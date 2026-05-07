@@ -1,6 +1,6 @@
 import type { PaperclipClient } from "../paperclip/types.js";
 import type { PaperclipRunStatus } from "../paperclip/types.js";
-import type { RunStartAuthorizer, TenantResolver } from "./run-service.js";
+import type { PaperclipEnabledCheck, RunStartAuthorizer, TenantResolver } from "./run-service.js";
 import { createRunService } from "./run-service.js";
 import { validateWorkflowQueuePayload } from "./queue.js";
 
@@ -16,13 +16,15 @@ export async function processWorkflowJob(options: {
   paperclipClient: Pick<PaperclipClient, "createRun">;
   tenantResolver: TenantResolver;
   authorizeRunStart: RunStartAuthorizer;
+  isPaperclipEnabled: PaperclipEnabledCheck;
   recordStatus?: (status: WorkflowStatusRecord) => void | Promise<void>;
 }) {
   const payload = validateWorkflowQueuePayload(options.payload);
   const runService = createRunService({
     paperclipClient: options.paperclipClient,
     tenantResolver: options.tenantResolver,
-    authorizeRunStart: options.authorizeRunStart
+    authorizeRunStart: options.authorizeRunStart,
+    isPaperclipEnabled: options.isPaperclipEnabled
   });
 
   try {

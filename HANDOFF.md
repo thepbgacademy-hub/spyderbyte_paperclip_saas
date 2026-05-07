@@ -1,10 +1,10 @@
-# Handoff: Phase 4
+# Handoff: Phase 5
 
 This handoff is intentionally overwritten after each phase. It should only describe the next active phase and point workers to the durable docs.
 
 ## Active Phase
 
-Phase 4: Operator Control Surface.
+Phase 5: Minimal Branded MVP UI.
 
 ## Reference Docs
 
@@ -15,23 +15,24 @@ Phase 4: Operator Control Surface.
 
 ## Build Instructions
 
-Follow `docs/build.md`, Phase 4 only.
+Follow `docs/build.md`, Phase 5 only.
 
-Build operator-only controls for tenant pause/resume, job inspect/retry/cancel/dead-letter views, secret rotate/revoke actions, and emergency Paperclip disable. Do not start the MVP UI until Phase 4 is tested, reviewed, committed, and this handoff is overwritten for Phase 5.
+Build a small SpyderByte-branded UI proving login placeholder flow, tenant selection, BYOK registration, workflow run status, and operator diagnostics. Do not start VPS deployment until Phase 5 is tested with Playwright, reviewed, committed, and this handoff is overwritten for Phase 6.
 
-## Phase 4 Files
+## Phase 5 Files
 
-- `src/operators/operator-service.ts`
-- `src/operators/routes.ts`
-- `tests/operator-service.test.ts`
+- `apps/web`
+- `apps/web/tests/e2e/workflow.spec.ts`
+- `apps/web/tests/e2e/tenant-isolation.spec.ts`
 
 ## Required Tests
 
-- Operator APIs require operator authorization.
-- Tenant pause/resume emits audit events.
-- Job inspect/retry/cancel/dead-letter operations return sanitized data.
-- Secret rotate/revoke actions delegate to secret service and emit operator audit events.
-- Emergency Paperclip disable prevents future workflow starts for the tenant.
+- UI uses SpyderByte naming only.
+- BYOK secrets are never redisplayed.
+- Workflow status/result display is sanitized.
+- Operator diagnostics are inaccessible to regular tenant users.
+- API/UI responses contain no Paperclip prompt, skill, command, agent, raw activity, or internal log fields.
+- Playwright CLI E2E tests pass.
 - `npm run build`
 - `npm test`
 - `npm run lint`

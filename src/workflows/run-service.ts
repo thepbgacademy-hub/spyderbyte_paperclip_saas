@@ -7,6 +7,7 @@ export type TenantPaperclipMapping = {
 export type TenantResolver = (tenantId: string) => Promise<TenantPaperclipMapping>;
 
 export type RunStartAuthorizer = (input: StartWorkflowRunInput) => Promise<boolean>;
+export type PaperclipEnabledCheck = (tenantId: string) => Promise<boolean>;
 
 export type StartWorkflowRunInput = {
   tenantId: string;
@@ -41,10 +42,21 @@ export class WorkflowAuthorizerMissingError extends Error {
   }
 }
 
+export class PaperclipDisabledError extends Error {
+  readonly code = "paperclip_disabled";
+  readonly publicMessage = "tenant_paused";
+
+  constructor() {
+    super("Paperclip integration is disabled for this tenant");
+    this.name = "PaperclipDisabledError";
+  }
+}
+
 export function createRunService(options: {
   paperclipClient: Pick<PaperclipClient, "createRun">;
   tenantResolver: TenantResolver;
   authorizeRunStart?: RunStartAuthorizer;
+  isPaperclipEnabled?: PaperclipEnabledCheck;
 }) {
   return {
     async startRun(input: StartWorkflowRunInput): Promise<PublicWorkflowRunStatus> {
@@ -54,6 +66,10 @@ export function createRunService(options: {
 
       if (!(await options.authorizeRunStart(input))) {
         throw new WorkflowAuthorizationError();
+      }
+
+      if (options.isPaperclipEnabled && !(await options.isPaperclipEnabled(input.tenantId))) {
+        throw new PaperclipDisabledError();
       }
 
       const tenant = await options.tenantResolver(input.tenantId);

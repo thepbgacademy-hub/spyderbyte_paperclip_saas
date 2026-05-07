@@ -118,6 +118,32 @@ describe("run service", () => {
     expect(paperclipClient.createRun).not.toHaveBeenCalled();
   });
 
+  it("blocks Paperclip calls when tenant integration is disabled", async () => {
+    const paperclipClient = {
+      createRun: vi.fn()
+    };
+    const service = createRunService({
+      paperclipClient,
+      tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
+      authorizeRunStart: vi.fn().mockResolvedValue(true),
+      isPaperclipEnabled: vi.fn().mockResolvedValue(false)
+    });
+
+    await expect(
+      service.startRun({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "workflow-1",
+        createdByUserId: "user-1"
+      })
+    ).rejects.toMatchObject({
+      code: "paperclip_disabled",
+      publicMessage: "tenant_paused"
+    });
+
+    expect(paperclipClient.createRun).not.toHaveBeenCalled();
+  });
+
   it("fails closed when no run ownership authorizer is configured", async () => {
     const paperclipClient = {
       createRun: vi.fn()
@@ -163,6 +189,7 @@ describe("workflow worker", () => {
         },
         tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
         authorizeRunStart: vi.fn().mockResolvedValue(true),
+        isPaperclipEnabled: vi.fn().mockResolvedValue(true),
         recordStatus
       })
     ).resolves.toEqual({
@@ -195,6 +222,7 @@ describe("workflow worker", () => {
         },
         tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
         authorizeRunStart: vi.fn().mockResolvedValue(true),
+        isPaperclipEnabled: vi.fn().mockResolvedValue(true),
         recordStatus
       })
     ).rejects.toThrow();
@@ -205,5 +233,24 @@ describe("workflow worker", () => {
       workflowId: "workflow-1",
       status: "failed"
     });
+  });
+
+  it("worker blocks Paperclip calls when tenant integration is disabled", async () => {
+    const createRun = vi.fn();
+    await expect(
+      processWorkflowJob({
+        payload: createWorkflowQueuePayload({
+          tenantId: "tenant-1",
+          runId: "run-1",
+          workflowId: "workflow-1",
+          createdByUserId: "user-1"
+        }),
+        paperclipClient: { createRun },
+        tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
+        authorizeRunStart: vi.fn().mockResolvedValue(true),
+        isPaperclipEnabled: vi.fn().mockResolvedValue(false)
+      })
+    ).rejects.toMatchObject({ code: "paperclip_disabled" });
+    expect(createRun).not.toHaveBeenCalled();
   });
 });

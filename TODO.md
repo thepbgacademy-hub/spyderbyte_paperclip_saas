@@ -41,21 +41,29 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Add audit events for create, rotate, revoke, and runtime access by reference.
 - [x] Run lint/build/refactor pass.
 - [x] Complete Phase 3 reviewer check.
+- [x] Phase 4: Operator control surface.
+- [x] Add tenant pause/resume.
+- [x] Add job inspect, retry, cancel, and dead-letter view APIs.
+- [x] Add secret rotate/revoke operator endpoints.
+- [x] Add emergency disable for Paperclip integration by tenant.
+- [x] Ensure operator APIs require operator role and write audit events.
+- [x] Run lint/build/refactor pass.
+- [x] Complete Phase 4 reviewer check.
 
-## Current Phase: Phase 4
+## Current Phase: Phase 5
 
-- [ ] Add tenant pause/resume.
-- [ ] Add job inspect, retry, cancel, and dead-letter view APIs.
-- [ ] Add secret rotate/revoke operator endpoints.
-- [ ] Add emergency disable for Paperclip integration by tenant.
-- [ ] Ensure operator APIs require operator role and write audit events.
+- [ ] Build minimal UI using SpyderByte naming only.
+- [ ] Add workflow run page with sanitized status/result.
+- [ ] Add BYOK registration page that never redisplays the secret.
+- [ ] Add operator-only diagnostics page.
+- [ ] Write Playwright CLI tests for login, workflow run, tenant isolation, and no Paperclip internals in UI/API responses.
+- [ ] Run Playwright CLI end-to-end tests.
 - [ ] Run lint/build/refactor pass.
 - [ ] Complete reviewer check.
-- [ ] Overwrite `HANDOFF.md` with Phase 5-only next steps.
-- [ ] Commit Phase 4.
+- [ ] Overwrite `HANDOFF.md` with Phase 6-only next steps.
+- [ ] Commit Phase 5.
 
 ## Later Phases
 
-- [ ] Phase 5: Minimal branded MVP UI and Playwright E2E.
 - [ ] Phase 6: VPS deployment POC.
 - [ ] Phase 7: Final dashboard design prep.
