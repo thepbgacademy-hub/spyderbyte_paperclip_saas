@@ -30,25 +30,32 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Run local RLS migration tests.
 - [x] Run lint/build/refactor pass.
 - [x] Complete Phase 2 reviewer check.
+- [x] Phase 3: BYOK secret references, OpenAI lane, and generic provider lane.
+- [x] Add secret reference data model usage without storing raw secret values in app tables.
+- [x] Implement OpenAI BYOK registration flow.
+- [x] Store optional OpenAI project ID as non-secret provider metadata.
+- [x] Add generic provider lane for declared secret labels and public-safe config.
+- [x] Implement redaction for common key/token/secret patterns.
+- [x] Write tests proving raw keys never appear in logs, job payloads, API responses, or audit events.
+- [x] Add rotation and revoke operations.
+- [x] Add audit events for create, rotate, revoke, and runtime access by reference.
+- [x] Run lint/build/refactor pass.
+- [x] Complete Phase 3 reviewer check.
 
-## Current Phase: Phase 3
+## Current Phase: Phase 4
 
-- [ ] Add secret reference data model usage without storing raw secret values in app tables.
-- [ ] Implement OpenAI BYOK registration flow.
-- [ ] Store optional OpenAI project ID as non-secret provider metadata.
-- [ ] Add generic provider lane for declared secret labels and public-safe config.
-- [ ] Implement redaction for common key/token/secret patterns.
-- [ ] Write tests proving raw keys never appear in logs, job payloads, API responses, or audit events.
-- [ ] Add rotation and revoke operations.
-- [ ] Add audit events for create, rotate, revoke, and runtime access by reference.
+- [ ] Add tenant pause/resume.
+- [ ] Add job inspect, retry, cancel, and dead-letter view APIs.
+- [ ] Add secret rotate/revoke operator endpoints.
+- [ ] Add emergency disable for Paperclip integration by tenant.
+- [ ] Ensure operator APIs require operator role and write audit events.
 - [ ] Run lint/build/refactor pass.
 - [ ] Complete reviewer check.
-- [ ] Overwrite `HANDOFF.md` with Phase 4-only next steps.
-- [ ] Commit Phase 3.
+- [ ] Overwrite `HANDOFF.md` with Phase 5-only next steps.
+- [ ] Commit Phase 4.
 
 ## Later Phases
 
-- [ ] Phase 4: Operator control surface.
 - [ ] Phase 5: Minimal branded MVP UI and Playwright E2E.
 - [ ] Phase 6: VPS deployment POC.
 - [ ] Phase 7: Final dashboard design prep.

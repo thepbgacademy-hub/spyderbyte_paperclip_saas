@@ -1,10 +1,10 @@
-# Handoff: Phase 3
+# Handoff: Phase 4
 
 This handoff is intentionally overwritten after each phase. It should only describe the next active phase and point workers to the durable docs.
 
 ## Active Phase
 
-Phase 3: BYOK Secret References, OpenAI Lane, And Generic Provider Lane.
+Phase 4: Operator Control Surface.
 
 ## Reference Docs
 
@@ -15,25 +15,23 @@ Phase 3: BYOK Secret References, OpenAI Lane, And Generic Provider Lane.
 
 ## Build Instructions
 
-Follow `docs/build.md`, Phase 3 only.
+Follow `docs/build.md`, Phase 4 only.
 
-Build BYOK secret-reference lifecycle services. Do not start operator control surface until Phase 3 is tested, reviewed, committed, and this handoff is overwritten for Phase 4.
+Build operator-only controls for tenant pause/resume, job inspect/retry/cancel/dead-letter views, secret rotate/revoke actions, and emergency Paperclip disable. Do not start the MVP UI until Phase 4 is tested, reviewed, committed, and this handoff is overwritten for Phase 5.
 
-## Phase 3 Files
+## Phase 4 Files
 
-- `src/secrets/secret-service.ts`
-- `src/secrets/redaction.ts`
-- `src/providers/openai-provider.ts`
-- `src/providers/generic-provider.ts`
-- `tests/secret-service.test.ts`
-- `tests/redaction.test.ts`
+- `src/operators/operator-service.ts`
+- `src/operators/routes.ts`
+- `tests/operator-service.test.ts`
 
 ## Required Tests
 
-- OpenAI BYOK registration stores only a secret reference and optional public-safe project metadata.
-- Generic providers reject secret-like metadata fields.
-- Raw keys never appear in logs, job payloads, API responses, or audit events.
-- Rotation, revoke, and runtime access emit sanitized audit events.
+- Operator APIs require operator authorization.
+- Tenant pause/resume emits audit events.
+- Job inspect/retry/cancel/dead-letter operations return sanitized data.
+- Secret rotate/revoke actions delegate to secret service and emit operator audit events.
+- Emergency Paperclip disable prevents future workflow starts for the tenant.
 - `npm run build`
 - `npm test`
 - `npm run lint`
