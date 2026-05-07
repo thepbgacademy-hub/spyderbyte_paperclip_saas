@@ -13,6 +13,8 @@ The MVP should prove the integration path before investing in the final React da
 - Prove that one VPS-hosted Paperclip instance can operate behind SpyderByte as a private workflow engine.
 - Support multi-user and multi-tenant SaaS behavior.
 - Use tenant BYOK credentials safely without storing secrets in queue payloads or user-visible logs.
+- Let users power workflows with their own OpenAI API/project credentials, matching Paperclip's native OpenAI provider path where possible.
+- Leave a provider abstraction lane for Anthropic, Google, local models, and other future API providers.
 - Map every SpyderByte tenant to a Paperclip company.
 - Run workflows through Redis/BullMQ workers.
 - Store app data, auth metadata, tenant mappings, run metadata, and audit events in Supabase.
@@ -82,6 +84,27 @@ BYOK is handled by reference.
 5. Worker resolves the secret only for the current job.
 6. Secret material remains in memory only for the shortest possible time.
 7. Logs and audit events record secret access by reference only.
+
+## Provider Lanes
+
+SpyderByte supports two provider lanes.
+
+OpenAI lane:
+
+- Primary MVP provider path.
+- Customer supplies an OpenAI API key tied to their own OpenAI account/project.
+- Optional `OpenAI-Project` metadata can be stored as non-secret provider configuration when customers use project-scoped keys.
+- Runtime injection should match Paperclip's native OpenAI environment expectations where possible, but only inside private worker/Paperclip execution.
+- The UI describes this as "Use your OpenAI account" or "Connect OpenAI"; it does not mention Paperclip internals.
+
+Generic provider lane:
+
+- Reserved for other LLM/API providers.
+- Uses the same secret-reference lifecycle and redaction rules.
+- Provider adapters declare required secret names and public-safe configuration fields.
+- Public workflow UX stays provider-neutral unless a workflow specifically requires a provider capability.
+
+OpenAI implementation note: OpenAI's current docs describe API keys as server-side credentials that should be loaded from environment variables or key management services, and project-scoped requests may include an `OpenAI-Project` header. The MVP should not attempt to automate creation of user API keys; customers generate and paste their own key, and SpyderByte stores it by reference.
 
 ## User Visibility Rule
 
@@ -189,3 +212,5 @@ Before each implementation phase is marked complete:
 - Paperclip secrets docs: `https://raw.githubusercontent.com/paperclipai/paperclip/master/docs/deploy/secrets.md`
 - Paperclip implementation spec: `https://github.com/paperclipai/paperclip/blob/master/doc/SPEC-implementation.md`
 - paperclip-mcp package: `https://pypi.org/project/paperclip-mcp/`
+- OpenAI API authentication: `https://platform.openai.com/docs/api-reference/authentication`
+- OpenAI project API keys: `https://platform.openai.com/docs/api-reference/project-api-keys/list`

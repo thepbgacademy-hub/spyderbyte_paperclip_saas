@@ -23,11 +23,13 @@ Subagents and implementers are not alone in the codebase. They must keep file ow
 - Create: `package.json`
 - Create: `.env.example`
 - Create: `src/config/env.ts`
+- Create: `src/providers/provider-types.ts`
 - Create: `tests/env.test.ts`
 - Create: `docs/reviewer-notes.md`
 
 - [ ] Create a minimal TypeScript project with lint/test scripts.
 - [ ] Add environment schema for Supabase URL/key, Redis URL, Paperclip base URL, and Paperclip service credential.
+- [ ] Add provider type definitions for `openai` and `generic_api`.
 - [ ] Add tests proving required environment variables are validated.
 - [ ] Run unit tests.
 - [ ] Reviewer checks that no secret values are committed.
@@ -88,11 +90,15 @@ Subagents and implementers are not alone in the codebase. They must keep file ow
 
 - Create: `src/secrets/secret-service.ts`
 - Create: `src/secrets/redaction.ts`
+- Create: `src/providers/openai-provider.ts`
+- Create: `src/providers/generic-provider.ts`
 - Create: `tests/secret-service.test.ts`
 - Create: `tests/redaction.test.ts`
 
 - [ ] Add secret reference data model usage without storing raw secret values in app tables.
-- [ ] Implement secret registration flow against the selected MVP secret backend.
+- [ ] Implement secret registration flow for the OpenAI lane against the selected MVP secret backend.
+- [ ] Store optional OpenAI project ID as non-secret provider metadata and never as an authoritative tenant identifier.
+- [ ] Add a generic provider lane that can declare required secret labels and public-safe config fields.
 - [ ] Implement redaction for common key/token/secret patterns.
 - [ ] Write tests proving raw keys never appear in logs, job payloads, API responses, or audit events.
 - [ ] Add rotation and revoke operations.
@@ -188,6 +194,8 @@ Coverage check:
 - Supabase is covered in Phase 2.
 - Redis/BullMQ is covered in Phase 1.
 - BYOK is covered in Phase 3.
+- OpenAI account/API-key support is covered in Phases 0 and 3.
+- Other API providers are covered by the generic provider lane in Phases 0 and 3.
 - Paperclip invisibility is covered across all phases.
 - E2E tests are required in Phases 5 and 6.
 - Reviewer control is required in every phase.
