@@ -1,40 +1,35 @@
-# Handoff: Phase 7
+# Handoff: MVP/POC Complete
 
-This handoff is intentionally overwritten after each phase. It should only describe the next active phase and point workers to the durable docs.
+This handoff is intentionally overwritten after each phase. It now describes the next post-MVP continuation point and points workers to the durable docs.
 
-## Active Phase
+## Status
 
-Phase 7: Final Dashboard Design Prep.
+Phases 0 through 7 are complete, tested, reviewed, and committed.
 
 ## Reference Docs
 
 - `docs/design.md`
 - `docs/build.md`
-- `docs/reviewer-notes.md`
-- `TODO.md`
-- `deploy/runbooks/deploy-poc.md`
-
-## Build Instructions
-
-Follow `docs/build.md`, Phase 7 only.
-
-Create the dashboard design preparation document for the post-MVP control panel. This phase should not build the final dashboard; it should convert what the POC proved into information architecture, safety rules, page inventory, and next implementation requirements.
-
-## Phase 7 Files
-
 - `docs/dashboard-design-prep.md`
+- `docs/reviewer-notes.md`
+- `deploy/runbooks/deploy-poc.md`
+- `deploy/runbooks/incident-response.md`
 - `TODO.md`
-- `HANDOFF.md`
 
-## Required Checks
+## Next Build
 
-- Customer dashboard information architecture is defined.
-- Operator/admin information architecture is defined.
-- Result views are explicitly designed to hide internal prompts, skills, commands, raw logs, provider secrets, and private workflow-engine identifiers.
-- The document identifies what must be backed by Supabase RLS, server-side authorization, and audit events.
-- `npm run build`
-- `npm test`
-- `npm run lint`
+Post-MVP: Build the full SpyderByte control panel/dashboard from `docs/dashboard-design-prep.md`.
+
+Do not expose internal workflow-engine prompts, skills, commands, agents, tool calls, raw logs, service routes, private company mappings, service tokens, BYOK values, backend secret handles, or private workflow identifiers.
+
+## Required Starting Checks
+
+- Replace Phase 5 demo UI state with authenticated API-backed state.
+- Derive tenant role and operator role from server-side authorization.
+- Use SpyderByte DTOs rather than raw database rows or internal workflow responses.
+- Add route tests proving tenant isolation and operator-only access.
+- Add Playwright tests for member, owner, and operator paths.
+- Keep `npm run build`, `npm test`, `npm run lint`, `npm run build:web`, and `npm run e2e` passing as the dashboard grows.
 
 ## Hard Rules
 
@@ -43,4 +38,4 @@ Create the dashboard design preparation document for the post-MVP control panel.
 - Generic providers must use the same secret-reference model as OpenAI.
 - Supabase RLS must protect provider metadata and secret references because metadata can be sensitive.
 - Subagents and implementers are not alone in the codebase. Do not revert others' work.
-- All code and docs require reviewer scrutiny before the phase is accepted.
+- All code and docs require reviewer scrutiny before acceptance.
