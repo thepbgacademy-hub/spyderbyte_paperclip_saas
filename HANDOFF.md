@@ -1,10 +1,10 @@
-# Handoff: Phase 5
+# Handoff: Phase 6
 
 This handoff is intentionally overwritten after each phase. It should only describe the next active phase and point workers to the durable docs.
 
 ## Active Phase
 
-Phase 5: Minimal Branded MVP UI.
+Phase 6: VPS Deployment POC.
 
 ## Reference Docs
 
@@ -15,24 +15,24 @@ Phase 5: Minimal Branded MVP UI.
 
 ## Build Instructions
 
-Follow `docs/build.md`, Phase 5 only.
+Follow `docs/build.md`, Phase 6 only.
 
-Build a small SpyderByte-branded UI proving login placeholder flow, tenant selection, BYOK registration, workflow run status, and operator diagnostics. Do not start VPS deployment until Phase 5 is tested with Playwright, reviewed, committed, and this handoff is overwritten for Phase 6.
+Create deployment proof-of-concept configuration for the VPS-hosted architecture using Supabase, Redis/BullMQ, and SpyderByte-owned services. Do not start dashboard design work until Phase 6 is tested, reviewed, committed, and this handoff is overwritten for Phase 7.
 
-## Phase 5 Files
+## Phase 6 Files
 
-- `apps/web`
-- `apps/web/tests/e2e/workflow.spec.ts`
-- `apps/web/tests/e2e/tenant-isolation.spec.ts`
+- `deploy/docker-compose.yml`
+- `deploy/nginx/spyderbyte.conf`
+- `deploy/runbooks/deploy-poc.md`
+- `tests/deploy-config.test.ts`
 
 ## Required Tests
 
-- UI uses SpyderByte naming only.
-- BYOK secrets are never redisplayed.
-- Workflow status/result display is sanitized.
-- Operator diagnostics are inaccessible to regular tenant users.
-- API/UI responses contain no Paperclip prompt, skill, command, agent, raw activity, or internal log fields.
-- Playwright CLI E2E tests pass.
+- Deployment config does not expose internal Paperclip service ports publicly.
+- Redis is private to the Compose network.
+- Reverse proxy routes public traffic only to the branded web/API surface.
+- Environment variables use secret references or server-side secrets, not browser-visible raw keys.
+- Health-check and smoke-test commands are documented.
 - `npm run build`
 - `npm test`
 - `npm run lint`

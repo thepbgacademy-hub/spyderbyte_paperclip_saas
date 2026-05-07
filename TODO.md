@@ -49,21 +49,30 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Ensure operator APIs require operator role and write audit events.
 - [x] Run lint/build/refactor pass.
 - [x] Complete Phase 4 reviewer check.
+- [x] Phase 5: Minimal branded MVP UI.
+- [x] Build minimal UI using SpyderByte naming only.
+- [x] Add workflow run page with sanitized status/result.
+- [x] Add BYOK registration page that never redisplays the secret.
+- [x] Add operator-only diagnostics page.
+- [x] Write Playwright CLI tests for workflow run, tenant isolation, and no Paperclip internals in UI responses.
+- [x] Run Playwright CLI end-to-end tests.
+- [x] Run lint/build/refactor pass.
+- [x] Complete reviewer check.
+- [x] Overwrite `HANDOFF.md` with Phase 6-only next steps.
 
-## Current Phase: Phase 5
+## Current Phase: Phase 6
 
-- [ ] Build minimal UI using SpyderByte naming only.
-- [ ] Add workflow run page with sanitized status/result.
-- [ ] Add BYOK registration page that never redisplays the secret.
-- [ ] Add operator-only diagnostics page.
-- [ ] Write Playwright CLI tests for login, workflow run, tenant isolation, and no Paperclip internals in UI/API responses.
-- [ ] Run Playwright CLI end-to-end tests.
-- [ ] Run lint/build/refactor pass.
+- [ ] Create VPS deployment POC configuration.
+- [ ] Add Docker Compose for app, worker, Redis, and reverse proxy assumptions.
+- [ ] Add Nginx subdomain config for `www.spyderbyte.cloud` or `paperclip.spyderbyte.cloud`.
+- [ ] Add deployment runbook with environment variable matrix and secret handling.
+- [ ] Add health-check and smoke-test instructions.
+- [ ] Add static tests for deployment config safety.
+- [ ] Run lint/build/test/refactor pass.
 - [ ] Complete reviewer check.
-- [ ] Overwrite `HANDOFF.md` with Phase 6-only next steps.
-- [ ] Commit Phase 5.
+- [ ] Overwrite `HANDOFF.md` with Phase 7-only next steps.
+- [ ] Commit Phase 6.
 
 ## Later Phases
 
-- [ ] Phase 6: VPS deployment POC.
 - [ ] Phase 7: Final dashboard design prep.

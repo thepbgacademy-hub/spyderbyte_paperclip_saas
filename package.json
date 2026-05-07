@@ -5,16 +5,28 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "build:web": "vite build apps/web",
+    "dev:web": "vite apps/web --host 127.0.0.1 --port 5173",
+    "e2e": "playwright test -c apps/web/playwright.config.ts",
+    "test": "vitest run tests",
+    "test:watch": "vitest tests",
     "lint": "eslint ."
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.59.1",
     "@types/node": "^22.15.3",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.2.0",
     "eslint": "^10.3.0",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.59.2",
     "vitest": "^3.1.2"
+  },
+  "dependencies": {
+    "lucide-react": "^1.14.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
   }
 }
