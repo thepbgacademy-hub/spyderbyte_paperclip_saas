@@ -60,19 +60,29 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Complete reviewer check.
 - [x] Overwrite `HANDOFF.md` with Phase 6-only next steps.
 
-## Current Phase: Phase 6
+- [x] Phase 6: VPS deployment POC.
+- [x] Create VPS deployment POC configuration.
+- [x] Add Docker Compose for app, worker, Redis, and reverse proxy assumptions.
+- [x] Add Nginx subdomain config for `www.spyderbyte.cloud` and `api.spyderbyte.cloud`.
+- [x] Add deployment runbook with environment variable matrix and secret handling.
+- [x] Add health-check and smoke-test instructions.
+- [x] Add static tests for deployment config safety.
+- [x] Run lint/build/test/refactor pass.
+- [x] Complete reviewer check.
+- [x] Overwrite `HANDOFF.md` with Phase 7-only next steps.
 
-- [ ] Create VPS deployment POC configuration.
-- [ ] Add Docker Compose for app, worker, Redis, and reverse proxy assumptions.
-- [ ] Add Nginx subdomain config for `www.spyderbyte.cloud` or `paperclip.spyderbyte.cloud`.
-- [ ] Add deployment runbook with environment variable matrix and secret handling.
-- [ ] Add health-check and smoke-test instructions.
-- [ ] Add static tests for deployment config safety.
+## Current Phase: Phase 7
+
+- [ ] Review operator workflows learned from the POC.
+- [ ] Define customer dashboard information architecture.
+- [ ] Define admin dashboard information architecture.
+- [ ] Design safe result views that never expose internal prompts, skills, commands, or logs.
+- [ ] Create dashboard design prep doc.
 - [ ] Run lint/build/test/refactor pass.
 - [ ] Complete reviewer check.
-- [ ] Overwrite `HANDOFF.md` with Phase 7-only next steps.
-- [ ] Commit Phase 6.
+- [ ] Overwrite `HANDOFF.md` with completion handoff.
+- [ ] Commit Phase 7.
 
 ## Later Phases
 
-- [ ] Phase 7: Final dashboard design prep.
+- [ ] Post-MVP: Build the full control panel/dashboard from Phase 7 design prep.

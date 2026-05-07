@@ -1,0 +1,118 @@
+services:
+  web:
+    image: spyderbyte/web:${SPYDERBYTE_IMAGE_TAG:?set SPYDERBYTE_IMAGE_TAG}
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: production
+      PUBLIC_APP_ORIGIN: https://www.spyderbyte.cloud
+      API_ORIGIN: https://api.spyderbyte.cloud
+    depends_on:
+      api:
+        condition: service_started
+    networks:
+      - public
+
+  api:
+    image: spyderbyte/api:${SPYDERBYTE_IMAGE_TAG:?set SPYDERBYTE_IMAGE_TAG}
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      NODE_ENV: production
+      SUPABASE_URL: ${SUPABASE_URL:?set SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:?set SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:?set SUPABASE_SERVICE_ROLE_KEY}
+      REDIS_URL: redis://redis:6379
+      PAPERCLIP_BASE_URL: http://paperclip:9000
+      PAPERCLIP_SERVICE_TOKEN: ${PAPERCLIP_SERVICE_TOKEN:?set PAPERCLIP_SERVICE_TOKEN}
+    depends_on:
+      redis:
+        condition: service_healthy
+      paperclip:
+        condition: service_healthy
+    networks:
+      - public
+      - private
+      - egress
+
+  worker:
+    image: spyderbyte/worker:${SPYDERBYTE_IMAGE_TAG:?set SPYDERBYTE_IMAGE_TAG}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      SUPABASE_URL: ${SUPABASE_URL:?set SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:?set SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:?set SUPABASE_SERVICE_ROLE_KEY}
+      REDIS_URL: redis://redis:6379
+      PAPERCLIP_BASE_URL: http://paperclip:9000
+      PAPERCLIP_SERVICE_TOKEN: ${PAPERCLIP_SERVICE_TOKEN:?set PAPERCLIP_SERVICE_TOKEN}
+    depends_on:
+      redis:
+        condition: service_healthy
+      paperclip:
+        condition: service_healthy
+    networks:
+      - private
+      - egress
+
+  paperclip:
+    image: paperclipai/paperclip:${PAPERCLIP_IMAGE_TAG:?set PAPERCLIP_IMAGE_TAG}
+    restart: unless-stopped
+    expose:
+      - "9000"
+    environment:
+      PAPERCLIP_AUTH_MODE: authenticated
+      PAPERCLIP_SERVICE_TOKEN: ${PAPERCLIP_SERVICE_TOKEN:?set PAPERCLIP_SERVICE_TOKEN}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    networks:
+      - private
+      - egress
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    expose:
+      - "6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    networks:
+      - private
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/spyderbyte.conf:/etc/nginx/conf.d/spyderbyte.conf:ro
+      - ./certbot/www:/var/www/certbot:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+    depends_on:
+      web:
+        condition: service_started
+      api:
+        condition: service_started
+    networks:
+      - public
+
+networks:
+  public:
+  egress:
+  private:
+    internal: true
+
+volumes:
+  redis-data:
