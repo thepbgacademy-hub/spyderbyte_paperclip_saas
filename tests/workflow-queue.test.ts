@@ -1,0 +1,209 @@
+import { describe, expect, it, vi } from "vitest";
+
+import { createWorkflowQueuePayload, validateWorkflowQueuePayload } from "../src/workflows/queue.js";
+import { createRunService } from "../src/workflows/run-service.js";
+import { processWorkflowJob } from "../src/workflows/worker.js";
+
+describe("workflow queue payloads", () => {
+  it("creates tenant-aware payloads without Paperclip internals", () => {
+    expect(
+      createWorkflowQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "workflow-1",
+        createdByUserId: "user-1"
+      })
+    ).toMatchObject({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "workflow-1",
+      createdByUserId: "user-1",
+      idempotencyKey: "tenant-1:workflow-1:run-1"
+    });
+  });
+
+  it("rejects raw secrets and Paperclip internals in queue payloads", () => {
+    expect(() =>
+      validateWorkflowQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "workflow-1",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:workflow-1:run-1",
+        createdAt: new Date().toISOString(),
+        apiKey: "sk-secret",
+        paperclipCompanyId: "pc-company-1"
+      })
+    ).toThrow(/Queue payload contains forbidden keys: apiKey, paperclipCompanyId/);
+  });
+
+  it("rejects secret-like and Paperclip-internal values in allowed fields", () => {
+    expect(() =>
+      validateWorkflowQueuePayload({
+        tenantId: "tenant-1",
+        runId: "pc-run-1",
+        workflowId: "workflow-1",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:workflow-1:pc-run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).toThrow(/Queue payload runId contains a forbidden internal value/);
+
+    expect(() =>
+      validateWorkflowQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "sk-secret",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:sk-secret:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).toThrow(/Queue payload workflowId contains a forbidden secret-like value/);
+  });
+});
+
+describe("run service", () => {
+  it("starts a workflow through Paperclip and returns sanitized SpyderByte status", async () => {
+    const paperclipClient = {
+      createRun: vi.fn().mockResolvedValue({ paperclipRunId: "pc-run-1", status: "queued" })
+    };
+    const tenantResolver = vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" });
+    const service = createRunService({
+      paperclipClient,
+      tenantResolver,
+      authorizeRunStart: vi.fn().mockResolvedValue(true)
+    });
+
+    await expect(
+      service.startRun({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "workflow-1"
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "workflow-1",
+      status: "queued"
+    });
+
+    expect(paperclipClient.createRun).toHaveBeenCalledWith({
+      companyId: "pc-company-1",
+      workflowId: "workflow-1",
+      spyderbyteRunId: "run-1"
+    });
+  });
+
+  it("validates tenant run ownership before calling Paperclip", async () => {
+    const paperclipClient = {
+      createRun: vi.fn()
+    };
+    const service = createRunService({
+      paperclipClient,
+      tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
+      authorizeRunStart: vi.fn().mockResolvedValue(false)
+    });
+
+    await expect(
+      service.startRun({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "workflow-1",
+        createdByUserId: "user-1"
+      })
+    ).rejects.toMatchObject({
+      code: "workflow_not_authorized",
+      publicMessage: "workflow_failed"
+    });
+
+    expect(paperclipClient.createRun).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when no run ownership authorizer is configured", async () => {
+    const paperclipClient = {
+      createRun: vi.fn()
+    };
+    const service = createRunService({
+      paperclipClient,
+      tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" })
+    });
+
+    await expect(
+      service.startRun({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "workflow-1",
+        createdByUserId: "user-1"
+      })
+    ).rejects.toMatchObject({
+      code: "workflow_authorizer_missing",
+      publicMessage: "workflow_failed"
+    });
+
+    expect(paperclipClient.createRun).not.toHaveBeenCalled();
+  });
+});
+
+describe("workflow worker", () => {
+  it("records only sanitized SpyderByte status after processing a job", async () => {
+    const recordStatus = vi.fn();
+
+    await expect(
+      processWorkflowJob({
+        payload: createWorkflowQueuePayload({
+          tenantId: "tenant-1",
+          runId: "run-1",
+          workflowId: "workflow-1",
+          createdByUserId: "user-1"
+        }),
+        paperclipClient: {
+          createRun: vi.fn().mockResolvedValue({
+            paperclipRunId: "pc-run-1",
+            status: "queued"
+          })
+        },
+        tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
+        authorizeRunStart: vi.fn().mockResolvedValue(true),
+        recordStatus
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "workflow-1",
+      status: "queued"
+    });
+
+    expect(recordStatus).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "workflow-1",
+      status: "queued"
+    });
+  });
+
+  it("records sanitized failure status when Paperclip start fails", async () => {
+    const recordStatus = vi.fn();
+
+    await expect(
+      processWorkflowJob({
+        payload: createWorkflowQueuePayload({
+          tenantId: "tenant-1",
+          runId: "run-1",
+          workflowId: "workflow-1",
+          createdByUserId: "user-1"
+        }),
+        paperclipClient: {
+          createRun: vi.fn().mockRejectedValue(new Error("prompt stack trace"))
+        },
+        tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
+        authorizeRunStart: vi.fn().mockResolvedValue(true),
+        recordStatus
+      })
+    ).rejects.toThrow();
+
+    expect(recordStatus).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "workflow-1",
+      status: "failed"
+    });
+  });
+});
