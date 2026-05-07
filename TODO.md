@@ -21,24 +21,33 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Run local dry-run behavior through mocked Paperclip tests.
 - [x] Run lint/build/refactor pass.
 - [x] Complete Phase 1 reviewer check.
+- [x] Phase 2: Supabase tenant model and RLS.
+- [x] Create Supabase migration for tenant model.
+- [x] Enable RLS on all tenant-owned tables.
+- [x] Add tenant service and database type definitions.
+- [x] Write positive tenant access tests.
+- [x] Write negative/static cross-tenant access tests.
+- [x] Run local RLS migration tests.
+- [x] Run lint/build/refactor pass.
+- [x] Complete Phase 2 reviewer check.
 
-## Current Phase: Phase 2
+## Current Phase: Phase 3
 
-- [ ] Create Supabase migration for tenant model.
-- [ ] Enable RLS on all tenant-owned tables.
-- [ ] Add tenant service and database type definitions.
-- [ ] Write positive tenant access tests.
-- [ ] Write negative cross-tenant access tests.
-- [ ] Run Supabase migration in the test project.
-- [ ] Run RLS tests.
+- [ ] Add secret reference data model usage without storing raw secret values in app tables.
+- [ ] Implement OpenAI BYOK registration flow.
+- [ ] Store optional OpenAI project ID as non-secret provider metadata.
+- [ ] Add generic provider lane for declared secret labels and public-safe config.
+- [ ] Implement redaction for common key/token/secret patterns.
+- [ ] Write tests proving raw keys never appear in logs, job payloads, API responses, or audit events.
+- [ ] Add rotation and revoke operations.
+- [ ] Add audit events for create, rotate, revoke, and runtime access by reference.
 - [ ] Run lint/build/refactor pass.
 - [ ] Complete reviewer check.
-- [ ] Overwrite `HANDOFF.md` with Phase 3-only next steps.
-- [ ] Commit Phase 2.
+- [ ] Overwrite `HANDOFF.md` with Phase 4-only next steps.
+- [ ] Commit Phase 3.
 
 ## Later Phases
 
-- [ ] Phase 3: BYOK secret references, OpenAI lane, and generic provider lane.
 - [ ] Phase 4: Operator control surface.
 - [ ] Phase 5: Minimal branded MVP UI and Playwright E2E.
 - [ ] Phase 6: VPS deployment POC.

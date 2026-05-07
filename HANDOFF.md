@@ -1,10 +1,10 @@
-# Handoff: Phase 2
+# Handoff: Phase 3
 
 This handoff is intentionally overwritten after each phase. It should only describe the next active phase and point workers to the durable docs.
 
 ## Active Phase
 
-Phase 2: Supabase Tenant Model And RLS.
+Phase 3: BYOK Secret References, OpenAI Lane, And Generic Provider Lane.
 
 ## Reference Docs
 
@@ -15,22 +15,25 @@ Phase 2: Supabase Tenant Model And RLS.
 
 ## Build Instructions
 
-Follow `docs/build.md`, Phase 2 only.
+Follow `docs/build.md`, Phase 3 only.
 
-Build the Supabase tenant schema and RLS isolation layer. Do not start BYOK implementation until Phase 2 is tested, reviewed, committed, and this handoff is overwritten for Phase 3.
+Build BYOK secret-reference lifecycle services. Do not start operator control surface until Phase 3 is tested, reviewed, committed, and this handoff is overwritten for Phase 4.
 
-## Phase 2 Files
+## Phase 3 Files
 
-- `supabase/migrations/0001_initial_tenant_model.sql`
-- `src/db/types.ts`
-- `src/tenants/tenant-service.ts`
-- `tests/tenant-rls.test.ts`
+- `src/secrets/secret-service.ts`
+- `src/secrets/redaction.ts`
+- `src/providers/openai-provider.ts`
+- `src/providers/generic-provider.ts`
+- `tests/secret-service.test.ts`
+- `tests/redaction.test.ts`
 
 ## Required Tests
 
-- Positive tenant access tests.
-- Negative cross-tenant access tests for reads, writes, deletes, enqueues, replays, and inspections.
-- Tests proving tenant users cannot access secret metadata, workflow runs, logs, or mappings outside their tenant.
+- OpenAI BYOK registration stores only a secret reference and optional public-safe project metadata.
+- Generic providers reject secret-like metadata fields.
+- Raw keys never appear in logs, job payloads, API responses, or audit events.
+- Rotation, revoke, and runtime access emit sanitized audit events.
 - `npm run build`
 - `npm test`
 - `npm run lint`
