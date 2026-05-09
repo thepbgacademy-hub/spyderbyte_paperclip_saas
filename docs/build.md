@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build an MVP/POC branded SaaS wrapper that uses private self-hosted Paperclip as a background workflow engine.
+**Goal:** Build an MVP/POC branded SaaS wrapper, customer-facing as Wealth Factory, that uses private self-hosted Paperclip as a background workflow engine.
 
-**Architecture:** SpyderByte owns the public application, tenant model, BYOK handling, workflow queue, and audit surface. Paperclip is called through an internal REST adapter only and remains invisible to customers. Supabase stores app-side state and Redis/BullMQ runs async workflows.
+**Architecture:** Wealth Factory owns the public application, tenant model, BYOK handling, workflow queue, and audit surface. Paperclip is called through an internal REST adapter only and remains invisible to customers. A deterministic TypeScript boundary layer maps, rewrites, and guards all Paperclip-facing data before it can reach user-facing APIs or UI. Supabase stores app-side state and Redis/BullMQ runs async workflows.
 
 **Tech Stack:** VPS hosting, Node.js/TypeScript, React later, Supabase, Redis, BullMQ, Paperclip REST API, Playwright CLI.
 
@@ -13,6 +13,63 @@
 ## Worker Rule
 
 Subagents and implementers are not alone in the codebase. They must keep file ownership narrow, avoid reverting others' work, and adapt to existing changes. All code requires reviewer scrutiny for error and accuracy control before a phase is accepted.
+
+## Wealth Factory Boundary Layer
+
+This is a hard architectural requirement. Do not rely on an LLM to remember branding, privacy, or terminology rules.
+
+All customer-facing routes and UI must pass through a deterministic TypeScript boundary layer before returning data. Paperclip responses, identifiers, errors, logs, workflow names, company mappings, prompts, skills, commands, agents, tool calls, and provider internals must never be sent directly to the browser.
+
+Required files for the next dashboard/API build:
+
+- Create: `src/wealthfactory/workflow-registry.ts`
+- Create: `src/wealthfactory/dto-mappers.ts`
+- Create: `src/wealthfactory/response-guard.ts`
+- Create: `src/wealthfactory/public-errors.ts`
+- Create: `tests/wealthfactory-boundary.test.ts`
+
+The boundary layer owns:
+
+- Public Wealth Factory workflow names, descriptions, categories, and result labels.
+- Private mappings from Wealth Factory workflow IDs to Paperclip workflow/company IDs.
+- DTO mapping from internal Paperclip adapter responses to Wealth Factory response objects.
+- Safe public error translation, such as `workflow_failed`, `credential_invalid`, `tenant_paused`, and `service_unavailable`.
+- Forbidden-term and forbidden-field checks for user-facing API responses.
+- Tests proving Paperclip/internal terms cannot leak to customer-facing output.
+
+Customer-facing DTOs should use names such as:
+
+- `WealthFactoryWorkflowListItem`
+- `WealthFactoryRunSummary`
+- `WealthFactoryRunResult`
+- `WealthFactoryCredentialSummary`
+- `WealthFactoryAuditEventSummary`
+
+Forbidden customer-facing terms and fields include:
+
+- `Paperclip`
+- `prompt`
+- `skill`
+- `command`
+- `agent`
+- `tool call`
+- `raw activity`
+- `internal log`
+- `companyId`
+- `secretRef`
+- `service token`
+- private Paperclip URLs
+- raw provider responses
+
+The UI consumes only Wealth Factory DTOs. The worker and adapter may know Paperclip identifiers internally, but those identifiers stay server-side and are never serialized into customer-visible responses.
+
+Minimum boundary test examples:
+
+```ts
+expect(JSON.stringify(publicResponse)).not.toMatch(/Paperclip|prompt|skill|command|agent/i);
+expect(JSON.stringify(publicResponse)).not.toMatch(/companyId|secretRef|service token/i);
+expect(publicResponse.workflowName).toContain("Wealth Factory");
+```
 
 ## Phase 0: Repository And Local Skeleton
 
@@ -174,6 +231,32 @@ Subagents and implementers are not alone in the codebase. They must keep file ow
 - [ ] Design Paperclip-safe result views that never expose internal prompts, skills, commands, or logs.
 - [ ] Create a separate dashboard design spec before implementation.
 
+## Post-MVP Phase: Wealth Factory Boundary Layer And Dashboard API
+
+**Outcome:** The real dashboard and API use a deterministic Wealth Factory boundary layer instead of relying on model memory or ad hoc UI copy.
+
+**Files:**
+
+- Create: `src/wealthfactory/workflow-registry.ts`
+- Create: `src/wealthfactory/dto-mappers.ts`
+- Create: `src/wealthfactory/response-guard.ts`
+- Create: `src/wealthfactory/public-errors.ts`
+- Create: `tests/wealthfactory-boundary.test.ts`
+- Modify: `src/workflows/run-service.ts`
+- Modify: `src/operators/routes.ts`
+- Modify: `apps/web/src/App.tsx` or replacement dashboard routes
+
+- [ ] Write failing tests that reject Paperclip/internal terms and fields in every customer-facing DTO.
+- [ ] Create the Wealth Factory workflow registry with public names/descriptions and private Paperclip mappings.
+- [ ] Create DTO mappers that accept internal run/workflow/credential data and return Wealth Factory-only objects.
+- [ ] Create a response guard that rejects forbidden terms and forbidden fields before API responses are returned.
+- [ ] Map internal Paperclip/worker errors to Wealth Factory public error codes.
+- [ ] Update workflow and run APIs to return only Wealth Factory DTOs.
+- [ ] Update dashboard UI to consume only Wealth Factory DTOs.
+- [ ] Add Playwright tests proving subscribers only see Wealth Factory wording, workflows, statuses, and results.
+- [ ] Run `npm run build`, `npm test`, `npm run lint`, `npm run build:web`, and `npm run e2e`.
+- [ ] Reviewer checks that no customer-visible API/UI response can expose Paperclip terms, prompts, skills, commands, agents, raw logs, provider secrets, backend secret handles, or private workflow identifiers.
+
 ## Required E2E Checks
 
 Use the installed Playwright CLI when a web surface exists.
@@ -197,6 +280,7 @@ Coverage check:
 - OpenAI account/API-key support is covered in Phases 0 and 3.
 - Other API providers are covered by the generic provider lane in Phases 0 and 3.
 - Paperclip invisibility is covered across all phases.
+- The Wealth Factory boundary layer is required before post-MVP dashboard/API work.
 - E2E tests are required in Phases 5 and 6.
 - Reviewer control is required in every phase.
 - Dashboard is deferred to Phase 7 by design.

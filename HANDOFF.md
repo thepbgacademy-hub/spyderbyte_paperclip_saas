@@ -18,16 +18,19 @@ Phases 0 through 7 are complete, tested, reviewed, and committed.
 
 ## Next Build
 
-Post-MVP: Build the full SpyderByte control panel/dashboard from `docs/dashboard-design-prep.md`.
+Post-MVP: Build the full Wealth Factory control panel/dashboard from `docs/dashboard-design-prep.md`.
 
-Do not expose internal workflow-engine prompts, skills, commands, agents, tool calls, raw logs, service routes, private company mappings, service tokens, BYOK values, backend secret handles, or private workflow identifiers.
+Before building customer-facing dashboard routes, implement the deterministic TypeScript Wealth Factory boundary layer described in `docs/build.md`. Do not rely on LLM memory or UI copy discipline for rewording. Do not expose internal workflow-engine prompts, skills, commands, agents, tool calls, raw logs, service routes, private company mappings, service tokens, BYOK values, backend secret handles, or private workflow identifiers.
 
 ## Required Starting Checks
 
 - Replace Phase 5 demo UI state with authenticated API-backed state.
+- Create `src/wealthfactory/workflow-registry.ts`, `src/wealthfactory/dto-mappers.ts`, `src/wealthfactory/response-guard.ts`, and `src/wealthfactory/public-errors.ts`.
+- Add `tests/wealthfactory-boundary.test.ts` before exposing new dashboard API routes.
 - Derive tenant role and operator role from server-side authorization.
-- Use SpyderByte DTOs rather than raw database rows or internal workflow responses.
+- Use Wealth Factory DTOs rather than raw database rows or internal workflow responses.
 - Add route tests proving tenant isolation and operator-only access.
+- Add response-guard tests proving Paperclip/internal terms and fields are rejected.
 - Add Playwright tests for member, owner, and operator paths.
 - Keep `npm run build`, `npm test`, `npm run lint`, `npm run build:web`, and `npm run e2e` passing as the dashboard grows.
 

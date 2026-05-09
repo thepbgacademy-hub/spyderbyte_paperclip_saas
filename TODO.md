@@ -87,4 +87,5 @@ This file tracks implementation progress. Keep it current after every phase.
 
 ## Later Phases
 
-- [ ] Post-MVP: Build the full control panel/dashboard from Phase 7 design prep.
+- [ ] Post-MVP: Build the deterministic TypeScript Wealth Factory boundary layer before dashboard API/UI work.
+- [ ] Post-MVP: Build the full Wealth Factory control panel/dashboard from Phase 7 design prep.
