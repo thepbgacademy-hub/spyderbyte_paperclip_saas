@@ -1,11 +1,7 @@
-import type { PackageInstallResult } from "../db/acid-guard-repository.js";
+import type { PackageInstallDecision } from "../db/acid-guard-repository.js";
 
 export type AcidPackageInstallRepository = {
-  installPackage(input: { tenantId: string; packageId: string; userId: string }): Promise<PackageInstallResult>;
-};
-
-export type PackagePurchaseAuthorizer = {
-  canInstallPackage(input: { tenantId: string; packageId: string; userId: string }): Promise<boolean>;
+  installPackage(input: { tenantId: string; packageId: string; userId: string }): Promise<PackageInstallDecision>;
 };
 
 export class PackageInstallAuthorizationError extends Error {
@@ -20,15 +16,15 @@ export class PackageInstallAuthorizationError extends Error {
 
 export function createAcidPackageInstallService(options: {
   repository: AcidPackageInstallRepository;
-  purchaseAuthorizer: PackagePurchaseAuthorizer;
 }) {
   return {
-    async installPackage(input: { tenantId: string; packageId: string; userId: string }): Promise<PackageInstallResult> {
-      if (!(await options.purchaseAuthorizer.canInstallPackage(input))) {
+    async installPackage(input: { tenantId: string; packageId: string; userId: string }): Promise<{ id: string; status: string }> {
+      const result = await options.repository.installPackage(input);
+      if (!result.installed) {
         throw new PackageInstallAuthorizationError();
       }
 
-      return options.repository.installPackage(input);
+      return { id: result.id, status: result.status };
     }
   };
 }

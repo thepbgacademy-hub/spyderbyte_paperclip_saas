@@ -8,7 +8,7 @@ Phases 0 through 7 are complete, tested, reviewed, and committed.
 
 The first post-MVP productization slices are implemented locally: security baseline helpers, Wealth Factory boundary layer, package entitlements/provider requirements, temporary artifacts, expanded provider definitions, a Wealth Factory dashboard POC surface, the first API-backed dashboard foundation, and the first database-backed ACID/race-condition foundation.
 
-The next session should add the authoritative package purchase table/transactional install guard, add queue enqueue outbox/recovery behavior, connect provider credential registration to vault-backed secrets, then prepare VPS deployment smoke tests.
+The next session should add queue enqueue outbox/recovery behavior, connect provider credential registration to vault-backed secrets, then prepare VPS deployment smoke tests.
 
 ## Reference Docs
 
@@ -58,17 +58,17 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 - Tests for security, boundary, entitlements, artifacts, provider lanes, and E2E dashboard behavior.
 - Tests for dashboard HTTP, dashboard client mapping, Supabase repository mappers, Postgres client behavior, and tenant settings APIs.
 - Provider enum support in the initial Supabase migration and DB types for OpenAI API, ChatGPT/Codex subscription auth, Anthropic, xAI/Grok, OpenRouter, and generic providers.
-- Live Supabase reachability confirmed from Windows through the self-hosted pooler with `SUPABASE_DB_SSL=false`; `wfpc` has 14 tables.
+- Live Supabase reachability confirmed from Windows through the self-hosted pooler with `SUPABASE_DB_SSL=false`; `wfpc` has 15 tables.
 - Live Supabase now includes `wfpc.workflow_run_reservations` with RLS enabled, idempotency uniqueness, active credential uniqueness, secret lookup, and status guard indexes.
+- Live Supabase now includes `wfpc.tenant_package_purchases` with RLS enabled, tenant/package uniqueness, and active purchase lookup support.
 
 ## Next Build Order
 
-1. Add an authoritative package purchase/entitlement table and wire package installs to check it inside the same database transaction as the install upsert.
-2. Add queue enqueue transaction/outbox behavior before production deployment.
-3. Connect provider credential registration to the selected secret vault backend.
-4. Implement Google Drive and Dropbox OAuth/storage connector setup if needed for the first media package.
-5. Add deployed API smoke tests for CORS, auth failures, dashboard DTO response guard, and exposed ports.
-6. Deploy the POC to the VPS using the Phase 6 deployment runbooks once runtime secrets and final origin values are available.
+1. Add queue enqueue transaction/outbox behavior before production deployment.
+2. Connect provider credential registration to the selected secret vault backend.
+3. Implement Google Drive and Dropbox OAuth/storage connector setup if needed for the first media package.
+4. Add deployed API smoke tests for CORS, auth failures, dashboard DTO response guard, and exposed ports.
+5. Deploy the POC to the VPS using the Phase 6 deployment runbooks once runtime secrets and final origin values are available.
 
 ## Security Position
 
@@ -252,9 +252,9 @@ Nuances to preserve:
 
 ## Latest Verification
 
-- `node scripts/apply-wfpc-migration.mjs` passed and reported `wfpc` with 14 tables.
+- `node scripts/apply-wfpc-migration.mjs` passed and reported `wfpc` with 15 tables.
 - `npm run build` passed.
-- Focused ACID package/credential adapter tests passed with 115 tests.
+- Focused package purchase guard tests passed with 119 tests.
 - `npm run lint` passed.
 - `npm run build:web` passed with lucide `use client` warnings from dependency bundling.
 - `npm run e2e` passed with 3 Playwright tests.

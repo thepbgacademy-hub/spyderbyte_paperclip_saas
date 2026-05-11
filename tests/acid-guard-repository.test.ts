@@ -57,7 +57,8 @@ describe("ACID guard repository", () => {
     expect(sql).toMatch(/begin/i);
     expect(sql).toMatch(/from wfpc\.tenants[\s\S]+for update/i);
     expect(sql).toMatch(/from wfpc\.workflow_templates[\s\S]+for update/i);
-    expect(sql).toMatch(/from wfpc\.tenant_package_installs[\s\S]+package_id = \$2[\s\S]+status = 'active'/i);
+    expect(sql).toMatch(/from wfpc\.tenant_package_installs[\s\S]+join wfpc\.tenant_package_purchases/i);
+    expect(sql).toMatch(/p\.status = 'active'[\s\S]+p\.starts_at <= now\(\)/i);
     expect(sql).toMatch(/from wfpc\.package_provider_requirements/i);
     expect(sql).toMatch(/from wfpc\.secret_references[\s\S]+revoked_at is null/i);
     expect(sql).toMatch(/insert into wfpc\.workflow_run_reservations[\s\S]+on conflict do nothing/i);
@@ -111,7 +112,7 @@ describe("ACID guard repository", () => {
     ).resolves.toEqual({ reserved: false, reason: "entitlement_denied" });
 
     const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
-    expect(sql).toMatch(/from wfpc\.tenant_package_installs[\s\S]+package_id = \$2[\s\S]+status = 'active'/i);
+    expect(sql).toMatch(/from wfpc\.tenant_package_installs[\s\S]+join wfpc\.tenant_package_purchases/i);
   });
 
   it("denies unbound workflows before checking package installs", async () => {
@@ -137,7 +138,7 @@ describe("ACID guard repository", () => {
   });
 
   it("installs packages idempotently with database conflict handling", async () => {
-    const client = createSequencedClient([[{ id: "install-1", status: "active" }]]);
+    const client = createSequencedClient([[{ tenant_id: "tenant-1" }], [{ id: "purchase-1" }], [{ id: "install-1", status: "active" }]]);
     const repository = createAcidGuardRepository(createTransactionRunner(client));
 
     await expect(
@@ -146,11 +147,48 @@ describe("ACID guard repository", () => {
         packageId: "package-1",
         userId: "user-1"
       })
-    ).resolves.toEqual({ id: "install-1", status: "active" });
+    ).resolves.toEqual({ installed: true, id: "install-1", status: "active" });
 
     const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
+    expect(sql).toMatch(/from wfpc\.tenant_memberships[\s\S]+role in \('owner', 'admin'\)/i);
+    expect(sql).toMatch(/from wfpc\.tenant_package_purchases[\s\S]+for update/i);
     expect(sql).toMatch(/insert into wfpc\.tenant_package_installs/i);
     expect(sql).toMatch(/on conflict \(tenant_id, package_id\) do update/i);
+  });
+
+  it("denies package installs when no active purchase is locked", async () => {
+    const client = createSequencedClient([[{ tenant_id: "tenant-1" }], []]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(
+      repository.installPackage({
+        tenantId: "tenant-1",
+        packageId: "package-1",
+        userId: "user-1"
+      })
+    ).resolves.toEqual({ installed: false, reason: "package_not_purchased" });
+
+    const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
+    expect(sql).toMatch(/from wfpc\.tenant_package_purchases[\s\S]+status = 'active'/i);
+    expect(sql).not.toMatch(/insert into wfpc\.tenant_package_installs/i);
+  });
+
+  it("denies package installs when the user cannot administer the tenant", async () => {
+    const client = createSequencedClient([[]]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(
+      repository.installPackage({
+        tenantId: "tenant-1",
+        packageId: "package-1",
+        userId: "user-1"
+      })
+    ).resolves.toEqual({ installed: false, reason: "package_not_purchased" });
+
+    const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
+    expect(sql).toMatch(/from wfpc\.tenant_memberships/i);
+    expect(sql).not.toMatch(/from wfpc\.tenant_package_purchases/i);
+    expect(sql).not.toMatch(/insert into wfpc\.tenant_package_installs/i);
   });
 
   it("revokes credentials with a locked row so new run reservations cannot race stale credentials", async () => {

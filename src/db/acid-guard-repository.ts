@@ -24,6 +24,10 @@ export type PackageInstallResult = {
   status: string;
 };
 
+export type PackageInstallDecision =
+  | { installed: true; id: string; status: string }
+  | { installed: false; reason: "package_not_purchased" };
+
 export function createAcidGuardRepository(runner: TransactionRunner) {
   return {
     async reserveWorkflowRun(input: ReserveWorkflowRunInput): Promise<ReserveWorkflowRunResult> {
@@ -62,9 +66,15 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
         const install = await transaction.query(
           `select i.id
            from wfpc.tenant_package_installs i
+           join wfpc.tenant_package_purchases p
+             on p.tenant_id = i.tenant_id
+            and p.package_id = i.package_id
            where i.tenant_id = $1
              and i.package_id = $2
              and i.status = 'active'
+             and p.status = 'active'
+             and p.starts_at <= now()
+             and (p.ends_at is null or p.ends_at > now())
            limit 1
            for update`,
           [input.tenantId, workflowRow.package_id]
@@ -116,8 +126,37 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
       });
     },
 
-    async installPackage(input: { tenantId: string; packageId: string; userId: string }): Promise<PackageInstallResult> {
+    async installPackage(input: { tenantId: string; packageId: string; userId: string }): Promise<PackageInstallDecision> {
       return runner.withTransaction(async (transaction) => {
+        const membership = await transaction.query(
+          `select tenant_id
+           from wfpc.tenant_memberships
+           where tenant_id = $1
+             and user_id = $2
+             and role in ('owner', 'admin')
+           limit 1`,
+          [input.tenantId, input.userId]
+        );
+        if (membership.rows.length === 0) {
+          return { installed: false, reason: "package_not_purchased" };
+        }
+
+        const purchase = await transaction.query(
+          `select id
+           from wfpc.tenant_package_purchases
+           where tenant_id = $1
+             and package_id = $2
+             and status = 'active'
+             and starts_at <= now()
+             and (ends_at is null or ends_at > now())
+           limit 1
+           for update`,
+          [input.tenantId, input.packageId]
+        );
+        if (purchase.rows.length === 0) {
+          return { installed: false, reason: "package_not_purchased" };
+        }
+
         const result = await transaction.query(
           `insert into wfpc.tenant_package_installs (tenant_id, package_id, installed_by_user_id, status)
            values ($1, $2, $3, 'active')
@@ -127,7 +166,7 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
           [input.tenantId, input.packageId, input.userId]
         );
         const row = asRecord(result.rows[0]);
-        return { id: String(row.id), status: String(row.status) };
+        return { installed: true, id: String(row.id), status: String(row.status) };
       });
     },
 

@@ -592,7 +592,7 @@ Next work after this phase:
 - [x] Replace the in-memory `run-creation-gate` usage with `createAcidGuardRepository.reserveWorkflowRun`.
 - [x] Wire worker status callbacks to `transitionWorkflowRunStatus` so terminal states cannot be overwritten.
 - [x] Wire credential revoke service adapter to the ACID repository.
-- [ ] Add authoritative package purchase storage and wire package install authorization into the same transaction as the install upsert.
+- [x] Add authoritative package purchase storage and wire package install authorization into the same transaction as the install upsert.
 - [ ] Add queue enqueue transaction/outbox behavior before production deployment.
 
 ## Post-MVP Phase: Runtime Wiring Foundation
@@ -643,8 +643,35 @@ Next work after this phase:
 
 Next work after this phase:
 
-- [ ] Add an authoritative package purchase/entitlement table and check it inside the package install transaction.
+- [x] Add an authoritative package purchase/entitlement table and check it inside the package install transaction.
 - [ ] Add a durable outbox for queue enqueue after workflow reservation.
+- [ ] Connect provider credential registration to the selected vault backend.
+- [ ] Add external VPS smoke tests for CORS, auth failure, exposed ports, and response guard.
+
+## Post-MVP Phase: Authoritative Package Purchase Guard
+
+**Outcome:** Package install authorization is now an authoritative Supabase transaction, not a preflight app check.
+
+**Files:**
+
+- Create: `supabase/migrations/0003_package_purchase_guards.sql`
+- Create: `tests/package-purchase-migration.test.ts`
+- Modify: `src/db/acid-guard-repository.ts`
+- Modify: `src/packages/acid-package-install-service.ts`
+- Modify: `scripts/apply-wfpc-migration.mjs`
+- Modify: `tests/acid-guard-repository.test.ts`
+- Modify: `tests/acid-package-install-service.test.ts`
+
+- [x] Add `wfpc.tenant_package_purchases` with tenant/package uniqueness, active/cancelled/expired/refunded states, start/end windows, RLS, and tenant member read policy.
+- [x] Add a live migration readiness check for the purchase table, active index, uniqueness, RLS, and member read policy.
+- [x] Change `createAcidGuardRepository.installPackage` to lock/check active purchase rows inside the same transaction as the install upsert.
+- [x] Change the package install service adapter to trust the repository's transactional install decision.
+- [x] Apply the migration to live Supabase and verify `wfpc` reports 15 tables.
+- [x] Run focused package purchase guard tests.
+
+Next work after this phase:
+
+- [ ] Add a durable queue outbox table and recovery worker for post-reservation enqueue reliability.
 - [ ] Connect provider credential registration to the selected vault backend.
 - [ ] Add external VPS smoke tests for CORS, auth failure, exposed ports, and response guard.
 

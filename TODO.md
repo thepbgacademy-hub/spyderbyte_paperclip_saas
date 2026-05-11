@@ -145,6 +145,10 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Add package install service adapter for future transactional purchase-backed installs.
 - [x] Add credential revoke service adapter backed by `createAcidGuardRepository.revokeCredential`.
 - [x] Add tests for package purchase authorization and credential revoke race behavior.
+- [x] Post-MVP Phase 11: Authoritative package purchase guard.
+- [x] Add `wfpc.tenant_package_purchases` migration with RLS and active purchase index.
+- [x] Wire package installs to lock/check active purchases inside the install transaction.
+- [x] Apply package purchase guard migration to live Supabase.
 
 ## Current Phase: API-Backed Dashboard Foundation Complete
 
@@ -158,7 +162,8 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Wire the deployed API server/runtime entrypoint to `createDashboardHttpHandler`.
 - [x] Wire workflow start and worker status updates to `createAcidGuardRepository`.
 - [x] Wire credential revoke service adapter to `createAcidGuardRepository`.
-- [ ] Add authoritative package purchase table and wire package install transaction to it.
+- [x] Add authoritative package purchase table and wire package install transaction to it.
+- [ ] Add durable queue enqueue outbox/recovery table and worker.
 - [ ] Add real secret vault backend integration behind provider credential registration.
 - [ ] Add real OAuth flows for Google Drive and Dropbox storage connectors.
 - [ ] Deploy the POC to VPS and run external exposed-port/CORS smoke tests.

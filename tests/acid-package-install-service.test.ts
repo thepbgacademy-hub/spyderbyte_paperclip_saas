@@ -5,12 +5,9 @@ import { createAcidPackageInstallService } from "../src/packages/acid-package-in
 describe("ACID package install service", () => {
   it("installs purchased packages through the transactional repository", async () => {
     const repository = {
-      installPackage: vi.fn().mockResolvedValue({ id: "install-1", status: "active" })
+      installPackage: vi.fn().mockResolvedValue({ installed: true, id: "install-1", status: "active" })
     };
-    const purchaseAuthorizer = {
-      canInstallPackage: vi.fn().mockResolvedValue(true)
-    };
-    const service = createAcidPackageInstallService({ repository, purchaseAuthorizer });
+    const service = createAcidPackageInstallService({ repository });
 
     await expect(
       service.installPackage({
@@ -27,14 +24,11 @@ describe("ACID package install service", () => {
     });
   });
 
-  it("blocks unpurchased package installs before writing to Supabase", async () => {
+  it("blocks unpurchased package installs from the transactional repository decision", async () => {
     const repository = {
-      installPackage: vi.fn()
+      installPackage: vi.fn().mockResolvedValue({ installed: false, reason: "package_not_purchased" })
     };
-    const service = createAcidPackageInstallService({
-      repository,
-      purchaseAuthorizer: { canInstallPackage: vi.fn().mockResolvedValue(false) }
-    });
+    const service = createAcidPackageInstallService({ repository });
 
     await expect(
       service.installPackage({
@@ -46,6 +40,10 @@ describe("ACID package install service", () => {
       code: "package_install_not_authorized",
       publicMessage: "package_unavailable"
     });
-    expect(repository.installPackage).not.toHaveBeenCalled();
+    expect(repository.installPackage).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      packageId: "pkg-social",
+      userId: "user-1"
+    });
   });
 });

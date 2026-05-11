@@ -28,6 +28,12 @@ const client = new Client({
   connectionString,
   ssl
 });
+let closing = false;
+client.on("error", (error) => {
+  if (!closing) {
+    throw error;
+  }
+});
 
 await client.connect();
 try {
@@ -55,6 +61,18 @@ try {
   if (!acidReady) {
     await client.query(readFileSync("supabase/migrations/0002_acid_race_guards.sql", "utf8"));
   }
+  const purchaseExisting = await client.query(
+    `select
+      exists (select 1 from information_schema.tables where table_schema = 'wfpc' and table_name = 'tenant_package_purchases') as has_table,
+      exists (select 1 from pg_indexes where schemaname = 'wfpc' and indexname = 'tenant_package_purchases_active_idx') as has_active_index,
+      exists (select 1 from pg_constraint where conname = 'tenant_package_purchases_tenant_id_package_id_key' and conrelid = to_regclass('wfpc.tenant_package_purchases')) as has_unique_purchase,
+      exists (select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'wfpc' and c.relname = 'tenant_package_purchases' and c.relrowsecurity) as has_rls,
+      exists (select 1 from pg_policies where schemaname = 'wfpc' and tablename = 'tenant_package_purchases' and policyname = 'members can read tenant package purchases') as has_member_read_policy`
+  );
+  const purchaseReady = Object.values(purchaseExisting.rows[0] ?? {}).every(Boolean);
+  if (!purchaseReady) {
+    await client.query(readFileSync("supabase/migrations/0003_package_purchase_guards.sql", "utf8"));
+  }
   const { rows } = await client.query(
     "select table_schema, table_name from information_schema.tables where table_schema = 'wfpc' order by table_name"
   );
@@ -62,7 +80,7 @@ try {
     JSON.stringify(
       {
         schema: "wfpc",
-        migrationApplied: !existing.rows[0]?.exists || !acidReady,
+        migrationApplied: !existing.rows[0]?.exists || !acidReady || !purchaseReady,
         tableCount: rows.length,
         tables: rows.map((row) => row.table_name)
       },
@@ -71,5 +89,6 @@ try {
     )
   );
 } finally {
+  closing = true;
   await client.end();
 }
