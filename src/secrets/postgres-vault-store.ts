@@ -7,7 +7,7 @@ export function createPostgresEncryptedVaultStore(client: QueryClient): Encrypte
       await client.query(
         `insert into wfpc_private.vault_secrets
           (secret_ref, tenant_id, provider_kind, ciphertext, iv, tag)
-         values ($1, $2, $3::wfpc.provider_kind, $4, $5, $6)
+         values ($1, $2, $3, $4, $5, $6)
          on conflict (secret_ref) do update
          set ciphertext = excluded.ciphertext,
              iv = excluded.iv,

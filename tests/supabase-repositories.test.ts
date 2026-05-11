@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createSupabaseRepositories, createSupabaseSecretRepository } from "../src/db/supabase-repositories.js";
+import { createSupabaseRepositories, createSupabaseSecretRepository, createSupabaseStorageConnectorRepository } from "../src/db/supabase-repositories.js";
 
 function createQuery(rowsBySql: Record<string, unknown[]>) {
   return vi.fn().mockImplementation((sql: string, values: unknown[]) => {
@@ -86,5 +86,88 @@ describe("Supabase wfpc repositories", () => {
     expect(String(call[0])).toMatch(/insert into wfpc\.secret_references/i);
     expect(JSON.stringify(call)).not.toContain("sk-");
     expect(call[1]).toContain("wf_secret_opaque");
+  });
+
+  it("persists storage connector summaries while keeping OAuth refs private", async () => {
+    const client = {
+      query: vi
+        .fn()
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: "storage-connector-1",
+              provider_kind: "google_drive",
+              display_name: "Company Drive",
+              public_target: { folderLabel: "Exports" }
+            }
+          ]
+        })
+        .mockResolvedValueOnce({ rows: [] })
+    };
+    const repositories = createSupabaseRepositories(client);
+
+    await expect(
+      repositories.registerStorageConnector({
+        tenantId: "tenant-1",
+        actorUserId: "user-1",
+        providerKind: "google_drive",
+        displayName: "Company Drive",
+        secretRefs: { oauthTokenRef: "wf_secret_storage" },
+        publicTarget: { folderLabel: "Exports" }
+      })
+    ).resolves.toEqual({
+      id: "storage-connector-1",
+      providerKind: "google_drive",
+      displayName: "Company Drive",
+      connected: true,
+      publicTarget: { folderLabel: "Exports" }
+    });
+
+    expect(String(client.query.mock.calls[0]?.[0])).toMatch(/insert into wfpc\.storage_connectors/i);
+    expect(String(client.query.mock.calls[1]?.[0])).toMatch(/insert into wfpc_private\.storage_connector_secrets/i);
+    expect(JSON.stringify(client.query.mock.calls[0])).not.toMatch(/wf_secret|oauthTokenRef/i);
+  });
+
+  it("persists storage connector rows through a transaction-backed repository", async () => {
+    const transaction = {
+      query: vi
+        .fn()
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: "storage-connector-1",
+              provider_kind: "dropbox",
+              display_name: "Dropbox",
+              public_target: { folderLabel: "Exports" }
+            }
+          ]
+        })
+        .mockResolvedValueOnce({ rows: [] })
+    };
+    const runner = {
+      withTransaction: vi.fn().mockImplementation(async (callback: (client: typeof transaction) => Promise<unknown>) => callback(transaction))
+    };
+    const repository = createSupabaseStorageConnectorRepository(runner);
+
+    await expect(
+      repository.register({
+        tenantId: "tenant-1",
+        actorUserId: "user-1",
+        providerKind: "dropbox",
+        displayName: "Dropbox",
+        secretRefs: { oauthTokenRef: "wf_secret_storage", refreshTokenRef: "wf_secret_storage" },
+        publicTarget: { folderLabel: "Exports" }
+      })
+    ).resolves.toEqual({
+      id: "storage-connector-1",
+      providerKind: "dropbox",
+      displayName: "Dropbox",
+      connected: true,
+      publicTarget: { folderLabel: "Exports" }
+    });
+
+    expect(runner.withTransaction).toHaveBeenCalledOnce();
+    expect(String(transaction.query.mock.calls[0]?.[0])).toMatch(/insert into wfpc\.storage_connectors/i);
+    expect(String(transaction.query.mock.calls[1]?.[0])).toMatch(/insert into wfpc_private\.storage_connector_secrets/i);
   });
 });

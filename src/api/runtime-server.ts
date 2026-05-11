@@ -2,7 +2,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 
 import type { ApiSession } from "./dashboard-api.js";
 import { createDashboardApi } from "./dashboard-api.js";
-import { createDashboardHttpHandler, type DashboardHttpResponse } from "./dashboard-http.js";
+import { createDashboardHttpHandler, type DashboardHttpRequest, type DashboardHttpResponse } from "./dashboard-http.js";
+import { createStorageOAuthHttpHandler } from "./storage-oauth-http.js";
 import { createAcidGuardRepository } from "../db/acid-guard-repository.js";
 import { createPgPool, createPgPoolQueryClient, createPgTransactionRunner } from "../db/postgres-client.js";
 import { createSupabaseRepositories } from "../db/supabase-repositories.js";
@@ -10,6 +11,8 @@ import { createFixedWindowRateLimiter } from "../security/rate-limit.js";
 import { createEncryptedSecretVault } from "../secrets/encrypted-vault.js";
 import { createPostgresEncryptedVaultStore } from "../secrets/postgres-vault-store.js";
 import { createVaultBackedProviderCredentialRegistration } from "../secrets/vault-backed-provider-registration.js";
+import { createMemoryOAuthStateStore, createStorageOAuthService, STORAGE_OAUTH_PROVIDER_CONFIGS } from "../storage/storage-oauth-service.js";
+import { createVaultBackedStorageOAuthRegistration } from "../storage/vault-backed-storage-oauth-registration.js";
 import type { WorkflowRunEnqueuer } from "../workflows/acid-run-reservation.js";
 import { createQueueOutboxPump } from "../workflows/queue-outbox-pump.js";
 import { createQueueOutboxWorker } from "../workflows/queue-outbox-worker.js";
@@ -21,6 +24,11 @@ export type RuntimeEnv = {
   apiPort: number;
   vaultMasterKey: string;
   runtimeEnv: Record<string, string | undefined>;
+  storageOAuthRedirectOrigin?: string;
+  googleDriveClientId?: string;
+  googleDriveClientSecret?: string;
+  dropboxClientId?: string;
+  dropboxClientSecret?: string;
 };
 
 export type RuntimeAuth = {
@@ -63,7 +71,12 @@ export function loadRuntimeEnv(source: NodeJS.ProcessEnv = process.env): Runtime
     allowedOrigins,
     apiPort,
     vaultMasterKey,
-    runtimeEnv: source
+    runtimeEnv: source,
+    ...(source.WF_STORAGE_OAUTH_REDIRECT_ORIGIN ? { storageOAuthRedirectOrigin: source.WF_STORAGE_OAUTH_REDIRECT_ORIGIN } : {}),
+    ...(source.GOOGLE_DRIVE_CLIENT_ID ? { googleDriveClientId: source.GOOGLE_DRIVE_CLIENT_ID } : {}),
+    ...(source.GOOGLE_DRIVE_CLIENT_SECRET ? { googleDriveClientSecret: source.GOOGLE_DRIVE_CLIENT_SECRET } : {}),
+    ...(source.DROPBOX_CLIENT_ID ? { dropboxClientId: source.DROPBOX_CLIENT_ID } : {}),
+    ...(source.DROPBOX_CLIENT_SECRET ? { dropboxClientSecret: source.DROPBOX_CLIENT_SECRET } : {})
   };
 }
 
@@ -88,7 +101,31 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
     audit: async () => undefined,
     runtimeEnv: options.env.runtimeEnv
   });
-  const acidRepository = createAcidGuardRepository(createPgTransactionRunner(pool));
+  const transactionRunner = createPgTransactionRunner(pool);
+  const acidRepository = createAcidGuardRepository(transactionRunner);
+  const storageOAuth =
+    options.env.storageOAuthRedirectOrigin && options.env.googleDriveClientId && options.env.dropboxClientId
+      ? createStorageOAuthService({
+          providers: {
+            google_drive: STORAGE_OAUTH_PROVIDER_CONFIGS.googleDrive({
+              clientId: options.env.googleDriveClientId,
+              ...(options.env.googleDriveClientSecret ? { clientSecret: options.env.googleDriveClientSecret } : {}),
+              redirectUri: `${options.env.storageOAuthRedirectOrigin}/api/storage/oauth/google_drive/callback`
+            }),
+            dropbox: STORAGE_OAUTH_PROVIDER_CONFIGS.dropbox({
+              clientId: options.env.dropboxClientId,
+              ...(options.env.dropboxClientSecret ? { clientSecret: options.env.dropboxClientSecret } : {}),
+              redirectUri: `${options.env.storageOAuthRedirectOrigin}/api/storage/oauth/dropbox/callback`
+            })
+          },
+          stateStore: createMemoryOAuthStateStore(),
+          registration: createVaultBackedStorageOAuthRegistration({
+            runner: transactionRunner,
+            vaultMasterKey: options.env.vaultMasterKey
+          }),
+          fetch: globalThis.fetch
+        })
+      : undefined;
   const outboxPump = options.workflowQueueEnqueuer
     ? createQueueOutboxPump({
         worker: createQueueOutboxWorker({
@@ -110,10 +147,29 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
     dashboardApi,
     rateLimiter: createFixedWindowRateLimiter({ limit: 120, windowMs: 60_000 })
   });
+  const storageOAuthHandler = storageOAuth
+    ? createStorageOAuthHttpHandler({
+        allowedOrigins: options.env.allowedOrigins,
+        authenticate: options.auth.authenticate,
+        requireTenantMember: repositories.requireTenantMember,
+        storageOAuth,
+        rateLimiter: createFixedWindowRateLimiter({ limit: 60, windowMs: 60_000 })
+      })
+    : undefined;
+  const runtimeHandler = async (request: DashboardHttpRequest): Promise<DashboardHttpResponse> => {
+    if (request.path.startsWith("/api/storage/oauth/")) {
+      if (!storageOAuthHandler) {
+        return { status: 503, headers: {}, body: { code: "storage_oauth_unavailable" } };
+      }
+      return storageOAuthHandler(request);
+    }
+    return handler(request);
+  };
 
   return {
-    server: createServer(createNodeRequestListener(handler)),
+    server: createServer(createNodeRequestListener(runtimeHandler)),
     registerProviderCredential,
+    storageOAuth,
     startWorkers: () => outboxPump?.start(),
     close: async () => {
       outboxPump?.stop();
@@ -122,7 +178,7 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
   };
 }
 
-export function createNodeRequestListener(handler: (request: Parameters<ReturnType<typeof createDashboardHttpHandler>>[0]) => Promise<DashboardHttpResponse>) {
+export function createNodeRequestListener(handler: (request: DashboardHttpRequest) => Promise<DashboardHttpResponse>) {
   return (request: IncomingMessage, response: ServerResponse) => {
     handleNodeRequest(handler, request, response).catch(() => {
       response.writeHead(500, { "content-type": "application/json" });
@@ -131,11 +187,12 @@ export function createNodeRequestListener(handler: (request: Parameters<ReturnTy
   };
 }
 
-async function handleNodeRequest(handler: (request: Parameters<ReturnType<typeof createDashboardHttpHandler>>[0]) => Promise<DashboardHttpResponse>, request: IncomingMessage, response: ServerResponse) {
+async function handleNodeRequest(handler: (request: DashboardHttpRequest) => Promise<DashboardHttpResponse>, request: IncomingMessage, response: ServerResponse) {
   const url = new URL(request.url ?? "/", "http://wealthfactory.local");
   const result = await handler({
     method: request.method ?? "GET",
     path: url.pathname,
+    query: Object.fromEntries(url.searchParams.entries()),
     headers: normalizeHeaders(request),
     bodyByteLength: Number(request.headers["content-length"] ?? 0),
     ip: readClientIp(request)

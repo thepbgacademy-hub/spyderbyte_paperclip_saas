@@ -129,15 +129,37 @@ describe("tenant settings API", () => {
     ).rejects.toThrow("Storage target cannot contain secret-like fields");
   });
 
-  it("registers storage connector summaries without returning OAuth references", async () => {
+  it("requires OAuth setup for Google Drive and Dropbox connectors", async () => {
+    const deps = {
+      authenticate: vi.fn().mockResolvedValue(session),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      registerProviderCredential: vi.fn(),
+      registerStorageConnector: vi.fn()
+    };
+    const api = createTenantSettingsApi(deps);
+
+    await expect(
+      api.registerStorageConnector({
+        authorization: "Bearer valid",
+        providerKind: "google_drive",
+        displayName: "Company Drive",
+        secretRefs: { oauthTokenRef: "vault://oauth", refreshTokenRef: "vault://refresh" },
+        publicTarget: { folderLabel: "Exports" }
+      })
+    ).rejects.toThrow("Storage connector must use OAuth setup");
+
+    expect(deps.registerStorageConnector).not.toHaveBeenCalled();
+  });
+
+  it("registers non-OAuth storage connector summaries without returning secret references", async () => {
     const deps = {
       authenticate: vi.fn().mockResolvedValue(session),
       requireTenantMember: vi.fn().mockResolvedValue(undefined),
       registerProviderCredential: vi.fn(),
       registerStorageConnector: vi.fn().mockResolvedValue({
         id: "storage-connector-1",
-        providerKind: "google_drive",
-        displayName: "Company Drive",
+        providerKind: "s3_compatible",
+        displayName: "Company Bucket",
         connected: true,
         publicTarget: { folderLabel: "Exports" }
       })
@@ -146,16 +168,16 @@ describe("tenant settings API", () => {
 
     const response = await api.registerStorageConnector({
       authorization: "Bearer valid",
-      providerKind: "google_drive",
-      displayName: "Company Drive",
-      secretRefs: { oauthTokenRef: "vault://oauth", refreshTokenRef: "vault://refresh" },
+      providerKind: "s3_compatible",
+      displayName: "Company Bucket",
+      secretRefs: { accessKeyRef: "vault://access-key", secretKeyRef: "vault://secret-key" },
       publicTarget: { folderLabel: "Exports" }
     });
 
     expect(response).toEqual({
       id: "storage-connector-1",
-      providerKind: "google_drive",
-      displayName: "Company Drive",
+      providerKind: "s3_compatible",
+      displayName: "Company Bucket",
       connected: true,
       publicTarget: { folderLabel: "Exports" }
     });

@@ -181,5 +181,6 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Add authoritative package purchase table and wire package install transaction to it.
 - [x] Add durable queue enqueue outbox/recovery table, worker, and runtime pump wiring.
 - [x] Add real secret vault backend integration behind provider credential registration.
-- [ ] Add real OAuth flows for Google Drive and Dropbox storage connectors.
+- [x] Add real OAuth flows for Google Drive and Dropbox storage connectors, including runtime begin/callback routes, offline refresh-token enforcement, and public-target sanitization.
+- [x] Add private storage connector secret-reference persistence.
 - [ ] Deploy the POC to VPS and run external exposed-port/CORS smoke tests.

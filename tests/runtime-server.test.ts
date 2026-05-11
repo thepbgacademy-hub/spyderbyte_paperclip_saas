@@ -15,6 +15,7 @@ vi.mock("../src/db/postgres-client.js", () => ({
 }));
 
 vi.mock("../src/db/supabase-repositories.js", () => ({
+  createSupabaseStorageConnectorRepository: vi.fn(() => ({ register: vi.fn() })),
   createSupabaseRepositories: vi.fn(() => ({
     requireTenantMember: vi.fn(),
     listWorkflows: vi.fn(),
@@ -97,6 +98,7 @@ describe("runtime server", () => {
         authorization: "Bearer token",
         origin: "https://www.spyderbyte.cloud"
       },
+      query: { tab: "runs" },
       bodyByteLength: 0,
       ip: "127.0.0.1"
     });
@@ -142,6 +144,26 @@ describe("runtime server", () => {
     });
 
     expect(runtime.registerProviderCredential).toEqual(expect.any(Function));
+    await runtime.close();
+  });
+
+  it("wires customer-owned storage OAuth when provider clients are configured", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {},
+        storageOAuthRedirectOrigin: "https://api.spyderbyte.cloud",
+        googleDriveClientId: "google-client",
+        dropboxClientId: "dropbox-client"
+      },
+      auth: { authenticate: vi.fn() }
+    });
+
+    expect(runtime.storageOAuth).toEqual(expect.objectContaining({ begin: expect.any(Function), complete: expect.any(Function) }));
     await runtime.close();
   });
 });

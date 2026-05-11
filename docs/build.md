@@ -741,7 +741,42 @@ Next work after this phase:
 
 Next work after this phase:
 
-- [ ] Add real OAuth flows for Google Drive and Dropbox storage connectors.
+- [x] Add real OAuth flows for Google Drive and Dropbox storage connectors.
+- [ ] Add external VPS smoke tests for CORS, auth failure, exposed ports, and response guard.
+
+## Post-MVP Phase: Customer-Owned Storage OAuth
+
+**Outcome:** Google Drive and Dropbox connector setup can run through OAuth with PKCE, exchange callback codes server-side, store OAuth tokens in the private encrypted vault, and persist connector secret references outside browser-readable tables.
+
+**Files:**
+
+- Create: `src/storage/storage-oauth-service.ts`
+- Create: `src/api/storage-oauth-http.ts`
+- Create: `supabase/migrations/0006_vault_storage_secret_kinds.sql`
+- Create: `supabase/migrations/0007_private_storage_connector_secrets.sql`
+- Create: `supabase/migrations/0008_storage_connector_tenant_fk.sql`
+- Create: `tests/storage-oauth-service.test.ts`
+- Create: `tests/storage-oauth-http.test.ts`
+- Create: `tests/vault-storage-kind-migration.test.ts`
+- Create: `tests/private-storage-connector-secrets-migration.test.ts`
+- Create: `tests/storage-connector-tenant-fk-migration.test.ts`
+- Modify: `src/secrets/encrypted-vault.ts`
+- Modify: `src/secrets/postgres-vault-store.ts`
+- Modify: `src/db/supabase-repositories.ts`
+- Modify: `scripts/apply-wfpc-migration.mjs`
+- Modify: `tests/supabase-repositories.test.ts`
+
+- [x] Add Google Drive and Dropbox OAuth provider configuration with PKCE authorization URLs.
+- [x] Add runtime-reachable OAuth begin/callback routes for Google Drive and Dropbox storage connectors.
+- [x] Add callback exchange that requires offline refresh-token access, stores `accessToken`/`refreshToken` in the encrypted vault, and returns only public connector summaries.
+- [x] Allow private vault rows to represent storage provider secret kinds directly.
+- [x] Add `wfpc_private.storage_connector_secrets` so connector secret references stay outside browser-readable `wfpc.storage_connectors`.
+- [x] Add same-tenant FK enforcement between public storage connector rows and private connector secret rows.
+- [x] Reject browser-supplied secret-reference registration for Google Drive/Dropbox; those providers must use the OAuth setup path.
+- [x] Apply storage OAuth/vault migrations to live Supabase and verify the helper is idempotent.
+
+Next work after this phase:
+
 - [ ] Add external VPS smoke tests for CORS, auth failure, exposed ports, and response guard.
 
 ## Self-Review

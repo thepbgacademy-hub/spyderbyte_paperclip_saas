@@ -47,10 +47,29 @@ function visit(value: unknown): void {
   }
 
   for (const [key, nested] of Object.entries(value)) {
+    if (key === "authorizationUrl" && isAllowedExternalAuthorizationUrl(nested)) {
+      continue;
+    }
     if (isForbiddenField(key)) {
       throw new Error("Forbidden customer-facing field");
     }
     visit(nested);
+  }
+}
+
+function isAllowedExternalAuthorizationUrl(value: unknown): boolean {
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  try {
+    const url = new URL(value);
+    if (!["https://accounts.google.com", "https://www.dropbox.com"].includes(url.origin)) {
+      return false;
+    }
+    return !/(access_token=|api[_-]?key[:=]|authorization[:=]|Bearer\s+|sk-[A-Za-z0-9_-]+)/i.test(value);
+  } catch {
+    return false;
   }
 }
 

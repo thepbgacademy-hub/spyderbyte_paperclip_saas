@@ -5,6 +5,7 @@ export type DashboardHttpRequest = {
   method: string;
   path: string;
   headers: Record<string, string | undefined>;
+  query?: Record<string, string>;
   bodyByteLength: number;
   ip: string;
 };

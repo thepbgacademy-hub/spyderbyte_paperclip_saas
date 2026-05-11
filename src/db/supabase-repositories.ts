@@ -1,3 +1,5 @@
+import type { TransactionRunner } from "./acid-guard-repository.js";
+
 export type QueryClient = {
   query(sql: string, values: readonly unknown[]): Promise<{ rows: unknown[] }>;
 };
@@ -149,6 +151,17 @@ export function createSupabaseRepositories(client: QueryClient) {
       ]);
       const id = asRecord(result.rows[0]).id;
       return typeof id === "string" ? id : "";
+    },
+
+    async registerStorageConnector(input: {
+      tenantId: string;
+      actorUserId: string;
+      providerKind: string;
+      displayName: string;
+      secretRefs: Record<string, string>;
+      publicTarget: Record<string, unknown>;
+    }) {
+      return registerStorageConnectorRecord(client, input);
     }
   };
 }
@@ -160,5 +173,57 @@ export function createSupabaseSecretRepository(client: QueryClient) {
     updateSecretRef: repositories.updateSecretRef,
     revoke: repositories.revokeSecretReference,
     findIdBySecretRef: repositories.findSecretReferenceId
+  };
+}
+
+export function createSupabaseStorageConnectorRepository(runner: TransactionRunner) {
+  return {
+    async register(input: {
+      tenantId: string;
+      actorUserId: string;
+      providerKind: string;
+      displayName: string;
+      secretRefs: Record<string, string>;
+      publicTarget: Record<string, unknown>;
+    }) {
+      return runner.withTransaction(async (transaction) => registerStorageConnectorRecord(transaction, input));
+    }
+  };
+}
+
+export async function registerStorageConnectorRecord(
+  client: QueryClient,
+  input: {
+    tenantId: string;
+    actorUserId: string;
+    providerKind: string;
+    displayName: string;
+    secretRefs: Record<string, string>;
+    publicTarget: Record<string, unknown>;
+  }
+) {
+  const connector = await client.query(
+    `insert into wfpc.storage_connectors
+      (tenant_id, provider_kind, display_name, public_target)
+     values ($1, $2, $3, $4::jsonb)
+     returning id, provider_kind, display_name, public_target`,
+    [input.tenantId, input.providerKind, input.displayName, JSON.stringify(input.publicTarget)]
+  );
+  const row = asRecord(connector.rows[0]);
+  await client.query(
+    `insert into wfpc_private.storage_connector_secrets
+      (storage_connector_id, tenant_id, provider_kind, secret_refs)
+     values ($1, $2, $3, $4::jsonb)
+     on conflict (storage_connector_id) do update
+     set secret_refs = excluded.secret_refs,
+         updated_at = now()`,
+    [String(row.id), input.tenantId, input.providerKind, JSON.stringify(input.secretRefs)]
+  );
+  return {
+    id: String(row.id),
+    providerKind: String(row.provider_kind),
+    displayName: String(row.display_name),
+    connected: true,
+    publicTarget: asRecord(row.public_target)
   };
 }

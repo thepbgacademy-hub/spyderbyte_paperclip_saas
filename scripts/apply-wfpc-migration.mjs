@@ -118,6 +118,39 @@ try {
   if (!vaultReady) {
     await client.query(readFileSync("supabase/migrations/0005_private_encrypted_vault.sql", "utf8"));
   }
+  const vaultKindExisting = await client.query(
+    `select exists (
+      select 1
+      from information_schema.columns
+      where table_schema = 'wfpc_private'
+        and table_name = 'vault_secrets'
+        and column_name = 'provider_kind'
+        and data_type = 'text'
+    ) as ready`
+  );
+  const vaultKindReady = Boolean(vaultKindExisting.rows[0]?.ready);
+  if (!vaultKindReady) {
+    await client.query(readFileSync("supabase/migrations/0006_vault_storage_secret_kinds.sql", "utf8"));
+  }
+  const storageSecretExisting = await client.query(
+    `select
+      exists (select 1 from information_schema.tables where table_schema = 'wfpc_private' and table_name = 'storage_connector_secrets') as has_table,
+      exists (select 1 from pg_indexes where schemaname = 'wfpc_private' and indexname = 'storage_connector_secrets_tenant_id_idx') as has_tenant_index,
+      exists (select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'wfpc_private' and c.relname = 'storage_connector_secrets' and c.relrowsecurity) as has_rls`
+  );
+  const storageSecretReady = Object.values(storageSecretExisting.rows[0] ?? {}).every(Boolean);
+  if (!storageSecretReady) {
+    await client.query(readFileSync("supabase/migrations/0007_private_storage_connector_secrets.sql", "utf8"));
+  }
+  const storageConnectorTenantFkExisting = await client.query(
+    `select
+      exists (select 1 from pg_constraint where conname = 'storage_connectors_id_tenant_id_key' and conrelid = to_regclass('wfpc.storage_connectors')) as has_unique_connector_tenant,
+      exists (select 1 from pg_constraint where conname = 'storage_connector_secrets_connector_tenant_fkey' and conrelid = to_regclass('wfpc_private.storage_connector_secrets')) as has_connector_tenant_fk`
+  );
+  const storageConnectorTenantFkReady = Object.values(storageConnectorTenantFkExisting.rows[0] ?? {}).every(Boolean);
+  if (!storageConnectorTenantFkReady) {
+    await client.query(readFileSync("supabase/migrations/0008_storage_connector_tenant_fk.sql", "utf8"));
+  }
   const { rows } = await client.query(
     "select table_schema, table_name from information_schema.tables where table_schema = 'wfpc' order by table_name"
   );
@@ -125,7 +158,15 @@ try {
     JSON.stringify(
       {
         schema: "wfpc",
-        migrationApplied: !existing.rows[0]?.exists || !acidReady || !purchaseReady || !outboxReady || !vaultReady,
+        migrationApplied:
+          !existing.rows[0]?.exists ||
+          !acidReady ||
+          !purchaseReady ||
+          !outboxReady ||
+          !vaultReady ||
+          !vaultKindReady ||
+          !storageSecretReady ||
+          !storageConnectorTenantFkReady,
         tableCount: rows.length,
         tables: rows.map((row) => row.table_name)
       },

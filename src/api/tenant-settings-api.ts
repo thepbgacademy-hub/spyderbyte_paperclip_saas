@@ -70,6 +70,9 @@ export function createTenantSettingsApi(deps: SettingsApiDeps) {
       }
     ) {
       assertPublicTarget(request.publicTarget);
+      if (request.providerKind === "google_drive" || request.providerKind === "dropbox") {
+        throw new Error("Storage connector must use OAuth setup");
+      }
       const session = await requireSession(request);
       const response = await deps.registerStorageConnector({
         tenantId: session.tenantId,

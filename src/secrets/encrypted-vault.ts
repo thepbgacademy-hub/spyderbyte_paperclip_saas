@@ -1,10 +1,8 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "node:crypto";
 
-import type { ProviderKind } from "../providers/provider-types.js";
-
 type EncryptedVaultRecord = {
   tenantId: string;
-  providerKind: ProviderKind;
+  providerKind: string;
   ciphertext: string;
   iv: string;
   tag: string;
@@ -30,7 +28,7 @@ export class VaultSecretNotFoundError extends Error {
 export function createEncryptedSecretVault(options: { masterKey: string; store: EncryptedVaultStore }) {
   const key = deriveKey(options.masterKey);
 
-  async function writeSecret(input: { tenantId: string; providerKind: ProviderKind; secretValues: Record<string, string>; secretRef?: string }) {
+  async function writeSecret(input: { tenantId: string; providerKind: string; secretValues: Record<string, string>; secretRef?: string }) {
     const secretRef = input.secretRef ?? `wf_secret_${randomUUID()}`;
     const encrypted = encryptJson(key, input.secretValues);
     await options.store.put({
@@ -48,7 +46,7 @@ export function createEncryptedSecretVault(options: { masterKey: string; store: 
   }
 
   return {
-    store(input: { tenantId: string; providerKind: ProviderKind; secretValues: Record<string, string> }) {
+    store(input: { tenantId: string; providerKind: string; secretValues: Record<string, string> }) {
       return writeSecret(input);
     },
 
