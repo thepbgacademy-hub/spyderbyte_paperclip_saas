@@ -453,6 +453,43 @@ Example package-provider behavior:
 - Those keys are collected after package install or when a workflow requiring that capability is first enabled.
 - Connecting a creative provider for Social Media does not authorize unrelated packages to use that provider unless their package definitions and tenant entitlements also allow it.
 
+## Post-MVP Phase: Temporary Artifacts And Customer-Owned Storage
+
+**Outcome:** Wealth Factory can generate reports, decks, images, and videos without becoming the customer's permanent storage/CDN provider.
+
+**Files:**
+
+- Create: `src/artifacts/artifact-types.ts`
+- Create: `src/artifacts/artifact-service.ts`
+- Create: `src/artifacts/artifact-cleanup-worker.ts`
+- Create: `src/artifacts/download-links.ts`
+- Create: `src/storage/storage-provider-types.ts`
+- Create: `src/storage/google-drive-provider.ts`
+- Create: `src/storage/dropbox-provider.ts`
+- Create: `tests/artifact-service.test.ts`
+- Create: `tests/artifact-cleanup.test.ts`
+- Create: `tests/storage-provider-connectors.test.ts`
+- Modify: `supabase/migrations/0001_initial_tenant_model.sql` or add an artifact/storage migration.
+- Modify: `src/workflows/run-service.ts`
+- Modify: `src/packages/package-provider-requirements.ts`
+
+- [ ] Add artifact metadata tables for tenant ID, run ID, package ID, type, filename/title, MIME type, byte size, checksum/hash, created time, expiration time, purge status, and export status.
+- [ ] Store generated artifact blobs in temporary private storage only.
+- [ ] Set default artifact TTL to `24 hours`.
+- [ ] Add a cleanup worker that purges expired blobs and leaves lightweight metadata.
+- [ ] Add authenticated tenant-scoped download links with short expiration.
+- [ ] Forbid public unauthenticated artifact URLs.
+- [ ] Add per-artifact, per-run, and per-tenant temporary storage limits.
+- [ ] Add audit events for artifact created, downloaded, exported, expired, and purged.
+- [ ] Add customer-owned storage connector types for Google Drive, Dropbox, OneDrive/SharePoint, customer S3-compatible storage, and customer-owned Supabase Storage.
+- [ ] Implement Google Drive and Dropbox connectors first if storage export is needed for the first media-heavy package.
+- [ ] Store storage connector OAuth tokens, refresh tokens, bucket credentials, and folder IDs by secret reference only.
+- [ ] Add package `media_storage` capability requirements so media-heavy packages can prompt for customer-owned storage after install.
+- [ ] Add tests proving expired artifacts are not downloadable after purge.
+- [ ] Add tests proving Tenant A cannot download, export, list, or infer Tenant B artifacts.
+- [ ] Add tests proving queue payloads do not contain artifact blobs, OAuth tokens, refresh tokens, bucket credentials, or private storage paths.
+- [ ] Reviewer checks storage cost controls, artifact TTL behavior, connector secret handling, tenant isolation, and audit coverage.
+
 ## Post-MVP Phase: Provider Credential Expansion
 
 **Outcome:** Wealth Factory supports company-specific OpenAI, Anthropic, xAI/Grok, OpenRouter, and optional company-isolated ChatGPT/Codex subscription auth.
@@ -487,6 +524,8 @@ Required assertions:
 
 - Tenant A cannot view Tenant B workflows, runs, secrets, logs, or audit events.
 - BYOK secrets are never redisplayed.
+- Generated artifacts expire and are no longer downloadable after the configured TTL.
+- Tenant A cannot download, export, list, or infer Tenant B generated artifacts.
 - API responses do not include Paperclip prompt, skill, command, agent, raw activity, or internal log fields.
 - Workflow run can be queued, processed, completed, and displayed as SpyderByte output.
 - Operator-only pages are inaccessible to regular tenant users.
@@ -505,6 +544,7 @@ Coverage check:
 - Anthropic, xAI/Grok, and OpenRouter are required post-MVP provider lanes.
 - Company-isolated ChatGPT/Codex subscription auth is required before offering subscription-based Codex usage to multiple companies.
 - Subscription packages and installed-package workflow boundaries are required before exposing workflows commercially.
+- Generated assets use temporary download-first storage by default, with customer-owned Google Drive/Dropbox/other storage connectors as the long-term option.
 - Paperclip invisibility is covered across all phases.
 - The Wealth Factory boundary layer is required before post-MVP dashboard/API work.
 - E2E tests are required in Phases 5 and 6.

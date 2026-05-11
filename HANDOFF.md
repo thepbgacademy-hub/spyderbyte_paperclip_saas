@@ -115,6 +115,37 @@ Package-specific provider nuance:
 - Connecting a provider for one package does not make it globally available to all packages.
 - Run creation must verify active subscription, installed package, workflow entitlement, provider lane allowlist, and valid non-revoked tenant credential before queueing work.
 
+## Generated Artifact Storage Position
+
+Wealth Factory should not be the default long-term storage/CDN provider for customer-generated reports, PDFs, slide decks, images, videos, source files, or raw media blobs.
+
+Default rule:
+
+- Generated artifacts are temporary.
+- Default TTL is `24 hours`.
+- Downloads are authenticated, tenant-scoped, and short-lived.
+- Expired artifacts are purged by a cleanup worker.
+- Wealth Factory keeps lightweight metadata, audit events, and small workflow context only.
+- Public unauthenticated artifact URLs are forbidden.
+
+Retain metadata such as artifact ID, tenant ID, run ID, package ID, artifact type, filename/title, MIME type, byte size, checksum/hash, created time, expiration time, purge status, and export status.
+
+Preferred long-term storage path:
+
+- Customer-owned Google Drive.
+- Customer-owned Dropbox.
+- Customer-owned OneDrive/SharePoint.
+- Customer-owned S3-compatible storage such as S3, Cloudflare R2, Backblaze B2, or MinIO.
+- Customer-owned Supabase Storage.
+
+Storage connector nuance:
+
+- Storage connectors are BYOK/bring-your-own-account integrations scoped to the tenant.
+- Packages can declare optional or required `media_storage` capabilities.
+- A Social Media package can use 24-hour download-only delivery by default, then offer Google Drive/Dropbox export for long-term media libraries.
+- OAuth tokens, refresh tokens, bucket credentials, folder IDs, and private storage paths must be secret-reference based and absent from browser responses and queue payloads.
+- A normal web app cannot silently save large generated assets to a user's local machine. Browser download is the MVP path; local SQLite/file storage belongs in a possible future desktop companion.
+
 ## Boundary Layer Requirements
 
 Required files:

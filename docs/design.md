@@ -228,6 +228,66 @@ Package provider rules:
 - The browser may show public provider labels and connection status, but never backend secret handles, raw provider responses, Paperclip mappings, prompts, skills, or commands.
 - Package-specific provider metadata should include capability names such as `text_generation`, `image_generation`, `video_generation`, `social_publishing`, and `media_storage` so workflows can request capabilities rather than hard-coded vendors.
 
+## Generated Artifact Storage
+
+Wealth Factory should not be the long-term storage or CDN provider for customer-generated assets by default. Generated PDFs, slide decks, images, videos, source design files, and heavy media can create large infrastructure bills and increase data-retention risk.
+
+Default MVP/POC artifact rule:
+
+- Generated artifacts are stored temporarily only long enough for workflow continuity and user download.
+- Default artifact TTL is `24 hours`.
+- Expired artifacts are purged by a background cleanup job.
+- Download links must be authenticated, tenant-scoped, and short-lived.
+- Public unauthenticated file URLs are forbidden.
+- The server keeps lightweight metadata after purge, not the artifact blob.
+
+Metadata Wealth Factory may retain:
+
+- Artifact ID.
+- Tenant ID.
+- Workflow/run ID.
+- Package ID and workflow ID.
+- Artifact type, filename/title, MIME type, byte size, checksum/hash, created time, expiration time, and purge status.
+- Download/export audit events.
+- A small user-facing summary or preview record when needed for ongoing workflow context.
+
+Data Wealth Factory should not retain by default:
+
+- Generated PDFs.
+- Slide decks.
+- Images.
+- Videos.
+- Source design files.
+- Raw provider media blobs.
+- Large intermediate files.
+
+Storage limits:
+
+- Enforce per-artifact size limits.
+- Enforce per-run temporary storage limits.
+- Enforce per-tenant temporary storage limits.
+- Refuse or downshift workflows that would exceed package limits unless the tenant connects customer-owned storage.
+
+Customer-owned storage connectors are the preferred long-term option after MVP:
+
+- Google Drive.
+- Dropbox.
+- OneDrive/SharePoint.
+- Customer-owned S3-compatible storage such as S3, Cloudflare R2, Backblaze B2, or MinIO.
+- Customer-owned Supabase Storage if the customer has its own project.
+
+Connector rules:
+
+- Storage connectors are BYOK/bring-your-own-account integrations and are scoped to the tenant.
+- Packages can declare optional or required `media_storage` provider capabilities.
+- A Social Media package can use temporary download-only delivery by default, then offer Google Drive/Dropbox export for long-term media libraries.
+- OAuth tokens, refresh tokens, bucket credentials, and folder IDs must be stored by secret reference and never exposed in browser responses or queue payloads.
+- Export jobs must write only to folders/buckets authorized by the tenant and should record audit events for export, failure, expiration, and deletion.
+
+Local machine storage note:
+
+- A normal web app cannot silently store generated files on a user's machine. For MVP, Wealth Factory can deliver browser downloads. A future desktop companion could support local SQLite/file storage, but browser-based local persistence should not be treated as reliable long-term storage for large business assets.
+
 ## Company-Specific Provider Credential Model
 
 Provider credentials are company-specific and handled by reference. No subscribing company may share another company's API keys, subscription auth state, Codex home, vault path, or runtime provider session.
