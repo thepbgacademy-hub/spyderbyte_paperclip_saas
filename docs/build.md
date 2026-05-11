@@ -14,6 +14,46 @@
 
 Subagents and implementers are not alone in the codebase. They must keep file ownership narrow, avoid reverting others' work, and adapt to existing changes. All code requires reviewer scrutiny for error and accuracy control before a phase is accepted.
 
+## Security And Split-Origin Rule
+
+Wealth Factory uses a split-site model: the customer portal/dashboard can be hosted on a normal website, while the backend API, workers, Redis/BullMQ, and private Paperclip runtime run on the VPS. The browser must only communicate with the Wealth Factory API over HTTPS. It must never communicate with Paperclip, Redis, workers, Supabase service-role endpoints, Docker, admin panels, or private ports.
+
+Required implementation files for security hardening:
+
+- Create: `src/security/cors.ts`
+- Create: `src/security/rate-limit.ts`
+- Create: `src/security/request-validation.ts`
+- Create: `src/security/security-headers.ts`
+- Create: `src/security/csrf.ts` if cookie auth is used across origins.
+- Create: `tests/security-boundary.test.ts`
+- Create: `tests/race-conditions.test.ts`
+- Create: `deploy/runbooks/security-checklist.md`
+- Modify: `deploy/docker-compose.yml`
+- Modify: `deploy/nginx/spyderbyte.conf`
+- Modify: `deploy/runbooks/deploy-poc.md`
+
+Required implementation rules:
+
+- Configure explicit portal origin allowlists. Wildcard CORS is forbidden for authenticated APIs.
+- Pick one auth strategy per deployed portal/API pair: secure cookies with CSRF protection, or bearer tokens with strict issuer/audience/expiry checks.
+- Keep Supabase service-role keys, Paperclip tokens, provider credentials, and secret-reference handles server-side only.
+- Expose only `80` and `443` publicly on the VPS; keep Paperclip, Redis, workers, Docker, and admin/debug ports private.
+- Add request schema validation, request size limits, route-level authorization, and rate limits to public routes.
+- Add transactional checks for subscription status, installed package, add-on entitlement, tenant pause state, workflow membership, and provider credential status before enqueueing any workflow.
+- Add idempotency keys, row locks, advisory locks, or unique constraints for run creation, package install, purchase activation, credential rotation/revoke, and queue enqueue paths.
+- Add dependency/image vulnerability review before deployment.
+- Add audit events for auth changes, provider credential lifecycle, package installs, entitlement changes, workflow starts, tenant pauses, operator actions, and security-relevant failures.
+
+Required tests:
+
+- Portal origin is allowed and an untrusted origin is rejected.
+- Public APIs reject missing auth, wrong tenant, wrong role, oversized payloads, and invalid schemas.
+- Tenant A cannot access Tenant B routes, rows, runs, credentials, package installs, audit events, or operator actions.
+- Concurrent run creation cannot bypass subscription/package/provider checks or enqueue duplicate work.
+- Credential revoke/rotate races cannot allow stale credentials to be used for new jobs.
+- Queue payloads never contain raw secrets, provider tokens, Paperclip company IDs, Paperclip run IDs, prompts, skills, commands, or backend secret handles.
+- Public responses pass the Wealth Factory response guard.
+
 ## Provider Credential Strategy
 
 Wealth Factory must treat every provider credential as company-specific. A subscribing company can use its own OpenAI, Anthropic, xAI/Grok, or OpenRouter API key, and optionally its own company-isolated ChatGPT/Codex subscription auth lane. No server-wide or operator-owned provider credential may be used as the default for subscriber work.
@@ -284,15 +324,52 @@ expect(publicResponse.workflowName).toContain("Wealth Factory");
 - Create: `deploy/runbooks/deploy-poc.md`
 - Create: `deploy/runbooks/incident-response.md`
 
-- [ ] Deploy public app at `www.spyderbyte.cloud`.
-- [ ] Deploy API at `api.spyderbyte.cloud` or behind the same origin.
+- [ ] Deploy public POC app at `www.spyderbyte.cloud` or configure the external customer portal origin.
+- [ ] Deploy API at `api.spyderbyte.cloud`.
+- [ ] Configure CORS to allow only the portal origin(s).
 - [ ] Deploy Paperclip on private network or private subdomain with authenticated mode.
 - [ ] Keep Redis private.
+- [ ] Expose only `80` and `443` publicly from the VPS reverse proxy.
 - [ ] Configure health checks.
-- [ ] Run smoke tests from outside the VPS proving Paperclip and Redis are not publicly reachable.
+- [ ] Run smoke tests from outside the VPS proving Paperclip, Redis, workers, Docker, Supabase service endpoints, and admin/debug ports are not publicly reachable.
+- [ ] Run CORS allow/deny smoke tests.
 - [ ] Run Playwright CLI E2E tests against the deployed POC.
 - [ ] Reviewer checks deployment exposure and logs.
 - [ ] Commit with message: `chore: add vps deployment poc`
+
+## Phase 6.5: Security Hardening And Split-Origin Deployment
+
+**Outcome:** The dashboard/API can be safely exposed as separate sites, with formal tenant isolation, network exposure, CORS, auth, RLS, race-condition, and vulnerability controls.
+
+**Files:**
+
+- Create: `src/security/cors.ts`
+- Create: `src/security/rate-limit.ts`
+- Create: `src/security/request-validation.ts`
+- Create: `src/security/security-headers.ts`
+- Create: `src/security/csrf.ts` if cookie auth is used.
+- Create: `tests/security-boundary.test.ts`
+- Create: `tests/race-conditions.test.ts`
+- Create: `deploy/runbooks/security-checklist.md`
+- Modify: `deploy/docker-compose.yml`
+- Modify: `deploy/nginx/spyderbyte.conf`
+- Modify: `deploy/runbooks/deploy-poc.md`
+- Modify: `supabase/migrations/0001_initial_tenant_model.sql` or add focused security migrations.
+
+- [ ] Define the customer portal origin and backend API origin for the POC and production target.
+- [ ] Add explicit CORS allowlist handling for the portal origin.
+- [ ] Implement the selected auth/session strategy and CSRF protection if using cross-origin cookies.
+- [ ] Add route-level auth, tenant membership, operator-role, request size, and schema validation middleware.
+- [ ] Add rate limits for auth-sensitive, workflow-start, provider-credential, package-install, and operator routes.
+- [ ] Add security headers at the reverse proxy or app layer.
+- [ ] Harden Docker Compose so only the reverse proxy binds public ports.
+- [ ] Add outside-the-VPS port exposure checks to the deployment runbook.
+- [ ] Add transactional entitlement checks and idempotency guards before queue enqueue.
+- [ ] Add race-condition tests for run creation, package install, entitlement change, tenant pause, and credential revoke/rotate.
+- [ ] Add RLS tests for all tenant-owned package, provider, workflow, run, and audit rows.
+- [ ] Add vulnerability scan instructions for dependencies and deployment images.
+- [ ] Run `npm run build`, `npm test`, `npm run lint`, and deployed smoke checks.
+- [ ] Reviewer checks split-origin auth, CORS, RLS, exposed ports, race-condition controls, vulnerability posture, and audit coverage.
 
 ## Phase 7: Final Dashboard Design Prep
 
@@ -405,7 +482,9 @@ Required assertions:
 Coverage check:
 
 - VPS hosting is covered in Phase 6.
+- Split-site portal/API deployment and VPS exposure security are covered in Phase 6.5.
 - Supabase is covered in Phase 2.
+- RLS, route authorization, CORS, rate limits, exposed ports, race-condition controls, and vulnerability checks are explicit security gates.
 - Redis/BullMQ is covered in Phase 1.
 - BYOK is covered in Phase 3.
 - OpenAI account/API-key support is covered in Phases 0 and 3, with OpenAI kept as the encouraged/default provider in post-MVP provider expansion.

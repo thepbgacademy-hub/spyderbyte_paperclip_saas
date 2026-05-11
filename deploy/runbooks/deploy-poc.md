@@ -4,10 +4,13 @@ Reference docs: `docs/design.md`, `docs/build.md`, `TODO.md`.
 
 ## Hosts
 
-- Public app: `www.spyderbyte.cloud`
-- Public API: `api.spyderbyte.cloud`
+- Customer portal/dashboard: hosted on a regular public website, origin configured as `WF_PORTAL_ORIGIN`.
+- POC public app: `www.spyderbyte.cloud` if the portal is hosted on the VPS during testing.
+- Public backend API: `api.spyderbyte.cloud`
 - Internal workflow engine: Docker private network only
 - Redis: Docker private network only
+
+The portal and API are treated as separate sites. The browser may call only the Wealth Factory API over HTTPS. It must not call Paperclip, Redis, workers, Docker, Supabase service-role endpoints, admin panels, or private ports.
 
 ## Required Secrets
 
@@ -19,6 +22,7 @@ Set these on the VPS as root-owned environment files or deployment secrets. Do n
 - `PAPERCLIP_SERVICE_TOKEN`
 - `SPYDERBYTE_IMAGE_TAG`
 - `PAPERCLIP_IMAGE_TAG`
+- `WF_PORTAL_ORIGIN`
 
 Tenant OpenAI and generic provider keys remain BYOK runtime secrets stored by reference. They must not be baked into Docker images, browser bundles, Compose files, or Redis jobs.
 
@@ -26,12 +30,13 @@ Tenant OpenAI and generic provider keys remain BYOK runtime secrets stored by re
 
 1. Build and push the `spyderbyte/web`, `spyderbyte/api`, and `spyderbyte/worker` images with an immutable commit tag.
 2. Copy `deploy/docker-compose.yml` and `deploy/nginx/spyderbyte.conf` to the VPS.
-3. Install TLS certificates for `www.spyderbyte.cloud` and `api.spyderbyte.cloud`.
+3. Install TLS certificates for `www.spyderbyte.cloud` if used for the POC app and `api.spyderbyte.cloud` for the backend API.
 4. Set `SPYDERBYTE_IMAGE_TAG` to the selected commit tag and `PAPERCLIP_IMAGE_TAG` to a reviewed version or digest-backed tag.
-5. Load the required server-side secrets into the shell or an `.env` file readable only by the deploy user.
-6. Run `docker compose -f deploy/docker-compose.yml pull`.
-7. Run `docker compose -f deploy/docker-compose.yml up -d`.
-8. Run `docker compose -f deploy/docker-compose.yml ps` and confirm `api`, `worker`, `paperclip`, and `redis` are healthy or running.
+5. Set `WF_PORTAL_ORIGIN` to the exact customer portal origin. Do not use wildcard origins for authenticated routes.
+6. Load the required server-side secrets into the shell or an `.env` file readable only by the deploy user.
+7. Run `docker compose -f deploy/docker-compose.yml pull`.
+8. Run `docker compose -f deploy/docker-compose.yml up -d`.
+9. Run `docker compose -f deploy/docker-compose.yml ps` and confirm `api`, `worker`, `paperclip`, and `redis` are healthy or running.
 
 ## Smoke Tests
 
@@ -42,6 +47,10 @@ curl.exe -I https://www.spyderbyte.cloud
 curl.exe -I https://api.spyderbyte.cloud/health
 curl.exe --connect-timeout 5 http://<vps-public-ip>:9000/health
 Test-NetConnection www.spyderbyte.cloud -Port 6379
+Test-NetConnection api.spyderbyte.cloud -Port 80
+Test-NetConnection api.spyderbyte.cloud -Port 443
+Test-NetConnection api.spyderbyte.cloud -Port 9000
+Test-NetConnection api.spyderbyte.cloud -Port 6379
 ```
 
 From the VPS:
@@ -55,10 +64,26 @@ Expected:
 
 - App returns HTTP 200 or 304.
 - API health returns HTTP 200 with SpyderByte-safe health output.
+- API responses include only Wealth Factory-safe health fields.
 - Public port 9000 is closed or unreachable from outside the VPS.
 - Redis port is closed externally.
+- Only 80 and 443 are externally reachable on the API host.
 - `docker compose port paperclip 9000` prints no host binding.
 - `docker compose port redis 6379` prints no host binding.
+
+Run CORS checks from outside the VPS:
+
+```powershell
+curl.exe -i -X OPTIONS https://api.spyderbyte.cloud/health -H "Origin: $env:WF_PORTAL_ORIGIN" -H "Access-Control-Request-Method: GET"
+curl.exe -i -X OPTIONS https://api.spyderbyte.cloud/health -H "Origin: https://untrusted.example" -H "Access-Control-Request-Method: GET"
+```
+
+Expected:
+
+- The configured portal origin receives the intended CORS headers.
+- The untrusted origin does not receive an allow-origin header.
+
+Before release-candidate deploys, run the security checklist in `deploy/runbooks/security-checklist.md`.
 
 Then run:
 

@@ -49,16 +49,78 @@ Customer browser
 
 ## VPS Layout
 
-Public host:
+Split-site production model:
 
-- `www.spyderbyte.cloud` serves the branded application.
+- The customer portal/dashboard may be hosted on a regular public website separate from the backend VPS.
+- The VPS hosts the Wealth Factory API, workers, Redis/BullMQ, and private Paperclip runtime.
+- The browser calls only the Wealth Factory public API over HTTPS. It never calls Paperclip, Redis, Supabase service-role endpoints, worker endpoints, or internal admin ports.
+- The exact portal origin can change by deployment, but it must be configured as an explicit allowlist value, not discovered from request headers.
+
+Public/backend hosts:
+
+- `www.spyderbyte.cloud` may serve the POC branded application or point users to the customer portal.
+- `api.spyderbyte.cloud` is the recommended public API origin for the VPS backend.
 
 Recommended private/internal hosts:
 
-- `api.spyderbyte.cloud` for the SpyderByte API.
 - `paperclip-internal.spyderbyte.cloud` or private network DNS for Paperclip. This should not be publicly routable if the VPS/network setup supports private ingress.
 - `redis` on a private Docker/network interface only.
 - Supabase initially may use the Supabase plugin/project for testing, while the final Supabase deployment will run on a different VPS.
+
+## Security Architecture
+
+Security is a product requirement, not a final deployment chore. Wealth Factory will be sold to many companies, so every public route, database policy, queue action, package lookup, provider credential, and Paperclip call must assume hostile cross-tenant input until proven otherwise.
+
+Network and origin rules:
+
+- The public VPS should expose only `80` and `443` through a reverse proxy.
+- SSH must be restricted by firewall, key-only auth, and preferably VPN or trusted IP allowlists.
+- Redis, Paperclip, Postgres/Supabase, Docker daemon, worker metrics, admin panels, and debug ports must not bind to public interfaces.
+- CORS must allow only the configured portal origin(s). Wildcard CORS is forbidden for authenticated routes.
+- If cookie-based auth crosses origins, cookies must be `Secure`, `HttpOnly`, and use the narrowest viable `SameSite` setting. Cross-site cookie auth requires CSRF protection.
+- If bearer tokens are used, the backend must validate issuer, audience, expiry, tenant membership, and route-level authorization on every request.
+- No Supabase service-role key, Paperclip service token, provider credential, or secret reference handle may be shipped to the browser.
+
+API protection rules:
+
+- Every public route must use strict schema validation, request size limits, authentication, tenant membership checks, and route-level authorization.
+- Rate limits must exist for auth-sensitive, workflow-start, provider-credential, package-install, and operator routes.
+- Public errors must use Wealth Factory-safe codes and must not reveal Paperclip URLs, provider internals, SQL errors, Redis keys, stack traces, prompt names, skill names, command names, or service-token state.
+- Security headers should include HSTS after TLS is stable, `X-Content-Type-Options`, `Referrer-Policy`, a restrictive `Content-Security-Policy`, and frame protections appropriate for the portal.
+
+RLS and data rules:
+
+- Supabase RLS is required on tenant-owned tables before enabling a second tenant.
+- Positive and negative RLS tests must prove that Tenant A cannot read, update, delete, replay, enqueue, or infer Tenant B resources.
+- Service-role operations must live only in backend/worker code paths and should be wrapped by application authorization, audit events, and narrow helper methods.
+- PII, customer data, provider metadata, secret references, package assets, prompts/rules, and audit trails are sensitive. Logs must be minimized and redacted by default.
+
+Race-condition and entitlement rules:
+
+- Subscription status, package install status, add-on entitlement, workflow membership, tenant pause state, and provider credential validity must be checked inside the run-creation transaction before enqueueing work.
+- Run creation, package installation, purchase activation, credential rotation/revoke, queue enqueue, and tenant pause/cancel flows need idempotency keys or unique constraints.
+- Use row locks, advisory locks, or unique constraints where concurrent requests could double-install packages, double-enqueue runs, revive revoked credentials, or bypass a subscription change.
+- A canceled subscription, revoked package, paused tenant, or revoked provider credential must block new work immediately and must be considered by workers before each Paperclip call.
+- The server must never trust client-selected tenant IDs, package IDs, workflow IDs, employee IDs, provider IDs, Paperclip company IDs, or Paperclip run IDs as authoritative.
+
+Vulnerability-management rules:
+
+- Container images and dependencies should be pinned to reviewed versions or immutable digests for deployment.
+- Run dependency audits and image vulnerability scans before a release candidate is deployed.
+- Keep the VPS patched, TLS certificates renewed, backups tested, and secrets rotated on a defined schedule.
+- Containers should run with least privilege and without unnecessary host mounts. The Docker socket must never be exposed to the app, worker, or public network.
+- Audit events should record auth changes, provider credential lifecycle events, package installs, entitlement changes, workflow starts, tenant pauses, operator actions, and security-relevant failures.
+
+Security test gates:
+
+- Exposed port smoke tests from outside the VPS.
+- CORS allow/deny tests for the portal origin and an untrusted origin.
+- RLS positive and negative tenant tests.
+- Tenant cross-access route tests.
+- Race-condition and idempotency tests for run creation, package install, entitlement changes, and credential rotation/revoke.
+- Response-guard tests proving customer-facing payloads cannot leak Paperclip or internal fields.
+- Queue payload tests proving jobs contain no raw secrets or private Paperclip identifiers.
+- Dependency and image vulnerability checks before deployment.
 
 ## Tenant Model
 

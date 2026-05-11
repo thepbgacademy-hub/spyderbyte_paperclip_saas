@@ -28,14 +28,52 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 
 ## Next Build Order
 
-1. Build the deterministic TypeScript Wealth Factory boundary layer described in `docs/build.md`.
-2. Build package entitlement and subscription gates.
-3. Expand company-specific provider credential lanes.
-4. Replace the Phase 5 demo UI state with authenticated API-backed state.
-5. Build the full Wealth Factory control panel/dashboard from `docs/dashboard-design-prep.md`.
-6. Deploy the POC to the VPS using the Phase 6 deployment runbooks once credentials and final Supabase target are available.
+1. Build the security hardening baseline for split-origin portal/API deployment.
+2. Build the deterministic TypeScript Wealth Factory boundary layer described in `docs/build.md`.
+3. Build package entitlement and subscription gates.
+4. Expand company-specific provider credential lanes.
+5. Replace the Phase 5 demo UI state with authenticated API-backed state.
+6. Build the full Wealth Factory control panel/dashboard from `docs/dashboard-design-prep.md`.
+7. Deploy the POC to the VPS using the Phase 6 deployment runbooks once credentials and final Supabase target are available.
 
-Do not build customer-facing dashboard routes before the boundary layer exists.
+Do not build customer-facing dashboard routes before the security baseline and boundary layer exist.
+
+## Security Position
+
+Wealth Factory will be sold to many companies. Security must cover user data, provider keys, PII, public APIs, exposed ports, vulnerabilities, race conditions, and Supabase RLS before commercial exposure.
+
+The intended deployment is split-origin:
+
+- The customer portal/dashboard can be hosted on a regular public website.
+- The backend API, workers, Redis/BullMQ, and private Paperclip runtime run on the VPS.
+- The browser calls only the Wealth Factory API over HTTPS.
+- Paperclip, Redis, workers, Docker, admin/debug ports, Supabase service-role operations, and private service tokens remain server-side/private.
+- Public VPS exposure should be limited to `80` and `443` through the reverse proxy.
+- CORS must allow only the configured portal origin(s). Wildcard CORS is forbidden for authenticated APIs.
+- If cross-origin cookies are used, add `Secure`, `HttpOnly`, correct `SameSite`, and CSRF protection. If bearer tokens are used, validate issuer, audience, expiry, membership, and role.
+- Supabase service-role keys, Paperclip tokens, provider credentials, and secret-reference handles must never reach browser code.
+
+Required security files for the next roadmap:
+
+- `src/security/cors.ts`
+- `src/security/rate-limit.ts`
+- `src/security/request-validation.ts`
+- `src/security/security-headers.ts`
+- `src/security/csrf.ts` if cookie auth is used.
+- `tests/security-boundary.test.ts`
+- `tests/race-conditions.test.ts`
+- `deploy/runbooks/security-checklist.md`
+
+Security tests to preserve:
+
+- CORS allow/deny tests for portal and untrusted origins.
+- RLS positive and negative tenant tests.
+- Route-level tenant and operator authorization tests.
+- Race-condition/idempotency tests for run creation, package install, entitlement change, tenant pause, and credential revoke/rotate.
+- Queue payload tests proving no raw secrets or Paperclip internals are enqueued.
+- Response-guard tests proving customer-facing responses contain only Wealth Factory terms and fields.
+- Outside-the-VPS exposed-port smoke tests.
+- Dependency and image vulnerability checks before deploy.
 
 ## Commercial Package Position
 
@@ -119,6 +157,7 @@ Nuances to preserve:
 
 - Create `src/wealthfactory/workflow-registry.ts`, `src/wealthfactory/dto-mappers.ts`, `src/wealthfactory/response-guard.ts`, and `src/wealthfactory/public-errors.ts`.
 - Add `tests/wealthfactory-boundary.test.ts` before exposing new dashboard API routes.
+- Add security middleware and tests before exposing customer-facing dashboard API routes.
 - Add package/subscription entitlement checks before exposing commercial workflow run APIs.
 - Expand provider credentials to company-specific OpenAI API, Anthropic API, xAI/Grok API, OpenRouter API, and optional company-isolated ChatGPT/Codex subscription auth.
 - Never use a shared server/operator `~/.codex`, `CODEX_HOME`, ChatGPT login, or provider API key for subscriber work.
@@ -128,7 +167,9 @@ Nuances to preserve:
 - Add route tests proving tenant isolation and operator-only access.
 - Add entitlement tests proving tenants cannot run workflows outside their installed package/industry.
 - Add asset registry tests proving tenants cannot resolve prompts/rules/assets outside their installed package.
+- Add race-condition tests proving concurrent requests cannot bypass entitlement, subscription, tenant pause, or credential revoke checks.
 - Add response-guard tests proving Paperclip/internal terms and fields are rejected.
+- Add CORS, request validation, rate-limit, and exposed-port checks for split-origin deployment.
 - Add Playwright tests for member, owner, and operator paths.
 - Keep `npm run build`, `npm test`, `npm run lint`, `npm run build:web`, and `npm run e2e` passing as the dashboard grows.
 
@@ -141,5 +182,8 @@ Nuances to preserve:
 - Anthropic, xAI/Grok, OpenRouter, and generic providers must use the same secret-reference model as OpenAI API keys.
 - ChatGPT/Codex subscription auth must be isolated by company or authorized company user.
 - Supabase RLS must protect provider metadata and secret references because metadata can be sensitive.
+- The frontend/dashboard site and backend/API VPS are different sites; preserve explicit origin, CORS, auth, CSRF, and firewall controls.
+- Only the reverse proxy should expose public ports on the VPS. Paperclip, Redis, workers, Docker, and admin/debug ports stay private.
+- Race conditions around subscriptions, package installs, add-ons, tenant pause, credential revoke/rotate, and queue enqueue must be blocked transactionally.
 - Subagents and implementers are not alone in the codebase. Do not revert others' work.
 - All code and docs require reviewer scrutiny before acceptance.
