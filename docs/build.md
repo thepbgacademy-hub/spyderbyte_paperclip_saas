@@ -530,6 +530,42 @@ Required assertions:
 - Workflow run can be queued, processed, completed, and displayed as SpyderByte output.
 - Operator-only pages are inaccessible to regular tenant users.
 
+## Post-MVP Phase: API-Backed Dashboard Foundation
+
+**Outcome:** The POC dashboard has a tested customer-facing HTTP boundary and Supabase-backed read repositories for the `wfpc` schema.
+
+**Files:**
+
+- Create: `src/api/dashboard-http.ts`
+- Create: `src/api/tenant-settings-api.ts`
+- Create: `src/db/supabase-repositories.ts`
+- Create: `src/db/postgres-client.ts`
+- Create: `scripts/apply-wfpc-migration.mjs`
+- Create: `tests/dashboard-http.test.ts`
+- Create: `tests/supabase-repositories.test.ts`
+- Create: `tests/tenant-settings-api.test.ts`
+- Create: `tests/postgres-client.test.ts`
+- Create: `tests/dashboard-client.test.ts`
+- Modify: `apps/web/src/dashboard-client.ts`
+
+- [x] Add repeat-safe live Supabase schema helper for `wfpc`.
+- [x] Add a dashboard HTTP handler with explicit CORS allowlist, request size guard, rate limiting, security headers, auth, and response guard.
+- [x] Add Supabase repository mappers for dashboard workflows, packages, artifacts, provider connections, and tenant membership.
+- [x] Add a Postgres query client factory that supports self-hosted Supabase pooler connections with `SUPABASE_DB_SSL=false`.
+- [x] Add provider credential registration API for company-specific OpenAI, Anthropic, xAI/Grok, OpenRouter, Codex subscription, and generic provider lanes.
+- [x] Add customer-owned storage connector registration API that returns public summaries only.
+- [x] Add dashboard client API fetch/mapping behavior.
+- [x] Run live Supabase schema reachability check against the VPS-hosted database.
+- [x] Run `npm run build`, `npm test`, `npm run lint`, `npm run build:web`, and `npm run e2e`.
+
+Next work after this phase:
+
+- [ ] Add the deployed API server/runtime entrypoint and compose `createDashboardApi`, `connectPgQueryClient`, and `createSupabaseRepositories`.
+- [ ] Replace remaining in-memory write paths with Supabase transactions, idempotency keys, and route-level authorization.
+- [ ] Connect provider credential registration to the selected vault backend.
+- [ ] Implement Google Drive and Dropbox OAuth for storage connector setup.
+- [ ] Run external VPS smoke tests for CORS, auth failures, exposed ports, and response-guarded DTOs.
+
 ## Self-Review
 
 Coverage check:

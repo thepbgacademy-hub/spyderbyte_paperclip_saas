@@ -6,9 +6,9 @@ This handoff is intentionally overwritten after each phase. It now describes the
 
 Phases 0 through 7 are complete, tested, reviewed, and committed.
 
-The first post-MVP productization slice is implemented locally: security baseline helpers, Wealth Factory boundary layer, package entitlements/provider requirements, temporary artifacts, expanded provider definitions, and a Wealth Factory dashboard POC surface.
+The first post-MVP productization slices are implemented locally: security baseline helpers, Wealth Factory boundary layer, package entitlements/provider requirements, temporary artifacts, expanded provider definitions, a Wealth Factory dashboard POC surface, and the first API-backed dashboard foundation.
 
-The next session should replace the in-memory POC services with authenticated API routes and Supabase-backed state, then prepare VPS deployment smoke tests.
+The next session should wire the deployed API runtime entrypoint to the new HTTP handler, replace remaining write paths with Supabase transactions and vault-backed secrets, then prepare VPS deployment smoke tests.
 
 ## Reference Docs
 
@@ -41,18 +41,27 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 - Authenticated dashboard API DTO primitive in `src/api/dashboard-api.ts`.
 - Supabase schema coverage for packages, package installs, provider requirements, artifact metadata, and storage connectors.
 - Dashboard client abstraction in `apps/web/src/dashboard-client.ts`.
+- API-backed dashboard client fetch mapping in `apps/web/src/dashboard-client.ts`.
+- Dashboard HTTP boundary in `src/api/dashboard-http.ts`.
+- Tenant settings API for provider credentials and storage connectors in `src/api/tenant-settings-api.ts`.
+- Supabase `wfpc` repository mappers in `src/db/supabase-repositories.ts`.
+- Self-hosted Supabase pooler Postgres client factory in `src/db/postgres-client.ts`.
+- Repeat-safe live schema helper in `scripts/apply-wfpc-migration.mjs`.
 - Wealth Factory dashboard POC updates in `apps/web/src/App.tsx`.
 - Tests for security, boundary, entitlements, artifacts, provider lanes, and E2E dashboard behavior.
+- Tests for dashboard HTTP, dashboard client mapping, Supabase repository mappers, Postgres client behavior, and tenant settings APIs.
 - Provider enum support in the initial Supabase migration and DB types for OpenAI API, ChatGPT/Codex subscription auth, Anthropic, xAI/Grok, OpenRouter, and generic providers.
+- Live Supabase reachability confirmed from Windows through the self-hosted pooler with `SUPABASE_DB_SSL=false`; `wfpc` has 13 tables.
 
 ## Next Build Order
 
-1. Wire the dashboard client to real HTTP endpoints.
-2. Replace in-memory POC repositories with Supabase repository implementations.
-3. Implement real provider credential registration endpoints for expanded provider lanes.
-4. Implement Google Drive and Dropbox OAuth/storage connector setup if needed for the first media package.
-5. Add deployed API smoke tests for CORS, auth failures, dashboard DTO response guard, and exposed ports.
-6. Deploy the POC to the VPS using the Phase 6 deployment runbooks once credentials and final Supabase target are available.
+1. Add the deployed API server/runtime entrypoint that calls `createDashboardHttpHandler`.
+2. Compose `createDashboardApi` with `connectPgQueryClient` and `createSupabaseRepositories` in the runtime.
+3. Replace remaining workflow/package write paths with Supabase transactions and idempotency controls.
+4. Connect provider credential registration to the selected secret vault backend.
+5. Implement Google Drive and Dropbox OAuth/storage connector setup if needed for the first media package.
+6. Add deployed API smoke tests for CORS, auth failures, dashboard DTO response guard, and exposed ports.
+7. Deploy the POC to the VPS using the Phase 6 deployment runbooks once runtime secrets and final origin values are available.
 
 ## Security Position
 
@@ -73,7 +82,7 @@ Required security files for the next roadmap:
 
 - `src/security/cors.ts` exists.
 - `src/security/rate-limit.ts` exists.
-- `src/security/request-validation.ts` still needs route integration.
+- `src/security/request-validation.ts` still needs full route integration beyond the dashboard HTTP primitive.
 - `src/security/security-headers.ts` can be split from `cors.ts` when the HTTP layer is added.
 - `src/security/csrf.ts` if cookie auth is used.
 - `tests/security-boundary.test.ts` exists.
@@ -221,7 +230,7 @@ Nuances to preserve:
 - Add package/subscription entitlement checks before exposing commercial workflow run APIs.
 - Expand provider credentials to company-specific OpenAI API, Anthropic API, xAI/Grok API, OpenRouter API, and optional company-isolated ChatGPT/Codex subscription auth.
 - Never use a shared server/operator `~/.codex`, `CODEX_HOME`, ChatGPT login, or provider API key for subscriber work.
-- Replace Phase 5 demo UI state with authenticated API-backed state.
+- Replace remaining Phase 5 demo UI state with authenticated API-backed state.
 - Derive tenant role and operator role from server-side authorization.
 - Use Wealth Factory DTOs rather than raw database rows or internal workflow responses.
 - Add route tests proving tenant isolation and operator-only access.
@@ -235,8 +244,9 @@ Nuances to preserve:
 
 ## Latest Verification
 
+- `node scripts/apply-wfpc-migration.mjs` passed and reported `wfpc` with 13 tables.
 - `npm run build` passed.
-- `npm test` passed with 69 tests.
+- `npm test` passed with 92 tests.
 - `npm run lint` passed.
 - `npm run build:web` passed with lucide `use client` warnings from dependency bundling.
 - `npm run e2e` passed with 3 Playwright tests.

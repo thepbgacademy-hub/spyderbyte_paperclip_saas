@@ -51,6 +51,13 @@ describe("Wealth Factory boundary layer", () => {
     expect(() => assertWealthFactoryResponse({ ...dto, secret_ref: "leak" })).toThrow("Forbidden customer-facing field");
   });
 
+  it("blocks secret-like values under harmless field names", () => {
+    expect(() => assertWealthFactoryResponse({ note: "Bearer should-not-be-public" })).toThrow("Forbidden customer-facing text");
+    expect(() => assertWealthFactoryResponse({ url: "https://example.test/export?access_token=hidden" })).toThrow(
+      "Forbidden customer-facing text"
+    );
+  });
+
   it("translates internal errors to public Wealth Factory errors", () => {
     expect(toPublicWorkflowError({ code: "paperclip_disabled" })).toEqual({ code: "tenant_paused" });
     expect(toPublicWorkflowError(new Error("prompt stack trace"))).toEqual({ code: "workflow_failed" });
