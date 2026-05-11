@@ -8,7 +8,7 @@ Phases 0 through 7 are complete, tested, reviewed, and committed.
 
 The first post-MVP productization slices are implemented locally: security baseline helpers, Wealth Factory boundary layer, package entitlements/provider requirements, temporary artifacts, expanded provider definitions, a Wealth Factory dashboard POC surface, the first API-backed dashboard foundation, and the first database-backed ACID/race-condition foundation.
 
-The next session should wire the deployed API runtime entrypoint to the new HTTP handler, connect runtime workflow/package/credential/worker paths to the ACID guard repository and vault-backed secrets, then prepare VPS deployment smoke tests.
+The next session should finish wiring package install and credential revoke paths to the ACID guard repository, connect provider credential registration to vault-backed secrets, then prepare VPS deployment smoke tests.
 
 ## Reference Docs
 
@@ -47,6 +47,9 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 - Supabase `wfpc` repository mappers in `src/db/supabase-repositories.ts`.
 - Self-hosted Supabase pooler Postgres client factory in `src/db/postgres-client.ts`.
 - ACID guard repository in `src/db/acid-guard-repository.ts`.
+- Runtime server adapter in `src/api/runtime-server.ts`.
+- ACID workflow run reservation facade in `src/workflows/acid-run-reservation.ts`.
+- ACID worker status recorder in `src/workflows/acid-status-recorder.ts`.
 - Repeat-safe live schema helper in `scripts/apply-wfpc-migration.mjs`.
 - ACID guard migration in `supabase/migrations/0002_acid_race_guards.sql`.
 - Wealth Factory dashboard POC updates in `apps/web/src/App.tsx`.
@@ -58,9 +61,9 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 
 ## Next Build Order
 
-1. Add the deployed API server/runtime entrypoint that calls `createDashboardHttpHandler`.
-2. Compose `createDashboardApi` with `connectPgQueryClient` and `createSupabaseRepositories` in the runtime.
-3. Wire workflow start, package install, credential revoke, and worker status updates to `createAcidGuardRepository`.
+1. Wire package install endpoints/services to `createAcidGuardRepository.installPackage`.
+2. Wire credential revoke endpoints/services to `createAcidGuardRepository.revokeCredential`.
+3. Add queue enqueue transaction/outbox behavior before production deployment.
 4. Connect provider credential registration to the selected secret vault backend.
 5. Implement Google Drive and Dropbox OAuth/storage connector setup if needed for the first media package.
 6. Add deployed API smoke tests for CORS, auth failures, dashboard DTO response guard, and exposed ports.
@@ -250,7 +253,7 @@ Nuances to preserve:
 
 - `node scripts/apply-wfpc-migration.mjs` passed and reported `wfpc` with 14 tables.
 - `npm run build` passed.
-- `npm test` passed with 104 tests.
+- Focused runtime/ACID adapter tests passed with 111 tests.
 - `npm run lint` passed.
 - `npm run build:web` passed with lucide `use client` warnings from dependency bundling.
 - `npm run e2e` passed with 3 Playwright tests.

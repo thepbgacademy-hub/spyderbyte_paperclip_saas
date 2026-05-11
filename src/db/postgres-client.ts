@@ -1,4 +1,4 @@
-import { Client } from "pg";
+import { Client, Pool } from "pg";
 
 import type { TransactionRunner } from "./acid-guard-repository.js";
 import type { QueryClient } from "./supabase-repositories.js";
@@ -9,6 +9,7 @@ type PgClientLike = {
 
 type PgPoolLike = {
   connect(): Promise<PgClientLike & { release(): void }>;
+  query?(sql: string, values: readonly unknown[]): Promise<{ rows: unknown[] }>;
 };
 
 export function resolvePgSsl(input: { connectionString: string; sslMode?: string }) {
@@ -27,6 +28,15 @@ export function createPgQueryClient(pgClient: PgClientLike): QueryClient {
   return {
     async query(sql: string, values: readonly unknown[]) {
       const result = await pgClient.query(sql, values);
+      return { rows: result.rows };
+    }
+  };
+}
+
+export function createPgPoolQueryClient(pool: Required<Pick<PgPoolLike, "query">>): QueryClient {
+  return {
+    async query(sql: string, values: readonly unknown[]) {
+      const result = await pool.query(sql, values);
       return { rows: result.rows };
     }
   };
@@ -61,4 +71,11 @@ export async function connectPgQueryClient(input: { connectionString: string; ss
     ...createPgQueryClient(pgClient),
     close: () => pgClient.end()
   };
+}
+
+export function createPgPool(input: { connectionString: string; sslMode?: string }) {
+  return new Pool({
+    connectionString: input.connectionString,
+    ssl: resolvePgSsl(input)
+  });
 }

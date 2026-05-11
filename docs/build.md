@@ -589,10 +589,40 @@ Next work after this phase:
 
 Next work after this phase:
 
-- [ ] Replace the in-memory `run-creation-gate` usage with `createAcidGuardRepository.reserveWorkflowRun`.
-- [ ] Wire worker status callbacks to `transitionWorkflowRunStatus` so terminal states cannot be overwritten.
+- [x] Replace the in-memory `run-creation-gate` usage with `createAcidGuardRepository.reserveWorkflowRun`.
+- [x] Wire worker status callbacks to `transitionWorkflowRunStatus` so terminal states cannot be overwritten.
 - [ ] Wire package install and credential revoke endpoints/services to the ACID repository.
 - [ ] Add queue enqueue transaction/outbox behavior before production deployment.
+
+## Post-MVP Phase: Runtime Wiring Foundation
+
+**Outcome:** The VPS API has a Node runtime adapter for the guarded dashboard HTTP boundary, and workflow write paths have explicit ACID-backed composition points.
+
+**Files:**
+
+- Create: `src/api/runtime-server.ts`
+- Create: `src/workflows/acid-run-reservation.ts`
+- Create: `src/workflows/acid-status-recorder.ts`
+- Create: `tests/runtime-server.test.ts`
+- Create: `tests/acid-run-reservation.test.ts`
+- Create: `tests/acid-status-recorder.test.ts`
+- Modify: `src/db/postgres-client.ts`
+- Modify: `.env.example`
+
+- [x] Add split-origin runtime env validation for `SUPABASE_DB_URL`, `SUPABASE_DB_SSL`, explicit `WF_ALLOWED_ORIGINS`, and `WF_API_PORT`.
+- [x] Add a Node HTTP request adapter that calls `createDashboardHttpHandler`.
+- [x] Compose the dashboard runtime with a Postgres pool, `createSupabaseRepositories`, `createDashboardApi`, CORS, security headers, and rate limiting.
+- [x] Add a DB-backed workflow run reservation facade that enqueues only after `createAcidGuardRepository.reserveWorkflowRun` succeeds.
+- [x] Add recoverable duplicate handling for committed reservations that were not queued.
+- [x] Add a DB-backed worker status recorder that uses guarded status transitions.
+- [x] Run focused runtime and ACID adapter tests.
+
+Next work after this phase:
+
+- [ ] Add the executable server bootstrap once the deployment runtime choice is final.
+- [ ] Wire package install and credential revoke endpoints/services to the ACID repository.
+- [ ] Add queue enqueue transaction/outbox behavior before production deployment.
+- [ ] Add external VPS smoke tests for the runtime adapter, CORS, auth failure, and response guard.
 
 ## Self-Review
 

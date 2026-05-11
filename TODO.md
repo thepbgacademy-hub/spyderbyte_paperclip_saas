@@ -135,6 +135,12 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Add guarded workflow status transition index.
 - [x] Add transactional ACID guard repository for run reservation, package install, credential revoke, and status transition.
 - [x] Apply ACID guard migration to live Supabase.
+- [x] Post-MVP Phase 9: Runtime wiring foundation.
+- [x] Add Node HTTP runtime adapter for the guarded dashboard API.
+- [x] Add split-origin runtime env validation.
+- [x] Compose dashboard runtime with Postgres pool and Supabase repositories.
+- [x] Add DB-backed workflow run reservation facade.
+- [x] Add DB-backed worker status recorder.
 
 ## Current Phase: API-Backed Dashboard Foundation Complete
 
@@ -145,8 +151,9 @@ This file tracks implementation progress. Keep it current after every phase.
 
 ## Later Phases
 
-- [ ] Wire the deployed API server/runtime entrypoint to `createDashboardHttpHandler`.
-- [ ] Wire workflow start, package install, credential revoke, and worker status updates to `createAcidGuardRepository`.
+- [x] Wire the deployed API server/runtime entrypoint to `createDashboardHttpHandler`.
+- [x] Wire workflow start and worker status updates to `createAcidGuardRepository`.
+- [ ] Wire package install and credential revoke endpoints/services to `createAcidGuardRepository`.
 - [ ] Add real secret vault backend integration behind provider credential registration.
 - [ ] Add real OAuth flows for Google Drive and Dropbox storage connectors.
 - [ ] Deploy the POC to VPS and run external exposed-port/CORS smoke tests.
