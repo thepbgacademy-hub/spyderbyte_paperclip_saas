@@ -69,9 +69,10 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 
 ## Next Build Order
 
-1. Add deployed API smoke tests for CORS, auth failures, dashboard DTO response guard, and exposed ports.
-2. Confirm the VPS runtime uses `createPostgresEncryptedVaultStore` with a strong `WF_VAULT_MASTER_KEY`.
-3. Deploy the POC to the VPS using the Phase 6 deployment runbooks once runtime secrets and final origin values are available.
+1. Fix VPS external exposure: `5432`, `8000`, and `8443` are currently reachable from outside and must be firewall/allowlist restricted before commercial exposure.
+2. Fix `api.spyderbyte.cloud` TLS handshake. It currently fails before CORS/auth/response-guard checks can run.
+3. Re-run `npm run smoke:external`; it is now the repeatable external gate for DNS, intended ports, private ports, auth/CORS route behavior, and response leak checks.
+4. Confirm the VPS runtime uses `createPostgresEncryptedVaultStore` with a strong `WF_VAULT_MASTER_KEY`.
 
 ## Security Position
 

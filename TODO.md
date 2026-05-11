@@ -184,3 +184,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Add real OAuth flows for Google Drive and Dropbox storage connectors, including runtime begin/callback routes, offline refresh-token enforcement, and public-target sanitization.
 - [x] Add private storage connector secret-reference persistence.
 - [ ] Deploy the POC to VPS and run external exposed-port/CORS smoke tests.
+  - [x] Add repeatable `npm run smoke:external` smoke/security command.
+  - [x] Run first external probe from Windows.
+  - [ ] Close or allowlist external `5432`, `8000`, and `8443`.
+  - [ ] Fix `api.spyderbyte.cloud` TLS handshake so CORS/auth/response-guard checks can execute.

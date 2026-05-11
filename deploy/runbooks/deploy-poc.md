@@ -46,6 +46,7 @@ Tenant OpenAI and generic provider keys remain BYOK runtime secrets stored by re
 From outside the VPS:
 
 ```powershell
+npm run smoke:external
 curl.exe -I https://www.spyderbyte.cloud
 curl.exe -I https://api.spyderbyte.cloud/health
 curl.exe --connect-timeout 5 http://<vps-public-ip>:9000/health
@@ -65,6 +66,7 @@ docker compose -f deploy/docker-compose.yml port redis 6379
 
 Expected:
 
+- `npm run smoke:external` exits `0`.
 - App returns HTTP 200 or 304.
 - API health returns HTTP 200 with SpyderByte-safe health output.
 - API responses include only Wealth Factory-safe health fields.
@@ -95,6 +97,18 @@ npm run e2e
 ```
 
 Point Playwright at the deployed origin before using this as a release gate.
+
+## Current External Smoke Status
+
+Last checked from outside the VPS on 2026-05-11:
+
+- PASS: `www.spyderbyte.cloud` and `api.spyderbyte.cloud` resolve to `187.77.19.83`.
+- PASS: Public ports `80` and `443` are reachable.
+- PASS: Redis `6379`, Paperclip `9000`, app/dev ports `3000`, `5173`, API direct ports `8080`, `8081`, and Docker daemon `2375` were not reachable.
+- BLOCKED: `5432`, `8000`, and `8443` were reachable externally. These appear to be Supabase Postgres/Kong exposure and must be firewall or allowlist restricted before commercial exposure.
+- BLOCKED: `https://api.spyderbyte.cloud/api/dashboard` failed TLS handshake, so CORS/auth/response-guard checks could not run externally.
+
+Do not treat the VPS deployment as release-safe until `npm run smoke:external` passes.
 
 ## Rollback
 
