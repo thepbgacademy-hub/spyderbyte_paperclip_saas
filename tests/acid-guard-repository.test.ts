@@ -1,0 +1,190 @@
+import { describe, expect, it, vi } from "vitest";
+
+import { createAcidGuardRepository } from "../src/db/acid-guard-repository.js";
+
+function createSequencedClient(rows: unknown[][]) {
+  const query = vi.fn().mockImplementation((_sql: string, _values: readonly unknown[]) => {
+    if (/^(begin|commit|rollback)$/i.test(String(_sql))) {
+      return Promise.resolve({ rows: [] });
+    }
+    return Promise.resolve({ rows: rows.shift() ?? [] });
+  });
+  return { query };
+}
+
+function createTransactionRunner(client: ReturnType<typeof createSequencedClient>) {
+  return {
+    withTransaction: vi.fn().mockImplementation(async (callback: (transaction: typeof client) => Promise<unknown>) => {
+      await client.query("begin", []);
+      try {
+        const result = await callback(client);
+        await client.query("commit", []);
+        return result;
+      } catch (error) {
+        await client.query("rollback", []);
+        throw error;
+      }
+    })
+  };
+}
+
+describe("ACID guard repository", () => {
+  it("reserves a workflow run inside one transaction with locked tenant and idempotency insert", async () => {
+    const client = createSequencedClient([
+      [{ paused_at: null }],
+      [{ tenant_id: "tenant-1" }],
+      [{ id: "workflow-1", package_id: "package-1", provider_kind: "openai_api" }],
+      [{ id: "install-1", package_id: "package-1" }],
+      [{ id: "requirement-1" }],
+      [{ id: "secret-1" }],
+      [{ id: "reservation-1" }],
+      []
+    ]);
+    const runner = createTransactionRunner(client);
+    const repository = createAcidGuardRepository(runner);
+
+    await expect(
+      repository.reserveWorkflowRun({
+        tenantId: "tenant-1",
+        userId: "user-1",
+        workflowTemplateId: "workflow-1",
+        runId: "run-1",
+        idempotencyKey: "idem-1"
+      })
+    ).resolves.toEqual({ reserved: true, runId: "run-1" });
+
+    const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
+    expect(sql).toMatch(/begin/i);
+    expect(sql).toMatch(/from wfpc\.tenants[\s\S]+for update/i);
+    expect(sql).toMatch(/from wfpc\.workflow_templates[\s\S]+for update/i);
+    expect(sql).toMatch(/from wfpc\.tenant_package_installs[\s\S]+package_id = \$2[\s\S]+status = 'active'/i);
+    expect(sql).toMatch(/from wfpc\.package_provider_requirements/i);
+    expect(sql).toMatch(/from wfpc\.secret_references[\s\S]+revoked_at is null/i);
+    expect(sql).toMatch(/insert into wfpc\.workflow_run_reservations[\s\S]+on conflict do nothing/i);
+    expect(sql).toMatch(/insert into wfpc\.workflow_runs/i);
+    expect(sql).toMatch(/commit/i);
+    expect(runner.withTransaction).toHaveBeenCalledOnce();
+  });
+
+  it("rolls back and reports duplicate when the idempotency reservation already exists", async () => {
+    const client = createSequencedClient([
+      [{ paused_at: null }],
+      [{ tenant_id: "tenant-1" }],
+      [{ id: "workflow-1", package_id: "package-1", provider_kind: "openai_api" }],
+      [{ id: "install-1", package_id: "package-1" }],
+      [{ id: "requirement-1" }],
+      [{ id: "secret-1" }],
+      []
+    ]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(
+      repository.reserveWorkflowRun({
+        tenantId: "tenant-1",
+        userId: "user-1",
+        workflowTemplateId: "workflow-1",
+        runId: "run-1",
+        idempotencyKey: "idem-1"
+      })
+    ).resolves.toEqual({ reserved: false, reason: "duplicate" });
+
+    expect(client.query.mock.calls.map(([statement]) => String(statement))).toContain("commit");
+  });
+
+  it("denies workflow reservations without an active package install entitlement", async () => {
+    const client = createSequencedClient([
+      [{ paused_at: null }],
+      [{ tenant_id: "tenant-1" }],
+      [{ id: "workflow-1", package_id: "package-1", provider_kind: "openai_api" }],
+      []
+    ]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(
+      repository.reserveWorkflowRun({
+        tenantId: "tenant-1",
+        userId: "user-1",
+        workflowTemplateId: "workflow-1",
+        runId: "run-1",
+        idempotencyKey: "idem-1"
+      })
+    ).resolves.toEqual({ reserved: false, reason: "entitlement_denied" });
+
+    const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
+    expect(sql).toMatch(/from wfpc\.tenant_package_installs[\s\S]+package_id = \$2[\s\S]+status = 'active'/i);
+  });
+
+  it("denies unbound workflows before checking package installs", async () => {
+    const client = createSequencedClient([
+      [{ paused_at: null }],
+      [{ tenant_id: "tenant-1" }],
+      [{ id: "workflow-1", package_id: null, provider_kind: "openai_api" }]
+    ]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(
+      repository.reserveWorkflowRun({
+        tenantId: "tenant-1",
+        userId: "user-1",
+        workflowTemplateId: "workflow-1",
+        runId: "run-1",
+        idempotencyKey: "idem-1"
+      })
+    ).resolves.toEqual({ reserved: false, reason: "entitlement_denied" });
+
+    const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
+    expect(sql).not.toMatch(/from wfpc\.tenant_package_installs/i);
+  });
+
+  it("installs packages idempotently with database conflict handling", async () => {
+    const client = createSequencedClient([[{ id: "install-1", status: "active" }]]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(
+      repository.installPackage({
+        tenantId: "tenant-1",
+        packageId: "package-1",
+        userId: "user-1"
+      })
+    ).resolves.toEqual({ id: "install-1", status: "active" });
+
+    const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
+    expect(sql).toMatch(/insert into wfpc\.tenant_package_installs/i);
+    expect(sql).toMatch(/on conflict \(tenant_id, package_id\) do update/i);
+  });
+
+  it("revokes credentials with a locked row so new run reservations cannot race stale credentials", async () => {
+    const client = createSequencedClient([[{ id: "secret-1" }]]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(
+      repository.revokeCredential({
+        tenantId: "tenant-1",
+        secretReferenceId: "secret-1"
+      })
+    ).resolves.toEqual({ revoked: true });
+
+    const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
+    expect(sql).toMatch(/update wfpc\.secret_references[\s\S]+revoked_at = coalesce/i);
+    expect(sql).toMatch(/where tenant_id = \$1 and id = \$2 and revoked_at is null/i);
+  });
+
+  it("guards workflow status transitions so terminal states are not overwritten", async () => {
+    const client = createSequencedClient([[{ id: "run-1", status: "running" }]]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(
+      repository.transitionWorkflowRunStatus({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        from: ["queued"],
+        to: "running"
+      })
+    ).resolves.toEqual({ transitioned: true, status: "running" });
+
+    const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
+    expect(sql).toMatch(/update wfpc\.workflow_runs/i);
+    expect(sql).toMatch(/status = any\(\$3::wfpc\.workflow_run_status\[\]\)/i);
+    expect(sql).not.toMatch(/completed', 'failed', 'cancelled/i);
+  });
+});

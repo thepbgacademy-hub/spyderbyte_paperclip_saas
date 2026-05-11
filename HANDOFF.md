@@ -6,9 +6,9 @@ This handoff is intentionally overwritten after each phase. It now describes the
 
 Phases 0 through 7 are complete, tested, reviewed, and committed.
 
-The first post-MVP productization slices are implemented locally: security baseline helpers, Wealth Factory boundary layer, package entitlements/provider requirements, temporary artifacts, expanded provider definitions, a Wealth Factory dashboard POC surface, and the first API-backed dashboard foundation.
+The first post-MVP productization slices are implemented locally: security baseline helpers, Wealth Factory boundary layer, package entitlements/provider requirements, temporary artifacts, expanded provider definitions, a Wealth Factory dashboard POC surface, the first API-backed dashboard foundation, and the first database-backed ACID/race-condition foundation.
 
-The next session should wire the deployed API runtime entrypoint to the new HTTP handler, replace remaining write paths with Supabase transactions and vault-backed secrets, then prepare VPS deployment smoke tests.
+The next session should wire the deployed API runtime entrypoint to the new HTTP handler, connect runtime workflow/package/credential/worker paths to the ACID guard repository and vault-backed secrets, then prepare VPS deployment smoke tests.
 
 ## Reference Docs
 
@@ -46,18 +46,21 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 - Tenant settings API for provider credentials and storage connectors in `src/api/tenant-settings-api.ts`.
 - Supabase `wfpc` repository mappers in `src/db/supabase-repositories.ts`.
 - Self-hosted Supabase pooler Postgres client factory in `src/db/postgres-client.ts`.
+- ACID guard repository in `src/db/acid-guard-repository.ts`.
 - Repeat-safe live schema helper in `scripts/apply-wfpc-migration.mjs`.
+- ACID guard migration in `supabase/migrations/0002_acid_race_guards.sql`.
 - Wealth Factory dashboard POC updates in `apps/web/src/App.tsx`.
 - Tests for security, boundary, entitlements, artifacts, provider lanes, and E2E dashboard behavior.
 - Tests for dashboard HTTP, dashboard client mapping, Supabase repository mappers, Postgres client behavior, and tenant settings APIs.
 - Provider enum support in the initial Supabase migration and DB types for OpenAI API, ChatGPT/Codex subscription auth, Anthropic, xAI/Grok, OpenRouter, and generic providers.
-- Live Supabase reachability confirmed from Windows through the self-hosted pooler with `SUPABASE_DB_SSL=false`; `wfpc` has 13 tables.
+- Live Supabase reachability confirmed from Windows through the self-hosted pooler with `SUPABASE_DB_SSL=false`; `wfpc` has 14 tables.
+- Live Supabase now includes `wfpc.workflow_run_reservations` with RLS enabled, idempotency uniqueness, active credential uniqueness, secret lookup, and status guard indexes.
 
 ## Next Build Order
 
 1. Add the deployed API server/runtime entrypoint that calls `createDashboardHttpHandler`.
 2. Compose `createDashboardApi` with `connectPgQueryClient` and `createSupabaseRepositories` in the runtime.
-3. Replace remaining workflow/package write paths with Supabase transactions and idempotency controls.
+3. Wire workflow start, package install, credential revoke, and worker status updates to `createAcidGuardRepository`.
 4. Connect provider credential registration to the selected secret vault backend.
 5. Implement Google Drive and Dropbox OAuth/storage connector setup if needed for the first media package.
 6. Add deployed API smoke tests for CORS, auth failures, dashboard DTO response guard, and exposed ports.
@@ -95,6 +98,7 @@ Security tests to preserve:
 - RLS positive and negative tenant tests.
 - Route-level tenant and operator authorization tests.
 - Race-condition/idempotency tests for run creation, package install, entitlement change, tenant pause, and credential revoke/rotate.
+- Database-backed ACID tests for workflow reservation, package install idempotency, credential revoke locks, and guarded status transitions.
 - Queue payload tests proving no raw secrets or Paperclip internals are enqueued.
 - Response-guard tests proving customer-facing responses contain only Wealth Factory terms and fields.
 - Outside-the-VPS exposed-port smoke tests.
@@ -244,9 +248,9 @@ Nuances to preserve:
 
 ## Latest Verification
 
-- `node scripts/apply-wfpc-migration.mjs` passed and reported `wfpc` with 13 tables.
+- `node scripts/apply-wfpc-migration.mjs` passed and reported `wfpc` with 14 tables.
 - `npm run build` passed.
-- `npm test` passed with 92 tests.
+- `npm test` passed with 104 tests.
 - `npm run lint` passed.
 - `npm run build:web` passed with lucide `use client` warnings from dependency bundling.
 - `npm run e2e` passed with 3 Playwright tests.

@@ -566,6 +566,34 @@ Next work after this phase:
 - [ ] Implement Google Drive and Dropbox OAuth for storage connector setup.
 - [ ] Run external VPS smoke tests for CORS, auth failures, exposed ports, and response-guarded DTOs.
 
+## Post-MVP Phase: ACID And Race-Condition Database Foundation
+
+**Outcome:** Workflow run creation and related commercial write paths have durable database primitives for idempotency and race protection.
+
+**Files:**
+
+- Create: `supabase/migrations/0002_acid_race_guards.sql`
+- Create: `src/db/acid-guard-repository.ts`
+- Create: `tests/acid-migration.test.ts`
+- Create: `tests/acid-guard-repository.test.ts`
+- Modify: `scripts/apply-wfpc-migration.mjs`
+
+- [x] Add `wfpc.workflow_run_reservations` with `unique (tenant_id, workflow_template_id, idempotency_key)` and unique `run_id`.
+- [x] Enable RLS on `wfpc.workflow_run_reservations` with no public policies.
+- [x] Add active credential uniqueness for `(tenant_id, provider_kind, label) where revoked_at is null`.
+- [x] Add `(tenant_id, secret_ref)` lookup uniqueness for secret-reference lifecycle operations.
+- [x] Add workflow run status guard index for conditional transitions.
+- [x] Add transactional repository methods for workflow run reservation, package install upsert, credential revoke, and guarded workflow status transition.
+- [x] Apply the migration to live Supabase and verify `wfpc` reports 14 tables.
+- [x] Run `npm run build`, `npm test`, and `npm run lint`.
+
+Next work after this phase:
+
+- [ ] Replace the in-memory `run-creation-gate` usage with `createAcidGuardRepository.reserveWorkflowRun`.
+- [ ] Wire worker status callbacks to `transitionWorkflowRunStatus` so terminal states cannot be overwritten.
+- [ ] Wire package install and credential revoke endpoints/services to the ACID repository.
+- [ ] Add queue enqueue transaction/outbox behavior before production deployment.
+
 ## Self-Review
 
 Coverage check:

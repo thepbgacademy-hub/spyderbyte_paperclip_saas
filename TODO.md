@@ -129,17 +129,24 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Add dashboard client fetch path for authenticated API-backed state.
 - [x] Add unit tests for HTTP boundary, Supabase repositories, Postgres client, tenant settings API, and dashboard client mapping.
 - [x] Verify live Supabase connectivity against the `wfpc` schema.
+- [x] Post-MVP Phase 8: ACID and race-condition database foundation.
+- [x] Add `wfpc.workflow_run_reservations` for durable workflow idempotency.
+- [x] Add active credential uniqueness and secret-reference lookup indexes.
+- [x] Add guarded workflow status transition index.
+- [x] Add transactional ACID guard repository for run reservation, package install, credential revoke, and status transition.
+- [x] Apply ACID guard migration to live Supabase.
 
 ## Current Phase: API-Backed Dashboard Foundation Complete
 
 - [x] MVP/POC phases are built, tested, reviewed, and committed.
 - [x] Post-MVP security, boundary, package, artifact, provider, and dashboard POC slices are built and tested.
 - [x] First API-backed dashboard foundation is built and tested.
+- [x] ACID and race-condition database foundation is built, tested, and applied to live Supabase.
 
 ## Later Phases
 
 - [ ] Wire the deployed API server/runtime entrypoint to `createDashboardHttpHandler`.
-- [ ] Replace remaining in-memory workflow/package write paths with Supabase transactions.
+- [ ] Wire workflow start, package install, credential revoke, and worker status updates to `createAcidGuardRepository`.
 - [ ] Add real secret vault backend integration behind provider credential registration.
 - [ ] Add real OAuth flows for Google Drive and Dropbox storage connectors.
 - [ ] Deploy the POC to VPS and run external exposed-port/CORS smoke tests.
