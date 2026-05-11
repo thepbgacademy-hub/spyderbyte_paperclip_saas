@@ -141,6 +141,10 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Compose dashboard runtime with Postgres pool and Supabase repositories.
 - [x] Add DB-backed workflow run reservation facade.
 - [x] Add DB-backed worker status recorder.
+- [x] Post-MVP Phase 10: ACID package and credential service adapter prep.
+- [x] Add package install service adapter for future transactional purchase-backed installs.
+- [x] Add credential revoke service adapter backed by `createAcidGuardRepository.revokeCredential`.
+- [x] Add tests for package purchase authorization and credential revoke race behavior.
 
 ## Current Phase: API-Backed Dashboard Foundation Complete
 
@@ -153,7 +157,8 @@ This file tracks implementation progress. Keep it current after every phase.
 
 - [x] Wire the deployed API server/runtime entrypoint to `createDashboardHttpHandler`.
 - [x] Wire workflow start and worker status updates to `createAcidGuardRepository`.
-- [ ] Wire package install and credential revoke endpoints/services to `createAcidGuardRepository`.
+- [x] Wire credential revoke service adapter to `createAcidGuardRepository`.
+- [ ] Add authoritative package purchase table and wire package install transaction to it.
 - [ ] Add real secret vault backend integration behind provider credential registration.
 - [ ] Add real OAuth flows for Google Drive and Dropbox storage connectors.
 - [ ] Deploy the POC to VPS and run external exposed-port/CORS smoke tests.

@@ -8,7 +8,7 @@ Phases 0 through 7 are complete, tested, reviewed, and committed.
 
 The first post-MVP productization slices are implemented locally: security baseline helpers, Wealth Factory boundary layer, package entitlements/provider requirements, temporary artifacts, expanded provider definitions, a Wealth Factory dashboard POC surface, the first API-backed dashboard foundation, and the first database-backed ACID/race-condition foundation.
 
-The next session should finish wiring package install and credential revoke paths to the ACID guard repository, connect provider credential registration to vault-backed secrets, then prepare VPS deployment smoke tests.
+The next session should add the authoritative package purchase table/transactional install guard, add queue enqueue outbox/recovery behavior, connect provider credential registration to vault-backed secrets, then prepare VPS deployment smoke tests.
 
 ## Reference Docs
 
@@ -50,6 +50,8 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 - Runtime server adapter in `src/api/runtime-server.ts`.
 - ACID workflow run reservation facade in `src/workflows/acid-run-reservation.ts`.
 - ACID worker status recorder in `src/workflows/acid-status-recorder.ts`.
+- ACID package install service in `src/packages/acid-package-install-service.ts`.
+- ACID credential revoke service in `src/secrets/acid-secret-revoke-service.ts`.
 - Repeat-safe live schema helper in `scripts/apply-wfpc-migration.mjs`.
 - ACID guard migration in `supabase/migrations/0002_acid_race_guards.sql`.
 - Wealth Factory dashboard POC updates in `apps/web/src/App.tsx`.
@@ -61,13 +63,12 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 
 ## Next Build Order
 
-1. Wire package install endpoints/services to `createAcidGuardRepository.installPackage`.
-2. Wire credential revoke endpoints/services to `createAcidGuardRepository.revokeCredential`.
-3. Add queue enqueue transaction/outbox behavior before production deployment.
-4. Connect provider credential registration to the selected secret vault backend.
-5. Implement Google Drive and Dropbox OAuth/storage connector setup if needed for the first media package.
-6. Add deployed API smoke tests for CORS, auth failures, dashboard DTO response guard, and exposed ports.
-7. Deploy the POC to the VPS using the Phase 6 deployment runbooks once runtime secrets and final origin values are available.
+1. Add an authoritative package purchase/entitlement table and wire package installs to check it inside the same database transaction as the install upsert.
+2. Add queue enqueue transaction/outbox behavior before production deployment.
+3. Connect provider credential registration to the selected secret vault backend.
+4. Implement Google Drive and Dropbox OAuth/storage connector setup if needed for the first media package.
+5. Add deployed API smoke tests for CORS, auth failures, dashboard DTO response guard, and exposed ports.
+6. Deploy the POC to the VPS using the Phase 6 deployment runbooks once runtime secrets and final origin values are available.
 
 ## Security Position
 
@@ -253,7 +254,7 @@ Nuances to preserve:
 
 - `node scripts/apply-wfpc-migration.mjs` passed and reported `wfpc` with 14 tables.
 - `npm run build` passed.
-- Focused runtime/ACID adapter tests passed with 111 tests.
+- Focused ACID package/credential adapter tests passed with 115 tests.
 - `npm run lint` passed.
 - `npm run build:web` passed with lucide `use client` warnings from dependency bundling.
 - `npm run e2e` passed with 3 Playwright tests.

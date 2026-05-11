@@ -591,7 +591,8 @@ Next work after this phase:
 
 - [x] Replace the in-memory `run-creation-gate` usage with `createAcidGuardRepository.reserveWorkflowRun`.
 - [x] Wire worker status callbacks to `transitionWorkflowRunStatus` so terminal states cannot be overwritten.
-- [ ] Wire package install and credential revoke endpoints/services to the ACID repository.
+- [x] Wire credential revoke service adapter to the ACID repository.
+- [ ] Add authoritative package purchase storage and wire package install authorization into the same transaction as the install upsert.
 - [ ] Add queue enqueue transaction/outbox behavior before production deployment.
 
 ## Post-MVP Phase: Runtime Wiring Foundation
@@ -620,9 +621,32 @@ Next work after this phase:
 Next work after this phase:
 
 - [ ] Add the executable server bootstrap once the deployment runtime choice is final.
-- [ ] Wire package install and credential revoke endpoints/services to the ACID repository.
 - [ ] Add queue enqueue transaction/outbox behavior before production deployment.
 - [ ] Add external VPS smoke tests for the runtime adapter, CORS, auth failure, and response guard.
+
+## Post-MVP Phase: ACID Package And Credential Service Adapter Prep
+
+**Outcome:** Credential revoke uses the transactional Supabase guard repository, and package install has an adapter ready for the authoritative purchase table needed to make install authorization transactional.
+
+**Files:**
+
+- Create: `src/packages/acid-package-install-service.ts`
+- Create: `src/secrets/acid-secret-revoke-service.ts`
+- Create: `tests/acid-package-install-service.test.ts`
+- Create: `tests/acid-secret-revoke-service.test.ts`
+
+- [x] Add a package install adapter that verifies tenant purchase authorization before install while the authoritative purchase table is pending.
+- [x] Add a credential revoke adapter that resolves secret references server-side and calls `createAcidGuardRepository.revokeCredential`.
+- [x] Ensure already-revoked credentials still retry vault cleanup, then fail closed without audit.
+- [x] Ensure audit output uses the database secret reference ID and never logs secret-reference handles.
+- [x] Run focused ACID service wiring tests.
+
+Next work after this phase:
+
+- [ ] Add an authoritative package purchase/entitlement table and check it inside the package install transaction.
+- [ ] Add a durable outbox for queue enqueue after workflow reservation.
+- [ ] Connect provider credential registration to the selected vault backend.
+- [ ] Add external VPS smoke tests for CORS, auth failure, exposed ports, and response guard.
 
 ## Self-Review
 
