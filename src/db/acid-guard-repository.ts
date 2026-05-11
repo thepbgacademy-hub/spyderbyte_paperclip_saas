@@ -28,6 +28,17 @@ export type PackageInstallDecision =
   | { installed: true; id: string; status: string }
   | { installed: false; reason: "package_not_purchased" };
 
+export type QueueOutboxRecord = {
+  id: string;
+  tenantId: string;
+  runId: string;
+  workflowTemplateId: string;
+  userId: string;
+  idempotencyKey: string;
+  attempts: number;
+  claimToken: string;
+};
+
 export function createAcidGuardRepository(runner: TransactionRunner) {
   return {
     async reserveWorkflowRun(input: ReserveWorkflowRunInput): Promise<ReserveWorkflowRunResult> {
@@ -122,7 +133,100 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
           [input.runId, input.tenantId, input.workflowTemplateId, input.userId]
         );
 
+        await transaction.query(
+          `insert into wfpc.workflow_queue_outbox
+            (tenant_id, run_id, workflow_template_id, created_by_user_id, idempotency_key)
+           values ($1, $2, $3, $4, $5)
+           on conflict (tenant_id, run_id) do nothing`,
+          [input.tenantId, input.runId, input.workflowTemplateId, input.userId, input.idempotencyKey]
+        );
+
         return { reserved: true, runId: input.runId };
+      });
+    },
+
+    async markWorkflowRunQueued(input: { tenantId: string; runId: string; outboxId: string; claimToken: string }): Promise<{ marked: boolean }> {
+      return runner.withTransaction(async (transaction) => {
+        const result = await transaction.query(
+          `update wfpc.workflow_queue_outbox
+           set status = 'enqueued',
+               enqueued_at = coalesce(enqueued_at, now()),
+               claim_token = null,
+               updated_at = now(),
+               last_error = null
+           where tenant_id = $1
+             and run_id = $2
+             and id = $3::uuid
+             and claim_token = $4::uuid
+             and status = 'claimed'
+           returning id`,
+          [input.tenantId, input.runId, input.outboxId, input.claimToken]
+        );
+        return { marked: result.rows.length > 0 };
+      });
+    },
+
+    async claimWorkflowQueueOutbox(input: { limit: number; staleClaimSeconds?: number }): Promise<QueueOutboxRecord[]> {
+      return runner.withTransaction(async (transaction) => {
+        const result = await transaction.query(
+          `with next_jobs as (
+             select id
+             from wfpc.workflow_queue_outbox
+             where (
+                status in ('pending', 'failed')
+                and available_at <= now()
+             )
+                or (
+                  status = 'claimed'
+                  and claimed_at < now() - ($2::int * interval '1 second')
+                )
+             order by available_at, created_at
+             limit $1
+             for update skip locked
+           )
+           update wfpc.workflow_queue_outbox outbox
+           set status = 'claimed',
+               claim_token = gen_random_uuid(),
+               claimed_at = now(),
+               attempts = attempts + 1,
+               updated_at = now()
+           from next_jobs
+           where outbox.id = next_jobs.id
+           returning outbox.id, outbox.tenant_id, outbox.run_id, outbox.workflow_template_id, outbox.created_by_user_id, outbox.idempotency_key, outbox.attempts, outbox.claim_token`,
+          [input.limit, input.staleClaimSeconds ?? 300]
+        );
+        return result.rows.map((row) => {
+          const record = asRecord(row);
+          return {
+            id: String(record.id),
+            tenantId: String(record.tenant_id),
+            runId: String(record.run_id),
+            workflowTemplateId: String(record.workflow_template_id),
+            userId: String(record.created_by_user_id),
+            idempotencyKey: String(record.idempotency_key),
+            attempts: Number(record.attempts),
+            claimToken: String(record.claim_token)
+          };
+        });
+      });
+    },
+
+    async releaseWorkflowQueueOutbox(input: { outboxId: string; claimToken: string; error: string; retryAfterSeconds: number }): Promise<{ released: boolean }> {
+      return runner.withTransaction(async (transaction) => {
+        const result = await transaction.query(
+          `update wfpc.workflow_queue_outbox
+           set status = 'failed',
+               claim_token = null,
+               available_at = now() + ($2::int * interval '1 second'),
+               last_error = left($3, 500),
+               updated_at = now()
+           where id = $1
+             and claim_token = $4::uuid
+             and status = 'claimed'
+           returning id`,
+          [input.outboxId, input.retryAfterSeconds, input.error, input.claimToken]
+        );
+        return { released: result.rows.length > 0 };
       });
     },
 
@@ -191,14 +295,14 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
     }): Promise<{ transitioned: boolean; status?: string }> {
       return runner.withTransaction(async (transaction) => {
         const result = await transaction.query(
-        `update wfpc.workflow_runs
-         set status = $4, updated_at = now()
-         where tenant_id = $1
-           and id = $2
-           and status = any($3::wfpc.workflow_run_status[])
-         returning id, status`,
-        [input.tenantId, input.runId, input.from, input.to]
-      );
+          `update wfpc.workflow_runs
+           set status = $4, updated_at = now()
+           where tenant_id = $1
+             and id = $2
+             and status = any($3::wfpc.workflow_run_status[])
+           returning id, status`,
+          [input.tenantId, input.runId, input.from, input.to]
+        );
         if (result.rows.length === 0) {
           return { transitioned: false };
         }

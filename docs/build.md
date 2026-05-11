@@ -593,7 +593,7 @@ Next work after this phase:
 - [x] Wire worker status callbacks to `transitionWorkflowRunStatus` so terminal states cannot be overwritten.
 - [x] Wire credential revoke service adapter to the ACID repository.
 - [x] Add authoritative package purchase storage and wire package install authorization into the same transaction as the install upsert.
-- [ ] Add queue enqueue transaction/outbox behavior before production deployment.
+- [x] Add queue enqueue transaction/outbox behavior before production deployment.
 
 ## Post-MVP Phase: Runtime Wiring Foundation
 
@@ -644,7 +644,7 @@ Next work after this phase:
 Next work after this phase:
 
 - [x] Add an authoritative package purchase/entitlement table and check it inside the package install transaction.
-- [ ] Add a durable outbox for queue enqueue after workflow reservation.
+- [x] Add a durable outbox for queue enqueue after workflow reservation.
 - [ ] Connect provider credential registration to the selected vault backend.
 - [ ] Add external VPS smoke tests for CORS, auth failure, exposed ports, and response guard.
 
@@ -671,7 +671,40 @@ Next work after this phase:
 
 Next work after this phase:
 
-- [ ] Add a durable queue outbox table and recovery worker for post-reservation enqueue reliability.
+- [x] Add a durable queue outbox table and recovery worker for post-reservation enqueue reliability.
+- [ ] Connect provider credential registration to the selected vault backend.
+- [ ] Add external VPS smoke tests for CORS, auth failure, exposed ports, and response guard.
+
+## Post-MVP Phase: Durable Workflow Queue Outbox
+
+**Outcome:** A committed workflow reservation can always be recovered and enqueued later, even if Redis/BullMQ enqueue fails after the database transaction commits.
+
+**Files:**
+
+- Create: `supabase/migrations/0004_workflow_queue_outbox.sql`
+- Create: `src/workflows/queue-outbox-worker.ts`
+- Create: `src/workflows/queue-outbox-pump.ts`
+- Create: `tests/queue-outbox-migration.test.ts`
+- Create: `tests/queue-outbox-worker.test.ts`
+- Create: `tests/queue-outbox-pump.test.ts`
+- Modify: `src/db/acid-guard-repository.ts`
+- Modify: `src/workflows/acid-run-reservation.ts`
+- Modify: `src/api/runtime-server.ts`
+- Modify: `scripts/apply-wfpc-migration.mjs`
+- Modify: `tests/acid-guard-repository.test.ts`
+- Modify: `tests/acid-run-reservation.test.ts`
+- Modify: `tests/runtime-server.test.ts`
+
+- [x] Add `wfpc.workflow_queue_outbox` with private RLS, run/idempotency uniqueness, pending lookup index, attempt counts, retry timestamps, and last-error tracking.
+- [x] Insert an outbox row inside the same transaction that reserves a workflow run.
+- [x] Mark outbox rows `enqueued` only after the external queue accepts the job.
+- [x] Add a recovery worker that claims pending/failed/stale-claimed outbox rows with `for update skip locked`, enqueues them through the idempotent `enqueueOnce` queue contract, marks success with claim-token fencing, or releases them for retry.
+- [x] Wire a runtime outbox pump into `createDashboardRuntime` when a queue enqueuer is provided, so the production runtime can drain pending jobs at a fixed interval without overlapping drain attempts.
+- [x] Apply the migration to live Supabase and verify `wfpc` reports 16 tables.
+- [x] Run focused outbox/runtime tests with 133 passing tests in the full Vitest suite.
+
+Next work after this phase:
+
 - [ ] Connect provider credential registration to the selected vault backend.
 - [ ] Add external VPS smoke tests for CORS, auth failure, exposed ports, and response guard.
 

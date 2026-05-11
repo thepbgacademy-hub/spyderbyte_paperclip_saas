@@ -2,7 +2,34 @@ import { EventEmitter } from "node:events";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { describe, expect, it, vi } from "vitest";
 
-import { createNodeRequestListener, loadRuntimeEnv } from "../src/api/runtime-server.js";
+import { createDashboardRuntime, createNodeRequestListener, loadRuntimeEnv } from "../src/api/runtime-server.js";
+
+vi.mock("../src/db/postgres-client.js", () => ({
+  createPgPool: vi.fn(() => ({
+    query: vi.fn(),
+    connect: vi.fn(),
+    end: vi.fn().mockResolvedValue(undefined)
+  })),
+  createPgPoolQueryClient: vi.fn(() => ({ query: vi.fn() })),
+  createPgTransactionRunner: vi.fn(() => ({ withTransaction: vi.fn() }))
+}));
+
+vi.mock("../src/db/supabase-repositories.js", () => ({
+  createSupabaseRepositories: vi.fn(() => ({
+    requireTenantMember: vi.fn(),
+    listWorkflows: vi.fn(),
+    listPackages: vi.fn(),
+    listArtifacts: vi.fn(),
+    listProviderConnections: vi.fn()
+  }))
+}));
+
+vi.mock("../src/workflows/queue-outbox-pump.js", () => ({
+  createQueueOutboxPump: vi.fn(() => ({
+    start: vi.fn(),
+    stop: vi.fn()
+  }))
+}));
 
 describe("runtime server", () => {
   it("loads explicit split-origin runtime settings", () => {
@@ -63,6 +90,28 @@ describe("runtime server", () => {
     });
     expect(response.statusCode).toBe(200);
     expect(response.body).toBe(JSON.stringify({ ok: true }));
+  });
+
+  it("wires the durable workflow outbox pump when a queue enqueuer is provided", async () => {
+    const { createQueueOutboxPump } = await import("../src/workflows/queue-outbox-pump.js");
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081
+      },
+      auth: { authenticate: vi.fn() },
+      workflowQueueEnqueuer: { enqueueOnce: vi.fn().mockResolvedValue("enqueued") }
+    });
+
+    runtime.startWorkers();
+    await runtime.close();
+
+    expect(createQueueOutboxPump).toHaveBeenCalled();
+    const pump = vi.mocked(createQueueOutboxPump).mock.results[0]?.value;
+    expect(pump.start).toHaveBeenCalledOnce();
+    expect(pump.stop).toHaveBeenCalledOnce();
   });
 });
 

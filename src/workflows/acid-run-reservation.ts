@@ -2,11 +2,11 @@ import type { ReserveWorkflowRunInput, ReserveWorkflowRunResult } from "../db/ac
 
 export type WorkflowRunReservationRepository = {
   reserveWorkflowRun(input: ReserveWorkflowRunInput): Promise<ReserveWorkflowRunResult>;
+  markWorkflowRunQueued?(input: { tenantId: string; runId: string }): Promise<{ marked: boolean }>;
 };
 
 export type WorkflowRunEnqueuer = {
-  enqueue(input: ReserveWorkflowRunInput): Promise<void>;
-  hasQueued?(input: ReserveWorkflowRunInput): Promise<boolean>;
+  enqueueOnce(input: ReserveWorkflowRunInput): Promise<"enqueued" | "already_queued">;
 };
 
 export class WorkflowRunReservationError extends Error {
@@ -24,15 +24,9 @@ export function createAcidRunReservationService(options: { repository: WorkflowR
     async reserveAndEnqueue(input: ReserveWorkflowRunInput): Promise<{ runId: string; queued: true }> {
       const reservation = await options.repository.reserveWorkflowRun(input);
       if (!reservation.reserved) {
-        if (reservation.reason === "duplicate" && options.enqueuer.hasQueued && !(await options.enqueuer.hasQueued(input))) {
-          await options.enqueuer.enqueue(input);
-          return { runId: input.runId, queued: true };
-        }
-
         throw new WorkflowRunReservationError(reservation.reason);
       }
 
-      await options.enqueuer.enqueue(input);
       return { runId: reservation.runId, queued: true };
     }
   };

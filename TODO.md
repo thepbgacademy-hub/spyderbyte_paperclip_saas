@@ -149,6 +149,13 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Add `wfpc.tenant_package_purchases` migration with RLS and active purchase index.
 - [x] Wire package installs to lock/check active purchases inside the install transaction.
 - [x] Apply package purchase guard migration to live Supabase.
+- [x] Post-MVP Phase 12: Durable workflow queue outbox.
+- [x] Add `wfpc.workflow_queue_outbox` migration with private RLS and pending lookup index.
+- [x] Write workflow queue outbox rows inside the workflow reservation transaction.
+- [x] Mark outbox rows enqueued after queue success.
+- [x] Add recovery worker to claim, enqueue, mark, or release outbox rows.
+- [x] Wire runtime outbox pump so workers can drain pending jobs without overlapping drains.
+- [x] Apply queue outbox migration to live Supabase.
 
 ## Current Phase: API-Backed Dashboard Foundation Complete
 
@@ -163,7 +170,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Wire workflow start and worker status updates to `createAcidGuardRepository`.
 - [x] Wire credential revoke service adapter to `createAcidGuardRepository`.
 - [x] Add authoritative package purchase table and wire package install transaction to it.
-- [ ] Add durable queue enqueue outbox/recovery table and worker.
+- [x] Add durable queue enqueue outbox/recovery table, worker, and runtime pump wiring.
 - [ ] Add real secret vault backend integration behind provider credential registration.
 - [ ] Add real OAuth flows for Google Drive and Dropbox storage connectors.
 - [ ] Deploy the POC to VPS and run external exposed-port/CORS smoke tests.

@@ -73,6 +73,41 @@ try {
   if (!purchaseReady) {
     await client.query(readFileSync("supabase/migrations/0003_package_purchase_guards.sql", "utf8"));
   }
+  const outboxExisting = await client.query(
+    `select
+      exists (select 1 from information_schema.tables where table_schema = 'wfpc' and table_name = 'workflow_queue_outbox') as has_table,
+      exists (select 1 from information_schema.columns where table_schema = 'wfpc' and table_name = 'workflow_queue_outbox' and column_name = 'created_by_user_id' and is_nullable = 'NO') as has_user_column,
+      exists (select 1 from information_schema.columns where table_schema = 'wfpc' and table_name = 'workflow_queue_outbox' and column_name = 'status' and is_nullable = 'NO' and column_default like '%pending%') as has_status_column,
+      exists (select 1 from information_schema.columns where table_schema = 'wfpc' and table_name = 'workflow_queue_outbox' and column_name = 'idempotency_key' and is_nullable = 'NO') as has_idempotency_column,
+      exists (select 1 from information_schema.columns where table_schema = 'wfpc' and table_name = 'workflow_queue_outbox' and column_name = 'attempts' and is_nullable = 'NO') as has_attempts_column,
+      exists (select 1 from information_schema.columns where table_schema = 'wfpc' and table_name = 'workflow_queue_outbox' and column_name = 'available_at' and is_nullable = 'NO') as has_available_at_column,
+      exists (select 1 from information_schema.columns where table_schema = 'wfpc' and table_name = 'workflow_queue_outbox' and column_name = 'created_at' and is_nullable = 'NO') as has_created_at_column,
+      exists (select 1 from information_schema.columns where table_schema = 'wfpc' and table_name = 'workflow_queue_outbox' and column_name = 'updated_at' and is_nullable = 'NO') as has_updated_at_column,
+      exists (select 1 from information_schema.columns where table_schema = 'wfpc' and table_name = 'workflow_queue_outbox' and column_name = 'claim_token') as has_claim_token,
+      exists (select 1 from information_schema.columns where table_schema = 'wfpc' and table_name = 'workflow_queue_outbox' and column_name = 'claimed_at') as has_claimed_at_column,
+      exists (select 1 from information_schema.columns where table_schema = 'wfpc' and table_name = 'workflow_queue_outbox' and column_name = 'enqueued_at') as has_enqueued_at_column,
+      exists (select 1 from information_schema.columns where table_schema = 'wfpc' and table_name = 'workflow_queue_outbox' and column_name = 'last_error') as has_last_error_column,
+      exists (select 1 from pg_indexes where schemaname = 'wfpc' and indexname = 'workflow_queue_outbox_pending_idx') as has_pending_index,
+      exists (select 1 from pg_indexes where schemaname = 'wfpc' and indexname = 'workflow_queue_outbox_claimed_idx') as has_claimed_index,
+      exists (select 1 from pg_constraint where conname = 'workflow_queue_outbox_tenant_id_run_id_key' and conrelid = to_regclass('wfpc.workflow_queue_outbox')) as has_run_unique,
+      exists (select 1 from pg_constraint where conname = 'workflow_queue_outbox_tenant_id_workflow_template_id_idempo_key' and conrelid = to_regclass('wfpc.workflow_queue_outbox')) as has_idempotency_unique,
+      exists (select 1 from pg_constraint where conrelid = to_regclass('wfpc.workflow_queue_outbox') and contype = 'p') as has_primary_key,
+      exists (select 1 from pg_constraint where conrelid = to_regclass('wfpc.workflow_queue_outbox') and pg_get_constraintdef(oid) like '%wfpc.workflow_runs%') as has_run_fk,
+      exists (select 1 from pg_constraint where conrelid = to_regclass('wfpc.workflow_queue_outbox') and pg_get_constraintdef(oid) like '%workflow_template_id, tenant_id%') as has_workflow_template_fk,
+      exists (
+        select 1
+        from pg_constraint
+        where conname = 'workflow_queue_outbox_status_check'
+          and conrelid = to_regclass('wfpc.workflow_queue_outbox')
+          and pg_get_constraintdef(oid) like '%claimed%'
+      ) as has_status_check,
+      exists (select 1 from pg_constraint where conname = 'workflow_queue_outbox_attempts_check' and conrelid = to_regclass('wfpc.workflow_queue_outbox')) as has_attempts_check,
+      exists (select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'wfpc' and c.relname = 'workflow_queue_outbox' and c.relrowsecurity) as has_rls`
+  );
+  const outboxReady = Object.values(outboxExisting.rows[0] ?? {}).every(Boolean);
+  if (!outboxReady) {
+    await client.query(readFileSync("supabase/migrations/0004_workflow_queue_outbox.sql", "utf8"));
+  }
   const { rows } = await client.query(
     "select table_schema, table_name from information_schema.tables where table_schema = 'wfpc' order by table_name"
   );
@@ -80,7 +115,7 @@ try {
     JSON.stringify(
       {
         schema: "wfpc",
-        migrationApplied: !existing.rows[0]?.exists || !acidReady || !purchaseReady,
+        migrationApplied: !existing.rows[0]?.exists || !acidReady || !purchaseReady || !outboxReady,
         tableCount: rows.length,
         tables: rows.map((row) => row.table_name)
       },

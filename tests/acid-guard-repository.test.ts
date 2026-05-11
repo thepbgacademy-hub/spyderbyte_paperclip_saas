@@ -63,6 +63,7 @@ describe("ACID guard repository", () => {
     expect(sql).toMatch(/from wfpc\.secret_references[\s\S]+revoked_at is null/i);
     expect(sql).toMatch(/insert into wfpc\.workflow_run_reservations[\s\S]+on conflict do nothing/i);
     expect(sql).toMatch(/insert into wfpc\.workflow_runs/i);
+    expect(sql).toMatch(/insert into wfpc\.workflow_queue_outbox/i);
     expect(sql).toMatch(/commit/i);
     expect(runner.withTransaction).toHaveBeenCalledOnce();
   });
@@ -224,5 +225,82 @@ describe("ACID guard repository", () => {
     expect(sql).toMatch(/update wfpc\.workflow_runs/i);
     expect(sql).toMatch(/status = any\(\$3::wfpc\.workflow_run_status\[\]\)/i);
     expect(sql).not.toMatch(/completed', 'failed', 'cancelled/i);
+  });
+
+  it("marks workflow outbox rows as enqueued after external queue success", async () => {
+    const client = createSequencedClient([[{ id: "outbox-1" }]]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(
+      repository.markWorkflowRunQueued({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        outboxId: "outbox-1",
+        claimToken: "11111111-1111-4111-8111-111111111111"
+      })
+    ).resolves.toEqual({ marked: true });
+
+    const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
+    expect(sql).toMatch(/update wfpc\.workflow_queue_outbox/i);
+    expect(sql).toMatch(/status = 'enqueued'/i);
+    expect(sql).toMatch(/claim_token = null/i);
+    expect(sql).toMatch(/and id = \$3::uuid/i);
+    expect(sql).toMatch(/and claim_token = \$4::uuid/i);
+    expect(sql).toMatch(/and status = 'claimed'/i);
+  });
+
+  it("claims pending workflow outbox rows with skip locked", async () => {
+    const client = createSequencedClient([
+      [
+        {
+          id: "outbox-1",
+          tenant_id: "tenant-1",
+          run_id: "run-1",
+          workflow_template_id: "workflow-1",
+          created_by_user_id: "user-1",
+          idempotency_key: "idem-1",
+          attempts: 1,
+          claim_token: "11111111-1111-4111-8111-111111111111"
+        }
+      ]
+    ]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(repository.claimWorkflowQueueOutbox({ limit: 10 })).resolves.toEqual([
+      {
+        id: "outbox-1",
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowTemplateId: "workflow-1",
+        userId: "user-1",
+        idempotencyKey: "idem-1",
+        attempts: 1,
+        claimToken: "11111111-1111-4111-8111-111111111111"
+      }
+    ]);
+
+    const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
+    expect(sql).toMatch(/for update skip locked/i);
+    expect(sql).toMatch(/status = 'claimed'/i);
+    expect(sql).toMatch(/claim_token = gen_random_uuid\(\)/i);
+    expect(sql).toMatch(/status = 'claimed'[\s\S]+claimed_at < now\(\) - \(\$2::int \* interval '1 second'\)/i);
+  });
+
+  it("releases only the claimed outbox row that still owns the claim token", async () => {
+    const client = createSequencedClient([[{ id: "outbox-1" }]]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(
+      repository.releaseWorkflowQueueOutbox({
+        outboxId: "outbox-1",
+        claimToken: "11111111-1111-4111-8111-111111111111",
+        error: "redis unavailable",
+        retryAfterSeconds: 30
+      })
+    ).resolves.toEqual({ released: true });
+
+    const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
+    expect(sql).toMatch(/claim_token = null/i);
+    expect(sql).toMatch(/where id = \$1[\s\S]+and claim_token = \$4::uuid[\s\S]+and status = 'claimed'/i);
   });
 });

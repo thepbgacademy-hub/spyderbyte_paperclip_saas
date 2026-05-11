@@ -3,9 +3,13 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { ApiSession } from "./dashboard-api.js";
 import { createDashboardApi } from "./dashboard-api.js";
 import { createDashboardHttpHandler, type DashboardHttpResponse } from "./dashboard-http.js";
-import { createPgPool, createPgPoolQueryClient } from "../db/postgres-client.js";
+import { createAcidGuardRepository } from "../db/acid-guard-repository.js";
+import { createPgPool, createPgPoolQueryClient, createPgTransactionRunner } from "../db/postgres-client.js";
 import { createSupabaseRepositories } from "../db/supabase-repositories.js";
 import { createFixedWindowRateLimiter } from "../security/rate-limit.js";
+import type { WorkflowRunEnqueuer } from "../workflows/acid-run-reservation.js";
+import { createQueueOutboxPump } from "../workflows/queue-outbox-pump.js";
+import { createQueueOutboxWorker } from "../workflows/queue-outbox-worker.js";
 
 export type RuntimeEnv = {
   supabaseDbUrl: string;
@@ -52,12 +56,22 @@ export function loadRuntimeEnv(source: NodeJS.ProcessEnv = process.env): Runtime
   };
 }
 
-export function createDashboardRuntime(options: { env: RuntimeEnv; auth: RuntimeAuth }) {
+export function createDashboardRuntime(options: { env: RuntimeEnv; auth: RuntimeAuth; workflowQueueEnqueuer?: WorkflowRunEnqueuer }) {
   const pool = createPgPool({
     connectionString: options.env.supabaseDbUrl,
     ...(options.env.supabaseDbSsl ? { sslMode: options.env.supabaseDbSsl } : {})
   });
-  const repositories = createSupabaseRepositories(createPgPoolQueryClient(pool));
+  const queryClient = createPgPoolQueryClient(pool);
+  const repositories = createSupabaseRepositories(queryClient);
+  const acidRepository = createAcidGuardRepository(createPgTransactionRunner(pool));
+  const outboxPump = options.workflowQueueEnqueuer
+    ? createQueueOutboxPump({
+        worker: createQueueOutboxWorker({
+          repository: acidRepository,
+          enqueuer: options.workflowQueueEnqueuer
+        })
+      })
+    : undefined;
   const dashboardApi = createDashboardApi({
     authenticate: options.auth.authenticate,
     requireTenantMember: repositories.requireTenantMember,
@@ -74,7 +88,11 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
 
   return {
     server: createServer(createNodeRequestListener(handler)),
-    close: () => pool.end()
+    startWorkers: () => outboxPump?.start(),
+    close: async () => {
+      outboxPump?.stop();
+      await pool.end();
+    }
   };
 }
 
