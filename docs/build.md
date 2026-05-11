@@ -53,7 +53,7 @@ Commercial rules:
 
 - A company must have an active subscription before it can run workflows.
 - A company purchases and installs a primary package from its dashboard.
-- Industry packages include prebuilt workflows, default dashboards/templates, and base employees.
+- Industry packages include governed prompts, rules, allowed assets, prebuilt workflows, default dashboards/templates, and base employees.
 - The blank-canvas premium tier starts with no prebuilt workflows; the customer designs the business from scratch.
 - Wealth Factory ships with basic executive employees such as CEO/CFO-style roles.
 - Specialist employees are paid add-ons.
@@ -63,9 +63,11 @@ Commercial rules:
 Required implementation files for package/subscription expansion:
 
 - Create: `src/packages/package-types.ts`
+- Create: `src/packages/package-asset-registry.ts`
 - Create: `src/packages/package-service.ts`
 - Create: `src/packages/entitlement-service.ts`
 - Create: `src/packages/employee-catalog.ts`
+- Create: `tests/package-asset-registry.test.ts`
 - Create: `tests/package-entitlements.test.ts`
 - Modify: `supabase/migrations/0001_initial_tenant_model.sql` or add a new package entitlement migration.
 - Modify: `src/workflows/run-service.ts`
@@ -76,6 +78,8 @@ Required tests:
 - A tenant cannot run any workflow without an active subscription.
 - A tenant cannot run a workflow before installing a purchased package.
 - A tenant cannot run a workflow from another industry package.
+- A tenant cannot resolve prompts/rules/assets from another package.
+- Business Coach package assets cannot be pulled into a Brand SEO run, and Brand SEO assets cannot be pulled into a Business Coach run.
 - A tenant can run workflows included in its installed package.
 - A tenant can run add-on specialist workflows only after purchasing the add-on.
 - The blank-canvas premium tier starts with no prebuilt workflows.
@@ -100,6 +104,7 @@ The boundary layer owns:
 
 - Public Wealth Factory workflow names, descriptions, categories, and result labels.
 - Private mappings from Wealth Factory workflow IDs to Paperclip workflow/company IDs.
+- Package asset lookup for allowed prompts, rules, templates, employees, and private Paperclip assets.
 - DTO mapping from internal Paperclip adapter responses to Wealth Factory response objects.
 - Safe public error translation, such as `workflow_failed`, `credential_invalid`, `tenant_paused`, and `service_unavailable`.
 - Forbidden-term and forbidden-field checks for user-facing API responses.
@@ -332,21 +337,26 @@ expect(publicResponse.workflowName).toContain("Wealth Factory");
 **Files:**
 
 - Create: `src/packages/package-types.ts`
+- Create: `src/packages/package-asset-registry.ts`
 - Create: `src/packages/package-service.ts`
 - Create: `src/packages/entitlement-service.ts`
 - Create: `src/packages/employee-catalog.ts`
+- Create: `tests/package-asset-registry.test.ts`
 - Create: `tests/package-entitlements.test.ts`
 - Modify: `supabase/migrations/0001_initial_tenant_model.sql` or create a new migration.
 - Modify: `src/workflows/run-service.ts`
 - Modify: `src/wealthfactory/workflow-registry.ts`
 - Modify: `docs/dashboard-design-prep.md`
 
-- [ ] Add package catalog types for industry packages, blank-canvas package, base employees, specialist add-ons, and package workflows.
+- [ ] Add package catalog types for industry packages, blank-canvas package, base employees, specialist add-ons, package workflows, and private package assets.
 - [ ] Add subscription and package install data model.
+- [ ] Add package asset registry that resolves prompts/rules/assets only through installed-package entitlement.
 - [ ] Add entitlement service that checks active subscription, installed package, workflow membership, and add-on employee access.
 - [ ] Update workflow registry so every public workflow belongs to a package or customer-created blank-canvas registry scope.
+- [ ] Update workflow registry so every workflow references only allowed package assets.
 - [ ] Update run creation to require active subscription and valid package/workflow entitlement before queueing.
 - [ ] Add tests proving workflows cannot escape the installed package/industry boundary.
+- [ ] Add tests proving package assets cannot cross package boundaries.
 - [ ] Add tests proving blank-canvas tenants start with no prebuilt workflows.
 - [ ] Add tests proving specialist employees are unavailable until purchased.
 - [ ] Run `npm run build`, `npm test`, and `npm run lint`.

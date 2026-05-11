@@ -49,6 +49,7 @@ Expected data:
 - Installed status
 - Included workflows count
 - Included base employees
+- Allowed asset groups, shown only as public labels such as templates, scorecards, checklists, or playbooks
 - Available specialist add-ons
 
 Rules:
@@ -58,6 +59,8 @@ Rules:
 - Installed package determines the allowed workflow/industry boundary.
 - Blank-canvas package starts with no prebuilt workflows.
 - Package IDs shown to users are Wealth Factory IDs, not Paperclip IDs.
+- Prompt/rule/internal asset names are not shown to customers.
+- Public package asset labels are descriptive Wealth Factory labels, not Paperclip prompt/skill/command names.
 
 ### Workflows
 
@@ -79,6 +82,7 @@ Rules:
 - Only display workflows enabled for the authenticated tenant.
 - Only display workflows included in the tenant's installed package or purchased add-ons.
 - Never let a workflow run outside the tenant's installed package/industry boundary.
+- Workflow execution must pull prompts, rules, templates, employees, and private assets only from the installed package's allowed asset registry.
 
 ### Employees
 
@@ -242,6 +246,8 @@ Hidden fields:
 
 - Raw job data
 - Raw internal workflow payloads
+- Package prompt/rule bodies
+- Private package asset IDs and Paperclip asset mappings
 - Provider secrets
 - Codex auth/session files
 - Service tokens
@@ -297,6 +303,7 @@ Operator result panels may add:
 Neither view may show:
 
 - Prompts
+- Package rule bodies
 - Skills
 - Commands
 - Agent names
@@ -306,6 +313,7 @@ Neither view may show:
 - BYOK values
 - ChatGPT/Codex access tokens, refresh tokens, account IDs, emails, or auth file paths
 - Private workflow-engine URLs or company IDs
+- Private package asset IDs or Paperclip asset mappings
 
 ## Authorization And Data Contracts
 
@@ -331,6 +339,9 @@ Minimum DTOs:
 - `OperatorTenantControlSummary`
 - `ProviderCredentialSummary`
 - `CodexSubscriptionAuthSummary`
+- `PackageInstallSummary`
+- `PackageAssetGroupSummary`
+- `EmployeeEntitlementSummary`
 
 ## Next Implementation Requirements
 
@@ -338,8 +349,10 @@ Before building the dashboard:
 
 - Add authenticated API route layer for workflow, run, credential, audit, and operator DTOs.
 - Add package catalog, package install, subscription, and add-on employee routes.
+- Add package asset registry routes for operator/admin management, with customer routes limited to public package asset labels.
 - Add company-specific provider credential routes for OpenAI, Anthropic, xAI/Grok, OpenRouter, and Codex subscription auth.
 - Add entitlement checks before workflow run creation.
+- Add asset entitlement checks before resolving any Paperclip prompt/rule/asset.
 - Add server-side authorization tests for every route.
 - Add Playwright tests for member, operator, and cross-tenant access.
 - Add response-shape tests proving forbidden terms and internal fields are absent.
@@ -355,3 +368,5 @@ Before building the dashboard:
 - Whether ChatGPT/Codex subscription auth is company-level only or can also be delegated per user inside a subscribing company.
 - Whether companies may install multiple industry packages later, or whether MVP enforces one primary installed package.
 - Which base employees ship with every package, and which specialists are add-ons.
+- Which package assets are common/global versus strictly industry-specific.
+- How package asset version upgrades are approved and rolled out to installed tenants.

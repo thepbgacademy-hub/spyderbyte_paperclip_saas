@@ -42,9 +42,12 @@ Do not build customer-facing dashboard routes before the boundary layer exists.
 Wealth Factory is sold in monthly subscription packages.
 
 - Each package is prebuilt for a specific industry, except the premium blank-canvas package.
+- A package is a governed bundle of prompts, rules, allowed assets, workflows, employees, dashboards/templates, and result views.
 - A company purchases a package and installs it from its dashboard.
 - The installed package defines the company's allowed workflow/industry boundary.
 - A workflow may never run outside the installed package/industry boundary.
+- A workflow may only pull prompts/rules/assets from the installed package's allowed asset registry.
+- Business Coach and Brand SEO are examples of separate packages with separate asset registries; they must not cross-load each other's prompts, rules, employees, templates, or Paperclip mappings.
 - Wealth Factory ships with basic CEO/CFO-style employees.
 - Specialist employees are paid add-ons.
 - Add-on employees and workflows remain scoped to the installed package/industry unless separately purchased.
@@ -54,9 +57,11 @@ Wealth Factory is sold in monthly subscription packages.
 Required package files for the next roadmap:
 
 - `src/packages/package-types.ts`
+- `src/packages/package-asset-registry.ts`
 - `src/packages/package-service.ts`
 - `src/packages/entitlement-service.ts`
 - `src/packages/employee-catalog.ts`
+- `tests/package-asset-registry.test.ts`
 - `tests/package-entitlements.test.ts`
 
 ## Boundary Layer Requirements
@@ -122,6 +127,7 @@ Nuances to preserve:
 - Use Wealth Factory DTOs rather than raw database rows or internal workflow responses.
 - Add route tests proving tenant isolation and operator-only access.
 - Add entitlement tests proving tenants cannot run workflows outside their installed package/industry.
+- Add asset registry tests proving tenants cannot resolve prompts/rules/assets outside their installed package.
 - Add response-guard tests proving Paperclip/internal terms and fields are rejected.
 - Add Playwright tests for member, owner, and operator paths.
 - Keep `npm run build`, `npm test`, `npm run lint`, `npm run build:web`, and `npm run e2e` passing as the dashboard grows.

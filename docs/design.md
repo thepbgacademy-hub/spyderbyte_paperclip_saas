@@ -82,7 +82,7 @@ Wealth Factory is sold in subscription packages.
 
 Package types:
 
-- Industry package: a prebuilt package for a specific industry with curated workflows, default employees, dashboards, templates, and result views.
+- Industry package: a prebuilt package for a specific industry with curated prompts, rules, allowed assets, workflows, default employees, dashboards, templates, and result views.
 - Blank-canvas package: the premium tier where the user starts with no prebuilt package/workflows and designs the business from scratch.
 - Add-on employee package: paid specialist employees that can be added to an installed package.
 - Add-on workflow/template package: optional later lane for additional workflow sets that remain scoped to the installed package/industry.
@@ -106,6 +106,38 @@ Package isolation rules:
 - The server resolves installed package entitlements before resolving private Paperclip mappings.
 - The blank-canvas premium tier starts with no prebuilt workflows; customer-created workflows must still become Wealth Factory registry entries before execution.
 - Add-on employees must be bound to the tenant's installed package context and cannot expand the tenant into unrelated industries unless explicitly purchased.
+
+## Package Asset Registry
+
+A Wealth Factory package is a governed set of allowed assets, not just a billing SKU.
+
+Package assets can include:
+
+- Public Wealth Factory workflow definitions.
+- Internal prompt/rule bundles used by Paperclip.
+- Allowed files, templates, documents, schemas, examples, checklists, or knowledge assets.
+- Employee/agent role definitions.
+- Dashboard widgets and result view templates.
+- Provider/model constraints.
+- Industry-specific guardrails and operating rules.
+
+Examples:
+
+- A Business Coach package can include business coaching prompts, discovery workflows, advisory scorecards, meeting templates, and coaching-specific employees.
+- A Brand SEO package can include SEO audit prompts, keyword workflows, brand voice assets, content planning templates, and SEO/content specialist employees.
+
+Those two packages must not share runtime assets unless the asset is explicitly marked as common/global and permitted by entitlement. A tenant with the Business Coach package cannot pull Brand SEO prompts, rules, employees, templates, or Paperclip mappings.
+
+The package asset registry should live in Supabase/app database tables and be resolved by Wealth Factory before Paperclip is called. Paperclip may store or execute the underlying prompts/rules/assets privately, but the browser and public API see only Wealth Factory package/workflow/employee/result DTOs.
+
+Required package asset checks:
+
+- Resolve assets by installed package ID and tenant entitlement, not by user-supplied asset IDs.
+- Treat prompts/rules as private internal assets even when their outputs become customer-visible results.
+- Keep Paperclip asset IDs, prompt names, skill names, command names, and agent names server-side only.
+- Version package assets so installed packages can be upgraded safely.
+- Record which package asset version was used for each run for audit/reproducibility.
+- Deny execution when a workflow references an asset outside the installed package's allowed asset set.
 
 ## Company-Specific Provider Credential Model
 
@@ -215,6 +247,8 @@ Core tables:
 - `tenant_subscriptions`
 - `wealth_factory_packages`
 - `tenant_package_installs`
+- `package_asset_versions`
+- `package_allowed_assets`
 - `package_workflows`
 - `package_employees`
 - `tenant_add_ons`
