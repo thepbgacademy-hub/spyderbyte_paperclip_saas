@@ -113,6 +113,10 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Add provider credential lane tests.
 - [x] Post-MVP Phase 6: Wealth Factory dashboard POC update.
 - [x] Update UI to Wealth Factory package, provider, artifact, and storage concepts.
+- [x] Add authenticated dashboard API DTO route primitive with response guard.
+- [x] Add Supabase schema for packages, package installs, provider requirements, artifact metadata, and storage connectors.
+- [x] Add package install service and customer-owned storage connector service.
+- [x] Add dashboard client abstraction for API-backed state.
 - [x] Add E2E tests for package provider gating and temporary storage options.
 - [x] Run lint/build/test/web-build/e2e pass.
 
@@ -123,7 +127,7 @@ This file tracks implementation progress. Keep it current after every phase.
 
 ## Later Phases
 
-- [ ] Replace in-memory POC services with authenticated API routes and Supabase-backed state.
-- [ ] Add Supabase migrations for package installs, provider capability requirements, artifact metadata, and storage connectors.
+- [ ] Wire dashboard client to real HTTP endpoints.
+- [ ] Replace in-memory POC service repositories with Supabase repository implementations.
 - [ ] Add real OAuth flows for Google Drive and Dropbox storage connectors.
 - [ ] Deploy the POC to VPS and run external exposed-port/CORS smoke tests.

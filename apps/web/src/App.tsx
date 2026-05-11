@@ -2,6 +2,7 @@ import { Activity, Download, HardDrive, KeyRound, Lock, PackageCheck, Play, Shie
 import { useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 
+import { dashboardClient } from "./dashboard-client.js";
 import "./styles.css";
 
 type Role = "member" | "operator";
@@ -19,6 +20,7 @@ function getInitialRole(): Role {
 }
 
 function App() {
+  const dashboard = dashboardClient.getSnapshot();
   const [role] = useState<Role>(getInitialRole);
   const [provider, setProvider] = useState("OpenAI");
   const [keySaved, setKeySaved] = useState(false);
@@ -66,17 +68,16 @@ function App() {
       </aside>
       <section className="workspace">
         <header className="topbar">
-          <div><h1>Wealth Factory workspace</h1><p>Northstar Labs | Social Media Agency package | {statusCopy}</p></div>
+          <div><h1>Wealth Factory workspace</h1><p>{dashboard.tenantName} | {dashboard.packageName} package | {statusCopy}</p></div>
           <div className="roleBadge" aria-label="Role">{role === "operator" ? "Operator" : "Member"}</div>
         </header>
         <section className="grid">
           <section className="panel" aria-label="Installed package">
-            <div className="panelTitle"><PackageCheck size={20} /><h2>Social Media Agency</h2></div>
+            <div className="panelTitle"><PackageCheck size={20} /><h2>{dashboard.packageName}</h2></div>
             <p className="body">Installed package for planning posts, creating approved media, and exporting short-lived deliverables.</p>
             <ul className="compactList">
-              <li>Required: OpenAI</li>
-              <li>Optional: image and video providers</li>
-              <li>Optional: customer-owned storage</li>
+              {dashboard.requiredProviders.map((provider) => <li key={provider}>Required: {provider}</li>)}
+              {dashboard.optionalProviders.map((provider) => <li key={provider}>Optional: {provider}</li>)}
             </ul>
           </section>
           <form className="panel" onSubmit={saveKey} aria-label="Connect provider">
@@ -95,7 +96,7 @@ function App() {
           </section>
           <section className="panel" aria-label="Artifact storage">
             <div className="panelTitle"><HardDrive size={20} /><h2>Delivery storage</h2></div>
-            <p className="body">Generated files are temporary by default and expire after 24 hours.</p>
+            <p className="body">Generated files are temporary by default and expire after {dashboard.artifactTtlHours} hours.</p>
             <button className="secondary"><Download size={16} /> Connect Google Drive</button>
             <button className="secondary">Connect Dropbox</button>
           </section>

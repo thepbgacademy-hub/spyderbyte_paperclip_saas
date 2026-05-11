@@ -37,19 +37,22 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 - Worker-level entitlement re-checks in `src/workflows/worker.ts` so stale/replayed jobs fail closed before private workflow calls.
 - Temporary artifact service in `src/artifacts/artifact-service.ts`.
 - Customer-owned storage provider definitions in `src/storage/storage-provider-types.ts`.
+- Customer-owned storage connector registry in `src/storage/storage-connector-service.ts`.
+- Authenticated dashboard API DTO primitive in `src/api/dashboard-api.ts`.
+- Supabase schema coverage for packages, package installs, provider requirements, artifact metadata, and storage connectors.
+- Dashboard client abstraction in `apps/web/src/dashboard-client.ts`.
 - Wealth Factory dashboard POC updates in `apps/web/src/App.tsx`.
 - Tests for security, boundary, entitlements, artifacts, provider lanes, and E2E dashboard behavior.
 - Provider enum support in the initial Supabase migration and DB types for OpenAI API, ChatGPT/Codex subscription auth, Anthropic, xAI/Grok, OpenRouter, and generic providers.
 
 ## Next Build Order
 
-1. Add authenticated API route layer that uses the security helpers and Wealth Factory response guard.
-2. Add Supabase migrations/tables for package installs, package provider requirements, artifact metadata, and storage connectors.
-3. Replace the dashboard's local demo state with API-backed state.
-4. Implement real package install/setup APIs.
-5. Implement real provider credential registration for expanded provider lanes.
-6. Implement Google Drive and Dropbox OAuth/storage connector setup if needed for the first media package.
-7. Deploy the POC to the VPS using the Phase 6 deployment runbooks once credentials and final Supabase target are available.
+1. Wire the dashboard client to real HTTP endpoints.
+2. Replace in-memory POC repositories with Supabase repository implementations.
+3. Implement real provider credential registration endpoints for expanded provider lanes.
+4. Implement Google Drive and Dropbox OAuth/storage connector setup if needed for the first media package.
+5. Add deployed API smoke tests for CORS, auth failures, dashboard DTO response guard, and exposed ports.
+6. Deploy the POC to the VPS using the Phase 6 deployment runbooks once credentials and final Supabase target are available.
 
 ## Security Position
 

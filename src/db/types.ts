@@ -45,3 +45,44 @@ export type SecretReferenceRow = {
   metadata: Record<string, unknown>;
   revokedAt: string | null;
 };
+
+export type WealthFactoryPackageRow = {
+  id: string;
+  packageKey: string;
+  name: string;
+  kind: "industry" | "blank_canvas";
+  metadata: Record<string, unknown>;
+};
+
+export type TenantPackageInstallRow = {
+  id: string;
+  tenantId: string;
+  packageId: string;
+  installedByUserId: string;
+  status: "active" | "paused" | "removed";
+  installedAt: string;
+};
+
+export type ArtifactMetadataRow = {
+  id: string;
+  tenantId: string;
+  workflowRunId: string;
+  packageId: string | null;
+  artifactType: string;
+  filename: string;
+  mimeType: string;
+  byteSize: number;
+  checksum: string;
+  expiresAt: string;
+  purgedAt: string | null;
+  exportStatus: "not_exported" | "exported";
+};
+
+export type StorageConnectorRow = {
+  id: string;
+  tenantId: string;
+  providerKind: string;
+  displayName: string;
+  publicTarget: Record<string, unknown>;
+  revokedAt: string | null;
+};

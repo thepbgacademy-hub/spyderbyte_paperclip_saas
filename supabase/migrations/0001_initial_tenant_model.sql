@@ -77,6 +77,64 @@ create table public.secret_references (
   check (jsonb_typeof(metadata) = 'object')
 );
 
+create table public.wealth_factory_packages (
+  id uuid primary key default gen_random_uuid(),
+  package_key text not null unique,
+  name text not null,
+  kind text not null check (kind in ('industry', 'blank_canvas')),
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (jsonb_typeof(metadata) = 'object')
+);
+
+create table public.tenant_package_installs (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  package_id uuid not null references public.wealth_factory_packages(id) on delete restrict,
+  installed_by_user_id uuid not null references auth.users(id) on delete restrict,
+  status text not null default 'active' check (status in ('active', 'paused', 'removed')),
+  installed_at timestamptz not null default now(),
+  unique (tenant_id, package_id)
+);
+
+create table public.package_provider_requirements (
+  id uuid primary key default gen_random_uuid(),
+  package_id uuid not null references public.wealth_factory_packages(id) on delete cascade,
+  capability text not null,
+  required boolean not null default false,
+  provider_kind public.provider_kind,
+  created_at timestamptz not null default now()
+);
+
+create table public.artifact_metadata (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  workflow_run_id uuid not null references public.workflow_runs(id) on delete cascade,
+  package_id uuid references public.wealth_factory_packages(id) on delete set null,
+  artifact_type text not null,
+  filename text not null,
+  mime_type text not null,
+  byte_size bigint not null check (byte_size >= 0),
+  checksum text not null,
+  expires_at timestamptz not null,
+  purged_at timestamptz,
+  export_status text not null default 'not_exported',
+  created_at timestamptz not null default now()
+);
+
+create table public.storage_connectors (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  provider_kind text not null,
+  display_name text not null,
+  public_target jsonb not null default '{}'::jsonb,
+  revoked_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (jsonb_typeof(public_target) = 'object')
+);
+
 create table public.audit_events (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null references public.tenants(id) on delete cascade,
@@ -105,6 +163,10 @@ create index workflow_templates_tenant_id_idx on public.workflow_templates (tena
 create index workflow_runs_tenant_id_idx on public.workflow_runs (tenant_id);
 create index workflow_runs_template_idx on public.workflow_runs (workflow_template_id);
 create index secret_references_tenant_id_idx on public.secret_references (tenant_id);
+create index tenant_package_installs_tenant_id_idx on public.tenant_package_installs (tenant_id);
+create index package_provider_requirements_package_id_idx on public.package_provider_requirements (package_id);
+create index artifact_metadata_tenant_id_created_at_idx on public.artifact_metadata (tenant_id, created_at desc);
+create index storage_connectors_tenant_id_idx on public.storage_connectors (tenant_id);
 create index audit_events_tenant_id_created_at_idx on public.audit_events (tenant_id, created_at desc);
 create index operator_actions_tenant_id_created_at_idx on public.operator_actions (tenant_id, created_at desc);
 
@@ -167,6 +229,11 @@ alter table public.paperclip_company_mappings enable row level security;
 alter table public.workflow_templates enable row level security;
 alter table public.workflow_runs enable row level security;
 alter table public.secret_references enable row level security;
+alter table public.wealth_factory_packages enable row level security;
+alter table public.tenant_package_installs enable row level security;
+alter table public.package_provider_requirements enable row level security;
+alter table public.artifact_metadata enable row level security;
+alter table public.storage_connectors enable row level security;
 alter table public.audit_events enable row level security;
 alter table public.operator_actions enable row level security;
 
@@ -192,6 +259,31 @@ using (private.is_tenant_member(tenant_id));
 
 create policy "members can read workflow runs"
 on public.workflow_runs for select
+to authenticated
+using (private.is_tenant_member(tenant_id));
+
+create policy "members can read package catalog"
+on public.wealth_factory_packages for select
+to authenticated
+using (true);
+
+create policy "members can read tenant package installs"
+on public.tenant_package_installs for select
+to authenticated
+using (private.is_tenant_member(tenant_id));
+
+create policy "members can read package provider requirements"
+on public.package_provider_requirements for select
+to authenticated
+using (true);
+
+create policy "members can read artifact metadata"
+on public.artifact_metadata for select
+to authenticated
+using (private.is_tenant_member(tenant_id));
+
+create policy "members can read storage connectors"
+on public.storage_connectors for select
 to authenticated
 using (private.is_tenant_member(tenant_id));
 

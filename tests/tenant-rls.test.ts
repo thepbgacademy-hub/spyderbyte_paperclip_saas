@@ -14,6 +14,11 @@ describe("tenant model migration", () => {
     "workflow_templates",
     "workflow_runs",
     "secret_references",
+    "wealth_factory_packages",
+    "tenant_package_installs",
+    "package_provider_requirements",
+    "artifact_metadata",
+    "storage_connectors",
     "audit_events",
     "operator_actions"
   ];
@@ -44,6 +49,8 @@ describe("tenant model migration", () => {
 
   it("does not expose Paperclip company mappings or secret references without membership checks", () => {
     expect(policyFor("paperclip_company_mappings")).toContain("private.is_tenant_member(tenant_id)");
+    const storageConnectorTable = migration.match(/create table public\.storage_connectors[\s\S]+?\);/i)?.[0] ?? "";
+    expect(storageConnectorTable).not.toMatch(/secret_ref/i);
     expect(migration).not.toMatch(/create policy "members can read secret reference metadata"[\s\S]+on public\.secret_references/i);
     expect(migration).not.toMatch(/grant select[\s\S]+on public\.secret_references to authenticated/i);
   });
