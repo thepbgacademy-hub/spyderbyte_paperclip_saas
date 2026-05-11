@@ -705,7 +705,43 @@ Next work after this phase:
 
 Next work after this phase:
 
-- [ ] Connect provider credential registration to the selected vault backend.
+- [x] Connect provider credential registration to the selected vault backend.
+- [ ] Add external VPS smoke tests for CORS, auth failure, exposed ports, and response guard.
+
+## Post-MVP Phase: Vault-Backed Provider Credential Registration
+
+**Outcome:** Company BYOK credentials are accepted through Wealth Factory, stored only as encrypted vault material behind opaque references, persisted in Supabase as `wfpc.secret_references`, and returned to the browser only as public provider connection summaries.
+
+**Files:**
+
+- Create: `src/secrets/encrypted-vault.ts`
+- Create: `src/secrets/postgres-vault-store.ts`
+- Create: `src/secrets/provider-credential-service.ts`
+- Create: `src/secrets/vault-backed-provider-registration.ts`
+- Create: `supabase/migrations/0005_private_encrypted_vault.sql`
+- Create: `tests/encrypted-vault.test.ts`
+- Create: `tests/postgres-vault-store.test.ts`
+- Create: `tests/private-vault-migration.test.ts`
+- Create: `tests/provider-credential-service.test.ts`
+- Create: `tests/vault-backed-provider-registration.test.ts`
+- Modify: `src/secrets/secret-service.ts`
+- Modify: `src/db/supabase-repositories.ts`
+- Modify: `src/providers/provider-types.ts`
+- Modify: `tests/secret-service.test.ts`
+- Modify: `tests/supabase-repositories.test.ts`
+
+- [x] Add AES-GCM encrypted vault backend abstraction with tenant ownership checks and opaque `wf_secret_*` handles.
+- [x] Add private Postgres-backed encrypted vault storage in `wfpc_private.vault_secrets`, with RLS enabled and no authenticated/browser grants.
+- [x] Add vault-backed provider credential registration composition that connects vault storage, Supabase secret-reference persistence, and public connection responses.
+- [x] Support OpenAI API, Anthropic, xAI/Grok, OpenRouter, and generic API credential lanes through the same path.
+- [x] Keep raw provider keys out of Supabase repository calls, audit metadata, public API responses, DTOs, and tests.
+- [x] Preserve `openai_api` as the explicit OpenAI BYOK lane.
+- [x] Apply the private encrypted vault migration to live Supabase and verify the helper is idempotent.
+- [x] Run full lint/build/test/web-build/e2e pass with 156 unit tests and 3 Playwright E2E tests passing.
+
+Next work after this phase:
+
+- [ ] Add real OAuth flows for Google Drive and Dropbox storage connectors.
 - [ ] Add external VPS smoke tests for CORS, auth failure, exposed ports, and response guard.
 
 ## Self-Review

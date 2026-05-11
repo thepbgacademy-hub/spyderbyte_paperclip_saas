@@ -14,7 +14,7 @@ export type SecretRequirement = {
 };
 
 export type OpenAIProviderConfig = {
-  kind: "openai";
+  kind: "openai" | "openai_api";
   label: "OpenAI";
   requiredSecrets: [SecretRequirement];
   metadataFields: readonly ["projectId"];
@@ -56,7 +56,10 @@ export const OPENAI_PROVIDER: OpenAIProviderConfig = {
   metadataFields: ["projectId"]
 };
 
-export const OPENAI_API_PROVIDER = OPENAI_PROVIDER;
+export const OPENAI_API_PROVIDER: OpenAIProviderConfig = {
+  ...OPENAI_PROVIDER,
+  kind: "openai_api"
+};
 
 export const ANTHROPIC_PROVIDER: ApiKeyProviderConfig = {
   kind: "anthropic_api",

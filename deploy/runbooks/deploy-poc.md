@@ -4,7 +4,7 @@ Reference docs: `docs/design.md`, `docs/build.md`, `TODO.md`.
 
 ## Hosts
 
-- Customer portal/dashboard: hosted on a regular public website, origin configured as `WF_PORTAL_ORIGIN`.
+- Customer portal/dashboard: hosted on a regular public website, origin configured in `WF_ALLOWED_ORIGINS`.
 - POC public app: `www.spyderbyte.cloud` if the portal is hosted on the VPS during testing.
 - Public backend API: `api.spyderbyte.cloud`
 - Internal workflow engine: Docker private network only
@@ -19,10 +19,13 @@ Set these on the VPS as root-owned environment files or deployment secrets. Do n
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_DB_URL`
+- `SUPABASE_DB_SSL`
 - `PAPERCLIP_SERVICE_TOKEN`
+- `WF_ALLOWED_ORIGINS`
+- `WF_VAULT_MASTER_KEY`
 - `SPYDERBYTE_IMAGE_TAG`
 - `PAPERCLIP_IMAGE_TAG`
-- `WF_PORTAL_ORIGIN`
 
 Tenant OpenAI and generic provider keys remain BYOK runtime secrets stored by reference. They must not be baked into Docker images, browser bundles, Compose files, or Redis jobs.
 
@@ -32,7 +35,7 @@ Tenant OpenAI and generic provider keys remain BYOK runtime secrets stored by re
 2. Copy `deploy/docker-compose.yml` and `deploy/nginx/spyderbyte.conf` to the VPS.
 3. Install TLS certificates for `www.spyderbyte.cloud` if used for the POC app and `api.spyderbyte.cloud` for the backend API.
 4. Set `SPYDERBYTE_IMAGE_TAG` to the selected commit tag and `PAPERCLIP_IMAGE_TAG` to a reviewed version or digest-backed tag.
-5. Set `WF_PORTAL_ORIGIN` to the exact customer portal origin. Do not use wildcard origins for authenticated routes.
+5. Set `WF_ALLOWED_ORIGINS` to the exact customer portal origin or comma-separated allowed origins. Do not use wildcard origins for authenticated routes.
 6. Load the required server-side secrets into the shell or an `.env` file readable only by the deploy user.
 7. Run `docker compose -f deploy/docker-compose.yml pull`.
 8. Run `docker compose -f deploy/docker-compose.yml up -d`.
@@ -74,7 +77,7 @@ Expected:
 Run CORS checks from outside the VPS:
 
 ```powershell
-curl.exe -i -X OPTIONS https://api.spyderbyte.cloud/health -H "Origin: $env:WF_PORTAL_ORIGIN" -H "Access-Control-Request-Method: GET"
+curl.exe -i -X OPTIONS https://api.spyderbyte.cloud/health -H "Origin: https://www.spyderbyte.cloud" -H "Access-Control-Request-Method: GET"
 curl.exe -i -X OPTIONS https://api.spyderbyte.cloud/health -H "Origin: https://untrusted.example" -H "Access-Control-Request-Method: GET"
 ```
 
@@ -88,7 +91,7 @@ Before release-candidate deploys, run the security checklist in `deploy/runbooks
 Then run:
 
 ```powershell
-npm run e2e -- --config apps/web/playwright.config.ts --project chromium
+npm run e2e
 ```
 
 Point Playwright at the deployed origin before using this as a release gate.

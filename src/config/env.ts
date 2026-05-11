@@ -6,6 +6,7 @@ export type AppEnv = {
   redisUrl: string;
   paperclipBaseUrl: string;
   paperclipServiceToken: string;
+  vaultMasterKey: string;
 };
 
 const REQUIRED_KEYS = [
@@ -14,7 +15,8 @@ const REQUIRED_KEYS = [
   "SUPABASE_SERVICE_ROLE_KEY",
   "REDIS_URL",
   "PAPERCLIP_BASE_URL",
-  "PAPERCLIP_SERVICE_TOKEN"
+  "PAPERCLIP_SERVICE_TOKEN",
+  "WF_VAULT_MASTER_KEY"
 ] as const;
 
 type RequiredEnvKey = (typeof REQUIRED_KEYS)[number];
@@ -49,6 +51,10 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     invalidKeys.push("PAPERCLIP_BASE_URL");
   }
 
+  if (hasValue(source.WF_VAULT_MASTER_KEY) && source.WF_VAULT_MASTER_KEY.length < 24) {
+    invalidKeys.push("WF_VAULT_MASTER_KEY");
+  }
+
   const nodeEnv = source.NODE_ENV ?? "development";
   if (!["development", "test", "production"].includes(nodeEnv)) {
     invalidKeys.push("NODE_ENV");
@@ -65,7 +71,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     supabaseServiceRoleKey: source.SUPABASE_SERVICE_ROLE_KEY as string,
     redisUrl: source.REDIS_URL as string,
     paperclipBaseUrl: trimTrailingSlash(source.PAPERCLIP_BASE_URL as string),
-    paperclipServiceToken: source.PAPERCLIP_SERVICE_TOKEN as string
+    paperclipServiceToken: source.PAPERCLIP_SERVICE_TOKEN as string,
+    vaultMasterKey: source.WF_VAULT_MASTER_KEY as string
   };
 }
 

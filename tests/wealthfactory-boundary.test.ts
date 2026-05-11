@@ -49,10 +49,12 @@ describe("Wealth Factory boundary layer", () => {
     expect(() => assertWealthFactoryResponse({ ...dto, prompt: "leak" })).toThrow("Forbidden customer-facing field");
     expect(() => assertWealthFactoryResponse({ ...dto, paperclip_run_id: "leak" })).toThrow("Forbidden customer-facing field");
     expect(() => assertWealthFactoryResponse({ ...dto, secret_ref: "leak" })).toThrow("Forbidden customer-facing field");
+    expect(() => assertWealthFactoryResponse({ ...dto, authStateRef: "leak" })).toThrow("Forbidden customer-facing field");
   });
 
   it("blocks secret-like values under harmless field names", () => {
     expect(() => assertWealthFactoryResponse({ note: "Bearer should-not-be-public" })).toThrow("Forbidden customer-facing text");
+    expect(() => assertWealthFactoryResponse({ note: "wf_secret_should_not_be_public" })).toThrow("Forbidden customer-facing text");
     expect(() => assertWealthFactoryResponse({ url: "https://example.test/export?access_token=hidden" })).toThrow(
       "Forbidden customer-facing text"
     );

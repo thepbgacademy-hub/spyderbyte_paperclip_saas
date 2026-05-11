@@ -35,6 +35,8 @@ describe("deployment POC config", () => {
   it("documents secret handling and external smoke checks", () => {
     expect(runbook).toContain("Do not place real values in Git");
     expect(runbook).toContain("BYOK runtime secrets stored by reference");
+    expect(runbook).toContain("WF_ALLOWED_ORIGINS");
+    expect(runbook).toContain("WF_VAULT_MASTER_KEY");
     expect(runbook).toContain("http://<vps-public-ip>:9000/health");
     expect(runbook).toContain("docker compose -f deploy/docker-compose.yml port paperclip 9000");
     expect(runbook).toContain("Test-NetConnection www.spyderbyte.cloud -Port 6379");
@@ -50,9 +52,19 @@ describe("deployment POC config", () => {
   });
 
   it("fails fast when required server-side secrets are missing", () => {
-    for (const key of ["SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "PAPERCLIP_SERVICE_TOKEN"]) {
+    for (const key of [
+      "SUPABASE_URL",
+      "SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_DB_URL",
+      "WF_ALLOWED_ORIGINS",
+      "PAPERCLIP_SERVICE_TOKEN",
+      "WF_VAULT_MASTER_KEY"
+    ]) {
       expect(compose).toContain(`${key}: \${${key}:?set ${key}}`);
     }
+    expect(runbook).toContain("npm run e2e");
+    expect(runbook).not.toContain("--project chromium");
   });
 });
 

@@ -38,13 +38,15 @@ describe("runtime server", () => {
         SUPABASE_DB_URL: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
         SUPABASE_DB_SSL: "false",
         WF_ALLOWED_ORIGINS: "https://www.spyderbyte.cloud, https://portal.spyderbyte.cloud",
-        WF_API_PORT: "8081"
+        WF_API_PORT: "8081",
+        WF_VAULT_MASTER_KEY: "test-master-key-with-enough-length"
       })
-    ).toEqual({
+    ).toMatchObject({
       supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
       supabaseDbSsl: "false",
       allowedOrigins: ["https://www.spyderbyte.cloud", "https://portal.spyderbyte.cloud"],
-      apiPort: 8081
+      apiPort: 8081,
+      vaultMasterKey: "test-master-key-with-enough-length"
     });
   });
 
@@ -52,9 +54,19 @@ describe("runtime server", () => {
     expect(() =>
       loadRuntimeEnv({
         SUPABASE_DB_URL: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
-        WF_ALLOWED_ORIGINS: "*"
+        WF_ALLOWED_ORIGINS: "*",
+        WF_VAULT_MASTER_KEY: "test-master-key-with-enough-length"
       })
     ).toThrow(/WF_ALLOWED_ORIGINS/);
+  });
+
+  it("requires a vault master key for runtime credential storage", () => {
+    expect(() =>
+      loadRuntimeEnv({
+        SUPABASE_DB_URL: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        WF_ALLOWED_ORIGINS: "https://www.spyderbyte.cloud"
+      })
+    ).toThrow(/WF_VAULT_MASTER_KEY/);
   });
 
   it("adapts Node requests to the guarded dashboard HTTP handler", async () => {
@@ -99,7 +111,9 @@ describe("runtime server", () => {
         supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
         supabaseDbSsl: "false",
         allowedOrigins: ["https://www.spyderbyte.cloud"],
-        apiPort: 8081
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
       },
       auth: { authenticate: vi.fn() },
       workflowQueueEnqueuer: { enqueueOnce: vi.fn().mockResolvedValue("enqueued") }
@@ -112,6 +126,23 @@ describe("runtime server", () => {
     const pump = vi.mocked(createQueueOutboxPump).mock.results[0]?.value;
     expect(pump.start).toHaveBeenCalledOnce();
     expect(pump.stop).toHaveBeenCalledOnce();
+  });
+
+  it("wires provider credential registration to the runtime vault path", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() }
+    });
+
+    expect(runtime.registerProviderCredential).toEqual(expect.any(Function));
+    await runtime.close();
   });
 });
 

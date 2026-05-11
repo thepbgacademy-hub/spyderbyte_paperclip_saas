@@ -99,7 +99,7 @@ function assertPublicTarget(target: Record<string, unknown>): void {
 
 function containsSecretLikeField(value: unknown): boolean {
   if (!value || typeof value !== "object") {
-    return typeof value === "string" && /vault:\/\/|oauth|refresh[_-]?token|access_token=|api[_-]?key[:=]|authorization[:=]|Bearer\s+|sk-[A-Za-z0-9_-]+/i.test(value);
+    return typeof value === "string" && /vault:\/\/|wf_secret_|oauth|refresh[_-]?token|access_token=|api[_-]?key[:=]|authorization[:=]|Bearer\s+|sk-[A-Za-z0-9_-]+/i.test(value);
   }
 
   if (Array.isArray(value)) {

@@ -100,6 +100,65 @@ export function createSupabaseRepositories(client: QueryClient) {
           label: String(record.label),
           connected: true
         }));
+    },
+
+    async createSecretReference(input: {
+      tenantId: string;
+      providerKind: string;
+      label: string;
+      secretRef: string;
+      metadata: Record<string, unknown>;
+      revokedAt: string | null;
+    }): Promise<string> {
+      const result = await client.query(
+        `insert into wfpc.secret_references
+          (tenant_id, provider_kind, label, secret_ref, metadata, revoked_at)
+         values ($1, $2::wfpc.provider_kind, $3, $4, $5::jsonb, $6)
+         returning id`,
+        [input.tenantId, input.providerKind, input.label, input.secretRef, JSON.stringify(input.metadata), input.revokedAt]
+      );
+      return String(asRecord(result.rows[0]).id);
+    },
+
+    async updateSecretRef(input: { tenantId: string; previousSecretRef: string; nextSecretRef: string }): Promise<string> {
+      const result = await client.query(
+        `update wfpc.secret_references
+         set secret_ref = $3, updated_at = now()
+         where tenant_id = $1 and secret_ref = $2 and revoked_at is null
+         returning id`,
+        [input.tenantId, input.previousSecretRef, input.nextSecretRef]
+      );
+      return String(asRecord(result.rows[0]).id);
+    },
+
+    async revokeSecretReference(input: { tenantId: string; secretRef: string }): Promise<string> {
+      const result = await client.query(
+        `update wfpc.secret_references
+         set revoked_at = coalesce(revoked_at, now()), updated_at = now()
+         where tenant_id = $1 and secret_ref = $2
+         returning id`,
+        [input.tenantId, input.secretRef]
+      );
+      return String(asRecord(result.rows[0]).id);
+    },
+
+    async findSecretReferenceId(input: { tenantId: string; secretRef: string }): Promise<string> {
+      const result = await client.query("select id from wfpc.secret_references where tenant_id = $1 and secret_ref = $2 and revoked_at is null limit 1", [
+        input.tenantId,
+        input.secretRef
+      ]);
+      const id = asRecord(result.rows[0]).id;
+      return typeof id === "string" ? id : "";
     }
+  };
+}
+
+export function createSupabaseSecretRepository(client: QueryClient) {
+  const repositories = createSupabaseRepositories(client);
+  return {
+    create: repositories.createSecretReference,
+    updateSecretRef: repositories.updateSecretRef,
+    revoke: repositories.revokeSecretReference,
+    findIdBySecretRef: repositories.findSecretReferenceId
   };
 }

@@ -7,6 +7,9 @@ import { createAcidGuardRepository } from "../db/acid-guard-repository.js";
 import { createPgPool, createPgPoolQueryClient, createPgTransactionRunner } from "../db/postgres-client.js";
 import { createSupabaseRepositories } from "../db/supabase-repositories.js";
 import { createFixedWindowRateLimiter } from "../security/rate-limit.js";
+import { createEncryptedSecretVault } from "../secrets/encrypted-vault.js";
+import { createPostgresEncryptedVaultStore } from "../secrets/postgres-vault-store.js";
+import { createVaultBackedProviderCredentialRegistration } from "../secrets/vault-backed-provider-registration.js";
 import type { WorkflowRunEnqueuer } from "../workflows/acid-run-reservation.js";
 import { createQueueOutboxPump } from "../workflows/queue-outbox-pump.js";
 import { createQueueOutboxWorker } from "../workflows/queue-outbox-worker.js";
@@ -16,6 +19,8 @@ export type RuntimeEnv = {
   supabaseDbSsl?: string;
   allowedOrigins: readonly string[];
   apiPort: number;
+  vaultMasterKey: string;
+  runtimeEnv: Record<string, string | undefined>;
 };
 
 export type RuntimeAuth = {
@@ -47,12 +52,18 @@ export function loadRuntimeEnv(source: NodeJS.ProcessEnv = process.env): Runtime
   if (!Number.isInteger(apiPort) || apiPort < 1 || apiPort > 65_535) {
     throw new RuntimeEnvError("WF_API_PORT must be a valid TCP port");
   }
+  const vaultMasterKey = source.WF_VAULT_MASTER_KEY;
+  if (!vaultMasterKey || vaultMasterKey.length < 24) {
+    throw new RuntimeEnvError("WF_VAULT_MASTER_KEY must be at least 24 characters");
+  }
 
   return {
     supabaseDbUrl,
     ...(source.SUPABASE_DB_SSL ? { supabaseDbSsl: source.SUPABASE_DB_SSL } : {}),
     allowedOrigins,
-    apiPort
+    apiPort,
+    vaultMasterKey,
+    runtimeEnv: source
   };
 }
 
@@ -63,6 +74,20 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
   });
   const queryClient = createPgPoolQueryClient(pool);
   const repositories = createSupabaseRepositories(queryClient);
+  const registerProviderCredential = createVaultBackedProviderCredentialRegistration({
+    vault: createEncryptedSecretVault({
+      masterKey: options.env.vaultMasterKey,
+      store: createPostgresEncryptedVaultStore(queryClient)
+    }),
+    repository: {
+      create: repositories.createSecretReference,
+      updateSecretRef: repositories.updateSecretRef,
+      revoke: repositories.revokeSecretReference,
+      findIdBySecretRef: repositories.findSecretReferenceId
+    },
+    audit: async () => undefined,
+    runtimeEnv: options.env.runtimeEnv
+  });
   const acidRepository = createAcidGuardRepository(createPgTransactionRunner(pool));
   const outboxPump = options.workflowQueueEnqueuer
     ? createQueueOutboxPump({
@@ -88,6 +113,7 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
 
   return {
     server: createServer(createNodeRequestListener(handler)),
+    registerProviderCredential,
     startWorkers: () => outboxPump?.start(),
     close: async () => {
       outboxPump?.stop();

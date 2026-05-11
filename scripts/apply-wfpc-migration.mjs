@@ -108,6 +108,16 @@ try {
   if (!outboxReady) {
     await client.query(readFileSync("supabase/migrations/0004_workflow_queue_outbox.sql", "utf8"));
   }
+  const vaultExisting = await client.query(
+    `select
+      exists (select 1 from information_schema.tables where table_schema = 'wfpc_private' and table_name = 'vault_secrets') as has_table,
+      exists (select 1 from pg_indexes where schemaname = 'wfpc_private' and indexname = 'vault_secrets_tenant_id_idx') as has_tenant_index,
+      exists (select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'wfpc_private' and c.relname = 'vault_secrets' and c.relrowsecurity) as has_rls`
+  );
+  const vaultReady = Object.values(vaultExisting.rows[0] ?? {}).every(Boolean);
+  if (!vaultReady) {
+    await client.query(readFileSync("supabase/migrations/0005_private_encrypted_vault.sql", "utf8"));
+  }
   const { rows } = await client.query(
     "select table_schema, table_name from information_schema.tables where table_schema = 'wfpc' order by table_name"
   );
@@ -115,7 +125,7 @@ try {
     JSON.stringify(
       {
         schema: "wfpc",
-        migrationApplied: !existing.rows[0]?.exists || !acidReady || !purchaseReady || !outboxReady,
+        migrationApplied: !existing.rows[0]?.exists || !acidReady || !purchaseReady || !outboxReady || !vaultReady,
         tableCount: rows.length,
         tables: rows.map((row) => row.table_name)
       },

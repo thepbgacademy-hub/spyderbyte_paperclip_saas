@@ -9,7 +9,8 @@ const validEnv = {
   SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
   REDIS_URL: "redis://localhost:6379",
   PAPERCLIP_BASE_URL: "https://paperclip-internal.spyderbyte.cloud/",
-  PAPERCLIP_SERVICE_TOKEN: "paperclip-service-token"
+  PAPERCLIP_SERVICE_TOKEN: "paperclip-service-token",
+  WF_VAULT_MASTER_KEY: "test-master-key-with-enough-length"
 };
 
 describe("loadEnv", () => {
@@ -21,7 +22,8 @@ describe("loadEnv", () => {
       supabaseServiceRoleKey: "service-role-key",
       redisUrl: "redis://localhost:6379",
       paperclipBaseUrl: "https://paperclip-internal.spyderbyte.cloud",
-      paperclipServiceToken: "paperclip-service-token"
+      paperclipServiceToken: "paperclip-service-token",
+      vaultMasterKey: "test-master-key-with-enough-length"
     });
   });
 
@@ -45,5 +47,9 @@ describe("loadEnv", () => {
         PAPERCLIP_BASE_URL: "ftp://paperclip"
       })
     ).toThrow(/invalid: SUPABASE_URL, REDIS_URL, PAPERCLIP_BASE_URL/);
+  });
+
+  it("requires a strong vault master key", () => {
+    expect(() => loadEnv({ ...validEnv, WF_VAULT_MASTER_KEY: "short" })).toThrow(/invalid: WF_VAULT_MASTER_KEY/);
   });
 });

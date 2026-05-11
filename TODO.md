@@ -156,13 +156,22 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Add recovery worker to claim, enqueue, mark, or release outbox rows.
 - [x] Wire runtime outbox pump so workers can drain pending jobs without overlapping drains.
 - [x] Apply queue outbox migration to live Supabase.
+- [x] Post-MVP Phase 13: Vault-backed provider credential registration.
+- [x] Add encrypted vault backend abstraction for provider secret material.
+- [x] Add private Postgres-backed encrypted vault store in `wfpc_private.vault_secrets`.
+- [x] Add public-safe provider credential registration service for OpenAI API, Anthropic, xAI/Grok, OpenRouter, and generic providers.
+- [x] Add Supabase secret-reference repository adapter so `wfpc.secret_references` stores opaque handles only.
+- [x] Add tests proving registration responses, audit metadata, and repository calls do not expose raw keys or secret references.
+- [x] Preserve OpenAI API as its own provider lane instead of collapsing it into the legacy OpenAI kind.
+- [x] Apply private encrypted vault migration to live Supabase.
 
-## Current Phase: API-Backed Dashboard Foundation Complete
+## Current Phase: Vault-Backed Credential Registration Complete
 
 - [x] MVP/POC phases are built, tested, reviewed, and committed.
 - [x] Post-MVP security, boundary, package, artifact, provider, and dashboard POC slices are built and tested.
 - [x] First API-backed dashboard foundation is built and tested.
 - [x] ACID and race-condition database foundation is built, tested, and applied to live Supabase.
+- [x] Durable queue outbox and vault-backed provider credential registration slices are built and tested.
 
 ## Later Phases
 
@@ -171,6 +180,6 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Wire credential revoke service adapter to `createAcidGuardRepository`.
 - [x] Add authoritative package purchase table and wire package install transaction to it.
 - [x] Add durable queue enqueue outbox/recovery table, worker, and runtime pump wiring.
-- [ ] Add real secret vault backend integration behind provider credential registration.
+- [x] Add real secret vault backend integration behind provider credential registration.
 - [ ] Add real OAuth flows for Google Drive and Dropbox storage connectors.
 - [ ] Deploy the POC to VPS and run external exposed-port/CORS smoke tests.

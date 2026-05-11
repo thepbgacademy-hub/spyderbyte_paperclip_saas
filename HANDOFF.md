@@ -8,7 +8,7 @@ Phases 0 through 7 are complete, tested, reviewed, and committed.
 
 The first post-MVP productization slices are implemented locally: security baseline helpers, Wealth Factory boundary layer, package entitlements/provider requirements, temporary artifacts, expanded provider definitions, a Wealth Factory dashboard POC surface, the first API-backed dashboard foundation, and the first database-backed ACID/race-condition foundation.
 
-The next session should connect provider credential registration to vault-backed secrets, then prepare VPS deployment smoke tests.
+The next session should add real OAuth flows for Google Drive/Dropbox storage connectors, then prepare VPS deployment smoke tests.
 
 ## Reference Docs
 
@@ -62,12 +62,14 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 - Live Supabase now includes `wfpc.workflow_run_reservations` with RLS enabled, idempotency uniqueness, active credential uniqueness, secret lookup, and status guard indexes.
 - Live Supabase now includes `wfpc.tenant_package_purchases` with RLS enabled, tenant/package uniqueness, and active purchase lookup support.
 - Live Supabase now includes `wfpc.workflow_queue_outbox` with RLS enabled, idempotent run/workflow uniqueness, pending/stale-claimed lookup support, claim-token fencing, backfill repair for queued reservations, and recovery worker/pump wiring in the runtime factory.
+- Provider credential registration now has a vault-backed path: encrypted secret material is persisted in private `wfpc_private.vault_secrets` behind opaque `wf_secret_*` handles, while `wfpc.secret_references` stores only the handle, provider kind, label, and public metadata.
+- Public provider registration responses now return only `{ providerKind, label, connected, metadata }`; no `secretRef`, vault handle, API key, token, or raw credential leaves the backend boundary.
 
 ## Next Build Order
 
-1. Connect provider credential registration to the selected secret vault backend.
-2. Implement Google Drive and Dropbox OAuth/storage connector setup if needed for the first media package.
-3. Add deployed API smoke tests for CORS, auth failures, dashboard DTO response guard, and exposed ports.
+1. Implement Google Drive and Dropbox OAuth/storage connector setup if needed for the first media package.
+2. Add deployed API smoke tests for CORS, auth failures, dashboard DTO response guard, and exposed ports.
+3. Confirm the VPS runtime uses `createPostgresEncryptedVaultStore` with a strong `WF_VAULT_MASTER_KEY`.
 4. Deploy the POC to the VPS using the Phase 6 deployment runbooks once runtime secrets and final origin values are available.
 
 ## Security Position
@@ -252,9 +254,9 @@ Nuances to preserve:
 
 ## Latest Verification
 
-- `node scripts/apply-wfpc-migration.mjs` passed and reported `wfpc` with 16 tables.
+- `node scripts/apply-wfpc-migration.mjs` applied private vault migration, then passed idempotently and reported `wfpc` with 16 public schema tables.
 - `npm run build` passed.
-- Full Vitest suite passed with 133 tests.
+- Full Vitest suite passed with 156 tests.
 - `npm run lint` passed.
 - `npm run build:web` passed with lucide `use client` warnings from dependency bundling.
 - `npm run e2e` passed with 3 Playwright tests.

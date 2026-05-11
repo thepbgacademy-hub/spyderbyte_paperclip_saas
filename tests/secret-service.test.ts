@@ -88,6 +88,77 @@ describe("secret service", () => {
     });
   });
 
+  it("returns public provider connection state without exposing secret references", async () => {
+    const vault = {
+      store: vi.fn().mockResolvedValue("wf_secret_hidden"),
+      rotate: vi.fn(),
+      revoke: vi.fn(),
+      access: vi.fn()
+    };
+    const service = createSecretService({
+      vault,
+      audit: vi.fn(),
+      repository: {
+        create: vi.fn().mockResolvedValue("11111111-1111-4111-8111-111111111111"),
+        updateSecretRef: vi.fn(),
+        revoke: vi.fn(),
+        findIdBySecretRef: vi.fn()
+      }
+    });
+
+    const response = await service.registerProviderCredential({
+      tenantId: "tenant-1",
+      actorUserId: "user-1",
+      label: "OpenAI primary",
+      registration: createOpenAIProviderRegistration({ apiKey: "sk-openai", projectId: "proj_123" })
+    });
+
+    expect(response).toEqual({
+      providerKind: "openai",
+      label: "OpenAI primary",
+      connected: true,
+      metadata: { projectId: "proj_123" }
+    });
+    expect(JSON.stringify(response)).not.toMatch(/wf_secret_hidden|sk-openai|secretRef/i);
+  });
+
+  it("does not expose Codex auth-state metadata in public connection responses", async () => {
+    const service = createSecretService({
+      vault: {
+        store: vi.fn().mockResolvedValue("wf_secret_codex"),
+        rotate: vi.fn(),
+        revoke: vi.fn(),
+        access: vi.fn()
+      },
+      audit: vi.fn(),
+      repository: {
+        create: vi.fn().mockResolvedValue("11111111-1111-4111-8111-111111111111"),
+        updateSecretRef: vi.fn(),
+        revoke: vi.fn(),
+        findIdBySecretRef: vi.fn()
+      }
+    });
+
+    const response = await service.registerProviderCredential({
+      tenantId: "tenant-1",
+      actorUserId: "user-1",
+      label: "OpenAI Codex",
+      registration: {
+        provider: { kind: "openai_chatgpt_codex_subscription", label: "OpenAI ChatGPT/Codex Subscription", requiredSecrets: [], metadataFields: [] },
+        secretValues: {},
+        metadata: { codexHome: "C:/wf-auth/tenant-1/codex", authStateRef: "codex-auth-state" }
+      }
+    });
+
+    expect(response).toEqual({
+      providerKind: "openai_chatgpt_codex_subscription",
+      label: "OpenAI Codex",
+      connected: true,
+      metadata: {}
+    });
+    expect(JSON.stringify(response)).not.toMatch(/codexHome|authStateRef|wf_secret_codex/i);
+  });
+
   it("rotates, revokes, and accesses secrets by reference only", async () => {
     const vault = {
       store: vi.fn(),
@@ -100,7 +171,7 @@ describe("secret service", () => {
       create: vi.fn(),
       updateSecretRef: vi.fn().mockResolvedValue("22222222-2222-4222-8222-222222222222"),
       revoke: vi.fn().mockResolvedValue("22222222-2222-4222-8222-222222222222"),
-      findIdBySecretRef: vi.fn().mockResolvedValue("22222222-2222-4222-8222-222222222222")
+      findIdBySecretRef: vi.fn().mockResolvedValue("")
     };
     const service = createSecretService({ vault, audit, repository });
 
@@ -114,7 +185,10 @@ describe("secret service", () => {
     ).resolves.toEqual({ secretRef: "secret_ref_2" });
 
     await service.revoke({ tenantId: "tenant-1", actorUserId: "user-1", secretRef: "secret_ref_2" });
-    await expect(service.access({ tenantId: "tenant-1", runId: "run-1", secretRef: "secret_ref_2" })).resolves.toBe("sk-runtime");
+    await expect(service.access({ tenantId: "tenant-1", runId: "run-1", secretRef: "secret_ref_2" })).rejects.toMatchObject({
+      code: "secret_reference_unavailable",
+      publicMessage: "credential_invalid"
+    });
 
     expect(JSON.stringify(audit.mock.calls)).not.toContain("sk-next");
     expect(JSON.stringify(audit.mock.calls)).not.toContain("sk-runtime");

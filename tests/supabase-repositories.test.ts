@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createSupabaseRepositories } from "../src/db/supabase-repositories.js";
+import { createSupabaseRepositories, createSupabaseSecretRepository } from "../src/db/supabase-repositories.js";
 
 function createQuery(rowsBySql: Record<string, unknown[]>) {
   return vi.fn().mockImplementation((sql: string, values: unknown[]) => {
@@ -61,5 +61,30 @@ describe("Supabase wfpc repositories", () => {
     await expect(repositories.requireTenantMember({ tenantId: "tenant-2", userId: "user-1" })).rejects.toThrow(
       "Tenant membership is required"
     );
+  });
+
+  it("persists provider credential references without raw secret values", async () => {
+    const client = {
+      query: vi.fn().mockResolvedValue({ rows: [{ id: "secret-reference-1" }] })
+    };
+    const repository = createSupabaseSecretRepository(client);
+
+    await expect(
+      repository.create({
+        tenantId: "tenant-1",
+        providerKind: "openrouter_api",
+        label: "OpenRouter",
+        secretRef: "wf_secret_opaque",
+        metadata: { allowedModels: ["openai/gpt-5"] },
+        revokedAt: null
+      })
+    ).resolves.toBe("secret-reference-1");
+
+    const call = client.query.mock.calls[0];
+    expect(call).toBeDefined();
+    if (!call) throw new Error("Expected secret reference insert query");
+    expect(String(call[0])).toMatch(/insert into wfpc\.secret_references/i);
+    expect(JSON.stringify(call)).not.toContain("sk-");
+    expect(call[1]).toContain("wf_secret_opaque");
   });
 });

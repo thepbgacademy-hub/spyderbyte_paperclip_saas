@@ -109,6 +109,16 @@ describe("tenant settings API", () => {
     ).rejects.toThrow("Provider metadata cannot contain secret-like fields");
 
     await expect(
+      api.registerProviderCredential({
+        authorization: "Bearer valid",
+        providerKind: "openrouter_api",
+        label: "OpenRouter",
+        secretValues: { apiKey: "sk-or-secret" },
+        metadata: { note: "wf_secret_should_not_be_public" }
+      })
+    ).rejects.toThrow("Provider metadata cannot contain secret-like fields");
+
+    await expect(
       api.registerStorageConnector({
         authorization: "Bearer valid",
         providerKind: "dropbox",
