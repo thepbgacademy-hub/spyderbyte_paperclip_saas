@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { createTenantService, TenantAccessError } from "../src/tenants/tenant-service.js";
 
 const migration = readFileSync("supabase/migrations/0001_initial_tenant_model.sql", "utf8");
+const appSchema = "wfpc";
 
 describe("tenant model migration", () => {
   const tenantTables = [
@@ -24,20 +25,22 @@ describe("tenant model migration", () => {
   ];
 
   it("creates every required tenant-owned table", () => {
+    expect(migration).toMatch(/create schema if not exists wfpc/i);
     for (const table of tenantTables) {
-      expect(migration).toMatch(new RegExp(`create table public\\.${table}\\b`, "i"));
+      expect(migration).toMatch(new RegExp(`create table ${appSchema}\\.${table}\\b`, "i"));
     }
+    expect(migration).not.toMatch(/create table public\.(tenants|workflow_templates|workflow_runs|secret_references|wealth_factory_packages|artifact_metadata|storage_connectors)\b/i);
   });
 
   it("enables RLS on every tenant-owned table", () => {
     for (const table of tenantTables) {
-      expect(migration).toMatch(new RegExp(`alter table public\\.${table}\\s+enable row level security`, "i"));
+      expect(migration).toMatch(new RegExp(`alter table ${appSchema}\\.${table}\\s+enable row level security`, "i"));
     }
   });
 
   it("uses auth.uid membership policies instead of user-editable metadata", () => {
     expect(migration).toContain("auth.uid()");
-    expect(migration).toContain("private.is_tenant_member");
+    expect(migration).toContain("wfpc_private.is_tenant_member");
     expect(migration).not.toMatch(/user_metadata|raw_user_meta_data/i);
   });
 
@@ -48,35 +51,35 @@ describe("tenant model migration", () => {
   });
 
   it("does not expose Paperclip company mappings or secret references without membership checks", () => {
-    expect(policyFor("paperclip_company_mappings")).toContain("private.is_tenant_member(tenant_id)");
-    const storageConnectorTable = migration.match(/create table public\.storage_connectors[\s\S]+?\);/i)?.[0] ?? "";
+    expect(policyFor("paperclip_company_mappings")).toContain("wfpc_private.is_tenant_member(tenant_id)");
+    const storageConnectorTable = migration.match(/create table wfpc\.storage_connectors[\s\S]+?\);/i)?.[0] ?? "";
     expect(storageConnectorTable).not.toMatch(/secret_ref/i);
-    expect(migration).not.toMatch(/create policy "members can read secret reference metadata"[\s\S]+on public\.secret_references/i);
-    expect(migration).not.toMatch(/grant select[\s\S]+on public\.secret_references to authenticated/i);
+    expect(migration).not.toMatch(/create policy "members can read secret reference metadata"[\s\S]+on wfpc\.secret_references/i);
+    expect(migration).not.toMatch(/grant select[\s\S]+on wfpc\.secret_references to authenticated/i);
   });
 
   it("keeps RLS helper functions private and security definer to avoid recursive membership policies", () => {
-    expect(migration).toMatch(/create schema if not exists private/i);
-    expect(migration).toMatch(/create function private\.is_tenant_member[\s\S]+security definer/i);
-    expect(migration).toMatch(/create function private\.is_tenant_operator[\s\S]+security definer/i);
+    expect(migration).toMatch(/create schema if not exists wfpc_private/i);
+    expect(migration).toMatch(/create function wfpc_private\.is_tenant_member[\s\S]+security definer/i);
+    expect(migration).toMatch(/create function wfpc_private\.is_tenant_operator[\s\S]+security definer/i);
     expect(migration).not.toMatch(/create function public\.is_tenant_member/i);
   });
 
   it("grants authenticated users execute on private helpers used by RLS policies", () => {
-    expect(migration).toMatch(/grant execute on function private\.is_tenant_member\(uuid\) to authenticated/i);
-    expect(migration).toMatch(/grant execute on function private\.is_tenant_operator\(uuid\) to authenticated/i);
+    expect(migration).toMatch(/grant execute on function wfpc_private\.is_tenant_member\(uuid\) to authenticated/i);
+    expect(migration).toMatch(/grant execute on function wfpc_private\.is_tenant_operator\(uuid\) to authenticated/i);
     expect(migration).toMatch(
-      /grant execute on function private\.workflow_template_belongs_to_tenant\(uuid, uuid\) to authenticated/i
+      /grant execute on function wfpc_private\.workflow_template_belongs_to_tenant\(uuid, uuid\) to authenticated/i
     );
   });
 
   it("prevents workflow runs from linking templates across tenants", () => {
     expect(migration).toMatch(/unique \(id, tenant_id\)/i);
     expect(migration).toMatch(
-      /foreign key \(workflow_template_id, tenant_id\)\s+references public\.workflow_templates\(id, tenant_id\)/i
+      /foreign key \(workflow_template_id, tenant_id\)\s+references wfpc\.workflow_templates\(id, tenant_id\)/i
     );
     expect(migration).toMatch(
-      /create policy "members can create workflow runs"[\s\S]+private\.workflow_template_belongs_to_tenant\(workflow_template_id, tenant_id\)/i
+      /create policy "members can create workflow runs"[\s\S]+wfpc_private\.workflow_template_belongs_to_tenant\(workflow_template_id, tenant_id\)/i
     );
   });
 });
@@ -127,6 +130,6 @@ describe("tenant service", () => {
 });
 
 function policyFor(table: string): string {
-  const match = migration.match(new RegExp(`create policy[\\s\\S]+?on public\\.${table}[\\s\\S]+?;`, "i"));
+  const match = migration.match(new RegExp(`create policy[\\s\\S]+?on ${appSchema}\\.${table}[\\s\\S]+?;`, "i"));
   return match?.[0] ?? "";
 }
