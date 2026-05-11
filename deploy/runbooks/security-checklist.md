@@ -8,6 +8,7 @@ Use this checklist before exposing a Wealth Factory POC or release candidate to 
 - [ ] API origin is explicitly configured.
 - [ ] Authenticated CORS allows only the configured portal origin(s).
 - [ ] Public VPS ports are limited to `80` and `443`.
+- [ ] Supabase/Postgres/Kong ports `5432`, `8000`, and `8443` are closed publicly or restricted to trusted admin/VPN IPs only.
 - [ ] SSH is key-only and restricted by firewall, VPN, or trusted IP allowlist.
 - [ ] Paperclip has no public binding.
 - [ ] Redis has no public binding.

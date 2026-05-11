@@ -110,6 +110,73 @@ Last checked from outside the VPS on 2026-05-11:
 
 Do not treat the VPS deployment as release-safe until `npm run smoke:external` passes.
 
+## Remediate Current Smoke Blockers
+
+These commands are intended to be run on the VPS by an operator with sudo/root access. Adjust the trusted admin IP value before applying firewall rules.
+
+### Restrict Supabase And Kong Ports
+
+Current smoke tests show `5432`, `8000`, and `8443` reachable from the public internet. For a commercial Wealth Factory deployment, these ports must not be public.
+
+Recommended UFW posture:
+
+```bash
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw allow from <trusted-admin-ip>/32 to any port 22 proto tcp
+
+# Optional temporary admin access for direct self-hosted Supabase maintenance.
+# Remove these before commercial exposure unless access is restricted by VPN.
+sudo ufw allow from <trusted-admin-ip>/32 to any port 5432 proto tcp
+sudo ufw allow from <trusted-admin-ip>/32 to any port 8000 proto tcp
+sudo ufw allow from <trusted-admin-ip>/32 to any port 8443 proto tcp
+
+sudo ufw deny 5432/tcp
+sudo ufw deny 8000/tcp
+sudo ufw deny 8443/tcp
+sudo ufw enable
+sudo ufw status verbose
+```
+
+If Docker-published ports bypass UFW on the VPS, apply provider firewall rules in the VPS control panel too. The external gate is authoritative: `npm run smoke:external` must report `5432`, `8000`, and `8443` as closed from an untrusted network.
+
+For Docker Compose hardening, avoid publishing Supabase/Kong/Postgres ports to `0.0.0.0`. Bind admin-only services to loopback or a private VPN interface when direct maintenance access is needed.
+
+### Fix API TLS
+
+Current smoke tests show `api.spyderbyte.cloud` fails during TLS handshake. Check the active reverse proxy, certificate, and SNI routing on the VPS.
+
+For Caddy-based deployments:
+
+```bash
+sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl status caddy --no-pager
+sudo journalctl -u caddy -n 100 --no-pager
+sudo caddy reload --config /etc/caddy/Caddyfile
+```
+
+Confirm the Caddyfile has an explicit `api.spyderbyte.cloud` site block and proxies only to the Wealth Factory API service, not to Supabase Kong or another TLS listener.
+
+For Nginx-based deployments:
+
+```bash
+sudo nginx -t
+sudo systemctl status nginx --no-pager
+sudo journalctl -u nginx -n 100 --no-pager
+sudo certbot certificates
+sudo systemctl reload nginx
+```
+
+Confirm the certificate paths for `api.spyderbyte.cloud` exist and that the server block proxies to the internal API port only.
+
+After changing firewall or TLS configuration, rerun from outside the VPS:
+
+```powershell
+npm run smoke:external
+```
+
 ## Rollback
 
 1. Keep the previous immutable image tags available.
