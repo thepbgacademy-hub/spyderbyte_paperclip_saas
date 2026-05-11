@@ -36,6 +36,12 @@ describe("tenant model migration", () => {
     expect(migration).not.toMatch(/user_metadata|raw_user_meta_data/i);
   });
 
+  it("allows every supported provider kind at the database boundary", () => {
+    for (const provider of ["openai_api", "openai_chatgpt_codex_subscription", "anthropic_api", "xai_grok_api", "openrouter_api", "generic_api"]) {
+      expect(migration).toContain(`'${provider}'`);
+    }
+  });
+
   it("does not expose Paperclip company mappings or secret references without membership checks", () => {
     expect(policyFor("paperclip_company_mappings")).toContain("private.is_tenant_member(tenant_id)");
     expect(migration).not.toMatch(/create policy "members can read secret reference metadata"[\s\S]+on public\.secret_references/i);

@@ -3,7 +3,15 @@ create schema if not exists private;
 
 create type public.tenant_role as enum ('owner', 'admin', 'member', 'operator');
 create type public.workflow_run_status as enum ('queued', 'running', 'completed', 'failed', 'cancelled');
-create type public.provider_kind as enum ('openai', 'generic_api');
+create type public.provider_kind as enum (
+  'openai',
+  'openai_api',
+  'openai_chatgpt_codex_subscription',
+  'anthropic_api',
+  'xai_grok_api',
+  'openrouter_api',
+  'generic_api'
+);
 
 create table public.tenants (
   id uuid primary key default gen_random_uuid(),

@@ -1,4 +1,5 @@
 import type { PaperclipClient, PaperclipRunStatus } from "../paperclip/types.js";
+import type { EntitlementDecision } from "../packages/package-types.js";
 
 export type TenantPaperclipMapping = {
   paperclipCompanyId: string;
@@ -8,6 +9,7 @@ export type TenantResolver = (tenantId: string) => Promise<TenantPaperclipMappin
 
 export type RunStartAuthorizer = (input: StartWorkflowRunInput) => Promise<boolean>;
 export type PaperclipEnabledCheck = (tenantId: string) => Promise<boolean>;
+export type RunEntitlementCheck = (input: StartWorkflowRunInput) => Promise<EntitlementDecision>;
 
 export type StartWorkflowRunInput = {
   tenantId: string;
@@ -52,11 +54,22 @@ export class PaperclipDisabledError extends Error {
   }
 }
 
+export class WorkflowEntitlementError extends Error {
+  readonly code = "workflow_entitlement_denied";
+  readonly publicMessage = "workflow_failed";
+
+  constructor(readonly reason: string) {
+    super("Workflow entitlement denied");
+    this.name = "WorkflowEntitlementError";
+  }
+}
+
 export function createRunService(options: {
   paperclipClient: Pick<PaperclipClient, "createRun">;
   tenantResolver: TenantResolver;
   authorizeRunStart?: RunStartAuthorizer;
   isPaperclipEnabled?: PaperclipEnabledCheck;
+  checkEntitlement?: RunEntitlementCheck;
 }) {
   return {
     async startRun(input: StartWorkflowRunInput): Promise<PublicWorkflowRunStatus> {
@@ -66,6 +79,13 @@ export function createRunService(options: {
 
       if (!(await options.authorizeRunStart(input))) {
         throw new WorkflowAuthorizationError();
+      }
+
+      if (options.checkEntitlement) {
+        const entitlement = await options.checkEntitlement(input);
+        if (!entitlement.allowed) {
+          throw new WorkflowEntitlementError(entitlement.reason);
+        }
       }
 
       if (options.isPaperclipEnabled && !(await options.isPaperclipEnabled(input.tenantId))) {

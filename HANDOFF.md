@@ -1,12 +1,14 @@
 # Handoff: Current Build Position
 
-This handoff is intentionally overwritten after each phase. It now describes the exact current build position and the next post-MVP continuation point for a fresh session.
+This handoff is intentionally overwritten after each phase. It now describes the exact current build position and the next continuation point for a fresh session.
 
 ## Status
 
 Phases 0 through 7 are complete, tested, reviewed, and committed.
 
-The project is no longer in the initial MVP planning/build phase. The next session should start post-MVP hardening and productization for the customer-facing SaaS brand **Wealth Factory**.
+The first post-MVP productization slice is implemented locally: security baseline helpers, Wealth Factory boundary layer, package entitlements/provider requirements, temporary artifacts, expanded provider definitions, and a Wealth Factory dashboard POC surface.
+
+The next session should replace the in-memory POC services with authenticated API routes and Supabase-backed state, then prepare VPS deployment smoke tests.
 
 ## Reference Docs
 
@@ -26,17 +28,28 @@ Customers subscribe as companies. Each subscribing company must see only Wealth 
 
 Do not rely on LLM memory or prompt instructions to enforce this rebrand. The product boundary must be deterministic TypeScript code and tests.
 
+## Completed In Current Slice
+
+- Security baseline helpers in `src/security/cors.ts` and `src/security/rate-limit.ts`.
+- Wealth Factory boundary layer in `src/wealthfactory/*`.
+- Package entitlement and asset registry primitives in `src/packages/*`.
+- Expanded provider lane definitions and Codex subscription validation in `src/providers/provider-types.ts`.
+- Worker-level entitlement re-checks in `src/workflows/worker.ts` so stale/replayed jobs fail closed before private workflow calls.
+- Temporary artifact service in `src/artifacts/artifact-service.ts`.
+- Customer-owned storage provider definitions in `src/storage/storage-provider-types.ts`.
+- Wealth Factory dashboard POC updates in `apps/web/src/App.tsx`.
+- Tests for security, boundary, entitlements, artifacts, provider lanes, and E2E dashboard behavior.
+- Provider enum support in the initial Supabase migration and DB types for OpenAI API, ChatGPT/Codex subscription auth, Anthropic, xAI/Grok, OpenRouter, and generic providers.
+
 ## Next Build Order
 
-1. Build the security hardening baseline for split-origin portal/API deployment.
-2. Build the deterministic TypeScript Wealth Factory boundary layer described in `docs/build.md`.
-3. Build package entitlement and subscription gates.
-4. Expand company-specific provider credential lanes.
-5. Replace the Phase 5 demo UI state with authenticated API-backed state.
-6. Build the full Wealth Factory control panel/dashboard from `docs/dashboard-design-prep.md`.
+1. Add authenticated API route layer that uses the security helpers and Wealth Factory response guard.
+2. Add Supabase migrations/tables for package installs, package provider requirements, artifact metadata, and storage connectors.
+3. Replace the dashboard's local demo state with API-backed state.
+4. Implement real package install/setup APIs.
+5. Implement real provider credential registration for expanded provider lanes.
+6. Implement Google Drive and Dropbox OAuth/storage connector setup if needed for the first media package.
 7. Deploy the POC to the VPS using the Phase 6 deployment runbooks once credentials and final Supabase target are available.
-
-Do not build customer-facing dashboard routes before the security baseline and boundary layer exist.
 
 ## Security Position
 
@@ -55,12 +68,12 @@ The intended deployment is split-origin:
 
 Required security files for the next roadmap:
 
-- `src/security/cors.ts`
-- `src/security/rate-limit.ts`
-- `src/security/request-validation.ts`
-- `src/security/security-headers.ts`
+- `src/security/cors.ts` exists.
+- `src/security/rate-limit.ts` exists.
+- `src/security/request-validation.ts` still needs route integration.
+- `src/security/security-headers.ts` can be split from `cors.ts` when the HTTP layer is added.
 - `src/security/csrf.ts` if cookie auth is used.
-- `tests/security-boundary.test.ts`
+- `tests/security-boundary.test.ts` exists.
 - `tests/race-conditions.test.ts`
 - `deploy/runbooks/security-checklist.md`
 
@@ -97,14 +110,14 @@ Wealth Factory is sold in monthly subscription packages.
 
 Required package files for the next roadmap:
 
-- `src/packages/package-types.ts`
-- `src/packages/package-asset-registry.ts`
-- `src/packages/package-service.ts`
-- `src/packages/entitlement-service.ts`
+- `src/packages/package-types.ts` exists.
+- `src/packages/package-asset-registry.ts` exists.
+- `src/packages/package-service.ts` still needs Supabase-backed install/list behavior.
+- `src/packages/entitlement-service.ts` exists.
 - `src/packages/employee-catalog.ts`
-- `src/packages/package-provider-requirements.ts`
-- `tests/package-asset-registry.test.ts`
-- `tests/package-entitlements.test.ts`
+- `src/packages/package-provider-requirements.ts` exists.
+- `tests/package-asset-registry.test.ts` can be split from the current entitlement test later.
+- `tests/package-entitlements.test.ts` exists.
 - `tests/package-provider-requirements.test.ts`
 
 Package-specific provider nuance:
@@ -150,11 +163,11 @@ Storage connector nuance:
 
 Required files:
 
-- `src/wealthfactory/workflow-registry.ts`
-- `src/wealthfactory/dto-mappers.ts`
-- `src/wealthfactory/response-guard.ts`
-- `src/wealthfactory/public-errors.ts`
-- `tests/wealthfactory-boundary.test.ts`
+- `src/wealthfactory/workflow-registry.ts` exists.
+- `src/wealthfactory/dto-mappers.ts` exists.
+- `src/wealthfactory/response-guard.ts` exists.
+- `src/wealthfactory/public-errors.ts` exists.
+- `tests/wealthfactory-boundary.test.ts` exists.
 
 The boundary layer must own public Wealth Factory workflow names, private Paperclip mappings, DTO mapping, public error mapping, forbidden-term checks, and forbidden-field checks. The browser consumes only Wealth Factory DTOs.
 
@@ -199,9 +212,9 @@ Nuances to preserve:
 
 ## Required Starting Checks
 
-- Create `src/wealthfactory/workflow-registry.ts`, `src/wealthfactory/dto-mappers.ts`, `src/wealthfactory/response-guard.ts`, and `src/wealthfactory/public-errors.ts`.
-- Add `tests/wealthfactory-boundary.test.ts` before exposing new dashboard API routes.
-- Add security middleware and tests before exposing customer-facing dashboard API routes.
+- Keep `src/wealthfactory/workflow-registry.ts`, `src/wealthfactory/dto-mappers.ts`, `src/wealthfactory/response-guard.ts`, and `src/wealthfactory/public-errors.ts` in the customer-facing API path.
+- Keep `tests/wealthfactory-boundary.test.ts` passing before exposing new dashboard API routes.
+- Integrate security helpers into the authenticated API layer before exposing customer-facing dashboard API routes.
 - Add package/subscription entitlement checks before exposing commercial workflow run APIs.
 - Expand provider credentials to company-specific OpenAI API, Anthropic API, xAI/Grok API, OpenRouter API, and optional company-isolated ChatGPT/Codex subscription auth.
 - Never use a shared server/operator `~/.codex`, `CODEX_HOME`, ChatGPT login, or provider API key for subscriber work.
@@ -216,6 +229,14 @@ Nuances to preserve:
 - Add CORS, request validation, rate-limit, and exposed-port checks for split-origin deployment.
 - Add Playwright tests for member, owner, and operator paths.
 - Keep `npm run build`, `npm test`, `npm run lint`, `npm run build:web`, and `npm run e2e` passing as the dashboard grows.
+
+## Latest Verification
+
+- `npm run build` passed.
+- `npm test` passed with 69 tests.
+- `npm run lint` passed.
+- `npm run build:web` passed with lucide `use client` warnings from dependency bundling.
+- `npm run e2e` passed with 3 Playwright tests.
 
 ## Hard Rules
 

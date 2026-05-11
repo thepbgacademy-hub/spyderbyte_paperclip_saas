@@ -81,13 +81,49 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Complete reviewer check.
 - [x] Overwrite `HANDOFF.md` with completion handoff.
 
+- [x] Post-MVP Phase 1: Security baseline.
+- [x] Add split-origin CORS allowlist checks.
+- [x] Add request body size guard.
+- [x] Add fixed-window rate limiter.
+- [x] Add browser security headers.
+- [x] Add run creation idempotency/race gate tests.
+- [x] Add security boundary tests.
+- [x] Post-MVP Phase 2: Wealth Factory boundary layer.
+- [x] Add workflow registry with private mapping separation.
+- [x] Add DTO mappers for Wealth Factory run summaries.
+- [x] Add response guard for forbidden internal fields/terms.
+- [x] Add public error mapping.
+- [x] Add boundary tests.
+- [x] Post-MVP Phase 3: Package entitlements and provider requirements.
+- [x] Add package types and package asset registry.
+- [x] Add entitlement checks for active subscription, installed package, workflow membership, and provider capabilities.
+- [x] Re-check entitlements in worker processing before calling the private workflow engine.
+- [x] Add package provider requirement helper.
+- [x] Add package entitlement tests.
+- [x] Post-MVP Phase 4: Temporary artifact storage.
+- [x] Add temporary artifact service with 24-hour default TTL.
+- [x] Add tenant-scoped download link behavior.
+- [x] Add expired artifact purge behavior.
+- [x] Add temporary artifact size limits and audit event shape.
+- [x] Add customer-owned storage provider definitions.
+- [x] Add artifact service tests.
+- [x] Post-MVP Phase 5: Provider lane expansion.
+- [x] Add Anthropic, xAI/Grok, OpenRouter, and Codex subscription provider definitions.
+- [x] Add Codex subscription isolation validation.
+- [x] Add provider credential lane tests.
+- [x] Post-MVP Phase 6: Wealth Factory dashboard POC update.
+- [x] Update UI to Wealth Factory package, provider, artifact, and storage concepts.
+- [x] Add E2E tests for package provider gating and temporary storage options.
+- [x] Run lint/build/test/web-build/e2e pass.
+
 ## Current Phase: Complete
 
 - [x] MVP/POC phases are built, tested, reviewed, and committed.
+- [x] Post-MVP security, boundary, package, artifact, provider, and dashboard POC slices are built and tested.
 
 ## Later Phases
 
-- [ ] Post-MVP: Build the deterministic TypeScript Wealth Factory boundary layer before dashboard API/UI work.
-- [ ] Post-MVP: Add subscription packages, package installation, installed-package workflow boundaries, and paid employee add-ons.
-- [ ] Post-MVP: Add company-specific provider lanes for OpenAI API, ChatGPT/Codex subscription auth, Anthropic API, xAI/Grok API, and OpenRouter API.
-- [ ] Post-MVP: Build the full Wealth Factory control panel/dashboard from Phase 7 design prep.
+- [ ] Replace in-memory POC services with authenticated API routes and Supabase-backed state.
+- [ ] Add Supabase migrations for package installs, provider capability requirements, artifact metadata, and storage connectors.
+- [ ] Add real OAuth flows for Google Drive and Dropbox storage connectors.
+- [ ] Deploy the POC to VPS and run external exposed-port/CORS smoke tests.

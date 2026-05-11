@@ -167,6 +167,33 @@ describe("run service", () => {
 
     expect(paperclipClient.createRun).not.toHaveBeenCalled();
   });
+
+  it("checks package entitlements before calling Paperclip", async () => {
+    const paperclipClient = {
+      createRun: vi.fn()
+    };
+    const service = createRunService({
+      paperclipClient,
+      tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
+      authorizeRunStart: vi.fn().mockResolvedValue(true),
+      checkEntitlement: vi.fn().mockResolvedValue({ allowed: false, reason: "workflow_not_in_package" })
+    });
+
+    await expect(
+      service.startRun({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf-social-calendar",
+        createdByUserId: "user-1"
+      })
+    ).rejects.toMatchObject({
+      code: "workflow_entitlement_denied",
+      publicMessage: "workflow_failed",
+      reason: "workflow_not_in_package"
+    });
+
+    expect(paperclipClient.createRun).not.toHaveBeenCalled();
+  });
 });
 
 describe("workflow worker", () => {
@@ -190,6 +217,7 @@ describe("workflow worker", () => {
         tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
         authorizeRunStart: vi.fn().mockResolvedValue(true),
         isPaperclipEnabled: vi.fn().mockResolvedValue(true),
+        checkEntitlement: vi.fn().mockResolvedValue({ allowed: true }),
         recordStatus
       })
     ).resolves.toEqual({
@@ -223,6 +251,7 @@ describe("workflow worker", () => {
         tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
         authorizeRunStart: vi.fn().mockResolvedValue(true),
         isPaperclipEnabled: vi.fn().mockResolvedValue(true),
+        checkEntitlement: vi.fn().mockResolvedValue({ allowed: true }),
         recordStatus
       })
     ).rejects.toThrow();
@@ -248,9 +277,30 @@ describe("workflow worker", () => {
         paperclipClient: { createRun },
         tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
         authorizeRunStart: vi.fn().mockResolvedValue(true),
-        isPaperclipEnabled: vi.fn().mockResolvedValue(false)
+        isPaperclipEnabled: vi.fn().mockResolvedValue(false),
+        checkEntitlement: vi.fn().mockResolvedValue({ allowed: true })
       })
     ).rejects.toMatchObject({ code: "paperclip_disabled" });
+    expect(createRun).not.toHaveBeenCalled();
+  });
+
+  it("worker re-checks entitlements before calling Paperclip", async () => {
+    const createRun = vi.fn();
+    await expect(
+      processWorkflowJob({
+        payload: createWorkflowQueuePayload({
+          tenantId: "tenant-1",
+          runId: "run-1",
+          workflowId: "wf-social-calendar",
+          createdByUserId: "user-1"
+        }),
+        paperclipClient: { createRun },
+        tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
+        authorizeRunStart: vi.fn().mockResolvedValue(true),
+        isPaperclipEnabled: vi.fn().mockResolvedValue(true),
+        checkEntitlement: vi.fn().mockResolvedValue({ allowed: false, reason: "provider_not_connected" })
+      })
+    ).rejects.toMatchObject({ code: "workflow_entitlement_denied", reason: "provider_not_connected" });
     expect(createRun).not.toHaveBeenCalled();
   });
 });

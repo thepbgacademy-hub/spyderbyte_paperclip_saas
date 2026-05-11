@@ -1,0 +1,58 @@
+import { describe, expect, it } from "vitest";
+
+import { createWorkflowRegistry } from "../src/wealthfactory/workflow-registry.js";
+import { mapRunToWealthFactorySummary } from "../src/wealthfactory/dto-mappers.js";
+import { assertWealthFactoryResponse } from "../src/wealthfactory/response-guard.js";
+import { toPublicWorkflowError } from "../src/wealthfactory/public-errors.js";
+
+describe("Wealth Factory boundary layer", () => {
+  it("returns only public workflow definitions while retaining private mappings server-side", () => {
+    const registry = createWorkflowRegistry([
+      {
+        publicId: "wf-social-calendar",
+        packageId: "pkg-social",
+        publicName: "Wealth Factory Social Calendar",
+        description: "Plan a week of social posts.",
+        privateMapping: { paperclipWorkflowId: "pc-workflow-1", paperclipCompanyId: "pc-company-1" },
+        requiredCapabilities: ["text_generation"]
+      }
+    ]);
+
+    expect(registry.listPublicWorkflows()).toEqual([
+      {
+        id: "wf-social-calendar",
+        packageId: "pkg-social",
+        name: "Wealth Factory Social Calendar",
+        description: "Plan a week of social posts.",
+        requiredCapabilities: ["text_generation"]
+      }
+    ]);
+    expect(JSON.stringify(registry.listPublicWorkflows())).not.toMatch(/paperclip|pc-workflow|pc-company/i);
+    expect(registry.resolvePrivateMapping("wf-social-calendar")).toEqual({ paperclipWorkflowId: "pc-workflow-1", paperclipCompanyId: "pc-company-1" });
+  });
+
+  it("maps internal run records to Wealth Factory DTOs and blocks forbidden fields", () => {
+    const dto = mapRunToWealthFactorySummary({
+      runId: "run-1",
+      workflowId: "wf-social-calendar",
+      workflowName: "Wealth Factory Social Calendar",
+      status: "queued",
+      internal: { paperclipRunId: "pc-run-1", prompt: "hidden" }
+    });
+
+    expect(dto).toEqual({
+      runId: "run-1",
+      workflowId: "wf-social-calendar",
+      workflowName: "Wealth Factory Social Calendar",
+      status: "queued"
+    });
+    expect(() => assertWealthFactoryResponse({ ...dto, prompt: "leak" })).toThrow("Forbidden customer-facing field");
+    expect(() => assertWealthFactoryResponse({ ...dto, paperclip_run_id: "leak" })).toThrow("Forbidden customer-facing field");
+    expect(() => assertWealthFactoryResponse({ ...dto, secret_ref: "leak" })).toThrow("Forbidden customer-facing field");
+  });
+
+  it("translates internal errors to public Wealth Factory errors", () => {
+    expect(toPublicWorkflowError({ code: "paperclip_disabled" })).toEqual({ code: "tenant_paused" });
+    expect(toPublicWorkflowError(new Error("prompt stack trace"))).toEqual({ code: "workflow_failed" });
+  });
+});

@@ -1,6 +1,6 @@
 export type TenantRole = "owner" | "admin" | "member" | "operator";
 export type WorkflowRunStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
-export type ProviderKind = "openai" | "generic_api";
+export type ProviderKind = "openai" | "openai_api" | "openai_chatgpt_codex_subscription" | "anthropic_api" | "xai_grok_api" | "openrouter_api" | "generic_api";
 
 export type TenantRow = {
   id: string;
