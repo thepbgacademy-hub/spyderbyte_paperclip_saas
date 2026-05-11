@@ -418,26 +418,40 @@ expect(publicResponse.workflowName).toContain("Wealth Factory");
 - Create: `src/packages/package-service.ts`
 - Create: `src/packages/entitlement-service.ts`
 - Create: `src/packages/employee-catalog.ts`
+- Create: `src/packages/package-provider-requirements.ts`
 - Create: `tests/package-asset-registry.test.ts`
 - Create: `tests/package-entitlements.test.ts`
+- Create: `tests/package-provider-requirements.test.ts`
 - Modify: `supabase/migrations/0001_initial_tenant_model.sql` or create a new migration.
 - Modify: `src/workflows/run-service.ts`
 - Modify: `src/wealthfactory/workflow-registry.ts`
 - Modify: `docs/dashboard-design-prep.md`
 
 - [ ] Add package catalog types for industry packages, blank-canvas package, base employees, specialist add-ons, package workflows, and private package assets.
+- [ ] Add package-specific required and optional provider lane metadata.
 - [ ] Add subscription and package install data model.
 - [ ] Add package asset registry that resolves prompts/rules/assets only through installed-package entitlement.
-- [ ] Add entitlement service that checks active subscription, installed package, workflow membership, and add-on employee access.
+- [ ] Add entitlement service that checks active subscription, installed package, workflow membership, add-on employee access, and package provider requirements.
 - [ ] Update workflow registry so every public workflow belongs to a package or customer-created blank-canvas registry scope.
 - [ ] Update workflow registry so every workflow references only allowed package assets.
+- [ ] Update workflow registry so workflows request provider capabilities allowed by the installed package, such as `text_generation`, `image_generation`, `video_generation`, `social_publishing`, or `media_storage`.
 - [ ] Update run creation to require active subscription and valid package/workflow entitlement before queueing.
+- [ ] Add setup-state APIs so installed packages can ask for extra BYOK connections after install rather than during initial signup.
 - [ ] Add tests proving workflows cannot escape the installed package/industry boundary.
 - [ ] Add tests proving package assets cannot cross package boundaries.
+- [ ] Add tests proving package-specific provider requirements are enforced before run creation.
+- [ ] Add tests proving optional provider lanes unlock optional workflows/capabilities without becoming global tenant permissions.
 - [ ] Add tests proving blank-canvas tenants start with no prebuilt workflows.
 - [ ] Add tests proving specialist employees are unavailable until purchased.
 - [ ] Run `npm run build`, `npm test`, and `npm run lint`.
-- [ ] Reviewer checks subscription gating, package isolation, blank-canvas behavior, and add-on employee entitlement enforcement.
+- [ ] Reviewer checks subscription gating, package isolation, package-specific BYOK requirements, blank-canvas behavior, and add-on employee entitlement enforcement.
+
+Example package-provider behavior:
+
+- A Social Media package may require OpenAI for planning and captions.
+- The same package may optionally support Google Gemini/Nano Banana-style image generation, Higgsfield image/video generation, OpenRouter creative model access, social publishing APIs, and media storage/CDN providers.
+- Those keys are collected after package install or when a workflow requiring that capability is first enabled.
+- Connecting a creative provider for Social Media does not authorize unrelated packages to use that provider unless their package definitions and tenant entitlements also allow it.
 
 ## Post-MVP Phase: Provider Credential Expansion
 

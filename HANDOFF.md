@@ -82,10 +82,13 @@ Wealth Factory is sold in monthly subscription packages.
 - Each package is prebuilt for a specific industry, except the premium blank-canvas package.
 - A package is a governed bundle of prompts, rules, allowed assets, workflows, employees, dashboards/templates, and result views.
 - A company purchases a package and installs it from its dashboard.
+- Initial signup should stay minimal; package-specific BYOK connections are requested after package install or when a workflow capability requires them.
 - The installed package defines the company's allowed workflow/industry boundary.
 - A workflow may never run outside the installed package/industry boundary.
 - A workflow may only pull prompts/rules/assets from the installed package's allowed asset registry.
+- A workflow may only use provider lanes allowed by the installed package and connected by the tenant.
 - Business Coach and Brand SEO are examples of separate packages with separate asset registries; they must not cross-load each other's prompts, rules, employees, templates, or Paperclip mappings.
+- Social Media is an example of a package that can require extra creative BYOK lanes such as image generation, video generation, social publishing, or media storage providers after install.
 - Wealth Factory ships with basic CEO/CFO-style employees.
 - Specialist employees are paid add-ons.
 - Add-on employees and workflows remain scoped to the installed package/industry unless separately purchased.
@@ -99,8 +102,18 @@ Required package files for the next roadmap:
 - `src/packages/package-service.ts`
 - `src/packages/entitlement-service.ts`
 - `src/packages/employee-catalog.ts`
+- `src/packages/package-provider-requirements.ts`
 - `tests/package-asset-registry.test.ts`
 - `tests/package-entitlements.test.ts`
+- `tests/package-provider-requirements.test.ts`
+
+Package-specific provider nuance:
+
+- Package definitions should declare required and optional provider lanes by capability, not just vendor.
+- Useful capability labels include `text_generation`, `image_generation`, `video_generation`, `social_publishing`, and `media_storage`.
+- A Social Media package might require OpenAI and optionally support Google Gemini/Nano Banana-style image generation, Higgsfield image/video, OpenRouter creative models, and later Meta/TikTok/YouTube/LinkedIn/X publishing APIs.
+- Connecting a provider for one package does not make it globally available to all packages.
+- Run creation must verify active subscription, installed package, workflow entitlement, provider lane allowlist, and valid non-revoked tenant credential before queueing work.
 
 ## Boundary Layer Requirements
 

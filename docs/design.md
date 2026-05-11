@@ -153,6 +153,7 @@ Base product assumptions:
 
 - A company purchases one primary package before using the service.
 - The company installs the purchased package from the dashboard.
+- Initial signup should remain minimal. Package-specific provider keys are requested after package install or when the user first enables a workflow capability that needs them.
 - The installed package defines the allowed industry/workflow boundary.
 - Workflows may never execute outside the installed package/industry boundary.
 - Wealth Factory ships with basic executive employees such as CEO/CFO-style roles.
@@ -168,6 +169,7 @@ Package isolation rules:
 - The server resolves installed package entitlements before resolving private Paperclip mappings.
 - The blank-canvas premium tier starts with no prebuilt workflows; customer-created workflows must still become Wealth Factory registry entries before execution.
 - Add-on employees must be bound to the tenant's installed package context and cannot expand the tenant into unrelated industries unless explicitly purchased.
+- Provider credentials can be package-specific. A tenant may connect OpenAI at signup for general workflows, but a Social Media package can require additional image, video, or publishing provider lanes that are scoped to that package's workflows.
 
 ## Package Asset Registry
 
@@ -180,7 +182,7 @@ Package assets can include:
 - Allowed files, templates, documents, schemas, examples, checklists, or knowledge assets.
 - Employee/agent role definitions.
 - Dashboard widgets and result view templates.
-- Provider/model constraints.
+- Required and optional provider/model constraints.
 - Industry-specific guardrails and operating rules.
 
 Examples:
@@ -200,6 +202,31 @@ Required package asset checks:
 - Version package assets so installed packages can be upgraded safely.
 - Record which package asset version was used for each run for audit/reproducibility.
 - Deny execution when a workflow references an asset outside the installed package's allowed asset set.
+
+## Package-Specific Provider Requirements
+
+Packages declare their own provider capability requirements. A provider lane is not automatically available to every package just because the tenant connected it once.
+
+Example: a Social Media package for solo founders or agencies may let the tenant create and manage social media for other individuals or companies. That package could include workflows for post planning, image generation, short-form video generation, caption variants, approval flows, and later channel publishing. Those workflows may require extra BYOK lanes beyond the initial signup provider.
+
+Possible Social Media package lanes:
+
+- Required: `openai_api` for general reasoning, planning, or approved image/video-capable OpenAI models.
+- Optional: Google Gemini or Nano Banana-style image generation API lane when available.
+- Optional: Higgsfield image/video API lane.
+- Optional: OpenRouter API lane for supported upstream creative models.
+- Later: Meta, TikTok, YouTube, LinkedIn, X, or other publishing API lanes.
+- Later: storage/CDN provider lanes for generated media hosting and delivery.
+
+Package provider rules:
+
+- Package install can create a setup checklist for required and optional provider connections.
+- A workflow run must verify that the installed package allows the requested provider lane.
+- A workflow run must verify that the tenant has connected a valid, non-revoked credential for every required provider capability.
+- Optional provider lanes can unlock optional workflows, better models, larger media outputs, or publishing destinations without blocking the base package.
+- Provider credentials remain company-specific and secret-reference based even when they are package-scoped.
+- The browser may show public provider labels and connection status, but never backend secret handles, raw provider responses, Paperclip mappings, prompts, skills, or commands.
+- Package-specific provider metadata should include capability names such as `text_generation`, `image_generation`, `video_generation`, `social_publishing`, and `media_storage` so workflows can request capabilities rather than hard-coded vendors.
 
 ## Company-Specific Provider Credential Model
 
