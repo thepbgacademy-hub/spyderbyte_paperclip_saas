@@ -4,7 +4,7 @@ Date: 2026-05-07
 
 ## Summary
 
-SpyderByte will be a branded multi-tenant SaaS that runs user-facing workflows while using a private self-hosted Paperclip deployment as the background orchestration engine. Customers bring their own provider API keys, but customers never interact with Paperclip directly and never see Paperclip prompts, skills, commands, agent configuration, tool output, or internal logs.
+SpyderByte will be a branded multi-tenant SaaS, sold to customers as Wealth Factory, that runs user-facing workflows while using a private self-hosted Paperclip deployment as the background orchestration engine. Customers bring their own company-specific provider credentials, but customers never interact with Paperclip directly and never see Paperclip prompts, skills, commands, agent configuration, tool output, or internal logs.
 
 The MVP should prove the integration path before investing in the final React dashboard. The first user-facing surface can be a minimal operator/dev web UI plus API endpoints that validate tenant isolation, BYOK handling, queue processing, and Paperclip run synchronization.
 
@@ -12,9 +12,9 @@ The MVP should prove the integration path before investing in the final React da
 
 - Prove that one VPS-hosted Paperclip instance can operate behind SpyderByte as a private workflow engine.
 - Support multi-user and multi-tenant SaaS behavior.
-- Use tenant BYOK credentials safely without storing secrets in queue payloads or user-visible logs.
-- Let users power workflows with their own OpenAI API/project credentials, matching Paperclip's native OpenAI provider path where possible.
-- Leave a provider abstraction lane for Anthropic, Google, local models, and other future API providers.
+- Use company-specific BYOK credentials safely without storing secrets in queue payloads or user-visible logs.
+- Encourage OpenAI as the preferred provider path, including OpenAI API/project keys and company-isolated ChatGPT/Codex subscription auth where allowed.
+- Support Anthropic, xAI/Grok, and OpenRouter API-key lanes with the same secret-reference lifecycle as OpenAI.
 - Map every SpyderByte tenant to a Paperclip company.
 - Run workflows through Redis/BullMQ workers.
 - Store app data, auth metadata, tenant mappings, run metadata, and audit events in Supabase.
@@ -71,11 +71,11 @@ Each tenant has:
 
 The browser and public API must never accept a customer-provided Paperclip `companyId` as authoritative. The server resolves tenant ownership from the authenticated user, then looks up the mapped Paperclip company internally.
 
-## BYOK Secret Model
+## Company-Specific Provider Credential Model
 
-BYOK is handled by reference.
+Provider credentials are company-specific and handled by reference. No subscribing company may share another company's API keys, subscription auth state, Codex home, vault path, or runtime provider session.
 
-1. Customer enters a provider API key in the SpyderByte UI.
+1. Customer enters a provider credential in the Wealth Factory UI.
 2. SpyderByte backend validates the user's tenant membership.
 3. Backend stores the key using the selected secret backend:
    - MVP option: Paperclip encrypted company/agent secret reference.
@@ -85,26 +85,55 @@ BYOK is handled by reference.
 6. Secret material remains in memory only for the shortest possible time.
 7. Logs and audit events record secret access by reference only.
 
+For ChatGPT/Codex subscription auth, the credential is not an API key. Wealth Factory must create an isolated `CODEX_HOME` per company or per authorized company user, run the Codex login/device-code flow for that company context, and store only the resulting auth/session material in that company's encrypted secret/volume boundary. A server-wide shared `~/.codex` login is not acceptable for multi-company SaaS.
+
 ## Provider Lanes
 
-SpyderByte supports two provider lanes.
+Wealth Factory supports these provider lanes.
 
-OpenAI lane:
+OpenAI API lane:
 
-- Primary MVP provider path.
+- Preferred provider path.
 - Customer supplies an OpenAI API key tied to their own OpenAI account/project.
 - Optional `OpenAI-Project` metadata can be stored as non-secret provider configuration when customers use project-scoped keys.
 - Runtime injection should match Paperclip's native OpenAI environment expectations where possible, but only inside private worker/Paperclip execution.
-- The UI describes this as "Use your OpenAI account" or "Connect OpenAI"; it does not mention Paperclip internals.
+- The UI describes this as "Connect OpenAI"; it does not mention Paperclip internals.
+
+OpenAI ChatGPT/Codex subscription lane:
+
+- Optional lane for companies that want to use their own ChatGPT/Codex subscription rather than OpenAI API billing.
+- Uses Paperclip's `codex_local` behavior through an isolated company-specific `CODEX_HOME`.
+- Requires `codex login` or device-code authentication for the company/user context.
+- Must not run with `OPENAI_API_KEY` present when subscription mode is intended, because Codex/Paperclip will treat that as API-key billing.
+- Runtime usage must be attributed to the correct Wealth Factory company and audited without exposing Codex auth files, access tokens, refresh tokens, account IDs, or ChatGPT email addresses to other tenants.
+- This lane is for company-specific subscription access only. It must not use a shared operator/server ChatGPT account for subscriber work.
+
+Anthropic API lane:
+
+- Customer supplies an Anthropic API key stored by reference.
+- Optional public-safe metadata may include workspace label or default model family.
+- Claude subscription login is not part of the initial Wealth Factory SaaS credential model unless a separate company-isolated, terms-reviewed lane is designed.
+
+xAI/Grok API lane:
+
+- Customer supplies an xAI API key stored by reference.
+- Public-safe metadata may include endpoint region or default Grok model label.
+- Runtime responses are normalized into Wealth Factory DTOs and never exposed raw.
+
+OpenRouter API lane:
+
+- Customer supplies an OpenRouter API key stored by reference.
+- Public-safe metadata may include allowed upstream provider/model allowlist.
+- Cost and usage reporting must distinguish `biller=openrouter` from the upstream model provider when available.
 
 Generic provider lane:
 
-- Reserved for other LLM/API providers.
+- Reserved for later providers not covered by OpenAI, Anthropic, xAI/Grok, or OpenRouter.
 - Uses the same secret-reference lifecycle and redaction rules.
 - Provider adapters declare required secret names and public-safe configuration fields.
 - Public workflow UX stays provider-neutral unless a workflow specifically requires a provider capability.
 
-OpenAI implementation note: OpenAI's current docs describe API keys as server-side credentials that should be loaded from environment variables or key management services, and project-scoped requests may include an `OpenAI-Project` header. The MVP should not attempt to automate creation of user API keys; customers generate and paste their own key, and SpyderByte stores it by reference.
+OpenAI implementation note: OpenAI's current docs describe API keys as server-side credentials that should be loaded from environment variables or key management services, and project-scoped requests may include an `OpenAI-Project` header. The MVP should not attempt to automate creation of user API keys; customers generate and paste their own key, and Wealth Factory stores it by reference. OpenAI's Codex docs also support signing in to Codex with a ChatGPT account; Wealth Factory may support this only through company-isolated Codex auth homes and explicit customer authorization.
 
 ## User Visibility Rule
 

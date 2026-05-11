@@ -14,6 +14,37 @@
 
 Subagents and implementers are not alone in the codebase. They must keep file ownership narrow, avoid reverting others' work, and adapt to existing changes. All code requires reviewer scrutiny for error and accuracy control before a phase is accepted.
 
+## Provider Credential Strategy
+
+Wealth Factory must treat every provider credential as company-specific. A subscribing company can use its own OpenAI, Anthropic, xAI/Grok, or OpenRouter API key, and optionally its own company-isolated ChatGPT/Codex subscription auth lane. No server-wide or operator-owned provider credential may be used as the default for subscriber work.
+
+Supported provider lanes for the post-MVP dashboard/API:
+
+- `openai_api`: preferred API-key lane. Stores OpenAI API key by reference and optional non-secret `OpenAI-Project` metadata.
+- `openai_chatgpt_codex_subscription`: company-isolated Codex CLI subscription lane. Uses a per-company or per-authorized-user `CODEX_HOME`, `codex login` or device-code auth, encrypted auth/session storage, and no `OPENAI_API_KEY` in the runtime environment when subscription mode is intended.
+- `anthropic_api`: Anthropic API-key lane using the same secret-reference model.
+- `xai_grok_api`: xAI/Grok API-key lane using the same secret-reference model.
+- `openrouter_api`: OpenRouter API-key lane using the same secret-reference model, with usage reporting that can distinguish OpenRouter as biller from upstream provider/model where available.
+- `generic_api`: later extension lane for providers outside the initial supported set.
+
+Required implementation files for provider expansion:
+
+- Modify: `src/providers/provider-types.ts`
+- Modify: `src/providers/generic-provider.ts`
+- Create: `src/providers/anthropic-provider.ts`
+- Create: `src/providers/xai-provider.ts`
+- Create: `src/providers/openrouter-provider.ts`
+- Create: `src/providers/codex-subscription-provider.ts`
+- Create: `tests/provider-credential-lanes.test.ts`
+
+Required tests:
+
+- OpenAI remains the recommended/default provider option.
+- Anthropic, xAI/Grok, and OpenRouter registrations require API-key secrets and reject secret-like metadata.
+- ChatGPT/Codex subscription registrations require isolated company/user auth state references and reject shared `~/.codex` or global `CODEX_HOME` paths.
+- Subscription mode fails if an `OPENAI_API_KEY` is present in the intended runtime environment.
+- Tenant A cannot access, rotate, revoke, inspect, or run with Tenant B provider credentials or Codex auth state.
+
 ## Wealth Factory Boundary Layer
 
 This is a hard architectural requirement. Do not rely on an LLM to remember branding, privacy, or terminology rules.
@@ -257,6 +288,32 @@ expect(publicResponse.workflowName).toContain("Wealth Factory");
 - [ ] Run `npm run build`, `npm test`, `npm run lint`, `npm run build:web`, and `npm run e2e`.
 - [ ] Reviewer checks that no customer-visible API/UI response can expose Paperclip terms, prompts, skills, commands, agents, raw logs, provider secrets, backend secret handles, or private workflow identifiers.
 
+## Post-MVP Phase: Provider Credential Expansion
+
+**Outcome:** Wealth Factory supports company-specific OpenAI, Anthropic, xAI/Grok, OpenRouter, and optional company-isolated ChatGPT/Codex subscription auth.
+
+**Files:**
+
+- Modify: `src/providers/provider-types.ts`
+- Modify: `src/providers/openai-provider.ts`
+- Modify: `src/providers/generic-provider.ts`
+- Create: `src/providers/anthropic-provider.ts`
+- Create: `src/providers/xai-provider.ts`
+- Create: `src/providers/openrouter-provider.ts`
+- Create: `src/providers/codex-subscription-provider.ts`
+- Create: `tests/provider-credential-lanes.test.ts`
+- Modify: `docs/dashboard-design-prep.md`
+
+- [ ] Add explicit provider kinds for `openai_api`, `openai_chatgpt_codex_subscription`, `anthropic_api`, `xai_grok_api`, `openrouter_api`, and `generic_api`.
+- [ ] Keep OpenAI API first in UI ordering and docs as the encouraged/default lane.
+- [ ] Add provider registration helpers for Anthropic, xAI/Grok, and OpenRouter API-key credentials.
+- [ ] Add a Codex subscription registration shape that stores only an isolated auth-state reference, not raw tokens in customer-visible rows.
+- [ ] Reject shared/global Codex auth homes in subscription registration.
+- [ ] Add runtime guard tests proving `OPENAI_API_KEY` is absent when subscription mode is selected.
+- [ ] Add cross-tenant tests proving provider credentials and Codex auth state cannot cross company boundaries.
+- [ ] Run `npm run build`, `npm test`, and `npm run lint`.
+- [ ] Reviewer checks provider isolation, secret redaction, billing attribution, and customer-facing Wealth Factory wording.
+
 ## Required E2E Checks
 
 Use the installed Playwright CLI when a web surface exists.
@@ -277,8 +334,9 @@ Coverage check:
 - Supabase is covered in Phase 2.
 - Redis/BullMQ is covered in Phase 1.
 - BYOK is covered in Phase 3.
-- OpenAI account/API-key support is covered in Phases 0 and 3.
-- Other API providers are covered by the generic provider lane in Phases 0 and 3.
+- OpenAI account/API-key support is covered in Phases 0 and 3, with OpenAI kept as the encouraged/default provider in post-MVP provider expansion.
+- Anthropic, xAI/Grok, and OpenRouter are required post-MVP provider lanes.
+- Company-isolated ChatGPT/Codex subscription auth is required before offering subscription-based Codex usage to multiple companies.
 - Paperclip invisibility is covered across all phases.
 - The Wealth Factory boundary layer is required before post-MVP dashboard/API work.
 - E2E tests are required in Phases 5 and 6.

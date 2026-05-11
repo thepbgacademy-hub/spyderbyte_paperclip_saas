@@ -27,6 +27,8 @@ Before building customer-facing dashboard routes, implement the deterministic Ty
 - Replace Phase 5 demo UI state with authenticated API-backed state.
 - Create `src/wealthfactory/workflow-registry.ts`, `src/wealthfactory/dto-mappers.ts`, `src/wealthfactory/response-guard.ts`, and `src/wealthfactory/public-errors.ts`.
 - Add `tests/wealthfactory-boundary.test.ts` before exposing new dashboard API routes.
+- Expand provider credentials to company-specific OpenAI API, Anthropic API, xAI/Grok API, OpenRouter API, and optional company-isolated ChatGPT/Codex subscription auth.
+- Never use a shared server/operator `~/.codex`, `CODEX_HOME`, ChatGPT login, or provider API key for subscriber work.
 - Derive tenant role and operator role from server-side authorization.
 - Use Wealth Factory DTOs rather than raw database rows or internal workflow responses.
 - Add route tests proving tenant isolation and operator-only access.
@@ -37,8 +39,9 @@ Before building customer-facing dashboard routes, implement the deterministic Ty
 ## Hard Rules
 
 - Users must never see Paperclip prompts, skills, commands, agents, tool calls, raw logs, or internal configuration.
-- OpenAI user credentials are BYOK server-side secrets, not browser-visible reusable values.
-- Generic providers must use the same secret-reference model as OpenAI.
+- OpenAI should remain the encouraged/default provider, but every company must bring or authorize its own credentials.
+- Anthropic, xAI/Grok, OpenRouter, and generic providers must use the same secret-reference model as OpenAI API keys.
+- ChatGPT/Codex subscription auth must be isolated by company or authorized company user.
 - Supabase RLS must protect provider metadata and secret references because metadata can be sensitive.
 - Subagents and implementers are not alone in the codebase. Do not revert others' work.
 - All code and docs require reviewer scrutiny before acceptance.
