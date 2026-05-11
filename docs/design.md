@@ -12,6 +12,8 @@ The MVP should prove the integration path before investing in the final React da
 
 - Prove that one VPS-hosted Paperclip instance can operate behind SpyderByte as a private workflow engine.
 - Support multi-user and multi-tenant SaaS behavior.
+- Sell Wealth Factory as subscription packages, where each package is prebuilt for a specific industry or offered as a premium blank-canvas build.
+- Let a company purchase a package, install it from its dashboard, and access only workflows/employees included in that installed package plus purchased add-ons.
 - Use company-specific BYOK credentials safely without storing secrets in queue payloads or user-visible logs.
 - Encourage OpenAI as the preferred provider path, including OpenAI API/project keys and company-isolated ChatGPT/Codex subscription auth where allowed.
 - Support Anthropic, xAI/Grok, and OpenRouter API-key lanes with the same secret-reference lifecycle as OpenAI.
@@ -64,12 +66,46 @@ Each tenant has:
 
 - A SpyderByte tenant record.
 - One or more users and memberships.
+- One active subscription plan and zero or more package/add-on entitlements.
+- Installed Wealth Factory package records.
 - A Paperclip `companyId`.
-- Workflow definitions available to that tenant.
+- Workflow definitions available to that tenant through installed packages only.
+- Employee/agent definitions available through the base package and purchased add-ons only.
 - BYOK secret references.
 - Run records and audit events.
 
 The browser and public API must never accept a customer-provided Paperclip `companyId` as authoritative. The server resolves tenant ownership from the authenticated user, then looks up the mapped Paperclip company internally.
+
+## Commercial Package Model
+
+Wealth Factory is sold in subscription packages.
+
+Package types:
+
+- Industry package: a prebuilt package for a specific industry with curated workflows, default employees, dashboards, templates, and result views.
+- Blank-canvas package: the premium tier where the user starts with no prebuilt package/workflows and designs the business from scratch.
+- Add-on employee package: paid specialist employees that can be added to an installed package.
+- Add-on workflow/template package: optional later lane for additional workflow sets that remain scoped to the installed package/industry.
+
+Base product assumptions:
+
+- A company purchases one primary package before using the service.
+- The company installs the purchased package from the dashboard.
+- The installed package defines the allowed industry/workflow boundary.
+- Workflows may never execute outside the installed package/industry boundary.
+- Wealth Factory ships with basic executive employees such as CEO/CFO-style roles.
+- Specialist employees are add-ons at an additional fee.
+- A monthly subscription is required to use the service.
+- Subscription status and entitlements must be checked before workflow run creation.
+
+Package isolation rules:
+
+- A tenant can list only packages it has purchased or is eligible to buy.
+- A tenant can run only workflows included in its installed package or purchased add-ons.
+- A tenant cannot request arbitrary Paperclip workflow IDs, agent IDs, package IDs, employee IDs, or industry IDs.
+- The server resolves installed package entitlements before resolving private Paperclip mappings.
+- The blank-canvas premium tier starts with no prebuilt workflows; customer-created workflows must still become Wealth Factory registry entries before execution.
+- Add-on employees must be bound to the tenant's installed package context and cannot expand the tenant into unrelated industries unless explicitly purchased.
 
 ## Company-Specific Provider Credential Model
 
@@ -148,13 +184,14 @@ Worker logs, Paperclip activity, and internal diagnostics must be separated into
 Redis/BullMQ queues are tenant-aware. Jobs use server-generated IDs and include:
 
 - `tenantId`
+- installed package ID
 - `runId`
 - `workflowId`
 - idempotency key
 - created-by user ID
 - request timestamp
 
-Jobs do not include raw API keys, Paperclip credentials, or untrusted Paperclip identifiers. Workers validate tenant/run ownership before every Paperclip call.
+Jobs do not include raw API keys, Paperclip credentials, or untrusted Paperclip identifiers. Workers validate tenant/run ownership, subscription status, installed package entitlement, add-on entitlement, and workflow/package membership before every Paperclip call.
 
 Required queue behavior:
 
@@ -174,6 +211,13 @@ Core tables:
 
 - `tenants`
 - `tenant_memberships`
+- `subscription_plans`
+- `tenant_subscriptions`
+- `wealth_factory_packages`
+- `tenant_package_installs`
+- `package_workflows`
+- `package_employees`
+- `tenant_add_ons`
 - `paperclip_company_mappings`
 - `workflow_templates`
 - `workflow_runs`
