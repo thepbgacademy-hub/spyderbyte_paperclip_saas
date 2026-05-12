@@ -186,5 +186,8 @@ This file tracks implementation progress. Keep it current after every phase.
 - [ ] Deploy the POC to VPS and run external exposed-port/CORS smoke tests.
   - [x] Add repeatable `npm run smoke:external` smoke/security command.
   - [x] Run first external probe from Windows.
-  - [ ] Close or allowlist external `5432`, `8000`, and `8443`.
-  - [ ] Fix `api.spyderbyte.cloud` TLS handshake so CORS/auth/response-guard checks can execute.
+  - [x] Add temporary Caddy block so `api.spyderbyte.cloud` presents a valid TLS certificate.
+  - [x] Deploy the standalone Wealth Factory API service so `api.spyderbyte.cloud` now proxies to the live `wealth-factory-api` container instead of the temporary `503 api_not_deployed` placeholder.
+  - [ ] Close or allowlist external `5432` and `8000`.
+  - [x] Confirm external `8443` is no longer reachable.
+  - [ ] Decide whether pre-config storage OAuth should keep returning `503 {"code":"storage_oauth_unavailable"}` or whether the smoke gate should ignore that route until provider client IDs are installed.

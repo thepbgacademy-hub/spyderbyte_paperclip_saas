@@ -8,7 +8,7 @@ Phases 0 through 7 are complete, tested, reviewed, and committed.
 
 The first post-MVP productization slices are implemented locally: security baseline helpers, Wealth Factory boundary layer, package entitlements/provider requirements, temporary artifacts, expanded provider definitions, a Wealth Factory dashboard POC surface, the first API-backed dashboard foundation, and the first database-backed ACID/race-condition foundation.
 
-The next session should prepare VPS deployment smoke tests for CORS, auth failure, exposed ports, private-service isolation, and response guard behavior.
+The next session should continue from the live VPS API deployment that now answers behind `api.spyderbyte.cloud`, then finish the remaining commercial hardening gaps.
 
 ## Reference Docs
 
@@ -69,10 +69,10 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 
 ## Next Build Order
 
-1. Fix VPS external exposure: `5432`, `8000`, and `8443` are currently reachable from outside and must be firewall/allowlist restricted before commercial exposure.
-2. Fix `api.spyderbyte.cloud` TLS handshake. It currently fails before CORS/auth/response-guard checks can run.
-3. Re-run `npm run smoke:external`; it is now the repeatable external gate for DNS, intended ports, private ports, auth/CORS route behavior, and response leak checks.
-4. Confirm the VPS runtime uses `createPostgresEncryptedVaultStore` with a strong `WF_VAULT_MASTER_KEY`.
+1. Fix VPS external exposure once the multi-project port plan is finalized: `5432` and `8000` are currently reachable from outside and must be firewall/allowlist restricted before commercial exposure. `8443` now probes closed externally.
+2. Decide whether the storage OAuth routes should remain unavailable until Google Drive/Dropbox client credentials are configured, or whether the smoke gate should treat `503 {"code":"storage_oauth_unavailable"}` as an expected pre-config state.
+3. Re-run `npm run smoke:external` after the final firewall/allowlist policy is applied; it is now the repeatable external gate for DNS, intended ports, private ports, auth/CORS route behavior, and response leak checks.
+4. Confirm the VPS runtime keeps using `createPostgresEncryptedVaultStore` with a strong `WF_VAULT_MASTER_KEY` and rotate the static bearer token when the tenant-aware auth layer replaces it.
 
 ## Security Position
 
@@ -85,6 +85,10 @@ The intended deployment is split-origin:
 - The browser calls only the Wealth Factory API over HTTPS.
 - Paperclip, Redis, workers, Docker, admin/debug ports, Supabase service-role operations, and private service tokens remain server-side/private.
 - Public VPS exposure should be limited to `80` and `443` through the reverse proxy.
+- `api.spyderbyte.cloud` now proxies to a live `wealth-factory-api` container on the `supabase_default` Docker network through `supabase-caddy`.
+- The live API container uses the internal Supabase Docker route `postgresql://postgres:<password>@supabase-db:5432/postgres` with `SUPABASE_DB_SSL=false`, not the public pooler URL.
+- External checks now pass for API TLS, health, unauthorized dashboard rejection, allowed-origin CORS, and authenticated dashboard responses.
+- Current external smoke still fails because `5432` and `8000` remain publicly reachable, and because storage OAuth is intentionally unconfigured so `/api/storage/oauth/google_drive/begin` returns `503 {"code":"storage_oauth_unavailable"}` without provider client IDs.
 - CORS must allow only the configured portal origin(s). Wildcard CORS is forbidden for authenticated APIs.
 - If cross-origin cookies are used, add `Secure`, `HttpOnly`, correct `SameSite`, and CSRF protection. If bearer tokens are used, validate issuer, audience, expiry, membership, and role.
 - Supabase service-role keys, Paperclip tokens, provider credentials, and secret-reference handles must never reach browser code.
@@ -253,15 +257,23 @@ Nuances to preserve:
 - Add CORS, request validation, rate-limit, and exposed-port checks for split-origin deployment.
 - Add Playwright tests for member, owner, and operator paths.
 - Keep `npm run build`, `npm test`, `npm run lint`, `npm run build:web`, and `npm run e2e` passing as the dashboard grows.
+- Keep the live API deployment aligned with the repo changes: current image tag is `wealth-factory-api:20260512-114209`, container name is `wealth-factory-api`, and the VPS Caddyfile has a backup at `/root/supabase/docker/Caddyfile.wfapi.bak`.
 
 ## Latest Verification
 
 - `node scripts/apply-wfpc-migration.mjs` applied private storage OAuth/vault migrations, then passed idempotently and reported `wfpc` with 16 public schema tables.
 - `npm run build` passed.
-- Focused storage OAuth tests passed with 164 tests across the suite.
+- `npm run build:server` passed.
+- `npm test` passed with 49 files / 185 tests.
 - `npm run lint` passed.
 - `npm run build:web` passed with lucide `use client` warnings from dependency bundling.
 - `npm run e2e` passed with 3 Playwright tests.
+- External verification passed for:
+  - `https://api.spyderbyte.cloud/health` -> `200 {"status":"ok","service":"wealth_factory_api"}`
+  - `GET /api/dashboard` from `https://www.spyderbyte.cloud` without auth -> `401`
+  - `GET /api/dashboard` from `https://www.spyderbyte.cloud` with the deploy bearer token -> `200` with seeded tenant/package/workflow data
+  - `OPTIONS /health` from `https://www.spyderbyte.cloud` -> `204` with explicit CORS headers
+- `npm run smoke:external` now passes DNS, public `80/443` reachability, private app-port closure, dashboard auth/CORS checks, and response-guard checks. It still fails on the known open `5432` and `8000` ports and on the intentionally unconfigured storage OAuth route.
 
 ## Hard Rules
 

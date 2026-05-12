@@ -325,12 +325,12 @@ expect(publicResponse.workflowName).toContain("Wealth Factory");
 - Create: `deploy/runbooks/incident-response.md`
 
 - [ ] Deploy public POC app at `www.spyderbyte.cloud` or configure the external customer portal origin.
-- [ ] Deploy API at `api.spyderbyte.cloud`.
+- [x] Deploy API at `api.spyderbyte.cloud`.
 - [ ] Configure CORS to allow only the portal origin(s).
 - [ ] Deploy Paperclip on private network or private subdomain with authenticated mode.
 - [ ] Keep Redis private.
 - [ ] Expose only `80` and `443` publicly from the VPS reverse proxy.
-- [ ] Configure health checks.
+- [x] Configure health checks.
 - [ ] Run smoke tests from outside the VPS proving Paperclip, Redis, workers, Docker, Supabase service endpoints, and admin/debug ports are not publicly reachable.
 - [ ] Run CORS allow/deny smoke tests.
 - [ ] Run Playwright CLI E2E tests against the deployed POC.

@@ -40,7 +40,7 @@ describe("deployment POC config", () => {
     expect(runbook).toContain("npm run smoke:external");
     expect(runbook).toContain("sudo ufw deny 5432/tcp");
     expect(runbook).toContain("api.spyderbyte.cloud");
-    expect(runbook).toContain("fails during TLS handshake");
+    expect(runbook).toContain("no longer show a TLS handshake failure");
     expect(runbook).toContain("http://<vps-public-ip>:9000/health");
     expect(runbook).toContain("docker compose -f deploy/docker-compose.yml port paperclip 9000");
     expect(runbook).toContain("Test-NetConnection www.spyderbyte.cloud -Port 6379");

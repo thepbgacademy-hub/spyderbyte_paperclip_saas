@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit",
+    "build:server": "tsc --project tsconfig.server.json",
     "build:web": "vite build apps/web",
     "dev:web": "vite apps/web --host 127.0.0.1 --port 5173",
     "e2e": "playwright test -c apps/web/playwright.config.ts",
     "smoke:external": "node scripts/external-smoke-security.mjs",
+    "start:server": "node dist/api/server-main.js",
     "test": "vitest run tests",
     "test:watch": "vitest tests",
     "lint": "eslint ."

@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { ApiSession } from "./dashboard-api.js";
 import { createDashboardApi } from "./dashboard-api.js";
 import { createDashboardHttpHandler, type DashboardHttpRequest, type DashboardHttpResponse } from "./dashboard-http.js";
+import { createHealthHttpHandler } from "./health-http.js";
 import { createStorageOAuthHttpHandler } from "./storage-oauth-http.js";
 import { createAcidGuardRepository } from "../db/acid-guard-repository.js";
 import { createPgPool, createPgPoolQueryClient, createPgTransactionRunner } from "../db/postgres-client.js";
@@ -147,6 +148,10 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
     dashboardApi,
     rateLimiter: createFixedWindowRateLimiter({ limit: 120, windowMs: 60_000 })
   });
+  const healthHandler = createHealthHttpHandler({
+    allowedOrigins: options.env.allowedOrigins,
+    readinessCheck: () => checkDatabaseReadiness(pool)
+  });
   const storageOAuthHandler = storageOAuth
     ? createStorageOAuthHttpHandler({
         allowedOrigins: options.env.allowedOrigins,
@@ -157,6 +162,9 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
       })
     : undefined;
   const runtimeHandler = async (request: DashboardHttpRequest): Promise<DashboardHttpResponse> => {
+    if (request.path === "/health" || request.path === "/api/health") {
+      return healthHandler(request);
+    }
     if (request.path.startsWith("/api/storage/oauth/")) {
       if (!storageOAuthHandler) {
         return { status: 503, headers: {}, body: { code: "storage_oauth_unavailable" } };
@@ -176,6 +184,22 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
       await pool.end();
     }
   };
+}
+
+async function checkDatabaseReadiness(pool: { query(sql: string, values: readonly unknown[]): Promise<{ rows: unknown[] }> }) {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      pool.query("select 1", []),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error("health_readiness_timeout")), 2_000);
+      })
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
 }
 
 export function createNodeRequestListener(handler: (request: DashboardHttpRequest) => Promise<DashboardHttpResponse>) {

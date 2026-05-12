@@ -100,15 +100,18 @@ Point Playwright at the deployed origin before using this as a release gate.
 
 ## Current External Smoke Status
 
-Last checked from outside the VPS on 2026-05-11:
+Last checked from outside the VPS on 2026-05-12:
 
 - PASS: `www.spyderbyte.cloud` and `api.spyderbyte.cloud` resolve to `187.77.19.83`.
 - PASS: Public ports `80` and `443` are reachable.
 - PASS: Redis `6379`, Paperclip `9000`, app/dev ports `3000`, `5173`, API direct ports `8080`, `8081`, and Docker daemon `2375` were not reachable.
-- BLOCKED: `5432`, `8000`, and `8443` were reachable externally. These appear to be Supabase Postgres/Kong exposure and must be firewall or allowlist restricted before commercial exposure.
-- BLOCKED: `https://api.spyderbyte.cloud/api/dashboard` failed TLS handshake, so CORS/auth/response-guard checks could not run externally.
+- PASS: `https://api.spyderbyte.cloud/health` returns `200 {"status":"ok","service":"wealth_factory_api"}`.
+- PASS: `https://api.spyderbyte.cloud/api/dashboard` now rejects unauthenticated requests with `401`, rejects untrusted origins with `403`, and returns tenant-scoped Wealth Factory data when called with the deploy bearer token from an allowed origin.
+- PASS: `api.spyderbyte.cloud` now proxies to the live `wealth-factory-api` container through `supabase-caddy`.
+- BLOCKED: `5432` and `8000` remain reachable externally. These are still part of the temporary multi-project exposure and must be firewall or allowlist restricted before commercial exposure.
+- BLOCKED: `https://api.spyderbyte.cloud/api/storage/oauth/google_drive/begin` returns `503 {"code":"storage_oauth_unavailable"}` until Google Drive and Dropbox OAuth client credentials are configured for the runtime.
 
-Do not treat the VPS deployment as release-safe until `npm run smoke:external` passes.
+Do not treat the VPS deployment as release-safe until `npm run smoke:external` passes or the intentionally unconfigured storage OAuth check is explicitly carved out for pre-credential environments.
 
 ## Remediate Current Smoke Blockers
 
@@ -116,7 +119,7 @@ These commands are intended to be run on the VPS by an operator with sudo/root a
 
 ### Restrict Supabase And Kong Ports
 
-Current smoke tests show `5432`, `8000`, and `8443` reachable from the public internet. For a commercial Wealth Factory deployment, these ports must not be public.
+Current smoke tests show `5432` and `8000` reachable from the public internet. For a commercial Wealth Factory deployment, these ports must not be public.
 
 Recommended UFW posture:
 
@@ -131,22 +134,19 @@ sudo ufw allow from <trusted-admin-ip>/32 to any port 22 proto tcp
 # Remove these before commercial exposure unless access is restricted by VPN.
 sudo ufw allow from <trusted-admin-ip>/32 to any port 5432 proto tcp
 sudo ufw allow from <trusted-admin-ip>/32 to any port 8000 proto tcp
-sudo ufw allow from <trusted-admin-ip>/32 to any port 8443 proto tcp
-
 sudo ufw deny 5432/tcp
 sudo ufw deny 8000/tcp
-sudo ufw deny 8443/tcp
 sudo ufw enable
 sudo ufw status verbose
 ```
 
-If Docker-published ports bypass UFW on the VPS, apply provider firewall rules in the VPS control panel too. The external gate is authoritative: `npm run smoke:external` must report `5432`, `8000`, and `8443` as closed from an untrusted network.
+If Docker-published ports bypass UFW on the VPS, apply provider firewall rules in the VPS control panel too. The external gate is authoritative: `npm run smoke:external` must report `5432` and `8000` as closed from an untrusted network.
 
 For Docker Compose hardening, avoid publishing Supabase/Kong/Postgres ports to `0.0.0.0`. Bind admin-only services to loopback or a private VPN interface when direct maintenance access is needed.
 
 ### Fix API TLS
 
-Current smoke tests show `api.spyderbyte.cloud` fails during TLS handshake. Check the active reverse proxy, certificate, and SNI routing on the VPS.
+Current smoke tests no longer show a TLS handshake failure. `api.spyderbyte.cloud` has a valid certificate and a live Caddy route. Use the following steps only if the TLS route regresses in a later deploy.
 
 For Caddy-based deployments:
 

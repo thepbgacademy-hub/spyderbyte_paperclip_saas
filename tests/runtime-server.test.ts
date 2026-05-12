@@ -106,6 +106,37 @@ describe("runtime server", () => {
     expect(response.body).toBe(JSON.stringify({ ok: true }));
   });
 
+  it("routes health checks through the runtime readiness handler", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() }
+    });
+
+    const request = createRequest({
+      method: "GET",
+      url: "/api/health",
+      headers: {
+        origin: "https://www.spyderbyte.cloud",
+        "content-length": "0"
+      }
+    });
+    const response = createResponse();
+
+    runtime.server.emit("request", request as unknown as IncomingMessage, response as unknown as ServerResponse);
+    await response.finished;
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toBe(JSON.stringify({ status: "ok", service: "wealth_factory_api" }));
+    await runtime.close();
+  });
+
   it("wires the durable workflow outbox pump when a queue enqueuer is provided", async () => {
     const { createQueueOutboxPump } = await import("../src/workflows/queue-outbox-pump.js");
     const runtime = createDashboardRuntime({
