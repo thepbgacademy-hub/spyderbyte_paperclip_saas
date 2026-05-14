@@ -296,7 +296,144 @@ Do not use it for sales copy, hidden internal capability descriptions, or unrela
 - `Try again in a moment`
 - `Ready to start`
 
-## Keys Page Baseline
+## Team Page Baseline
+
+### Purpose
+
+Help the customer understand who is available to help inside the package, what each role can do, which hires they already own, and which premium `Power Plays` they have unlocked.
+
+### Core Page Shape
+
+The `Team` page should feel like a roster plus capability deck, not a backend registry.
+
+It should have:
+
+- a calm top summary for team coverage
+- tabs for included roles, hired roles, and power plays
+- one dominant list or grid of roles
+- a selected detail pane for the chosen role or power play
+
+This page should not expose internal skill bundles, prompt packs, or tooling inventories.
+
+### Layout Anatomy
+
+1. Top bar:
+   - page title: `Team`
+   - search
+   - filter for `Included`, `Hired`, `Power Plays`
+   - optional package-family chip
+
+2. Main canvas:
+   - left column: compact role list or roster cards
+   - center column: selected role detail
+   - optional right rail: unlock requirements, provider needs, package fit
+
+3. Mobile / narrow layout:
+   - tab row first
+   - role list below
+   - selected role opens as a detail view or drawer
+
+### Key Components
+
+#### Team Coverage Strip
+
+Show a small summary row with:
+
+- included roles count
+- hired roles count
+- power plays unlocked
+- roles needing connection before use
+
+#### Included Team Tab
+
+Show the employees that ship with the package:
+
+- role name
+- short resume line
+- primary business outcomes
+- active / available state
+
+#### Hired Tab
+
+Show paid or activated add-ons:
+
+- role name
+- outcome summary
+- added date
+- connection readiness
+
+#### Power Plays Tab
+
+This is the right place for the premium capabilities you mentioned.
+
+Each item should show:
+
+- power play name
+- short description of what it unlocks
+- required provider or package condition
+- unlocked / locked state
+
+These should feel like premium operating capabilities, not hidden dev tools.
+
+#### Role Detail Card
+
+The selected role should show:
+
+- role name
+- concise mini resume
+- what this role helps with
+- what workflows or outcomes it supports
+- any provider requirements
+- one clean action area
+
+### States
+
+The page should clearly support:
+
+- included-only customers
+- mixed included + hired roster
+- locked power plays
+- no hires yet
+- role blocked by missing provider
+
+### Primary Actions
+
+- review role details
+- activate a purchased hire
+- open the marketplace lane
+- unlock a power play
+- connect a required provider
+
+### Right-Rail Guidance
+
+Good uses:
+
+- provider requirement summary
+- package-fit explanation
+- unlock requirement summary
+
+Avoid:
+
+- raw capability inventories
+- implementation detail
+- long sales copy
+
+### What To Avoid
+
+- calling these backend skills
+- showing hidden prompt/tool names
+- making the page sound like HR software
+- making power plays feel like unsafe unrestricted powers
+
+### Sample Customer-Safe Labels
+
+- `Included with your package`
+- `Ready to use`
+- `Needs provider`
+- `Unlock power play`
+- `Hired and active`
+
+## Providers Page Baseline
 
 ### Purpose
 
@@ -304,7 +441,7 @@ Help the customer set up and maintain BYOK providers, subscriptions, and custome
 
 ### Core Page Shape
 
-The `Keys` page should feel like a setup checklist, not an infrastructure dashboard.
+The `Providers` page should feel like a setup checklist, not an infrastructure dashboard.
 
 It should have:
 
@@ -317,8 +454,9 @@ It should have:
 ### Layout Anatomy
 
 1. Top bar:
-   - page title: `Keys`
+   - page title: `Providers`
    - optional filter for `All`, `Needed now`, `Connected`, `Needs attention`
+   - tab row for `Providers`, `Keys`, `Storage`, `Defaults`
 
 2. Main canvas:
    - provider and subscription section
@@ -361,6 +499,16 @@ Each card should show:
 - export role summary
 - reconnect guidance if needed
 - ownership reassurance that files are delivered to storage the customer controls
+
+#### Defaults Card
+
+This card should show:
+
+- preferred provider for supported workflow families
+- default storage destination
+- safe engine mode label if exposed later, such as `Balanced` or `Deep Work`
+
+This lets customers choose their providers without exposing backend routing internals.
 
 #### Requirements Summary Card
 
@@ -420,13 +568,145 @@ Avoid:
 - `Not needed for your package`
 - `Storage ready`
 
+## Insights Page Baseline
+
+### Purpose
+
+Show customer-safe usage, output, turnaround, and package KPI summaries in a clean operational analytics surface.
+
+### Core Page Shape
+
+The `Insights` page should reuse the strongest Hermes analytics patterns while translating them into business-safe meaning.
+
+It should have:
+
+- a KPI strip
+- one trend row
+- one recent-work table
+- one package utilization module
+
+This page should feel executive-readable, not like observability tooling.
+
+### Layout Anatomy
+
+1. Top bar:
+   - page title: `Insights`
+   - date-range control such as `7D`, `30D`, `90D`
+   - optional export or refresh action later
+
+2. Main canvas:
+   - top KPI band
+   - middle row with two charts
+   - lower table for recent business-safe work
+   - optional side rail or lower card for package utilization
+
+3. Mobile / narrow layout:
+   - KPI cards stack first
+   - charts collapse vertically
+   - recent-work table becomes cards or a condensed list
+
+### Key Components
+
+#### KPI Strip
+
+Recommended cards:
+
+- usage
+- output
+- turnaround
+- package status
+
+Each card should show:
+
+- current value
+- delta vs prior period
+- clear label
+
+#### Usage Trend
+
+Show:
+
+- requests, completed tasks, or delivered outputs over time
+
+#### Turnaround Trend
+
+Show:
+
+- median or average turnaround over time
+
+#### Recent Work Table
+
+Show customer-safe columns such as:
+
+- date
+- work type
+- status
+- turnaround
+- delivery channel
+
+#### Package Utilization Card
+
+Show:
+
+- used this period
+- remaining
+- renewal/reset date
+- near-limit state when relevant
+
+### States
+
+The page should clearly support:
+
+- active account with enough data
+- low-data account
+- empty/new account
+- filtered date-range view
+
+### Primary Actions
+
+- change date range
+- review a recent output
+- understand package utilization
+- request support if outcomes look off
+
+### Right-Rail Guidance
+
+Good uses:
+
+- package summary
+- plan utilization
+- short glossary/help note
+
+Avoid:
+
+- internal model/provider telemetry
+- trace data
+- queue or retry metrics
+
+### What To Avoid
+
+- raw token-accounting tables
+- backend observability language
+- too many decorative charts
+- exposing model orchestration or cost internals without product framing
+
+### Sample Customer-Safe Labels
+
+- `Used this period`
+- `Completed successfully`
+- `Average turnaround`
+- `Near package limit`
+- `Output volume`
+
 ## Sequence Recommendation
 
 If these focused pages are implemented in stages, build them in this order:
 
 1. `Results`
 2. `Workflows`
-3. `Keys`
+3. `Providers`
+4. `Team`
+5. `Insights`
 
 This sequence keeps the product centered on visible customer value first, then execution flow, then setup clarity.
 

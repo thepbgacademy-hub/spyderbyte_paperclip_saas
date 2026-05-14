@@ -57,9 +57,10 @@ Recommended top-level items:
 - `Home`
 - `Workflows`
 - `Results`
-- `Skills`
+- `Team`
 - `Profiles`
-- `Keys`
+- `Providers`
+- `Insights`
 - `Package`
 - `Files`
 - `Assistant`
@@ -69,15 +70,21 @@ Bottom cluster:
 - `Billing`
 - `Settings`
 
+Lower-left utility:
+
+- theme switcher / palette chooser
+
 Notes:
 
 - Avoid internal/build-system language such as logs, runs, prompts, agents, tools, queues, or containers.
 - `Workflows` is acceptable because it is already productized in Wealth Factory language, but it must show business workflows only.
-- `Skills` is acceptable here as long as it clearly means the active employee roster plus marketplace hiring lane, not backend skill packs.
+- `Team` is clearer than `Skills` because it frames the page around included employees, hires, and power-play unlocks rather than backend capability language.
 - `Profiles` should represent the companies or operating contexts the customer owns within the same package family.
-- `Keys` should be the customer-safe provider, subscription, and storage setup surface.
+- `Providers` should be the customer-safe provider, subscription, and storage setup surface.
+- `Insights` should borrow the analytics tables and summary-card patterns from the reference product, but only for business-safe summaries.
 - `Package` is acceptable here because it is already a core commercial concept in Wealth Factory. On-screen copy should make clear that this page represents the installed business system, not shipping or file packaging.
 - The installed package name should be visible near the top of the nav as context, not as a navigation branch explosion.
+- `Guides` should exist as a support/help link to the website package guide rather than as a primary app workspace tab.
 
 ### 2. Top Bar
 
@@ -92,6 +99,8 @@ Recommended elements:
 - notifications
 - quick capture / quick add
 - account menu
+
+The palette chooser can also be surfaced from the account menu or lower-left utility area, but the source of truth for theme management remains `Settings`.
 
 The top bar should not carry dense KPI clutter.
 
@@ -284,6 +293,7 @@ Rules:
 - Theme choices should change palette and surface treatment, not rewrite the information architecture.
 - Themes should stay curated and brand-safe, not become a freeform color picker in the MVP.
 - The default should remain the Wealth Factory baseline look.
+- Customers should be able to preview and switch themes quickly without entering a deep configuration screen.
 
 ### Typography
 
@@ -366,7 +376,7 @@ Use this as the baseline prompt for concept generation:
 
 `The dashboard should be designed for a business owner running a company, not a developer configuring AI tools. Make the hierarchy extremely clear. At the top of the main content area, show a large Current Focus panel with one important recommendation, supporting context chips, and 1-2 clean action buttons. Below it, show a Needs Attention list with overdue items, approvals, payment issues, and follow-ups. Add an Operating Snapshot area with business-facing metrics such as campaigns in motion, deliverables due, revenue at risk, and upcoming deadlines. Add a separate Work Queue panel with ordered tasks like awaiting review, awaiting approval, ready to send, and due today. Keep one restrained lower row with small trend charts or throughput summaries, not a crowded analytics mosaic.`
 
-`The right rail should include Today's Schedule, alerts, pending approvals summary, and expiring downloads. The left nav should use customer-facing labels such as Home, Workflows, Results, Skills, Profiles, Keys, Package, Files, Assistant, Billing, and Settings. Near the top, show the installed package context in a subtle label, such as Social Media Package or Business Coach Package.`
+`The right rail should include Today's Schedule, alerts, pending approvals summary, and expiring downloads. The left nav should use customer-facing labels such as Home, Workflows, Results, Team, Profiles, Providers, Insights, Package, Files, Assistant, Billing, and Settings. Near the top, show the installed package context in a subtle label, such as Social Media Package or Business Coach Package.`
 
 `Use realistic product UI details: believable spacing, crisp borders, matte surfaces, subtle shadows, dark green-black or charcoal textured background, graphite panels, cream utility buttons, muted blue accents, restrained green highlights, soft gray or warm ivory typography, and small amber warning states. Make the interface feel premium, calm, and implementation-friendly. Avoid giant headline text, fantasy visuals, generic AI art style, glowing sci-fi HUDs, fake glassmorphism, oversized rounded cards, purple gradients, empty placeholder panels, mobile layout, or exposed technical terminology. Do not show prompts, agents, logs, or any internal workflow-engine concepts.`
 
@@ -382,9 +392,10 @@ The reference style is useful because it has:
 
 Wealth Factory should borrow that confidence while changing the meaning of the UI:
 
-- `Skills` means packaged employees and hires, not backend skill folders
+- `Team` means packaged employees, hires, and power-play unlocks, not backend skill folders
 - `Profiles` means companies/workspaces the customer operates
-- `Keys` means provider, subscription, and storage setup
+- `Providers` means provider, subscription, and storage setup
+- `Insights` means customer-safe usage and outcome summaries, not internal telemetry
 - `Settings` should stay deliberately smaller than the reference product's wide config surface
 - operator-only configuration must remain backstage
 
