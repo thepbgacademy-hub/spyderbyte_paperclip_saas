@@ -17,7 +17,7 @@ export type DashboardHttpResponse = {
 };
 
 type DashboardApi = {
-  listDashboard(request: { authorization: string }): Promise<unknown>;
+  listDashboard(request: { authorization: string; cookie?: string }): Promise<unknown>;
 };
 
 type RateLimiter = {
@@ -69,7 +69,10 @@ export function createDashboardHttpHandler(options: {
     }
 
     try {
-      const body = await options.dashboardApi.listDashboard({ authorization: request.headers.authorization ?? "" });
+      const body = await options.dashboardApi.listDashboard({
+        authorization: request.headers.authorization ?? "",
+        ...(request.headers.cookie ? { cookie: request.headers.cookie } : {})
+      });
       assertWealthFactoryResponse(body);
       return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
     } catch {

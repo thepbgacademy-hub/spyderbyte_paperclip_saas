@@ -13,6 +13,7 @@ describe("runtime auth", () => {
       })
     ).toEqual({
       bearerToken: "wf-demo-token-with-sufficient-length",
+      sessionCookieName: "wf_portal_session",
       tenantId: "tenant-1",
       userId: "user-1",
       role: "member"
@@ -40,12 +41,18 @@ describe("runtime auth", () => {
 
     const auth = createStaticRuntimeAuth({
       bearerToken: "wf-demo-token-with-sufficient-length",
+      sessionCookieName: "wf_portal_session",
       tenantId: "tenant-1",
       userId: "user-1",
       role: "operator"
     });
 
     await expect(auth.authenticate({ authorization: "Bearer wf-demo-token-with-sufficient-length" })).resolves.toEqual({
+      tenantId: "tenant-1",
+      userId: "user-1",
+      role: "operator"
+    });
+    await expect(auth.authenticate({ authorization: "", cookie: "wf_portal_session=wf-demo-token-with-sufficient-length" })).resolves.toEqual({
       tenantId: "tenant-1",
       userId: "user-1",
       role: "operator"

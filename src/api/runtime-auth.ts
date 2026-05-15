@@ -4,6 +4,7 @@ import type { ApiRole, ApiSession } from "./dashboard-api.js";
 
 export type StaticRuntimeAuthEnv = {
   bearerToken: string;
+  sessionCookieName: string;
   tenantId: string;
   userId: string;
   role: ApiRole;
@@ -23,6 +24,7 @@ export function loadStaticRuntimeAuthEnv(source: NodeJS.ProcessEnv = process.env
   const tenantId = source.WF_API_TENANT_ID?.trim();
   const userId = source.WF_API_USER_ID?.trim();
   const role = source.WF_API_ROLE?.trim();
+  const sessionCookieName = source.WF_PORTAL_SESSION_COOKIE_NAME?.trim() || "wf_portal_session";
 
   if (!bearerToken) {
     throw new RuntimeAuthEnvError("WF_API_BEARER_TOKEN is required");
@@ -40,7 +42,7 @@ export function loadStaticRuntimeAuthEnv(source: NodeJS.ProcessEnv = process.env
     throw new RuntimeAuthEnvError("WF_API_ROLE must be member or operator");
   }
 
-  return { bearerToken, tenantId, userId, role };
+  return { bearerToken, sessionCookieName, tenantId, userId, role };
 }
 
 export function createStaticRuntimeAuth(env: StaticRuntimeAuthEnv) {
@@ -52,12 +54,39 @@ export function createStaticRuntimeAuth(env: StaticRuntimeAuthEnv) {
   };
 
   return {
-    async authenticate(input: { authorization: string }): Promise<ApiSession | null> {
+    async authenticate(input: { authorization: string; cookie?: string }): Promise<ApiSession | null> {
       const actualAuthorization = Buffer.from(input.authorization, "utf8");
-      if (actualAuthorization.length !== expectedAuthorization.length) {
+      if (actualAuthorization.length === expectedAuthorization.length && timingSafeEqual(actualAuthorization, expectedAuthorization)) {
+        return session;
+      }
+
+      const cookieToken = readCookieValue(input.cookie, env.sessionCookieName);
+      if (!cookieToken) {
         return null;
       }
-      return timingSafeEqual(actualAuthorization, expectedAuthorization) ? session : null;
+
+      const actualCookieToken = Buffer.from(cookieToken, "utf8");
+      const expectedCookieToken = Buffer.from(env.bearerToken, "utf8");
+      if (actualCookieToken.length !== expectedCookieToken.length) {
+        return null;
+      }
+
+      return timingSafeEqual(actualCookieToken, expectedCookieToken) ? session : null;
     }
   };
+}
+
+function readCookieValue(cookieHeader: string | undefined, cookieName: string): string | null {
+  if (!cookieHeader) {
+    return null;
+  }
+
+  for (const entry of cookieHeader.split(";")) {
+    const [name, ...valueParts] = entry.trim().split("=");
+    if (name === cookieName) {
+      return valueParts.join("=") || null;
+    }
+  }
+
+  return null;
 }

@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
+import { createAppShellHandler } from "./app-shell.js";
 import type { ApiSession } from "./dashboard-api.js";
 import { createDashboardApi } from "./dashboard-api.js";
 import { createDashboardHttpHandler, type DashboardHttpRequest, type DashboardHttpResponse } from "./dashboard-http.js";
@@ -24,6 +25,8 @@ export type RuntimeEnv = {
   allowedOrigins: readonly string[];
   apiPort: number;
   vaultMasterKey: string;
+  webAppEntryUrl?: string;
+  webAppStylesheetUrl?: string;
   runtimeEnv: Record<string, string | undefined>;
   storageOAuthRedirectOrigin?: string;
   googleDriveClientId?: string;
@@ -72,6 +75,8 @@ export function loadRuntimeEnv(source: NodeJS.ProcessEnv = process.env): Runtime
     allowedOrigins,
     apiPort,
     vaultMasterKey,
+    ...(source.WF_WEB_APP_ENTRY_URL ? { webAppEntryUrl: source.WF_WEB_APP_ENTRY_URL } : {}),
+    ...(source.WF_WEB_APP_STYLESHEET_URL ? { webAppStylesheetUrl: source.WF_WEB_APP_STYLESHEET_URL } : {}),
     runtimeEnv: source,
     ...(source.WF_STORAGE_OAUTH_REDIRECT_ORIGIN ? { storageOAuthRedirectOrigin: source.WF_STORAGE_OAUTH_REDIRECT_ORIGIN } : {}),
     ...(source.GOOGLE_DRIVE_CLIENT_ID ? { googleDriveClientId: source.GOOGLE_DRIVE_CLIENT_ID } : {}),
@@ -162,6 +167,13 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
         rateLimiter: createFixedWindowRateLimiter({ limit: 60, windowMs: 60_000 })
       })
     : undefined;
+  const appShellHandler = options.env.webAppEntryUrl
+    ? createAppShellHandler({
+        dashboardApi,
+        webAppEntryUrl: options.env.webAppEntryUrl,
+        ...(options.env.webAppStylesheetUrl ? { webAppStylesheetUrl: options.env.webAppStylesheetUrl } : {})
+      })
+    : undefined;
   const runtimeHandler = async (request: DashboardHttpRequest): Promise<DashboardHttpResponse> => {
     if (request.path === "/health" || request.path === "/api/health") {
       return healthHandler(request);
@@ -171,6 +183,9 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
         return { status: 503, headers: {}, body: { code: "storage_oauth_unavailable" } };
       }
       return storageOAuthHandler(request);
+    }
+    if (appShellHandler && !request.path.startsWith("/api/")) {
+      return appShellHandler(request);
     }
     return handler(request);
   };
@@ -223,13 +238,15 @@ async function handleNodeRequest(handler: (request: DashboardHttpRequest) => Pro
     ip: readClientIp(request)
   });
 
-  response.writeHead(result.status, { "content-type": "application/json", ...result.headers });
-  response.end(result.body === null ? "" : JSON.stringify(result.body));
+  const contentType = result.headers["content-type"] ?? "application/json";
+  response.writeHead(result.status, { "content-type": contentType, ...result.headers });
+  response.end(result.body === null ? "" : typeof result.body === "string" ? result.body : JSON.stringify(result.body));
 }
 
 function normalizeHeaders(request: IncomingMessage): Record<string, string | undefined> {
   return {
     authorization: readHeader(request, "authorization"),
+    cookie: readHeader(request, "cookie"),
     origin: readHeader(request, "origin")
   };
 }

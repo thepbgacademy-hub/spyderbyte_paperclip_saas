@@ -98,4 +98,43 @@ describe("dashboard client", () => {
 
     expect(browserClient.client.getSnapshot().role).toBe("operator");
   });
+
+  it("reads bootstrap JSON from the document shell when no window global is present", () => {
+    const browserWindow = {
+      document: {
+        getElementById: vi.fn().mockReturnValue({
+          textContent: JSON.stringify({
+            initialResponse: {
+              tenantId: "tenant-shell",
+              role: "operator",
+              packages: [{ name: "Social Media Agency" }],
+              providerConnections: [],
+              workflows: [],
+              artifacts: [],
+              storageConnectors: []
+            }
+          })
+        })
+      },
+      fetch: vi.fn()
+    } as unknown as Window;
+
+    const browserClient = createBrowserDashboardClient(browserWindow);
+
+    expect(browserClient.client.getSnapshot().tenantName).toBe("tenant-shell");
+    expect(browserClient.client.getSnapshot().role).toBe("operator");
+  });
+
+  it("fails closed when the shell bootstrap JSON is malformed", () => {
+    const browserWindow = {
+      document: {
+        getElementById: vi.fn().mockReturnValue({
+          textContent: "{bad json"
+        })
+      },
+      fetch: vi.fn()
+    } as unknown as Window;
+
+    expect(() => createBrowserDashboardClient(browserWindow)).toThrow(/Invalid dashboard bootstrap/);
+  });
 });

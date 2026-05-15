@@ -21,7 +21,8 @@ vi.mock("../src/db/supabase-repositories.js", () => ({
     listWorkflows: vi.fn(),
     listPackages: vi.fn(),
     listArtifacts: vi.fn(),
-    listProviderConnections: vi.fn()
+    listProviderConnections: vi.fn(),
+    listStorageConnectors: vi.fn()
   }))
 }));
 
@@ -195,6 +196,53 @@ describe("runtime server", () => {
     });
 
     expect(runtime.storageOAuth).toEqual(expect.objectContaining({ begin: expect.any(Function), complete: expect.any(Function) }));
+    await runtime.close();
+  });
+
+  it("serves an authenticated HTML shell with bootstrap JSON when a web entry URL is configured", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        webAppEntryUrl: "https://portal.spyderbyte.cloud/assets/app.js",
+        webAppStylesheetUrl: "https://portal.spyderbyte.cloud/assets/app.css",
+        runtimeEnv: {}
+      },
+      auth: {
+        authenticate: vi.fn().mockResolvedValue({
+          tenantId: "tenant-1",
+          userId: "user-1",
+          role: "operator"
+        })
+      }
+    });
+
+    const request = createRequest({
+      method: "GET",
+      url: "/workflows",
+      headers: {
+        cookie: "wf_portal_session=portal-session-token",
+        "content-length": "0"
+      }
+    });
+    const response = createResponse();
+
+    runtime.server.emit("request", request as unknown as IncomingMessage, response as unknown as ServerResponse);
+    await response.finished;
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/html");
+    expect(response.body).toContain('id="wf-dashboard-bootstrap"');
+    expect(response.body).toContain('"tenantId":"tenant-1"');
+    expect(response.body).toContain('"role":"operator"');
+    expect(response.body).toContain('href="https://portal.spyderbyte.cloud/assets/app.css"');
+    expect(response.body).toContain('src="https://portal.spyderbyte.cloud/assets/app.js"');
+    expect(response.headers["content-security-policy"]).toContain("style-src 'self' 'unsafe-inline' https://portal.spyderbyte.cloud");
+    expect(response.headers["content-security-policy"]).toContain("img-src 'self' data: blob: https://portal.spyderbyte.cloud");
+    expect(response.headers["content-security-policy"]).toContain("font-src 'self' data: https://portal.spyderbyte.cloud");
     await runtime.close();
   });
 });

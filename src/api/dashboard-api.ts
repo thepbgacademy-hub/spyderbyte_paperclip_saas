@@ -19,7 +19,7 @@ export class ApiAuthError extends Error {
 }
 
 type DashboardApiDeps = {
-  authenticate(input: { authorization: string }): Promise<ApiSession | null>;
+  authenticate(input: { authorization: string; cookie?: string }): Promise<ApiSession | null>;
   requireTenantMember(input: { tenantId: string; userId: string }): Promise<void>;
   listWorkflows(input: { tenantId: string; userId: string }): Promise<unknown[]>;
   listPackages(input: { tenantId: string; userId: string }): Promise<unknown[]>;
@@ -30,8 +30,8 @@ type DashboardApiDeps = {
 
 export function createDashboardApi(deps: DashboardApiDeps) {
   return {
-    async listDashboard(request: { authorization: string }) {
-      const session = await deps.authenticate({ authorization: request.authorization });
+    async listDashboard(request: { authorization: string; cookie?: string }) {
+      const session = await deps.authenticate({ authorization: request.authorization, ...(request.cookie ? { cookie: request.cookie } : {}) });
       if (!session) {
         throw new ApiAuthError();
       }

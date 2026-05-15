@@ -44,6 +44,7 @@ export type DashboardSnapshot = {
 
 export type DashboardBootstrap = {
   initialSnapshot?: DashboardSnapshot;
+  initialResponse?: unknown;
 };
 
 declare global {
@@ -101,12 +102,27 @@ export function createDashboardClient(options: DashboardClientOptions) {
 }
 
 export function getBrowserDashboardBootstrap(browserWindow: Window = window): DashboardBootstrap | null {
-  return browserWindow.__WF_DASHBOARD_BOOTSTRAP__ ?? null;
+  if (browserWindow.__WF_DASHBOARD_BOOTSTRAP__) {
+    return browserWindow.__WF_DASHBOARD_BOOTSTRAP__;
+  }
+
+  const bootstrapScript = browserWindow.document?.getElementById("wf-dashboard-bootstrap");
+  const bootstrapJson = bootstrapScript?.textContent?.trim();
+  if (!bootstrapJson) {
+    return null;
+  }
+
+  try {
+    const bootstrap = JSON.parse(bootstrapJson);
+    return bootstrap && typeof bootstrap === "object" ? (bootstrap as DashboardBootstrap) : null;
+  } catch {
+    throw new Error("Invalid dashboard bootstrap");
+  }
 }
 
 export function createBrowserDashboardClient(browserWindow: Window = window) {
   const bootstrap = getBrowserDashboardBootstrap(browserWindow);
-  const fallbackSnapshot = bootstrap?.initialSnapshot ?? defaultSnapshot;
+  const fallbackSnapshot = bootstrap?.initialSnapshot ?? (bootstrap?.initialResponse ? mapDashboardResponse(bootstrap.initialResponse) : defaultSnapshot);
 
   return {
     authorization: null,
@@ -131,7 +147,12 @@ function mapDashboardResponse(response: unknown): DashboardSnapshot {
     .map((provider) => provider.label);
 
   return {
-    tenantName: typeof record.tenantName === "string" ? record.tenantName : defaultSnapshot.tenantName,
+    tenantName:
+      typeof record.tenantName === "string"
+        ? record.tenantName
+        : typeof record.tenantId === "string"
+          ? record.tenantId
+          : defaultSnapshot.tenantName,
     packageName: typeof packageRecord.name === "string" ? packageRecord.name : "No package installed",
     requiredProviders,
     optionalProviders: optionalProviders.length > 0 ? [...optionalProviders, "customer-owned storage"] : ["customer-owned storage"],
