@@ -72,5 +72,30 @@ describe("dashboard client", () => {
 
     expect(browserClient.authorization).toBeNull();
     expect(browserClient.client.getSnapshot().tenantName).toBe("Injected Tenant");
+    expect(browserClient.client.getSnapshot().role).toBe("member");
+  });
+
+  it("uses the bootstrap snapshot role as the authoritative browser role", () => {
+    const browserWindow = {
+      __WF_DASHBOARD_BOOTSTRAP__: {
+        initialSnapshot: {
+          tenantName: "Operator Tenant",
+          packageName: "Social Media Agency",
+          requiredProviders: ["OpenAI"],
+          optionalProviders: ["customer-owned storage"],
+          artifactTtlHours: 24,
+          role: "operator" as const,
+          workflows: [],
+          artifacts: [],
+          providerConnections: [],
+          storageConnectors: []
+        }
+      },
+      fetch: vi.fn()
+    } as unknown as Window;
+
+    const browserClient = createBrowserDashboardClient(browserWindow);
+
+    expect(browserClient.client.getSnapshot().role).toBe("operator");
   });
 });

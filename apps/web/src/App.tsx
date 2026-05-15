@@ -23,24 +23,14 @@ import { HIDDEN_SHELL_FLAGS } from "./shell/feature-flags.js";
 import { useTheme } from "./shell/theme-context.js";
 import { HIDDEN_FUTURE_ROUTES, VISIBLE_WEALTH_FACTORY_ROUTES, resolveShellRoute } from "./shell/navigation.js";
 
-declare global {
-  interface Window {
-    __WF_SERVER_SESSION__?: { role: Role };
-  }
-}
-
-function getInitialRole(): Role {
-  return window.__WF_SERVER_SESSION__?.role === "operator" ? "operator" : "member";
-}
-
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const shellFeatureFlags = HIDDEN_SHELL_FLAGS;
   const dashboardRuntime = useMemo(() => createBrowserDashboardClient(), []);
-  const [role, setRole] = useState<Role>(() => window.__WF_SERVER_SESSION__?.role ?? dashboardRuntime.client.getSnapshot().role ?? getInitialRole());
   const [dashboard] = useState<DashboardSnapshot>(() => dashboardRuntime.client.getSnapshot());
+  const role: Role = dashboard.role;
   const [provider, setProvider] = useState("OpenAI");
   const [searchQuery, setSearchQuery] = useState("");
   const [keySaved, setKeySaved] = useState(false);
@@ -76,12 +66,6 @@ export default function App() {
       setSelectedResultId(dashboard.artifacts[0]!.id);
     }
   }, [dashboard, selectedResultId, selectedWorkflowId]);
-
-  useEffect(() => {
-    if (!window.__WF_SERVER_SESSION__) {
-      setRole(dashboard.role);
-    }
-  }, [dashboard.role]);
 
   const dashboardState = useMemo<DashboardPageState>(
     () => ({

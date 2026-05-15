@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
+import type { DashboardBootstrap } from "../../src/dashboard-client.js";
 
 declare global {
   interface Window {
-    __WF_SERVER_SESSION__?: { role: "member" | "operator" };
+    __WF_DASHBOARD_BOOTSTRAP__?: DashboardBootstrap;
   }
 }
 
@@ -27,7 +28,20 @@ test("operator can pause workflows while members cannot see pause controls", asy
   await expect(page.getByRole("button", { name: /Disable tenant workflows/ })).toHaveCount(0);
 
   await page.addInitScript(() => {
-    window.__WF_SERVER_SESSION__ = { role: "operator" };
+    window.__WF_DASHBOARD_BOOTSTRAP__ = {
+      initialSnapshot: {
+        tenantName: "Northstar Labs",
+        packageName: "Social Media Agency",
+        requiredProviders: ["OpenAI"],
+        optionalProviders: ["customer-owned storage"],
+        artifactTtlHours: 24,
+        role: "operator",
+        workflows: [],
+        artifacts: [],
+        providerConnections: [],
+        storageConnectors: []
+      }
+    };
   });
   await page.goto("/");
 
