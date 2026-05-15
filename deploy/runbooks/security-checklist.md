@@ -6,6 +6,7 @@ Use this checklist before exposing a Wealth Factory POC or release candidate to 
 
 - [ ] Portal/dashboard origin is explicitly configured.
 - [ ] API origin is explicitly configured.
+- [ ] Authenticated HTML shell serves from the API origin, and `/app-assets/` resolves to the approved frontend build output or reverse-proxy target.
 - [ ] Authenticated CORS allows only the configured portal origin(s).
 - [ ] Public VPS ports are limited to `80` and `443`.
 - [ ] Supabase/Postgres/Kong ports `5432`, `8000`, and `8443` are closed publicly or restricted to trusted admin/VPN IPs only.
@@ -18,7 +19,8 @@ Use this checklist before exposing a Wealth Factory POC or release candidate to 
 ## Auth, Sessions, And API Protection
 
 - [ ] Auth strategy is documented for the portal/API pair.
-- [ ] Cross-origin cookie auth, if used, has `Secure`, `HttpOnly`, correct `SameSite`, and CSRF protection.
+- [ ] Same-site cookie bootstrap is documented and uses `Secure`, `HttpOnly`, and the intended `SameSite` policy.
+- [ ] Cross-origin cookie sessions remain disabled unless CSRF protection is implemented and verified.
 - [ ] Bearer-token auth, if used, validates issuer, audience, expiry, tenant membership, and route role.
 - [ ] Public routes use schema validation and request size limits.
 - [ ] Workflow-start, credential, package-install, auth-sensitive, and operator routes are rate limited.

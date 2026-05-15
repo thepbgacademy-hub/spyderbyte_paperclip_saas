@@ -32,6 +32,8 @@ export default function App() {
   const [dashboard] = useState<DashboardSnapshot>(() => dashboardRuntime.client.getSnapshot());
   const role: Role = dashboard.role;
   const [provider, setProvider] = useState("OpenAI");
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [projectIdInput, setProjectIdInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [keySaved, setKeySaved] = useState(false);
   const [connectedProviders, setConnectedProviders] = useState(() => createInitialConnectedProvidersFromSnapshot(dashboardRuntime.client.getSnapshot()));
@@ -72,9 +74,11 @@ export default function App() {
       connectedProviders,
       dropboxConnected,
       googleDriveConnected,
+      apiKeyInput,
       keySaved,
       mediaProviderSaved,
       provider,
+      projectIdInput,
       resultApprovalStates,
       runStatus,
       selectedResultId,
@@ -88,9 +92,11 @@ export default function App() {
       connectedProviders,
       dropboxConnected,
       googleDriveConnected,
+      apiKeyInput,
       keySaved,
       mediaProviderSaved,
       provider,
+      projectIdInput,
       resultApprovalStates,
       runStatus,
       selectedResultId,
@@ -118,7 +124,8 @@ export default function App() {
       ...current,
       [provider === "Anthropic" ? "anthropic" : provider === "xAI Grok" ? "xaiGrok" : provider === "OpenRouter" ? "openRouter" : "openai"]: true
     }));
-    event.currentTarget.reset();
+    setApiKeyInput("");
+    setProjectIdInput("");
   }
 
   function handleProviderCardAction(providerId: ProviderCardId) {
@@ -139,6 +146,8 @@ export default function App() {
     } else if (providerId === "openRouter") {
       setProvider("OpenRouter");
     }
+    setApiKeyInput("");
+    setProjectIdInput("");
     setKeySaved(false);
   }
 
@@ -173,10 +182,19 @@ export default function App() {
     onConnectImageProvider() {
       setMediaProviderSaved(true);
     },
+    onApiKeyInputChange(value) {
+      setApiKeyInput(value);
+    },
     onNavigate: handleNavigate,
     onProviderCardAction: handleProviderCardAction,
     onProviderChange(nextProvider) {
       setProvider(nextProvider);
+      setApiKeyInput("");
+      setProjectIdInput("");
+      setKeySaved(false);
+    },
+    onProjectIdInputChange(value) {
+      setProjectIdInput(value);
     },
     onQueueRun: handleQueueRun,
     onRequestRevision(resultId) {

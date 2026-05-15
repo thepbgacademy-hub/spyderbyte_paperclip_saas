@@ -623,7 +623,8 @@ Next work after this phase:
 - [x] Add an executable server bootstrap path that serves an authenticated HTML shell with injected dashboard bootstrap JSON when `WF_WEB_APP_ENTRY_URL` is configured, with same-site session-cookie support and optional `WF_WEB_APP_STYLESHEET_URL`.
 - [ ] Add queue enqueue transaction/outbox behavior before production deployment.
 - [ ] Add external VPS smoke tests for the runtime adapter, CORS, auth failure, and response guard.
-- [ ] Add static asset hosting or reverse-proxy integration for the configured app entry URL so the HTML shell and frontend bundle can ship together in deployment.
+- [x] Add static asset hosting or reverse-proxy integration for the configured app entry URL so the HTML shell and frontend bundle can ship together in deployment.
+- [x] Codify the current session stance as same-site cookie bootstrap on the API origin, not full cross-origin cookie auth.
 
 ## Post-MVP Phase: ACID Package And Credential Service Adapter Prep
 

@@ -11,9 +11,15 @@ const portalUrl = new URL(process.env.WF_SMOKE_PORTAL_URL ?? "https://www.spyder
 const host = process.env.WF_SMOKE_PORT_HOST ?? "187.77.19.83";
 const allowedOrigin = process.env.WF_SMOKE_ALLOWED_ORIGIN ?? portalUrl.origin;
 const deniedOrigin = process.env.WF_SMOKE_DENIED_ORIGIN ?? "https://evil.example";
+const shellPath = process.env.WF_SMOKE_SHELL_PATH ?? "/";
+const sessionCookieName = process.env.WF_SMOKE_SESSION_COOKIE_NAME ?? "wf_portal_session";
+const sessionCookieValue = process.env.WF_SMOKE_SESSION_COOKIE_VALUE ?? "";
+const expectedAssetBaseUrl = process.env.WF_SMOKE_EXPECT_ASSET_BASE_URL ?? `${apiUrl.origin}/app-assets/`;
 const publicPorts = parsePorts(process.env.WF_SMOKE_PUBLIC_PORTS ?? "80,443");
 const privatePorts = parsePorts(process.env.WF_SMOKE_PRIVATE_PORTS ?? "5432,6379,8000,8443,9000,3000,5173,8080,8081,2375");
 const timeoutMs = Number(process.env.WF_SMOKE_TIMEOUT_MS ?? 3000);
+const forbiddenText = /paperclip|prompt|skill|command|tool call|raw activity|internal log|service token|vault:\/\/|wf_secret_|access_token=|api[_-]?key[:=]|authorization[:=]|Bearer\s+|sk-[A-Za-z0-9_-]+|pc-(company|run|agent|goal|task)-/i;
+const forbiddenSecretText = /service token|vault:\/\/|wf_secret_|access_token=|api[_-]?key[:=]|authorization[:=]|Bearer\s+|sk-[A-Za-z0-9_-]+|pc-(company|run|agent|goal|task)-/i;
 
 const results = [];
 
@@ -32,6 +38,18 @@ for (const port of privatePorts) {
 results.push(await checkHttp({ url: new URL("/api/dashboard", apiUrl), origin: allowedOrigin, expectedStatuses: [401, 403] }));
 results.push(await checkHttp({ url: new URL("/api/dashboard", apiUrl), origin: deniedOrigin, expectedStatuses: [403] }));
 results.push(await checkHttp({ url: new URL("/api/storage/oauth/google_drive/begin", apiUrl), origin: allowedOrigin, expectedStatuses: [401] }));
+results.push(await checkHttp({ url: new URL(shellPath, apiUrl), origin: allowedOrigin, expectedStatuses: [401, 403] }));
+
+if (sessionCookieValue) {
+  results.push(
+    await checkShell({
+      url: new URL(shellPath, apiUrl),
+      origin: allowedOrigin,
+      cookie: `${sessionCookieName}=${sessionCookieValue}`,
+      expectedAssetBaseUrl
+    })
+  );
+}
 
 const failures = results.filter((result) => result.status === "fail");
 console.log(JSON.stringify({ checkedAt: new Date().toISOString(), apiUrl: apiUrl.origin, portalUrl: portalUrl.origin, host, results }, null, 2));
@@ -99,7 +117,6 @@ async function checkHttp(input) {
   try {
     const response = await request(input.url, input.origin);
     const corsHeader = response.headers["access-control-allow-origin"];
-    const forbiddenText = /paperclip|prompt|skill|command|tool call|raw activity|internal log|service token|vault:\/\/|wf_secret_|access_token=|api[_-]?key[:=]|authorization[:=]|Bearer\s+|sk-[A-Za-z0-9_-]+|pc-(company|run|agent|goal|task)-/i;
     const statusOk = input.expectedStatuses.includes(response.statusCode);
     const bodyOk = !forbiddenText.test(response.body);
     const corsOk = input.origin === deniedOrigin ? corsHeader !== deniedOrigin : true;
@@ -131,13 +148,17 @@ async function checkHttp(input) {
 }
 
 function request(url, origin) {
+  return requestWithHeaders(url, { origin });
+}
+
+function requestWithHeaders(url, headers) {
   return new Promise((resolve, reject) => {
     const req = https.request(
       url,
       {
         method: "GET",
         timeout: timeoutMs,
-        headers: { origin },
+        headers,
         rejectUnauthorized: false
       },
       (res) => {
@@ -156,6 +177,82 @@ function request(url, origin) {
     req.once("error", reject);
     req.end();
   });
+}
+
+async function checkShell(input) {
+  try {
+    const response = await requestWithHeaders(input.url, {
+      origin: input.origin,
+      cookie: input.cookie
+    });
+    const contentType = response.headers["content-type"] ?? "";
+    const htmlOk = typeof contentType === "string" && contentType.includes("text/html");
+    const bootstrapOk = response.body.includes('id="wf-dashboard-bootstrap"');
+    const assetUrls = extractAssetUrls(response.body, input.expectedAssetBaseUrl);
+    const assetsOk = assetUrls.length > 0;
+    const bodyOk = !forbiddenText.test(response.body);
+    const assetChecks = assetsOk ? await Promise.all(assetUrls.map((assetUrl) => checkShellAsset(assetUrl, input.origin, input.cookie))) : [];
+    const assetChecksOk = assetChecks.every((assetCheck) => assetCheck.status === "pass");
+    return {
+      check: "html_shell",
+      url: input.url.toString(),
+      origin: input.origin,
+      status: response.statusCode === 200 && htmlOk && bootstrapOk && assetsOk && bodyOk && assetChecksOk ? "pass" : "fail",
+      observedStatus: response.statusCode,
+      contentType,
+      assetUrls,
+      assetChecks,
+      bodyPreview: response.body.slice(0, 220)
+    };
+  } catch (error) {
+    return {
+      check: "html_shell",
+      url: input.url.toString(),
+      origin: input.origin,
+      status: "fail",
+      error: readError(error)
+    };
+  }
+}
+
+function extractAssetUrls(html, expectedAssetBaseUrl) {
+  const assetUrlPattern = /(src|href)="([^"]+)"/g;
+  const assetUrls = [];
+  for (const match of html.matchAll(assetUrlPattern)) {
+    const assetUrl = match[2];
+    if (assetUrl?.startsWith(expectedAssetBaseUrl)) {
+      assetUrls.push(assetUrl);
+    }
+  }
+
+  return unique(assetUrls);
+}
+
+async function checkShellAsset(assetUrl, origin, cookie) {
+  try {
+    const response = await requestWithHeaders(assetUrl, {
+      origin,
+      cookie
+    });
+    const contentType = response.headers["content-type"] ?? "";
+    const contentTypeOk =
+      typeof contentType === "string" &&
+      (contentType.includes("javascript") || contentType.includes("css"));
+    return {
+      check: "shell_asset",
+      url: assetUrl,
+      observedStatus: response.statusCode,
+      contentType,
+      status: response.statusCode === 200 && contentTypeOk && !forbiddenSecretText.test(response.body) ? "pass" : "fail"
+    };
+  } catch (error) {
+    return {
+      check: "shell_asset",
+      url: assetUrl,
+      status: "fail",
+      error: readError(error)
+    };
+  }
 }
 
 function readError(error) {

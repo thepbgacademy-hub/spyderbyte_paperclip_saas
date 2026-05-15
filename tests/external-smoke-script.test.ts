@@ -14,6 +14,12 @@ describe("external smoke security script", () => {
   it("checks CORS/auth routes and customer-facing response leaks", () => {
     expect(script).toContain("/api/dashboard");
     expect(script).toContain("/api/storage/oauth/google_drive/begin");
+    expect(script).toContain('WF_SMOKE_SHELL_PATH ?? "/"');
+    expect(script).toContain("WF_SMOKE_SESSION_COOKIE_VALUE");
+    expect(script).toContain('id="wf-dashboard-bootstrap"');
+    expect(script).toContain("/app-assets/");
+    expect(script).toContain("extractAssetUrls");
+    expect(script).toContain("shell_asset");
     expect(script).toContain("access-control-allow-origin");
     expect(script).toContain("paperclip|prompt|skill|command");
   });

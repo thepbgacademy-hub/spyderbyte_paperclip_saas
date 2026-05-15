@@ -29,6 +29,8 @@ describe("deployment POC config", () => {
     expect(publicPortBlocks.join("\n")).toContain("\"443:443\"");
     expect(nginx).toContain("server_name www.spyderbyte.cloud");
     expect(nginx).toContain("server_name api.spyderbyte.cloud");
+    expect(nginx).toContain("location /app-assets/");
+    expect(nginx).toContain("proxy_pass http://web:3000/assets/");
     expect(nginx).not.toMatch(/paperclip|redis/i);
   });
 
@@ -37,6 +39,12 @@ describe("deployment POC config", () => {
     expect(runbook).toContain("BYOK runtime secrets stored by reference");
     expect(runbook).toContain("WF_ALLOWED_ORIGINS");
     expect(runbook).toContain("WF_VAULT_MASTER_KEY");
+    expect(runbook).toContain("WF_WEB_APP_ENTRY_URL");
+    expect(runbook).toContain("WF_WEB_APP_STYLESHEET_URL");
+    expect(runbook).toContain("WF_PORTAL_SESSION_COOKIE_NAME");
+    expect(runbook).toContain("npm run resolve:web-assets");
+    expect(runbook).toContain("same-site cookie auth only");
+    expect(runbook).toContain("/app-assets/");
     expect(runbook).toContain("npm run smoke:external");
     expect(runbook).toContain("sudo ufw deny 5432/tcp");
     expect(runbook).toContain("api.spyderbyte.cloud");
@@ -62,11 +70,14 @@ describe("deployment POC config", () => {
       "SUPABASE_SERVICE_ROLE_KEY",
       "SUPABASE_DB_URL",
       "WF_ALLOWED_ORIGINS",
+      "WF_WEB_APP_ENTRY_URL",
       "PAPERCLIP_SERVICE_TOKEN",
       "WF_VAULT_MASTER_KEY"
     ]) {
       expect(compose).toContain(`${key}: \${${key}:?set ${key}}`);
     }
+    expect(compose).toContain("WF_WEB_APP_STYLESHEET_URL: ${WF_WEB_APP_STYLESHEET_URL:-}");
+    expect(compose).toContain("WF_PORTAL_SESSION_COOKIE_NAME: ${WF_PORTAL_SESSION_COOKIE_NAME:-wf_portal_session}");
     expect(runbook).toContain("npm run e2e");
     expect(runbook).not.toContain("--project chromium");
   });

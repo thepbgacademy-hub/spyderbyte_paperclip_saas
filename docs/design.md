@@ -78,6 +78,7 @@ Network and origin rules:
 - Redis, Paperclip, Postgres/Supabase, Docker daemon, worker metrics, admin panels, and debug ports must not bind to public interfaces.
 - CORS must allow only the configured portal origin(s). Wildcard CORS is forbidden for authenticated routes.
 - If cookie-based auth crosses origins, cookies must be `Secure`, `HttpOnly`, and use the narrowest viable `SameSite` setting. Cross-site cookie auth requires CSRF protection.
+- Current deployment direction: keep the authenticated HTML shell and bootstrap on the API origin with same-site cookies, and serve frontend assets through a reviewed reverse-proxy path on that same origin. Do not treat true cross-origin cookie sessions as supported until CSRF protection is implemented and reviewed.
 - If bearer tokens are used, the backend must validate issuer, audience, expiry, tenant membership, and route-level authorization on every request.
 - No Supabase service-role key, Paperclip service token, provider credential, or secret reference handle may be shipped to the browser.
 

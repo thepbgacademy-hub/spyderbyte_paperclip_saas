@@ -45,6 +45,8 @@ import {
 export interface DashboardPageState {
   theme: (typeof themePresets)[number];
   provider: string;
+  apiKeyInput: string;
+  projectIdInput: string;
   keySaved: boolean;
   connectedProviders: Record<ProviderKey, boolean>;
   mediaProviderSaved: boolean;
@@ -63,6 +65,8 @@ export interface DashboardPageActions {
   onNavigate: (page: PageKey) => void;
   onThemeChange: (theme: DashboardPageState["theme"]) => void;
   onProviderChange: (provider: string) => void;
+  onApiKeyInputChange: (value: string) => void;
+  onProjectIdInputChange: (value: string) => void;
   onSaveKey: (event: FormEvent<HTMLFormElement>) => void;
   onConnectImageProvider: () => void;
   onProviderCardAction: (providerId: ProviderCardId) => void;
@@ -598,11 +602,23 @@ export function DashboardPages(props: DashboardPagesProps) {
             </label>
             <label>
               API key
-              <input aria-label="API key" name="apiKey" placeholder="Saved by reference only" type="password" />
+              <input
+                aria-label="API key"
+                name="apiKey"
+                onChange={(event) => props.actions.onApiKeyInputChange(event.target.value)}
+                placeholder="Saved by reference only"
+                type="password"
+                value={props.state.apiKeyInput}
+              />
             </label>
             <label>
               Project ID
-              <input name="projectId" placeholder="Optional non-secret metadata" />
+              <input
+                name="projectId"
+                onChange={(event) => props.actions.onProjectIdInputChange(event.target.value)}
+                placeholder="Optional non-secret metadata"
+                value={props.state.projectIdInput}
+              />
             </label>
             <div className="actionRow">
               <button className="primaryButton" type="submit">

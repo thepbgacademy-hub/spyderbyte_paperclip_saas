@@ -24,6 +24,9 @@ Set these on the VPS as root-owned environment files or deployment secrets. Do n
 - `PAPERCLIP_SERVICE_TOKEN`
 - `WF_ALLOWED_ORIGINS`
 - `WF_VAULT_MASTER_KEY`
+- `WF_WEB_APP_ENTRY_URL`
+- `WF_WEB_APP_STYLESHEET_URL` if emitted by `npm run resolve:web-assets`
+- `WF_PORTAL_SESSION_COOKIE_NAME`
 - `SPYDERBYTE_IMAGE_TAG`
 - `PAPERCLIP_IMAGE_TAG`
 
@@ -37,9 +40,25 @@ Tenant OpenAI and generic provider keys remain BYOK runtime secrets stored by re
 4. Set `SPYDERBYTE_IMAGE_TAG` to the selected commit tag and `PAPERCLIP_IMAGE_TAG` to a reviewed version or digest-backed tag.
 5. Set `WF_ALLOWED_ORIGINS` to the exact customer portal origin or comma-separated allowed origins. Do not use wildcard origins for authenticated routes.
 6. Load the required server-side secrets into the shell or an `.env` file readable only by the deploy user.
-7. Run `docker compose -f deploy/docker-compose.yml pull`.
-8. Run `docker compose -f deploy/docker-compose.yml up -d`.
-9. Run `docker compose -f deploy/docker-compose.yml ps` and confirm `api`, `worker`, `paperclip`, and `redis` are healthy or running.
+7. Build the frontend assets and resolve the API-shell asset URLs:
+
+```powershell
+npm run build:web
+$env:WF_WEB_PUBLIC_ASSET_ORIGIN="https://api.spyderbyte.cloud"
+$env:WF_WEB_PUBLIC_ASSET_PREFIX="/app-assets"
+npm run resolve:web-assets
+```
+
+Copy the emitted `WF_WEB_APP_ENTRY_URL` value into the deployment environment for the `api` service. If the resolver also prints `WF_WEB_APP_STYLESHEET_URL`, set that too. Leave it unset when the build does not emit a standalone stylesheet.
+
+Current deployment choice:
+
+- The authenticated HTML shell is served from `api.spyderbyte.cloud`.
+- Frontend JS and CSS assets are served from the same API origin through Nginx at `/app-assets/`, reverse-proxied to the `web` container.
+- Session bootstrap is treated as same-site cookie auth only. Do not treat true cross-origin cookie sessions as supported until CSRF protections are implemented and reviewed.
+8. Run `docker compose -f deploy/docker-compose.yml pull`.
+9. Run `docker compose -f deploy/docker-compose.yml up -d`.
+10. Run `docker compose -f deploy/docker-compose.yml ps` and confirm `api`, `worker`, `paperclip`, and `redis` are healthy or running.
 
 ## Smoke Tests
 
@@ -49,6 +68,7 @@ From outside the VPS:
 npm run smoke:external
 curl.exe -I https://www.spyderbyte.cloud
 curl.exe -I https://api.spyderbyte.cloud/health
+curl.exe -I https://api.spyderbyte.cloud/app-assets/
 curl.exe --connect-timeout 5 http://<vps-public-ip>:9000/health
 Test-NetConnection www.spyderbyte.cloud -Port 6379
 Test-NetConnection api.spyderbyte.cloud -Port 80
@@ -69,6 +89,7 @@ Expected:
 - `npm run smoke:external` exits `0`.
 - App returns HTTP 200 or 304.
 - API health returns HTTP 200 with SpyderByte-safe health output.
+- API shell assets are reachable only through the intended `/app-assets/` reverse-proxy path.
 - API responses include only Wealth Factory-safe health fields.
 - Public port 9000 is closed or unreachable from outside the VPS.
 - Redis port is closed externally.
@@ -89,6 +110,15 @@ Expected:
 - The untrusted origin does not receive an allow-origin header.
 
 Before release-candidate deploys, run the security checklist in `deploy/runbooks/security-checklist.md`.
+
+For authenticated shell smoke checks, set a deploy-safe cookie token before running the external smoke script:
+
+```powershell
+$env:WF_SMOKE_SESSION_COOKIE_NAME="wf_portal_session"
+$env:WF_SMOKE_SESSION_COOKIE_VALUE="<deploy-session-token>"
+$env:WF_SMOKE_EXPECT_ASSET_BASE_URL="https://api.spyderbyte.cloud/app-assets/"
+npm run smoke:external
+```
 
 Then run:
 
