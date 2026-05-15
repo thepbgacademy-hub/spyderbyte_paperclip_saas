@@ -51,7 +51,13 @@ describe("deployment POC config", () => {
     expect(runbook).toContain("/app-assets/");
     expect(runbook).toContain("npm run smoke:external");
     expect(runbook).toContain("npm run e2e:live");
+    expect(runbook).toContain("Reversible Operator Sequence");
+    expect(runbook).toContain("Temporary Reopen Sequence");
+    expect(runbook).toContain("Roll Out API Shell Env Vars");
+    expect(runbook).toContain("WF_WEB_APP_ENTRY_URL");
+    expect(runbook).toContain("wf-dashboard-bootstrap");
     expect(runbook).toContain("sudo ufw deny 5432/tcp");
+    expect(runbook).toContain("sudo ufw delete deny 5432/tcp");
     expect(runbook).toContain("api.spyderbyte.cloud");
     expect(runbook).toContain("no longer show a TLS handshake failure");
     expect(runbook).toContain("http://<vps-public-ip>:9000/health");

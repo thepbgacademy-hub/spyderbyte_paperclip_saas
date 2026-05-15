@@ -156,6 +156,36 @@ Last checked from outside the VPS on 2026-05-15:
 
 Do not treat the VPS deployment as release-safe until `npm run smoke:external` passes or the intentionally unconfigured storage OAuth check is explicitly carved out for pre-credential environments.
 
+## Reversible Operator Sequence
+
+Use this sequence when other work in progress may still depend on currently exposed Supabase or Kong ports. The goal is to make temporary hardening and shell rollout testable without losing the ability to reopen those ports afterward.
+
+1. Capture the current published-port state before changing anything:
+
+```bash
+sudo docker ps --format 'table {{.Names}}\t{{.Ports}}'
+sudo ss -tulpn | egrep '(:80|:443|:5432|:6543|:8000|:8443|:9000|:8080|:8081)'
+curl -i https://api.spyderbyte.cloud/
+curl -i -H 'Origin: https://www.spyderbyte.cloud' https://api.spyderbyte.cloud/api/dashboard
+```
+
+2. If another project still needs public access to `5432`, `8000`, or `8443`, record that dependency and postpone temporary restriction until its owner approves the test window.
+3. When a test window is available, apply the temporary port restrictions using the reversible firewall sequence below.
+4. Roll out the Wealth Factory API shell env vars in the live `wealth-factory-api` deployment:
+   - `WF_WEB_APP_ENTRY_URL`
+   - `WF_WEB_APP_STYLESHEET_URL` if the build emits one
+5. Restart only the affected Wealth Factory service or compose stack, not unrelated VPS projects.
+6. Rerun:
+
+```powershell
+npm run smoke:external
+$env:WF_LIVE_BASE_URL="https://api.spyderbyte.cloud"
+npm run e2e:live
+```
+
+7. If the tests pass but other in-progress builds still require those previously exposed ports, reopen only the specific ports that were intentionally closed for the test window and document who requested them.
+8. If tests fail, restore the pre-change port posture and shell env state before moving on.
+
 ## Remediate Current Smoke Blockers
 
 These commands are intended to be run on the VPS by an operator with sudo/root access. Adjust the trusted admin IP value before applying firewall rules.
@@ -188,6 +218,51 @@ sudo ufw status verbose
 If Docker-published ports bypass UFW on the VPS, apply provider firewall rules in the VPS control panel too. The external gate is authoritative: `npm run smoke:external` must report `5432`, `8000`, and `8443` as closed from an untrusted network.
 
 For Docker Compose hardening, avoid publishing Supabase/Kong/Postgres ports to `0.0.0.0`. Bind admin-only services to loopback or a private VPN interface when direct maintenance access is needed.
+
+### Temporary Reopen Sequence
+
+If another active VPS project still needs one of the restricted ports after the Wealth Factory test window, reopen only the exact port required and only for the shortest practical time.
+
+```bash
+# Example: temporarily reopen only 5432 to the trusted admin IP.
+sudo ufw delete deny 5432/tcp
+sudo ufw allow from <trusted-admin-ip>/32 to any port 5432 proto tcp
+sudo ufw status numbered
+```
+
+When that dependent work is finished, restore the deny rule and rerun the external smoke check:
+
+```bash
+sudo ufw delete allow from <trusted-admin-ip>/32 to any port 5432 proto tcp
+sudo ufw deny 5432/tcp
+sudo ufw status numbered
+```
+
+```powershell
+npm run smoke:external
+```
+
+If Docker-published ports are managed outside UFW, apply the same open-close sequence in the VPS provider firewall or compose publishing rules instead of assuming host firewall changes are enough.
+
+### Roll Out API Shell Env Vars
+
+The current live `wealth-factory-api` container is running without the shell env vars, so `/` still behaves like an API-only deployment. Before expecting the authenticated API-origin shell to work, confirm these env vars are present in the live service definition:
+
+- `WF_WEB_APP_ENTRY_URL`
+- `WF_WEB_APP_STYLESHEET_URL` if the build emits one
+
+Recommended verification from the VPS after redeploy:
+
+```bash
+sudo docker inspect wealth-factory-api --format '{{range .Config.Env}}{{println .}}{{end}}' | grep '^WF_WEB_'
+curl -i -H 'Cookie: wf_portal_session=<deploy-session-token>' https://api.spyderbyte.cloud/
+```
+
+Expected:
+
+- `WF_WEB_APP_ENTRY_URL` is present in the live container env.
+- `WF_WEB_APP_STYLESHEET_URL` is present when the current web build emits a standalone stylesheet.
+- Authenticated `GET /` returns HTML with `id="wf-dashboard-bootstrap"` instead of `{"code":"not_found"}`.
 
 ### Fix API TLS
 

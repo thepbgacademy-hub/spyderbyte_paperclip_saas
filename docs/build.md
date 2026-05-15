@@ -626,6 +626,7 @@ Next work after this phase:
 - [x] Add static asset hosting or reverse-proxy integration for the configured app entry URL so the HTML shell and frontend bundle can ship together in deployment.
   - [x] Codify the current session stance as same-site cookie bootstrap on the API origin, not full cross-origin cookie auth.
 - [x] Add an opt-in deployed Playwright gate (`npm run e2e:live`) that verifies the current unauthenticated browser contract against the live API origin and can exercise the authenticated shell when a deploy-safe cookie is supplied.
+- [x] Document a reversible VPS operator sequence for temporarily restricting exposed Supabase/Kong ports, rolling out shell env vars, rerunning deployment checks, and reopening ports if other in-progress builds still depend on them.
 
 ## Post-MVP Phase: ACID Package And Credential Service Adapter Prep
 
