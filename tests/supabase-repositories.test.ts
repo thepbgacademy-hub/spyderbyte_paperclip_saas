@@ -24,6 +24,27 @@ describe("Supabase wfpc repositories", () => {
         { provider_kind: "openai_api", label: "OpenAI", revoked_at: null, secret_ref: "vault://secret" },
         { provider_kind: "anthropic_api", label: "Anthropic", revoked_at: "2026-05-11T00:00:00.000Z", secret_ref: "vault://old" }
       ],
+      "from wfpc.storage_connectors": [
+        {
+          id: "storage-1",
+          provider_kind: "google_drive",
+          display_name: "Company Drive",
+          revoked_at: null,
+          public_target: {
+            folderLabel: "Exports",
+            bucketLabel: "shared-media",
+            privatePath: "/srv/private/company-drive",
+            oauthTokenRef: "vault://oauth"
+          }
+        },
+        {
+          id: "storage-2",
+          provider_kind: "dropbox",
+          display_name: "Revoked Dropbox",
+          revoked_at: "2026-05-11T00:00:00.000Z",
+          public_target: { folderLabel: "Old Exports" }
+        }
+      ],
       "from wfpc.tenant_memberships": [{ tenant_id: "tenant-1" }]
     });
     const repositories = createSupabaseRepositories({ query });
@@ -46,9 +67,19 @@ describe("Supabase wfpc repositories", () => {
     await expect(repositories.listProviderConnections({ tenantId: "tenant-1" })).resolves.toEqual([
       { providerKind: "openai_api", label: "OpenAI", connected: true }
     ]);
+    await expect(repositories.listStorageConnectors({ tenantId: "tenant-1" })).resolves.toEqual([
+      {
+        id: "storage-1",
+        providerKind: "google_drive",
+        displayName: "Company Drive",
+        connected: true,
+        publicTarget: { folderLabel: "Exports", bucketLabel: "shared-media" }
+      }
+    ]);
 
     const serialized = JSON.stringify(await repositories.listProviderConnections({ tenantId: "tenant-1" }));
     expect(serialized).not.toMatch(/secret|vault/i);
+    expect(JSON.stringify(await repositories.listStorageConnectors({ tenantId: "tenant-1" }))).not.toMatch(/secret|vault|oauth|privatepath|private/i);
   });
 
   it("rejects tenant membership misses", async () => {

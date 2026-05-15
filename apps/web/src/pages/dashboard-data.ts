@@ -1,4 +1,7 @@
-import type { DashboardSnapshot } from "../dashboard-client.js";
+import type {
+  DashboardSnapshot,
+  DashboardWorkflow
+} from "../dashboard-client.js";
 
 export type Role = "member" | "operator";
 export type PageKey =
@@ -34,6 +37,35 @@ export interface ProviderStateContext {
   connectedProviders: Record<ProviderKey, boolean>;
   googleDriveConnected: boolean;
   dropboxConnected: boolean;
+}
+
+export interface WorkflowCard {
+  id: string;
+  name: string;
+  description: string;
+  providerTags: readonly string[];
+  readiness: string;
+  outcome: string;
+  inputs: string;
+  outputType: string;
+  milestone: string;
+}
+
+export interface ResultCard {
+  id: string;
+  title: string;
+  workflow: string;
+  summary: string;
+  timestamp: string;
+  status: string;
+  exportState: string;
+}
+
+export interface FileRow {
+  title: string;
+  type: string;
+  state: string;
+  expiry: string;
 }
 
 export interface CurrentFocusCard {
@@ -419,6 +451,79 @@ export function getProviderKey(provider: string): ProviderKey {
   return "openai";
 }
 
+export function createInitialConnectedProvidersFromSnapshot(snapshot: DashboardSnapshot): Record<ProviderKey, boolean> {
+  const connectedProviders = createInitialConnectedProviders();
+
+  for (const provider of snapshot.providerConnections) {
+    const key = mapProviderKindToKey(provider.providerKind);
+    if (key) {
+      connectedProviders[key] = provider.connected !== false;
+    }
+  }
+
+  return connectedProviders;
+}
+
+export function hasConnectedStorage(snapshot: DashboardSnapshot, providerKind: "google_drive" | "dropbox"): boolean {
+  return snapshot.storageConnectors.some((connector) => connector.providerKind === providerKind && connector.connected !== false);
+}
+
+export function getWorkflowCards(snapshot: DashboardSnapshot, input: { connectedProviders: Record<ProviderKey, boolean> }): WorkflowCard[] {
+  if (snapshot.workflows.length === 0) {
+    return [...workflowCards];
+  }
+
+  return snapshot.workflows.map((workflow) => {
+    const providerLabel = getProviderLabelForWorkflow(workflow);
+    const providerConnected = isWorkflowProviderConnected(workflow, input.connectedProviders);
+    const ready = providerConnected;
+
+    return {
+      id: workflow.id,
+      name: workflow.name,
+      description: `Runs the approved ${workflow.name} workflow inside your installed package boundary.`,
+      providerTags: buildWorkflowProviderTags(providerLabel),
+      readiness: ready ? "Available now" : "Connection needed",
+      outcome: `A customer-safe ${workflow.name.toLowerCase()} result ready for review and delivery.`,
+      inputs: "Approved package inputs and current business context.",
+      outputType: "Review-ready deliverables",
+      milestone: ready ? "Next milestone: review the result before export." : "Next milestone: connect the required provider to unlock this workflow."
+    };
+  });
+}
+
+export function getResultCards(snapshot: DashboardSnapshot, input: { googleDriveConnected: boolean; dropboxConnected: boolean }): ResultCard[] {
+  if (snapshot.artifacts.length === 0) {
+    return [...resultCards];
+  }
+
+  return snapshot.artifacts.map((artifact, index) => {
+    const fallback = resultCards[index] ?? resultCards[0]!;
+    return {
+      id: artifact.id,
+      title: toDisplayTitle(artifact.filename),
+      workflow: snapshot.workflows.length === 1 ? snapshot.workflows[0]!.name : "Approved workflow output",
+      summary: `A ${artifact.artifactType} deliverable named ${artifact.filename} is ready for review and export.`,
+      timestamp: `Available until ${formatTimestamp(artifact.expiresAt)}`,
+      status: fallback.status,
+      exportState: input.googleDriveConnected || input.dropboxConnected ? "Ready to export" : "Reconnect storage"
+    };
+  });
+}
+
+export function getFileRows(snapshot: DashboardSnapshot, input: { googleDriveConnected: boolean; dropboxConnected: boolean }): FileRow[] {
+  if (snapshot.artifacts.length === 0) {
+    return [...fileRows];
+  }
+
+  return snapshot.artifacts.map((artifact) => ({
+    title: toDisplayTitle(artifact.filename),
+    type: artifact.artifactType.toUpperCase(),
+    state: input.googleDriveConnected || input.dropboxConnected ? "Ready to download" : "Reconnect storage",
+    expiry: `Expires ${formatTimestamp(artifact.expiresAt)}`
+  }));
+}
+
 export function resolveProviderState(id: ProviderCardId, state: ProviderStateContext): string {
   if (id === "openai") {
     return state.connectedProviders.openai ? "Connected" : "Missing";
@@ -613,4 +718,69 @@ export function getDefaultDashboardPageProps(snapshot: DashboardSnapshot) {
       "result-238": "Revision needed" as const
     }
   };
+}
+
+function mapProviderKindToKey(providerKind: string): ProviderKey | null {
+  switch (providerKind) {
+    case "openai_api":
+    case "openai":
+      return "openai";
+    case "anthropic_api":
+    case "anthropic":
+      return "anthropic";
+    case "xai_grok_api":
+    case "xai_grok":
+      return "xaiGrok";
+    case "openrouter_api":
+    case "openrouter":
+      return "openRouter";
+    case "openai_chatgpt_codex_subscription":
+    case "codex":
+      return "codex";
+    default:
+      return null;
+  }
+}
+
+function getProviderLabelForWorkflow(workflow: DashboardWorkflow): string {
+  switch (workflow.providerKind) {
+    case "openai_api":
+      return "OpenAI";
+    case "anthropic_api":
+      return "Anthropic";
+    case "xai_grok_api":
+      return "xAI / Grok";
+    case "openrouter_api":
+      return "OpenRouter";
+    case "openai_chatgpt_codex_subscription":
+      return "ChatGPT / Codex subscription";
+    default:
+      return "Approved provider";
+  }
+}
+
+function isWorkflowProviderConnected(workflow: DashboardWorkflow, connectedProviders: Record<ProviderKey, boolean>): boolean {
+  const providerKey = mapProviderKindToKey(workflow.providerKind);
+  return providerKey ? connectedProviders[providerKey] : false;
+}
+
+function buildWorkflowProviderTags(providerLabel: string) {
+  return [`${providerLabel} required`];
+}
+
+function toDisplayTitle(filename: string): string {
+  const withoutExtension = filename.replace(/\.[^.]+$/u, "");
+  return withoutExtension
+    .split(/[_-]/u)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatTimestamp(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }

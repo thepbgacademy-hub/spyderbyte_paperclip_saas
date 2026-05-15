@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createDashboardClient } from "../apps/web/src/dashboard-client.js";
+import { createBrowserDashboardClient, createDashboardClient } from "../apps/web/src/dashboard-client.js";
 
 describe("dashboard client", () => {
   it("fetches and maps the Wealth Factory dashboard snapshot from the API", async () => {
@@ -9,13 +9,17 @@ describe("dashboard client", () => {
       json: () =>
         Promise.resolve({
           tenantName: "Wealth Factory Company",
+          role: "operator",
           packages: [{ name: "Social Media Agency" }],
           providerConnections: [
-            { label: "OpenAI", connected: true, required: true },
-            { label: "Anthropic", connected: false, required: false }
+            { label: "OpenAI", providerKind: "openai_api", connected: true, required: true },
+            { label: "Anthropic", providerKind: "anthropic_api", connected: false, required: false }
           ],
-          workflows: [{ name: "Wealth Factory Social Calendar" }],
-          artifacts: [{ expiresAt: "2026-05-11T00:00:00.000Z" }]
+          workflows: [{ id: "wf-social-calendar", name: "Wealth Factory Social Calendar", providerKind: "openai_api", enabled: true }],
+          artifacts: [{ id: "artifact-1", filename: "post.png", artifactType: "image", expiresAt: "2026-05-11T00:00:00.000Z" }],
+          storageConnectors: [
+            { id: "storage-1", providerKind: "google_drive", displayName: "Company Drive", connected: true, publicTarget: { folderLabel: "Exports" } }
+          ]
         })
     });
     const client = createDashboardClient({
@@ -28,10 +32,45 @@ describe("dashboard client", () => {
       packageName: "Social Media Agency",
       requiredProviders: ["OpenAI"],
       optionalProviders: ["Anthropic", "customer-owned storage"],
-      artifactTtlHours: 24
+      artifactTtlHours: 24,
+      role: "operator",
+      workflows: [{ id: "wf-social-calendar", name: "Wealth Factory Social Calendar", providerKind: "openai_api", enabled: true }],
+      artifacts: [{ id: "artifact-1", filename: "post.png", artifactType: "image", expiresAt: "2026-05-11T00:00:00.000Z" }],
+      providerConnections: [
+        { label: "OpenAI", providerKind: "openai_api", connected: true, required: true },
+        { label: "Anthropic", providerKind: "anthropic_api", connected: false, required: false }
+      ],
+      storageConnectors: [
+        { id: "storage-1", providerKind: "google_drive", displayName: "Company Drive", connected: true, publicTarget: { folderLabel: "Exports" } }
+      ]
     });
     expect(fetchImpl).toHaveBeenCalledWith("https://api.wealthfactory.test/api/dashboard", {
       headers: { authorization: "Bearer valid" }
     });
+  });
+
+  it("creates a browser client from injected dashboard bootstrap config", () => {
+    const browserWindow = {
+      __WF_DASHBOARD_BOOTSTRAP__: {
+        initialSnapshot: {
+          tenantName: "Injected Tenant",
+          packageName: "Social Media Agency",
+          requiredProviders: ["OpenAI"],
+          optionalProviders: ["customer-owned storage"],
+          artifactTtlHours: 24,
+          role: "member" as const,
+          workflows: [],
+          artifacts: [],
+          providerConnections: [],
+          storageConnectors: []
+        }
+      },
+      fetch: vi.fn()
+    } as unknown as Window;
+
+    const browserClient = createBrowserDashboardClient(browserWindow);
+
+    expect(browserClient.authorization).toBeNull();
+    expect(browserClient.client.getSnapshot().tenantName).toBe("Injected Tenant");
   });
 });

@@ -1,10 +1,11 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
-import { dashboardClient } from "./dashboard-client.js";
+import { createBrowserDashboardClient, type DashboardSnapshot } from "./dashboard-client.js";
 import DashboardPages, { type DashboardPageActions, type DashboardPageState } from "./pages/DashboardPages.js";
 import {
-  createInitialConnectedProviders,
+  createInitialConnectedProvidersFromSnapshot,
+  hasConnectedStorage,
   getInitialSelectedRoleId,
   getPagePath,
   includedRoles,
@@ -33,23 +34,24 @@ function getInitialRole(): Role {
 }
 
 export default function App() {
-  const dashboard = dashboardClient.getSnapshot();
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const shellFeatureFlags = HIDDEN_SHELL_FLAGS;
-  const [role] = useState<Role>(getInitialRole);
+  const dashboardRuntime = useMemo(() => createBrowserDashboardClient(), []);
+  const [role, setRole] = useState<Role>(() => window.__WF_SERVER_SESSION__?.role ?? dashboardRuntime.client.getSnapshot().role ?? getInitialRole());
+  const [dashboard] = useState<DashboardSnapshot>(() => dashboardRuntime.client.getSnapshot());
   const [provider, setProvider] = useState("OpenAI");
   const [searchQuery, setSearchQuery] = useState("");
   const [keySaved, setKeySaved] = useState(false);
-  const [connectedProviders, setConnectedProviders] = useState(createInitialConnectedProviders);
+  const [connectedProviders, setConnectedProviders] = useState(() => createInitialConnectedProvidersFromSnapshot(dashboardRuntime.client.getSnapshot()));
   const [mediaProviderSaved, setMediaProviderSaved] = useState(false);
-  const [googleDriveConnected, setGoogleDriveConnected] = useState(false);
-  const [dropboxConnected, setDropboxConnected] = useState(false);
+  const [googleDriveConnected, setGoogleDriveConnected] = useState(() => hasConnectedStorage(dashboardRuntime.client.getSnapshot(), "google_drive"));
+  const [dropboxConnected, setDropboxConnected] = useState(() => hasConnectedStorage(dashboardRuntime.client.getSnapshot(), "dropbox"));
   const [runStatus, setRunStatus] = useState<DashboardPageState["runStatus"]>("ready");
   const [workflowsPaused, setWorkflowsPaused] = useState(false);
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>(workflowCards[0]!.id);
-  const [selectedResultId, setSelectedResultId] = useState<string>(resultCards[0]!.id);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>(dashboardRuntime.client.getSnapshot().workflows[0]?.id ?? workflowCards[0]!.id);
+  const [selectedResultId, setSelectedResultId] = useState<string>(dashboardRuntime.client.getSnapshot().artifacts[0]?.id ?? resultCards[0]!.id);
   const [teamTab, setTeamTab] = useState<TeamTab>("Included Team");
   const [selectedRoleId, setSelectedRoleId] = useState<string>(includedRoles[0]!.id);
   const [dateRange, setDateRange] = useState<DateRange>("30D");
@@ -60,7 +62,36 @@ export default function App() {
 
   const activeRoute = resolveShellRoute(location.pathname, shellFeatureFlags);
   const providerReady = connectedProviders.openai;
-  const packageReady = providerReady && mediaProviderSaved;
+  const requiresMediaProvider = dashboard.workflows.length === 0;
+  const packageReady = providerReady && (!requiresMediaProvider || mediaProviderSaved);
+
+  useEffect(() => {
+    setConnectedProviders(createInitialConnectedProvidersFromSnapshot(dashboard));
+    setGoogleDriveConnected(hasConnectedStorage(dashboard, "google_drive"));
+    setDropboxConnected(hasConnectedStorage(dashboard, "dropbox"));
+    setMediaProviderSaved(false);
+    if (dashboard.workflows.length > 0 && !dashboard.workflows.some((workflow) => workflow.id === selectedWorkflowId)) {
+      setSelectedWorkflowId(dashboard.workflows[0]!.id);
+    }
+    if (dashboard.artifacts.length > 0) {
+      setResultApprovalStates((current) => {
+        const next = { ...current };
+        for (const artifact of dashboard.artifacts) {
+          next[artifact.id] ??= "Awaiting review";
+        }
+        return next;
+      });
+      if (!dashboard.artifacts.some((artifact) => artifact.id === selectedResultId)) {
+        setSelectedResultId(dashboard.artifacts[0]!.id);
+      }
+    }
+  }, [dashboard, selectedResultId, selectedWorkflowId]);
+
+  useEffect(() => {
+    if (!window.__WF_SERVER_SESSION__) {
+      setRole(dashboard.role);
+    }
+  }, [dashboard.role]);
 
   const dashboardState = useMemo<DashboardPageState>(
     () => ({

@@ -12,23 +12,22 @@ import type { FormEvent } from "react";
 import type { DashboardSnapshot } from "../dashboard-client.js";
 import {
   billingRows,
-  fileRows,
+  getFileRows,
   getCurrentFocus,
   getInsightStats,
   getPageTestId,
   getRecentWork,
-  getSelectedResult,
+  getResultCards,
   getSelectedRole,
-  getSelectedWorkflow,
   getStatusCopy,
   getTeamCollection,
   getThemeDescription,
+  getWorkflowCards,
   includedRoles,
   packageSummary,
   profileRows,
   providerCards,
   resolveProviderState,
-  resultCards,
   themePresets,
   type ApprovalState,
   type DateRange,
@@ -38,7 +37,6 @@ import {
   type Role,
   type RunStatus,
   type TeamTab,
-  workflowCards
 } from "./dashboard-data.js";
 
 export interface DashboardPageState {
@@ -88,8 +86,19 @@ export interface DashboardPagesProps {
 export function DashboardPages(props: DashboardPagesProps) {
   const providerReady = props.state.connectedProviders.openai;
   const packageReady = providerReady && props.state.mediaProviderSaved;
-  const selectedWorkflow = getSelectedWorkflow(props.state.selectedWorkflowId);
-  const selectedResult = getSelectedResult(props.state.selectedResultId);
+  const workflowItems = getWorkflowCards(props.dashboard, {
+    connectedProviders: props.state.connectedProviders
+  });
+  const resultItems = getResultCards(props.dashboard, {
+    googleDriveConnected: props.state.googleDriveConnected,
+    dropboxConnected: props.state.dropboxConnected
+  });
+  const selectedWorkflow = workflowItems.find((workflow) => workflow.id === props.state.selectedWorkflowId) ?? workflowItems[0]!;
+  const selectedResult = resultItems.find((result) => result.id === props.state.selectedResultId) ?? resultItems[0]!;
+  const fileItems = getFileRows(props.dashboard, {
+    googleDriveConnected: props.state.googleDriveConnected,
+    dropboxConnected: props.state.dropboxConnected
+  });
   const selectedApprovalState = props.state.resultApprovalStates[selectedResult.id] ?? "Awaiting review";
   const selectedRole = getSelectedRole(props.state.teamTab, props.state.selectedRoleId);
   const statusCopy = getStatusCopy({
@@ -289,7 +298,7 @@ export function DashboardPages(props: DashboardPagesProps) {
           <div className="panelHeader">
             <p className="eyebrow">Workflow Catalog</p>
           </div>
-          {workflowCards.map((workflow) => (
+          {workflowItems.map((workflow) => (
             <button
               key={workflow.id}
               className={`listCard${selectedWorkflow.id === workflow.id ? " selected" : ""}`}
@@ -355,7 +364,7 @@ export function DashboardPages(props: DashboardPagesProps) {
           <div className="panelHeader">
             <p className="eyebrow">Result List</p>
           </div>
-          {resultCards.map((result) => (
+          {resultItems.map((result) => (
             <button
               key={result.id}
               className={`listCard${selectedResult.id === result.id ? " selected" : ""}`}
@@ -749,7 +758,7 @@ export function DashboardPages(props: DashboardPagesProps) {
                 </tr>
               </thead>
               <tbody>
-                {fileRows.map((row) => (
+                {fileItems.map((row) => (
                   <tr key={row.title}>
                     <td>{row.title}</td>
                     <td>{row.type}</td>

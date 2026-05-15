@@ -35,7 +35,8 @@ describe("dashboard HTTP boundary", () => {
         workflows: [{ id: "wf-social-calendar", name: "Wealth Factory Social Calendar" }],
         packages: [],
         artifacts: [],
-        providerConnections: []
+        providerConnections: [],
+        storageConnectors: [{ id: "storage-1", providerKind: "dropbox", displayName: "Marketing Dropbox", connected: true, publicTarget: { folderLabel: "Exports" } }]
       })
     };
     const handler = createDashboardHttpHandler({

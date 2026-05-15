@@ -12,7 +12,8 @@ describe("authenticated dashboard API", () => {
       listWorkflows: vi.fn(),
       listPackages: vi.fn(),
       listArtifacts: vi.fn(),
-      listProviderConnections: vi.fn()
+      listProviderConnections: vi.fn(),
+      listStorageConnectors: vi.fn()
     });
 
     await expect(api.listDashboard({ authorization: "" })).rejects.toMatchObject({ code: "unauthorized" });
@@ -25,7 +26,10 @@ describe("authenticated dashboard API", () => {
       listWorkflows: vi.fn().mockResolvedValue([{ id: "wf-social-calendar", name: "Wealth Factory Social Calendar" }]),
       listPackages: vi.fn().mockResolvedValue([{ id: "pkg-social", name: "Social Media Agency" }]),
       listArtifacts: vi.fn().mockResolvedValue([{ id: "artifact-1", filename: "post.png", expiresAt: "2026-05-11T00:00:00.000Z" }]),
-      listProviderConnections: vi.fn().mockResolvedValue([{ providerKind: "openai_api", label: "OpenAI", connected: true }])
+      listProviderConnections: vi.fn().mockResolvedValue([{ providerKind: "openai_api", label: "OpenAI", connected: true }]),
+      listStorageConnectors: vi
+        .fn()
+        .mockResolvedValue([{ id: "storage-1", providerKind: "google_drive", displayName: "Company Drive", connected: true, publicTarget: { folderLabel: "Exports" } }])
     };
     const api = createDashboardApi(deps);
 
@@ -35,7 +39,8 @@ describe("authenticated dashboard API", () => {
       workflows: [{ id: "wf-social-calendar", name: "Wealth Factory Social Calendar" }],
       packages: [{ id: "pkg-social", name: "Social Media Agency" }],
       artifacts: [{ id: "artifact-1", filename: "post.png", expiresAt: "2026-05-11T00:00:00.000Z" }],
-      providerConnections: [{ providerKind: "openai_api", label: "OpenAI", connected: true }]
+      providerConnections: [{ providerKind: "openai_api", label: "OpenAI", connected: true }],
+      storageConnectors: [{ id: "storage-1", providerKind: "google_drive", displayName: "Company Drive", connected: true, publicTarget: { folderLabel: "Exports" } }]
     });
 
     expect(deps.requireTenantMember).toHaveBeenCalledWith({ tenantId: "tenant-1", userId: "user-1" });
@@ -48,7 +53,24 @@ describe("authenticated dashboard API", () => {
       listWorkflows: vi.fn().mockResolvedValue([{ id: "wf-leak", paperclip_run_id: "pc-run-1" }]),
       listPackages: vi.fn().mockResolvedValue([]),
       listArtifacts: vi.fn().mockResolvedValue([]),
-      listProviderConnections: vi.fn().mockResolvedValue([])
+      listProviderConnections: vi.fn().mockResolvedValue([]),
+      listStorageConnectors: vi.fn().mockResolvedValue([])
+    });
+
+    await expect(api.listDashboard({ authorization: "Bearer valid" })).rejects.toThrow("Forbidden customer-facing field");
+  });
+
+  it("rejects storage connector summaries that leak private connector handles", async () => {
+    const api = createDashboardApi({
+      authenticate: vi.fn().mockResolvedValue(session),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      listWorkflows: vi.fn().mockResolvedValue([]),
+      listPackages: vi.fn().mockResolvedValue([]),
+      listArtifacts: vi.fn().mockResolvedValue([]),
+      listProviderConnections: vi.fn().mockResolvedValue([]),
+      listStorageConnectors: vi
+        .fn()
+        .mockResolvedValue([{ id: "storage-1", providerKind: "google_drive", displayName: "Company Drive", connected: true, publicTarget: { oauthTokenRef: "vault://oauth" } }])
     });
 
     await expect(api.listDashboard({ authorization: "Bearer valid" })).rejects.toThrow("Forbidden customer-facing field");

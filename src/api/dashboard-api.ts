@@ -25,6 +25,7 @@ type DashboardApiDeps = {
   listPackages(input: { tenantId: string; userId: string }): Promise<unknown[]>;
   listArtifacts(input: { tenantId: string; userId: string }): Promise<unknown[]>;
   listProviderConnections(input: { tenantId: string; userId: string }): Promise<unknown[]>;
+  listStorageConnectors(input: { tenantId: string; userId: string }): Promise<unknown[]>;
 };
 
 export function createDashboardApi(deps: DashboardApiDeps) {
@@ -37,11 +38,12 @@ export function createDashboardApi(deps: DashboardApiDeps) {
 
       await deps.requireTenantMember({ tenantId: session.tenantId, userId: session.userId });
 
-      const [workflows, packages, artifacts, providerConnections] = await Promise.all([
+      const [workflows, packages, artifacts, providerConnections, storageConnectors] = await Promise.all([
         deps.listWorkflows({ tenantId: session.tenantId, userId: session.userId }),
         deps.listPackages({ tenantId: session.tenantId, userId: session.userId }),
         deps.listArtifacts({ tenantId: session.tenantId, userId: session.userId }),
-        deps.listProviderConnections({ tenantId: session.tenantId, userId: session.userId })
+        deps.listProviderConnections({ tenantId: session.tenantId, userId: session.userId }),
+        deps.listStorageConnectors({ tenantId: session.tenantId, userId: session.userId })
       ]);
 
       const response = {
@@ -50,7 +52,8 @@ export function createDashboardApi(deps: DashboardApiDeps) {
         workflows,
         packages,
         artifacts,
-        providerConnections
+        providerConnections,
+        storageConnectors
       };
 
       assertWealthFactoryResponse(response);

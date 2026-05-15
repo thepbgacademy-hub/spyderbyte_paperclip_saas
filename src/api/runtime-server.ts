@@ -141,7 +141,8 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
     listWorkflows: repositories.listWorkflows,
     listPackages: repositories.listPackages,
     listArtifacts: repositories.listArtifacts,
-    listProviderConnections: repositories.listProviderConnections
+    listProviderConnections: repositories.listProviderConnections,
+    listStorageConnectors: repositories.listStorageConnectors
   });
   const handler = createDashboardHttpHandler({
     allowedOrigins: options.env.allowedOrigins,

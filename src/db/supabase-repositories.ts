@@ -19,6 +19,21 @@ function asRecord(row: unknown): Record<string, unknown> {
   return row as Record<string, unknown>;
 }
 
+function readOptionalTrimmedString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function toStorageConnectorPublicTarget(value: unknown): Record<string, string> {
+  const record = asRecord(value);
+  const folderLabel = readOptionalTrimmedString(record.folderLabel);
+  const bucketLabel = readOptionalTrimmedString(record.bucketLabel);
+
+  return {
+    ...(folderLabel ? { folderLabel } : {}),
+    ...(bucketLabel ? { bucketLabel } : {})
+  };
+}
+
 export function createSupabaseRepositories(client: QueryClient) {
   return {
     async requireTenantMember(input: MembershipScope): Promise<void> {
@@ -101,6 +116,26 @@ export function createSupabaseRepositories(client: QueryClient) {
           providerKind: String(record.provider_kind),
           label: String(record.label),
           connected: true
+        }));
+    },
+
+    async listStorageConnectors(input: DashboardScope) {
+      const result = await client.query(
+        `select id, provider_kind, display_name, public_target, revoked_at
+         from wfpc.storage_connectors
+         where tenant_id = $1 and revoked_at is null
+         order by display_name`,
+        [input.tenantId]
+      );
+      return result.rows
+        .map(asRecord)
+        .filter((record) => record.revoked_at === null)
+        .map((record) => ({
+          id: String(record.id),
+          providerKind: String(record.provider_kind),
+          displayName: String(record.display_name),
+          connected: true,
+          publicTarget: toStorageConnectorPublicTarget(record.public_target)
         }));
     },
 
@@ -224,6 +259,6 @@ export async function registerStorageConnectorRecord(
     providerKind: String(row.provider_kind),
     displayName: String(row.display_name),
     connected: true,
-    publicTarget: asRecord(row.public_target)
+    publicTarget: toStorageConnectorPublicTarget(row.public_target)
   };
 }
