@@ -1,5 +1,4 @@
 import {
-  ChevronRight,
   CircleAlert,
   Download,
   Lock,
@@ -12,11 +11,16 @@ import type { FormEvent } from "react";
 import type { DashboardSnapshot } from "../dashboard-client.js";
 import {
   billingRows,
+  getExpiringDownloadItems,
   getFileRows,
   getCurrentFocus,
+  getHomeNextSteps,
+  getHomeWorkQueue,
   getInsightStats,
+  getNeedsAttentionItems,
   getPageTestId,
-  getRecentWork,
+  getOperatingSnapshotMetrics,
+  getRecentArtifacts,
   getResultCards,
   getSelectedRole,
   getStatusCopy,
@@ -30,7 +34,6 @@ import {
   resolveProviderState,
   themePresets,
   type ApprovalState,
-  type DateRange,
   type PageKey,
   type ProviderCardId,
   type ProviderKey,
@@ -53,7 +56,6 @@ export interface DashboardPageState {
   selectedResultId: string;
   teamTab: TeamTab;
   selectedRoleId: string;
-  dateRange: DateRange;
   resultApprovalStates: Record<string, ApprovalState>;
 }
 
@@ -71,7 +73,6 @@ export interface DashboardPageActions {
   onRequestRevision: (resultId: string) => void;
   onUpdateTeamTab: (teamTab: TeamTab) => void;
   onSelectRole: (roleId: string) => void;
-  onDateRangeChange: (range: DateRange) => void;
   onToggleWorkflowsPaused: () => void;
 }
 
@@ -85,7 +86,8 @@ export interface DashboardPagesProps {
 
 export function DashboardPages(props: DashboardPagesProps) {
   const providerReady = props.state.connectedProviders.openai;
-  const packageReady = providerReady && props.state.mediaProviderSaved;
+  const requiresMediaProvider = props.dashboard.workflows.length === 0;
+  const packageReady = providerReady && (!requiresMediaProvider || props.state.mediaProviderSaved);
   const workflowItems = getWorkflowCards(props.dashboard, {
     connectedProviders: props.state.connectedProviders
   });
@@ -99,6 +101,13 @@ export function DashboardPages(props: DashboardPagesProps) {
     googleDriveConnected: props.state.googleDriveConnected,
     dropboxConnected: props.state.dropboxConnected
   });
+  const snapshotContext = {
+    connectedProviders: props.state.connectedProviders,
+    googleDriveConnected: props.state.googleDriveConnected,
+    dropboxConnected: props.state.dropboxConnected,
+    workflowsPaused: props.state.workflowsPaused,
+    resultApprovalStates: props.state.resultApprovalStates
+  };
   const selectedApprovalState = props.state.resultApprovalStates[selectedResult.id] ?? "Awaiting review";
   const selectedRole = getSelectedRole(props.state.teamTab, props.state.selectedRoleId);
   const statusCopy = getStatusCopy({
@@ -115,13 +124,20 @@ export function DashboardPages(props: DashboardPagesProps) {
     googleDriveConnected: props.state.googleDriveConnected,
     dropboxConnected: props.state.dropboxConnected
   });
-  const workflowLaunchReady = packageReady && !props.state.workflowsPaused;
-  const insightStats = getInsightStats(props.state.dateRange);
-  const recentWork = getRecentWork(
-    props.state.resultApprovalStates,
-    props.state.googleDriveConnected,
-    props.state.dropboxConnected
-  );
+  const workflowLaunchReady = selectedWorkflow.readiness === "Available now" && packageReady && !props.state.workflowsPaused;
+  const homeNextSteps = getHomeNextSteps(props.dashboard, snapshotContext);
+  const expiringDownloads = getExpiringDownloadItems(props.dashboard, {
+    googleDriveConnected: props.state.googleDriveConnected,
+    dropboxConnected: props.state.dropboxConnected
+  });
+  const attentionItems = getNeedsAttentionItems(props.dashboard, snapshotContext);
+  const operatingSnapshot = getOperatingSnapshotMetrics(props.dashboard, snapshotContext);
+  const homeWorkQueue = getHomeWorkQueue(props.dashboard, snapshotContext);
+  const insightStats = getInsightStats(props.dashboard);
+  const recentArtifacts = getRecentArtifacts(props.dashboard, {
+    googleDriveConnected: props.state.googleDriveConnected,
+    dropboxConnected: props.state.dropboxConnected
+  });
 
   function openCurrentFocusPrimary() {
     if (currentFocus.primary === "Open Results") {
@@ -186,12 +202,14 @@ export function DashboardPages(props: DashboardPagesProps) {
         <aside className="contextRail">
           <section className="panel compact">
             <div className="panelHeader">
-              <p className="eyebrow">Today&apos;s Schedule</p>
+              <p className="eyebrow">Next Steps</p>
             </div>
             <ul className="simpleList">
-              <li>11:00 AM | Review campaign approvals</li>
-              <li>1:30 PM | Send owner recap</li>
-              <li>4:00 PM | Export final assets</li>
+              {homeNextSteps.map((item) => (
+                <li key={item.title}>
+                  {item.title} | {item.detail}
+                </li>
+              ))}
             </ul>
           </section>
           <section className="panel compact">
@@ -199,8 +217,11 @@ export function DashboardPages(props: DashboardPagesProps) {
               <p className="eyebrow">Expiring Downloads</p>
             </div>
             <ul className="simpleList">
-              <li>Campaign asset list | Expires in 18 hours</li>
-              <li>Draft deck | Expires in 23 hours</li>
+              {expiringDownloads.map((item) => (
+                <li key={item.title}>
+                  {item.title} | {item.detail}
+                </li>
+              ))}
             </ul>
           </section>
         </aside>
@@ -210,18 +231,12 @@ export function DashboardPages(props: DashboardPagesProps) {
             <p className="eyebrow">Needs Attention</p>
           </div>
           <ul className="attentionList">
-            <li>
-              <CircleAlert size={16} />
-              Approval waiting for Summer campaign calendar
-            </li>
-            <li>
-              <CircleAlert size={16} />
-              Media provider connection still needed
-            </li>
-            <li>
-              <CircleAlert size={16} />
-              Package utilization is nearing this week&apos;s plan
-            </li>
+            {attentionItems.map((item) => (
+              <li key={item.id}>
+                <CircleAlert size={16} />
+                {item.message}
+              </li>
+            ))}
           </ul>
         </section>
 
@@ -230,10 +245,9 @@ export function DashboardPages(props: DashboardPagesProps) {
             <p className="eyebrow">Operating Snapshot</p>
           </div>
           <div className="metricGrid">
-            <MetricCard label="Campaigns in motion" value="4" detail="2 need approval today" />
-            <MetricCard label="Deliverables due" value="7" detail="3 ready to send" />
-            <MetricCard label="Completed this week" value="19" detail="On-time rate 93%" />
-            <MetricCard label="Package limit" value="74%" detail="Resets June 01" />
+            {operatingSnapshot.map((metric) => (
+              <MetricCard key={metric.label} label={metric.label} value={metric.value} detail={metric.detail} />
+            ))}
           </div>
         </section>
 
@@ -251,21 +265,13 @@ export function DashboardPages(props: DashboardPagesProps) {
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td>Approve this week&apos;s campaign draft</td>
-                  <td>Needs approval</td>
-                  <td>Open Results</td>
-                </tr>
-                <tr>
-                  <td>Connect the media provider</td>
-                  <td>Needs connection</td>
-                  <td>Open Providers</td>
-                </tr>
-                <tr>
-                  <td>Send owner recap</td>
-                  <td>Ready</td>
-                  <td>Open Files</td>
-                </tr>
+                {homeWorkQueue.map((row) => (
+                  <tr key={row.task}>
+                    <td>{row.task}</td>
+                    <td>{row.status}</td>
+                    <td>{row.nextAction}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -328,13 +334,13 @@ export function DashboardPages(props: DashboardPagesProps) {
             <InfoBlock label="Next milestone" value={selectedWorkflow.milestone} />
           </div>
           <div className="readinessCard">
-            <strong>{props.state.workflowsPaused ? "Try again in a moment" : packageReady ? "Available now" : "Connection needed"}</strong>
+            <strong>{props.state.workflowsPaused ? "Try again in a moment" : selectedWorkflow.readiness}</strong>
             <p>
               {props.state.workflowsPaused
                 ? "Workflow launches are paused for this tenant right now."
-                : packageReady
+                : selectedWorkflow.readiness === "Available now"
                   ? "The installed package is ready to launch this workflow."
-                  : "Finish provider setup before starting."}
+                  : "Finish the required provider setup before starting this workflow."}
             </p>
             <button className="primaryButton" disabled={!workflowLaunchReady} onClick={props.actions.onQueueRun} type="button">
               <Play size={16} />
@@ -642,20 +648,7 @@ export function DashboardPages(props: DashboardPagesProps) {
       <section className="pageGrid singlePage" data-testid={getPageTestId("insights")}>
         <section className="panel">
           <div className="panelHeader">
-            <p className="eyebrow">Performance Window</p>
-            <div className="tabRow" role="group" aria-label="Insight ranges">
-              {(["7D", "30D", "90D"] as const).map((range) => (
-                <button
-                  aria-pressed={props.state.dateRange === range}
-                  key={range}
-                  className={`tabButton${props.state.dateRange === range ? " active" : ""}`}
-                  onClick={() => props.actions.onDateRangeChange(range)}
-                  type="button"
-                >
-                  {range}
-                </button>
-              ))}
-            </div>
+            <p className="eyebrow">Current Snapshot</p>
           </div>
           <div className="metricGrid">
             {insightStats.map((stat) => (
@@ -664,51 +657,27 @@ export function DashboardPages(props: DashboardPagesProps) {
           </div>
         </section>
 
-        <section className="chartGrid">
-          <article className="panel">
-            <div className="panelHeader">
-              <p className="eyebrow">Output Volume</p>
-            </div>
-            <MiniChart
-              caption="Completed successfully"
-              values={props.state.dateRange === "7D" ? [4, 5, 7, 6, 8, 7, 9] : props.state.dateRange === "30D" ? [3, 5, 4, 7, 8, 6, 9, 10] : [2, 3, 5, 6, 7, 8, 10, 11]}
-            />
-          </article>
-          <article className="panel">
-            <div className="panelHeader">
-              <p className="eyebrow">Average Turnaround</p>
-            </div>
-            <MiniChart
-              caption="Average turnaround"
-              values={props.state.dateRange === "7D" ? [7, 6, 5, 4, 4, 3, 3] : props.state.dateRange === "30D" ? [8, 7, 6, 5, 5, 4, 4, 4] : [9, 8, 7, 6, 6, 5, 4, 4]}
-              descending
-            />
-          </article>
-        </section>
-
         <section className="panel wide">
           <div className="panelHeader">
-            <p className="eyebrow">Recent Work</p>
+            <p className="eyebrow">Available Artifacts</p>
           </div>
           <div className="tableShell">
             <table>
               <thead>
                 <tr>
-                  <th>Date</th>
+                  <th>Title</th>
                   <th>Work type</th>
-                  <th>Status</th>
-                  <th>Turnaround</th>
+                  <th>Available until</th>
                   <th>Delivered via</th>
                 </tr>
               </thead>
               <tbody>
-                {recentWork.map((row) => (
-                  <tr key={`${row.date}-${row.type}`}>
-                    <td>{row.date}</td>
+                {recentArtifacts.map((row) => (
+                  <tr key={`${row.title}-${row.type}`}>
+                    <td>{row.title}</td>
                     <td>{row.type}</td>
-                    <td>{row.status}</td>
-                    <td>{row.turnaround}</td>
-                    <td>{row.deliveredVia}</td>
+                    <td>{row.expires}</td>
+                    <td>{row.delivery}</td>
                   </tr>
                 ))}
               </tbody>
@@ -862,24 +831,6 @@ function InfoBlock(props: { label: string; value: string }) {
     <div className="infoBlock">
       <p>{props.label}</p>
       <strong>{props.value}</strong>
-    </div>
-  );
-}
-
-function MiniChart(props: { values: readonly number[]; caption: string; descending?: boolean }) {
-  const points = props.values
-    .map((value, index) => `${index === 0 ? "M" : "L"} ${index * 38} ${120 - value * 10}`)
-    .join(" ");
-
-  return (
-    <div className="chartPanel">
-      <svg aria-hidden="true" viewBox="0 0 280 140">
-        <path className={`chartPath${props.descending ? " descending" : ""}`} d={points} />
-      </svg>
-      <div className="chartFooter">
-        <span>{props.caption}</span>
-        <ChevronRight size={16} />
-      </div>
     </div>
   );
 }

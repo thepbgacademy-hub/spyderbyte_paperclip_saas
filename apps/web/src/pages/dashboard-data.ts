@@ -68,6 +68,35 @@ export interface FileRow {
   expiry: string;
 }
 
+export interface ListItem {
+  title: string;
+  detail: string;
+}
+
+export interface AttentionItem {
+  id: string;
+  message: string;
+}
+
+export interface MetricSummary {
+  label: string;
+  value: string;
+  detail: string;
+}
+
+export interface WorkQueueItem {
+  task: string;
+  status: string;
+  nextAction: string;
+}
+
+export interface ArtifactSummaryRow {
+  title: string;
+  type: string;
+  expires: string;
+  delivery: string;
+}
+
 export interface CurrentFocusCard {
   title: string;
   summary: string;
@@ -90,6 +119,14 @@ export interface CurrentFocusOptions {
   selectedApprovalState: ApprovalState;
   googleDriveConnected: boolean;
   dropboxConnected: boolean;
+}
+
+export interface DashboardSnapshotContext {
+  connectedProviders: Record<ProviderKey, boolean>;
+  googleDriveConnected: boolean;
+  dropboxConnected: boolean;
+  workflowsPaused: boolean;
+  resultApprovalStates: Record<string, ApprovalState>;
 }
 
 export const themePresets = ["Foundry", "Midnight", "Ledger", "Ember"] as const;
@@ -497,15 +534,14 @@ export function getResultCards(snapshot: DashboardSnapshot, input: { googleDrive
     return [...resultCards];
   }
 
-  return snapshot.artifacts.map((artifact, index) => {
-    const fallback = resultCards[index] ?? resultCards[0]!;
+  return snapshot.artifacts.map((artifact) => {
     return {
       id: artifact.id,
       title: toDisplayTitle(artifact.filename),
       workflow: snapshot.workflows.length === 1 ? snapshot.workflows[0]!.name : "Approved workflow output",
       summary: `A ${artifact.artifactType} deliverable named ${artifact.filename} is ready for review and export.`,
       timestamp: `Available until ${formatTimestamp(artifact.expiresAt)}`,
-      status: fallback.status,
+      status: "Ready to review",
       exportState: input.googleDriveConnected || input.dropboxConnected ? "Ready to export" : "Reconnect storage"
     };
   });
@@ -522,6 +558,171 @@ export function getFileRows(snapshot: DashboardSnapshot, input: { googleDriveCon
     state: input.googleDriveConnected || input.dropboxConnected ? "Ready to download" : "Reconnect storage",
     expiry: `Expires ${formatTimestamp(artifact.expiresAt)}`
   }));
+}
+
+export function getHomeNextSteps(snapshot: DashboardSnapshot, context: DashboardSnapshotContext): ListItem[] {
+  const items: ListItem[] = [];
+  const reviewOpportunity = getReviewOpportunityResult(snapshot, context);
+
+  if (reviewOpportunity) {
+    items.push({
+      title: `Review ${reviewOpportunity.title}`,
+      detail: reviewOpportunity.timestamp
+    });
+  }
+
+  const missingProvider = getMissingRequiredProvider(snapshot, context.connectedProviders);
+  if (missingProvider) {
+    items.push({
+      title: `Connect ${missingProvider.label}`,
+      detail: "Required before the next package workflow can run"
+    });
+  }
+
+  if (snapshot.artifacts.length > 0) {
+    items.push({
+      title: hasConnectedExportLane(context) ? "Move approved files into customer storage" : "Reconnect an export destination",
+      detail: hasConnectedExportLane(context) ? "Files are ready to send" : "Temporary files are waiting for a storage lane"
+    });
+  }
+
+  if (items.length === 0) {
+    items.push({
+      title: "Launch the next approved workflow",
+      detail: snapshot.workflows.some((workflow) => workflow.enabled !== false)
+        ? "The package boundary is ready for the next run"
+        : "No workflow runs are available yet"
+    });
+  }
+
+  return items.slice(0, 3);
+}
+
+export function getExpiringDownloadItems(snapshot: DashboardSnapshot, input: { googleDriveConnected: boolean; dropboxConnected: boolean }): ListItem[] {
+  return getFileRows(snapshot, input)
+    .slice(0, 3)
+    .map((file) => ({
+      title: file.title,
+      detail: file.expiry
+    }));
+}
+
+export function getNeedsAttentionItems(snapshot: DashboardSnapshot, context: DashboardSnapshotContext): AttentionItem[] {
+  const items: AttentionItem[] = [];
+  const reviewOpportunity = getReviewOpportunityResult(snapshot, context);
+  const missingProvider = getMissingRequiredProvider(snapshot, context.connectedProviders);
+
+  if (reviewOpportunity) {
+    items.push({
+      id: `review-${reviewOpportunity.id}`,
+      message: `Review available for ${reviewOpportunity.title}`
+    });
+  }
+
+  if (missingProvider) {
+    items.push({
+      id: `provider-${missingProvider.id}`,
+      message: `${missingProvider.label} connection still needed`
+    });
+  }
+
+  if (snapshot.artifacts.length > 0 && !hasConnectedExportLane(context)) {
+    items.push({
+      id: "storage",
+      message: "Connect customer-owned storage before temporary files expire"
+    });
+  }
+
+  if (context.workflowsPaused) {
+    items.push({
+      id: "paused",
+      message: "Workflow launches are paused for this tenant"
+    });
+  }
+
+  if (items.length === 0) {
+    items.push({
+      id: "clear",
+      message: "No urgent blockers right now"
+    });
+  }
+
+  return items;
+}
+
+export function getOperatingSnapshotMetrics(snapshot: DashboardSnapshot, context: DashboardSnapshotContext): MetricSummary[] {
+  const enabledWorkflows = snapshot.workflows.filter((workflow) => workflow.enabled !== false).length;
+  const connectedProviders = snapshot.providerConnections.filter((provider) => provider.connected !== false).length;
+  const connectedStorage = snapshot.storageConnectors.filter((connector) => connector.connected !== false).length;
+  const awaitingReviewCount = getResultCards(snapshot, {
+    googleDriveConnected: context.googleDriveConnected,
+    dropboxConnected: context.dropboxConnected
+  }).filter((result) => context.resultApprovalStates[result.id] === "Awaiting review").length;
+  const totalWorkflowCount = snapshot.workflows.length > 0 ? snapshot.workflows.length : workflowCards.length;
+  const availableWorkflowCount = snapshot.workflows.length > 0 ? enabledWorkflows : workflowCards.length;
+
+  return [
+    {
+      label: "Approved workflows",
+      value: String(totalWorkflowCount),
+      detail: `${availableWorkflowCount} available now`
+    },
+    {
+      label: "Results ready",
+      value: String(snapshot.artifacts.length || resultCards.length),
+      detail: awaitingReviewCount > 0 ? `${awaitingReviewCount} awaiting review` : "Nothing waiting on approval"
+    },
+    {
+      label: "Connected providers",
+      value: String(connectedProviders),
+      detail: getMissingRequiredProvider(snapshot, context.connectedProviders) ? "Required setup still needed" : "Required lanes connected"
+    },
+    {
+      label: "Storage lanes",
+      value: String(connectedStorage),
+      detail: connectedStorage > 0 ? "Customer-owned export path ready" : "No export lane connected"
+    }
+  ];
+}
+
+export function getHomeWorkQueue(snapshot: DashboardSnapshot, context: DashboardSnapshotContext): WorkQueueItem[] {
+  const queue: WorkQueueItem[] = [];
+  const reviewOpportunity = getReviewOpportunityResult(snapshot, context);
+  const missingProvider = getMissingRequiredProvider(snapshot, context.connectedProviders);
+
+  if (reviewOpportunity) {
+    queue.push({
+      task: `Review ${reviewOpportunity.title}`,
+      status: "Ready to review",
+      nextAction: "Open Results"
+    });
+  }
+
+  if (missingProvider) {
+    queue.push({
+      task: `Connect ${missingProvider.label}`,
+      status: "Needs connection",
+      nextAction: "Open Providers"
+    });
+  }
+
+  if (snapshot.artifacts.length > 0) {
+    queue.push({
+      task: hasConnectedExportLane(context) ? "Send approved files to customer storage" : "Reconnect export destination",
+      status: hasConnectedExportLane(context) ? "Ready" : "Needs connection",
+      nextAction: "Open Files"
+    });
+  }
+
+  if (!context.workflowsPaused && snapshot.workflows.some((workflow) => workflow.enabled !== false)) {
+    queue.push({
+      task: "Launch the next approved workflow",
+      status: missingProvider ? "Blocked" : "Ready",
+      nextAction: "Open Workflows"
+    });
+  }
+
+  return queue.slice(0, 4);
 }
 
 export function resolveProviderState(id: ProviderCardId, state: ProviderStateContext): string {
@@ -635,55 +836,58 @@ export function getSelectedRole(teamTab: TeamTab, selectedRoleId: string) {
   return teamCollection.find((role) => role.id === selectedRoleId) ?? teamCollection[0];
 }
 
-export function getInsightStats(dateRange: DateRange) {
+export function getInsightStats(snapshot: DashboardSnapshot) {
+  const enabledWorkflows = snapshot.workflows.filter((workflow) => workflow.enabled !== false).length;
+  const connectedProviders = snapshot.providerConnections.filter((provider) => provider.connected !== false).length;
+  const connectedStorage = snapshot.storageConnectors.filter((connector) => connector.connected !== false).length;
+  const totalWorkflowCount = snapshot.workflows.length > 0 ? snapshot.workflows.length : workflowCards.length;
+  const availableWorkflowCount = snapshot.workflows.length > 0 ? enabledWorkflows : workflowCards.length;
+
   return [
     {
-      label: "Used this period",
-      value: dateRange === "7D" ? "18 workflows" : dateRange === "30D" ? "74 workflows" : "212 workflows",
-      delta: "+12%"
+      label: "Approved workflows",
+      value: String(totalWorkflowCount),
+      delta: `${availableWorkflowCount} available now`
     },
     {
-      label: "Output volume",
-      value: dateRange === "7D" ? "46 deliverables" : dateRange === "30D" ? "188 deliverables" : "534 deliverables",
-      delta: "+9%"
+      label: "Available artifacts",
+      value: String(snapshot.artifacts.length || resultCards.length),
+      delta: `Temporary retention: ${snapshot.artifactTtlHours} hours`
     },
     {
-      label: "Average turnaround",
-      value: dateRange === "7D" ? "3h 20m" : dateRange === "30D" ? "4h 05m" : "4h 42m",
-      delta: "-11%"
+      label: "Connected providers",
+      value: String(connectedProviders),
+      delta: connectedProviders > 0 ? "BYOK lanes active" : "Provider setup needed"
     },
-    { label: "Package status", value: "On track", delta: "Renews in 17 days" }
+    {
+      label: "Connected storage",
+      value: String(connectedStorage),
+      delta: connectedStorage > 0 ? "Customer-owned export path ready" : "Connect an export lane"
+    }
   ] as const;
 }
 
-export function getRecentWork(
-  resultApprovalStates: Record<string, ApprovalState>,
-  googleDriveConnected: boolean,
-  dropboxConnected: boolean
-) {
-  return [
-    {
-      date: "May 14",
-      type: "Media calendar",
-      status: resultApprovalStates["result-241"],
-      turnaround: "2h 14m",
-      deliveredVia: googleDriveConnected ? "Google Drive" : "Download"
-    },
-    {
-      date: "May 13",
-      type: "Offer refresh",
-      status: resultApprovalStates["result-238"],
-      turnaround: "4h 08m",
-      deliveredVia: dropboxConnected ? "Dropbox" : "Download"
-    },
-    {
-      date: "May 12",
-      type: "Weekly recap",
-      status: "Needs connection",
-      turnaround: "Delayed",
-      deliveredVia: "Reconnect storage"
-    }
-  ] as const;
+export function getRecentArtifacts(snapshot: DashboardSnapshot, input: { googleDriveConnected: boolean; dropboxConnected: boolean }): ArtifactSummaryRow[] {
+  if (snapshot.artifacts.length === 0) {
+    return getFileRows(snapshot, input).map((file) => ({
+      title: file.title,
+      type: file.type,
+      expires: file.expiry,
+      delivery: input.googleDriveConnected ? "Google Drive" : input.dropboxConnected ? "Dropbox" : "Download"
+    }));
+  }
+
+  const delivery = input.googleDriveConnected ? "Google Drive" : input.dropboxConnected ? "Dropbox" : "Download";
+
+  return [...snapshot.artifacts]
+    .sort((left, right) => toTimestamp(left.expiresAt) - toTimestamp(right.expiresAt))
+    .slice(0, 4)
+    .map((artifact) => ({
+      title: toDisplayTitle(artifact.filename),
+      type: artifact.artifactType.toUpperCase(),
+      expires: `Available until ${formatTimestamp(artifact.expiresAt)}`,
+      delivery
+    }));
 }
 
 export function getRouteForPath(pathname: string): DashboardRouteDefinition {
@@ -712,7 +916,6 @@ export function getDefaultDashboardPageProps(snapshot: DashboardSnapshot) {
     selectedResultId: resultCards[0]!.id,
     teamTab: "Included Team" as const,
     selectedRoleId: includedRoles[0]!.id,
-    dateRange: "30D" as const,
     resultApprovalStates: {
       "result-241": "Awaiting review" as const,
       "result-238": "Revision needed" as const
@@ -768,6 +971,41 @@ function buildWorkflowProviderTags(providerLabel: string) {
   return [`${providerLabel} required`];
 }
 
+function getReviewOpportunityResult(snapshot: DashboardSnapshot, context: DashboardSnapshotContext): ResultCard | null {
+  return (
+    getResultCards(snapshot, {
+      googleDriveConnected: context.googleDriveConnected,
+      dropboxConnected: context.dropboxConnected
+    }).find((result) => context.resultApprovalStates[result.id] !== "Approved") ?? null
+  );
+}
+
+function getMissingRequiredProvider(
+  snapshot: DashboardSnapshot,
+  connectedProviders: Record<ProviderKey, boolean>
+): { id: ProviderKey; label: string } | null {
+  for (const provider of snapshot.providerConnections) {
+    if (provider.required === false) {
+      continue;
+    }
+
+    const key = mapProviderKindToKey(provider.providerKind);
+    if (key && !connectedProviders[key]) {
+      return { id: key, label: provider.label };
+    }
+  }
+
+  if (!connectedProviders.openai) {
+    return { id: "openai", label: "OpenAI" };
+  }
+
+  return null;
+}
+
+function hasConnectedExportLane(input: { googleDriveConnected: boolean; dropboxConnected: boolean }): boolean {
+  return input.googleDriveConnected || input.dropboxConnected;
+}
+
 function toDisplayTitle(filename: string): string {
   const withoutExtension = filename.replace(/\.[^.]+$/u, "");
   return withoutExtension
@@ -783,4 +1021,9 @@ function formatTimestamp(value: string): string {
     return value;
   }
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function toTimestamp(value: string): number {
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? Number.MAX_SAFE_INTEGER : timestamp;
 }

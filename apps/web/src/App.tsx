@@ -5,14 +5,14 @@ import { createBrowserDashboardClient, type DashboardSnapshot } from "./dashboar
 import DashboardPages, { type DashboardPageActions, type DashboardPageState } from "./pages/DashboardPages.js";
 import {
   createInitialConnectedProvidersFromSnapshot,
-  hasConnectedStorage,
   getInitialSelectedRoleId,
   getPagePath,
+  getWorkflowCards,
+  hasConnectedStorage,
   includedRoles,
   resultCards,
   workflowCards,
   type ApprovalState,
-  type DateRange,
   type PageKey,
   type ProviderCardId,
   type Role,
@@ -54,7 +54,6 @@ export default function App() {
   const [selectedResultId, setSelectedResultId] = useState<string>(dashboardRuntime.client.getSnapshot().artifacts[0]?.id ?? resultCards[0]!.id);
   const [teamTab, setTeamTab] = useState<TeamTab>("Included Team");
   const [selectedRoleId, setSelectedRoleId] = useState<string>(includedRoles[0]!.id);
-  const [dateRange, setDateRange] = useState<DateRange>("30D");
   const [resultApprovalStates, setResultApprovalStates] = useState<Record<string, ApprovalState>>({
     "result-241": "Awaiting review",
     "result-238": "Revision needed"
@@ -73,17 +72,8 @@ export default function App() {
     if (dashboard.workflows.length > 0 && !dashboard.workflows.some((workflow) => workflow.id === selectedWorkflowId)) {
       setSelectedWorkflowId(dashboard.workflows[0]!.id);
     }
-    if (dashboard.artifacts.length > 0) {
-      setResultApprovalStates((current) => {
-        const next = { ...current };
-        for (const artifact of dashboard.artifacts) {
-          next[artifact.id] ??= "Awaiting review";
-        }
-        return next;
-      });
-      if (!dashboard.artifacts.some((artifact) => artifact.id === selectedResultId)) {
-        setSelectedResultId(dashboard.artifacts[0]!.id);
-      }
+    if (dashboard.artifacts.length > 0 && !dashboard.artifacts.some((artifact) => artifact.id === selectedResultId)) {
+      setSelectedResultId(dashboard.artifacts[0]!.id);
     }
   }, [dashboard, selectedResultId, selectedWorkflowId]);
 
@@ -96,7 +86,6 @@ export default function App() {
   const dashboardState = useMemo<DashboardPageState>(
     () => ({
       connectedProviders,
-      dateRange,
       dropboxConnected,
       googleDriveConnected,
       keySaved,
@@ -113,7 +102,6 @@ export default function App() {
     }),
     [
       connectedProviders,
-      dateRange,
       dropboxConnected,
       googleDriveConnected,
       keySaved,
@@ -171,11 +159,14 @@ export default function App() {
   }
 
   function handleQueueRun() {
+    const selectedWorkflow = getWorkflowCards(dashboard, { connectedProviders }).find((workflow) => workflow.id === selectedWorkflowId);
+    const selectedWorkflowReady = selectedWorkflow?.readiness === "Available now";
+
     if (workflowsPaused) {
       setRunStatus("paused");
       return;
     }
-    if (!packageReady) {
+    if (!packageReady || !selectedWorkflowReady) {
       return;
     }
     setRunStatus("queued");
@@ -197,9 +188,6 @@ export default function App() {
     },
     onConnectImageProvider() {
       setMediaProviderSaved(true);
-    },
-    onDateRangeChange(range) {
-      setDateRange(range);
     },
     onNavigate: handleNavigate,
     onProviderCardAction: handleProviderCardAction,
