@@ -23,6 +23,10 @@ Set these on the VPS as root-owned environment files or deployment secrets. Do n
 - `SUPABASE_DB_SSL`
 - `PAPERCLIP_SERVICE_TOKEN`
 - `WF_ALLOWED_ORIGINS`
+- `WF_API_BEARER_TOKEN`
+- `WF_API_TENANT_ID`
+- `WF_API_USER_ID`
+- `WF_API_ROLE`
 - `WF_VAULT_MASTER_KEY`
 - `WF_WEB_APP_ENTRY_URL`
 - `WF_WEB_APP_STYLESHEET_URL` if emitted by `npm run resolve:web-assets`
@@ -31,6 +35,12 @@ Set these on the VPS as root-owned environment files or deployment secrets. Do n
 - `PAPERCLIP_IMAGE_TAG`
 
 Tenant OpenAI and generic provider keys remain BYOK runtime secrets stored by reference. They must not be baked into Docker images, browser bundles, Compose files, or Redis jobs.
+
+Current POC auth note:
+
+- The deployed API shell and dashboard API currently trust a static runtime bearer token configured through `WF_API_BEARER_TOKEN`.
+- The same token may also be presented through the configured portal session cookie name for same-site shell bootstrap smoke checks.
+- Treat this as a deploy-only/shared-secret POC path, not a long-term end-user auth design.
 
 ## Deploy
 
@@ -123,22 +133,25 @@ npm run smoke:external
 Then run:
 
 ```powershell
+npm run e2e:live
 npm run e2e
 ```
 
-Point Playwright at the deployed origin before using this as a release gate.
+For deployed-browser verification, set `WF_LIVE_BASE_URL` to the API origin before running `npm run e2e:live`. If you have a deploy-safe same-site session token, also set `WF_LIVE_SESSION_COOKIE_VALUE` to exercise the authenticated shell path. The live Playwright config now fails fast when `WF_LIVE_BASE_URL` is omitted so it does not probe a deployment by accident.
 
 ## Current External Smoke Status
 
-Last checked from outside the VPS on 2026-05-12:
+Last checked from outside the VPS on 2026-05-15:
 
 - PASS: `www.spyderbyte.cloud` and `api.spyderbyte.cloud` resolve to `187.77.19.83`.
 - PASS: Public ports `80` and `443` are reachable.
 - PASS: Redis `6379`, Paperclip `9000`, app/dev ports `3000`, `5173`, API direct ports `8080`, `8081`, and Docker daemon `2375` were not reachable.
 - PASS: `https://api.spyderbyte.cloud/health` returns `200 {"status":"ok","service":"wealth_factory_api"}`.
 - PASS: `https://api.spyderbyte.cloud/api/dashboard` now rejects unauthenticated requests with `401`, rejects untrusted origins with `403`, and returns tenant-scoped Wealth Factory data when called with the deploy bearer token from an allowed origin.
+- PASS: `npm run e2e:live` now verifies the deployed unauthenticated browser-navigation contract against `https://api.spyderbyte.cloud`, and the optional authenticated-shell check skips cleanly when no deploy-safe session cookie is supplied.
 - PASS: `api.spyderbyte.cloud` now proxies to the live `wealth-factory-api` container through `supabase-caddy`.
-- BLOCKED: `5432` and `8000` remain reachable externally. These are still part of the temporary multi-project exposure and must be firewall or allowlist restricted before commercial exposure.
+- BLOCKED: `5432`, `8000`, and `8443` remain reachable externally. These are still part of the temporary multi-project exposure and must be firewall or allowlist restricted before commercial exposure.
+- BLOCKED: `https://api.spyderbyte.cloud/` still returns `404 {"code":"not_found"}` to the script-based unauthenticated shell probe used by `npm run smoke:external` when that probe sends an explicit portal `Origin` header. This differs from top-level browser navigation, which currently receives an unauthenticated app response, so the authenticated API-origin shell rollout should not be treated as fully consistent yet.
 - BLOCKED: `https://api.spyderbyte.cloud/api/storage/oauth/google_drive/begin` returns `503 {"code":"storage_oauth_unavailable"}` until Google Drive and Dropbox OAuth client credentials are configured for the runtime.
 
 Do not treat the VPS deployment as release-safe until `npm run smoke:external` passes or the intentionally unconfigured storage OAuth check is explicitly carved out for pre-credential environments.
@@ -149,7 +162,7 @@ These commands are intended to be run on the VPS by an operator with sudo/root a
 
 ### Restrict Supabase And Kong Ports
 
-Current smoke tests show `5432` and `8000` reachable from the public internet. For a commercial Wealth Factory deployment, these ports must not be public.
+Current smoke tests show `5432`, `8000`, and `8443` reachable from the public internet. For a commercial Wealth Factory deployment, these ports must not be public.
 
 Recommended UFW posture:
 
@@ -164,13 +177,15 @@ sudo ufw allow from <trusted-admin-ip>/32 to any port 22 proto tcp
 # Remove these before commercial exposure unless access is restricted by VPN.
 sudo ufw allow from <trusted-admin-ip>/32 to any port 5432 proto tcp
 sudo ufw allow from <trusted-admin-ip>/32 to any port 8000 proto tcp
+sudo ufw allow from <trusted-admin-ip>/32 to any port 8443 proto tcp
 sudo ufw deny 5432/tcp
 sudo ufw deny 8000/tcp
+sudo ufw deny 8443/tcp
 sudo ufw enable
 sudo ufw status verbose
 ```
 
-If Docker-published ports bypass UFW on the VPS, apply provider firewall rules in the VPS control panel too. The external gate is authoritative: `npm run smoke:external` must report `5432` and `8000` as closed from an untrusted network.
+If Docker-published ports bypass UFW on the VPS, apply provider firewall rules in the VPS control panel too. The external gate is authoritative: `npm run smoke:external` must report `5432`, `8000`, and `8443` as closed from an untrusted network.
 
 For Docker Compose hardening, avoid publishing Supabase/Kong/Postgres ports to `0.0.0.0`. Bind admin-only services to loopback or a private VPN interface when direct maintenance access is needed.
 

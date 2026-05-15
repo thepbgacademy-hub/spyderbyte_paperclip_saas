@@ -38,6 +38,10 @@ describe("deployment POC config", () => {
     expect(runbook).toContain("Do not place real values in Git");
     expect(runbook).toContain("BYOK runtime secrets stored by reference");
     expect(runbook).toContain("WF_ALLOWED_ORIGINS");
+    expect(runbook).toContain("WF_API_BEARER_TOKEN");
+    expect(runbook).toContain("WF_API_TENANT_ID");
+    expect(runbook).toContain("WF_API_USER_ID");
+    expect(runbook).toContain("WF_API_ROLE");
     expect(runbook).toContain("WF_VAULT_MASTER_KEY");
     expect(runbook).toContain("WF_WEB_APP_ENTRY_URL");
     expect(runbook).toContain("WF_WEB_APP_STYLESHEET_URL");
@@ -46,6 +50,7 @@ describe("deployment POC config", () => {
     expect(runbook).toContain("same-site cookie auth only");
     expect(runbook).toContain("/app-assets/");
     expect(runbook).toContain("npm run smoke:external");
+    expect(runbook).toContain("npm run e2e:live");
     expect(runbook).toContain("sudo ufw deny 5432/tcp");
     expect(runbook).toContain("api.spyderbyte.cloud");
     expect(runbook).toContain("no longer show a TLS handshake failure");
@@ -70,6 +75,10 @@ describe("deployment POC config", () => {
       "SUPABASE_SERVICE_ROLE_KEY",
       "SUPABASE_DB_URL",
       "WF_ALLOWED_ORIGINS",
+      "WF_API_BEARER_TOKEN",
+      "WF_API_TENANT_ID",
+      "WF_API_USER_ID",
+      "WF_API_ROLE",
       "WF_WEB_APP_ENTRY_URL",
       "PAPERCLIP_SERVICE_TOKEN",
       "WF_VAULT_MASTER_KEY"

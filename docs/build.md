@@ -624,7 +624,8 @@ Next work after this phase:
 - [ ] Add queue enqueue transaction/outbox behavior before production deployment.
 - [ ] Add external VPS smoke tests for the runtime adapter, CORS, auth failure, and response guard.
 - [x] Add static asset hosting or reverse-proxy integration for the configured app entry URL so the HTML shell and frontend bundle can ship together in deployment.
-- [x] Codify the current session stance as same-site cookie bootstrap on the API origin, not full cross-origin cookie auth.
+  - [x] Codify the current session stance as same-site cookie bootstrap on the API origin, not full cross-origin cookie auth.
+- [x] Add an opt-in deployed Playwright gate (`npm run e2e:live`) that verifies the current unauthenticated browser contract against the live API origin and can exercise the authenticated shell when a deploy-safe cookie is supplied.
 
 ## Post-MVP Phase: ACID Package And Credential Service Adapter Prep
 
