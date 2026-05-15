@@ -54,20 +54,30 @@ function mapDashboardResponse(response: unknown): DashboardSnapshot {
   const packages = Array.isArray(record.packages) ? record.packages : [];
   const providerConnections = Array.isArray(record.providerConnections) ? record.providerConnections : [];
   const packageRecord = packages[0] && typeof packages[0] === "object" ? (packages[0] as Record<string, unknown>) : {};
+  const requiredProviders = providerConnections
+    .filter((provider) => {
+      const providerRecord = provider && typeof provider === "object" ? (provider as Record<string, unknown>) : {};
+      return providerRecord.required !== false;
+    })
+    .map((provider) => {
+      const providerRecord = provider && typeof provider === "object" ? (provider as Record<string, unknown>) : {};
+      return String(providerRecord.label ?? providerRecord.providerKind ?? "Provider");
+    });
+  const optionalProviders = providerConnections
+    .filter((provider) => {
+      const providerRecord = provider && typeof provider === "object" ? (provider as Record<string, unknown>) : {};
+      return providerRecord.required === false;
+    })
+    .map((provider) => {
+      const providerRecord = provider && typeof provider === "object" ? (provider as Record<string, unknown>) : {};
+      return String(providerRecord.label ?? providerRecord.providerKind ?? "Provider");
+    });
 
   return {
-    tenantName: "Wealth Factory Company",
+    tenantName: typeof record.tenantName === "string" ? record.tenantName : defaultSnapshot.tenantName,
     packageName: typeof packageRecord.name === "string" ? packageRecord.name : "No package installed",
-    requiredProviders: providerConnections
-      .filter((provider) => {
-        const providerRecord = provider && typeof provider === "object" ? (provider as Record<string, unknown>) : {};
-        return providerRecord.connected === true;
-      })
-      .map((provider) => {
-        const providerRecord = provider && typeof provider === "object" ? (provider as Record<string, unknown>) : {};
-        return String(providerRecord.label ?? providerRecord.providerKind ?? "Provider");
-      }),
-    optionalProviders: ["customer-owned storage"],
+    requiredProviders,
+    optionalProviders: optionalProviders.length > 0 ? [...optionalProviders, "customer-owned storage"] : ["customer-owned storage"],
     artifactTtlHours: 24
   };
 }

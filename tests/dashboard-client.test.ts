@@ -8,10 +8,11 @@ describe("dashboard client", () => {
       ok: true,
       json: () =>
         Promise.resolve({
+          tenantName: "Wealth Factory Company",
           packages: [{ name: "Social Media Agency" }],
           providerConnections: [
-            { label: "OpenAI", connected: true },
-            { label: "Anthropic", connected: false }
+            { label: "OpenAI", connected: true, required: true },
+            { label: "Anthropic", connected: false, required: false }
           ],
           workflows: [{ name: "Wealth Factory Social Calendar" }],
           artifacts: [{ expiresAt: "2026-05-11T00:00:00.000Z" }]
@@ -26,7 +27,7 @@ describe("dashboard client", () => {
       tenantName: "Wealth Factory Company",
       packageName: "Social Media Agency",
       requiredProviders: ["OpenAI"],
-      optionalProviders: ["customer-owned storage"],
+      optionalProviders: ["Anthropic", "customer-owned storage"],
       artifactTtlHours: 24
     });
     expect(fetchImpl).toHaveBeenCalledWith("https://api.wealthfactory.test/api/dashboard", {
