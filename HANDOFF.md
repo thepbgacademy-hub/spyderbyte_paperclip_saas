@@ -264,7 +264,7 @@ Nuances to preserve:
 - `node scripts/apply-wfpc-migration.mjs` applied private storage OAuth/vault migrations, then passed idempotently and reported `wfpc` with 16 public schema tables.
 - `npm run build` passed.
 - `npm run build:server` passed.
-- `npm test` passed with 49 files / 185 tests.
+- `npm test` passed with 52 files / 200 tests.
 - `npm run lint` passed.
 - `npm run build:web` passed with lucide `use client` warnings from dependency bundling.
 - `npm run e2e` passed with 3 Playwright tests.
