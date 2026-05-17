@@ -14,6 +14,8 @@ The next session should continue from the live VPS API deployment that now answe
 
 - `docs/design.md`
 - `docs/build.md`
+- `docs/recovery-2026-05-16.md`
+- `docs/recovery-backup-2026-05-14.md`
 - `docs/dashboard-design-prep.md`
 - `docs/reviewer-notes.md`
 - `deploy/runbooks/deploy-poc.md`
