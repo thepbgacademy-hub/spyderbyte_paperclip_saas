@@ -58,6 +58,34 @@ Required tests:
 
 Wealth Factory must treat every provider credential as company-specific. A subscribing company can use its own OpenAI, Anthropic, xAI/Grok, or OpenRouter API key, and optionally its own company-isolated ChatGPT/Codex subscription auth lane. No server-wide or operator-owned provider credential may be used as the default for subscriber work.
 
+### Production Provider Injection Rule
+
+Before commercial production launch, Wealth Factory must stop relying on a
+server-wide provider credential for subscriber workflow execution.
+
+Required production behavior:
+
+- Wealth Factory resolves the tenant's active allowed provider lane at run start.
+- Wealth Factory fetches the tenant's provider credential from the private vault
+  only at execution time.
+- The worker injects that tenant credential into the Paperclip execution context
+  for that run only.
+- Paperclip must run the workflow using the tenant-selected credential, not an
+  operator/shared default credential.
+- If the tenant has no active credential, no allowed provider lane, or a
+  revoked/expired credential, the run fails closed and is not sent to Paperclip.
+
+Temporary non-production rule:
+
+- Operator-owned/provider-owned credentials may remain configured on the VPS for
+  development, smoke testing, and debugging while the tenant-scoped provider
+  injection path is being completed and verified.
+- That fallback must be treated as temporary test/debug infrastructure only and
+  must not remain the default path for subscriber production traffic.
+- The production cutover is not complete until tenant-scoped credential
+  injection is verified end-to-end and shared fallback credentials are disabled
+  for subscriber runs.
+
 Supported provider lanes for the post-MVP dashboard/API:
 
 - `openai_api`: preferred API-key lane. Stores OpenAI API key by reference and optional non-secret `OpenAI-Project` metadata.
@@ -84,6 +112,17 @@ Required tests:
 - ChatGPT/Codex subscription registrations require isolated company/user auth state references and reject shared `~/.codex` or global `CODEX_HOME` paths.
 - Subscription mode fails if an `OPENAI_API_KEY` is present in the intended runtime environment.
 - Tenant A cannot access, rotate, revoke, inspect, or run with Tenant B provider credentials or Codex auth state.
+
+Required production-cutover tests:
+
+- Workflow runs use the tenant's selected provider credential at execution time,
+  not a server-wide default credential.
+- Queue payloads still contain no raw secrets, even though runtime credential
+  lookup/injection is enabled.
+- A tenant workflow run fails closed when the tenant credential is missing,
+  revoked, expired, or not allowed by the installed package.
+- Temporary operator/shared fallback credentials are used only in explicit
+  debug/test mode and are rejected for normal subscriber production execution.
 
 ## Subscription Package Strategy
 
@@ -782,6 +821,54 @@ Next work after this phase:
 Next work after this phase:
 
 - [ ] Add external VPS smoke tests for CORS, auth failure, exposed ports, and response guard.
+
+## Post-MVP Phase: Tenant-Scoped Paperclip Provider Runtime Cutover
+
+**Outcome:** Wealth Factory keeps operator/provider credentials available for
+temporary testing and debugging, but commercial workflow execution uses
+tenant-scoped provider credentials injected into Paperclip at runtime on a
+per-run basis.
+
+**Files:**
+
+- Modify: `src/workflows/run-service.ts`
+- Modify: `src/workflows/worker.ts`
+- Modify: `src/paperclip/types.ts`
+- Modify: `src/paperclip/client.ts`
+- Modify: `src/secrets/provider-credential-service.ts`
+- Modify: `src/secrets/secret-service.ts`
+- Create: `src/providers/runtime-provider-resolution.ts`
+- Create: `tests/paperclip-provider-runtime.test.ts`
+- Modify: `tests/workflow-queue.test.ts`
+- Modify: `tests/provider-credential-service.test.ts`
+- Modify: `deploy/runbooks/deploy-poc.md`
+- Modify: `HANDOFF.md`
+
+- [ ] Add a tenant-scoped runtime provider resolver that selects the active
+  allowed provider lane for a workflow run based on package entitlement,
+  provider connection state, and tenant ownership.
+- [ ] Add vault-backed runtime secret lookup so the worker can fetch the
+  tenant's provider credential just-in-time without exposing raw secrets to the
+  browser, DTOs, queue payloads, or audit summaries.
+- [ ] Extend the Paperclip execution adapter contract so a run can be started
+  with tenant-scoped provider context rather than assuming one server-wide
+  credential.
+- [ ] Keep raw provider secrets out of BullMQ/outbox payloads; pass only safe
+  run identifiers through the queue and perform secret resolution in the worker
+  at execution time.
+- [ ] Preserve operator-owned/shared provider credentials as an explicit
+  development/debug fallback only while the production tenant-scoped path is
+  being validated.
+- [ ] Add a deploy-time flag or equivalent runtime guard so shared fallback
+  credentials can be disabled for subscriber production traffic.
+- [ ] Make subscriber workflow execution fail closed when no active allowed
+  tenant credential exists.
+- [ ] Add tests proving tenant A cannot ever execute a workflow with tenant B's
+  credential or a silent shared fallback.
+- [ ] Add tests proving production-mode runs use tenant credentials and only
+  debug/test mode can use the temporary operator fallback.
+- [ ] Run `npm run build`, `npm test`, `npm run lint`, `npm run build:web`, and
+  the relevant deployed smoke/E2E checks.
 
 ## Self-Review
 
