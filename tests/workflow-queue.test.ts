@@ -93,6 +93,101 @@ describe("run service", () => {
     });
   });
 
+  it("passes resolved provider context into the Paperclip run contract", async () => {
+    const paperclipClient = {
+      createRun: vi.fn().mockResolvedValue({ paperclipRunId: "pc-run-1", status: "queued" })
+    };
+    const service = createRunService({
+      paperclipClient,
+      tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
+      authorizeRunStart: vi.fn().mockResolvedValue(true),
+      resolveProviderContext: vi.fn().mockResolvedValue([
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Primary OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: { projectId: "proj_123" }
+        }
+      ])
+    });
+
+    await service.startRun({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "workflow-1",
+      requiredCapabilities: ["text_generation"]
+    });
+
+    expect(paperclipClient.createRun).toHaveBeenCalledWith({
+      companyId: "pc-company-1",
+      workflowId: "workflow-1",
+      spyderbyteRunId: "run-1",
+      providerContext: [
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Primary OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: { projectId: "proj_123" }
+        }
+      ]
+    });
+  });
+
+  it("hydrates resolved provider context with secret values before calling Paperclip", async () => {
+    const paperclipClient = {
+      createRun: vi.fn().mockResolvedValue({ paperclipRunId: "pc-run-1", status: "queued" })
+    };
+    const service = createRunService({
+      paperclipClient,
+      tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
+      authorizeRunStart: vi.fn().mockResolvedValue(true),
+      resolveProviderContext: vi.fn().mockResolvedValue([
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Primary OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: { projectId: "proj_123" }
+        }
+      ]),
+      hydrateProviderContext: vi.fn().mockResolvedValue([
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Primary OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: { projectId: "proj_123" },
+          secretValues: { apiKey: "sk-openai-secret" }
+        }
+      ])
+    });
+
+    await service.startRun({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "workflow-1",
+      requiredCapabilities: ["text_generation"]
+    });
+
+    expect(paperclipClient.createRun).toHaveBeenCalledWith({
+      companyId: "pc-company-1",
+      workflowId: "workflow-1",
+      spyderbyteRunId: "run-1",
+      providerContext: [
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Primary OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: { projectId: "proj_123" },
+          secretValues: { apiKey: "sk-openai-secret" }
+        }
+      ]
+    });
+  });
+
   it("validates tenant run ownership before calling Paperclip", async () => {
     const paperclipClient = {
       createRun: vi.fn()
@@ -302,5 +397,61 @@ describe("workflow worker", () => {
       })
     ).rejects.toMatchObject({ code: "workflow_entitlement_denied", reason: "provider_not_connected" });
     expect(createRun).not.toHaveBeenCalled();
+  });
+
+  it("worker hydrates provider secrets just-in-time before calling Paperclip", async () => {
+    const createRun = vi.fn().mockResolvedValue({
+      paperclipRunId: "pc-run-1",
+      status: "queued"
+    });
+
+    await processWorkflowJob({
+      payload: createWorkflowQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "workflow-1",
+        createdByUserId: "user-1"
+      }),
+      paperclipClient: { createRun },
+      tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
+      authorizeRunStart: vi.fn().mockResolvedValue(true),
+      isPaperclipEnabled: vi.fn().mockResolvedValue(true),
+      checkEntitlement: vi.fn().mockResolvedValue({ allowed: true }),
+      resolveProviderContext: vi.fn().mockResolvedValue([
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Primary OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: {}
+        }
+      ]),
+      hydrateProviderContext: vi.fn().mockResolvedValue([
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Primary OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: {},
+          secretValues: { apiKey: "sk-openai-secret" }
+        }
+      ])
+    });
+
+    expect(createRun).toHaveBeenCalledWith({
+      companyId: "pc-company-1",
+      workflowId: "workflow-1",
+      spyderbyteRunId: "run-1",
+      providerContext: [
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Primary OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: {},
+          secretValues: { apiKey: "sk-openai-secret" }
+        }
+      ]
+    });
   });
 });

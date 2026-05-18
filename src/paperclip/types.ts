@@ -8,6 +8,14 @@ export type CreatePaperclipRunInput = {
   companyId: string;
   workflowId: string;
   spyderbyteRunId: string;
+  providerContext?: readonly {
+    capability: string;
+    providerKind: string;
+    label: string;
+    secretRef: string;
+    metadata: Record<string, unknown>;
+    secretValues?: Record<string, string>;
+  }[];
 };
 
 export type PaperclipRunReference = {

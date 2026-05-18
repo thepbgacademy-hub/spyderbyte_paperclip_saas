@@ -1,5 +1,7 @@
 import type { PaperclipClient, PaperclipRunStatus } from "../paperclip/types.js";
-import type { EntitlementDecision } from "../packages/package-types.js";
+import type { EntitlementDecision, ProviderCapability } from "../packages/package-types.js";
+import type { RuntimeProviderExecutionBinding } from "../providers/runtime-provider-execution.js";
+import type { RuntimeProviderBinding } from "../providers/runtime-provider-resolution.js";
 
 export type TenantPaperclipMapping = {
   paperclipCompanyId: string;
@@ -10,12 +12,17 @@ export type TenantResolver = (tenantId: string) => Promise<TenantPaperclipMappin
 export type RunStartAuthorizer = (input: StartWorkflowRunInput) => Promise<boolean>;
 export type PaperclipEnabledCheck = (tenantId: string) => Promise<boolean>;
 export type RunEntitlementCheck = (input: StartWorkflowRunInput) => Promise<EntitlementDecision>;
+export type RuntimeProviderContextResolver = (input: StartWorkflowRunInput) => Promise<readonly RuntimeProviderBinding[]>;
+export type RuntimeProviderContextHydrator = (input: StartWorkflowRunInput & { providerBindings: readonly RuntimeProviderBinding[] }) => Promise<
+  readonly RuntimeProviderExecutionBinding[]
+>;
 
 export type StartWorkflowRunInput = {
   tenantId: string;
   runId: string;
   workflowId: string;
   createdByUserId?: string;
+  requiredCapabilities?: readonly ProviderCapability[];
 };
 
 export type PublicWorkflowRunStatus = {
@@ -70,6 +77,8 @@ export function createRunService(options: {
   authorizeRunStart?: RunStartAuthorizer;
   isPaperclipEnabled?: PaperclipEnabledCheck;
   checkEntitlement?: RunEntitlementCheck;
+  resolveProviderContext?: RuntimeProviderContextResolver;
+  hydrateProviderContext?: RuntimeProviderContextHydrator;
 }) {
   return {
     async startRun(input: StartWorkflowRunInput): Promise<PublicWorkflowRunStatus> {
@@ -93,10 +102,19 @@ export function createRunService(options: {
       }
 
       const tenant = await options.tenantResolver(input.tenantId);
+      const providerBindings = options.resolveProviderContext ? await options.resolveProviderContext(input) : undefined;
+      const providerContext =
+        providerBindings && options.hydrateProviderContext
+          ? await options.hydrateProviderContext({
+              ...input,
+              providerBindings
+            })
+          : providerBindings;
       const run = await options.paperclipClient.createRun({
         companyId: tenant.paperclipCompanyId,
         workflowId: input.workflowId,
-        spyderbyteRunId: input.runId
+        spyderbyteRunId: input.runId,
+        ...(providerContext ? { providerContext } : {})
       });
 
       return {

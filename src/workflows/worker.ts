@@ -1,6 +1,13 @@
 import type { PaperclipClient } from "../paperclip/types.js";
 import type { PaperclipRunStatus } from "../paperclip/types.js";
-import type { PaperclipEnabledCheck, RunEntitlementCheck, RunStartAuthorizer, TenantResolver } from "./run-service.js";
+import type {
+  PaperclipEnabledCheck,
+  RunEntitlementCheck,
+  RunStartAuthorizer,
+  RuntimeProviderContextHydrator,
+  RuntimeProviderContextResolver,
+  TenantResolver
+} from "./run-service.js";
 import { createRunService } from "./run-service.js";
 import { validateWorkflowQueuePayload } from "./queue.js";
 
@@ -18,6 +25,8 @@ export async function processWorkflowJob(options: {
   authorizeRunStart: RunStartAuthorizer;
   isPaperclipEnabled: PaperclipEnabledCheck;
   checkEntitlement: RunEntitlementCheck;
+  resolveProviderContext?: RuntimeProviderContextResolver;
+  hydrateProviderContext?: RuntimeProviderContextHydrator;
   recordStatus?: (status: WorkflowStatusRecord) => void | Promise<void>;
 }) {
   const payload = validateWorkflowQueuePayload(options.payload);
@@ -26,7 +35,9 @@ export async function processWorkflowJob(options: {
     tenantResolver: options.tenantResolver,
     authorizeRunStart: options.authorizeRunStart,
     isPaperclipEnabled: options.isPaperclipEnabled,
-    checkEntitlement: options.checkEntitlement
+    checkEntitlement: options.checkEntitlement,
+    ...(options.resolveProviderContext ? { resolveProviderContext: options.resolveProviderContext } : {}),
+    ...(options.hydrateProviderContext ? { hydrateProviderContext: options.hydrateProviderContext } : {})
   });
 
   try {
