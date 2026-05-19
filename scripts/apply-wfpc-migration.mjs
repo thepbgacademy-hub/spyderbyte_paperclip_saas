@@ -108,6 +108,30 @@ try {
   if (!outboxReady) {
     await client.query(readFileSync("supabase/migrations/0004_workflow_queue_outbox.sql", "utf8"));
   }
+  const boundProviderExisting = await client.query(
+    `select
+      exists (select 1 from information_schema.columns where table_schema = 'wfpc' and table_name = 'workflow_runs' and column_name = 'bound_secret_reference_id') as has_secret_reference_id,
+      exists (
+        select 1
+        from pg_constraint
+        where conname = 'workflow_runs_bound_secret_reference_id_fkey'
+          and conrelid = to_regclass('wfpc.workflow_runs')
+          and pg_get_constraintdef(oid) like '%references wfpc.secret_references(id)%'
+      ) as has_secret_reference_fk,
+      exists (select 1 from information_schema.columns where table_schema = 'wfpc' and table_name = 'workflow_runs' and column_name = 'bound_provider_context' and is_nullable = 'NO') as has_provider_context,
+      exists (
+        select 1
+        from pg_constraint
+        where conname = 'workflow_runs_bound_provider_context_object_check'
+          and conrelid = to_regclass('wfpc.workflow_runs')
+          and pg_get_constraintdef(oid) like '%jsonb_typeof(bound_provider_context) = ''array''%'
+      ) as has_context_check,
+      exists (select 1 from pg_indexes where schemaname = 'wfpc' and indexname = 'workflow_runs_bound_secret_reference_idx') as has_secret_reference_idx`
+  );
+  const boundProviderReady = Object.values(boundProviderExisting.rows[0] ?? {}).every(Boolean);
+  if (!boundProviderReady) {
+    await client.query(readFileSync("supabase/migrations/0005_bound_provider_context.sql", "utf8"));
+  }
   const vaultExisting = await client.query(
     `select
       exists (select 1 from information_schema.tables where table_schema = 'wfpc_private' and table_name = 'vault_secrets') as has_table,
@@ -163,6 +187,7 @@ try {
           !acidReady ||
           !purchaseReady ||
           !outboxReady ||
+          !boundProviderReady ||
           !vaultReady ||
           !vaultKindReady ||
           !storageSecretReady ||
