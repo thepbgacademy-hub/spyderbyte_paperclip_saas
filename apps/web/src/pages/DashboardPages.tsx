@@ -19,6 +19,7 @@ import {
   getInsightStats,
   getNeedsAttentionItems,
   getPageTestId,
+  getPlatformLoadVisual,
   getOperatingSnapshotMetrics,
   getRecentArtifacts,
   getResultCards,
@@ -138,6 +139,7 @@ export function DashboardPages(props: DashboardPagesProps) {
   const operatingSnapshot = getOperatingSnapshotMetrics(props.dashboard, snapshotContext);
   const homeWorkQueue = getHomeWorkQueue(props.dashboard, snapshotContext);
   const insightStats = getInsightStats(props.dashboard);
+  const platformLoad = getPlatformLoadVisual(props.dashboard.platformLoad);
   const recentArtifacts = getRecentArtifacts(props.dashboard, {
     googleDriveConnected: props.state.googleDriveConnected,
     dropboxConnected: props.state.dropboxConnected
@@ -670,6 +672,41 @@ export function DashboardPages(props: DashboardPagesProps) {
             {insightStats.map((stat) => (
               <MetricCard key={stat.label} label={stat.label} value={stat.value} detail={stat.delta} />
             ))}
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panelHeader">
+            <p className="eyebrow">Platform Traffic</p>
+          </div>
+          <div className="metricCard">
+            <p>{platformLoad.label}</p>
+            <strong>{platformLoad.value}</strong>
+            <span>{platformLoad.detail}</span>
+            <div aria-hidden="true" style={{ marginTop: "12px" }}>
+              <div
+                style={{
+                  height: "10px",
+                  borderRadius: "999px",
+                  background: "rgba(255,255,255,0.12)",
+                  overflow: "hidden"
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${platformLoad.gaugePercent}%`,
+                    borderRadius: "999px",
+                    background:
+                      platformLoad.gaugePercent >= 80
+                        ? "linear-gradient(90deg, #f2b35b 0%, #d97045 100%)"
+                        : platformLoad.gaugePercent >= 50
+                          ? "linear-gradient(90deg, #d8c56a 0%, #d79f4f 100%)"
+                          : "linear-gradient(90deg, #7bcf9f 0%, #4aa17b 100%)"
+                  }}
+                />
+              </div>
+            </div>
           </div>
         </section>
 

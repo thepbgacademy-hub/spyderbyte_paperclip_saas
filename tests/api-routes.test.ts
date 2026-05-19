@@ -13,7 +13,8 @@ describe("authenticated dashboard API", () => {
       listPackages: vi.fn(),
       listArtifacts: vi.fn(),
       listProviderConnections: vi.fn(),
-      listStorageConnectors: vi.fn()
+      listStorageConnectors: vi.fn(),
+      getPlatformLoad: vi.fn()
     });
 
     await expect(api.listDashboard({ authorization: "" })).rejects.toMatchObject({ code: "unauthorized" });
@@ -29,7 +30,12 @@ describe("authenticated dashboard API", () => {
       listProviderConnections: vi.fn().mockResolvedValue([{ providerKind: "openai_api", label: "OpenAI", connected: true }]),
       listStorageConnectors: vi
         .fn()
-        .mockResolvedValue([{ id: "storage-1", providerKind: "google_drive", displayName: "Company Drive", connected: true, publicTarget: { folderLabel: "Exports" } }])
+        .mockResolvedValue([{ id: "storage-1", providerKind: "google_drive", displayName: "Company Drive", connected: true, publicTarget: { folderLabel: "Exports" } }]),
+      getPlatformLoad: vi.fn().mockResolvedValue({
+        level: "light",
+        summary: "Light traffic",
+        detail: "New workflows should begin processing quickly."
+      })
     };
     const api = createDashboardApi(deps);
 
@@ -40,7 +46,12 @@ describe("authenticated dashboard API", () => {
       packages: [{ id: "pkg-social", name: "Social Media Agency" }],
       artifacts: [{ id: "artifact-1", filename: "post.png", expiresAt: "2026-05-11T00:00:00.000Z" }],
       providerConnections: [{ providerKind: "openai_api", label: "OpenAI", connected: true }],
-      storageConnectors: [{ id: "storage-1", providerKind: "google_drive", displayName: "Company Drive", connected: true, publicTarget: { folderLabel: "Exports" } }]
+      storageConnectors: [{ id: "storage-1", providerKind: "google_drive", displayName: "Company Drive", connected: true, publicTarget: { folderLabel: "Exports" } }],
+      platformLoad: {
+        level: "light",
+        summary: "Light traffic",
+        detail: "New workflows should begin processing quickly."
+      }
     });
 
     expect(deps.requireTenantMember).toHaveBeenCalledWith({ tenantId: "tenant-1", userId: "user-1" });
@@ -54,7 +65,12 @@ describe("authenticated dashboard API", () => {
       listPackages: vi.fn().mockResolvedValue([]),
       listArtifacts: vi.fn().mockResolvedValue([]),
       listProviderConnections: vi.fn().mockResolvedValue([]),
-      listStorageConnectors: vi.fn().mockResolvedValue([])
+      listStorageConnectors: vi.fn().mockResolvedValue([]),
+      getPlatformLoad: vi.fn().mockResolvedValue({
+        level: "light",
+        summary: "Light traffic",
+        detail: "New workflows should begin processing quickly."
+      })
     });
 
     await expect(api.listDashboard({ authorization: "Bearer valid" })).rejects.toThrow("Forbidden customer-facing field");
@@ -70,7 +86,12 @@ describe("authenticated dashboard API", () => {
       listProviderConnections: vi.fn().mockResolvedValue([]),
       listStorageConnectors: vi
         .fn()
-        .mockResolvedValue([{ id: "storage-1", providerKind: "google_drive", displayName: "Company Drive", connected: true, publicTarget: { oauthTokenRef: "vault://oauth" } }])
+        .mockResolvedValue([{ id: "storage-1", providerKind: "google_drive", displayName: "Company Drive", connected: true, publicTarget: { oauthTokenRef: "vault://oauth" } }]),
+      getPlatformLoad: vi.fn().mockResolvedValue({
+        level: "light",
+        summary: "Light traffic",
+        detail: "New workflows should begin processing quickly."
+      })
     });
 
     await expect(api.listDashboard({ authorization: "Bearer valid" })).rejects.toThrow("Forbidden customer-facing field");

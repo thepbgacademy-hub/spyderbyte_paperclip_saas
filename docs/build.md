@@ -870,6 +870,42 @@ per-run basis.
 - [ ] Run `npm run build`, `npm test`, `npm run lint`, `npm run build:web`, and
   the relevant deployed smoke/E2E checks.
 
+## Worker Capacity Guidance
+
+Current VPS target:
+
+- `4 vCPU`
+- `16 GB RAM`
+- `200 GB NVMe`
+- `16 TB bandwidth`
+
+Recommended first commercial worker posture:
+
+- treat the system as queue-first, not request-first
+- keep web/API responsiveness separate from workflow execution
+- start with conservative worker concurrency, then raise it only after measurement
+- assume upstream LLM latency dominates most runs, but keep room for local artifact, DB, and retry overhead
+
+Conservative starting guidance:
+
+- worker process count: `1`
+- per-process workflow concurrency: `2` to `4`
+- treat `2` as the safer initial default for mixed workloads
+- allow a move to `4` only after observing stable memory, queue depth, and run latency
+
+Operational rules:
+
+- one noisy tenant must not be allowed to occupy all worker slots indefinitely
+- watch queue depth, pending age, retry count, and median time-to-start
+- fail closed on missing or revoked tenant credentials instead of retrying ambiguous provider selection
+- prefer more evidence before raising concurrency; do not assume model-provider latency makes all local limits irrelevant
+
+Customer-safe dashboard traffic signal:
+
+- expose a blended traffic status such as `Light traffic`, `Normal traffic`, or `Heavy traffic`
+- derive it from queue depth plus active queued/running work, not raw VPS CPU
+- present it as delay guidance, not a hard SLA
+
 ## Self-Review
 
 Coverage check:

@@ -1,7 +1,4 @@
-import type {
-  DashboardSnapshot,
-  DashboardWorkflow
-} from "../dashboard-client.js";
+import type { DashboardPlatformLoad, DashboardSnapshot, DashboardWorkflow } from "../dashboard-client.js";
 
 export type Role = "member" | "operator";
 export type PageKey =
@@ -83,6 +80,13 @@ export interface MetricSummary {
   value: string;
   detail: string;
 }
+
+export interface PlatformLoadVisual {
+  label: string;
+  value: string;
+  detail: string;
+  gaugePercent: number;
+};
 
 export interface WorkQueueItem {
   task: string;
@@ -865,6 +869,17 @@ export function getInsightStats(snapshot: DashboardSnapshot) {
       delta: connectedStorage > 0 ? "Customer-owned export path ready" : "Connect an export lane"
     }
   ] as const;
+}
+
+export function getPlatformLoadVisual(platformLoad: DashboardPlatformLoad): PlatformLoadVisual {
+  const gaugePercent = platformLoad.level === "heavy" ? 88 : platformLoad.level === "moderate" ? 56 : 22;
+
+  return {
+    label: "Platform traffic",
+    value: platformLoad.summary,
+    detail: platformLoad.detail,
+    gaugePercent
+  };
 }
 
 export function getRecentArtifacts(snapshot: DashboardSnapshot, input: { googleDriveConnected: boolean; dropboxConnected: boolean }): ArtifactSummaryRow[] {

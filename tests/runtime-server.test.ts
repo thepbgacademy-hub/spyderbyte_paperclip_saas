@@ -17,12 +17,18 @@ vi.mock("../src/db/postgres-client.js", () => ({
 vi.mock("../src/db/supabase-repositories.js", () => ({
   createSupabaseStorageConnectorRepository: vi.fn(() => ({ register: vi.fn() })),
   createSupabaseRepositories: vi.fn(() => ({
+    resolvePaperclipCompanyMapping: vi.fn(),
     requireTenantMember: vi.fn(),
     listWorkflows: vi.fn(),
     listPackages: vi.fn(),
     listArtifacts: vi.fn(),
     listProviderConnections: vi.fn(),
-    listStorageConnectors: vi.fn()
+    listStorageConnectors: vi.fn(),
+    getPlatformLoad: vi.fn().mockResolvedValue({
+      level: "light",
+      summary: "Light traffic",
+      detail: "New workflows should begin processing quickly."
+    })
   }))
 }));
 

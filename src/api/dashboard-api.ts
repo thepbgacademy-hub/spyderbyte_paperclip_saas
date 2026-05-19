@@ -1,4 +1,5 @@
 import { assertWealthFactoryResponse } from "../wealthfactory/response-guard.js";
+import type { CustomerSafePlatformLoad } from "../db/supabase-repositories.js";
 
 export type ApiRole = "member" | "operator";
 
@@ -26,6 +27,7 @@ type DashboardApiDeps = {
   listArtifacts(input: { tenantId: string; userId: string }): Promise<unknown[]>;
   listProviderConnections(input: { tenantId: string; userId: string }): Promise<unknown[]>;
   listStorageConnectors(input: { tenantId: string; userId: string }): Promise<unknown[]>;
+  getPlatformLoad(input: { tenantId: string; userId: string }): Promise<CustomerSafePlatformLoad>;
 };
 
 export function createDashboardApi(deps: DashboardApiDeps) {
@@ -38,12 +40,13 @@ export function createDashboardApi(deps: DashboardApiDeps) {
 
       await deps.requireTenantMember({ tenantId: session.tenantId, userId: session.userId });
 
-      const [workflows, packages, artifacts, providerConnections, storageConnectors] = await Promise.all([
+      const [workflows, packages, artifacts, providerConnections, storageConnectors, platformLoad] = await Promise.all([
         deps.listWorkflows({ tenantId: session.tenantId, userId: session.userId }),
         deps.listPackages({ tenantId: session.tenantId, userId: session.userId }),
         deps.listArtifacts({ tenantId: session.tenantId, userId: session.userId }),
         deps.listProviderConnections({ tenantId: session.tenantId, userId: session.userId }),
-        deps.listStorageConnectors({ tenantId: session.tenantId, userId: session.userId })
+        deps.listStorageConnectors({ tenantId: session.tenantId, userId: session.userId }),
+        deps.getPlatformLoad({ tenantId: session.tenantId, userId: session.userId })
       ]);
 
       const response = {
@@ -53,7 +56,8 @@ export function createDashboardApi(deps: DashboardApiDeps) {
         packages,
         artifacts,
         providerConnections,
-        storageConnectors
+        storageConnectors,
+        platformLoad
       };
 
       assertWealthFactoryResponse(response);

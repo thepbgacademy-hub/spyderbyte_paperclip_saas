@@ -29,6 +29,12 @@ export type DashboardStorageConnector = {
   publicTarget: Record<string, unknown>;
 };
 
+export type DashboardPlatformLoad = {
+  level: "light" | "moderate" | "heavy";
+  summary: string;
+  detail: string;
+};
+
 export type DashboardSnapshot = {
   tenantName: string;
   packageName: string;
@@ -40,6 +46,7 @@ export type DashboardSnapshot = {
   artifacts: readonly DashboardArtifact[];
   providerConnections: readonly DashboardProviderConnection[];
   storageConnectors: readonly DashboardStorageConnector[];
+  platformLoad: DashboardPlatformLoad;
 };
 
 export type DashboardBootstrap = {
@@ -71,7 +78,12 @@ const defaultSnapshot: DashboardSnapshot = {
   workflows: [],
   artifacts: [],
   providerConnections: [],
-  storageConnectors: []
+  storageConnectors: [],
+  platformLoad: {
+    level: "light",
+    summary: "Light traffic",
+    detail: "New workflows should begin processing quickly."
+  }
 };
 
 export function createDashboardClient(options: DashboardClientOptions) {
@@ -161,7 +173,8 @@ function mapDashboardResponse(response: unknown): DashboardSnapshot {
     workflows: workflows.map(mapWorkflow),
     artifacts: artifacts.map(mapArtifact),
     providerConnections: mappedProviderConnections,
-    storageConnectors: storageConnectors.map(mapStorageConnector)
+    storageConnectors: storageConnectors.map(mapStorageConnector),
+    platformLoad: mapPlatformLoad(record.platformLoad ?? record.platform_load)
   };
 }
 
@@ -207,6 +220,16 @@ function mapStorageConnector(value: unknown): DashboardStorageConnector {
     displayName: String(record.displayName ?? record.display_name ?? "Storage"),
     connected: record.connected !== false,
     publicTarget: asRecord(record.publicTarget ?? record.public_target)
+  };
+}
+
+function mapPlatformLoad(value: unknown): DashboardPlatformLoad {
+  const record = asRecord(value);
+  const level = record.level === "heavy" || record.level === "moderate" ? record.level : "light";
+  return {
+    level,
+    summary: typeof record.summary === "string" ? record.summary : defaultSnapshot.platformLoad.summary,
+    detail: typeof record.detail === "string" ? record.detail : defaultSnapshot.platformLoad.detail
   };
 }
 

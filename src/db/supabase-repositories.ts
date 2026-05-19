@@ -4,6 +4,12 @@ export type QueryClient = {
   query(sql: string, values: readonly unknown[]): Promise<{ rows: unknown[] }>;
 };
 
+export type CustomerSafePlatformLoad = {
+  level: "light" | "moderate" | "heavy";
+  summary: string;
+  detail: string;
+};
+
 type DashboardScope = {
   tenantId: string;
 };
@@ -148,6 +154,51 @@ export function createSupabaseRepositories(client: QueryClient) {
           connected: true,
           publicTarget: toStorageConnectorPublicTarget(record.public_target)
         }));
+    },
+
+    async getPlatformLoad(input: DashboardScope): Promise<CustomerSafePlatformLoad> {
+      const [outbox, activeRuns] = await Promise.all([
+        client.query(
+          `select count(*)::int as pending_count
+           from wfpc.workflow_queue_outbox
+           where tenant_id = $1
+             and status in ('pending', 'claimed', 'failed')`,
+          [input.tenantId]
+        ),
+        client.query(
+          `select count(*)::int as active_count
+           from wfpc.workflow_runs
+           where tenant_id = $1
+             and status in ('queued', 'running')`,
+          [input.tenantId]
+        )
+      ]);
+
+      const pendingCount = Number(asRecord(outbox.rows[0]).pending_count ?? 0);
+      const activeCount = Number(asRecord(activeRuns.rows[0]).active_count ?? 0);
+      const pressureScore = pendingCount + activeCount;
+
+      if (pressureScore >= 10) {
+        return {
+          level: "heavy",
+          summary: "Heavy traffic",
+          detail: "Workflows may take longer than usual to begin processing."
+        };
+      }
+
+      if (pressureScore >= 4) {
+        return {
+          level: "moderate",
+          summary: "Normal traffic",
+          detail: "Slight delays are possible while current work clears."
+        };
+      }
+
+      return {
+        level: "light",
+        summary: "Light traffic",
+        detail: "New workflows should begin processing quickly."
+      };
     },
 
     async createSecretReference(input: {

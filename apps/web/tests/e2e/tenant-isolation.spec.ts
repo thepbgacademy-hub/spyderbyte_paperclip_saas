@@ -39,7 +39,12 @@ test("operator can pause workflows while members cannot see pause controls", asy
         workflows: [],
         artifacts: [],
         providerConnections: [],
-        storageConnectors: []
+        storageConnectors: [],
+        platformLoad: {
+          level: "light",
+          summary: "Light traffic",
+          detail: "New workflows should begin processing quickly."
+        }
       }
     };
   });

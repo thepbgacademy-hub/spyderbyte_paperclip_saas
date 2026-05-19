@@ -19,7 +19,12 @@ describe("dashboard client", () => {
           artifacts: [{ id: "artifact-1", filename: "post.png", artifactType: "image", expiresAt: "2026-05-11T00:00:00.000Z" }],
           storageConnectors: [
             { id: "storage-1", providerKind: "google_drive", displayName: "Company Drive", connected: true, publicTarget: { folderLabel: "Exports" } }
-          ]
+          ],
+          platformLoad: {
+            level: "moderate",
+            summary: "Normal traffic",
+            detail: "Slight delays are possible while current work clears."
+          }
         })
     });
     const client = createDashboardClient({
@@ -42,7 +47,12 @@ describe("dashboard client", () => {
       ],
       storageConnectors: [
         { id: "storage-1", providerKind: "google_drive", displayName: "Company Drive", connected: true, publicTarget: { folderLabel: "Exports" } }
-      ]
+      ],
+      platformLoad: {
+        level: "moderate",
+        summary: "Normal traffic",
+        detail: "Slight delays are possible while current work clears."
+      }
     });
     expect(fetchImpl).toHaveBeenCalledWith("https://api.wealthfactory.test/api/dashboard", {
       headers: { authorization: "Bearer valid" }
@@ -62,7 +72,12 @@ describe("dashboard client", () => {
           workflows: [],
           artifacts: [],
           providerConnections: [],
-          storageConnectors: []
+          storageConnectors: [],
+          platformLoad: {
+            level: "light" as const,
+            summary: "Light traffic",
+            detail: "New workflows should begin processing quickly."
+          }
         }
       },
       fetch: vi.fn()
@@ -88,7 +103,12 @@ describe("dashboard client", () => {
           workflows: [],
           artifacts: [],
           providerConnections: [],
-          storageConnectors: []
+          storageConnectors: [],
+          platformLoad: {
+            level: "light" as const,
+            summary: "Light traffic",
+            detail: "New workflows should begin processing quickly."
+          }
         }
       },
       fetch: vi.fn()
@@ -111,7 +131,12 @@ describe("dashboard client", () => {
               providerConnections: [],
               workflows: [],
               artifacts: [],
-              storageConnectors: []
+              storageConnectors: [],
+              platformLoad: {
+                level: "light",
+                summary: "Light traffic",
+                detail: "New workflows should begin processing quickly."
+              }
             }
           })
         })

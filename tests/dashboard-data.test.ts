@@ -4,6 +4,7 @@ import {
   createInitialConnectedProviders,
   getHomeWorkQueue,
   getInsightStats,
+  getPlatformLoadVisual,
   getRecentArtifacts,
   getResultCards
 } from "../apps/web/src/pages/dashboard-data.js";
@@ -19,7 +20,12 @@ const snapshot: DashboardSnapshot = {
   workflows: [{ id: "wf-1", name: "Media Calendar", providerKind: "openai_api", enabled: true }],
   artifacts: [{ id: "artifact-1", filename: "campaign_asset_list.pdf", artifactType: "pdf", expiresAt: "2026-05-20T00:00:00.000Z" }],
   providerConnections: [{ providerKind: "openai_api", label: "OpenAI", connected: false, required: true }],
-  storageConnectors: [{ id: "storage-1", providerKind: "google_drive", displayName: "Google Drive", connected: false, publicTarget: {} }]
+  storageConnectors: [{ id: "storage-1", providerKind: "google_drive", displayName: "Google Drive", connected: false, publicTarget: {} }],
+  platformLoad: {
+    level: "moderate",
+    summary: "Normal traffic",
+    detail: "Slight delays are possible while current work clears."
+  }
 };
 
 describe("dashboard data helpers", () => {
@@ -106,5 +112,14 @@ describe("dashboard data helpers", () => {
         delivery: "Google Drive"
       }
     ]);
+  });
+
+  it("builds a customer-safe platform load visual", () => {
+    expect(getPlatformLoadVisual(snapshot.platformLoad)).toEqual({
+      label: "Platform traffic",
+      value: "Normal traffic",
+      detail: "Slight delays are possible while current work clears.",
+      gaugePercent: 56
+    });
   });
 });

@@ -36,7 +36,12 @@ describe("dashboard HTTP boundary", () => {
         packages: [],
         artifacts: [],
         providerConnections: [],
-        storageConnectors: [{ id: "storage-1", providerKind: "dropbox", displayName: "Marketing Dropbox", connected: true, publicTarget: { folderLabel: "Exports" } }]
+        storageConnectors: [{ id: "storage-1", providerKind: "dropbox", displayName: "Marketing Dropbox", connected: true, publicTarget: { folderLabel: "Exports" } }],
+        platformLoad: {
+          level: "moderate",
+          summary: "Normal traffic",
+          detail: "Slight delays are possible while current work clears."
+        }
       })
     };
     const handler = createDashboardHttpHandler({
