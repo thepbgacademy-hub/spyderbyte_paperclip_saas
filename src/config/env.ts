@@ -7,6 +7,7 @@ export type AppEnv = {
   paperclipBaseUrl: string;
   paperclipServiceToken: string;
   vaultMasterKey: string;
+  providerExecutionMode: "tenant_credentials_required" | "debug_shared_fallback";
 };
 
 const REQUIRED_KEYS = [
@@ -59,6 +60,10 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   if (!["development", "test", "production"].includes(nodeEnv)) {
     invalidKeys.push("NODE_ENV");
   }
+  const providerExecutionMode = source.WF_PROVIDER_EXECUTION_MODE ?? "tenant_credentials_required";
+  if (!["tenant_credentials_required", "debug_shared_fallback"].includes(providerExecutionMode)) {
+    invalidKeys.push("WF_PROVIDER_EXECUTION_MODE");
+  }
 
   if (missingKeys.length > 0 || invalidKeys.length > 0) {
     throw new EnvValidationError(missingKeys, invalidKeys);
@@ -72,7 +77,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     redisUrl: source.REDIS_URL as string,
     paperclipBaseUrl: trimTrailingSlash(source.PAPERCLIP_BASE_URL as string),
     paperclipServiceToken: source.PAPERCLIP_SERVICE_TOKEN as string,
-    vaultMasterKey: source.WF_VAULT_MASTER_KEY as string
+    vaultMasterKey: source.WF_VAULT_MASTER_KEY as string,
+    providerExecutionMode: providerExecutionMode as AppEnv["providerExecutionMode"]
   };
 }
 

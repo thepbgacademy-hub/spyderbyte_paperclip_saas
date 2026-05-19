@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { RuntimeProviderResolutionError } from "../src/providers/runtime-provider-resolution.js";
 import { createWorkflowQueuePayload, validateWorkflowQueuePayload } from "../src/workflows/queue.js";
 import { createRunService } from "../src/workflows/run-service.js";
 import { processWorkflowJob } from "../src/workflows/worker.js";
@@ -183,6 +184,155 @@ describe("run service", () => {
           secretRef: "wf_secret_openai",
           metadata: { projectId: "proj_123" },
           secretValues: { apiKey: "sk-openai-secret" }
+        }
+      ]
+    });
+  });
+
+  it("fails closed in tenant-required mode when no tenant provider is connected", async () => {
+    const paperclipClient = {
+      createRun: vi.fn()
+    };
+    const service = createRunService({
+      paperclipClient,
+      tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
+      authorizeRunStart: vi.fn().mockResolvedValue(true),
+      resolveProviderContext: vi.fn().mockRejectedValue(
+        new RuntimeProviderResolutionError({
+          tenantId: "tenant-1",
+          workflowId: "workflow-1",
+          capability: "text_generation"
+        })
+      ),
+      resolveDebugSharedProvider: vi.fn()
+    });
+
+    await expect(
+      service.startRun({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "workflow-1",
+        requiredCapabilities: ["text_generation"]
+      })
+    ).rejects.toMatchObject({
+      code: "runtime_provider_unavailable",
+      publicMessage: "workflow_failed"
+    });
+
+    expect(paperclipClient.createRun).not.toHaveBeenCalled();
+  });
+
+  it("uses explicit debug shared fallback only when tenant resolution is unavailable", async () => {
+    const paperclipClient = {
+      createRun: vi.fn().mockResolvedValue({ paperclipRunId: "pc-run-1", status: "queued" })
+    };
+    const resolveDebugSharedProvider = vi.fn().mockResolvedValue([
+      {
+        capability: "text_generation",
+        providerKind: "openai_api",
+        label: "Operator Debug Provider",
+        secretRef: "wf_debug_shared_provider",
+        metadata: {},
+        secretValues: { apiKey: "sk-operator-debug" }
+      }
+    ]);
+    const service = createRunService({
+      paperclipClient,
+      tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
+      authorizeRunStart: vi.fn().mockResolvedValue(true),
+      providerExecutionMode: "debug_shared_fallback",
+      resolveProviderContext: vi.fn().mockRejectedValue(
+        new RuntimeProviderResolutionError({
+          tenantId: "tenant-1",
+          workflowId: "workflow-1",
+          capability: "text_generation"
+        })
+      ),
+      resolveDebugSharedProvider
+    });
+
+    await service.startRun({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "workflow-1",
+      requiredCapabilities: ["text_generation"]
+    });
+
+    expect(resolveDebugSharedProvider).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "workflow-1",
+      requiredCapabilities: ["text_generation"]
+    });
+    expect(paperclipClient.createRun).toHaveBeenCalledWith({
+      companyId: "pc-company-1",
+      workflowId: "workflow-1",
+      spyderbyteRunId: "run-1",
+      providerContext: [
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Operator Debug Provider",
+          secretRef: "wf_debug_shared_provider",
+          metadata: {},
+          secretValues: { apiKey: "sk-operator-debug" }
+        }
+      ]
+    });
+  });
+
+  it("does not use debug shared fallback when tenant provider context resolves successfully", async () => {
+    const paperclipClient = {
+      createRun: vi.fn().mockResolvedValue({ paperclipRunId: "pc-run-1", status: "queued" })
+    };
+    const resolveDebugSharedProvider = vi.fn();
+    const service = createRunService({
+      paperclipClient,
+      tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
+      authorizeRunStart: vi.fn().mockResolvedValue(true),
+      providerExecutionMode: "debug_shared_fallback",
+      resolveProviderContext: vi.fn().mockResolvedValue([
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Tenant OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: {}
+        }
+      ]),
+      hydrateProviderContext: vi.fn().mockResolvedValue([
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Tenant OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: {},
+          secretValues: { apiKey: "sk-tenant" }
+        }
+      ]),
+      resolveDebugSharedProvider
+    });
+
+    await service.startRun({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "workflow-1",
+      requiredCapabilities: ["text_generation"]
+    });
+
+    expect(resolveDebugSharedProvider).not.toHaveBeenCalled();
+    expect(paperclipClient.createRun).toHaveBeenCalledWith({
+      companyId: "pc-company-1",
+      workflowId: "workflow-1",
+      spyderbyteRunId: "run-1",
+      providerContext: [
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Tenant OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: {},
+          secretValues: { apiKey: "sk-tenant" }
         }
       ]
     });
@@ -450,6 +600,61 @@ describe("workflow worker", () => {
           secretRef: "wf_secret_openai",
           metadata: {},
           secretValues: { apiKey: "sk-openai-secret" }
+        }
+      ]
+    });
+  });
+
+  it("worker uses debug shared fallback only in explicit fallback mode", async () => {
+    const createRun = vi.fn().mockResolvedValue({
+      paperclipRunId: "pc-run-1",
+      status: "queued"
+    });
+
+    await processWorkflowJob({
+      payload: createWorkflowQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "workflow-1",
+        createdByUserId: "user-1"
+      }),
+      paperclipClient: { createRun },
+      tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
+      authorizeRunStart: vi.fn().mockResolvedValue(true),
+      isPaperclipEnabled: vi.fn().mockResolvedValue(true),
+      checkEntitlement: vi.fn().mockResolvedValue({ allowed: true }),
+      providerExecutionMode: "debug_shared_fallback",
+      resolveProviderContext: vi.fn().mockRejectedValue(
+        new RuntimeProviderResolutionError({
+          tenantId: "tenant-1",
+          workflowId: "workflow-1",
+          capability: "text_generation"
+        })
+      ),
+      resolveDebugSharedProvider: vi.fn().mockResolvedValue([
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Operator Debug Provider",
+          secretRef: "wf_debug_shared_provider",
+          metadata: {},
+          secretValues: { apiKey: "sk-operator-debug" }
+        }
+      ])
+    });
+
+    expect(createRun).toHaveBeenCalledWith({
+      companyId: "pc-company-1",
+      workflowId: "workflow-1",
+      spyderbyteRunId: "run-1",
+      providerContext: [
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Operator Debug Provider",
+          secretRef: "wf_debug_shared_provider",
+          metadata: {},
+          secretValues: { apiKey: "sk-operator-debug" }
         }
       ]
     });

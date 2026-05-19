@@ -1,7 +1,9 @@
 import type { PaperclipClient, PaperclipRunStatus } from "../paperclip/types.js";
 import type { EntitlementDecision, ProviderCapability } from "../packages/package-types.js";
+import type { ProviderExecutionMode } from "../providers/runtime-provider-fallback.js";
 import type { RuntimeProviderExecutionBinding } from "../providers/runtime-provider-execution.js";
 import type { RuntimeProviderBinding } from "../providers/runtime-provider-resolution.js";
+import { resolveProviderExecutionContext, type DebugSharedProviderResolver } from "./provider-execution-policy.js";
 
 export type TenantPaperclipMapping = {
   paperclipCompanyId: string;
@@ -77,8 +79,10 @@ export function createRunService(options: {
   authorizeRunStart?: RunStartAuthorizer;
   isPaperclipEnabled?: PaperclipEnabledCheck;
   checkEntitlement?: RunEntitlementCheck;
+  providerExecutionMode?: ProviderExecutionMode;
   resolveProviderContext?: RuntimeProviderContextResolver;
   hydrateProviderContext?: RuntimeProviderContextHydrator;
+  resolveDebugSharedProvider?: DebugSharedProviderResolver;
 }) {
   return {
     async startRun(input: StartWorkflowRunInput): Promise<PublicWorkflowRunStatus> {
@@ -102,14 +106,13 @@ export function createRunService(options: {
       }
 
       const tenant = await options.tenantResolver(input.tenantId);
-      const providerBindings = options.resolveProviderContext ? await options.resolveProviderContext(input) : undefined;
-      const providerContext =
-        providerBindings && options.hydrateProviderContext
-          ? await options.hydrateProviderContext({
-              ...input,
-              providerBindings
-            })
-          : providerBindings;
+      const providerContext = await resolveProviderExecutionContext({
+        mode: options.providerExecutionMode ?? "tenant_credentials_required",
+        input,
+        ...(options.resolveProviderContext ? { resolveProviderContext: options.resolveProviderContext } : {}),
+        ...(options.hydrateProviderContext ? { hydrateProviderContext: options.hydrateProviderContext } : {}),
+        ...(options.resolveDebugSharedProvider ? { resolveDebugSharedProvider: options.resolveDebugSharedProvider } : {})
+      });
       const run = await options.paperclipClient.createRun({
         companyId: tenant.paperclipCompanyId,
         workflowId: input.workflowId,

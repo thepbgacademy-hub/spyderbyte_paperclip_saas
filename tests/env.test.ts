@@ -23,7 +23,8 @@ describe("loadEnv", () => {
       redisUrl: "redis://localhost:6379",
       paperclipBaseUrl: "https://paperclip-internal.spyderbyte.cloud",
       paperclipServiceToken: "paperclip-service-token",
-      vaultMasterKey: "test-master-key-with-enough-length"
+      vaultMasterKey: "test-master-key-with-enough-length",
+      providerExecutionMode: "tenant_credentials_required"
     });
   });
 
@@ -51,5 +52,13 @@ describe("loadEnv", () => {
 
   it("requires a strong vault master key", () => {
     expect(() => loadEnv({ ...validEnv, WF_VAULT_MASTER_KEY: "short" })).toThrow(/invalid: WF_VAULT_MASTER_KEY/);
+  });
+
+  it("accepts explicit debug shared fallback mode", () => {
+    expect(loadEnv({ ...validEnv, WF_PROVIDER_EXECUTION_MODE: "debug_shared_fallback" }).providerExecutionMode).toBe("debug_shared_fallback");
+  });
+
+  it("rejects unknown provider execution modes", () => {
+    expect(() => loadEnv({ ...validEnv, WF_PROVIDER_EXECUTION_MODE: "something_else" })).toThrow(/WF_PROVIDER_EXECUTION_MODE/);
   });
 });
