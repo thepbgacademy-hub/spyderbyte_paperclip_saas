@@ -20,7 +20,8 @@ describe("ACID secret revoke service", () => {
 
     expect(repository.revokeCredential).toHaveBeenCalledWith({
       tenantId: "tenant-1",
-      secretReferenceId: "11111111-1111-4111-8111-111111111111"
+      secretReferenceId: "11111111-1111-4111-8111-111111111111",
+      revokedReason: "manual"
     });
     expect(vault.revoke).toHaveBeenCalledWith({ tenantId: "tenant-1", secretRef: "vault://secret-ref" });
     expect(audit).toHaveBeenCalledWith({

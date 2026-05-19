@@ -306,14 +306,16 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
       });
     },
 
-    async revokeCredential(input: { tenantId: string; secretReferenceId: string }): Promise<{ revoked: boolean }> {
+    async revokeCredential(input: { tenantId: string; secretReferenceId: string; revokedReason: "manual" }): Promise<{ revoked: boolean }> {
       return runner.withTransaction(async (transaction) => {
         const result = await transaction.query(
           `update wfpc.secret_references
-           set revoked_at = coalesce(revoked_at, now())
+           set revoked_at = coalesce(revoked_at, now()),
+               revoked_reason = $3,
+               updated_at = now()
            where tenant_id = $1 and id = $2 and revoked_at is null
            returning id`,
-          [input.tenantId, input.secretReferenceId]
+          [input.tenantId, input.secretReferenceId, input.revokedReason]
         );
         return { revoked: result.rows.length > 0 };
       });
@@ -356,7 +358,10 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
              and runs.id = $2
              and (
                secrets.revoked_at is null
-               or runs.status in ('queued', 'running')
+               or (
+                 secrets.revoked_reason = 'superseded'
+                 and runs.status in ('queued', 'running')
+               )
              )
            limit 1`,
           [input.tenantId, input.runId]

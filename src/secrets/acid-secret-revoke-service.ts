@@ -1,5 +1,5 @@
 export type AcidCredentialRevokeRepository = {
-  revokeCredential(input: { tenantId: string; secretReferenceId: string }): Promise<{ revoked: boolean }>;
+  revokeCredential(input: { tenantId: string; secretReferenceId: string; revokedReason: "manual" }): Promise<{ revoked: boolean }>;
 };
 
 export type SecretReferenceResolver = {
@@ -38,7 +38,11 @@ export function createAcidSecretRevokeService(options: {
   return {
     async revoke(input: { tenantId: string; actorUserId: string; secretRef: string }): Promise<void> {
       const secretReferenceId = await options.resolver.findIdBySecretRef({ tenantId: input.tenantId, secretRef: input.secretRef });
-      const revokeResult = await options.repository.revokeCredential({ tenantId: input.tenantId, secretReferenceId });
+      const revokeResult = await options.repository.revokeCredential({
+        tenantId: input.tenantId,
+        secretReferenceId,
+        revokedReason: "manual"
+      });
       await options.vault.revoke({ tenantId: input.tenantId, secretRef: input.secretRef });
       if (!revokeResult.revoked) {
         throw new CredentialAlreadyRevokedError();

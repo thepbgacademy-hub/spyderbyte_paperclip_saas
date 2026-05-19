@@ -1,5 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
+const reuseExistingServer = process.env.CI !== "true";
+
 export default defineConfig({
   testDir: "./tests/e2e",
   timeout: 60_000,
@@ -7,7 +9,7 @@ export default defineConfig({
   webServer: {
     command: "npm run dev:web",
     url: "http://127.0.0.1:5173",
-    reuseExistingServer: false,
+    reuseExistingServer,
     timeout: 120_000
   },
   use: {

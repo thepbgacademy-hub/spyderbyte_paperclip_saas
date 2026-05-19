@@ -300,9 +300,10 @@ export function createSupabaseRepositories(client: QueryClient) {
       revokedAt: string | null;
     }): Promise<string> {
       const result = await client.query(
-        `with revoked_active as (
+         `with revoked_active as (
            update wfpc.secret_references
            set revoked_at = coalesce(revoked_at, now()),
+               revoked_reason = 'superseded',
                updated_at = now()
            where tenant_id = $1
              and provider_kind = $2::wfpc.provider_kind
@@ -331,7 +332,9 @@ export function createSupabaseRepositories(client: QueryClient) {
     async revokeSecretReference(input: { tenantId: string; secretRef: string }): Promise<string> {
       const result = await client.query(
         `update wfpc.secret_references
-         set revoked_at = coalesce(revoked_at, now()), updated_at = now()
+         set revoked_at = coalesce(revoked_at, now()),
+             revoked_reason = coalesce(revoked_reason, 'manual'),
+             updated_at = now()
          where tenant_id = $1 and secret_ref = $2
          returning id`,
         [input.tenantId, input.secretRef]
@@ -352,7 +355,10 @@ export function createSupabaseRepositories(client: QueryClient) {
            and secrets.secret_ref = $2
            and (
              secrets.revoked_at is null
-             or runs.id is not null
+             or (
+               runs.id is not null
+               and secrets.revoked_reason = 'superseded'
+             )
            )
          limit 1`,
         [input.tenantId, input.secretRef, input.runId ?? null]

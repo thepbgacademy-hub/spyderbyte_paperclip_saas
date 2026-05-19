@@ -228,4 +228,27 @@ describe("secret service", () => {
       runId: "run-queued-1"
     });
   });
+
+  it("still fails closed for manually revoked credentials when the repository refuses the run-bound lookup", async () => {
+    const service = createSecretService({
+      vault: {
+        store: vi.fn(),
+        rotate: vi.fn(),
+        revoke: vi.fn(),
+        access: vi.fn()
+      },
+      audit: vi.fn(),
+      repository: {
+        create: vi.fn(),
+        updateSecretRef: vi.fn(),
+        revoke: vi.fn(),
+        findIdBySecretRef: vi.fn().mockResolvedValue("")
+      }
+    });
+
+    await expect(service.access({ tenantId: "tenant-1", runId: "run-queued-1", secretRef: "secret_ref_old" })).rejects.toMatchObject({
+      code: "secret_reference_unavailable",
+      publicMessage: "credential_invalid"
+    });
+  });
 });

@@ -266,12 +266,14 @@ describe("ACID guard repository", () => {
     await expect(
       repository.revokeCredential({
         tenantId: "tenant-1",
-        secretReferenceId: "secret-1"
+        secretReferenceId: "secret-1",
+        revokedReason: "manual"
       })
     ).resolves.toEqual({ revoked: true });
 
     const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
     expect(sql).toMatch(/update wfpc\.secret_references[\s\S]+revoked_at = coalesce/i);
+    expect(sql).toMatch(/revoked_reason = \$3/i);
     expect(sql).toMatch(/where tenant_id = \$1 and id = \$2 and revoked_at is null/i);
   });
 
@@ -434,7 +436,17 @@ describe("ACID guard repository", () => {
     ]);
 
     const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
-    expect(sql).toMatch(/runs\.status in \('queued', 'running'\)/i);
+    expect(sql).toMatch(/secrets\.revoked_reason = 'superseded'[\s\S]+runs\.status in \('queued', 'running'\)/i);
+  });
+
+  it("fails closed for already-bound queued runs after an explicit manual revoke", async () => {
+    const client = createSequencedClient([[]]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(repository.getBoundProviderContext({ tenantId: "tenant-1", runId: "run-1" })).resolves.toBeNull();
+
+    const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
+    expect(sql).toMatch(/secrets\.revoked_reason = 'superseded'/i);
   });
 
   it("normalizes legacy bound provider capability values when loading existing run context", async () => {
