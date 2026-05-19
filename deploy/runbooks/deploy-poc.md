@@ -163,6 +163,7 @@ Expected for the temporary test target:
 For a controlled live run drive after Paperclip target health is verified:
 
 ```powershell
+npm run check:live-runtime -- --tenant 22222222-2222-4222-8222-222222222222 --workflow 44444444-4444-4444-8444-444444444444
 $env:WF_DEMO_PAPERCLIP_COMPANY_ID="<paperclip-company-id>"
 npm run seed:demo
 npm run queue:live-run -- --tenant 22222222-2222-4222-8222-222222222222 --user 11111111-1111-4111-8111-111111111111 --workflow 44444444-4444-4444-8444-444444444444
@@ -171,10 +172,19 @@ npm run inspect:live-run -- --tenant 22222222-2222-4222-8222-222222222222 --work
 
 Expected for the live drive:
 
+- `check:live-runtime` reports whether the live DB schema is current enough for
+  bound-provider workflow execution and demo purchase seeding
 - `seed:demo` now creates the active package purchase prerequisite
 - `seed:demo` can also create `wfpc.paperclip_company_mappings` when `WF_DEMO_PAPERCLIP_COMPANY_ID` is provided
 - `queue:live-run` creates a reserved workflow run plus the durable outbox row
 - `inspect:live-run` confirms bound provider context and BullMQ job presence without improvised SQL
+
+Current observed blocker on 2026-05-19:
+
+- the live DB still reports `workflow_runs` without the bound-provider columns
+  required by the latest queue/worker execution path
+- the VPS process list shows the Wealth Factory API running, but not the repo's
+  `worker-main` process yet
 
 Do not treat a public Paperclip target as release-safe. Before commercial rollout, remove the host port publish and public router so Paperclip is reachable only from the Wealth Factory API and worker containers.
 

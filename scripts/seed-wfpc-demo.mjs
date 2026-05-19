@@ -3,6 +3,8 @@ import process from "node:process";
 
 import pg from "pg";
 
+import { loadRuntimePreflight, summarizeRuntimePreflight } from "./lib/runtime-preflight.mjs";
+
 const DEMO = {
   userId: "11111111-1111-4111-8111-111111111111",
   tenantId: "22222222-2222-4222-8222-222222222222",
@@ -23,10 +25,30 @@ const client = new pg.Client({
   connectionString: env.SUPABASE_DB_URL,
   ssl: resolveSsl()
 });
+let closing = false;
+client.on("error", (error) => {
+  if (!closing) {
+    throw error;
+  }
+});
 
 await client.connect();
 
 try {
+  const preflight = await loadRuntimePreflight({
+    client,
+    tenantId: DEMO.tenantId,
+    workflowId: DEMO.workflowId
+  });
+  const summary = summarizeRuntimePreflight(preflight);
+  const paperclipCompanyId = env.WF_DEMO_PAPERCLIP_COMPANY_ID?.trim();
+  if (!preflight.schema.tenantPackagePurchasesReady) {
+    throw new Error(`Live runtime schema is not ready for demo seeding: ${summary.blockers.join("; ")}`);
+  }
+  if (paperclipCompanyId && !preflight.schema.hasCompanyMappingTable) {
+    throw new Error("Live runtime schema is not ready for Paperclip company mapping seeding: paperclip_company_mappings table is missing");
+  }
+
   await client.query("begin");
 
   await client.query(
@@ -71,7 +93,7 @@ try {
 
   await client.query(
     `insert into wfpc.tenant_package_purchases
-      (id, tenant_id, package_id, status, starts_at, ends_at, created_by_user_id)
+      (id, tenant_id, package_id, status, starts_at, ends_at, ${preflight.schema.purchaseActorColumn})
      values ($1, $2, $3, 'active', now() - interval '1 day', null, $4)
      on conflict (tenant_id, package_id) do update
      set status = 'active',
@@ -128,7 +150,6 @@ try {
     [DEMO.providerReferenceId, DEMO.tenantId]
   );
 
-  const paperclipCompanyId = env.WF_DEMO_PAPERCLIP_COMPANY_ID?.trim();
   if (paperclipCompanyId) {
     await client.query(
       `insert into wfpc.paperclip_company_mappings (tenant_id, paperclip_company_id)
@@ -161,6 +182,7 @@ try {
   await client.query("rollback");
   throw error;
 } finally {
+  closing = true;
   await client.end();
 }
 

@@ -4,6 +4,7 @@ import process from "node:process";
 import pg from "pg";
 
 import { createLiveRunRequest } from "./lib/live-run-drive.mjs";
+import { loadRuntimePreflight, summarizeRuntimePreflight } from "./lib/runtime-preflight.mjs";
 
 const env = Object.fromEntries(
   readFileSync(".env", "utf8")
@@ -30,34 +31,63 @@ const client = new pg.Client({
   connectionString: env.SUPABASE_DB_URL,
   ssl: resolveSsl(env)
 });
+let closing = false;
+client.on("error", (error) => {
+  if (!closing) {
+    throw error;
+  }
+});
 
 await client.connect();
 
 try {
-  await client.query("begin");
-
-  const reservation = await reserveWorkflowRun({ client, ...request });
-  await client.query("commit");
-
-  if (!reservation.reserved) {
+  const preflight = await loadRuntimePreflight({
+    client,
+    tenantId: request.tenantId,
+    workflowId: request.workflowId
+  });
+  const summary = summarizeRuntimePreflight(preflight);
+  if (!summary.ok) {
     process.exitCode = 1;
-  }
+    process.stdout.write(
+      JSON.stringify(
+        {
+          ok: false,
+          preflight,
+          summary,
+          request
+        },
+        null,
+        2
+      ) + "\n"
+    );
+  } else {
+    await client.query("begin");
 
-  process.stdout.write(
-    JSON.stringify(
-      {
-        ok: reservation.reserved,
-        result: reservation,
-        request
-      },
-      null,
-      2
-    ) + "\n"
-  );
+    const reservation = await reserveWorkflowRun({ client, ...request });
+    await client.query("commit");
+
+    if (!reservation.reserved) {
+      process.exitCode = 1;
+    }
+
+    process.stdout.write(
+      JSON.stringify(
+        {
+          ok: reservation.reserved,
+          result: reservation,
+          request
+        },
+        null,
+        2
+      ) + "\n"
+    );
+  }
 } catch (error) {
   await client.query("rollback");
   throw error;
 } finally {
+  closing = true;
   await client.end();
 }
 

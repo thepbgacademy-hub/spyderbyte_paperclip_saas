@@ -72,7 +72,7 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 - Private storage connector secret rows now have same-tenant FK enforcement back to public `wfpc.storage_connectors`; OAuth public targets are sanitized before persistence, and browser-supplied Google Drive/Dropbox secret-reference registration is rejected.
 - The API runtime now creates a BullMQ-backed workflow enqueuer from `REDIS_URL` and starts the durable outbox pump against that queue at boot.
 - The worker runtime now starts a BullMQ consumer on boot and routes queue payloads through the tenant fairness gate before the guarded Paperclip execution path.
-- Repo-owned live-drive scripts now exist for controlled runtime verification: `npm run seed:demo`, `npm run queue:live-run`, and `npm run inspect:live-run`.
+- Repo-owned live-drive scripts now exist for controlled runtime verification: `npm run check:live-runtime`, `npm run seed:demo`, `npm run queue:live-run`, and `npm run inspect:live-run`.
 - The Paperclip client now accepts both `{ ok: true }` and the live target’s `{ status: "ok" }` health payload shape during the temporary public test-drive phase.
 
 ## Next Build Order
@@ -80,6 +80,7 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 1. Fix VPS external exposure once the multi-project port plan is finalized: `5432` and `8000` are currently reachable from outside and must be firewall/allowlist restricted before commercial exposure. `8443` now probes closed externally.
 2. Decide whether the storage OAuth routes should remain unavailable until Google Drive/Dropbox client credentials are configured, or whether the smoke gate should treat `503 {"code":"storage_oauth_unavailable"}` as an expected pre-config state.
 3. Use the temporary public Paperclip lane only for controlled testing: run `npm run verify:paperclip-target`, then use `npm run seed:demo`, `npm run queue:live-run`, and `npm run inspect:live-run` to validate the live Redis/BullMQ path end to end, confirming the outbox pump enqueues the run, the worker can claim it, and the bound provider path reaches Paperclip without using shared credentials in normal mode.
+4. Current live blocker as of 2026-05-19: `npm run check:live-runtime` against the VPS-backed database reports that `wfpc.workflow_runs` is still missing the bound-provider columns from the latest repo migrations, and the VPS process list shows the API process running without a deployed `worker-main` process. The next live-ops step is migration alignment plus worker deployment, then seeding a real `paperclip_company_mappings` row before rerunning the live drive.
 4. Run parallel-load verification proving one tenant cannot monopolize execution under realistic ordering pressure, then tune `WF_WORKER_CONCURRENCY` and `WF_WORKER_MAX_ACTIVE_PER_TENANT` with measurement instead of assumption.
 5. Re-run `npm run smoke:external` after the final firewall/allowlist policy is applied; it is now the repeatable external gate for DNS, intended ports, private ports, auth/CORS route behavior, and response leak checks.
 6. Confirm the VPS runtime keeps using `createPostgresEncryptedVaultStore` with a strong `WF_VAULT_MASTER_KEY` and rotate the static bearer token when the tenant-aware auth layer replaces it.
