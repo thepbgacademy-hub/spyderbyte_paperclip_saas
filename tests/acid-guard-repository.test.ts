@@ -405,6 +405,38 @@ describe("ACID guard repository", () => {
     expect(sql).toMatch(/secrets\.revoked_at is null/i);
   });
 
+  it("keeps already-bound queued runs eligible to load provider context after the credential lane is replaced", async () => {
+    const client = createSequencedClient([
+      [
+        {
+          bound_provider_context: [
+            {
+              capability: "text_generation",
+              providerKind: "openai_api",
+              label: "Primary OpenAI",
+              secretRef: "wf_secret_openai_old",
+              metadata: { projectId: "proj_123" }
+            }
+          ]
+        }
+      ]
+    ]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(repository.getBoundProviderContext({ tenantId: "tenant-1", runId: "run-1" })).resolves.toEqual([
+      {
+        capability: "text_generation",
+        providerKind: "openai_api",
+        label: "Primary OpenAI",
+        secretRef: "wf_secret_openai_old",
+        metadata: { projectId: "proj_123" }
+      }
+    ]);
+
+    const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
+    expect(sql).toMatch(/runs\.status in \('queued', 'running'\)/i);
+  });
+
   it("normalizes legacy bound provider capability values when loading existing run context", async () => {
     const client = createSequencedClient([
       [

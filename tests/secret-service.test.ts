@@ -202,4 +202,30 @@ describe("secret service", () => {
     });
     expect(repository.revoke).toHaveBeenCalledWith({ tenantId: "tenant-1", secretRef: "secret_ref_2" });
   });
+
+  it("allows already-bound runs to access a replaced credential by passing the run id to repository resolution", async () => {
+    const vault = {
+      store: vi.fn(),
+      rotate: vi.fn(),
+      revoke: vi.fn(),
+      access: vi.fn().mockResolvedValue({ apiKey: "sk-old" })
+    };
+    const repository = {
+      create: vi.fn(),
+      updateSecretRef: vi.fn(),
+      revoke: vi.fn(),
+      findIdBySecretRef: vi.fn().mockResolvedValue("11111111-1111-4111-8111-111111111111")
+    };
+    const service = createSecretService({ vault, audit: vi.fn(), repository });
+
+    await expect(service.access({ tenantId: "tenant-1", runId: "run-queued-1", secretRef: "secret_ref_old" })).resolves.toEqual({
+      apiKey: "sk-old"
+    });
+
+    expect(repository.findIdBySecretRef).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      secretRef: "secret_ref_old",
+      runId: "run-queued-1"
+    });
+  });
 });

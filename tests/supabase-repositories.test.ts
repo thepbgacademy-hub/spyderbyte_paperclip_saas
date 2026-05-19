@@ -275,6 +275,8 @@ describe("Supabase wfpc repositories", () => {
     const call = client.query.mock.calls[0];
     expect(call).toBeDefined();
     if (!call) throw new Error("Expected secret reference insert query");
+    expect(String(call[0])).toMatch(/update wfpc\.secret_references/i);
+    expect(String(call[0])).toMatch(/provider_kind = \$2::wfpc\.provider_kind/i);
     expect(String(call[0])).toMatch(/insert into wfpc\.secret_references/i);
     expect(JSON.stringify(call)).not.toContain("sk-");
     expect(call[1]).toContain("wf_secret_opaque");

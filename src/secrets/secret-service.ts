@@ -53,7 +53,7 @@ type SecretRepository = {
   create(reference: SecretReference): Promise<string> | string;
   updateSecretRef(input: { tenantId: string; previousSecretRef: string; nextSecretRef: string }): Promise<string> | string;
   revoke(input: { tenantId: string; secretRef: string }): Promise<string> | string;
-  findIdBySecretRef(input: { tenantId: string; secretRef: string }): Promise<string> | string;
+  findIdBySecretRef(input: { tenantId: string; secretRef: string; runId?: string }): Promise<string> | string;
 };
 
 export function createSecretService(options: { vault: Vault; audit: Audit; repository: SecretRepository }) {
@@ -155,7 +155,11 @@ export function createSecretService(options: { vault: Vault; audit: Audit; repos
     },
 
     async access(input: { tenantId: string; runId: string; secretRef: string }): Promise<unknown> {
-      const secretReferenceId = await options.repository.findIdBySecretRef({ tenantId: input.tenantId, secretRef: input.secretRef });
+      const secretReferenceId = await options.repository.findIdBySecretRef({
+        tenantId: input.tenantId,
+        secretRef: input.secretRef,
+        runId: input.runId
+      });
       if (!secretReferenceId) {
         throw new SecretReferenceUnavailableError();
       }

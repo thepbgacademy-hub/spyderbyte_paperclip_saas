@@ -300,7 +300,15 @@ export function createSupabaseRepositories(client: QueryClient) {
       revokedAt: string | null;
     }): Promise<string> {
       const result = await client.query(
-        `insert into wfpc.secret_references
+        `with revoked_active as (
+           update wfpc.secret_references
+           set revoked_at = coalesce(revoked_at, now()),
+               updated_at = now()
+           where tenant_id = $1
+             and provider_kind = $2::wfpc.provider_kind
+             and revoked_at is null
+         )
+         insert into wfpc.secret_references
           (tenant_id, provider_kind, label, secret_ref, metadata, revoked_at)
          values ($1, $2::wfpc.provider_kind, $3, $4, $5::jsonb, $6)
          returning id`,
@@ -331,11 +339,24 @@ export function createSupabaseRepositories(client: QueryClient) {
       return String(asRecord(result.rows[0]).id);
     },
 
-    async findSecretReferenceId(input: { tenantId: string; secretRef: string }): Promise<string> {
-      const result = await client.query("select id from wfpc.secret_references where tenant_id = $1 and secret_ref = $2 and revoked_at is null limit 1", [
-        input.tenantId,
-        input.secretRef
-      ]);
+    async findSecretReferenceId(input: { tenantId: string; secretRef: string; runId?: string }): Promise<string> {
+      const result = await client.query(
+        `select secrets.id
+         from wfpc.secret_references secrets
+         left join wfpc.workflow_runs runs
+           on runs.tenant_id = secrets.tenant_id
+          and runs.id = $3::uuid
+          and runs.bound_secret_reference_id = secrets.id
+          and runs.status in ('queued', 'running')
+         where secrets.tenant_id = $1
+           and secrets.secret_ref = $2
+           and (
+             secrets.revoked_at is null
+             or runs.id is not null
+           )
+         limit 1`,
+        [input.tenantId, input.secretRef, input.runId ?? null]
+      );
       const id = asRecord(result.rows[0]).id;
       return typeof id === "string" ? id : "";
     },

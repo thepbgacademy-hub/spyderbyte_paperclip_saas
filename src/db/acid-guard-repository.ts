@@ -354,7 +354,10 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
             and secrets.tenant_id = runs.tenant_id
            where runs.tenant_id = $1
              and runs.id = $2
-             and secrets.revoked_at is null
+             and (
+               secrets.revoked_at is null
+               or runs.status in ('queued', 'running')
+             )
            limit 1`,
           [input.tenantId, input.runId]
         );
