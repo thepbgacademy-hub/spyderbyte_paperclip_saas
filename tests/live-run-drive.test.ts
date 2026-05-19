@@ -36,7 +36,7 @@ describe("live run drive helpers", () => {
               bound_secret_reference_id: "secret-ref-1",
               bound_provider_context: [
                 {
-                  capability: "openai_api",
+                  capability: "text_generation",
                   providerKind: "openai_api",
                   label: "OpenAI",
                   secretRef: "wf_secret_demo",
@@ -65,7 +65,7 @@ describe("live run drive helpers", () => {
         boundSecretReferenceId: "secret-ref-1",
         providerContext: [
           {
-            capability: "openai_api",
+            capability: "text_generation",
             providerKind: "openai_api",
             label: "OpenAI",
             secretRef: "wf_secret_demo",
@@ -92,7 +92,7 @@ describe("live run drive helpers", () => {
             boundSecretReferenceId: "secret-ref-1",
             providerContext: [
               {
-                capability: "openai_api",
+                capability: "text_generation",
                 providerKind: "openai_api",
                 label: "OpenAI",
                 secretRef: "wf_secret_demo",
@@ -167,7 +167,7 @@ describe("live run drive helpers", () => {
             boundSecretReferenceId: "secret-ref-1",
             providerContext: [
               {
-                capability: "openai_api",
+                capability: "text_generation",
                 providerKind: "openai_api",
                 label: "OpenAI",
                 secretRef: "wf_secret_demo",

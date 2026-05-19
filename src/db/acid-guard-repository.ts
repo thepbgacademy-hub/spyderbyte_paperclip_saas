@@ -1,3 +1,4 @@
+import type { ProviderCapability } from "../packages/package-types.js";
 import type { QueryClient } from "./supabase-repositories.js";
 
 export type TransactionRunner = {
@@ -40,7 +41,7 @@ export type QueueOutboxRecord = {
 };
 
 export type BoundProviderContextRecord = {
-  capability: string;
+  capability: ProviderCapability;
   providerKind: string;
   label: string;
   secretRef: string;
@@ -103,14 +104,21 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
         }
 
         const providerRequirement = await transaction.query(
-          `select id
+          `select id, capability, provider_kind
            from wfpc.package_provider_requirements
            where package_id = $1
              and (provider_kind is null or provider_kind = $2)
-           limit 1`,
+           order by case when provider_kind = $2 then 0 else 1 end, capability`,
           [workflowRow.package_id, workflowRow.provider_kind]
         );
         if (providerRequirement.rows.length === 0) {
+          return { reserved: false, reason: "entitlement_denied" };
+        }
+        const boundCapability = resolveBoundCapability({
+          providerKind: String(workflowRow.provider_kind),
+          requirementRows: providerRequirement.rows
+        });
+        if (!boundCapability) {
           return { reserved: false, reason: "entitlement_denied" };
         }
 
@@ -147,7 +155,7 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
             String(credentialRow.id),
             JSON.stringify([
               {
-                capability: String(workflowRow.provider_kind),
+                capability: boundCapability,
                 providerKind: String(workflowRow.provider_kind),
                 label: String(credentialRow.label),
                 secretRef: String(credentialRow.secret_ref),
@@ -377,11 +385,54 @@ function toBoundProviderContext(value: unknown): readonly BoundProviderContextRe
   return value
     .map(asRecord)
     .map((entry) => ({
-      capability: String(entry.capability),
+      capability: normalizeProviderCapability(entry.capability),
       providerKind: String(entry.providerKind),
       label: String(entry.label),
       secretRef: String(entry.secretRef),
       metadata: asObject(entry.metadata)
     }))
-    .filter((entry) => entry.capability.length > 0 && entry.providerKind.length > 0 && entry.label.length > 0 && entry.secretRef.length > 0);
+    .filter((entry) => entry.capability !== null && entry.providerKind.length > 0 && entry.label.length > 0 && entry.secretRef.length > 0)
+    .map((entry) => ({
+      ...entry,
+      capability: entry.capability as ProviderCapability
+    }));
+}
+
+function resolveBoundCapability(input: { providerKind: string; requirementRows: readonly unknown[] }): ProviderCapability | null {
+  const normalizedCapabilities = [...new Set(input.requirementRows.map(asRecord).map((row) => normalizeProviderCapability(row.capability)).filter((value) => value !== null))];
+  if (normalizedCapabilities.length === 1) {
+    return normalizedCapabilities[0] ?? null;
+  }
+
+  if (normalizedCapabilities.length > 1) {
+    return null;
+  }
+
+  return inferCapabilityFromProviderKind(input.providerKind);
+}
+
+function normalizeProviderCapability(value: unknown): ProviderCapability | null {
+  if (value === "content_generation") {
+    return "text_generation";
+  }
+
+  return value === "text_generation" ||
+    value === "image_generation" ||
+    value === "video_generation" ||
+    value === "social_publishing" ||
+    value === "media_storage"
+    ? value
+    : null;
+}
+
+function inferCapabilityFromProviderKind(providerKind: string): ProviderCapability | null {
+  return providerKind === "openai" ||
+    providerKind === "openai_api" ||
+    providerKind === "openai_chatgpt_codex_subscription" ||
+    providerKind === "anthropic_api" ||
+    providerKind === "xai_grok_api" ||
+    providerKind === "openrouter_api" ||
+    providerKind === "generic_api"
+    ? "text_generation"
+    : null;
 }

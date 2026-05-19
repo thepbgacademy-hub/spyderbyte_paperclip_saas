@@ -196,7 +196,7 @@ describe("run service", () => {
     const resolveProviderContext = vi.fn();
     const loadBoundProviderContext = vi.fn().mockResolvedValue([
       {
-        capability: "openai_api",
+        capability: "text_generation",
         providerKind: "openai_api",
         label: "Bound OpenAI",
         secretRef: "wf_secret_bound",
@@ -205,7 +205,7 @@ describe("run service", () => {
     ]);
     const hydrateProviderContext = vi.fn().mockResolvedValue([
       {
-        capability: "openai_api",
+        capability: "text_generation",
         providerKind: "openai_api",
         label: "Bound OpenAI",
         secretRef: "wf_secret_bound",
@@ -236,7 +236,7 @@ describe("run service", () => {
       workflowId: "workflow-1",
       providerBindings: [
         {
-          capability: "openai_api",
+          capability: "text_generation",
           providerKind: "openai_api",
           label: "Bound OpenAI",
           secretRef: "wf_secret_bound",

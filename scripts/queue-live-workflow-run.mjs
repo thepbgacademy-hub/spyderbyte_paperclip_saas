@@ -134,11 +134,11 @@ async function reserveWorkflowRun(input) {
   }
 
   const requirement = await input.client.query(
-    `select id
+    `select id, capability, provider_kind
      from wfpc.package_provider_requirements
      where package_id = $1
        and (provider_kind is null or provider_kind = $2)
-     limit 1`,
+     order by case when provider_kind = $2 then 0 else 1 end, capability`,
     [workflowRow.package_id, workflowRow.provider_kind]
   );
   if (requirement.rows.length === 0) {
@@ -154,6 +154,13 @@ async function reserveWorkflowRun(input) {
   }
 
   const credentialRow = credential.rows[0];
+  const boundCapability = resolveBoundCapability({
+    providerKind: String(workflowRow.provider_kind),
+    requirementRows: requirement.rows
+  });
+  if (!boundCapability) {
+    return { reserved: false, reason: "entitlement_denied" };
+  }
   const reservation = await input.client.query(
     `insert into wfpc.workflow_run_reservations
       (tenant_id, workflow_template_id, run_id, idempotency_key, reserved_by_user_id)
@@ -178,7 +185,7 @@ async function reserveWorkflowRun(input) {
       String(credentialRow.id),
       JSON.stringify([
         {
-          capability: String(workflowRow.provider_kind),
+          capability: boundCapability,
           providerKind: String(workflowRow.provider_kind),
           label: String(credentialRow.label),
           secretRef: String(credentialRow.secret_ref),
@@ -222,4 +229,47 @@ function resolveSsl(source) {
   }
 
   return { rejectUnauthorized: true };
+}
+
+function resolveBoundCapability(input) {
+  const normalizedCapabilities = [...new Set(input.requirementRows.map(asRecord).map((row) => normalizeProviderCapability(row.capability)).filter((value) => value !== null))];
+  if (normalizedCapabilities.length === 1) {
+    return normalizedCapabilities[0];
+  }
+
+  if (normalizedCapabilities.length > 1) {
+    return null;
+  }
+
+  return inferCapabilityFromProviderKind(input.providerKind);
+}
+
+function normalizeProviderCapability(value) {
+  if (value === "content_generation") {
+    return "text_generation";
+  }
+
+  return value === "text_generation" ||
+    value === "image_generation" ||
+    value === "video_generation" ||
+    value === "social_publishing" ||
+    value === "media_storage"
+    ? value
+    : null;
+}
+
+function inferCapabilityFromProviderKind(providerKind) {
+  return providerKind === "openai" ||
+    providerKind === "openai_api" ||
+    providerKind === "openai_chatgpt_codex_subscription" ||
+    providerKind === "anthropic_api" ||
+    providerKind === "xai_grok_api" ||
+    providerKind === "openrouter_api" ||
+    providerKind === "generic_api"
+    ? "text_generation"
+    : null;
+}
+
+function asRecord(value) {
+  return value && typeof value === "object" ? value : {};
 }
