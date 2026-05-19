@@ -181,10 +181,18 @@ Expected for the live drive:
 
 Current observed blocker on 2026-05-19:
 
-- the live DB still reports `workflow_runs` without the bound-provider columns
-  required by the latest queue/worker execution path
-- the VPS process list shows the Wealth Factory API running, but not the repo's
-  `worker-main` process yet
+- the live DB schema is now aligned for bound-provider workflow execution after
+  rerunning `node scripts/apply-wfpc-migration.mjs`
+- the running `wealth-factory-api` container is still an older partial runtime
+  and does not currently carry the full queue/Paperclip env required by the
+  repo's worker path, including `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+  `SUPABASE_SERVICE_ROLE_KEY`, `REDIS_URL`, `PAPERCLIP_BASE_URL`, and
+  `PAPERCLIP_SERVICE_TOKEN`
+- the VPS process list still shows the Wealth Factory API running, but not the
+  repo's `worker-main` process yet
+- a real `wfpc.paperclip_company_mappings` row still needs to be seeded with
+  the Paperclip company ID that Wealth Factory should target during controlled
+  testing
 
 Do not treat a public Paperclip target as release-safe. Before commercial rollout, remove the host port publish and public router so Paperclip is reachable only from the Wealth Factory API and worker containers.
 

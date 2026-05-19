@@ -194,7 +194,10 @@ This file tracks implementation progress. Keep it current after every phase.
   - [x] Disable shared fallback credentials for normal subscriber production runs by default, with debug fallback available only through explicit runtime mode.
   - [x] Add repo-owned live-drive scripts to seed current queue prerequisites, reserve one real workflow run, and inspect outbox/BullMQ state without improvised SQL.
   - [x] Add a live-runtime preflight so schema drift and missing migration blockers are reported before controlled queue tests begin.
-  - [ ] Apply the remaining live DB migration that adds `workflow_runs.bound_secret_reference_id` and `workflow_runs.bound_provider_context`, then redeploy/start the Wealth Factory worker on the VPS before rerunning the live drive.
+  - [x] Apply the live DB migration that adds `workflow_runs.bound_secret_reference_id` and `workflow_runs.bound_provider_context`.
+  - [ ] Redeploy the live `wealth-factory-api` container with `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `REDIS_URL`, `PAPERCLIP_BASE_URL`, and `PAPERCLIP_SERVICE_TOKEN`.
+  - [ ] Deploy/start the repo's `worker-main` process on the VPS and confirm it joins the Redis/BullMQ queue.
+  - [ ] Seed a real `wfpc.paperclip_company_mappings` row with the target Paperclip company ID before rerunning the live drive.
 - [ ] Deploy the POC to VPS and run external exposed-port/CORS smoke tests.
   - [x] Add repeatable `npm run smoke:external` smoke/security command.
   - [x] Run first external probe from Windows.
