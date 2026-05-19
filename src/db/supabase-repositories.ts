@@ -36,6 +36,17 @@ function toStorageConnectorPublicTarget(value: unknown): Record<string, string> 
 
 export function createSupabaseRepositories(client: QueryClient) {
   return {
+    async resolvePaperclipCompanyMapping(input: DashboardScope) {
+      const result = await client.query("select paperclip_company_id from wfpc.paperclip_company_mappings where tenant_id = $1 limit 1", [input.tenantId]);
+      const row = asRecord(result.rows[0]);
+      const paperclipCompanyId = String(row.paperclip_company_id ?? "");
+      if (!paperclipCompanyId) {
+        throw new Error("Paperclip company mapping is required");
+      }
+
+      return { paperclipCompanyId };
+    },
+
     async requireTenantMember(input: MembershipScope): Promise<void> {
       const result = await client.query(
         "select tenant_id from wfpc.tenant_memberships where tenant_id = $1 and user_id = $2 limit 1",

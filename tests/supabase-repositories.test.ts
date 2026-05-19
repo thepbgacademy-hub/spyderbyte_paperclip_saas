@@ -16,6 +16,7 @@ describe("Supabase wfpc repositories", () => {
   it("maps dashboard repositories from wfpc schema without exposing secret handles", async () => {
     const query = createQuery({
       "from wfpc.workflow_templates": [{ id: "wf-social-calendar", name: "Wealth Factory Social Calendar", provider_kind: "openai_api", enabled: true }],
+      "from wfpc.paperclip_company_mappings": [{ paperclip_company_id: "pc-company-1" }],
       "from wfpc.tenant_package_installs": [{ id: "pkg-social", name: "Social Media Agency", kind: "industry", status: "active" }],
       "from wfpc.artifact_metadata": [
         { id: "artifact-1", filename: "post.png", artifact_type: "image", expires_at: "2026-05-11T00:00:00.000Z" }
@@ -64,6 +65,9 @@ describe("Supabase wfpc repositories", () => {
     await expect(repositories.listArtifacts({ tenantId: "tenant-1" })).resolves.toEqual([
       { id: "artifact-1", filename: "post.png", artifactType: "image", expiresAt: "2026-05-11T00:00:00.000Z" }
     ]);
+    await expect(repositories.resolvePaperclipCompanyMapping({ tenantId: "tenant-1" })).resolves.toEqual({
+      paperclipCompanyId: "pc-company-1"
+    });
     await expect(repositories.listProviderConnections({ tenantId: "tenant-1" })).resolves.toEqual([
       { providerKind: "openai_api", label: "OpenAI", connected: true }
     ]);
