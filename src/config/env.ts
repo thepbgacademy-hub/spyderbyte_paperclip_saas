@@ -4,12 +4,18 @@ export type AppEnv = {
   supabaseAnonKey: string;
   supabaseServiceRoleKey: string;
   redisUrl: string;
+  workflowQueueName: string;
   paperclipBaseUrl: string;
   paperclipServiceToken: string;
   vaultMasterKey: string;
   providerExecutionMode: "tenant_credentials_required" | "debug_shared_fallback";
   workerConcurrency: number;
   workerMaxActivePerTenant: number;
+};
+
+export type WorkflowQueueEnv = {
+  redisUrl: string;
+  workflowQueueName: string;
 };
 
 const REQUIRED_KEYS = [
@@ -85,12 +91,31 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     supabaseAnonKey: source.SUPABASE_ANON_KEY as string,
     supabaseServiceRoleKey: source.SUPABASE_SERVICE_ROLE_KEY as string,
     redisUrl: source.REDIS_URL as string,
+    workflowQueueName: source.WF_WORKFLOW_QUEUE_NAME?.trim() || "wfpc-workflow-runs",
     paperclipBaseUrl: trimTrailingSlash(source.PAPERCLIP_BASE_URL as string),
     paperclipServiceToken: source.PAPERCLIP_SERVICE_TOKEN as string,
     vaultMasterKey: source.WF_VAULT_MASTER_KEY as string,
     providerExecutionMode: providerExecutionMode as AppEnv["providerExecutionMode"],
     workerConcurrency: workerConcurrency as number,
     workerMaxActivePerTenant: workerMaxActivePerTenant as number
+  };
+}
+
+export function loadWorkflowQueueEnv(source: NodeJS.ProcessEnv = process.env): WorkflowQueueEnv {
+  const missingKeys = REQUIRED_KEYS.filter((key) => key === "REDIS_URL" && !hasValue(source[key]));
+  const invalidKeys: string[] = [];
+
+  if (hasValue(source.REDIS_URL) && !source.REDIS_URL.startsWith("redis://") && !source.REDIS_URL.startsWith("rediss://")) {
+    invalidKeys.push("REDIS_URL");
+  }
+
+  if (missingKeys.length > 0 || invalidKeys.length > 0) {
+    throw new EnvValidationError(missingKeys, invalidKeys);
+  }
+
+  return {
+    redisUrl: source.REDIS_URL as string,
+    workflowQueueName: source.WF_WORKFLOW_QUEUE_NAME?.trim() || "wfpc-workflow-runs"
   };
 }
 

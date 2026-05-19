@@ -3,19 +3,28 @@ import process from "node:process";
 import { closeServerGracefully } from "./server-lifecycle.js";
 import { createStaticRuntimeAuth, loadStaticRuntimeAuthEnv } from "./runtime-auth.js";
 import { createDashboardRuntime, loadRuntimeEnv } from "./runtime-server.js";
+import { loadWorkflowQueueEnv } from "../config/env.js";
+import { createBullmqWorkflowRunEnqueuer } from "../workflows/bullmq-workflow-queue.js";
 
 async function main() {
+  const queueEnv = loadWorkflowQueueEnv(process.env);
   const env = loadRuntimeEnv(process.env);
   const auth = createStaticRuntimeAuth(loadStaticRuntimeAuthEnv(process.env));
-  const runtime = createDashboardRuntime({ env, auth });
+  const queueEnqueuer = createBullmqWorkflowRunEnqueuer({
+    redisUrl: queueEnv.redisUrl,
+    queueName: queueEnv.workflowQueueName
+  });
+  const runtime = createDashboardRuntime({ env, auth, workflowQueueEnqueuer: queueEnqueuer });
 
   runtime.server.listen(env.apiPort, "0.0.0.0", () => {
     process.stdout.write(`wealth_factory_api_listening:${env.apiPort}\n`);
   });
+  runtime.startWorkers();
 
   const shutdown = async () => {
     await closeServerGracefully(runtime.server);
     await runtime.close();
+    await queueEnqueuer.close();
   };
 
   const handleShutdownSignal = () => {

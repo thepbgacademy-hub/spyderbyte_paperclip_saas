@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { EnvValidationError, loadEnv } from "../src/config/env.js";
+import { EnvValidationError, loadEnv, loadWorkflowQueueEnv } from "../src/config/env.js";
 
 const validEnv = {
   NODE_ENV: "test",
@@ -21,6 +21,7 @@ describe("loadEnv", () => {
       supabaseAnonKey: "anon-key",
       supabaseServiceRoleKey: "service-role-key",
       redisUrl: "redis://localhost:6379",
+      workflowQueueName: "wfpc-workflow-runs",
       paperclipBaseUrl: "https://paperclip-internal.spyderbyte.cloud",
       paperclipServiceToken: "paperclip-service-token",
       vaultMasterKey: "test-master-key-with-enough-length",
@@ -80,5 +81,17 @@ describe("loadEnv", () => {
   it("rejects invalid worker concurrency settings", () => {
     expect(() => loadEnv({ ...validEnv, WF_WORKER_CONCURRENCY: "0" })).toThrow(/WF_WORKER_CONCURRENCY/);
     expect(() => loadEnv({ ...validEnv, WF_WORKER_MAX_ACTIVE_PER_TENANT: "0" })).toThrow(/WF_WORKER_MAX_ACTIVE_PER_TENANT/);
+  });
+
+  it("loads queue env without requiring worker-only runtime values", () => {
+    expect(
+      loadWorkflowQueueEnv({
+        REDIS_URL: "redis://localhost:6379",
+        WF_WORKFLOW_QUEUE_NAME: "wfpc-custom"
+      })
+    ).toEqual({
+      redisUrl: "redis://localhost:6379",
+      workflowQueueName: "wfpc-custom"
+    });
   });
 });

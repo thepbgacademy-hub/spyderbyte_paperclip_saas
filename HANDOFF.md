@@ -50,6 +50,7 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 - Self-hosted Supabase pooler Postgres client factory in `src/db/postgres-client.ts`.
 - ACID guard repository in `src/db/acid-guard-repository.ts`.
 - Runtime server adapter in `src/api/runtime-server.ts`.
+- BullMQ-backed workflow queue bridge in `src/workflows/bullmq-workflow-queue.ts`.
 - ACID workflow run reservation facade in `src/workflows/acid-run-reservation.ts`.
 - ACID worker status recorder in `src/workflows/acid-status-recorder.ts`.
 - ACID package install service in `src/packages/acid-package-install-service.ts`.
@@ -68,13 +69,15 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 - Public provider registration responses now return only `{ providerKind, label, connected, metadata }`; no `secretRef`, vault handle, API key, token, or raw credential leaves the backend boundary.
 - Google Drive and Dropbox storage connector setup now has runtime-reachable OAuth/PKCE begin/callback routes. The callback exchange requires offline refresh-token access, stores OAuth tokens in the encrypted vault, and persists connector secret references in private `wfpc_private.storage_connector_secrets`.
 - Private storage connector secret rows now have same-tenant FK enforcement back to public `wfpc.storage_connectors`; OAuth public targets are sanitized before persistence, and browser-supplied Google Drive/Dropbox secret-reference registration is rejected.
+- The API runtime now creates a BullMQ-backed workflow enqueuer from `REDIS_URL` and starts the durable outbox pump against that queue at boot.
+- The worker runtime now starts a BullMQ consumer on boot and routes queue payloads through the tenant fairness gate before the guarded Paperclip execution path.
 
 ## Next Build Order
 
 1. Fix VPS external exposure once the multi-project port plan is finalized: `5432` and `8000` are currently reachable from outside and must be firewall/allowlist restricted before commercial exposure. `8443` now probes closed externally.
 2. Decide whether the storage OAuth routes should remain unavailable until Google Drive/Dropbox client credentials are configured, or whether the smoke gate should treat `503 {"code":"storage_oauth_unavailable"}` as an expected pre-config state.
-3. Add the tenant-scoped provider runtime cutover so Wealth Factory resolves each tenant's allowed provider, fetches that tenant's vault-backed credential just-in-time in the worker, and injects it into Paperclip per run. Keep operator/shared credentials available only as explicit debug/test fallback until the tenant path is verified, then disable the shared fallback for normal subscriber production runs.
-4. Wire the BullMQ consumer/dequeue loop to the worker runtime using the new conservative concurrency defaults and per-tenant fairness gate, then verify one tenant cannot monopolize execution slots under parallel load.
+3. Validate the live Redis/BullMQ path end to end after Paperclip is installed on the VPS: queue a run, confirm the outbox pump enqueues it, confirm the worker claims it, and verify the bound provider path reaches Paperclip without using shared credentials in normal mode.
+4. Run parallel-load verification proving one tenant cannot monopolize execution under realistic ordering pressure, then tune `WF_WORKER_CONCURRENCY` and `WF_WORKER_MAX_ACTIVE_PER_TENANT` with measurement instead of assumption.
 5. Re-run `npm run smoke:external` after the final firewall/allowlist policy is applied; it is now the repeatable external gate for DNS, intended ports, private ports, auth/CORS route behavior, and response leak checks.
 6. Confirm the VPS runtime keeps using `createPostgresEncryptedVaultStore` with a strong `WF_VAULT_MASTER_KEY` and rotate the static bearer token when the tenant-aware auth layer replaces it.
 

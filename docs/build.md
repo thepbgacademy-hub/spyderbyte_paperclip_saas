@@ -898,6 +898,7 @@ Operational rules:
 
 - one noisy tenant must not be allowed to occupy all worker slots indefinitely
 - enforce a worker-side per-tenant execution gate before or alongside the BullMQ consumer
+- keep the queue transport explicit: the API outbox pump should enqueue safe payloads into BullMQ, and the worker should consume them through the guarded runtime path
 - watch queue depth, pending age, retry count, and median time-to-start
 - fail closed on missing or revoked tenant credentials instead of retrying ambiguous provider selection
 - prefer more evidence before raising concurrency; do not assume model-provider latency makes all local limits irrelevant
