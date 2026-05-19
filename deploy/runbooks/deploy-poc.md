@@ -23,10 +23,9 @@ Set these on the VPS as root-owned environment files or deployment secrets. Do n
 - `SUPABASE_DB_SSL`
 - `PAPERCLIP_SERVICE_TOKEN`
 - `WF_ALLOWED_ORIGINS`
-- `WF_API_BEARER_TOKEN`
-- `WF_API_TENANT_ID`
-- `WF_API_USER_ID`
-- `WF_API_ROLE`
+- `WF_API_SESSION_SIGNING_KEY`
+- `WF_API_SESSION_ISSUER`
+- `WF_API_SESSION_AUDIENCE`
 - `WF_VAULT_MASTER_KEY`
 - `WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID` optional but recommended for worker readiness because it lets the worker healthcheck prove the Paperclip bearer token can reach an authenticated company route on the installed Paperclip build
 - this probe is intentionally narrow: it proves authenticated company-scoped API access, not full Wealth Factory launch-contract readiness
@@ -40,9 +39,11 @@ Tenant OpenAI and generic provider keys remain BYOK runtime secrets stored by re
 
 Current POC auth note:
 
-- The deployed API shell and dashboard API currently trust a static runtime bearer token configured through `WF_API_BEARER_TOKEN`.
-- The same token may also be presented through the configured portal session cookie name for same-site shell bootstrap smoke checks.
-- Treat this as a deploy-only/shared-secret POC path, not a long-term end-user auth design.
+- The deployed API shell and dashboard API now trust short-lived signed runtime session tokens.
+- Bearer and same-site cookie bootstrap may both carry the same signed session token, but the token must include issuer, audience, tenant, user, role, and expiry claims.
+- Runtime session tokens must expire within 60 minutes. Do not mint long-lived deploy or smoke-check tokens.
+- `npm run create:runtime-session-token` rebuilds the server bundle before minting so deploy smoke checks cannot accidentally use stale auth logic.
+- Treat this as a controlled deploy/runtime bridge, not the final end-user auth design.
 
 ## Deploy
 
@@ -134,11 +135,14 @@ Expected:
 
 Before release-candidate deploys, run the security checklist in `deploy/runbooks/security-checklist.md`.
 
-For authenticated shell smoke checks, set a deploy-safe cookie token before running the external smoke script:
+For authenticated shell smoke checks, mint a short-lived deploy-safe runtime session token before running the external smoke script:
 
 ```powershell
+$env:WF_API_SESSION_SIGNING_KEY="<session-signing-key>"
+npm run build:server
+npm run create:runtime-session-token -- --tenant tenant-demo --user deploy-operator --role operator --expires-in-minutes 15
 $env:WF_SMOKE_SESSION_COOKIE_NAME="wf_portal_session"
-$env:WF_SMOKE_SESSION_COOKIE_VALUE="<deploy-session-token>"
+$env:WF_SMOKE_SESSION_COOKIE_VALUE="<signed-session-token>"
 $env:WF_SMOKE_EXPECT_ASSET_BASE_URL="https://api.spyderbyte.cloud/app-assets/"
 npm run smoke:external
 ```
@@ -264,7 +268,7 @@ Last checked from outside the VPS on 2026-05-15:
 - PASS: Public ports `80` and `443` are reachable.
 - PASS: Redis `6379`, Paperclip `9000`, app/dev ports `3000`, `5173`, API direct ports `8080`, `8081`, and Docker daemon `2375` were not reachable.
 - PASS: `https://api.spyderbyte.cloud/health` returns `200 {"status":"ok","service":"wealth_factory_api"}`.
-- PASS: `https://api.spyderbyte.cloud/api/dashboard` now rejects unauthenticated requests with `401`, rejects untrusted origins with `403`, and returns tenant-scoped Wealth Factory data when called with the deploy bearer token from an allowed origin.
+- PASS: `https://api.spyderbyte.cloud/api/dashboard` now rejects unauthenticated requests with `401`, rejects untrusted origins with `403`, and returns tenant-scoped Wealth Factory data when called with a valid signed runtime session token from an allowed origin.
 - PASS: `npm run e2e:live` now verifies the deployed unauthenticated browser-navigation contract against `https://api.spyderbyte.cloud`, and the optional authenticated-shell check skips cleanly when no deploy-safe session cookie is supplied.
 - PASS: `api.spyderbyte.cloud` now proxies to the live `wealth-factory-api` container through `supabase-caddy`.
 - BLOCKED: `5432` and `8000` remain reachable externally. These are still part of the temporary multi-project exposure and must be firewall or allowlist restricted before commercial exposure. `8443` now probes closed externally.

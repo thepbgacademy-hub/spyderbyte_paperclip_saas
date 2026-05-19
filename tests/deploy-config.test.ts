@@ -41,10 +41,9 @@ describe("deployment POC config", () => {
     expect(runbook).toContain("Do not place real values in Git");
     expect(runbook).toContain("BYOK runtime secrets stored by reference");
     expect(runbook).toContain("WF_ALLOWED_ORIGINS");
-    expect(runbook).toContain("WF_API_BEARER_TOKEN");
-    expect(runbook).toContain("WF_API_TENANT_ID");
-    expect(runbook).toContain("WF_API_USER_ID");
-    expect(runbook).toContain("WF_API_ROLE");
+    expect(runbook).toContain("WF_API_SESSION_SIGNING_KEY");
+    expect(runbook).toContain("WF_API_SESSION_ISSUER");
+    expect(runbook).toContain("WF_API_SESSION_AUDIENCE");
     expect(runbook).toContain("WF_VAULT_MASTER_KEY");
     expect(runbook).toContain("WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID");
     expect(runbook).toContain("WF_WEB_APP_ENTRY_URL");
@@ -95,16 +94,15 @@ describe("deployment POC config", () => {
       "SUPABASE_SERVICE_ROLE_KEY",
       "SUPABASE_DB_URL",
       "WF_ALLOWED_ORIGINS",
-      "WF_API_BEARER_TOKEN",
-      "WF_API_TENANT_ID",
-      "WF_API_USER_ID",
-      "WF_API_ROLE",
+      "WF_API_SESSION_SIGNING_KEY",
       "WF_WEB_APP_ENTRY_URL",
       "PAPERCLIP_SERVICE_TOKEN",
       "WF_VAULT_MASTER_KEY"
     ]) {
       expect(compose).toContain(`${key}: \${${key}:?set ${key}}`);
     }
+    expect(compose).toContain("WF_API_SESSION_ISSUER: ${WF_API_SESSION_ISSUER:-wealth-factory-runtime}");
+    expect(compose).toContain("WF_API_SESSION_AUDIENCE: ${WF_API_SESSION_AUDIENCE:-wealth-factory-portal}");
     expect(compose).toContain("WF_WEB_APP_STYLESHEET_URL: ${WF_WEB_APP_STYLESHEET_URL:-}");
     expect(compose).toContain("WF_PORTAL_SESSION_COOKIE_NAME: ${WF_PORTAL_SESSION_COOKIE_NAME:-wf_portal_session}");
     expect(compose).toContain("WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID: ${WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID:-}");

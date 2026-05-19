@@ -21,7 +21,7 @@ type RateLimiter = {
 
 export function createStorageOAuthHttpHandler(options: {
   allowedOrigins: readonly string[];
-  authenticate(input: { authorization: string }): Promise<ApiSession | null>;
+  authenticate(input: { authorization: string; cookie?: string }): Promise<ApiSession | null>;
   requireTenantMember(input: { tenantId: string; userId: string }): Promise<void>;
   storageOAuth: StorageOAuthService;
   rateLimiter: RateLimiter;
@@ -68,7 +68,10 @@ export function createStorageOAuthHttpHandler(options: {
 
     try {
       if (route.action === "begin") {
-        const session = await options.authenticate({ authorization: request.headers.authorization ?? "" });
+        const session = await options.authenticate({
+          authorization: request.headers.authorization ?? "",
+          ...(request.headers.cookie ? { cookie: request.headers.cookie } : {})
+        });
         if (!session) {
           return { status: 401, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "unauthorized" } };
         }

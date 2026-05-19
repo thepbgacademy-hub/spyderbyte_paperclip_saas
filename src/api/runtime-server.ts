@@ -36,7 +36,7 @@ export type RuntimeEnv = {
 };
 
 export type RuntimeAuth = {
-  authenticate(input: { authorization: string }): Promise<ApiSession | null>;
+  authenticate(input: { authorization: string; cookie?: string }): Promise<ApiSession | null>;
 };
 
 export class RuntimeEnvError extends Error {

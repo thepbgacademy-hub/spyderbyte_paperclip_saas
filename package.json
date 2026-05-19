@@ -13,6 +13,7 @@
     "resolve:web-assets": "node scripts/resolve-web-assets.mjs",
     "smoke:external": "node scripts/external-smoke-security.mjs",
     "verify:paperclip-target": "node scripts/verify-paperclip-target.mjs",
+    "create:runtime-session-token": "npm run build:server && node scripts/create-runtime-session-token.mjs",
     "check:live-runtime": "node scripts/check-live-runtime-readiness.mjs",
     "seed:demo": "node scripts/seed-wfpc-demo.mjs",
     "queue:live-run": "node scripts/queue-live-workflow-run.mjs",

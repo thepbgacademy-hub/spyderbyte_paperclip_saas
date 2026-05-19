@@ -1,13 +1,20 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
-import type { ApiRole, ApiSession } from "./dashboard-api.js";
+import type { ApiSession } from "./dashboard-api.js";
 
-export type StaticRuntimeAuthEnv = {
-  bearerToken: string;
+export type RuntimeSessionAuthEnv = {
+  signingKey: string;
   sessionCookieName: string;
-  tenantId: string;
-  userId: string;
-  role: ApiRole;
+  issuer: string;
+  audience: string;
+};
+
+export type RuntimeSessionClaims = ApiSession & {
+  exp: number;
+  iat: number;
+  iss: string;
+  aud: string;
+  v: 1;
 };
 
 export class RuntimeAuthEnvError extends Error {
@@ -17,63 +24,169 @@ export class RuntimeAuthEnvError extends Error {
   }
 }
 
-const MIN_BEARER_TOKEN_LENGTH = 24;
+const MIN_SIGNING_KEY_LENGTH = 24;
+const TOKEN_VERSION = "wf1";
+const MAX_RUNTIME_SESSION_TTL_SECONDS = 60 * 60;
 
-export function loadStaticRuntimeAuthEnv(source: NodeJS.ProcessEnv = process.env): StaticRuntimeAuthEnv {
-  const bearerToken = source.WF_API_BEARER_TOKEN?.trim();
-  const tenantId = source.WF_API_TENANT_ID?.trim();
-  const userId = source.WF_API_USER_ID?.trim();
-  const role = source.WF_API_ROLE?.trim();
+export function loadRuntimeSessionAuthEnv(source: NodeJS.ProcessEnv = process.env): RuntimeSessionAuthEnv {
+  const signingKey = source.WF_API_SESSION_SIGNING_KEY?.trim();
   const sessionCookieName = source.WF_PORTAL_SESSION_COOKIE_NAME?.trim() || "wf_portal_session";
+  const issuer = source.WF_API_SESSION_ISSUER?.trim() || "wealth-factory-runtime";
+  const audience = source.WF_API_SESSION_AUDIENCE?.trim() || "wealth-factory-portal";
 
-  if (!bearerToken) {
-    throw new RuntimeAuthEnvError("WF_API_BEARER_TOKEN is required");
+  if (!signingKey) {
+    throw new RuntimeAuthEnvError("WF_API_SESSION_SIGNING_KEY is required");
   }
-  if (bearerToken.length < MIN_BEARER_TOKEN_LENGTH) {
-    throw new RuntimeAuthEnvError(`WF_API_BEARER_TOKEN must be at least ${MIN_BEARER_TOKEN_LENGTH} characters`);
+  if (signingKey.length < MIN_SIGNING_KEY_LENGTH) {
+    throw new RuntimeAuthEnvError(`WF_API_SESSION_SIGNING_KEY must be at least ${MIN_SIGNING_KEY_LENGTH} characters`);
   }
-  if (!tenantId) {
-    throw new RuntimeAuthEnvError("WF_API_TENANT_ID is required");
+  if (!issuer) {
+    throw new RuntimeAuthEnvError("WF_API_SESSION_ISSUER is required");
   }
-  if (!userId) {
-    throw new RuntimeAuthEnvError("WF_API_USER_ID is required");
-  }
-  if (role !== "member" && role !== "operator") {
-    throw new RuntimeAuthEnvError("WF_API_ROLE must be member or operator");
+  if (!audience) {
+    throw new RuntimeAuthEnvError("WF_API_SESSION_AUDIENCE is required");
   }
 
-  return { bearerToken, sessionCookieName, tenantId, userId, role };
+  return {
+    signingKey,
+    sessionCookieName,
+    issuer,
+    audience
+  };
 }
 
-export function createStaticRuntimeAuth(env: StaticRuntimeAuthEnv) {
-  const expectedAuthorization = Buffer.from(`Bearer ${env.bearerToken}`, "utf8");
-  const session: ApiSession = {
-    tenantId: env.tenantId,
-    userId: env.userId,
-    role: env.role
-  };
+export function createRuntimeSessionAuth(
+  env: RuntimeSessionAuthEnv,
+  options: {
+    now?: () => number;
+  } = {}
+) {
+  const now = options.now ?? (() => Date.now());
 
   return {
     async authenticate(input: { authorization: string; cookie?: string }): Promise<ApiSession | null> {
-      const actualAuthorization = Buffer.from(input.authorization, "utf8");
-      if (actualAuthorization.length === expectedAuthorization.length && timingSafeEqual(actualAuthorization, expectedAuthorization)) {
-        return session;
-      }
-
+      const bearerToken = readBearerToken(input.authorization);
       const cookieToken = readCookieValue(input.cookie, env.sessionCookieName);
-      if (!cookieToken) {
-        return null;
-      }
+      for (const token of [cookieToken, bearerToken]) {
+        if (!token) {
+          continue;
+        }
 
-      const actualCookieToken = Buffer.from(cookieToken, "utf8");
-      const expectedCookieToken = Buffer.from(env.bearerToken, "utf8");
-      if (actualCookieToken.length !== expectedCookieToken.length) {
-        return null;
-      }
+        const claims = verifyRuntimeSessionToken({
+          token,
+          signingKey: env.signingKey,
+          issuer: env.issuer,
+          audience: env.audience,
+          nowMs: now()
+        });
+        if (!claims) {
+          continue;
+        }
 
-      return timingSafeEqual(actualCookieToken, expectedCookieToken) ? session : null;
+        return {
+          tenantId: claims.tenantId,
+          userId: claims.userId,
+          role: claims.role
+        };
+      }
+      return null;
     }
   };
+}
+
+export function createRuntimeSessionToken(input: {
+  signingKey: string;
+  issuer: string;
+  audience: string;
+  session: ApiSession;
+  expiresAt: Date;
+  issuedAt?: Date;
+}): string {
+  const issuedAt = input.issuedAt ?? new Date();
+  const claims: RuntimeSessionClaims = {
+    tenantId: input.session.tenantId,
+    userId: input.session.userId,
+    role: input.session.role,
+    iat: Math.floor(issuedAt.getTime() / 1000),
+    exp: Math.floor(input.expiresAt.getTime() / 1000),
+    iss: input.issuer,
+    aud: input.audience,
+    v: 1
+  };
+
+  const payload = base64UrlEncode(JSON.stringify(claims));
+  const signature = signPayload({
+    signingKey: input.signingKey,
+    payload
+  });
+  return `${TOKEN_VERSION}.${payload}.${signature}`;
+}
+
+export function verifyRuntimeSessionToken(input: {
+  token: string;
+  signingKey: string;
+  issuer: string;
+  audience: string;
+  nowMs?: number;
+}): RuntimeSessionClaims | null {
+  const nowMs = input.nowMs ?? Date.now();
+  const [version, payload, signature] = input.token.split(".");
+  if (version !== TOKEN_VERSION || !payload || !signature) {
+    return null;
+  }
+
+  const expectedSignature = signPayload({
+    signingKey: input.signingKey,
+    payload
+  });
+  const actualSignature = Buffer.from(signature, "utf8");
+  const expectedSignatureBuffer = Buffer.from(expectedSignature, "utf8");
+  if (actualSignature.length !== expectedSignatureBuffer.length) {
+    return null;
+  }
+  if (!timingSafeEqual(actualSignature, expectedSignatureBuffer)) {
+    return null;
+  }
+
+  let claims: unknown;
+  try {
+    claims = JSON.parse(base64UrlDecode(payload));
+  } catch {
+    return null;
+  }
+
+  if (!isRuntimeSessionClaims(claims)) {
+    return null;
+  }
+  if (claims.iss !== input.issuer || claims.aud !== input.audience) {
+    return null;
+  }
+  if (claims.exp <= claims.iat) {
+    return null;
+  }
+  if (claims.exp - claims.iat > MAX_RUNTIME_SESSION_TTL_SECONDS) {
+    return null;
+  }
+  if (claims.iat > Math.floor(nowMs / 1000)) {
+    return null;
+  }
+  if (claims.exp <= Math.floor(nowMs / 1000)) {
+    return null;
+  }
+
+  return claims;
+}
+
+function signPayload(input: { signingKey: string; payload: string }) {
+  return createHmac("sha256", input.signingKey).update(input.payload).digest("base64url");
+}
+
+function readBearerToken(authorizationHeader: string | undefined): string | null {
+  if (!authorizationHeader) {
+    return null;
+  }
+  const match = /^Bearer\s+(.+)$/u.exec(authorizationHeader.trim());
+  return match?.[1]?.trim() || null;
 }
 
 function readCookieValue(cookieHeader: string | undefined, cookieName: string): string | null {
@@ -89,4 +202,36 @@ function readCookieValue(cookieHeader: string | undefined, cookieName: string): 
   }
 
   return null;
+}
+
+function base64UrlEncode(value: string) {
+  return Buffer.from(value, "utf8").toString("base64url");
+}
+
+function base64UrlDecode(value: string) {
+  return Buffer.from(value, "base64url").toString("utf8");
+}
+
+function isRuntimeSessionClaims(value: unknown): value is RuntimeSessionClaims {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.tenantId === "string" &&
+    record.tenantId.trim().length > 0 &&
+    typeof record.userId === "string" &&
+    record.userId.trim().length > 0 &&
+    (record.role === "member" || record.role === "operator") &&
+    typeof record.iss === "string" &&
+    record.iss.trim().length > 0 &&
+    typeof record.aud === "string" &&
+    record.aud.trim().length > 0 &&
+    typeof record.iat === "number" &&
+    Number.isFinite(record.iat) &&
+    typeof record.exp === "number" &&
+    Number.isFinite(record.exp) &&
+    record.v === 1
+  );
 }

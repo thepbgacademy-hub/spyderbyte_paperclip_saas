@@ -4,7 +4,7 @@ import { assertWealthFactoryResponse } from "../wealthfactory/response-guard.js"
 import type { ApiSession } from "./dashboard-api.js";
 
 type SettingsApiDeps = {
-  authenticate(input: { authorization: string }): Promise<ApiSession | null>;
+  authenticate(input: { authorization: string; cookie?: string }): Promise<ApiSession | null>;
   requireTenantMember(input: { tenantId: string; userId: string }): Promise<void>;
   registerProviderCredential(input: {
     tenantId: string;
@@ -26,11 +26,15 @@ type SettingsApiDeps = {
 
 type AuthenticatedRequest = {
   authorization: string;
+  cookie?: string;
 };
 
 export function createTenantSettingsApi(deps: SettingsApiDeps) {
   async function requireSession(request: AuthenticatedRequest): Promise<ApiSession> {
-    const session = await deps.authenticate({ authorization: request.authorization });
+    const session = await deps.authenticate({
+      authorization: request.authorization,
+      ...(request.cookie ? { cookie: request.cookie } : {})
+    });
     if (!session) {
       throw new Error("Unauthorized");
     }

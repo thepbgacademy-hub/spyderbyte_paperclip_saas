@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { describe, expect, it, vi } from "vitest";
 
+import { createRuntimeSessionAuth, createRuntimeSessionToken } from "../src/api/runtime-auth.js";
 import { createDashboardRuntime, createNodeRequestListener, loadRuntimeEnv } from "../src/api/runtime-server.js";
 
 vi.mock("../src/db/postgres-client.js", () => ({
@@ -249,6 +250,65 @@ describe("runtime server", () => {
     expect(response.headers["content-security-policy"]).toContain("style-src 'self' 'unsafe-inline' https://portal.spyderbyte.cloud");
     expect(response.headers["content-security-policy"]).toContain("img-src 'self' data: blob: https://portal.spyderbyte.cloud");
     expect(response.headers["content-security-policy"]).toContain("font-src 'self' data: https://portal.spyderbyte.cloud");
+    await runtime.close();
+  });
+
+  it("authenticates an app-shell request with a real signed session cookie", async () => {
+    const signingKey = "wf-demo-signing-key-with-sufficient-length";
+    const auth = createRuntimeSessionAuth(
+      {
+        signingKey,
+        sessionCookieName: "wf_portal_session",
+        issuer: "wealth-factory-runtime",
+        audience: "wealth-factory-portal"
+      },
+      {
+        now: () => new Date("2026-05-19T12:00:00.000Z").getTime()
+      }
+    );
+    const token = createRuntimeSessionToken({
+      signingKey,
+      issuer: "wealth-factory-runtime",
+      audience: "wealth-factory-portal",
+      session: {
+        tenantId: "tenant-1",
+        userId: "user-1",
+        role: "operator"
+      },
+      issuedAt: new Date("2026-05-19T11:55:00.000Z"),
+      expiresAt: new Date("2026-05-19T12:30:00.000Z")
+    });
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        webAppEntryUrl: "https://portal.spyderbyte.cloud/assets/app.js",
+        webAppStylesheetUrl: "https://portal.spyderbyte.cloud/assets/app.css",
+        runtimeEnv: {}
+      },
+      auth
+    });
+
+    const request = createRequest({
+      method: "GET",
+      url: "/home",
+      headers: {
+        cookie: `wf_portal_session=${token}`,
+        "content-length": "0"
+      }
+    });
+    const response = createResponse();
+
+    runtime.server.emit("request", request as unknown as IncomingMessage, response as unknown as ServerResponse);
+    await response.finished;
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('"tenantId":"tenant-1"');
+    expect(response.body).toContain('"role":"operator"');
+    expect(response.body).not.toContain('"userId"');
     await runtime.close();
   });
 });

@@ -80,11 +80,11 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 1. Fix VPS external exposure once the multi-project port plan is finalized: `5432` and `8000` are currently reachable from outside and must be firewall/allowlist restricted before commercial exposure. `8443` now probes closed externally.
 2. Decide whether the storage OAuth routes should remain unavailable until Google Drive/Dropbox client credentials are configured, or whether the smoke gate should treat `503 {"code":"storage_oauth_unavailable"}` as an expected pre-config state.
 3. Use the temporary public Paperclip lane only for controlled testing: run `npm run verify:paperclip-target`, then use `npm run seed:demo`, `npm run queue:live-run`, and `npm run inspect:live-run` to validate the live Redis/BullMQ path end to end, confirming the outbox pump enqueues the run, the worker can claim it, and the bound provider path reaches Paperclip without using shared credentials in normal mode.
-4. Current live blocker as of 2026-05-19: the repo-side migration gap is fixed and `npm run check:live-runtime` now reports the VPS-backed database schema as bound-provider ready, but the running `wealth-factory-api` container is still an older partial runtime. It is missing the app/worker env needed for the full queue path, including `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `REDIS_URL`, `PAPERCLIP_BASE_URL`, and `PAPERCLIP_SERVICE_TOKEN`, and the VPS process list still shows no deployed `worker-main` process.
+4. Current live blocker as of 2026-05-19: the repo-side migration gap is fixed and `npm run check:live-runtime` now reports the VPS-backed database schema as bound-provider ready, but the running `wealth-factory-api` container is still an older partial runtime. It is missing the app/worker env needed for the full queue path, including `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `REDIS_URL`, `PAPERCLIP_BASE_URL`, `PAPERCLIP_SERVICE_TOKEN`, and the new signed-session auth env (`WF_API_SESSION_SIGNING_KEY`, plus optional issuer/audience overrides), and the VPS process list still shows no deployed `worker-main` process.
 5. Next live-ops step: redeploy the Wealth Factory API with the full queue/Paperclip env set, deploy/start the repo's `worker-main` process, seed a real `wfpc.paperclip_company_mappings` row with a Paperclip company ID, and then rerun the controlled live drive.
 6. Run parallel-load verification proving one tenant cannot monopolize execution under realistic ordering pressure, then tune `WF_WORKER_CONCURRENCY` and `WF_WORKER_MAX_ACTIVE_PER_TENANT` with measurement instead of assumption.
 7. Re-run `npm run smoke:external` after the final firewall/allowlist policy is applied; it is now the repeatable external gate for DNS, intended ports, private ports, auth/CORS route behavior, and response leak checks.
-8. Confirm the VPS runtime keeps using `createPostgresEncryptedVaultStore` with a strong `WF_VAULT_MASTER_KEY` and rotate the static bearer token when the tenant-aware auth layer replaces it.
+8. Confirm the VPS runtime keeps using `createPostgresEncryptedVaultStore` with a strong `WF_VAULT_MASTER_KEY` and rotate any previously issued shared deploy tokens out of operator workflows now that the signed runtime session-token layer is in place.
 9. Keep the repo-side Paperclip adapter steady for now. The installed Paperclip build has now proven:
    - issue assignment creates a real heartbeat run
    - `GET /api/issues/:identifier` can expose `executionRunId`/`checkoutRunId` shortly after assignment
@@ -299,7 +299,7 @@ Nuances to preserve:
 - External verification passed for:
   - `https://api.spyderbyte.cloud/health` -> `200 {"status":"ok","service":"wealth_factory_api"}`
   - `GET /api/dashboard` from `https://www.spyderbyte.cloud` without auth -> `401`
-  - `GET /api/dashboard` from `https://www.spyderbyte.cloud` with the deploy bearer token -> `200` with seeded tenant/package/workflow data
+  - `GET /api/dashboard` from `https://www.spyderbyte.cloud` with a valid signed runtime session token -> `200` with seeded tenant/package/workflow data
   - `OPTIONS /health` from `https://www.spyderbyte.cloud` -> `204` with explicit CORS headers
 - `npm run smoke:external` now passes DNS, public `80/443` reachability, private app-port closure, dashboard auth/CORS checks, and response-guard checks. It still fails on the known open `5432` and `8000` ports and on the intentionally unconfigured storage OAuth route.
 
