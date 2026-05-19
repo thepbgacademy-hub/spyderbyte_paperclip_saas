@@ -59,6 +59,63 @@ describe("createPaperclipClient", () => {
     });
   });
 
+  it("forwards resolved provider execution context to the Paperclip run payload", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        id: "pc-run-1",
+        status: "queued"
+      })
+    );
+    const client = createPaperclipClient({
+      baseUrl: "https://paperclip.internal.local/",
+      serviceToken: "service-token",
+      fetchImpl
+    });
+
+    await expect(
+      client.createRun({
+        companyId: "pc-company-1",
+        workflowId: "wf-intake",
+        spyderbyteRunId: "run-1",
+        providerContext: [
+          {
+            capability: "text_generation",
+            providerKind: "openai_api",
+            label: "Primary OpenAI",
+            secretRef: "wf_secret_openai",
+            metadata: { projectId: "proj_123" },
+            secretValues: { apiKey: "sk-openai-secret" }
+          }
+        ]
+      })
+    ).resolves.toEqual({
+      paperclipRunId: "pc-run-1",
+      status: "queued"
+    });
+
+    expect(fetchImpl).toHaveBeenCalledWith("https://paperclip.internal.local/api/companies/pc-company-1/runs", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer service-token",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        workflowId: "wf-intake",
+        externalRunId: "run-1",
+        providerContext: [
+          {
+            capability: "text_generation",
+            providerKind: "openai_api",
+            label: "Primary OpenAI",
+            secretRef: "wf_secret_openai",
+            metadata: { projectId: "proj_123" },
+            secretValues: { apiKey: "sk-openai-secret" }
+          }
+        ]
+      })
+    });
+  });
+
   it("translates Paperclip failures into safe internal error codes", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ message: "stack trace with prompt" }, 500));
     const client = createPaperclipClient({

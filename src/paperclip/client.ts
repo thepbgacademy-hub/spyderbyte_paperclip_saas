@@ -65,7 +65,8 @@ export function createPaperclipClient(options: PaperclipClientOptions): Papercli
         method: "POST",
         body: JSON.stringify({
           workflowId: input.workflowId,
-          externalRunId: input.spyderbyteRunId
+          externalRunId: input.spyderbyteRunId,
+          ...(input.providerContext ? { providerContext: input.providerContext } : {})
         })
       });
 
