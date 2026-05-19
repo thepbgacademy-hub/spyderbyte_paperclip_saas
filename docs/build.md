@@ -909,6 +909,12 @@ Customer-safe dashboard traffic signal:
 - derive it from queue depth plus active queued/running work, not raw VPS CPU
 - present it as delay guidance, not a hard SLA
 
+Temporary Paperclip test-drive note:
+
+- during the pre-hardening test-drive phase, a public Paperclip target may be used only as a controlled verification lane
+- use `npm run verify:paperclip-target` against that target before and after pressure testing
+- do not treat a public Paperclip host or published port as release-safe
+
 ## Self-Review
 
 Coverage check:

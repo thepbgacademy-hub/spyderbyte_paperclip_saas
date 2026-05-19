@@ -139,6 +139,29 @@ npm run e2e
 
 For deployed-browser verification, set `WF_LIVE_BASE_URL` to the API origin before running `npm run e2e:live`. If you have a deploy-safe same-site session token, also set `WF_LIVE_SESSION_COOKIE_VALUE` to exercise the authenticated shell path. The live Playwright config now fails fast when `WF_LIVE_BASE_URL` is omitted so it does not probe a deployment by accident.
 
+## Temporary Public Paperclip Test Drive
+
+If Paperclip is intentionally installed as a temporary public debug target before the final private-only Wealth Factory topology is applied, treat it as a controlled verification lane only.
+
+Use this repo-side check before and after pressure testing:
+
+```powershell
+$env:WF_PAPERCLIP_VERIFY_URL="http://187.77.19.83:53324"
+$env:WF_PAPERCLIP_EXPECT_MODE="authenticated"
+$env:WF_PAPERCLIP_EXPECT_EXPOSURE="public"
+$env:WF_PAPERCLIP_PUBLIC_PORT="53324"
+npm run verify:paperclip-target
+```
+
+Expected for the temporary test target:
+
+- `/api/health` returns `200`
+- the payload reports a healthy Paperclip instance
+- `deploymentMode` reports `authenticated`
+- the script prints a warning reminding operators that this public exposure is for controlled testing only
+
+Do not treat a public Paperclip target as release-safe. Before commercial rollout, remove the host port publish and public router so Paperclip is reachable only from the Wealth Factory API and worker containers.
+
 ## Current External Smoke Status
 
 Last checked from outside the VPS on 2026-05-15:
@@ -150,7 +173,7 @@ Last checked from outside the VPS on 2026-05-15:
 - PASS: `https://api.spyderbyte.cloud/api/dashboard` now rejects unauthenticated requests with `401`, rejects untrusted origins with `403`, and returns tenant-scoped Wealth Factory data when called with the deploy bearer token from an allowed origin.
 - PASS: `npm run e2e:live` now verifies the deployed unauthenticated browser-navigation contract against `https://api.spyderbyte.cloud`, and the optional authenticated-shell check skips cleanly when no deploy-safe session cookie is supplied.
 - PASS: `api.spyderbyte.cloud` now proxies to the live `wealth-factory-api` container through `supabase-caddy`.
-- BLOCKED: `5432`, `8000`, and `8443` remain reachable externally. These are still part of the temporary multi-project exposure and must be firewall or allowlist restricted before commercial exposure.
+- BLOCKED: `5432` and `8000` remain reachable externally. These are still part of the temporary multi-project exposure and must be firewall or allowlist restricted before commercial exposure. `8443` now probes closed externally.
 - BLOCKED: `https://api.spyderbyte.cloud/` still returns `404 {"code":"not_found"}` to the script-based unauthenticated shell probe used by `npm run smoke:external` when that probe sends an explicit portal `Origin` header. This differs from top-level browser navigation, which currently receives an unauthenticated app response, so the authenticated API-origin shell rollout should not be treated as fully consistent yet.
 - BLOCKED: `https://api.spyderbyte.cloud/api/storage/oauth/google_drive/begin` returns `503 {"code":"storage_oauth_unavailable"}` until Google Drive and Dropbox OAuth client credentials are configured for the runtime.
 
@@ -169,7 +192,7 @@ curl -i https://api.spyderbyte.cloud/
 curl -i -H 'Origin: https://www.spyderbyte.cloud' https://api.spyderbyte.cloud/api/dashboard
 ```
 
-2. If another project still needs public access to `5432`, `8000`, or `8443`, record that dependency and postpone temporary restriction until its owner approves the test window.
+2. If another project still needs public access to `5432` or `8000`, record that dependency and postpone temporary restriction until its owner approves the test window.
 3. When a test window is available, apply the temporary port restrictions using the reversible firewall sequence below.
 4. Roll out the Wealth Factory API shell env vars in the live `wealth-factory-api` deployment:
    - `WF_WEB_APP_ENTRY_URL`
@@ -192,7 +215,7 @@ These commands are intended to be run on the VPS by an operator with sudo/root a
 
 ### Restrict Supabase And Kong Ports
 
-Current smoke tests show `5432`, `8000`, and `8443` reachable from the public internet. For a commercial Wealth Factory deployment, these ports must not be public.
+Current smoke tests show `5432` and `8000` reachable from the public internet. `8443` now probes closed externally. For a commercial Wealth Factory deployment, the remaining exposed admin/service ports must not be public.
 
 Recommended UFW posture:
 
@@ -207,15 +230,13 @@ sudo ufw allow from <trusted-admin-ip>/32 to any port 22 proto tcp
 # Remove these before commercial exposure unless access is restricted by VPN.
 sudo ufw allow from <trusted-admin-ip>/32 to any port 5432 proto tcp
 sudo ufw allow from <trusted-admin-ip>/32 to any port 8000 proto tcp
-sudo ufw allow from <trusted-admin-ip>/32 to any port 8443 proto tcp
 sudo ufw deny 5432/tcp
 sudo ufw deny 8000/tcp
-sudo ufw deny 8443/tcp
 sudo ufw enable
 sudo ufw status verbose
 ```
 
-If Docker-published ports bypass UFW on the VPS, apply provider firewall rules in the VPS control panel too. The external gate is authoritative: `npm run smoke:external` must report `5432`, `8000`, and `8443` as closed from an untrusted network.
+If Docker-published ports bypass UFW on the VPS, apply provider firewall rules in the VPS control panel too. The external gate is authoritative: `npm run smoke:external` must report `5432` and `8000` as closed from an untrusted network, and continue confirming that `8443` stays closed.
 
 For Docker Compose hardening, avoid publishing Supabase/Kong/Postgres ports to `0.0.0.0`. Bind admin-only services to loopback or a private VPN interface when direct maintenance access is needed.
 

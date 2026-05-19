@@ -185,6 +185,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Add private storage connector secret-reference persistence.
 - [x] Add worker-side concurrency defaults and tenant fairness gate before BullMQ consumer rollout.
 - [x] Wire the BullMQ enqueuer/consumer path into the API and worker runtime entrypoints.
+- [x] Add a temporary public-Paperclip verification script and accept the live health payload contract during the test-drive phase.
 - [x] Add tenant-scoped provider runtime injection into Paperclip before commercial production cutover.
   - [x] Resolve the tenant's active allowed provider at run execution time.
   - [x] Fetch tenant provider secrets from the vault just-in-time in the worker.

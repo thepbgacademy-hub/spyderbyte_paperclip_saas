@@ -12,6 +12,7 @@
     "e2e:live": "playwright test -c apps/web/playwright.live.config.ts",
     "resolve:web-assets": "node scripts/resolve-web-assets.mjs",
     "smoke:external": "node scripts/external-smoke-security.mjs",
+    "verify:paperclip-target": "node scripts/verify-paperclip-target.mjs",
     "start:server": "node dist/api/server-main.js",
     "start:worker": "node dist/worker/worker-main.js",
     "test": "vitest run tests",

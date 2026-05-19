@@ -22,6 +22,17 @@ describe("createPaperclipClient", () => {
     });
   });
 
+  it("accepts live Paperclip health payloads that report status ok", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ status: "ok", deploymentMode: "authenticated" }));
+    const client = createPaperclipClient({
+      baseUrl: "https://paperclip.internal.local",
+      serviceToken: "service-token",
+      fetchImpl
+    });
+
+    await expect(client.healthCheck()).resolves.toEqual({ ok: true });
+  });
+
   it("creates a private run using the mapped Paperclip company id", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       jsonResponse({

@@ -57,7 +57,7 @@ export function createPaperclipClient(options: PaperclipClientOptions): Papercli
   return {
     async healthCheck(): Promise<PaperclipHealth> {
       const body = await request("/api/health", { method: "GET" });
-      return { ok: readBoolean(body, "ok") };
+      return { ok: readHealth(body) };
     },
 
     async createRun(input: CreatePaperclipRunInput): Promise<PaperclipRunReference> {
@@ -110,12 +110,20 @@ function toRunReference(body: unknown): PaperclipRunReference {
   };
 }
 
-function readBoolean(body: unknown, key: string): boolean {
-  if (!isRecord(body) || typeof body[key] !== "boolean") {
+function readHealth(body: unknown): boolean {
+  if (!isRecord(body)) {
     throw new PaperclipClientError("paperclip_bad_response", "workflow_failed", "Paperclip returned an invalid health payload");
   }
 
-  return body[key];
+  if (typeof body.ok === "boolean") {
+    return body.ok;
+  }
+
+  if (body.status === "ok") {
+    return true;
+  }
+
+  throw new PaperclipClientError("paperclip_bad_response", "workflow_failed", "Paperclip returned an invalid health payload");
 }
 
 function isRunStatus(value: unknown): value is PaperclipRunStatus {
