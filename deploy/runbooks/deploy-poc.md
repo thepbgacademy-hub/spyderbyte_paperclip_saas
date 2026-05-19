@@ -28,7 +28,8 @@ Set these on the VPS as root-owned environment files or deployment secrets. Do n
 - `WF_API_USER_ID`
 - `WF_API_ROLE`
 - `WF_VAULT_MASTER_KEY`
-- `WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID` optional but recommended for worker readiness because it lets the worker healthcheck prove the Paperclip bearer token can reach an authenticated company route
+- `WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID` optional but recommended for worker readiness because it lets the worker healthcheck prove the Paperclip bearer token can reach an authenticated company route on the installed Paperclip build
+- this probe is intentionally narrow: it proves authenticated company-scoped API access, not full Wealth Factory launch-contract readiness
 - `WF_WEB_APP_ENTRY_URL`
 - `WF_WEB_APP_STYLESHEET_URL` if emitted by `npm run resolve:web-assets`
 - `WF_PORTAL_SESSION_COOKIE_NAME`
@@ -78,6 +79,8 @@ Image build note:
 - `spyderbyte/worker` must start `dist/worker/worker-main.js`
 - the worker image now includes a container healthcheck that verifies both Redis reachability and Paperclip health before the rollout should be treated as green
 - when `WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID` is set, the worker healthcheck also verifies that the configured Paperclip bearer token is not rejected by an authenticated company-scoped route
+- on the current Paperclip install, that authenticated probe route is `GET /api/companies/:companyId/agents`
+- treat that as an auth/readiness floor only; it does not prove the current token can execute the final Wealth Factory launch flow
 - do not reuse the API image for the worker unless its entrypoint is explicitly overridden to `node dist/worker/worker-main.js`
 
 ## Smoke Tests
@@ -227,6 +230,29 @@ Current staged-runtime finding on 2026-05-19:
   - that same staged experiment showed `POST /api/issues/:id/checkout` still returns `401` when called headlessly with the company bearer token and explicit agent id
   - that strongly suggests the installed Paperclip build treats checkout as an interactive/local-agent claim flow rather than a server-safe headless execution endpoint
   - the checked-in repo still keeps the previous BYOK-preserving `/runs` adapter behavior until a supported headless Paperclip execution/auth contract is identified for Wealth Factory
+
+Current Paperclip contract findings on 2026-05-19:
+
+- temporary VPS remediation proved two real runtime blockers were Paperclip-local, not Wealth Factory-local:
+  - the `codex_local` lane needed a valid seeded `.codex` auth/session
+  - top-level `PAPERCLIP_PUBLIC_URL` had to point at `http://127.0.0.1:3100` so agent-injected `PAPERCLIP_API_URL` and `PAPERCLIP_RUNTIME_API_URL` stayed local instead of redirecting through the public hostname
+- with those fixes in place, assignment-triggered Paperclip heartbeat runs now succeed end to end on the temporary test lane
+- issue creation now exposes a usable run bridge:
+  - `POST /api/companies/:companyId/issues` returns the issue only
+  - within roughly `1.5s`, `GET /api/issues/:identifier` can populate `executionRunId` and `checkoutRunId`
+  - `GET /api/heartbeat-runs/:runId` returns the live run record
+- sharp edge:
+  - `executionRunId` and `checkoutRunId` are not durable on the issue object after the run transitions the issue to `blocked` or the issue later completes; they can fall back to `null`
+  - for durable correlation, use the run id while it is present, then rely on issue activity/comment `runId` or `createdByRunId` plus `GET /api/heartbeat-runs/:runId`
+- issue-level `assigneeAdapterOverrides.adapterConfig.env` reaches the launched runtime:
+  - a direct CTO probe issue successfully echoed an injected env value from runtime
+  - this proves the installed Paperclip build supports issue-scoped adapter env overrides in execution
+- security sharp edge:
+  - plain env override values are persisted on the Paperclip issue object and therefore must not be used for subscriber API keys or other tenant secrets
+  - a naive `secret_ref` issue override failed in the current company-token lane, and Paperclip secret creation from the company token returned `403 Board access required`
+- current implication for Wealth Factory:
+  - do not switch the checked-in adapter yet
+  - the installed Paperclip build now looks capable of deterministic issue-launch plus run-id polling, but safe tenant-secret injection still needs a supported secret-ref/admin lane before commercial BYOK traffic should rely on it
 
 Do not treat a public Paperclip target as release-safe. Before commercial rollout, remove the host port publish and public router so Paperclip is reachable only from the Wealth Factory API and worker containers.
 

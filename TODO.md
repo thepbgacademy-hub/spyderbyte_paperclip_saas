@@ -215,5 +215,12 @@ This file tracks implementation progress. Keep it current after every phase.
 - [ ] Discover and implement the correct Paperclip execution-launch endpoint/flow for this installed Paperclip build.
   - [x] Prove the dead `POST /api/companies/:companyId/runs` client contract is not supported by the installed Paperclip build.
   - [x] Prove the staged lane can create a real Paperclip issue with the company-scoped bearer token.
-  - [ ] Discover the supported headless auth/launch primitive for checkout or execution after the current `POST /api/issues/:id/checkout` attempt returned `401`.
-  - [ ] Re-run the staged lane until a real Paperclip run reference is created successfully.
+  - [x] Prove assignment-triggered issue execution creates a real heartbeat run and that `GET /api/issues/:identifier` can expose `executionRunId` / `checkoutRunId` shortly after launch.
+  - [x] Prove `GET /api/heartbeat-runs/:runId` returns the live run record for that assignment-triggered execution.
+  - [x] Prove issue-scoped `assigneeAdapterOverrides.adapterConfig.env` reaches runtime on the installed Paperclip build.
+  - [ ] Establish a secure tenant-secret injection lane for that issue-centric flow.
+    - [x] Prove plain issue-level env overrides are technically effective.
+    - [x] Prove plain issue-level env overrides are not safe for subscriber secrets because the values persist on the issue object.
+    - [ ] Determine whether a board/admin secret-management lane can create Paperclip secrets usable by `secret_ref` issue overrides.
+    - [ ] Determine whether company-token execution can consume `secret_ref` issue overrides after a valid secret exists.
+  - [ ] Decide whether Wealth Factory should adapt to issue-launch plus short polling for `executionRunId`, or whether Paperclip should be reconfigured/upgraded to expose a safer direct run-launch contract.

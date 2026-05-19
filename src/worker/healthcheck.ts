@@ -53,7 +53,7 @@ async function main() {
     ...(authProbeCompanyId
       ? {
           verifyPaperclipAuth: async () => {
-            const response = await fetch(`${env.paperclipBaseUrl}/api/companies/${encodeURIComponent(authProbeCompanyId)}/runs/_wf_auth_probe_`, {
+            const response = await fetch(`${env.paperclipBaseUrl}/api/companies/${encodeURIComponent(authProbeCompanyId)}/agents`, {
               method: "GET",
               headers: {
                 authorization: `Bearer ${env.paperclipServiceToken}`
@@ -62,6 +62,10 @@ async function main() {
 
             if (response.status === 401 || response.status === 403) {
               throw new Error("Paperclip authenticated probe was rejected");
+            }
+
+            if (!response.ok) {
+              throw new Error(`Paperclip authenticated probe failed with status ${response.status}`);
             }
           }
         }

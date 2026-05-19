@@ -85,6 +85,12 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 6. Run parallel-load verification proving one tenant cannot monopolize execution under realistic ordering pressure, then tune `WF_WORKER_CONCURRENCY` and `WF_WORKER_MAX_ACTIVE_PER_TENANT` with measurement instead of assumption.
 7. Re-run `npm run smoke:external` after the final firewall/allowlist policy is applied; it is now the repeatable external gate for DNS, intended ports, private ports, auth/CORS route behavior, and response leak checks.
 8. Confirm the VPS runtime keeps using `createPostgresEncryptedVaultStore` with a strong `WF_VAULT_MASTER_KEY` and rotate the static bearer token when the tenant-aware auth layer replaces it.
+9. Keep the repo-side Paperclip adapter steady for now. The installed Paperclip build has now proven:
+   - issue assignment creates a real heartbeat run
+   - `GET /api/issues/:identifier` can expose `executionRunId`/`checkoutRunId` shortly after assignment
+   - `GET /api/heartbeat-runs/:runId` works
+   - issue-scoped adapter env overrides reach runtime
+   but it has not yet proven a safe secret-ref lane for tenant BYOK secrets. Do not pivot the checked-in Wealth Factory adapter until that secure injection path is understood.
 
 ## Security Position
 
@@ -316,6 +322,25 @@ Nuances to preserve:
   - the next step in that issue-centric flow, `POST /api/issues/:id/checkout`, still returns `401` when called headlessly with the same company token plus explicit agent id
   - that means the staging discovery has narrowed the problem beyond the original `404`, but the checked-in repo still needs a supported headless Paperclip launch contract before the adapter should change
   - current evidence suggests checkout is an interactive/local-agent claim flow, not a server-safe headless launch primitive for Wealth Factory
+
+## 2026-05-19 Paperclip Runtime Discovery
+
+- Paperclip is now able to execute real assignment-triggered runs after 2 VPS-side fixes:
+  - seed a valid `.codex` auth/session into the Paperclip-managed Codex home
+  - keep `PAPERCLIP_PUBLIC_URL` local (`http://127.0.0.1:3100`) so agent API calls do not redirect through the public hostname and fail TLS internally
+- The issue-centric execution surface is more capable than it first looked:
+  - `POST /api/companies/:companyId/issues` starts the assignment flow
+  - the issue can pick up `executionRunId`/`checkoutRunId` within about `1.5s`
+  - `GET /api/heartbeat-runs/:runId` returns the actual run record
+- Sharp edges discovered:
+  - the run id is not durable on the issue object forever; after `blocked` or later completion it can return to `null`
+  - the durable fallback is issue activity/comment metadata plus the heartbeat-runs endpoint
+  - issue-level plain env overrides definitely reach runtime, but the plain value is stored on the issue object and is therefore not safe for subscriber secrets
+  - a direct `secret_ref` issue override did not work in the company-token lane, and secret creation via the company token returned `403 Board access required`
+- Immediate repo implication:
+  - keep the checked-in `/runs` adapter steady
+  - only the worker healthcheck auth probe should change right now
+  - the bigger adapter decision waits on a secure secret-ref/admin path for tenant BYOK injection
 
 ## Hard Rules
 
