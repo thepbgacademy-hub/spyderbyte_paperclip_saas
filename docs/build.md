@@ -913,6 +913,7 @@ Temporary Paperclip test-drive note:
 
 - during the pre-hardening test-drive phase, a public Paperclip target may be used only as a controlled verification lane
 - use `npm run verify:paperclip-target` against that target before and after pressure testing
+- use `npm run seed:demo`, `npm run queue:live-run`, and `npm run inspect:live-run` to drive one controlled live workflow through reservation, outbox, and BullMQ before any pressure run
 - do not treat a public Paperclip host or published port as release-safe
 
 ## Self-Review

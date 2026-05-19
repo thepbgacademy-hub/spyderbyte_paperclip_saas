@@ -192,6 +192,7 @@ This file tracks implementation progress. Keep it current after every phase.
   - [x] Extend the Paperclip adapter to accept per-run provider context instead of assuming one shared VPS credential.
   - [x] Keep operator/shared credentials available only as explicit debug/test fallback until the tenant-scoped path is proven.
   - [x] Disable shared fallback credentials for normal subscriber production runs by default, with debug fallback available only through explicit runtime mode.
+  - [x] Add repo-owned live-drive scripts to seed current queue prerequisites, reserve one real workflow run, and inspect outbox/BullMQ state without improvised SQL.
 - [ ] Deploy the POC to VPS and run external exposed-port/CORS smoke tests.
   - [x] Add repeatable `npm run smoke:external` smoke/security command.
   - [x] Run first external probe from Windows.

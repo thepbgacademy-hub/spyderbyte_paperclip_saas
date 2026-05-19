@@ -8,7 +8,8 @@ const DEMO = {
   tenantId: "22222222-2222-4222-8222-222222222222",
   packageId: "33333333-3333-4333-8333-333333333333",
   workflowId: "44444444-4444-4444-8444-444444444444",
-  providerReferenceId: "55555555-5555-4555-8555-555555555555"
+  providerReferenceId: "55555555-5555-4555-8555-555555555555",
+  purchaseId: "66666666-6666-4666-8666-666666666666"
 };
 
 const env = Object.fromEntries(
@@ -69,6 +70,18 @@ try {
   );
 
   await client.query(
+    `insert into wfpc.tenant_package_purchases
+      (id, tenant_id, package_id, status, starts_at, ends_at, created_by_user_id)
+     values ($1, $2, $3, 'active', now() - interval '1 day', null, $4)
+     on conflict (tenant_id, package_id) do update
+     set status = 'active',
+         starts_at = excluded.starts_at,
+         ends_at = excluded.ends_at,
+         updated_at = now()`,
+    [DEMO.purchaseId, DEMO.tenantId, DEMO.packageId, DEMO.userId]
+  );
+
+  await client.query(
     `insert into wfpc.tenant_package_installs (id, tenant_id, package_id, installed_by_user_id, status)
      values (gen_random_uuid(), $1, $2, $3, 'active')
      on conflict (tenant_id, package_id) do update
@@ -77,9 +90,16 @@ try {
   );
 
   await client.query(
+    `delete from wfpc.package_provider_requirements
+     where package_id = $1
+       and capability = 'content_generation'
+       and provider_kind = 'openai_api'`,
+    [DEMO.packageId]
+  );
+
+  await client.query(
     `insert into wfpc.package_provider_requirements (id, package_id, capability, required, provider_kind)
-     values (gen_random_uuid(), $1, 'content_generation', true, 'openai_api')
-     on conflict do nothing`,
+     values (gen_random_uuid(), $1, 'content_generation', true, 'openai_api')`,
     [DEMO.packageId]
   );
 
@@ -108,6 +128,17 @@ try {
     [DEMO.providerReferenceId, DEMO.tenantId]
   );
 
+  const paperclipCompanyId = env.WF_DEMO_PAPERCLIP_COMPANY_ID?.trim();
+  if (paperclipCompanyId) {
+    await client.query(
+      `insert into wfpc.paperclip_company_mappings (tenant_id, paperclip_company_id)
+       values ($1, $2)
+       on conflict (tenant_id) do update
+       set paperclip_company_id = excluded.paperclip_company_id`,
+      [DEMO.tenantId, paperclipCompanyId]
+    );
+  }
+
   await client.query("commit");
 
   process.stdout.write(
@@ -118,7 +149,8 @@ try {
           tenantId: DEMO.tenantId,
           userId: DEMO.userId,
           packageId: DEMO.packageId,
-          workflowId: DEMO.workflowId
+          workflowId: DEMO.workflowId,
+          ...(paperclipCompanyId ? { paperclipCompanyId } : {})
         }
       },
       null,

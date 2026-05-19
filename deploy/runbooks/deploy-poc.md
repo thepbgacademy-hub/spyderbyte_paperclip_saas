@@ -160,6 +160,22 @@ Expected for the temporary test target:
 - `deploymentMode` reports `authenticated`
 - the script prints a warning reminding operators that this public exposure is for controlled testing only
 
+For a controlled live run drive after Paperclip target health is verified:
+
+```powershell
+$env:WF_DEMO_PAPERCLIP_COMPANY_ID="<paperclip-company-id>"
+npm run seed:demo
+npm run queue:live-run -- --tenant 22222222-2222-4222-8222-222222222222 --user 11111111-1111-4111-8111-111111111111 --workflow 44444444-4444-4444-8444-444444444444
+npm run inspect:live-run -- --tenant 22222222-2222-4222-8222-222222222222 --workflow 44444444-4444-4444-8444-444444444444 --run <run-id-from-queue-output>
+```
+
+Expected for the live drive:
+
+- `seed:demo` now creates the active package purchase prerequisite
+- `seed:demo` can also create `wfpc.paperclip_company_mappings` when `WF_DEMO_PAPERCLIP_COMPANY_ID` is provided
+- `queue:live-run` creates a reserved workflow run plus the durable outbox row
+- `inspect:live-run` confirms bound provider context and BullMQ job presence without improvised SQL
+
 Do not treat a public Paperclip target as release-safe. Before commercial rollout, remove the host port publish and public router so Paperclip is reachable only from the Wealth Factory API and worker containers.
 
 ## Current External Smoke Status
