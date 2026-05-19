@@ -64,6 +64,7 @@ services:
       PAPERCLIP_BASE_URL: http://paperclip:9000
       PAPERCLIP_SERVICE_TOKEN: ${PAPERCLIP_SERVICE_TOKEN:?set PAPERCLIP_SERVICE_TOKEN}
       WF_VAULT_MASTER_KEY: ${WF_VAULT_MASTER_KEY:?set WF_VAULT_MASTER_KEY}
+      WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID: ${WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID:-}
     depends_on:
       redis:
         condition: service_healthy

@@ -9,10 +9,14 @@ Do not expose internal workflow-engine prompts, skills, commands, agent names, r
 ## Triage
 
 1. Check `https://www.spyderbyte.cloud` and `https://api.spyderbyte.cloud/health`.
-2. Check Docker health with `docker compose -f deploy/docker-compose.yml ps`.
-3. Inspect only redacted API and worker logs.
-4. If tenant data exposure is suspected, pause the tenant before retrying jobs.
-5. If provider credential exposure is suspected, revoke or rotate the affected secret reference and audit runtime access events.
+2. Check Docker health with `docker compose -f deploy/docker-compose.yml ps`, and confirm `api`, `worker`, `paperclip`, and `redis` are present in the intended rollout.
+3. Confirm the worker dependency chain before blaming the app shell:
+   - `worker` health
+   - `paperclip` health
+   - `redis` health
+4. Inspect only redacted API and worker logs.
+5. If tenant data exposure is suspected, pause the tenant before retrying jobs.
+6. If provider credential exposure is suspected, revoke or rotate the affected secret reference and audit runtime access events.
 
 ## Emergency Controls
 

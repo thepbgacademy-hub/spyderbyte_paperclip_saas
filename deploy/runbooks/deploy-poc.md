@@ -28,6 +28,7 @@ Set these on the VPS as root-owned environment files or deployment secrets. Do n
 - `WF_API_USER_ID`
 - `WF_API_ROLE`
 - `WF_VAULT_MASTER_KEY`
+- `WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID` optional but recommended for worker readiness because it lets the worker healthcheck prove the Paperclip bearer token can reach an authenticated company route
 - `WF_WEB_APP_ENTRY_URL`
 - `WF_WEB_APP_STYLESHEET_URL` if emitted by `npm run resolve:web-assets`
 - `WF_PORTAL_SESSION_COOKIE_NAME`
@@ -68,7 +69,16 @@ Current deployment choice:
 - Session bootstrap is treated as same-site cookie auth only. Do not treat true cross-origin cookie sessions as supported until CSRF protections are implemented and reviewed.
 8. Run `docker compose -f deploy/docker-compose.yml pull`.
 9. Run `docker compose -f deploy/docker-compose.yml up -d`.
-10. Run `docker compose -f deploy/docker-compose.yml ps` and confirm `api`, `worker`, `paperclip`, and `redis` are healthy or running.
+10. Run `docker compose -f deploy/docker-compose.yml ps` and confirm `api` is running, and `worker`, `paperclip`, and `redis` are healthy.
+
+Image build note:
+
+- the repo now ships both [E:\REPOS\spyderbyte_paperclip_saas\Dockerfile.api](E:\REPOS\spyderbyte_paperclip_saas\Dockerfile.api) and [E:\REPOS\spyderbyte_paperclip_saas\Dockerfile.worker](E:\REPOS\spyderbyte_paperclip_saas\Dockerfile.worker)
+- `spyderbyte/api` must start `dist/api/server-main.js`
+- `spyderbyte/worker` must start `dist/worker/worker-main.js`
+- the worker image now includes a container healthcheck that verifies both Redis reachability and Paperclip health before the rollout should be treated as green
+- when `WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID` is set, the worker healthcheck also verifies that the configured Paperclip bearer token is not rejected by an authenticated company-scoped route
+- do not reuse the API image for the worker unless its entrypoint is explicitly overridden to `node dist/worker/worker-main.js`
 
 ## Smoke Tests
 
@@ -193,6 +203,13 @@ Current observed blocker on 2026-05-19:
 - a real `wfpc.paperclip_company_mappings` row still needs to be seeded with
   the Paperclip company ID that Wealth Factory should target during controlled
   testing
+
+Current live rollout implication:
+
+- the next VPS alignment step is not a schema change anymore
+- it is a runtime/image alignment step: the live API container needs the queue
+  and Paperclip env, and the worker needs to be deployed from the repo's worker
+  entrypoint
 
 Do not treat a public Paperclip target as release-safe. Before commercial rollout, remove the host port publish and public router so Paperclip is reachable only from the Wealth Factory API and worker containers.
 
@@ -355,6 +372,7 @@ npm run smoke:external
 ## Rollback
 
 1. Keep the previous immutable image tags available.
-2. Update `SPYDERBYTE_IMAGE_TAG` and `PAPERCLIP_IMAGE_TAG` back to previous known-good tags.
-3. Run `docker compose -f deploy/docker-compose.yml up -d`.
-4. Confirm the smoke tests pass.
+2. Restore the previous `WF_WEB_APP_ENTRY_URL` and `WF_WEB_APP_STYLESHEET_URL` values that match the known-good image tag.
+3. Update `SPYDERBYTE_IMAGE_TAG` and `PAPERCLIP_IMAGE_TAG` back to previous known-good tags.
+4. Run `docker compose -f deploy/docker-compose.yml up -d`.
+5. Confirm the smoke tests pass.

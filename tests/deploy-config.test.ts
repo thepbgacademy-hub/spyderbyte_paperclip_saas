@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 const compose = normalizeLineEndings(readFileSync("deploy/docker-compose.yml", "utf8"));
 const nginx = normalizeLineEndings(readFileSync("deploy/nginx/spyderbyte.conf", "utf8"));
 const runbook = normalizeLineEndings(readFileSync("deploy/runbooks/deploy-poc.md", "utf8"));
+const apiDockerfile = normalizeLineEndings(readFileSync("Dockerfile.api", "utf8"));
+const workerDockerfile = normalizeLineEndings(readFileSync("Dockerfile.worker", "utf8"));
 
 describe("deployment POC config", () => {
   it("keeps Redis and the internal workflow engine off public host ports", () => {
@@ -12,6 +14,7 @@ describe("deployment POC config", () => {
 
     for (const block of internalServiceBlocks) {
       expect(block).not.toMatch(/^\s+ports:/m);
+      expect(block).not.toMatch(/network_mode:\s*host/i);
     }
 
     expect(compose).toContain("private:");
@@ -31,7 +34,7 @@ describe("deployment POC config", () => {
     expect(nginx).toContain("server_name api.spyderbyte.cloud");
     expect(nginx).toContain("location /app-assets/");
     expect(nginx).toContain("proxy_pass http://web:3000/assets/");
-    expect(nginx).not.toMatch(/paperclip|redis/i);
+    expect(nginx).not.toMatch(/paperclip|redis|worker/i);
   });
 
   it("documents secret handling and external smoke checks", () => {
@@ -43,6 +46,7 @@ describe("deployment POC config", () => {
     expect(runbook).toContain("WF_API_USER_ID");
     expect(runbook).toContain("WF_API_ROLE");
     expect(runbook).toContain("WF_VAULT_MASTER_KEY");
+    expect(runbook).toContain("WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID");
     expect(runbook).toContain("WF_WEB_APP_ENTRY_URL");
     expect(runbook).toContain("WF_WEB_APP_STYLESHEET_URL");
     expect(runbook).toContain("WF_PORTAL_SESSION_COOKIE_NAME");
@@ -74,6 +78,16 @@ describe("deployment POC config", () => {
     expect(runbook).toContain("immutable commit tag");
   });
 
+  it("ships explicit server and worker container entrypoints for deployment", () => {
+    expect(apiDockerfile).toContain('CMD ["node", "dist/api/server-main.js"]');
+    expect(workerDockerfile).toContain('CMD ["node", "dist/worker/worker-main.js"]');
+    expect(workerDockerfile).toContain('HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD ["node", "dist/worker/healthcheck.js"]');
+    expect(workerDockerfile).toContain("npm run build:server");
+    expect(runbook).toContain("confirm `api` is running, and `worker`, `paperclip`, and `redis` are healthy");
+    expect(runbook).toContain("verifies both Redis reachability and Paperclip health");
+    expect(runbook).toContain("configured Paperclip bearer token is not rejected by an authenticated company-scoped route");
+  });
+
   it("fails fast when required server-side secrets are missing", () => {
     for (const key of [
       "SUPABASE_URL",
@@ -93,8 +107,13 @@ describe("deployment POC config", () => {
     }
     expect(compose).toContain("WF_WEB_APP_STYLESHEET_URL: ${WF_WEB_APP_STYLESHEET_URL:-}");
     expect(compose).toContain("WF_PORTAL_SESSION_COOKIE_NAME: ${WF_PORTAL_SESSION_COOKIE_NAME:-wf_portal_session}");
+    expect(compose).toContain("WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID: ${WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID:-}");
     expect(runbook).toContain("npm run e2e");
     expect(runbook).not.toContain("--project chromium");
+  });
+
+  it("documents rollback of shell asset env along with image tags", () => {
+    expect(runbook).toContain("Restore the previous `WF_WEB_APP_ENTRY_URL` and `WF_WEB_APP_STYLESHEET_URL`");
   });
 });
 
