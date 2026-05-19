@@ -36,7 +36,7 @@ describe("ACID guard repository", () => {
       [{ id: "workflow-1", package_id: "package-1", provider_kind: "openai_api" }],
       [{ id: "install-1", package_id: "package-1" }],
       [{ id: "requirement-1" }],
-      [{ id: "secret-1" }],
+      [{ id: "secret-1", secret_ref: "wf_secret_openai", label: "Primary OpenAI", metadata: { projectId: "proj_123" } }],
       [{ id: "reservation-1" }],
       []
     ]);
@@ -63,6 +63,8 @@ describe("ACID guard repository", () => {
     expect(sql).toMatch(/from wfpc\.secret_references[\s\S]+revoked_at is null/i);
     expect(sql).toMatch(/insert into wfpc\.workflow_run_reservations[\s\S]+on conflict do nothing/i);
     expect(sql).toMatch(/insert into wfpc\.workflow_runs/i);
+    expect(sql).toMatch(/bound_secret_reference_id/i);
+    expect(sql).toMatch(/bound_provider_context/i);
     expect(sql).toMatch(/insert into wfpc\.workflow_queue_outbox/i);
     expect(sql).toMatch(/commit/i);
     expect(runner.withTransaction).toHaveBeenCalledOnce();
@@ -75,7 +77,7 @@ describe("ACID guard repository", () => {
       [{ id: "workflow-1", package_id: "package-1", provider_kind: "openai_api" }],
       [{ id: "install-1", package_id: "package-1" }],
       [{ id: "requirement-1" }],
-      [{ id: "secret-1" }],
+      [{ id: "secret-1", secret_ref: "wf_secret_openai", label: "Primary OpenAI", metadata: {} }],
       []
     ]);
     const repository = createAcidGuardRepository(createTransactionRunner(client));
@@ -304,3 +306,36 @@ describe("ACID guard repository", () => {
     expect(sql).toMatch(/where id = \$1[\s\S]+and claim_token = \$4::uuid[\s\S]+and status = 'claimed'/i);
   });
 });
+  it("loads a run's bound provider context only while the bound credential remains active", async () => {
+    const client = createSequencedClient([
+      [
+        {
+          bound_provider_context: [
+            {
+              capability: "openai_api",
+              providerKind: "openai_api",
+              label: "Primary OpenAI",
+              secretRef: "wf_secret_openai",
+              metadata: { projectId: "proj_123" }
+            }
+          ]
+        }
+      ]
+    ]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(repository.getBoundProviderContext({ tenantId: "tenant-1", runId: "run-1" })).resolves.toEqual([
+      {
+        capability: "openai_api",
+        providerKind: "openai_api",
+        label: "Primary OpenAI",
+        secretRef: "wf_secret_openai",
+        metadata: { projectId: "proj_123" }
+      }
+    ]);
+
+    const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
+    expect(sql).toMatch(/from wfpc\.workflow_runs runs/i);
+    expect(sql).toMatch(/join wfpc\.secret_references secrets/i);
+    expect(sql).toMatch(/secrets\.revoked_at is null/i);
+  });

@@ -33,4 +33,14 @@ describe("ACID race guard migration", () => {
     expect(migration).toMatch(/workflow_runs_status_guard_idx/i);
     expect(migration).toMatch(/workflow_run_reservations_idempotency_unique/i);
   });
+
+  it("stores bound provider context on workflow runs for retry-safe execution", async () => {
+    const bindingMigration = await import("node:fs/promises").then((fs) =>
+      fs.readFile(new URL("../supabase/migrations/0005_bound_provider_context.sql", import.meta.url), "utf8")
+    );
+    expect(bindingMigration).toMatch(/alter table wfpc\.workflow_runs[\s\S]+bound_secret_reference_id uuid/i);
+    expect(bindingMigration).toMatch(/alter table wfpc\.workflow_runs[\s\S]+bound_provider_context jsonb/i);
+    expect(bindingMigration).toMatch(/jsonb_typeof\(bound_provider_context\) = 'array'/i);
+    expect(bindingMigration).toMatch(/workflow_runs_bound_secret_reference_idx/i);
+  });
 });

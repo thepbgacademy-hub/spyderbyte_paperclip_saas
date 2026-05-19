@@ -9,35 +9,48 @@ export type DebugSharedProviderResolver = (input: StartWorkflowRunInput) => Prom
 export async function resolveProviderExecutionContext(options: {
   mode: ProviderExecutionMode;
   input: StartWorkflowRunInput;
+  loadBoundProviderContext?: (input: StartWorkflowRunInput) => Promise<readonly RuntimeProviderBinding[] | null>;
   resolveProviderContext?: (input: StartWorkflowRunInput) => Promise<readonly RuntimeProviderBinding[]>;
   hydrateProviderContext?: (input: StartWorkflowRunInput & {
     providerBindings: readonly RuntimeProviderBinding[];
   }) => Promise<readonly RuntimeProviderExecutionBinding[]>;
   resolveDebugSharedProvider?: DebugSharedProviderResolver;
 }): Promise<readonly RuntimeProviderExecutionBinding[] | readonly RuntimeProviderBinding[] | undefined> {
-  if (!options.resolveProviderContext) {
+  const providerBindings =
+    (options.loadBoundProviderContext ? await options.loadBoundProviderContext(options.input) : null) ??
+    (options.resolveProviderContext ? await tryResolveProviderContext(options.resolveProviderContext, options.input, options.mode, options.resolveDebugSharedProvider) : undefined);
+
+  if (!providerBindings) {
     return undefined;
   }
 
+  if (!options.hydrateProviderContext) {
+    return providerBindings;
+  }
+
+  return options.hydrateProviderContext({
+    ...options.input,
+    providerBindings
+  });
+}
+
+async function tryResolveProviderContext(
+  resolveProviderContext: (input: StartWorkflowRunInput) => Promise<readonly RuntimeProviderBinding[]>,
+  input: StartWorkflowRunInput,
+  mode: ProviderExecutionMode,
+  resolveDebugSharedProvider?: DebugSharedProviderResolver
+): Promise<readonly RuntimeProviderBinding[] | readonly RuntimeProviderExecutionBinding[]> {
   try {
-    const providerBindings = await options.resolveProviderContext(options.input);
-    if (!options.hydrateProviderContext) {
-      return providerBindings;
-    }
-
-    return options.hydrateProviderContext({
-      ...options.input,
-      providerBindings
-    });
+    return await resolveProviderContext(input);
   } catch (error) {
-    if (!(error instanceof RuntimeProviderResolutionError) || options.mode !== "debug_shared_fallback") {
+    if (!(error instanceof RuntimeProviderResolutionError) || mode !== "debug_shared_fallback") {
       throw error;
     }
 
-    if (!options.resolveDebugSharedProvider) {
+    if (!resolveDebugSharedProvider) {
       throw error;
     }
 
-    return options.resolveDebugSharedProvider(options.input);
+    return resolveDebugSharedProvider(input);
   }
 }

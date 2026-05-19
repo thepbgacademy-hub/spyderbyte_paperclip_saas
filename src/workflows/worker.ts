@@ -2,6 +2,7 @@ import type { PaperclipClient } from "../paperclip/types.js";
 import type { PaperclipRunStatus } from "../paperclip/types.js";
 import type { ProviderExecutionMode } from "../providers/runtime-provider-fallback.js";
 import type {
+  BoundProviderContextLoader,
   PaperclipEnabledCheck,
   RunEntitlementCheck,
   RunStartAuthorizer,
@@ -28,6 +29,7 @@ export async function processWorkflowJob(options: {
   isPaperclipEnabled: PaperclipEnabledCheck;
   checkEntitlement: RunEntitlementCheck;
   providerExecutionMode?: ProviderExecutionMode;
+  loadBoundProviderContext?: BoundProviderContextLoader;
   resolveProviderContext?: RuntimeProviderContextResolver;
   hydrateProviderContext?: RuntimeProviderContextHydrator;
   resolveDebugSharedProvider?: DebugSharedProviderResolver;
@@ -41,6 +43,7 @@ export async function processWorkflowJob(options: {
     isPaperclipEnabled: options.isPaperclipEnabled,
     checkEntitlement: options.checkEntitlement,
     ...(options.providerExecutionMode ? { providerExecutionMode: options.providerExecutionMode } : {}),
+    ...(options.loadBoundProviderContext ? { loadBoundProviderContext: options.loadBoundProviderContext } : {}),
     ...(options.resolveProviderContext ? { resolveProviderContext: options.resolveProviderContext } : {}),
     ...(options.hydrateProviderContext ? { hydrateProviderContext: options.hydrateProviderContext } : {}),
     ...(options.resolveDebugSharedProvider ? { resolveDebugSharedProvider: options.resolveDebugSharedProvider } : {})

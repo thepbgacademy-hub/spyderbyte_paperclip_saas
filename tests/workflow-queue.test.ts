@@ -189,6 +189,63 @@ describe("run service", () => {
     });
   });
 
+  it("prefers a run's bound provider context so retries cannot drift to a different credential", async () => {
+    const paperclipClient = {
+      createRun: vi.fn().mockResolvedValue({ paperclipRunId: "pc-run-1", status: "queued" })
+    };
+    const resolveProviderContext = vi.fn();
+    const loadBoundProviderContext = vi.fn().mockResolvedValue([
+      {
+        capability: "openai_api",
+        providerKind: "openai_api",
+        label: "Bound OpenAI",
+        secretRef: "wf_secret_bound",
+        metadata: {}
+      }
+    ]);
+    const hydrateProviderContext = vi.fn().mockResolvedValue([
+      {
+        capability: "openai_api",
+        providerKind: "openai_api",
+        label: "Bound OpenAI",
+        secretRef: "wf_secret_bound",
+        metadata: {},
+        secretValues: { apiKey: "sk-bound" }
+      }
+    ]);
+    const service = createRunService({
+      paperclipClient,
+      tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
+      authorizeRunStart: vi.fn().mockResolvedValue(true),
+      loadBoundProviderContext,
+      resolveProviderContext,
+      hydrateProviderContext
+    });
+
+    await service.startRun({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "workflow-1"
+    });
+
+    expect(loadBoundProviderContext).toHaveBeenCalled();
+    expect(resolveProviderContext).not.toHaveBeenCalled();
+    expect(hydrateProviderContext).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "workflow-1",
+      providerBindings: [
+        {
+          capability: "openai_api",
+          providerKind: "openai_api",
+          label: "Bound OpenAI",
+          secretRef: "wf_secret_bound",
+          metadata: {}
+        }
+      ]
+    });
+  });
+
   it("fails closed in tenant-required mode when no tenant provider is connected", async () => {
     const paperclipClient = {
       createRun: vi.fn()
@@ -603,6 +660,39 @@ describe("workflow worker", () => {
         }
       ]
     });
+  });
+
+  it("worker fails closed when the bound credential is no longer active at execution time", async () => {
+    const createRun = vi.fn();
+
+    await expect(
+      processWorkflowJob({
+        payload: createWorkflowQueuePayload({
+          tenantId: "tenant-1",
+          runId: "run-1",
+          workflowId: "workflow-1",
+          createdByUserId: "user-1"
+        }),
+        paperclipClient: { createRun },
+        tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
+        authorizeRunStart: vi.fn().mockResolvedValue(true),
+        isPaperclipEnabled: vi.fn().mockResolvedValue(true),
+        checkEntitlement: vi.fn().mockResolvedValue({ allowed: true }),
+        loadBoundProviderContext: vi.fn().mockResolvedValue(null),
+        resolveProviderContext: vi.fn().mockRejectedValue(
+          new RuntimeProviderResolutionError({
+            tenantId: "tenant-1",
+            workflowId: "workflow-1",
+            capability: "text_generation"
+          })
+        )
+      })
+    ).rejects.toMatchObject({
+      code: "runtime_provider_unavailable",
+      publicMessage: "workflow_failed"
+    });
+
+    expect(createRun).not.toHaveBeenCalled();
   });
 
   it("worker uses debug shared fallback only in explicit fallback mode", async () => {

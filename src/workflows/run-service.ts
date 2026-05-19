@@ -18,6 +18,7 @@ export type RuntimeProviderContextResolver = (input: StartWorkflowRunInput) => P
 export type RuntimeProviderContextHydrator = (input: StartWorkflowRunInput & { providerBindings: readonly RuntimeProviderBinding[] }) => Promise<
   readonly RuntimeProviderExecutionBinding[]
 >;
+export type BoundProviderContextLoader = (input: StartWorkflowRunInput) => Promise<readonly RuntimeProviderBinding[] | null>;
 
 export type StartWorkflowRunInput = {
   tenantId: string;
@@ -80,6 +81,7 @@ export function createRunService(options: {
   isPaperclipEnabled?: PaperclipEnabledCheck;
   checkEntitlement?: RunEntitlementCheck;
   providerExecutionMode?: ProviderExecutionMode;
+  loadBoundProviderContext?: BoundProviderContextLoader;
   resolveProviderContext?: RuntimeProviderContextResolver;
   hydrateProviderContext?: RuntimeProviderContextHydrator;
   resolveDebugSharedProvider?: DebugSharedProviderResolver;
@@ -109,6 +111,7 @@ export function createRunService(options: {
       const providerContext = await resolveProviderExecutionContext({
         mode: options.providerExecutionMode ?? "tenant_credentials_required",
         input,
+        ...(options.loadBoundProviderContext ? { loadBoundProviderContext: options.loadBoundProviderContext } : {}),
         ...(options.resolveProviderContext ? { resolveProviderContext: options.resolveProviderContext } : {}),
         ...(options.hydrateProviderContext ? { hydrateProviderContext: options.hydrateProviderContext } : {}),
         ...(options.resolveDebugSharedProvider ? { resolveDebugSharedProvider: options.resolveDebugSharedProvider } : {})

@@ -39,6 +39,14 @@ export type QueueOutboxRecord = {
   claimToken: string;
 };
 
+export type BoundProviderContextRecord = {
+  capability: string;
+  providerKind: string;
+  label: string;
+  secretRef: string;
+  metadata: Record<string, unknown>;
+};
+
 export function createAcidGuardRepository(runner: TransactionRunner) {
   return {
     async reserveWorkflowRun(input: ReserveWorkflowRunInput): Promise<ReserveWorkflowRunResult> {
@@ -107,12 +115,13 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
         }
 
         const credential = await transaction.query(
-          "select id from wfpc.secret_references where tenant_id = $1 and provider_kind = $2 and revoked_at is null limit 1 for update",
+          "select id, secret_ref, label, metadata from wfpc.secret_references where tenant_id = $1 and provider_kind = $2 and revoked_at is null limit 1 for update",
           [input.tenantId, workflowRow.provider_kind]
         );
         if (credential.rows.length === 0) {
           return { reserved: false, reason: "credential_revoked" };
         }
+        const credentialRow = asRecord(credential.rows[0]);
 
         const reservation = await transaction.query(
           `insert into wfpc.workflow_run_reservations
@@ -128,9 +137,24 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
 
         await transaction.query(
           `insert into wfpc.workflow_runs
-            (id, tenant_id, workflow_template_id, created_by_user_id, status)
-           values ($1, $2, $3, $4, 'queued')`,
-          [input.runId, input.tenantId, input.workflowTemplateId, input.userId]
+            (id, tenant_id, workflow_template_id, created_by_user_id, status, bound_secret_reference_id, bound_provider_context)
+           values ($1, $2, $3, $4, 'queued', $5::uuid, $6::jsonb)`,
+          [
+            input.runId,
+            input.tenantId,
+            input.workflowTemplateId,
+            input.userId,
+            String(credentialRow.id),
+            JSON.stringify([
+              {
+                capability: String(workflowRow.provider_kind),
+                providerKind: String(workflowRow.provider_kind),
+                label: String(credentialRow.label),
+                secretRef: String(credentialRow.secret_ref),
+                metadata: asObject(credentialRow.metadata)
+              }
+            ])
+          ]
         );
 
         await transaction.query(
@@ -310,10 +334,54 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
         const row = asRecord(result.rows[0]);
         return { transitioned: true, status: String(row.status) };
       });
+    },
+
+    async getBoundProviderContext(input: { tenantId: string; runId: string }): Promise<readonly BoundProviderContextRecord[] | null> {
+      return runner.withTransaction(async (transaction) => {
+        const result = await transaction.query(
+          `select runs.bound_provider_context
+           from wfpc.workflow_runs runs
+           join wfpc.secret_references secrets
+             on secrets.id = runs.bound_secret_reference_id
+            and secrets.tenant_id = runs.tenant_id
+           where runs.tenant_id = $1
+             and runs.id = $2
+             and secrets.revoked_at is null
+           limit 1`,
+          [input.tenantId, input.runId]
+        );
+        if (result.rows.length === 0) {
+          return null;
+        }
+
+        const record = asRecord(result.rows[0]);
+        return toBoundProviderContext(record.bound_provider_context);
+      });
     }
   };
 }
 
 function asRecord(row: unknown): Record<string, unknown> {
   return row && typeof row === "object" ? (row as Record<string, unknown>) : {};
+}
+
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function toBoundProviderContext(value: unknown): readonly BoundProviderContextRecord[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map(asRecord)
+    .map((entry) => ({
+      capability: String(entry.capability),
+      providerKind: String(entry.providerKind),
+      label: String(entry.label),
+      secretRef: String(entry.secretRef),
+      metadata: asObject(entry.metadata)
+    }))
+    .filter((entry) => entry.capability.length > 0 && entry.providerKind.length > 0 && entry.label.length > 0 && entry.secretRef.length > 0);
 }
