@@ -8,6 +8,8 @@ export type AppEnv = {
   paperclipServiceToken: string;
   vaultMasterKey: string;
   providerExecutionMode: "tenant_credentials_required" | "debug_shared_fallback";
+  workerConcurrency: number;
+  workerMaxActivePerTenant: number;
 };
 
 const REQUIRED_KEYS = [
@@ -64,6 +66,14 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   if (!["tenant_credentials_required", "debug_shared_fallback"].includes(providerExecutionMode)) {
     invalidKeys.push("WF_PROVIDER_EXECUTION_MODE");
   }
+  const workerConcurrency = readPositiveInteger(source.WF_WORKER_CONCURRENCY, 2);
+  if (workerConcurrency === null) {
+    invalidKeys.push("WF_WORKER_CONCURRENCY");
+  }
+  const workerMaxActivePerTenant = readPositiveInteger(source.WF_WORKER_MAX_ACTIVE_PER_TENANT, 1);
+  if (workerMaxActivePerTenant === null) {
+    invalidKeys.push("WF_WORKER_MAX_ACTIVE_PER_TENANT");
+  }
 
   if (missingKeys.length > 0 || invalidKeys.length > 0) {
     throw new EnvValidationError(missingKeys, invalidKeys);
@@ -78,7 +88,9 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     paperclipBaseUrl: trimTrailingSlash(source.PAPERCLIP_BASE_URL as string),
     paperclipServiceToken: source.PAPERCLIP_SERVICE_TOKEN as string,
     vaultMasterKey: source.WF_VAULT_MASTER_KEY as string,
-    providerExecutionMode: providerExecutionMode as AppEnv["providerExecutionMode"]
+    providerExecutionMode: providerExecutionMode as AppEnv["providerExecutionMode"],
+    workerConcurrency: workerConcurrency as number,
+    workerMaxActivePerTenant: workerMaxActivePerTenant as number
   };
 }
 
@@ -97,4 +109,17 @@ function isHttpUrl(value: string): boolean {
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
+}
+
+function readPositiveInteger(value: string | undefined, fallback: number): number | null {
+  if (!hasValue(value)) {
+    return fallback;
+  }
+
+  if (!/^\d+$/.test(value)) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return parsed >= 1 ? parsed : null;
 }

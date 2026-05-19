@@ -24,7 +24,9 @@ describe("loadEnv", () => {
       paperclipBaseUrl: "https://paperclip-internal.spyderbyte.cloud",
       paperclipServiceToken: "paperclip-service-token",
       vaultMasterKey: "test-master-key-with-enough-length",
-      providerExecutionMode: "tenant_credentials_required"
+      providerExecutionMode: "tenant_credentials_required",
+      workerConcurrency: 2,
+      workerMaxActivePerTenant: 1
     });
   });
 
@@ -60,5 +62,23 @@ describe("loadEnv", () => {
 
   it("rejects unknown provider execution modes", () => {
     expect(() => loadEnv({ ...validEnv, WF_PROVIDER_EXECUTION_MODE: "something_else" })).toThrow(/WF_PROVIDER_EXECUTION_MODE/);
+  });
+
+  it("accepts explicit worker concurrency settings", () => {
+    expect(
+      loadEnv({
+        ...validEnv,
+        WF_WORKER_CONCURRENCY: "4",
+        WF_WORKER_MAX_ACTIVE_PER_TENANT: "2"
+      })
+    ).toMatchObject({
+      workerConcurrency: 4,
+      workerMaxActivePerTenant: 2
+    });
+  });
+
+  it("rejects invalid worker concurrency settings", () => {
+    expect(() => loadEnv({ ...validEnv, WF_WORKER_CONCURRENCY: "0" })).toThrow(/WF_WORKER_CONCURRENCY/);
+    expect(() => loadEnv({ ...validEnv, WF_WORKER_MAX_ACTIVE_PER_TENANT: "0" })).toThrow(/WF_WORKER_MAX_ACTIVE_PER_TENANT/);
   });
 });

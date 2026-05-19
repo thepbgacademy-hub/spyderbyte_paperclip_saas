@@ -11,6 +11,8 @@ import { createEncryptedSecretVault } from "../secrets/encrypted-vault.js";
 import { createPostgresEncryptedVaultStore } from "../secrets/postgres-vault-store.js";
 import { createSecretService } from "../secrets/secret-service.js";
 import { processWorkflowJob } from "../workflows/worker.js";
+import { validateWorkflowQueuePayload } from "../workflows/queue.js";
+import { createTenantExecutionGate } from "./tenant-execution-gate.js";
 
 export type WorkerEnv = ReturnType<typeof loadWorkerEnv>;
 
@@ -60,34 +62,48 @@ export function createWorkerRuntime(options: { env: WorkerEnv }) {
     baseUrl: options.env.paperclipBaseUrl,
     serviceToken: options.env.paperclipServiceToken
   });
+  const executionGate = createTenantExecutionGate({
+    maxConcurrentRuns: options.env.workerConcurrency,
+    maxConcurrentRunsPerTenant: options.env.workerMaxActivePerTenant
+  });
 
   return {
     async processQueuePayload(payload: unknown) {
-      return processWorkflowJob({
-        payload,
-        paperclipClient,
-        tenantResolver: async (tenantId) => {
-          const mapping = await repositories.resolvePaperclipCompanyMapping({ tenantId });
-          return { paperclipCompanyId: mapping.paperclipCompanyId };
-        },
-        authorizeRunStart: async () => true,
-        isPaperclipEnabled: async () => true,
-        checkEntitlement: async () => ({ allowed: true }),
-        providerExecutionMode: options.env.providerExecutionMode,
-        loadBoundProviderContext: async ({ tenantId, runId }) => {
-          const context = await acidRepository.getBoundProviderContext({ tenantId, runId });
-          return context as readonly RuntimeProviderBinding[] | null;
-        },
-        hydrateProviderContext: async ({ tenantId, runId, workflowId, providerBindings }) =>
-          providerExecutionResolver.resolveForRun({
-            tenantId,
-            runId,
-            workflowId,
-            providerBindings
-          }),
-        resolveDebugSharedProvider: async ({ requiredCapabilities = ["text_generation"] }) =>
-          debugFallbackResolver.resolveForRun({ requiredCapabilities })
+      const validatedPayload = validateWorkflowQueuePayload(payload);
+
+      return executionGate.run({
+        tenantId: validatedPayload.tenantId,
+        operation: async () =>
+          processWorkflowJob({
+            payload: validatedPayload,
+            paperclipClient,
+            tenantResolver: async (tenantId) => {
+              const mapping = await repositories.resolvePaperclipCompanyMapping({ tenantId });
+              return { paperclipCompanyId: mapping.paperclipCompanyId };
+            },
+            authorizeRunStart: async () => true,
+            isPaperclipEnabled: async () => true,
+            checkEntitlement: async () => ({ allowed: true }),
+            providerExecutionMode: options.env.providerExecutionMode,
+            loadBoundProviderContext: async ({ tenantId, runId }) => {
+              const context = await acidRepository.getBoundProviderContext({ tenantId, runId });
+              return context as readonly RuntimeProviderBinding[] | null;
+            },
+            hydrateProviderContext: async ({ tenantId, runId, workflowId, providerBindings }) =>
+              providerExecutionResolver.resolveForRun({
+                tenantId,
+                runId,
+                workflowId,
+                providerBindings
+              }),
+            resolveDebugSharedProvider: async ({ requiredCapabilities = ["text_generation"] }) =>
+              debugFallbackResolver.resolveForRun({ requiredCapabilities })
+          })
       });
+    },
+
+    getExecutionSnapshot() {
+      return executionGate.getSnapshot();
     },
 
     async close() {

@@ -183,12 +183,13 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Add real secret vault backend integration behind provider credential registration.
 - [x] Add real OAuth flows for Google Drive and Dropbox storage connectors, including runtime begin/callback routes, offline refresh-token enforcement, and public-target sanitization.
 - [x] Add private storage connector secret-reference persistence.
-- [ ] Add tenant-scoped provider runtime injection into Paperclip before commercial production cutover.
-  - [ ] Resolve the tenant's active allowed provider at run execution time.
-  - [ ] Fetch tenant provider secrets from the vault just-in-time in the worker.
-  - [ ] Extend the Paperclip adapter to accept per-run provider context instead of assuming one shared VPS credential.
-  - [ ] Keep operator/shared credentials available only as explicit debug/test fallback until the tenant-scoped path is proven.
-  - [ ] Disable shared fallback credentials for normal subscriber production runs.
+- [x] Add worker-side concurrency defaults and tenant fairness gate before BullMQ consumer rollout.
+- [x] Add tenant-scoped provider runtime injection into Paperclip before commercial production cutover.
+  - [x] Resolve the tenant's active allowed provider at run execution time.
+  - [x] Fetch tenant provider secrets from the vault just-in-time in the worker.
+  - [x] Extend the Paperclip adapter to accept per-run provider context instead of assuming one shared VPS credential.
+  - [x] Keep operator/shared credentials available only as explicit debug/test fallback until the tenant-scoped path is proven.
+  - [x] Disable shared fallback credentials for normal subscriber production runs by default, with debug fallback available only through explicit runtime mode.
 - [ ] Deploy the POC to VPS and run external exposed-port/CORS smoke tests.
   - [x] Add repeatable `npm run smoke:external` smoke/security command.
   - [x] Run first external probe from Windows.

@@ -74,8 +74,9 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 1. Fix VPS external exposure once the multi-project port plan is finalized: `5432` and `8000` are currently reachable from outside and must be firewall/allowlist restricted before commercial exposure. `8443` now probes closed externally.
 2. Decide whether the storage OAuth routes should remain unavailable until Google Drive/Dropbox client credentials are configured, or whether the smoke gate should treat `503 {"code":"storage_oauth_unavailable"}` as an expected pre-config state.
 3. Add the tenant-scoped provider runtime cutover so Wealth Factory resolves each tenant's allowed provider, fetches that tenant's vault-backed credential just-in-time in the worker, and injects it into Paperclip per run. Keep operator/shared credentials available only as explicit debug/test fallback until the tenant path is verified, then disable the shared fallback for normal subscriber production runs.
-4. Re-run `npm run smoke:external` after the final firewall/allowlist policy is applied; it is now the repeatable external gate for DNS, intended ports, private ports, auth/CORS route behavior, and response leak checks.
-5. Confirm the VPS runtime keeps using `createPostgresEncryptedVaultStore` with a strong `WF_VAULT_MASTER_KEY` and rotate the static bearer token when the tenant-aware auth layer replaces it.
+4. Wire the BullMQ consumer/dequeue loop to the worker runtime using the new conservative concurrency defaults and per-tenant fairness gate, then verify one tenant cannot monopolize execution slots under parallel load.
+5. Re-run `npm run smoke:external` after the final firewall/allowlist policy is applied; it is now the repeatable external gate for DNS, intended ports, private ports, auth/CORS route behavior, and response leak checks.
+6. Confirm the VPS runtime keeps using `createPostgresEncryptedVaultStore` with a strong `WF_VAULT_MASTER_KEY` and rotate the static bearer token when the tenant-aware auth layer replaces it.
 
 ## Security Position
 

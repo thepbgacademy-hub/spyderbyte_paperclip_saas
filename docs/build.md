@@ -892,10 +892,12 @@ Conservative starting guidance:
 - per-process workflow concurrency: `2` to `4`
 - treat `2` as the safer initial default for mixed workloads
 - allow a move to `4` only after observing stable memory, queue depth, and run latency
+- keep the per-tenant active-run limit at `1` for the first commercial rollout, then raise it only after fairness testing
 
 Operational rules:
 
 - one noisy tenant must not be allowed to occupy all worker slots indefinitely
+- enforce a worker-side per-tenant execution gate before or alongside the BullMQ consumer
 - watch queue depth, pending age, retry count, and median time-to-start
 - fail closed on missing or revoked tenant credentials instead of retrying ambiguous provider selection
 - prefer more evidence before raising concurrency; do not assume model-provider latency makes all local limits irrelevant
