@@ -211,6 +211,25 @@ Current live rollout implication:
   and Paperclip env, and the worker needs to be deployed from the repo's worker
   entrypoint
 
+Current staged-runtime finding on 2026-05-19:
+
+- a parallel private-only stage lane was brought up successfully on the VPS
+  using the repo's current API and worker runtime from commit `38fdf74`
+- that stage lane proved:
+  - authenticated Redis/BullMQ connectivity
+  - outbox enqueue
+  - worker pickup
+  - tenant vault-backed provider hydration
+  - Paperclip bearer-token authentication
+- the remaining blocker is the Paperclip launch contract itself:
+  - the repo currently calls `POST /api/companies/:companyId/runs`
+  - the installed Paperclip build responds `404`
+  - logs confirm the authenticated request reaches Paperclip with provider
+    context attached, so the remaining problem is the Paperclip execution route
+    shape rather than queue, Redis, or vault wiring
+- do not switch public traffic to the new API/worker path until the Paperclip
+  client is updated to the real execution-launch contract for this build
+
 Do not treat a public Paperclip target as release-safe. Before commercial rollout, remove the host port publish and public router so Paperclip is reachable only from the Wealth Factory API and worker containers.
 
 ## Current External Smoke Status

@@ -206,3 +206,12 @@ This file tracks implementation progress. Keep it current after every phase.
   - [ ] Close or allowlist external `5432` and `8000`.
   - [x] Confirm external `8443` is no longer reachable.
   - [ ] Decide whether pre-config storage OAuth should keep returning `503 {"code":"storage_oauth_unavailable"}` or whether the smoke gate should ignore that route until provider client IDs are installed.
+
+## Current Live Adapter Blocker
+
+- [x] Bring up a private-only staged API and worker lane on the VPS with the current repo runtime.
+- [x] Prove the staged lane can reserve, enqueue, pick up, and hydrate a tenant-scoped provider secret.
+- [x] Prove the staged lane can authenticate to Paperclip with a company-scoped bearer token.
+- [ ] Discover and implement the correct Paperclip execution-launch endpoint/flow for this installed Paperclip build.
+  - [ ] Replace or adapt the current `POST /api/companies/:companyId/runs` client contract in `src/paperclip/client.ts`.
+  - [ ] Re-run the staged lane until a real Paperclip run reference is created successfully.

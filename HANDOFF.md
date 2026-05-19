@@ -291,6 +291,30 @@ Nuances to preserve:
   - `OPTIONS /health` from `https://www.spyderbyte.cloud` -> `204` with explicit CORS headers
 - `npm run smoke:external` now passes DNS, public `80/443` reachability, private app-port closure, dashboard auth/CORS checks, and response-guard checks. It still fails on the known open `5432` and `8000` ports and on the intentionally unconfigured storage OAuth route.
 
+## 2026-05-19 Staged Runtime Status
+
+- A private-only VPS stage lane is now running from repo commit `38fdf74` as:
+  - `wealth-factory-api-stage`
+  - `wealth-factory-worker-stage`
+- The stage lane is attached to:
+  - `supabase_default`
+  - `redis-tzbr_default`
+  - `paperclip-gwry_default`
+- The stage lane has already proven:
+  - DB-backed workflow reservation
+  - outbox enqueue
+  - BullMQ pickup
+  - worker startup against authenticated Redis
+  - tenant secret hydration from the encrypted vault
+  - Paperclip bearer-token authentication
+- The demo Paperclip company and token in use are:
+  - company: `a691a344-a3e6-4a1c-963a-4acac79b6253`
+  - agent: `e40e2bc4-263e-45fa-b8a6-7a7737265994`
+- Current next blocker:
+  - the repo `src/paperclip/client.ts` targets `POST /api/companies/:companyId/runs`
+  - the installed Paperclip build on the VPS returns `404` for that route
+  - logs confirm the authenticated request reached Paperclip with provider context attached, so the remaining mismatch is the Paperclip execution-launch contract, not Redis, queue wiring, vault hydration, or bearer auth
+
 ## Hard Rules
 
 - Users must never see Paperclip prompts, skills, commands, agents, tool calls, raw logs, or internal configuration.
