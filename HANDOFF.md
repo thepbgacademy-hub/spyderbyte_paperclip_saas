@@ -91,6 +91,12 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
    - `GET /api/heartbeat-runs/:runId` works
    - issue-scoped adapter env overrides reach runtime
    but it has not yet proven a safe secret-ref lane for tenant BYOK secrets. Do not pivot the checked-in Wealth Factory adapter until that secure injection path is understood.
+10. New mapping checkpoint: `docs/paperclip-secret-ref-mapping.md` captures the secure direction that was proven live:
+   - Wealth Factory should remain the tenant trust boundary and canonical BYOK vault
+   - Paperclip should receive synchronized managed secrets plus bound `secret_ref` runtime config, not plain tenant `secretValues` on issue payloads
+   - before adapter cutover, fix 2 repo seams:
+     - current `bound_provider_context.capability` values are vendor-shaped instead of capability-shaped
+     - current run binding storage is effectively single-provider even though the product model assumes future multi-capability workflows
 
 ## Security Position
 
@@ -341,6 +347,21 @@ Nuances to preserve:
   - keep the checked-in `/runs` adapter steady
   - only the worker healthcheck auth probe should change right now
   - the bigger adapter decision waits on a secure secret-ref/admin path for tenant BYOK injection
+
+## 2026-05-19 Paperclip Secret Ref Mapping
+
+- Live Paperclip testing has now proven a secure agent-runtime path:
+  - create a managed Paperclip secret
+  - bind it to an agent env key
+  - store only `secret_ref` metadata on the agent config
+  - let the heartbeat runtime resolve the secret internally
+- That direction is documented in `docs/paperclip-secret-ref-mapping.md`.
+- Reviewer findings that must shape the next implementation slice:
+  - `src/db/acid-guard-repository.ts` currently writes provider vendor enums into `bound_provider_context.capability`, but the design direction expects capability labels like `text_generation`
+  - `workflow_runs` still centers on one `bound_secret_reference_id`, which is too narrow for future multi-capability workflows
+  - the repo still lacks a private runtime repository path that can resolve full provider bindings for worker/sync use without weakening customer-safe DTO paths
+- Immediate implication:
+  - the next repo work should start with the runtime binding model and private resolver seam, not with a direct adapter rewrite
 
 ## Hard Rules
 

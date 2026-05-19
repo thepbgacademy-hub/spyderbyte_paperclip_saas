@@ -183,6 +183,11 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Add real secret vault backend integration behind provider credential registration.
 - [x] Add real OAuth flows for Google Drive and Dropbox storage connectors, including runtime begin/callback routes, offline refresh-token enforcement, and public-target sanitization.
 - [x] Add private storage connector secret-reference persistence.
+- [x] Capture the live Paperclip secure secret-ref direction in `docs/paperclip-secret-ref-mapping.md`.
+- [ ] Normalize `bound_provider_context` so capability fields use real capability labels instead of provider vendor enums.
+- [ ] Design a private runtime provider repository path for worker/sync use that can resolve `secretRef`, metadata, and capability coverage without weakening customer-safe provider DTO paths.
+- [ ] Design app-side `paperclip_secret_bindings` persistence so Wealth Factory can track synced Paperclip secret ids, env keys, agent targets, sync status, and rotation/revoke drift.
+- [ ] Replace the legacy Paperclip `/runs` assumption with a mocked issue-launch adapter plan after the secret-sync and runtime-binding seams are in place.
 - [x] Add worker-side concurrency defaults and tenant fairness gate before BullMQ consumer rollout.
 - [x] Wire the BullMQ enqueuer/consumer path into the API and worker runtime entrypoints.
 - [x] Add a temporary public-Paperclip verification script and accept the live health payload contract during the test-drive phase.

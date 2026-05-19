@@ -870,6 +870,16 @@ per-run basis.
 - [ ] Run `npm run build`, `npm test`, `npm run lint`, `npm run build:web`, and
   the relevant deployed smoke/E2E checks.
 
+Mapping update from live Paperclip discovery:
+
+- the next secure direction is documented in `docs/paperclip-secret-ref-mapping.md`
+- Wealth Factory should remain the canonical tenant BYOK vault and trust boundary
+- Paperclip should receive synchronized managed secrets plus bound `secret_ref` runtime config, not plain issue-level secret values
+- before adapter cutover, fix the runtime-binding seam:
+  - current `bound_provider_context.capability` values are vendor-shaped instead of capability-shaped
+  - current run binding storage is effectively single-provider even though the product model assumes future multi-capability workflows
+  - a private runtime provider repository path is still needed for worker/sync use
+
 ## Worker Capacity Guidance
 
 Current VPS target:
