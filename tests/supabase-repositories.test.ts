@@ -86,6 +86,163 @@ describe("Supabase wfpc repositories", () => {
     expect(JSON.stringify(await repositories.listStorageConnectors({ tenantId: "tenant-1" }))).not.toMatch(/secret|vault|oauth|privatepath|private/i);
   });
 
+  it("lists private runtime provider connections with secret refs and normalized capability coverage", async () => {
+    const query = createQuery({
+      "from wfpc.workflow_templates workflows": [
+        {
+          tenant_id: "tenant-1",
+          workflow_provider_kind: "openai_api",
+          provider_kind: "openai_api",
+          label: "OpenAI Primary",
+          secret_ref: "wf_secret_openai",
+          metadata: { projectId: "proj_123" },
+          capability: "content_generation"
+        },
+        {
+          tenant_id: "tenant-1",
+          workflow_provider_kind: "openai_api",
+          provider_kind: "openai_api",
+          label: "OpenAI Primary",
+          secret_ref: "wf_secret_openai",
+          metadata: { projectId: "proj_123" },
+          capability: "text_generation"
+        },
+        {
+          tenant_id: "tenant-1",
+          workflow_provider_kind: "openai_api",
+          provider_kind: "openai_api",
+          label: "OpenAI Primary",
+          secret_ref: "wf_secret_openai",
+          metadata: { projectId: "proj_123" },
+          capability: "unsupported_capability"
+        }
+      ]
+    });
+    const repositories = createSupabaseRepositories({ query });
+
+    await expect(repositories.listRuntimeProviderConnections({ tenantId: "tenant-1", workflowId: "workflow-1" })).resolves.toEqual([
+      {
+        tenantId: "tenant-1",
+        providerKind: "openai_api",
+        label: "OpenAI Primary",
+        secretRef: "wf_secret_openai",
+        metadata: { projectId: "proj_123" },
+        capabilities: ["text_generation"]
+      }
+    ]);
+  });
+
+  it("falls back to provider-kind capability inference when workflow requirements are absent or unsupported", async () => {
+    const query = createQuery({
+      "from wfpc.workflow_templates workflows": [
+        {
+          tenant_id: "tenant-1",
+          workflow_provider_kind: "openai_api",
+          provider_kind: "openai_api",
+          label: "OpenAI Primary",
+          secret_ref: "wf_secret_openai",
+          metadata: { projectId: "proj_123" },
+          capability: null
+        },
+        {
+          tenant_id: "tenant-1",
+          workflow_provider_kind: "openai_api",
+          provider_kind: "openai_api",
+          label: "OpenAI Primary",
+          secret_ref: "wf_secret_openai",
+          metadata: { projectId: "proj_123" },
+          capability: "unsupported_capability"
+        }
+      ]
+    });
+    const repositories = createSupabaseRepositories({ query });
+
+    await expect(repositories.listRuntimeProviderConnections({ tenantId: "tenant-1", workflowId: "workflow-1" })).resolves.toEqual([
+      {
+        tenantId: "tenant-1",
+        providerKind: "openai_api",
+        label: "OpenAI Primary",
+        secretRef: "wf_secret_openai",
+        metadata: { projectId: "proj_123" },
+        capabilities: ["text_generation"]
+      }
+    ]);
+  });
+
+  it("fails closed for ambiguous multi-capability workflow requirements", async () => {
+    const query = createQuery({
+      "from wfpc.workflow_templates workflows": [
+        {
+          tenant_id: "tenant-1",
+          workflow_provider_kind: "openai_api",
+          provider_kind: "openai_api",
+          label: "OpenAI Primary",
+          secret_ref: "wf_secret_openai",
+          metadata: {},
+          capability: "text_generation"
+        },
+        {
+          tenant_id: "tenant-1",
+          workflow_provider_kind: "openai_api",
+          provider_kind: "openai_api",
+          label: "OpenAI Primary",
+          secret_ref: "wf_secret_openai",
+          metadata: {},
+          capability: "image_generation"
+        }
+      ]
+    });
+    const repositories = createSupabaseRepositories({ query });
+
+    await expect(repositories.listRuntimeProviderConnections({ tenantId: "tenant-1", workflowId: "workflow-1" })).resolves.toEqual([]);
+  });
+
+  it("stays fail-closed after ambiguity even when later rows are unsupported", async () => {
+    const query = createQuery({
+      "from wfpc.workflow_templates workflows": [
+        {
+          tenant_id: "tenant-1",
+          workflow_provider_kind: "openai_api",
+          provider_kind: "openai_api",
+          label: "OpenAI Primary",
+          secret_ref: "wf_secret_openai",
+          metadata: {},
+          capability: "text_generation"
+        },
+        {
+          tenant_id: "tenant-1",
+          workflow_provider_kind: "openai_api",
+          provider_kind: "openai_api",
+          label: "OpenAI Primary",
+          secret_ref: "wf_secret_openai",
+          metadata: {},
+          capability: "image_generation"
+        },
+        {
+          tenant_id: "tenant-1",
+          workflow_provider_kind: "openai_api",
+          provider_kind: "openai_api",
+          label: "OpenAI Primary",
+          secret_ref: "wf_secret_openai",
+          metadata: {},
+          capability: "unsupported_capability"
+        }
+      ]
+    });
+    const repositories = createSupabaseRepositories({ query });
+
+    await expect(repositories.listRuntimeProviderConnections({ tenantId: "tenant-1", workflowId: "workflow-1" })).resolves.toEqual([]);
+  });
+
+  it("does not surface private runtime provider connections without an active entitlement", async () => {
+    const query = createQuery({
+      "from wfpc.workflow_templates workflows": []
+    });
+    const repositories = createSupabaseRepositories({ query });
+
+    await expect(repositories.listRuntimeProviderConnections({ tenantId: "tenant-1", workflowId: "workflow-1" })).resolves.toEqual([]);
+  });
+
   it("rejects tenant membership misses", async () => {
     const repositories = createSupabaseRepositories({
       query: createQuery({

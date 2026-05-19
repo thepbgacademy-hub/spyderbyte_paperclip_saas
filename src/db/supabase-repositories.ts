@@ -1,3 +1,5 @@
+import type { ProviderCapability } from "../packages/package-types.js";
+import type { RuntimeProviderConnection } from "../providers/runtime-provider-resolution.js";
 import type { TransactionRunner } from "./acid-guard-repository.js";
 
 export type QueryClient = {
@@ -134,6 +136,94 @@ export function createSupabaseRepositories(client: QueryClient) {
           label: String(record.label),
           connected: true
         }));
+    },
+
+    async listRuntimeProviderConnections(input: DashboardScope & { workflowId: string }): Promise<readonly RuntimeProviderConnection[]> {
+      const result = await client.query(
+        `select workflows.tenant_id,
+                workflows.provider_kind as workflow_provider_kind,
+                secrets.provider_kind,
+                secrets.label,
+                secrets.secret_ref,
+                secrets.metadata,
+                req.capability
+         from wfpc.workflow_templates workflows
+         join wfpc.tenant_package_installs installs
+           on installs.tenant_id = workflows.tenant_id
+          and installs.package_id = workflows.package_id
+          and installs.status = 'active'
+         join wfpc.tenant_package_purchases purchases
+           on purchases.tenant_id = installs.tenant_id
+          and purchases.package_id = installs.package_id
+          and purchases.status = 'active'
+          and purchases.starts_at <= now()
+          and (purchases.ends_at is null or purchases.ends_at > now())
+         left join wfpc.package_provider_requirements req
+           on req.package_id = workflows.package_id
+          and (req.provider_kind is null or req.provider_kind = workflows.provider_kind)
+         join wfpc.secret_references secrets
+           on secrets.tenant_id = workflows.tenant_id
+          and secrets.provider_kind = workflows.provider_kind
+          and secrets.revoked_at is null
+         where workflows.tenant_id = $1
+           and workflows.id = $2
+           and workflows.enabled = true
+         order by secrets.provider_kind, secrets.label, req.capability`,
+        [input.tenantId, input.workflowId]
+      );
+
+      const grouped = new Map<string, RuntimeProviderConnection & { normalizedCapabilities: ProviderCapability[] }>();
+      const ambiguousKeys = new Set<string>();
+      for (const row of result.rows.map(asRecord)) {
+        const tenantId = String(row.tenant_id ?? "");
+        const workflowProviderKind = String(row.workflow_provider_kind ?? "");
+        const providerKind = String(row.provider_kind ?? "");
+        const label = String(row.label ?? "");
+        const secretRef = String(row.secret_ref ?? "");
+        if (!tenantId || !workflowProviderKind || !providerKind || !label || !secretRef) {
+          continue;
+        }
+
+        const key = `${tenantId}:${providerKind}:${label}:${secretRef}`;
+        if (ambiguousKeys.has(key)) {
+          continue;
+        }
+
+        const existing = grouped.get(key);
+        const nextCapabilities = existing
+          ? [...existing.normalizedCapabilities, normalizeProviderCapability(row.capability)].filter((value): value is ProviderCapability => value !== null)
+          : [normalizeProviderCapability(row.capability)].filter((value): value is ProviderCapability => value !== null);
+        const resolvedCapability = resolveRuntimeCapability({
+          providerKind: workflowProviderKind,
+          normalizedCapabilities: nextCapabilities
+        });
+        if (!resolvedCapability) {
+          grouped.delete(key);
+          ambiguousKeys.add(key);
+          continue;
+        }
+
+        if (existing) {
+          grouped.set(key, {
+            ...existing,
+            normalizedCapabilities: nextCapabilities,
+            capabilities: [resolvedCapability]
+          });
+          continue;
+        }
+
+        grouped.set(key, {
+          tenantId,
+          providerKind: providerKind as RuntimeProviderConnection["providerKind"],
+          label,
+          secretRef,
+          metadata: asObject(row.metadata),
+          capabilities: [resolvedCapability],
+          normalizedCapabilities: nextCapabilities
+        });
+      }
+
+      return [...grouped.values()].map(({ normalizedCapabilities: _normalizedCapabilities, ...connection }) => connection);
     },
 
     async listStorageConnectors(input: DashboardScope) {
@@ -323,4 +413,47 @@ export async function registerStorageConnectorRecord(
     connected: true,
     publicTarget: toStorageConnectorPublicTarget(row.public_target)
   };
+}
+
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function normalizeProviderCapability(value: unknown): ProviderCapability | null {
+  if (value === "content_generation") {
+    return "text_generation";
+  }
+
+  return value === "text_generation" ||
+    value === "image_generation" ||
+    value === "video_generation" ||
+    value === "social_publishing" ||
+    value === "media_storage"
+    ? value
+    : null;
+}
+
+function inferCapabilityFromProviderKind(providerKind: string): ProviderCapability | null {
+  return providerKind === "openai" ||
+    providerKind === "openai_api" ||
+    providerKind === "openai_chatgpt_codex_subscription" ||
+    providerKind === "anthropic_api" ||
+    providerKind === "xai_grok_api" ||
+    providerKind === "openrouter_api" ||
+    providerKind === "generic_api"
+    ? "text_generation"
+    : null;
+}
+
+function resolveRuntimeCapability(input: { providerKind: string; normalizedCapabilities: readonly ProviderCapability[] }): ProviderCapability | null {
+  const uniqueCapabilities = [...new Set(input.normalizedCapabilities)];
+  if (uniqueCapabilities.length === 1) {
+    return uniqueCapabilities[0] ?? null;
+  }
+
+  if (uniqueCapabilities.length > 1) {
+    return null;
+  }
+
+  return inferCapabilityFromProviderKind(input.providerKind);
 }
