@@ -83,8 +83,8 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 4. Current live blocker as of 2026-05-19: the repo-side migration gap is fixed and `npm run check:live-runtime` now reports the VPS-backed database schema as bound-provider ready, but the running `wealth-factory-api` container is still an older partial runtime. It is missing the app/worker env needed for the full queue path, including `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `REDIS_URL`, `PAPERCLIP_BASE_URL`, and `PAPERCLIP_SERVICE_TOKEN`, and the VPS process list still shows no deployed `worker-main` process.
 5. Next live-ops step: redeploy the Wealth Factory API with the full queue/Paperclip env set, deploy/start the repo's `worker-main` process, seed a real `wfpc.paperclip_company_mappings` row with a Paperclip company ID, and then rerun the controlled live drive.
 6. Run parallel-load verification proving one tenant cannot monopolize execution under realistic ordering pressure, then tune `WF_WORKER_CONCURRENCY` and `WF_WORKER_MAX_ACTIVE_PER_TENANT` with measurement instead of assumption.
-5. Re-run `npm run smoke:external` after the final firewall/allowlist policy is applied; it is now the repeatable external gate for DNS, intended ports, private ports, auth/CORS route behavior, and response leak checks.
-6. Confirm the VPS runtime keeps using `createPostgresEncryptedVaultStore` with a strong `WF_VAULT_MASTER_KEY` and rotate the static bearer token when the tenant-aware auth layer replaces it.
+7. Re-run `npm run smoke:external` after the final firewall/allowlist policy is applied; it is now the repeatable external gate for DNS, intended ports, private ports, auth/CORS route behavior, and response leak checks.
+8. Confirm the VPS runtime keeps using `createPostgresEncryptedVaultStore` with a strong `WF_VAULT_MASTER_KEY` and rotate the static bearer token when the tenant-aware auth layer replaces it.
 
 ## Security Position
 
@@ -307,13 +307,15 @@ Nuances to preserve:
   - worker startup against authenticated Redis
   - tenant secret hydration from the encrypted vault
   - Paperclip bearer-token authentication
-- The demo Paperclip company and token in use are:
+- The demo Paperclip company, agent, and token in use are:
   - company: `a691a344-a3e6-4a1c-963a-4acac79b6253`
   - agent: `e40e2bc4-263e-45fa-b8a6-7a7737265994`
 - Current next blocker:
-  - the repo `src/paperclip/client.ts` targets `POST /api/companies/:companyId/runs`
-  - the installed Paperclip build on the VPS returns `404` for that route
-  - logs confirm the authenticated request reached Paperclip with provider context attached, so the remaining mismatch is the Paperclip execution-launch contract, not Redis, queue wiring, vault hydration, or bearer auth
+  - the current repo still preserves the old BYOK-aware `/runs` adapter because the issue-centric experiment is not safe to merge yet
+  - staged verification proved the company-scoped bearer token can create a Paperclip issue successfully through `POST /api/companies/:companyId/issues`
+  - the next step in that issue-centric flow, `POST /api/issues/:id/checkout`, still returns `401` when called headlessly with the same company token plus explicit agent id
+  - that means the staging discovery has narrowed the problem beyond the original `404`, but the checked-in repo still needs a supported headless Paperclip launch contract before the adapter should change
+  - current evidence suggests checkout is an interactive/local-agent claim flow, not a server-safe headless launch primitive for Wealth Factory
 
 ## Hard Rules
 

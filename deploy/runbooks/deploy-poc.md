@@ -222,13 +222,11 @@ Current staged-runtime finding on 2026-05-19:
   - tenant vault-backed provider hydration
   - Paperclip bearer-token authentication
 - the remaining blocker is the Paperclip launch contract itself:
-  - the repo currently calls `POST /api/companies/:companyId/runs`
-  - the installed Paperclip build responds `404`
-  - logs confirm the authenticated request reaches Paperclip with provider
-    context attached, so the remaining problem is the Paperclip execution route
-    shape rather than queue, Redis, or vault wiring
-- do not switch public traffic to the new API/worker path until the Paperclip
-  client is updated to the real execution-launch contract for this build
+  - the legacy `POST /api/companies/:companyId/runs` route is not present on the installed Paperclip build and returns `404`
+  - a staged adapter experiment proved company-token issue creation succeeds through `POST /api/companies/:companyId/issues`
+  - that same staged experiment showed `POST /api/issues/:id/checkout` still returns `401` when called headlessly with the company bearer token and explicit agent id
+  - that strongly suggests the installed Paperclip build treats checkout as an interactive/local-agent claim flow rather than a server-safe headless execution endpoint
+  - the checked-in repo still keeps the previous BYOK-preserving `/runs` adapter behavior until a supported headless Paperclip execution/auth contract is identified for Wealth Factory
 
 Do not treat a public Paperclip target as release-safe. Before commercial rollout, remove the host port publish and public router so Paperclip is reachable only from the Wealth Factory API and worker containers.
 

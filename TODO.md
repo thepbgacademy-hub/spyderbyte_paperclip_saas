@@ -213,5 +213,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Prove the staged lane can reserve, enqueue, pick up, and hydrate a tenant-scoped provider secret.
 - [x] Prove the staged lane can authenticate to Paperclip with a company-scoped bearer token.
 - [ ] Discover and implement the correct Paperclip execution-launch endpoint/flow for this installed Paperclip build.
-  - [ ] Replace or adapt the current `POST /api/companies/:companyId/runs` client contract in `src/paperclip/client.ts`.
+  - [x] Prove the dead `POST /api/companies/:companyId/runs` client contract is not supported by the installed Paperclip build.
+  - [x] Prove the staged lane can create a real Paperclip issue with the company-scoped bearer token.
+  - [ ] Discover the supported headless auth/launch primitive for checkout or execution after the current `POST /api/issues/:id/checkout` attempt returned `401`.
   - [ ] Re-run the staged lane until a real Paperclip run reference is created successfully.
