@@ -1,16 +1,11 @@
-import { readFileSync } from "node:fs";
 import process from "node:process";
 
 import pg from "pg";
 
 import { loadRuntimePreflight, summarizeRuntimePreflight } from "./lib/runtime-preflight.mjs";
+import { loadScriptEnv } from "./lib/script-env.mjs";
 
-const env = Object.fromEntries(
-  readFileSync(".env", "utf8")
-    .split(/\r?\n/)
-    .filter((line) => line.trim() && !line.trim().startsWith("#"))
-    .map((line) => line.split(/=(.*)/s).slice(0, 2))
-);
+const env = loadScriptEnv();
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.tenant || !args.workflow) {

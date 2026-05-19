@@ -94,12 +94,24 @@ export function summarizeWorkflowRunVerification({ snapshot, queue }) {
     };
   }
 
+  if (snapshot.outbox.status === "enqueued" && queue.reachable === false) {
+    return {
+      ok: true,
+      phase: "queued_queue_unreachable",
+      notes: [
+        "Workflow run is reserved and the outbox is marked enqueued.",
+        "Queue reachability could not be verified from this caller.",
+        `Queue inspection error: ${queue.error ?? "unknown"}`
+      ]
+    };
+  }
+
   return {
     ok: false,
     phase: "verification_incomplete",
     notes: [
       "Workflow run verification did not reach a known ready state.",
-      `Run status: ${snapshot.run.status || "missing"}. Outbox status: ${snapshot.outbox.status || "missing"}. Queue state: ${queue.state ?? "missing"}.`
+      `Run status: ${snapshot.run.status || "missing"}. Outbox status: ${snapshot.outbox.status || "missing"}. Queue state: ${queue.state ?? "missing"}. Queue reachable: ${queue.reachable === false ? `no (${queue.error ?? "unknown"})` : "yes"}.`
     ]
   };
 }

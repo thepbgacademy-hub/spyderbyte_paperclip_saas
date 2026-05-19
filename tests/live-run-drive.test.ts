@@ -156,4 +156,48 @@ describe("live run drive helpers", () => {
       ]
     });
   });
+
+  it("distinguishes unreachable queue inspection from missing queue state", () => {
+    expect(
+      summarizeWorkflowRunVerification({
+        snapshot: {
+          run: {
+            id: "run-1",
+            status: "queued",
+            boundSecretReferenceId: "secret-ref-1",
+            providerContext: [
+              {
+                capability: "openai_api",
+                providerKind: "openai_api",
+                label: "OpenAI",
+                secretRef: "wf_secret_demo",
+                metadata: {}
+              }
+            ]
+          },
+          outbox: {
+            id: "outbox-1",
+            status: "enqueued",
+            attempts: 1,
+            lastError: null
+          }
+        },
+        queue: {
+          queueName: "wfpc-workflow-runs",
+          jobId: "tenant-1:workflow-1:run-1",
+          state: null,
+          reachable: false,
+          error: "Connection is closed."
+        }
+      })
+    ).toEqual({
+      ok: true,
+      phase: "queued_queue_unreachable",
+      notes: [
+        "Workflow run is reserved and the outbox is marked enqueued.",
+        "Queue reachability could not be verified from this caller.",
+        "Queue inspection error: Connection is closed."
+      ]
+    });
+  });
 });

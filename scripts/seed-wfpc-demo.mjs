@@ -1,9 +1,9 @@
-import { readFileSync } from "node:fs";
 import process from "node:process";
 
 import pg from "pg";
 
 import { loadRuntimePreflight, summarizeRuntimePreflight } from "./lib/runtime-preflight.mjs";
+import { loadScriptEnv } from "./lib/script-env.mjs";
 
 const DEMO = {
   userId: "11111111-1111-4111-8111-111111111111",
@@ -14,12 +14,7 @@ const DEMO = {
   purchaseId: "66666666-6666-4666-8666-666666666666"
 };
 
-const env = Object.fromEntries(
-  readFileSync(".env", "utf8")
-    .split(/\r?\n/)
-    .filter((line) => line.trim() && !line.trim().startsWith("#"))
-    .map((line) => line.split(/=(.*)/s).slice(0, 2))
-);
+const env = loadScriptEnv();
 
 const client = new pg.Client({
   connectionString: env.SUPABASE_DB_URL,
@@ -41,7 +36,7 @@ try {
     workflowId: DEMO.workflowId
   });
   const summary = summarizeRuntimePreflight(preflight);
-  const paperclipCompanyId = env.WF_DEMO_PAPERCLIP_COMPANY_ID?.trim();
+  const paperclipCompanyId = resolvePaperclipCompanyId(env);
   if (!preflight.schema.tenantPackagePurchasesReady) {
     throw new Error(`Live runtime schema is not ready for demo seeding: ${summary.blockers.join("; ")}`);
   }
@@ -196,4 +191,9 @@ function resolveSsl() {
   }
 
   return { rejectUnauthorized: true };
+}
+
+function resolvePaperclipCompanyId(source) {
+  const value = source.WF_DEMO_PAPERCLIP_COMPANY_ID;
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }

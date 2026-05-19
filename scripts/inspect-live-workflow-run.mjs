@@ -1,18 +1,12 @@
-import { readFileSync } from "node:fs";
 import process from "node:process";
 
-import { Queue } from "bullmq";
-import { Redis } from "ioredis";
 import pg from "pg";
 
 import { loadWorkflowRunSnapshot, summarizeWorkflowRunVerification } from "./lib/live-run-drive.mjs";
+import { inspectQueueState } from "./lib/queue-inspection.mjs";
+import { loadScriptEnv } from "./lib/script-env.mjs";
 
-const env = Object.fromEntries(
-  readFileSync(".env", "utf8")
-    .split(/\r?\n/)
-    .filter((line) => line.trim() && !line.trim().startsWith("#"))
-    .map((line) => line.split(/=(.*)/s).slice(0, 2))
-);
+const env = loadScriptEnv();
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.tenant || !args.run || !args.workflow) {
@@ -23,8 +17,6 @@ const client = new pg.Client({
   connectionString: env.SUPABASE_DB_URL,
   ssl: resolveSsl(env)
 });
-const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
-const queue = new Queue(env.WF_WORKFLOW_QUEUE_NAME?.trim() || "wfpc-workflow-runs", { connection });
 let closing = false;
 client.on("error", (error) => {
   if (!closing) {
@@ -41,15 +33,14 @@ try {
     runId: args.run
   });
   const jobId = `${args.tenant}:${args.workflow}:${args.run}`;
-  const job = await queue.getJob(jobId);
-  const queueState = job ? await job.getState() : null;
+  const queueInspection = await inspectQueueState({
+    redisUrl: env.REDIS_URL,
+    queueName: env.WF_WORKFLOW_QUEUE_NAME?.trim() || "wfpc-workflow-runs",
+    jobId
+  });
   const summary = summarizeWorkflowRunVerification({
     snapshot,
-    queue: {
-      queueName: env.WF_WORKFLOW_QUEUE_NAME?.trim() || "wfpc-workflow-runs",
-      jobId,
-      state: queueState
-    }
+    queue: queueInspection
   });
 
   process.stdout.write(
@@ -58,11 +49,7 @@ try {
         ok: summary.ok,
         summary,
         snapshot,
-        queue: {
-          queueName: env.WF_WORKFLOW_QUEUE_NAME?.trim() || "wfpc-workflow-runs",
-          jobId,
-          state: queueState
-        }
+        queue: queueInspection
       },
       null,
       2
@@ -70,8 +57,6 @@ try {
   );
 } finally {
   closing = true;
-  await queue.close();
-  await connection.quit();
   await client.end();
 }
 
