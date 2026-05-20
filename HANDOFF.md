@@ -124,6 +124,7 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 - limit: this is a single-worker fairness proof only; outbox claim order is still FIFO and cross-worker fairness is not yet globally proven
 - current sustained-burst checkpoint on 2026-05-20:
   - `prove:live-fairness` now supports `--mode drain` and emits per-run queue plus observed progress/start/completion timestamps, along with per-lane observed wait and retry summaries
+  - it also now supports repeated `--lane lane:tenant:user:workflow:runs` inputs, so staged bursts are no longer limited to hard-coded primary/secondary/tertiary lanes
   - stage burst drain proof passed with:
     - primary runs:
       - `82219491-8916-47ca-9f5b-6924e1a48961`
@@ -140,7 +141,14 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
     - primary: `min=2264ms`, `median=3493ms`, `max=4737ms`
     - secondary: `min=2098ms`, `median=2722ms`, `max=3345ms`
   - no retries and no queue-unreachable observations were reported
-  - worker logs now also emit `wealth_factory_worker_run` start/release events so fairness output can be correlated back to concrete `runId` values
+  - worker logs now also emit `wealth_factory_worker_run` start/release events with `workerInstanceId` and `observedAt`, so fairness output can be correlated back to concrete `runId` values
+  - the repo now includes `scripts/analyze-worker-fairness.mjs` for turning a saved burst proof plus structured worker events into a global multi-worker fairness verdict
+  - `prove:live-fairness --mode global-fairness` is now accepted as a capture alias, but it still records drain-phase proof and expects the analyzer to compute the final cross-worker verdict from worker logs
+  - `workerInstanceId` is authoritative only when `WF_WORKER_INSTANCE_ID` is explicitly pinned in the worker env; the default `hostname:pid` fallback is best-effort staging telemetry
+  - current global finding:
+    - repeated staged two-worker probes still returned `phase = single_worker_only`
+    - even with warmed proof workers at `WF_WORKER_CONCURRENCY=1`, one worker continued to drain the launch burst by itself
+    - conclusion: tenant fairness inside one worker is proven, but cross-worker claim distribution is not yet proven and now needs claim-layer investigation instead of more shell-only probing
 
 ## Security Position
 

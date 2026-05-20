@@ -36,7 +36,7 @@ export function loadWorkerEnv(source: NodeJS.ProcessEnv = process.env) {
   };
 }
 
-export function createWorkerRuntime(options: { env: WorkerEnv }) {
+export function createWorkerRuntime(options: { env: WorkerEnv; workerInstanceId?: string }) {
   const pool = createPgPool({
     connectionString: options.env.supabaseDbUrl,
     ...(options.env.supabaseDbSsl ? { sslMode: options.env.supabaseDbSsl } : {})
@@ -180,6 +180,8 @@ export function createWorkerRuntime(options: { env: WorkerEnv }) {
       process.stdout.write(
         `${JSON.stringify({
           type: "wealth_factory_worker_fairness",
+          workerInstanceId: options.workerInstanceId ?? "worker",
+          observedAt: new Date().toISOString(),
           ...snapshot
         })}\n`
       );
@@ -258,6 +260,8 @@ export function createWorkerRuntime(options: { env: WorkerEnv }) {
     process.stdout.write(
       `${JSON.stringify({
         type: "wealth_factory_worker_run",
+        workerInstanceId: options.workerInstanceId ?? "worker",
+        observedAt: new Date().toISOString(),
         event,
         tenantId: payload.tenantId,
         runId: payload.runId,

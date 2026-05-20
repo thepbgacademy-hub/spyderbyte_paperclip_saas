@@ -37,6 +37,35 @@ Fix:
 - use the per-run queue timestamp when computing wait-to-start and wait-to-complete summaries
 - do not reuse the batch start time for every run in a staggered reservation burst
 
+7. PowerShell repeatedly rewrote SSH redirection and compound-command syntax during the multi-worker proof attempt.
+Fix:
+- prefer Node-based helpers and local file combination over nested remote shell redirection
+- avoid `&&` entirely on this workstation and use sequential commands or semicolons
+- when remote evidence matters, fetch raw files back locally and analyze them from the repo instead of chaining shell filters on the VPS
+
+8. The first two-worker staged probe produced a misleading result because one worker still had `WF_WORKER_CONCURRENCY=2`, letting it drain the short launch burst before the second worker had any meaningful chance to claim jobs.
+Fix:
+- use dedicated proof workers with explicit `WF_WORKER_INSTANCE_ID`
+- set proof-worker `WF_WORKER_CONCURRENCY=1` when validating cross-worker claim distribution
+- keep the single-worker sustained-burst metrics separate from the global multi-worker fairness check
+
+9. A warmed two-worker proof lane still failed to show cross-worker participation, even after both proof workers were healthy and configured with one slot each.
+Fix:
+- treat this as a real staged finding, not a shell artifact
+- preserve the `single_worker_only` analyzer result and use it to drive the next claim-layer fairness investigation
+- do not mark global multi-worker fairness as proven until at least two distinct `workerInstanceId` values appear in the structured `wealth_factory_worker_run` start events for the same burst window
+
+10. The first lane-aware analyzer patch changed the fairness semantics correctly, but two existing tests were still asserting the old tenant-collapsed behavior.
+Fix:
+- update the global-fairness happy-path and skew-path expectations together when changing lane-coverage semantics
+- prefer test names that describe the expected verdict, not the previous implementation detail
+
+11. `prove-live-fairness` and `analyze-worker-fairness` exposed an awkward mode split once `global-fairness` analysis was added.
+Fix:
+- let `prove-live-fairness --mode global-fairness` capture the same drain-phase evidence as `--mode drain`
+- emit an explicit note that the final cross-worker verdict still requires `analyze-worker-fairness`
+- do not pretend the capture step alone can prove global fairness without worker-event analysis
+
 ## Outcome
 
 After the fixes above:
@@ -66,3 +95,15 @@ Additional sustained-burst checkpoint after strengthening the proof harness:
   - secondary observed wait-to-start: `min=2098ms`, `median=2722ms`, `max=3345ms`
   - retries observed: `0`
   - queue-unreachable observations: `0`
+
+Additional global multi-worker fairness checkpoint after adding worker-instance IDs, arbitrary lane specs, and the repo-owned worker-event analyzer:
+
+- `scripts/prove-live-fairness.mjs` now supports repeated `--lane lane:tenant:user:workflow:runs` inputs for larger staged bursts
+- `scripts/analyze-worker-fairness.mjs` now turns a saved burst proof plus structured `wealth_factory_worker_run` log lines into a `global-fairness` verdict
+- staged two-worker proof attempts were run against warmed proof workers with explicit `WF_WORKER_INSTANCE_ID` values
+- `prove-live-fairness --mode global-fairness` is now accepted as a capture alias, but it intentionally records drain-phase proof plus guidance to run `analyze-worker-fairness` afterward
+- the analyzer still returned `phase = single_worker_only`
+- observed implication:
+  - staged tenant fairness inside one worker remains good
+  - global cross-worker distribution is not yet proven
+  - the next step is no longer better scripting; it is claim-layer investigation or a different worker/queue coordination strategy

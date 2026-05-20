@@ -6,45 +6,38 @@ import { promisify } from "node:util";
 import pg from "pg";
 
 import { createLiveRunRequest, loadWorkflowRunSnapshot } from "./lib/live-run-drive.mjs";
-import { createPressureRequests, summarizePressureProof } from "./lib/pressure-drive.mjs";
+import { buildPressureLanes, expandPressureRequests, summarizePressureProof } from "./lib/pressure-drive.mjs";
 import { inspectQueueState } from "./lib/queue-inspection.mjs";
 import { loadRuntimePreflight, summarizeRuntimePreflight } from "./lib/runtime-preflight.mjs";
 import { loadScriptEnv } from "./lib/script-env.mjs";
 
 const env = loadScriptEnv();
 const args = parseArgs(process.argv.slice(2));
-const lanes = buildLanes(args);
+const lanes = buildPressureLanes({
+  args,
+  laneSpecs: toArray(args.lane)
+});
 const execFileAsync = promisify(execFile);
-const primaryRuns = parseRunsArg(args["primary-runs"], 2, "primary-runs");
-const secondaryRuns = parseRunsArg(args["secondary-runs"], 1, "secondary-runs");
-const tertiaryRuns = parseRunsArg(args["tertiary-runs"], 0, "tertiary-runs", { allowZero: true });
-const mode = parseModeArg(args.mode);
-const requests = createPressureRequests({
+const modeConfig = parseModeArg(args.mode);
+const requests = expandPressureRequests({
   lanes,
-  runsPerLane: 1,
   order: "alternating"
-}).flatMap((request) => {
-  const sourceLane = lanes.find((lane) => lane.lane === request.lane);
-  const runsForLane = request.lane === "primary"
-    ? primaryRuns
-    : request.lane === "secondary"
-      ? secondaryRuns
-      : tertiaryRuns;
-  return Array.from({ length: runsForLane }, () =>
-    createLiveRunRequest({
-      tenantId: request.tenantId,
-      userId: sourceLane.userId,
-      workflowId: sourceLane.workflowId
-    })).map((run, index) => ({
-      lane: request.lane,
-      tenantId: request.tenantId,
-      userId: sourceLane.userId,
-      workflowId: sourceLane.workflowId,
-      runId: run.runId,
-      idempotencyKey: run.idempotencyKey,
-      sequence: index + 1
-    }));
-}).sort((left, right) => left.sequence - right.sequence || left.lane.localeCompare(right.lane));
+}).map((request, index) => {
+  const run = createLiveRunRequest({
+    tenantId: request.tenantId,
+    userId: request.userId,
+    workflowId: request.workflowId
+  });
+  return {
+    lane: request.lane,
+    tenantId: request.tenantId,
+    userId: request.userId,
+    workflowId: request.workflowId,
+    runId: run.runId,
+    idempotencyKey: run.idempotencyKey,
+    sequence: index + 1
+  };
+});
 
 const client = new pg.Client({
   connectionString: env.SUPABASE_DB_URL,
@@ -144,7 +137,7 @@ try {
         const summary = summarizePressureProof({
           requests,
           snapshots: [...observations.values()],
-          mode
+          mode: modeConfig.summaryMode
         });
 
         if (summary.ok) {
@@ -153,9 +146,12 @@ try {
               {
                 ok: true,
                 phase: summary.phase,
+                requestedMode: modeConfig.requestedMode,
+                summaryMode: modeConfig.summaryMode,
                 requests,
                 snapshots: [...observations.values()],
-                summary
+                summary,
+                notes: modeConfig.captureNotes
               },
               null,
               2
@@ -170,7 +166,7 @@ try {
       const summary = summarizePressureProof({
         requests,
         snapshots: [...observations.values()],
-        mode
+        mode: modeConfig.summaryMode
       });
       if (!summary.ok || process.exitCode) {
         process.exitCode = summary.ok ? process.exitCode ?? 0 : 1;
@@ -179,9 +175,12 @@ try {
             {
               ok: summary.ok,
               phase: summary.phase,
+              requestedMode: modeConfig.requestedMode,
+              summaryMode: modeConfig.summaryMode,
               requests,
               snapshots: [...observations.values()],
-              summary
+              summary,
+              notes: modeConfig.captureNotes
             },
             null,
               2
@@ -225,88 +224,39 @@ function parseArgs(values) {
     if (!value.startsWith("--")) {
       continue;
     }
-    args[value.slice(2)] = values[index + 1];
+    const key = value.slice(2);
+    const next = values[index + 1];
+    if (Object.hasOwn(args, key)) {
+      const previous = args[key];
+      args[key] = Array.isArray(previous) ? [...previous, next] : [previous, next];
+    } else {
+      args[key] = next;
+    }
     index += 1;
   }
   return args;
 }
 
-function buildLanes(args) {
-  const required = [
-    "primary-tenant",
-    "primary-user",
-    "primary-workflow",
-    "secondary-tenant",
-    "secondary-user",
-    "secondary-workflow"
-  ];
-  const missing = required.filter((key) => !args[key]);
-  if (missing.length > 0) {
-    throw new Error(`Missing required args: ${missing.map((key) => `--${key}`).join(", ")}`);
-  }
-
-  return [
-    {
-      lane: "primary",
-      tenantId: args["primary-tenant"],
-      userId: args["primary-user"],
-      workflowId: args["primary-workflow"]
-    },
-    {
-      lane: "secondary",
-      tenantId: args["secondary-tenant"],
-      userId: args["secondary-user"],
-      workflowId: args["secondary-workflow"]
-    },
-    ...buildOptionalLane(args, "tertiary")
-  ];
-}
-
-function buildOptionalLane(args, prefix) {
-  const required = [`${prefix}-tenant`, `${prefix}-user`, `${prefix}-workflow`];
-  const present = required.filter((key) => Boolean(args[key]));
-  if (present.length === 0) {
-    return [];
-  }
-  if (present.length !== required.length) {
-    throw new Error(`Optional ${prefix} lane requires --${required.join(", --")}`);
-  }
-  return [{
-    lane: prefix,
-    tenantId: args[`${prefix}-tenant`],
-    userId: args[`${prefix}-user`],
-    workflowId: args[`${prefix}-workflow`]
-  }];
-}
-
-function parseRunsArg(value, fallback, label, options = {}) {
-  if (value === undefined) {
-    return fallback;
-  }
-
-  if (!/^\d+$/.test(value)) {
-    throw new Error(`Invalid --${label}: expected a ${options.allowZero ? "non-negative" : "positive"} integer`);
-  }
-
-  const parsed = Number.parseInt(value, 10);
-  const minimum = options.allowZero ? 0 : 1;
-  if (parsed < minimum) {
-    throw new Error(`Invalid --${label}: expected a ${options.allowZero ? "non-negative" : "positive"} integer`);
-  }
-
-  return parsed;
-}
-
 function parseModeArg(value) {
-  if (value === undefined) {
-    return "progress";
+  const requestedMode = value === undefined ? "progress" : value;
+  if (requestedMode === "progress" || requestedMode === "drain") {
+    return {
+      requestedMode,
+      summaryMode: requestedMode,
+      captureNotes: []
+    };
   }
-
-  if (value !== "progress" && value !== "drain") {
-    throw new Error("Invalid --mode: expected 'progress' or 'drain'");
+  if (requestedMode === "global-fairness") {
+    return {
+      requestedMode,
+      summaryMode: "drain",
+      captureNotes: [
+        "prove-live-fairness captures drain-phase proof only.",
+        "Use analyze-worker-fairness with captured worker logs to compute the final global fairness verdict."
+      ]
+    };
   }
-
-  return value;
+  throw new Error("Invalid --mode: expected 'progress', 'drain', or 'global-fairness'");
 }
 
 function resolveSsl(source) {
@@ -327,4 +277,11 @@ function isProgressing(runStatus, queueState) {
     runStatus === "failed" ||
     queueState === "active" ||
     queueState === "completed";
+}
+
+function toArray(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  return value ? [value] : [];
 }

@@ -119,7 +119,7 @@ describe("worker runtime", () => {
 
   it("processes queue payloads through the bound-provider worker path", async () => {
     const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
-    const runtime = createWorkerRuntime({ env: loadWorkerEnv(validEnv) });
+    const runtime = createWorkerRuntime({ env: loadWorkerEnv(validEnv), workerInstanceId: "worker-test-1" });
 
     await expect(
       runtime.processQueuePayload({
@@ -280,7 +280,7 @@ describe("worker runtime", () => {
 
   it("emits tenant-safe fairness snapshots while processing queue payloads", async () => {
     stdoutWrite.mockClear();
-    const runtime = createWorkerRuntime({ env: loadWorkerEnv(validEnv) });
+    const runtime = createWorkerRuntime({ env: loadWorkerEnv(validEnv), workerInstanceId: "worker-test-1" });
 
     await runtime.processQueuePayload({
       tenantId: "tenant-1",
@@ -301,6 +301,7 @@ describe("worker runtime", () => {
     expect(allOutput.some((line) => line.includes("\"type\":\"wealth_factory_worker_run\""))).toBe(true);
     expect(allOutput.some((line) => line.includes("\"runId\":\"run-1\""))).toBe(true);
     expect(allOutput.some((line) => line.includes("\"event\":\"released\""))).toBe(true);
+    expect(allOutput.some((line) => line.includes("\"workerInstanceId\":\"worker-test-1\""))).toBe(true);
 
     await runtime.close();
   });

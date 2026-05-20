@@ -326,8 +326,14 @@ Repeatable operator helpers for this proof lane:
 - `npm run prove:provider-lifecycle -- --tenant <tenant-id> --user <user-id> --provider-kind openai_api --label OpenAI`
 - `npm run seed:demo -- --lane secondary --paperclip-company-id <paperclip-company-id>`
 - `npm run prove:live-fairness -- --mode drain --primary-tenant <tenant-a> --primary-user <user-a> --primary-workflow <workflow-a> --primary-runs 3 --secondary-tenant <tenant-b> --secondary-user <user-b> --secondary-workflow <workflow-b> --secondary-runs 2`
+- `npm run prove:live-fairness -- --mode drain --lane alpha:<tenant-a>:<user-a>:<workflow-a>:3 --lane beta:<tenant-b>:<user-b>:<workflow-b>:3`
+- `npm run prove:live-fairness -- --mode global-fairness --lane alpha:<tenant-a>:<user-a>:<workflow-a>:3 --lane beta:<tenant-b>:<user-b>:<workflow-b>:3`
+- `npm run analyze:worker-fairness -- --proof <saved-proof-json> --worker-events <combined-worker-run-jsonl>`
 - the API runtime image now carries the repo `scripts/` folder, and `scripts/lib/script-env.mjs` tolerates a missing `.env`, so `docker exec wealth-factory-api-stage2 node scripts/inspect-live-workflow-run.mjs ...` no longer requires copying helper scripts or an ad hoc env file into the container first
 - `prove:live-fairness` now emits per-run `queuedAt`, `observedFirstProgressAt`, `observedFirstStartedAt`, and `observedCompletedAt` plus per-lane observed wait and retry summaries, so the staged proof can distinguish burst drain from simple first progress without overstating timestamp precision
+- `prove:live-fairness --mode global-fairness` is a capture alias only; it still records drain-phase proof and expects `analyze-worker-fairness` to compute the final cross-worker verdict from worker logs
+- the worker runtime now emits `workerInstanceId` and `observedAt` on structured `wealth_factory_worker_run` events so the analyzer can distinguish single-worker drain from real cross-worker participation
+- pin `WF_WORKER_INSTANCE_ID` explicitly for any fairness proof you plan to trust; the default `hostname:pid` fallback is only best-effort staging telemetry
 
 Current staged sustained-burst checkpoint on 2026-05-20:
 
@@ -348,6 +354,11 @@ Current staged sustained-burst checkpoint on 2026-05-20:
   - secondary observed wait-to-start: `min=2098ms`, `median=2722ms`, `max=3345ms`
   - no retries and no queue-unreachable observations were reported
 - worker logs now also emit `wealth_factory_worker_run` start/release events so fairness output can be correlated back to concrete `runId` values without exposing secrets
+- current cross-worker checkpoint on 2026-05-20:
+  - warmed two-worker proof lanes were exercised with explicit `WF_WORKER_INSTANCE_ID` values and a repo-owned analyzer
+  - the analyzer still returned `phase = single_worker_only`
+  - even dedicated proof workers at `WF_WORKER_CONCURRENCY=1` did not yet produce a staged burst where two distinct workers shared the observed launch claims
+  - treat this as a real backlog item, not a scripting artifact: the next step is claim-layer investigation or a different queue coordination strategy before calling global multi-worker fairness proven
 
 Set the lifecycle proof env before using the helper:
 

@@ -20,6 +20,7 @@
     "queue:live-run": "node scripts/queue-live-workflow-run.mjs",
     "inspect:live-run": "node scripts/inspect-live-workflow-run.mjs",
     "prove:live-fairness": "node scripts/prove-live-fairness.mjs",
+    "analyze:worker-fairness": "node scripts/analyze-worker-fairness.mjs",
     "start:server": "node dist/api/server-main.js",
     "start:worker": "node dist/worker/worker-main.js",
     "test": "vitest run tests",

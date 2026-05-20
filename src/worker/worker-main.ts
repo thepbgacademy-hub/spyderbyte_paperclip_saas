@@ -1,3 +1,4 @@
+import { hostname } from "node:os";
 import process from "node:process";
 
 import { createWorkerRuntime, loadWorkerEnv } from "./runtime.js";
@@ -5,7 +6,8 @@ import { createBullmqWorkflowConsumer } from "../workflows/bullmq-workflow-queue
 
 async function main() {
   const env = loadWorkerEnv(process.env);
-  const runtime = createWorkerRuntime({ env });
+  const workerInstanceId = process.env.WF_WORKER_INSTANCE_ID?.trim() || `${hostname()}:${process.pid}`;
+  const runtime = createWorkerRuntime({ env, workerInstanceId });
   const consumer = createBullmqWorkflowConsumer({
     redisUrl: env.redisUrl,
     queueName: env.workflowQueueName,

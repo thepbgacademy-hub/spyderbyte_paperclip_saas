@@ -239,3 +239,6 @@ This file tracks implementation progress. Keep it current after every phase.
   - [x] Confirm the staged worker emits tenant-safe fairness logs during admission/release.
 - [ ] Extend from the first staged fairness proof to global multi-worker fairness validation.
   - [x] Add a sustained single-worker burst drain proof with per-run timing, per-lane wait summaries, and retry visibility.
+  - [x] Add worker-instance-aware fairness telemetry plus a repo-owned analyzer for structured `wealth_factory_worker_run` events.
+  - [x] Generalize the staged fairness driver beyond hard-coded primary/secondary lanes.
+  - [ ] Resolve the staged `single_worker_only` finding before calling cross-worker fairness proven.
