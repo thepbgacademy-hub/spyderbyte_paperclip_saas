@@ -140,7 +140,17 @@ describe("createPaperclipClient", () => {
       .fn()
       .mockResolvedValueOnce(jsonResponse({ id: "WEA-21" }))
       .mockResolvedValueOnce(jsonResponse({ id: "WEA-21", executionRunId: "hb-run-21" }));
-    const syncProviderSecretRefs = vi.fn().mockResolvedValue(undefined);
+    const syncProviderSecretRefs = vi.fn().mockResolvedValue({
+      adapterConfig: {
+        env: {
+          OPENAI_API_KEY: {
+            type: "secret_ref",
+            secretId: "pc-secret-1",
+            version: "9"
+          }
+        }
+      }
+    });
     const client = createPaperclipClient({
       baseUrl: "https://paperclip.internal.local/",
       serviceToken: "service-token",
@@ -185,7 +195,7 @@ describe("createPaperclipClient", () => {
       })
     ).resolves.toEqual({
       paperclipRunId: "hb-run-21",
-      status: "queued"
+      status: "running"
     });
 
     expect(syncProviderSecretRefs).toHaveBeenCalledWith({
@@ -203,6 +213,42 @@ describe("createPaperclipClient", () => {
         }
       ]
     });
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      1,
+      "https://paperclip.internal.local/api/companies/pc-company-1/issues",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          title: "WF workflow",
+          body: "launch",
+          assigneeAgentId: "agent-1",
+          assigneeAdapterOverrides: {
+            adapterConfig: {
+              env: {
+                OPENAI_API_KEY: {
+                  type: "secret_ref",
+                  secretId: "pc-secret-1",
+                  version: "9"
+                }
+              }
+            }
+          },
+          metadata: {
+            externalRunId: "run-1",
+            workflowId: "wf-intake",
+            providerContext: [
+              {
+                capability: "text_generation",
+                providerKind: "openai_api",
+                label: "Primary OpenAI",
+                secretRef: "wf_secret_openai",
+                metadata: { projectId: "proj_123" }
+              }
+            ]
+          }
+        })
+      })
+    );
     expect(JSON.stringify(fetchImpl.mock.calls[0]?.[1]?.body)).not.toContain("sk-secret");
   });
 

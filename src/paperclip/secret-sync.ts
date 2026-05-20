@@ -11,24 +11,26 @@ export type PaperclipSecretBindingRecord = {
   paperclipEnvKey: string;
   paperclipSecretId: string;
   paperclipSecretKey: string;
+  paperclipSecretVersion?: string;
   providerKind: ProviderKind;
   bindingStatus: "active" | "revoked" | "error";
   lastSyncedAt: string;
   lastError: string | null;
 };
 
-export type PaperclipSecretAdminClient = {
+export type PaperclipSecretBoardSessionClient = {
   upsertSecret(input: {
     companyId: string;
     secretKey: string;
     secretValue: string;
-  }): Promise<{ paperclipSecretId: string; paperclipSecretKey: string }>;
+  }): Promise<{ paperclipSecretId: string; paperclipSecretKey: string; paperclipSecretVersion: string }>;
   bindAgentSecretRef(input: {
     companyId: string;
     agentId: string;
     envKey: string;
     paperclipSecretId: string;
-  }): Promise<void>;
+    paperclipSecretVersion?: string;
+    }): Promise<void>;
   revokeSecretBinding?(input: {
     companyId: string;
     agentId: string;
@@ -36,6 +38,12 @@ export type PaperclipSecretAdminClient = {
     paperclipSecretId: string;
   }): Promise<void>;
 };
+
+/**
+ * @deprecated Preserve compatibility for existing composition sites while the
+ * repo migrates to explicit board-session naming.
+ */
+export type PaperclipSecretAdminClient = PaperclipSecretBoardSessionClient;
 
 export type PaperclipSecretProjectionService = {
   onRegistered(input: {
@@ -62,12 +70,13 @@ export function createPaperclipSecretBindingRepository(client: QueryClient) {
     async upsert(input: Omit<PaperclipSecretBindingRecord, "lastSyncedAt">): Promise<void> {
       await client.query(
         `insert into wfpc.paperclip_secret_bindings
-          (tenant_id, wealth_factory_secret_reference_id, paperclip_company_id, paperclip_agent_id, paperclip_env_key, paperclip_secret_id, paperclip_secret_key, provider_kind, binding_status, last_synced_at, last_error)
-         values ($1, $2::uuid, $3, $4, $5, $6, $7, $8::wfpc.provider_kind, $9, now(), $10)
+          (tenant_id, wealth_factory_secret_reference_id, paperclip_company_id, paperclip_agent_id, paperclip_env_key, paperclip_secret_id, paperclip_secret_key, paperclip_secret_version, provider_kind, binding_status, last_synced_at, last_error)
+         values ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9::wfpc.provider_kind, $10, now(), $11)
          on conflict (wealth_factory_secret_reference_id, paperclip_company_id, paperclip_agent_id, paperclip_env_key)
          do update set
            paperclip_secret_id = excluded.paperclip_secret_id,
            paperclip_secret_key = excluded.paperclip_secret_key,
+           paperclip_secret_version = excluded.paperclip_secret_version,
            provider_kind = excluded.provider_kind,
            binding_status = excluded.binding_status,
            last_synced_at = now(),
@@ -81,6 +90,7 @@ export function createPaperclipSecretBindingRepository(client: QueryClient) {
           input.paperclipEnvKey,
           input.paperclipSecretId,
           input.paperclipSecretKey,
+          input.paperclipSecretVersion ?? null,
           input.providerKind,
           input.bindingStatus,
           input.lastError
@@ -108,6 +118,7 @@ export function createPaperclipSecretBindingRepository(client: QueryClient) {
                 paperclip_env_key,
                 paperclip_secret_id,
                 paperclip_secret_key,
+                paperclip_secret_version,
                 provider_kind,
                 binding_status,
                 last_synced_at,
@@ -127,6 +138,7 @@ export function createPaperclipSecretBindingRepository(client: QueryClient) {
           paperclipEnvKey: String(record.paperclip_env_key),
           paperclipSecretId: String(record.paperclip_secret_id),
           paperclipSecretKey: String(record.paperclip_secret_key),
+          ...(typeof record.paperclip_secret_version === "string" ? { paperclipSecretVersion: record.paperclip_secret_version } : {}),
           providerKind: String(record.provider_kind) as ProviderKind,
           bindingStatus: String(record.binding_status) as PaperclipSecretBindingRecord["bindingStatus"],
           lastSyncedAt: String(record.last_synced_at),
@@ -150,6 +162,7 @@ export function createPaperclipSecretBindingRepository(client: QueryClient) {
                 bindings.paperclip_env_key,
                 bindings.paperclip_secret_id,
                 bindings.paperclip_secret_key,
+                bindings.paperclip_secret_version,
                 bindings.provider_kind,
                 bindings.binding_status,
                 bindings.last_synced_at,
@@ -178,6 +191,7 @@ export function createPaperclipSecretBindingRepository(client: QueryClient) {
         paperclipEnvKey: String(row.paperclip_env_key),
         paperclipSecretId: String(row.paperclip_secret_id),
         paperclipSecretKey: String(row.paperclip_secret_key),
+        ...(typeof row.paperclip_secret_version === "string" ? { paperclipSecretVersion: row.paperclip_secret_version } : {}),
         providerKind: String(row.provider_kind) as ProviderKind,
         bindingStatus: String(row.binding_status) as PaperclipSecretBindingRecord["bindingStatus"],
         lastSyncedAt: String(row.last_synced_at),
@@ -188,7 +202,7 @@ export function createPaperclipSecretBindingRepository(client: QueryClient) {
 }
 
 export function createPaperclipSecretSyncService(options: {
-  adminClient: PaperclipSecretAdminClient;
+  adminClient: PaperclipSecretBoardSessionClient;
   bindings: ReturnType<typeof createPaperclipSecretBindingRepository>;
 }) {
   return {
@@ -201,19 +215,23 @@ export function createPaperclipSecretSyncService(options: {
       providerKind: ProviderKind;
       secretValue: string;
       paperclipSecretKey: string;
-    }): Promise<void> {
+      bindToAgent?: boolean;
+    }): Promise<{ paperclipSecretId: string; paperclipSecretKey: string; paperclipSecretVersion: string }> {
       try {
         const secret = await options.adminClient.upsertSecret({
           companyId: input.paperclipCompanyId,
           secretKey: input.paperclipSecretKey,
           secretValue: input.secretValue
         });
-        await options.adminClient.bindAgentSecretRef({
-          companyId: input.paperclipCompanyId,
-          agentId: input.paperclipAgentId,
-          envKey: input.paperclipEnvKey,
-          paperclipSecretId: secret.paperclipSecretId
-        });
+        if (input.bindToAgent ?? true) {
+          await options.adminClient.bindAgentSecretRef({
+            companyId: input.paperclipCompanyId,
+            agentId: input.paperclipAgentId,
+            envKey: input.paperclipEnvKey,
+            paperclipSecretId: secret.paperclipSecretId,
+            paperclipSecretVersion: secret.paperclipSecretVersion
+          });
+        }
         await options.bindings.upsert({
           tenantId: input.tenantId,
           wealthFactorySecretReferenceId: input.wealthFactorySecretReferenceId,
@@ -222,10 +240,12 @@ export function createPaperclipSecretSyncService(options: {
           paperclipEnvKey: input.paperclipEnvKey,
           paperclipSecretId: secret.paperclipSecretId,
           paperclipSecretKey: secret.paperclipSecretKey,
+          paperclipSecretVersion: secret.paperclipSecretVersion,
           providerKind: input.providerKind,
           bindingStatus: "active",
           lastError: null
         });
+        return secret;
       } catch (error) {
         await options.bindings.upsert({
           tenantId: input.tenantId,
@@ -264,7 +284,7 @@ export function createPaperclipSecretSyncService(options: {
 }
 
 export function createPaperclipSecretProjectionService(options: {
-  adminClient: PaperclipSecretAdminClient;
+  adminClient: PaperclipSecretBoardSessionClient;
   bindings: ReturnType<typeof createPaperclipSecretBindingRepository>;
   resolveCompanyMapping(input: { tenantId: string }): Promise<{ paperclipCompanyId: string }>;
   paperclipAgentId: string;
@@ -301,7 +321,8 @@ export function createPaperclipSecretProjectionService(options: {
           paperclipEnvKey: binding.envKey,
           providerKind: input.providerKind,
           secretValue: binding.secretValue,
-          paperclipSecretKey: binding.envKey
+          paperclipSecretKey: binding.envKey,
+          bindToAgent: false
         });
       }
     },
@@ -336,7 +357,8 @@ export function createPaperclipSecretProjectionService(options: {
             paperclipEnvKey: binding.envKey,
             providerKind: input.providerKind,
             secretValue: binding.secretValue,
-            paperclipSecretKey: binding.envKey
+            paperclipSecretKey: binding.envKey,
+            bindToAgent: false
           });
         }
         return;
@@ -351,7 +373,8 @@ export function createPaperclipSecretProjectionService(options: {
           paperclipEnvKey: existing.paperclipEnvKey,
           providerKind: existing.providerKind,
           secretValue,
-          paperclipSecretKey: existing.paperclipSecretKey
+          paperclipSecretKey: existing.paperclipSecretKey,
+          bindToAgent: false
         });
       }
     },
@@ -413,57 +436,132 @@ async function resolveCompanyMappingSafely(
 export function createPaperclipSecretAdminHttpClient(options: {
   baseUrl: string;
   adminToken: string;
+  origin?: string;
+  referer?: string;
   fetchImpl?: FetchLike;
 }): PaperclipSecretAdminClient {
+  return createPaperclipSecretBoardSessionHttpClient({
+    baseUrl: options.baseUrl,
+    boardSessionCookie: options.adminToken,
+    ...(options.origin ? { origin: options.origin } : {}),
+    ...(options.referer ? { referer: options.referer } : {}),
+    ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {})
+  });
+}
+
+export function createPaperclipSecretBoardSessionHttpClient(options: {
+  baseUrl: string;
+  boardSessionCookie: string;
+  origin?: string;
+  referer?: string;
+  fetchImpl?: FetchLike;
+}): PaperclipSecretBoardSessionClient {
   const baseUrl = options.baseUrl.replace(/\/+$/, "");
   const fetchImpl = options.fetchImpl ?? fetch;
+  const requestHeaders = createBoardSessionHeaders({
+    cookie: options.boardSessionCookie,
+    origin: options.origin ?? deriveOrigin(baseUrl),
+    referer: options.referer ?? `${deriveOrigin(baseUrl)}/`
+  });
 
   return {
     async upsertSecret(input) {
-      const body = await requestJson(fetchImpl, `${baseUrl}/api/admin/companies/${encodeURIComponent(input.companyId)}/secrets`, {
-        method: "POST",
-        headers: createHeaders(options.adminToken),
-        body: JSON.stringify({
-          key: input.secretKey,
-          value: input.secretValue
-        })
+      const normalizedSecretKey = normalizePaperclipSecretKey(input.secretKey);
+      const existingSecret = await findCompanySecretByKey(fetchImpl, baseUrl, requestHeaders, {
+        companyId: input.companyId,
+        secretKey: normalizedSecretKey,
+        secretName: input.secretKey
       });
-      const record = asRecord(body);
-      const paperclipSecretId = typeof record.id === "string" ? record.id : typeof record.secretId === "string" ? record.secretId : "";
+      const record = existingSecret
+        ? await rotateCompanySecret(fetchImpl, baseUrl, requestHeaders, {
+            paperclipSecretId: existingSecret.paperclipSecretId,
+            secretValue: input.secretValue
+          })
+        : await createOrRecoverCompanySecret(fetchImpl, baseUrl, requestHeaders, {
+            companyId: input.companyId,
+            secretKey: normalizedSecretKey,
+            secretName: input.secretKey,
+            secretValue: input.secretValue
+          });
+      const parsed = asRecord(record);
+      const paperclipSecretId =
+        typeof parsed.id === "string"
+          ? parsed.id
+          : typeof parsed.secretId === "string"
+            ? parsed.secretId
+            : existingSecret?.paperclipSecretId ?? "";
       if (!paperclipSecretId) {
-        throw new Error("Paperclip secret upsert did not return a secret id");
+        throw new Error("Paperclip board-session secret upsert did not return a secret id");
       }
       return {
-        paperclipSecretId,
-        paperclipSecretKey: typeof record.key === "string" ? record.key : input.secretKey
-      };
+          paperclipSecretId,
+          paperclipSecretVersion: readPaperclipSecretVersion(parsed, existingSecret?.paperclipSecretVersion),
+          paperclipSecretKey: typeof parsed.key === "string" ? parsed.key : existingSecret?.paperclipSecretKey ?? normalizedSecretKey
+        };
     },
 
     async bindAgentSecretRef(input) {
+      const agent = await requestJson(fetchImpl, `${baseUrl}/api/agents/${encodeURIComponent(input.agentId)}`, {
+        method: "GET",
+        headers: requestHeaders
+      });
+      const adapterConfig = readAgentAdapterConfig(agent);
+      const env = readAdapterEnv(adapterConfig);
       await requestJson(
         fetchImpl,
-        `${baseUrl}/api/admin/companies/${encodeURIComponent(input.companyId)}/agents/${encodeURIComponent(input.agentId)}/env/${encodeURIComponent(input.envKey)}`,
+        `${baseUrl}/api/agents/${encodeURIComponent(input.agentId)}`,
         {
-          method: "PUT",
-          headers: createHeaders(options.adminToken),
+          method: "PATCH",
+          headers: requestHeaders,
           body: JSON.stringify({
-            type: "secret_ref",
-            secretId: input.paperclipSecretId,
-            version: "latest"
+            replaceAdapterConfig: true,
+            adapterConfig: {
+              ...adapterConfig,
+              env: {
+                ...env,
+                [input.envKey]: {
+                  type: "secret_ref",
+                  secretId: input.paperclipSecretId,
+                  version: input.paperclipSecretVersion ?? "latest"
+                }
+              }
+            }
           })
         }
       );
     },
 
     async revokeSecretBinding(input) {
+      const agent = await requestJson(fetchImpl, `${baseUrl}/api/agents/${encodeURIComponent(input.agentId)}`, {
+        method: "GET",
+        headers: requestHeaders
+      });
+      const adapterConfig = readAgentAdapterConfig(agent);
+      const env = readAdapterEnv(adapterConfig);
+      const nextEnv = { ...env };
+      const currentValue = asRecord(nextEnv[input.envKey]);
+      if (typeof currentValue.secretId === "string" && currentValue.secretId === input.paperclipSecretId) {
+        delete nextEnv[input.envKey];
+        await requestJson(fetchImpl, `${baseUrl}/api/agents/${encodeURIComponent(input.agentId)}`, {
+          method: "PATCH",
+          headers: requestHeaders,
+          body: JSON.stringify({
+            replaceAdapterConfig: true,
+            adapterConfig: {
+              ...adapterConfig,
+              env: nextEnv
+            }
+          })
+        });
+      }
       await requestJson(
         fetchImpl,
-        `${baseUrl}/api/admin/companies/${encodeURIComponent(input.companyId)}/agents/${encodeURIComponent(input.agentId)}/env/${encodeURIComponent(input.envKey)}`,
+        `${baseUrl}/api/secrets/${encodeURIComponent(input.paperclipSecretId)}`,
         {
-          method: "DELETE",
-          headers: createHeaders(options.adminToken),
+          method: "PATCH",
+          headers: requestHeaders,
           body: JSON.stringify({
-            secretId: input.paperclipSecretId
+            status: "disabled"
           })
         }
       );
@@ -514,18 +612,184 @@ function requireSecretValue(secretValues: Record<string, string>, key: string): 
   return value;
 }
 
-function createHeaders(token: string): HeadersInit {
+function createBoardSessionHeaders(input: {
+  cookie: string;
+  origin: string;
+  referer: string;
+}): HeadersInit {
   return {
-    authorization: `Bearer ${token}`,
-    "content-type": "application/json"
+    cookie: normalizeBoardSessionCookie(input.cookie),
+    "content-type": "application/json",
+    origin: input.origin,
+    referer: input.referer
   };
+}
+
+function normalizeBoardSessionCookie(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+  if (trimmed.includes("=")) {
+    return trimmed;
+  }
+  return `paperclip-default.session_token=${trimmed}`;
 }
 
 async function requestJson(fetchImpl: FetchLike, url: string, init: RequestInit): Promise<unknown> {
   const response = await fetchImpl(url, init);
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(`Paperclip secret admin request failed: ${response.status}`);
+    throw new PaperclipBoardSessionHttpError(response.status, body);
   }
   return body;
+}
+
+async function rotateCompanySecret(
+  fetchImpl: FetchLike,
+  baseUrl: string,
+  headers: HeadersInit,
+  input: { paperclipSecretId: string; secretValue: string }
+): Promise<unknown> {
+  return requestJson(fetchImpl, `${baseUrl}/api/secrets/${encodeURIComponent(input.paperclipSecretId)}/rotate`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      value: input.secretValue
+    })
+  });
+}
+
+async function createOrRecoverCompanySecret(
+  fetchImpl: FetchLike,
+  baseUrl: string,
+  headers: HeadersInit,
+  input: { companyId: string; secretKey: string; secretName: string; secretValue: string }
+): Promise<unknown> {
+  try {
+    return await requestJson(fetchImpl, `${baseUrl}/api/companies/${encodeURIComponent(input.companyId)}/secrets`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        name: input.secretName,
+        key: input.secretKey,
+        value: input.secretValue
+      })
+    });
+  } catch (error) {
+    if (!(error instanceof PaperclipBoardSessionHttpError) || error.status !== 409) {
+      throw error;
+    }
+    const recoveredSecret = await findCompanySecretByKey(fetchImpl, baseUrl, headers, {
+      companyId: input.companyId,
+      secretKey: input.secretKey,
+      secretName: input.secretName
+    });
+    if (!recoveredSecret) {
+      throw error;
+    }
+    return rotateCompanySecret(fetchImpl, baseUrl, headers, {
+      paperclipSecretId: recoveredSecret.paperclipSecretId,
+      secretValue: input.secretValue
+    });
+  }
+}
+
+async function findCompanySecretByKey(
+  fetchImpl: FetchLike,
+  baseUrl: string,
+  headers: HeadersInit,
+  input: { companyId: string; secretKey: string; secretName?: string }
+): Promise<{ paperclipSecretId: string; paperclipSecretKey: string; paperclipSecretVersion?: string } | null> {
+  const body = await requestJson(fetchImpl, `${baseUrl}/api/companies/${encodeURIComponent(input.companyId)}/secrets`, {
+    method: "GET",
+    headers
+  });
+  const records = extractSecretRecords(body);
+  const normalizedSecretKey = normalizePaperclipSecretKey(input.secretKey);
+  const normalizedSecretName = input.secretName ? normalizePaperclipSecretKey(input.secretName) : null;
+  const match = records.find((record) => {
+    const keyMatch = normalizePaperclipSecretKey(record.paperclipSecretKey) === normalizedSecretKey;
+    if (keyMatch) {
+      return true;
+    }
+    return normalizedSecretName !== null && normalizePaperclipSecretKey(record.paperclipSecretName ?? "") === normalizedSecretName;
+  });
+  return match ?? null;
+}
+
+function extractSecretRecords(body: unknown): Array<{ paperclipSecretId: string; paperclipSecretKey: string; paperclipSecretVersion?: string; paperclipSecretName?: string }> {
+  const record = asRecord(body);
+  const candidates = Array.isArray(body)
+    ? body
+    : Array.isArray(record.secrets)
+      ? record.secrets
+      : Array.isArray(record.items)
+        ? record.items
+        : [];
+  return candidates
+    .map((candidate) => {
+      const value = asRecord(candidate);
+      const paperclipSecretId =
+        typeof value.id === "string" ? value.id : typeof value.secretId === "string" ? value.secretId : "";
+      const paperclipSecretKey =
+        typeof value.key === "string" ? value.key : typeof value.secretKey === "string" ? value.secretKey : "";
+      const paperclipSecretVersion = readPaperclipSecretVersion(value);
+      const paperclipSecretName = typeof value.name === "string" ? value.name : undefined;
+      if (!paperclipSecretId || !paperclipSecretKey) {
+        return null;
+      }
+      return {
+        paperclipSecretId,
+        paperclipSecretKey,
+        ...(paperclipSecretVersion ? { paperclipSecretVersion } : {}),
+        ...(paperclipSecretName ? { paperclipSecretName } : {})
+      };
+    })
+    .filter(
+      (
+        candidate
+      ): candidate is { paperclipSecretId: string; paperclipSecretKey: string; paperclipSecretVersion?: string; paperclipSecretName?: string } =>
+        candidate !== null
+    );
+}
+
+function readAgentAdapterConfig(agent: unknown): Record<string, unknown> {
+  const record = asRecord(agent);
+  return asRecord(record.adapterConfig);
+}
+
+function readAdapterEnv(adapterConfig: Record<string, unknown>): Record<string, unknown> {
+  const env = adapterConfig.env;
+  return env && typeof env === "object" ? { ...(env as Record<string, unknown>) } : {};
+}
+
+function deriveOrigin(baseUrl: string): string {
+  const url = new URL(baseUrl);
+  return `${url.protocol}//${url.host}`;
+}
+
+function normalizePaperclipSecretKey(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function readPaperclipSecretVersion(body: Record<string, unknown>, fallback?: string): string {
+  const value = body.latestVersion ?? body.latest_version ?? fallback;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value;
+  }
+  return fallback ?? "latest";
+}
+
+class PaperclipBoardSessionHttpError extends Error {
+  constructor(
+    readonly status: number,
+    readonly body: unknown
+  ) {
+    super(`Paperclip board-session request failed: ${status}`);
+    this.name = "PaperclipBoardSessionHttpError";
+  }
 }

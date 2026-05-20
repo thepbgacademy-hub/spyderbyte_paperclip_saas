@@ -3,10 +3,11 @@ import process from "node:process";
 import { closeServerGracefully } from "./server-lifecycle.js";
 import { createRuntimeSessionAuth, loadRuntimeSessionAuthEnv } from "./runtime-auth.js";
 import { createDashboardRuntime, loadRuntimeEnv } from "./runtime-server.js";
-import { loadWorkflowQueueEnv } from "../config/env.js";
+import { loadWorkflowQueueEnv, validatePaperclipLaunchEnv } from "../config/env.js";
 import { createBullmqWorkflowRunEnqueuer } from "../workflows/bullmq-workflow-queue.js";
 
 async function main() {
+  validatePaperclipLaunchEnv(process.env);
   const queueEnv = loadWorkflowQueueEnv(process.env);
   const env = loadRuntimeEnv(process.env);
   const auth = createRuntimeSessionAuth(loadRuntimeSessionAuthEnv(process.env));

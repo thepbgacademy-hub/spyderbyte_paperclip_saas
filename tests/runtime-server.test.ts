@@ -220,7 +220,7 @@ describe("runtime server", () => {
   it("wires Paperclip projection into provider registration when admin issue-launch env is configured", async () => {
     const { createVaultBackedProviderCredentialRegistration } = await import("../src/secrets/vault-backed-provider-registration.js");
     const { createAcidSecretRevokeService } = await import("../src/secrets/acid-secret-revoke-service.js");
-    const { createPaperclipSecretProjectionService } = await import("../src/paperclip/secret-sync.js");
+    const { createPaperclipSecretAdminHttpClient, createPaperclipSecretProjectionService } = await import("../src/paperclip/secret-sync.js");
 
     const runtime = createDashboardRuntime({
       env: {
@@ -231,7 +231,8 @@ describe("runtime server", () => {
         vaultMasterKey: "test-master-key-with-enough-length",
         runtimeEnv: {
           PAPERCLIP_BASE_URL: "https://paperclip.internal.local",
-          WF_PAPERCLIP_ADMIN_TOKEN: "admin-token",
+          WF_PAPERCLIP_BOARD_SESSION_TOKEN: "board-session-token",
+          WF_PAPERCLIP_BOARD_ORIGIN: "https://paperclip-board.internal.local/",
           WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-1"
         }
       },
@@ -239,6 +240,12 @@ describe("runtime server", () => {
     });
 
     expect(createPaperclipSecretProjectionService).toHaveBeenCalled();
+    expect(createPaperclipSecretAdminHttpClient).toHaveBeenCalledWith({
+      baseUrl: "https://paperclip.internal.local",
+      adminToken: "board-session-token",
+      origin: "https://paperclip-board.internal.local/",
+      referer: "https://paperclip-board.internal.local/"
+    });
     expect(createVaultBackedProviderCredentialRegistration).toHaveBeenCalledWith(
       expect.objectContaining({
         projection: expect.objectContaining({

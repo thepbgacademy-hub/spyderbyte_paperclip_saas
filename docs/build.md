@@ -880,8 +880,9 @@ Mapping update from live Paperclip discovery:
   - current run binding storage is effectively single-provider even though the product model assumes future multi-capability workflows
   - a private runtime provider repository path is still needed for worker/sync use
   - a configurable issue-launch adapter and `paperclip_secret_bindings` persistence are now in the repo, and the worker runtime can enforce or refresh explicit company/agent/env-key bindings before issue launch
-  - provider registration can now project Paperclip-managed secrets through the admin lane when `WF_PAPERCLIP_ADMIN_TOKEN` and `WF_PAPERCLIP_ISSUE_AGENT_ID` are configured
-  - the remaining Paperclip runtime gap is live VPS verification of the installed admin routes and token scope, not the repo-side lifecycle wiring
+  - provider registration can now project Paperclip-managed secrets through the board-session lane when `WF_PAPERCLIP_BOARD_SESSION_TOKEN`, trusted `WF_PAPERCLIP_BOARD_ORIGIN` headers, and `WF_PAPERCLIP_ISSUE_AGENT_ID` are configured while `PAPERCLIP_BASE_URL` stays on the private runtime address
+  - `WF_PAPERCLIP_ADMIN_TOKEN` should not be treated as a bearer-token compatibility path for this issue-launch secret-projection lane
+  - the remaining Paperclip runtime gap is live VPS verification of the installed board-session routes and cookie scope, not the repo-side lifecycle wiring
 
 ## Worker Capacity Guidance
 

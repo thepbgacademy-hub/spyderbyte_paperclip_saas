@@ -7,6 +7,8 @@ export type AppEnv = {
   workflowQueueName: string;
   paperclipBaseUrl: string;
   paperclipServiceToken: string;
+  paperclipBoardSessionToken?: string;
+  paperclipBoardOrigin?: string;
   paperclipAdminToken?: string;
   vaultMasterKey: string;
   providerExecutionMode: "tenant_credentials_required" | "debug_shared_fallback";
@@ -64,6 +66,9 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   if (hasValue(source.PAPERCLIP_BASE_URL) && !isHttpUrl(source.PAPERCLIP_BASE_URL)) {
     invalidKeys.push("PAPERCLIP_BASE_URL");
   }
+  if (hasValue(source.WF_PAPERCLIP_BOARD_ORIGIN) && !isHttpUrl(source.WF_PAPERCLIP_BOARD_ORIGIN)) {
+    invalidKeys.push("WF_PAPERCLIP_BOARD_ORIGIN");
+  }
 
   if (hasValue(source.WF_VAULT_MASTER_KEY) && source.WF_VAULT_MASTER_KEY.length < 24) {
     invalidKeys.push("WF_VAULT_MASTER_KEY");
@@ -93,6 +98,14 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   if (paperclipIssueMaxPollAttempts === null) {
     invalidKeys.push("WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS");
   }
+  const paperclipBoardSessionToken = hasValue(source.WF_PAPERCLIP_BOARD_SESSION_TOKEN)
+    ? source.WF_PAPERCLIP_BOARD_SESSION_TOKEN.trim()
+    : undefined;
+  const paperclipBoardOrigin = hasValue(source.WF_PAPERCLIP_BOARD_ORIGIN) ? trimTrailingSlash(source.WF_PAPERCLIP_BOARD_ORIGIN) : undefined;
+  const paperclipAdminToken = hasValue(source.WF_PAPERCLIP_ADMIN_TOKEN) ? source.WF_PAPERCLIP_ADMIN_TOKEN.trim() : undefined;
+  if (paperclipBoardSessionToken && !paperclipBoardOrigin) {
+    invalidKeys.push("WF_PAPERCLIP_BOARD_ORIGIN");
+  }
   const workerConcurrency = readPositiveInteger(source.WF_WORKER_CONCURRENCY, 2);
   if (workerConcurrency === null) {
     invalidKeys.push("WF_WORKER_CONCURRENCY");
@@ -115,7 +128,9 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     workflowQueueName: source.WF_WORKFLOW_QUEUE_NAME?.trim() || "wfpc-workflow-runs",
     paperclipBaseUrl: trimTrailingSlash(source.PAPERCLIP_BASE_URL as string),
     paperclipServiceToken: source.PAPERCLIP_SERVICE_TOKEN as string,
-    ...(hasValue(source.WF_PAPERCLIP_ADMIN_TOKEN) ? { paperclipAdminToken: source.WF_PAPERCLIP_ADMIN_TOKEN.trim() } : {}),
+    ...(paperclipBoardSessionToken ? { paperclipBoardSessionToken } : {}),
+    ...(paperclipBoardOrigin ? { paperclipBoardOrigin } : {}),
+    ...(paperclipAdminToken ? { paperclipAdminToken } : {}),
     vaultMasterKey: source.WF_VAULT_MASTER_KEY as string,
     providerExecutionMode: providerExecutionMode as AppEnv["providerExecutionMode"],
     paperclipLaunchMode: paperclipLaunchMode as AppEnv["paperclipLaunchMode"],
@@ -125,6 +140,41 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     workerConcurrency: workerConcurrency as number,
     workerMaxActivePerTenant: workerMaxActivePerTenant as number
   };
+}
+
+export function validatePaperclipLaunchEnv(source: NodeJS.ProcessEnv = process.env): void {
+  const invalidKeys: string[] = [];
+
+  const paperclipLaunchMode = source.WF_PAPERCLIP_LAUNCH_MODE ?? "runs";
+  if (!["runs", "issues"].includes(paperclipLaunchMode)) {
+    invalidKeys.push("WF_PAPERCLIP_LAUNCH_MODE");
+  }
+
+  const paperclipIssueAgentId = hasValue(source.WF_PAPERCLIP_ISSUE_AGENT_ID) ? source.WF_PAPERCLIP_ISSUE_AGENT_ID.trim() : undefined;
+  if (paperclipLaunchMode === "issues" && !paperclipIssueAgentId) {
+    invalidKeys.push("WF_PAPERCLIP_ISSUE_AGENT_ID");
+  }
+
+  const paperclipIssuePollIntervalMs = readPositiveInteger(source.WF_PAPERCLIP_ISSUE_POLL_INTERVAL_MS, 1_000);
+  if (paperclipIssuePollIntervalMs === null) {
+    invalidKeys.push("WF_PAPERCLIP_ISSUE_POLL_INTERVAL_MS");
+  }
+  const paperclipIssueMaxPollAttempts = readPositiveInteger(source.WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS, 10);
+  if (paperclipIssueMaxPollAttempts === null) {
+    invalidKeys.push("WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS");
+  }
+
+  const paperclipBoardSessionToken = hasValue(source.WF_PAPERCLIP_BOARD_SESSION_TOKEN)
+    ? source.WF_PAPERCLIP_BOARD_SESSION_TOKEN.trim()
+    : undefined;
+  const paperclipBoardOrigin = hasValue(source.WF_PAPERCLIP_BOARD_ORIGIN) ? trimTrailingSlash(source.WF_PAPERCLIP_BOARD_ORIGIN) : undefined;
+  if (paperclipBoardSessionToken && !paperclipBoardOrigin) {
+    invalidKeys.push("WF_PAPERCLIP_BOARD_ORIGIN");
+  }
+
+  if (invalidKeys.length > 0) {
+    throw new EnvValidationError([], invalidKeys);
+  }
 }
 
 export function loadWorkflowQueueEnv(source: NodeJS.ProcessEnv = process.env): WorkflowQueueEnv {

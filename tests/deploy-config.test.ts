@@ -45,6 +45,16 @@ describe("deployment POC config", () => {
     expect(runbook).toContain("WF_API_SESSION_ISSUER");
     expect(runbook).toContain("WF_API_SESSION_AUDIENCE");
     expect(runbook).toContain("WF_VAULT_MASTER_KEY");
+    expect(runbook).toContain("WF_PROVIDER_EXECUTION_MODE");
+    expect(runbook).toContain("WF_PAPERCLIP_LAUNCH_MODE");
+    expect(runbook).toContain("WF_PAPERCLIP_BOARD_SESSION_TOKEN");
+    expect(runbook).toContain("WF_PAPERCLIP_BOARD_ORIGIN");
+    expect(runbook).toContain("WF_PAPERCLIP_ADMIN_TOKEN");
+    expect(runbook).toContain("WF_PAPERCLIP_ISSUE_AGENT_ID");
+    expect(runbook).toContain("WF_PAPERCLIP_ISSUE_POLL_INTERVAL_MS");
+    expect(runbook).toContain("WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS");
+    expect(runbook).toContain("WF_WORKER_CONCURRENCY");
+    expect(runbook).toContain("WF_WORKER_MAX_ACTIVE_PER_TENANT");
     expect(runbook).toContain("WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID");
     expect(runbook).toContain("WF_WEB_APP_ENTRY_URL");
     expect(runbook).toContain("WF_WEB_APP_STYLESHEET_URL");
@@ -63,10 +73,10 @@ describe("deployment POC config", () => {
     expect(runbook).toContain("sudo ufw delete deny 5432/tcp");
     expect(runbook).toContain("api.spyderbyte.cloud");
     expect(runbook).toContain("no longer show a TLS handshake failure");
-    expect(runbook).toContain("http://<vps-public-ip>:9000/health");
-    expect(runbook).toContain("docker compose -f deploy/docker-compose.yml port paperclip 9000");
+    expect(runbook).toContain("http://<vps-public-ip>:3100/api/health");
+    expect(runbook).toContain("docker compose -f deploy/docker-compose.yml port paperclip 3100");
     expect(runbook).toContain("Test-NetConnection www.spyderbyte.cloud -Port 6379");
-    expect(runbook).toContain("Public port 9000 is closed");
+    expect(runbook).toContain("Public port 3100 is closed");
   });
 
   it("requires explicit immutable image tags for deployment inputs", () => {
@@ -84,7 +94,8 @@ describe("deployment POC config", () => {
     expect(workerDockerfile).toContain("npm run build:server");
     expect(runbook).toContain("confirm `api` is running, and `worker`, `paperclip`, and `redis` are healthy");
     expect(runbook).toContain("verifies both Redis reachability and Paperclip health");
-    expect(runbook).toContain("configured Paperclip bearer token is not rejected by an authenticated company-scoped route");
+    expect(runbook).toContain("configured Paperclip service token is not rejected by an authenticated company-scoped route");
+    expect(runbook).toContain("both receive `WF_PAPERCLIP_LAUNCH_MODE`, `WF_PAPERCLIP_BOARD_SESSION_TOKEN`, `WF_PAPERCLIP_BOARD_ORIGIN`, and `WF_PAPERCLIP_ISSUE_AGENT_ID`");
   });
 
   it("fails fast when required server-side secrets are missing", () => {
@@ -105,13 +116,38 @@ describe("deployment POC config", () => {
     expect(compose).toContain("WF_API_SESSION_AUDIENCE: ${WF_API_SESSION_AUDIENCE:-wealth-factory-portal}");
     expect(compose).toContain("WF_WEB_APP_STYLESHEET_URL: ${WF_WEB_APP_STYLESHEET_URL:-}");
     expect(compose).toContain("WF_PORTAL_SESSION_COOKIE_NAME: ${WF_PORTAL_SESSION_COOKIE_NAME:-wf_portal_session}");
+    expect(compose).toContain("WF_PROVIDER_EXECUTION_MODE: ${WF_PROVIDER_EXECUTION_MODE:-tenant_credentials_required}");
+    expect(compose).toContain("WF_PAPERCLIP_LAUNCH_MODE: ${WF_PAPERCLIP_LAUNCH_MODE:-runs}");
+    expect(compose).toContain("WF_PAPERCLIP_BOARD_SESSION_TOKEN: ${WF_PAPERCLIP_BOARD_SESSION_TOKEN:-}");
+    expect(compose).toContain("WF_PAPERCLIP_BOARD_ORIGIN: ${WF_PAPERCLIP_BOARD_ORIGIN:-}");
+    expect(compose).toContain("WF_PAPERCLIP_ADMIN_TOKEN: ${WF_PAPERCLIP_ADMIN_TOKEN:-}");
+    expect(compose).toContain("WF_PAPERCLIP_ISSUE_AGENT_ID: ${WF_PAPERCLIP_ISSUE_AGENT_ID:-}");
+    expect(compose).toContain("WF_PAPERCLIP_ISSUE_POLL_INTERVAL_MS: ${WF_PAPERCLIP_ISSUE_POLL_INTERVAL_MS:-1000}");
+    expect(compose).toContain("WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS: ${WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS:-10}");
+    expect(compose).toContain("WF_WORKER_CONCURRENCY: ${WF_WORKER_CONCURRENCY:-2}");
+    expect(compose).toContain("WF_WORKER_MAX_ACTIVE_PER_TENANT: ${WF_WORKER_MAX_ACTIVE_PER_TENANT:-1}");
     expect(compose).toContain("WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID: ${WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID:-}");
+    expect(compose).toContain("PAPERCLIP_BASE_URL: http://paperclip:3100");
+    expect(compose).toContain("PAPERCLIP_DEPLOYMENT_MODE: authenticated");
+    expect(compose).toContain("PAPERCLIP_PUBLIC_URL: ${PAPERCLIP_PUBLIC_URL:-http://127.0.0.1:3100}");
     expect(runbook).toContain("npm run e2e");
     expect(runbook).not.toContain("--project chromium");
   });
 
   it("documents rollback of shell asset env along with image tags", () => {
     expect(runbook).toContain("Restore the previous `WF_WEB_APP_ENTRY_URL` and `WF_WEB_APP_STYLESHEET_URL`");
+  });
+
+  it("documents the next staged/live VPS proof sequence for secret lifecycle validation", () => {
+    expect(runbook).toContain("## Next VPS Proof Sequence");
+    expect(runbook).toContain("Register or refresh a tenant provider credential");
+    expect(runbook).toContain("wfpc.paperclip_company_mappings");
+    expect(runbook).toContain("Rotate the tenant credential");
+    expect(runbook).toContain("Revoke the tenant credential");
+    expect(runbook).toContain("GET/POST /api/companies/:companyId/secrets");
+    expect(runbook).toContain("POST /api/secrets/:secretId/rotate");
+    expect(runbook).toContain("PATCH /api/secrets/:secretId");
+    expect(runbook).toContain("PATCH /api/agents/:agentId");
   });
 });
 

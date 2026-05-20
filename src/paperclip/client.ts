@@ -29,7 +29,7 @@ export type PaperclipClientOptions = {
       workflowId: string;
       agentId: string;
       providerContext: readonly PaperclipRuntimeProviderContext[];
-    }): Promise<void>;
+    }): Promise<{ adapterConfig?: { env?: Record<string, { type: "secret_ref"; secretId: string; version: string }> } } | void>;
     pollIntervalMs?: number;
     maxPollAttempts?: number;
   };

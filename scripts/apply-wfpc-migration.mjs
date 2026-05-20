@@ -195,6 +195,20 @@ try {
   if (!paperclipSecretBindingReady) {
     await client.query(readFileSync("supabase/migrations/0011_paperclip_secret_bindings.sql", "utf8"));
   }
+  const paperclipSecretBindingVersionExisting = await client.query(
+    `select
+      exists (
+        select 1
+        from information_schema.columns
+        where table_schema = 'wfpc'
+          and table_name = 'paperclip_secret_bindings'
+          and column_name = 'paperclip_secret_version'
+      ) as has_version_column`
+  );
+  const paperclipSecretBindingVersionReady = Object.values(paperclipSecretBindingVersionExisting.rows[0] ?? {}).every(Boolean);
+  if (!paperclipSecretBindingVersionReady) {
+    await client.query(readFileSync("supabase/migrations/0012_paperclip_secret_binding_versions.sql", "utf8"));
+  }
   const { rows } = await client.query(
     "select table_schema, table_name from information_schema.tables where table_schema = 'wfpc' order by table_name"
   );
@@ -213,7 +227,8 @@ try {
           !storageSecretReady ||
           !storageConnectorTenantFkReady ||
           !runtimeSharedStateReady ||
-          !paperclipSecretBindingReady,
+          !paperclipSecretBindingReady ||
+          !paperclipSecretBindingVersionReady,
         tableCount: rows.length,
         tables: rows.map((row) => row.table_name)
       },

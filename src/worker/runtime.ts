@@ -20,6 +20,7 @@ import { createPostgresEncryptedVaultStore } from "../secrets/postgres-vault-sto
 import { createSecretService } from "../secrets/secret-service.js";
 import { processWorkflowJob } from "../workflows/worker.js";
 import { validateWorkflowQueuePayload } from "../workflows/queue.js";
+import { createAcidWorkflowStatusRecorder } from "../workflows/acid-status-recorder.js";
 import { createTenantExecutionGate } from "./tenant-execution-gate.js";
 
 export type WorkerEnv = ReturnType<typeof loadWorkerEnv>;
@@ -44,17 +45,24 @@ export function createWorkerRuntime(options: { env: WorkerEnv }) {
   const repositories = createSupabaseRepositories(queryClient);
   const paperclipSecretBindings = createPaperclipSecretBindingRepository(queryClient);
   const paperclipSecretSync =
-    options.env.paperclipAdminToken && options.env.paperclipLaunchMode === "issues"
+    options.env.paperclipBoardSessionToken && options.env.paperclipLaunchMode === "issues"
       ? createPaperclipSecretSyncService({
           adminClient: createPaperclipSecretAdminHttpClient({
             baseUrl: options.env.paperclipBaseUrl,
-            adminToken: options.env.paperclipAdminToken
+            adminToken: options.env.paperclipBoardSessionToken,
+            ...(options.env.paperclipBoardOrigin
+              ? {
+                  origin: options.env.paperclipBoardOrigin,
+                  referer: `${options.env.paperclipBoardOrigin.replace(/\/+$/, "")}/`
+                }
+              : {})
           }),
           bindings: paperclipSecretBindings
         })
       : null;
   const audit = createDurableAuditSink(queryClient);
   const acidRepository = createAcidGuardRepository(transactionRunner);
+  const recordWorkflowStatus = createAcidWorkflowStatusRecorder(acidRepository);
   const vault = createEncryptedSecretVault({
     masterKey: options.env.vaultMasterKey,
     store: createPostgresEncryptedVaultStore(queryClient)
@@ -90,6 +98,7 @@ export function createWorkerRuntime(options: { env: WorkerEnv }) {
             }),
             syncProviderSecretRefs: async ({ companyId, agentId, providerContext }) => {
               const tenantId = companyIdToTenantId.get(companyId) ?? "";
+              const env: Record<string, { type: "secret_ref"; secretId: string; version: string }> = {};
               for (const binding of providerContext) {
                 for (const bindingTarget of toPaperclipEnvBindings(binding.providerKind as ProviderKind, binding.secretValues ?? {})) {
                   if (!tenantId) {
@@ -106,9 +115,17 @@ export function createWorkerRuntime(options: { env: WorkerEnv }) {
                     if (!existing) {
                       throw new Error(`Missing Paperclip secret binding for ${binding.providerKind}:${bindingTarget.envKey}`);
                     }
+                    if (!existing.paperclipSecretVersion) {
+                      throw new Error(`Missing Paperclip secret version for ${binding.providerKind}:${bindingTarget.envKey}`);
+                    }
+                    env[bindingTarget.envKey] = {
+                      type: "secret_ref",
+                      secretId: existing.paperclipSecretId,
+                      version: existing.paperclipSecretVersion
+                    };
                     continue;
                   }
-                  await paperclipSecretSync.syncBinding({
+                  const syncedSecret = await paperclipSecretSync.syncBinding({
                     tenantId,
                     wealthFactorySecretReferenceId: await repositories.findSecretReferenceId({
                       tenantId,
@@ -119,10 +136,17 @@ export function createWorkerRuntime(options: { env: WorkerEnv }) {
                     paperclipEnvKey: bindingTarget.envKey,
                     providerKind: binding.providerKind as ProviderKind,
                     secretValue: bindingTarget.secretValue,
-                    paperclipSecretKey: bindingTarget.envKey
+                    paperclipSecretKey: bindingTarget.envKey,
+                    bindToAgent: false
                   });
+                  env[bindingTarget.envKey] = {
+                    type: "secret_ref",
+                    secretId: syncedSecret.paperclipSecretId,
+                    version: syncedSecret.paperclipSecretVersion
+                  };
                 }
               }
+              return Object.keys(env).length > 0 ? { adapterConfig: { env } } : undefined;
             },
             pollIntervalMs: options.env.paperclipIssuePollIntervalMs,
             maxPollAttempts: options.env.paperclipIssueMaxPollAttempts
@@ -167,7 +191,10 @@ export function createWorkerRuntime(options: { env: WorkerEnv }) {
                 providerBindings
               }),
             resolveDebugSharedProvider: async ({ requiredCapabilities = ["text_generation"] }) =>
-              debugFallbackResolver.resolveForRun({ requiredCapabilities })
+              debugFallbackResolver.resolveForRun({ requiredCapabilities }),
+            recordStatus: async (status) => {
+              await recordWorkflowStatus(status);
+            }
           })
       });
     },

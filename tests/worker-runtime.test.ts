@@ -31,7 +31,8 @@ vi.mock("../src/db/acid-guard-repository.js", () => ({
         secretRef: "wf_secret_bound",
         metadata: {}
       }
-    ])
+    ]),
+    transitionWorkflowRunStatus: vi.fn().mockResolvedValue({ transitioned: true, status: "queued" })
   }))
 }));
 
@@ -72,7 +73,11 @@ vi.mock("../src/paperclip/secret-sync.js", () => ({
   })),
   createPaperclipSecretAdminHttpClient: vi.fn(() => ({})),
   createPaperclipSecretSyncService: vi.fn(() => ({
-    syncBinding: vi.fn().mockResolvedValue(undefined)
+    syncBinding: vi.fn().mockResolvedValue({
+      paperclipSecretId: "pc-secret-1",
+      paperclipSecretKey: "OPENAI_API_KEY",
+      paperclipSecretVersion: "9"
+    })
   })),
   toPaperclipEnvBindings: vi.fn(() => [{ envKey: "OPENAI_API_KEY", secretValue: "sk-tenant" }])
 }));
@@ -102,6 +107,7 @@ describe("worker runtime", () => {
   });
 
   it("processes queue payloads through the bound-provider worker path", async () => {
+    const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
     const runtime = createWorkerRuntime({ env: loadWorkerEnv(validEnv) });
 
     await expect(
@@ -119,19 +125,28 @@ describe("worker runtime", () => {
       status: "queued"
     });
 
+    const acidRepository = vi.mocked(createAcidGuardRepository).mock.results[0]?.value;
+    expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      from: ["queued"],
+      to: "queued"
+    });
+
     await runtime.close();
   });
 
   it("wires the issue-launch adapter into the worker runtime when configured", async () => {
     const { createPaperclipClient } = await import("../src/paperclip/client.js");
-    const { createPaperclipSecretSyncService } = await import("../src/paperclip/secret-sync.js");
+    const { createPaperclipSecretAdminHttpClient, createPaperclipSecretSyncService } = await import("../src/paperclip/secret-sync.js");
 
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
         WF_PAPERCLIP_LAUNCH_MODE: "issues",
-        WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-1",
-        WF_PAPERCLIP_ADMIN_TOKEN: "admin-token"
+        WF_PAPERCLIP_BOARD_SESSION_TOKEN: "board-session-token",
+        WF_PAPERCLIP_BOARD_ORIGIN: "https://paperclip-board.internal.local/",
+        WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-1"
       })
     });
 
@@ -146,6 +161,12 @@ describe("worker runtime", () => {
         })
       })
     );
+    expect(createPaperclipSecretAdminHttpClient).toHaveBeenCalledWith({
+      baseUrl: "https://paperclip-internal.spyderbyte.cloud",
+      adminToken: "board-session-token",
+      origin: "https://paperclip-board.internal.local",
+      referer: "https://paperclip-board.internal.local/"
+    });
 
     await runtime.processQueuePayload({
       tenantId: "tenant-1",
@@ -158,7 +179,7 @@ describe("worker runtime", () => {
 
     const issueLaunch = vi.mocked(createPaperclipClient).mock.calls.at(-1)?.[0].issueLaunch;
     expect(issueLaunch).toBeDefined();
-    await issueLaunch?.syncProviderSecretRefs?.({
+    await expect(issueLaunch?.syncProviderSecretRefs?.({
       companyId: "pc-company-1",
       workflowId: "workflow-1",
       agentId: "agent-1",
@@ -172,6 +193,16 @@ describe("worker runtime", () => {
           secretValues: { apiKey: "sk-tenant" }
         }
       ]
+    })).resolves.toEqual({
+      adapterConfig: {
+        env: {
+          OPENAI_API_KEY: {
+            type: "secret_ref",
+            secretId: "pc-secret-1",
+            version: "9"
+          }
+        }
+      }
     });
 
     const syncService = vi.mocked(createPaperclipSecretSyncService).mock.results[0]?.value;
@@ -183,7 +214,8 @@ describe("worker runtime", () => {
       paperclipEnvKey: "OPENAI_API_KEY",
       providerKind: "openai_api",
       secretValue: "sk-tenant",
-      paperclipSecretKey: "OPENAI_API_KEY"
+      paperclipSecretKey: "OPENAI_API_KEY",
+      bindToAgent: false
     });
 
     await runtime.close();

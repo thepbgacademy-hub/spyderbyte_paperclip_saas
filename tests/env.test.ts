@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { EnvValidationError, loadEnv, loadWorkflowQueueEnv } from "../src/config/env.js";
+import { EnvValidationError, loadEnv, loadWorkflowQueueEnv, validatePaperclipLaunchEnv } from "../src/config/env.js";
 
 const validEnv = {
   NODE_ENV: "test",
@@ -73,20 +73,60 @@ describe("loadEnv", () => {
       loadEnv({
         ...validEnv,
         WF_PAPERCLIP_LAUNCH_MODE: "issues",
+        WF_PAPERCLIP_BOARD_SESSION_TOKEN: "board-session-cookie",
+        WF_PAPERCLIP_BOARD_ORIGIN: "https://paperclip-board.internal.local",
         WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-1",
         WF_PAPERCLIP_ISSUE_POLL_INTERVAL_MS: "1500",
         WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS: "12"
       })
     ).toMatchObject({
       paperclipLaunchMode: "issues",
+      paperclipBoardSessionToken: "board-session-cookie",
+      paperclipBoardOrigin: "https://paperclip-board.internal.local",
       paperclipIssueAgentId: "agent-1",
       paperclipIssuePollIntervalMs: 1500,
       paperclipIssueMaxPollAttempts: 12
     });
   });
 
+  it("preserves the legacy admin token separately from the board-session token", () => {
+    expect(
+      loadEnv({
+        ...validEnv,
+        WF_PAPERCLIP_ADMIN_TOKEN: "legacy-admin-token",
+        WF_PAPERCLIP_BOARD_ORIGIN: "https://paperclip-board.internal.local"
+      })
+    ).toMatchObject({
+      paperclipBoardOrigin: "https://paperclip-board.internal.local",
+      paperclipAdminToken: "legacy-admin-token"
+    });
+  });
+
+  it("requires an explicit board origin when the board session token is configured", () => {
+    expect(() => loadEnv({ ...validEnv, WF_PAPERCLIP_BOARD_SESSION_TOKEN: "board-session-cookie" })).toThrow(/WF_PAPERCLIP_BOARD_ORIGIN/);
+  });
+
   it("requires an agent id for issue-launch mode", () => {
     expect(() => loadEnv({ ...validEnv, WF_PAPERCLIP_LAUNCH_MODE: "issues" })).toThrow(/WF_PAPERCLIP_ISSUE_AGENT_ID/);
+  });
+
+  it("validates the issue-launch env seam without requiring the full app env set", () => {
+    expect(() =>
+      validatePaperclipLaunchEnv({
+        WF_PAPERCLIP_LAUNCH_MODE: "issues",
+        WF_PAPERCLIP_BOARD_SESSION_TOKEN: "board-session-cookie",
+        WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-1"
+      })
+    ).toThrow(/WF_PAPERCLIP_BOARD_ORIGIN/);
+
+    expect(() =>
+      validatePaperclipLaunchEnv({
+        WF_PAPERCLIP_LAUNCH_MODE: "issues",
+        WF_PAPERCLIP_BOARD_SESSION_TOKEN: "board-session-cookie",
+        WF_PAPERCLIP_BOARD_ORIGIN: "https://paperclip-board.internal.local",
+        WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-1"
+      })
+    ).not.toThrow();
   });
 
   it("accepts explicit worker concurrency settings", () => {

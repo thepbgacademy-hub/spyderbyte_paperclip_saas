@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  createPaperclipSecretAdminHttpClient,
   createPaperclipSecretBindingRepository,
+  createPaperclipSecretBoardSessionHttpClient,
   createPaperclipSecretProjectionService,
   createPaperclipSecretSyncService
 } from "../src/paperclip/secret-sync.js";
@@ -13,7 +15,8 @@ describe("paperclip secret sync", () => {
     const adminClient = {
       upsertSecret: vi.fn().mockResolvedValue({
         paperclipSecretId: "pc-secret-1",
-        paperclipSecretKey: "WF_OPENAI_API_KEY"
+        paperclipSecretKey: "WF_OPENAI_API_KEY",
+        paperclipSecretVersion: "3"
       }),
       bindAgentSecretRef: vi.fn().mockResolvedValue(undefined)
     };
@@ -33,7 +36,11 @@ describe("paperclip secret sync", () => {
         secretValue: "sk-tenant",
         paperclipSecretKey: "WF_OPENAI_API_KEY"
       })
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({
+      paperclipSecretId: "pc-secret-1",
+      paperclipSecretKey: "WF_OPENAI_API_KEY",
+      paperclipSecretVersion: "3"
+    });
 
     expect(adminClient.upsertSecret).toHaveBeenCalledWith({
       companyId: "company-1",
@@ -44,7 +51,8 @@ describe("paperclip secret sync", () => {
       companyId: "company-1",
       agentId: "agent-1",
       envKey: "WF_OPENAI_API_KEY",
-      paperclipSecretId: "pc-secret-1"
+      paperclipSecretId: "pc-secret-1",
+      paperclipSecretVersion: "3"
     });
     expect(String(query.mock.calls[0]?.[0])).toMatch(/insert into wfpc\.paperclip_secret_bindings/i);
   });
@@ -97,7 +105,7 @@ describe("paperclip secret sync", () => {
     expect(String(query.mock.calls[1]?.[0])).toMatch(/update wfpc\.paperclip_secret_bindings/i);
   });
 
-  it("projects registration, rotation, and revoke through the admin-lane projection service", async () => {
+  it("projects registration, rotation, and revoke through the board-session projection service", async () => {
     const bindings = {
       upsert: vi.fn().mockResolvedValue(undefined),
       revoke: vi.fn().mockResolvedValue(undefined),
@@ -150,7 +158,8 @@ describe("paperclip secret sync", () => {
     const adminClient = {
       upsertSecret: vi.fn().mockResolvedValue({
         paperclipSecretId: "pc-secret-1",
-        paperclipSecretKey: "OPENAI_API_KEY"
+        paperclipSecretKey: "OPENAI_API_KEY",
+        paperclipSecretVersion: "4"
       }),
       bindAgentSecretRef: vi.fn().mockResolvedValue(undefined),
       revokeSecretBinding: vi.fn().mockResolvedValue(undefined)
@@ -211,7 +220,8 @@ describe("paperclip secret sync", () => {
     const adminClient = {
       upsertSecret: vi.fn().mockResolvedValue({
         paperclipSecretId: "pc-secret-2",
-        paperclipSecretKey: "OPENAI_API_KEY"
+        paperclipSecretKey: "OPENAI_API_KEY",
+        paperclipSecretVersion: "7"
       }),
       bindAgentSecretRef: vi.fn().mockResolvedValue(undefined),
       revokeSecretBinding: vi.fn().mockResolvedValue(undefined)
@@ -240,12 +250,7 @@ describe("paperclip secret sync", () => {
       secretKey: "OPENAI_API_KEY",
       secretValue: "sk-next"
     });
-    expect(adminClient.bindAgentSecretRef).toHaveBeenCalledWith({
-      companyId: "company-1",
-      agentId: "agent-1",
-      envKey: "OPENAI_API_KEY",
-      paperclipSecretId: "pc-secret-2"
-    });
+    expect(adminClient.bindAgentSecretRef).not.toHaveBeenCalled();
   });
 
   it("treats missing company mappings as a local-safe no-op for projection hooks", async () => {
@@ -304,4 +309,311 @@ describe("paperclip secret sync", () => {
       }
     });
   });
+
+  it("uses the board-session company secret and agent patch routes", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createJsonResponse(200, [
+          {
+            id: "pc-secret-1",
+            key: "OPENAI_API_KEY"
+          }
+        ])
+      )
+      .mockResolvedValueOnce(createJsonResponse(200, { id: "pc-secret-1", key: "OPENAI_API_KEY" }))
+      .mockResolvedValueOnce(createJsonResponse(200, { id: "agent-1", adapterConfig: { env: {} } }))
+      .mockResolvedValueOnce(createJsonResponse(200, { ok: true }));
+    const client = createPaperclipSecretBoardSessionHttpClient({
+      baseUrl: "https://paperclip.internal.local/",
+      boardSessionCookie: "paperclip_board_session=abc123",
+      origin: "https://paperclip.internal.local",
+      referer: "https://paperclip.internal.local/board",
+      fetchImpl
+    });
+
+    await expect(
+      client.upsertSecret({
+        companyId: "company-1",
+        secretKey: "OPENAI_API_KEY",
+        secretValue: "sk-tenant"
+      })
+    ).resolves.toEqual({
+      paperclipSecretId: "pc-secret-1",
+      paperclipSecretKey: "OPENAI_API_KEY",
+      paperclipSecretVersion: "latest"
+    });
+    await expect(
+      client.bindAgentSecretRef({
+        companyId: "company-1",
+        agentId: "agent-1",
+        envKey: "OPENAI_API_KEY",
+        paperclipSecretId: "pc-secret-1"
+      })
+    ).resolves.toBeUndefined();
+
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      1,
+      "https://paperclip.internal.local/api/companies/company-1/secrets",
+      expect.objectContaining({
+        method: "GET",
+        headers: expect.objectContaining({
+          cookie: "paperclip_board_session=abc123",
+          origin: "https://paperclip.internal.local",
+          referer: "https://paperclip.internal.local/board"
+        })
+      })
+    );
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      2,
+      "https://paperclip.internal.local/api/secrets/pc-secret-1/rotate",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ value: "sk-tenant" })
+      })
+    );
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      4,
+      "https://paperclip.internal.local/api/agents/agent-1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          replaceAdapterConfig: true,
+          adapterConfig: {
+            env: {
+              OPENAI_API_KEY: {
+                type: "secret_ref",
+                secretId: "pc-secret-1",
+                version: "latest"
+              }
+            }
+          }
+        })
+      })
+    );
+  });
+
+  it("normalizes a raw board session token into the expected cookie header", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse(200, []))
+      .mockResolvedValueOnce(createJsonResponse(200, { id: "pc-secret-4", key: "OPENAI_API_KEY" }));
+    const client = createPaperclipSecretBoardSessionHttpClient({
+      baseUrl: "https://paperclip.internal.local/",
+      boardSessionCookie: "raw-session-token",
+      fetchImpl
+    });
+
+    await expect(
+      client.upsertSecret({
+        companyId: "company-1",
+        secretKey: "OPENAI_API_KEY",
+        secretValue: "sk-tenant"
+      })
+    ).resolves.toEqual({
+      paperclipSecretId: "pc-secret-4",
+      paperclipSecretKey: "OPENAI_API_KEY",
+      paperclipSecretVersion: "latest"
+    });
+
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      1,
+      "https://paperclip.internal.local/api/companies/company-1/secrets",
+      expect.objectContaining({
+        method: "GET",
+        headers: expect.objectContaining({
+          cookie: "paperclip-default.session_token=raw-session-token",
+          origin: "https://paperclip.internal.local",
+          referer: "https://paperclip.internal.local/"
+        })
+      })
+    );
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      2,
+      "https://paperclip.internal.local/api/companies/company-1/secrets",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          name: "OPENAI_API_KEY",
+          key: "openai_api_key",
+          value: "sk-tenant"
+        })
+      })
+    );
+  });
+
+  it("recovers from a create conflict by re-listing and rotating the existing company secret", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse(200, []))
+      .mockResolvedValueOnce(createJsonResponse(409, { error: "duplicate_secret_key" }))
+      .mockResolvedValueOnce(
+        createJsonResponse(200, [
+          {
+            id: "pc-secret-5",
+            key: "openai_api_key",
+            name: "OPENAI_API_KEY"
+          }
+        ])
+      )
+      .mockResolvedValueOnce(createJsonResponse(200, { id: "pc-secret-5", key: "openai_api_key" }));
+    const client = createPaperclipSecretBoardSessionHttpClient({
+      baseUrl: "https://paperclip.internal.local/",
+      boardSessionCookie: "raw-session-token",
+      fetchImpl
+    });
+
+    await expect(
+      client.upsertSecret({
+        companyId: "company-1",
+        secretKey: "OPENAI_API_KEY",
+        secretValue: "sk-tenant"
+      })
+    ).resolves.toEqual({
+      paperclipSecretId: "pc-secret-5",
+      paperclipSecretKey: "openai_api_key",
+      paperclipSecretVersion: "latest"
+    });
+
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      2,
+      "https://paperclip.internal.local/api/companies/company-1/secrets",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          name: "OPENAI_API_KEY",
+          key: "openai_api_key",
+          value: "sk-tenant"
+        })
+      })
+    );
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      3,
+      "https://paperclip.internal.local/api/companies/company-1/secrets",
+      expect.objectContaining({
+        method: "GET"
+      })
+    );
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      4,
+      "https://paperclip.internal.local/api/secrets/pc-secret-5/rotate",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ value: "sk-tenant" })
+      })
+    );
+  });
+
+  it("disables the secret and removes the matching env ref on revoke", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createJsonResponse(200, {
+          id: "agent-1",
+          adapterConfig: {
+            env: {
+              OPENAI_API_KEY: {
+                type: "secret_ref",
+                secretId: "pc-secret-1",
+                version: "latest"
+              },
+              OTHER_KEY: {
+                type: "secret_ref",
+                secretId: "pc-secret-2",
+                version: "latest"
+              }
+            }
+          }
+        })
+      )
+      .mockResolvedValueOnce(createJsonResponse(200, { ok: true }))
+      .mockResolvedValueOnce(createJsonResponse(200, { id: "pc-secret-1", status: "disabled" }));
+    const client = createPaperclipSecretBoardSessionHttpClient({
+      baseUrl: "https://paperclip.internal.local/",
+      boardSessionCookie: "paperclip_board_session=abc123",
+      fetchImpl
+    });
+
+    await expect(
+      client.revokeSecretBinding?.({
+        companyId: "company-1",
+        agentId: "agent-1",
+        envKey: "OPENAI_API_KEY",
+        paperclipSecretId: "pc-secret-1"
+      })
+    ).resolves.toBeUndefined();
+
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      2,
+      "https://paperclip.internal.local/api/agents/agent-1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          replaceAdapterConfig: true,
+          adapterConfig: {
+            env: {
+              OTHER_KEY: {
+                type: "secret_ref",
+                secretId: "pc-secret-2",
+                version: "latest"
+              }
+            }
+          }
+        })
+      })
+    );
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      3,
+      "https://paperclip.internal.local/api/secrets/pc-secret-1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ status: "disabled" })
+      })
+    );
+  });
+
+  it("keeps the deprecated admin client wrapper compatible by forwarding to the board-session contract", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse(200, []))
+      .mockResolvedValueOnce(createJsonResponse(200, { id: "pc-secret-3", key: "OPENAI_API_KEY" }));
+    const client = createPaperclipSecretAdminHttpClient({
+      baseUrl: "https://paperclip.internal.local/",
+      adminToken: "paperclip_board_session=legacy_cookie",
+      fetchImpl
+    });
+
+    await expect(
+      client.upsertSecret({
+        companyId: "company-1",
+        secretKey: "OPENAI_API_KEY",
+        secretValue: "sk-tenant"
+      })
+    ).resolves.toEqual({
+      paperclipSecretId: "pc-secret-3",
+      paperclipSecretKey: "OPENAI_API_KEY",
+      paperclipSecretVersion: "latest"
+    });
+
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      1,
+      "https://paperclip.internal.local/api/companies/company-1/secrets",
+      expect.objectContaining({
+        method: "GET",
+        headers: expect.objectContaining({
+          cookie: "paperclip_board_session=legacy_cookie",
+          origin: "https://paperclip.internal.local",
+          referer: "https://paperclip.internal.local/"
+        })
+      })
+    );
+  });
 });
+
+function createJsonResponse(status: number, body: unknown): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: vi.fn().mockResolvedValue(body)
+  } as unknown as Response;
+}

@@ -32,7 +32,7 @@ describe("paperclip issue launch adapter", () => {
       })
     ).resolves.toEqual({
       paperclipRunId: "hb-run-1",
-      status: "queued"
+      status: "running"
     });
 
     expect(fetchImpl).toHaveBeenNthCalledWith(
@@ -72,6 +72,39 @@ describe("paperclip issue launch adapter", () => {
         providerContext: []
       })
     ).rejects.toBeInstanceOf(PaperclipIssueLaunchError);
+  });
+
+  it("retries transient fetch failures while polling the issue run link", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ id: "WEA-21" }))
+      .mockRejectedValueOnce(new TypeError("fetch failed"))
+      .mockResolvedValueOnce(jsonResponse({ id: "WEA-21", executionRunId: "hb-run-2" }));
+
+    const adapter = createPaperclipIssueLaunchAdapter({
+      baseUrl: "https://paperclip.internal.local",
+      serviceToken: "pc-token",
+      fetchImpl,
+      pollIntervalMs: 0,
+      maxPollAttempts: 2,
+      requestRetryAttempts: 2,
+      requestRetryDelayMs: 0,
+      resolveLaunchTarget: vi.fn().mockResolvedValue({
+        agentId: "agent-1"
+      })
+    });
+
+    await expect(
+      adapter.launch({
+        companyId: "company-1",
+        workflowId: "workflow-1",
+        spyderbyteRunId: "run-1",
+        providerContext: []
+      })
+    ).resolves.toEqual({
+      paperclipRunId: "hb-run-2",
+      status: "running"
+    });
   });
 });
 

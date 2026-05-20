@@ -22,18 +22,29 @@ Set these on the VPS as root-owned environment files or deployment secrets. Do n
 - `SUPABASE_DB_URL`
 - `SUPABASE_DB_SSL`
 - `PAPERCLIP_SERVICE_TOKEN`
+- `WF_PAPERCLIP_LAUNCH_MODE` set to `issues` for the staged/live Paperclip board-session proof, otherwise leave the default `runs`
+- `WF_PAPERCLIP_BOARD_SESSION_TOKEN` required when verifying Paperclip secret projection, rotation, and revoke against the installed board session routes
+- `WF_PAPERCLIP_BOARD_ORIGIN` required with the board session token so trusted `Origin` / `Referer` headers match the Paperclip board host; use it for request headers, not as a replacement for the internal `PAPERCLIP_BASE_URL`
+- `WF_PAPERCLIP_ADMIN_TOKEN` is deprecated for this issue-launch secret-projection path and should not be treated as a bearer-token compatibility lane
+- `WF_PAPERCLIP_ISSUE_AGENT_ID` required when `WF_PAPERCLIP_LAUNCH_MODE=issues`
+- `WF_PAPERCLIP_ISSUE_POLL_INTERVAL_MS` optional override for issue-launch run polling
+- `WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS` optional override for issue-launch run polling
+- `WF_PROVIDER_EXECUTION_MODE` optional, defaults to `tenant_credentials_required`
+- `WF_WORKER_CONCURRENCY` optional, defaults to `2`
+- `WF_WORKER_MAX_ACTIVE_PER_TENANT` optional, defaults to `1`
 - `WF_ALLOWED_ORIGINS`
 - `WF_API_SESSION_SIGNING_KEY`
 - `WF_API_SESSION_ISSUER`
 - `WF_API_SESSION_AUDIENCE`
 - `WF_VAULT_MASTER_KEY`
-- `WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID` optional but recommended for worker readiness because it lets the worker healthcheck prove the Paperclip bearer token can reach an authenticated company route on the installed Paperclip build
+- `WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID` optional but recommended for worker readiness because it lets the worker healthcheck prove the Paperclip service token can reach an authenticated company route on the installed Paperclip build
 - this probe is intentionally narrow: it proves authenticated company-scoped API access, not full Wealth Factory launch-contract readiness
 - `WF_WEB_APP_ENTRY_URL`
 - `WF_WEB_APP_STYLESHEET_URL` if emitted by `npm run resolve:web-assets`
 - `WF_PORTAL_SESSION_COOKIE_NAME`
 - `SPYDERBYTE_IMAGE_TAG`
 - `PAPERCLIP_IMAGE_TAG`
+- `PAPERCLIP_PUBLIC_URL` optional, defaults to `http://127.0.0.1:3100` for the private-only container topology
 
 Tenant OpenAI and generic provider keys remain BYOK runtime secrets stored by reference. They must not be baked into Docker images, browser bundles, Compose files, or Redis jobs.
 
@@ -53,7 +64,20 @@ Current POC auth note:
 4. Set `SPYDERBYTE_IMAGE_TAG` to the selected commit tag and `PAPERCLIP_IMAGE_TAG` to a reviewed version or digest-backed tag.
 5. Set `WF_ALLOWED_ORIGINS` to the exact customer portal origin or comma-separated allowed origins. Do not use wildcard origins for authenticated routes.
 6. Load the required server-side secrets into the shell or an `.env` file readable only by the deploy user.
-7. Build the frontend assets and resolve the API-shell asset URLs:
+7. For the staged/live Paperclip proof lane, explicitly set:
+
+```powershell
+$env:WF_PAPERCLIP_LAUNCH_MODE="issues"
+$env:WF_PAPERCLIP_BOARD_SESSION_TOKEN="<paperclip-board-session-token>"
+$env:WF_PAPERCLIP_BOARD_ORIGIN="https://paperclip-gwry.srv1605805.hstgr.cloud"
+$env:WF_PAPERCLIP_ISSUE_AGENT_ID="<paperclip-issue-agent-id>"
+```
+
+Keep `PAPERCLIP_BASE_URL` pointed at the internal Paperclip service (`http://paperclip:3100` or equivalent private network target). `WF_PAPERCLIP_BOARD_ORIGIN` exists only so the board-session routes receive the expected trusted `Origin` / `Referer` headers.
+
+Leave `WF_PAPERCLIP_BOARD_SESSION_TOKEN` unset outside the board-session proof path so normal `/runs` deployments do not accidentally depend on board-scoped Paperclip credentials. Do not rely on `WF_PAPERCLIP_ADMIN_TOKEN` as a bearer-token fallback for this path.
+
+8. Build the frontend assets and resolve the API-shell asset URLs:
 
 ```powershell
 npm run build:web
@@ -79,9 +103,12 @@ Image build note:
 - `spyderbyte/api` must start `dist/api/server-main.js`
 - `spyderbyte/worker` must start `dist/worker/worker-main.js`
 - the worker image now includes a container healthcheck that verifies both Redis reachability and Paperclip health before the rollout should be treated as green
-- when `WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID` is set, the worker healthcheck also verifies that the configured Paperclip bearer token is not rejected by an authenticated company-scoped route
+- when `WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID` is set, the worker healthcheck also verifies that the configured Paperclip service token is not rejected by an authenticated company-scoped route
 - on the current Paperclip install, that authenticated probe route is `GET /api/companies/:companyId/agents`
 - treat that as an auth/readiness floor only; it does not prove the current token can execute the final Wealth Factory launch flow
+- the checked-in deploy compose now targets the installed Paperclip internal port and health route at `http://paperclip:3100/api/health`
+- for staged/live issue-launch proof, the deployed API and worker must both receive `WF_PAPERCLIP_LAUNCH_MODE`, `WF_PAPERCLIP_BOARD_SESSION_TOKEN`, `WF_PAPERCLIP_BOARD_ORIGIN`, and `WF_PAPERCLIP_ISSUE_AGENT_ID` so registration, rotation, revoke, and worker-side secret sync all use the same board-session contract
+- for that proof path specifically, keep `PAPERCLIP_BASE_URL` on the internal/private service and use `WF_PAPERCLIP_BOARD_ORIGIN` only for trusted board headers
 - do not reuse the API image for the worker unless its entrypoint is explicitly overridden to `node dist/worker/worker-main.js`
 
 ## Smoke Tests
@@ -93,18 +120,18 @@ npm run smoke:external
 curl.exe -I https://www.spyderbyte.cloud
 curl.exe -I https://api.spyderbyte.cloud/health
 curl.exe -I https://api.spyderbyte.cloud/app-assets/
-curl.exe --connect-timeout 5 http://<vps-public-ip>:9000/health
+curl.exe --connect-timeout 5 http://<vps-public-ip>:3100/api/health
 Test-NetConnection www.spyderbyte.cloud -Port 6379
 Test-NetConnection api.spyderbyte.cloud -Port 80
 Test-NetConnection api.spyderbyte.cloud -Port 443
-Test-NetConnection api.spyderbyte.cloud -Port 9000
+Test-NetConnection api.spyderbyte.cloud -Port 3100
 Test-NetConnection api.spyderbyte.cloud -Port 6379
 ```
 
 From the VPS:
 
 ```powershell
-docker compose -f deploy/docker-compose.yml port paperclip 9000
+docker compose -f deploy/docker-compose.yml port paperclip 3100
 docker compose -f deploy/docker-compose.yml port redis 6379
 ```
 
@@ -115,10 +142,10 @@ Expected:
 - API health returns HTTP 200 with SpyderByte-safe health output.
 - API shell assets are reachable only through the intended `/app-assets/` reverse-proxy path.
 - API responses include only Wealth Factory-safe health fields.
-- Public port 9000 is closed or unreachable from outside the VPS.
+- Public port 3100 is closed or unreachable from outside the VPS.
 - Redis port is closed externally.
 - Only 80 and 443 are externally reachable on the API host.
-- `docker compose port paperclip 9000` prints no host binding.
+- `docker compose port paperclip 3100` prints no host binding.
 - `docker compose port redis 6379` prints no host binding.
 
 Run CORS checks from outside the VPS:
@@ -217,6 +244,10 @@ Current live rollout implication:
 - it is a runtime/image alignment step: the live API container needs the queue
   and Paperclip env, and the worker needs to be deployed from the repo's worker
   entrypoint
+- for board-session proof specifically, ensure both services are restarted with
+  `WF_PAPERCLIP_LAUNCH_MODE=issues`, `WF_PAPERCLIP_BOARD_SESSION_TOKEN`,
+  `WF_PAPERCLIP_BOARD_ORIGIN`, and `WF_PAPERCLIP_ISSUE_AGENT_ID` populated
+  before testing register, rotate, and revoke behavior
 
 Current staged-runtime finding on 2026-05-19:
 
@@ -233,7 +264,20 @@ Current staged-runtime finding on 2026-05-19:
   - a staged adapter experiment proved company-token issue creation succeeds through `POST /api/companies/:companyId/issues`
   - that same staged experiment showed `POST /api/issues/:id/checkout` still returns `401` when called headlessly with the company bearer token and explicit agent id
   - that strongly suggests the installed Paperclip build treats checkout as an interactive/local-agent claim flow rather than a server-safe headless execution endpoint
-  - the checked-in repo still keeps the previous BYOK-preserving `/runs` adapter behavior until a supported headless Paperclip execution/auth contract is identified for Wealth Factory
+- the checked-in repo still keeps the previous BYOK-preserving `/runs` adapter behavior until a supported headless Paperclip execution/auth contract is identified for Wealth Factory
+
+Current staged-runtime finding on 2026-05-20:
+
+- the stage lane was rebuilt with version-pinned Paperclip secret binding support
+- the stage database now carries `wfpc.paperclip_secret_bindings.paperclip_secret_version`
+- the worker issue-launch path now syncs Paperclip secrets per run and injects issue-scoped `assigneeAdapterOverrides.adapterConfig.env` using explicit `secret_ref { secretId, version }`
+- the worker no longer falls back to Paperclip `version: "latest"` when reusing an existing binding for workflow launch; missing versions now fail closed
+- a fresh staged proof run (`040f4776-7636-4d08-9678-dc6b17ed1378`) confirmed:
+  - run reservation succeeds
+  - durable outbox status becomes `enqueued`
+  - BullMQ job becomes reachable and completes
+  - `wfpc.workflow_runs.status` advances to `running`
+  - bound provider context remains attached to the run
 
 Current Paperclip contract findings on 2026-05-19:
 
@@ -256,8 +300,18 @@ Current Paperclip contract findings on 2026-05-19:
   - a naive `secret_ref` issue override failed in the current company-token lane, and Paperclip secret creation from the company token returned `403 Board access required`
 - current implication for Wealth Factory:
   - do not switch the checked-in adapter yet
-  - the installed Paperclip build now looks capable of deterministic issue-launch plus run-id polling, and the repo now assumes admin-lane secret projection via `WF_PAPERCLIP_ADMIN_TOKEN` plus `WF_PAPERCLIP_ISSUE_AGENT_ID`
-  - before commercial BYOK traffic relies on that path, verify the installed Paperclip build accepts the expected `/api/admin/...` secret-provisioning routes with the configured admin token
+  - the installed Paperclip build now looks capable of deterministic issue-launch plus run-id polling, and the repo now assumes board-session secret projection via `WF_PAPERCLIP_BOARD_SESSION_TOKEN`, trusted `WF_PAPERCLIP_BOARD_ORIGIN` request headers, and `WF_PAPERCLIP_ISSUE_AGENT_ID`
+  - the live VPS contract no longer uses `/api/admin/...` bearer routes for secret lifecycle work; it now depends on the trusted board session routes `GET/POST /api/companies/:companyId/secrets`, `POST /api/secrets/:secretId/rotate`, `PATCH /api/secrets/:secretId`, and `PATCH /api/agents/:agentId`
+
+## Next VPS Proof Sequence
+
+After the stage/live containers are running with the issue-launch board-session env, verify the lifecycle end to end in this order:
+
+1. Register or refresh a tenant provider credential and confirm the API logs an audited projection attempt without breaking local registration if the Paperclip mapping is absent.
+2. Seed or confirm the matching `wfpc.paperclip_company_mappings` row, then repeat registration and confirm a Paperclip secret binding is created for the configured issue agent.
+3. Queue a real run and confirm the worker reuses the same board-session binding contract during issue-launch secret sync.
+4. Rotate the tenant credential and confirm a first-time or replacement binding is refreshed remotely without exposing raw secret values in the launch payload.
+5. Revoke the tenant credential and confirm future runs fail closed while the Paperclip binding cleanup path is attempted and audited.
 
 Do not treat a public Paperclip target as release-safe. Before commercial rollout, remove the host port publish and public router so Paperclip is reachable only from the Wealth Factory API and worker containers.
 
@@ -267,7 +321,7 @@ Last checked from outside the VPS on 2026-05-15:
 
 - PASS: `www.spyderbyte.cloud` and `api.spyderbyte.cloud` resolve to `187.77.19.83`.
 - PASS: Public ports `80` and `443` are reachable.
-- PASS: Redis `6379`, Paperclip `9000`, app/dev ports `3000`, `5173`, API direct ports `8080`, `8081`, and Docker daemon `2375` were not reachable.
+- PASS: Redis `6379`, Paperclip `3100`, app/dev ports `3000`, `5173`, API direct ports `8080`, `8081`, and Docker daemon `2375` were not reachable.
 - PASS: `https://api.spyderbyte.cloud/health` returns `200 {"status":"ok","service":"wealth_factory_api"}`.
 - PASS: `https://api.spyderbyte.cloud/api/dashboard` now rejects unauthenticated requests with `401`, rejects untrusted origins with `403`, and returns tenant-scoped Wealth Factory data when called with a valid signed runtime session token from an allowed origin.
 - PASS: `npm run e2e:live` now verifies the deployed unauthenticated browser-navigation contract against `https://api.spyderbyte.cloud`, and the optional authenticated-shell check skips cleanly when no deploy-safe session cookie is supplied.
@@ -286,7 +340,7 @@ Use this sequence when other work in progress may still depend on currently expo
 
 ```bash
 sudo docker ps --format 'table {{.Names}}\t{{.Ports}}'
-sudo ss -tulpn | egrep '(:80|:443|:5432|:6543|:8000|:8443|:9000|:8080|:8081)'
+sudo ss -tulpn | egrep '(:80|:443|:3100|:5432|:6543|:8000|:8443|:8080|:8081)'
 curl -i https://api.spyderbyte.cloud/
 curl -i -H 'Origin: https://www.spyderbyte.cloud' https://api.spyderbyte.cloud/api/dashboard
 ```

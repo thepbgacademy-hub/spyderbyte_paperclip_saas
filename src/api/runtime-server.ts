@@ -107,14 +107,21 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
     store: createPostgresEncryptedVaultStore(queryClient)
   });
   const paperclipSecretBindings = createPaperclipSecretBindingRepository(queryClient);
+  const paperclipBoardSessionToken = options.env.runtimeEnv.WF_PAPERCLIP_BOARD_SESSION_TOKEN;
   const paperclipProjection =
-    options.env.runtimeEnv.WF_PAPERCLIP_ADMIN_TOKEN &&
+    paperclipBoardSessionToken &&
     options.env.runtimeEnv.WF_PAPERCLIP_ISSUE_AGENT_ID &&
     options.env.runtimeEnv.PAPERCLIP_BASE_URL
       ? createPaperclipSecretProjectionService({
           adminClient: createPaperclipSecretAdminHttpClient({
             baseUrl: options.env.runtimeEnv.PAPERCLIP_BASE_URL,
-            adminToken: options.env.runtimeEnv.WF_PAPERCLIP_ADMIN_TOKEN
+            adminToken: paperclipBoardSessionToken,
+            ...(options.env.runtimeEnv.WF_PAPERCLIP_BOARD_ORIGIN
+              ? {
+                  origin: options.env.runtimeEnv.WF_PAPERCLIP_BOARD_ORIGIN,
+                  referer: `${options.env.runtimeEnv.WF_PAPERCLIP_BOARD_ORIGIN.replace(/\/+$/, "")}/`
+                }
+              : {})
           }),
           bindings: paperclipSecretBindings,
           resolveCompanyMapping: async ({ tenantId }) => repositories.resolvePaperclipCompanyMapping({ tenantId }),

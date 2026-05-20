@@ -332,6 +332,13 @@ If Wealth Factory rotates a tenant secret while a run is queued or active:
 - new runs should use the latest synced secret binding
 - active runs should not silently drift mid-execution
 
+Current repo/stage resolution on 2026-05-20:
+
+- `wfpc.paperclip_secret_bindings` now persists `paperclip_secret_version`
+- issue-launch runtime sync now returns issue-scoped `assigneeAdapterOverrides.adapterConfig.env`
+- those launch overrides use explicit `secret_ref { secretId, version }` values instead of mutable `version: "latest"` semantics
+- when the worker must reuse an existing Paperclip binding for launch and no concrete version is stored, the launch now fails closed instead of silently drifting to the newest remote secret version
+
 ### 4. Subscription Auth Lane
 
 `openai_chatgpt_codex_subscription` does not map cleanly to a normal API-key env var.
@@ -376,7 +383,7 @@ Primary files:
 
 ## Immediate Conclusion
 
-The current Paperclip install is capable of supporting the Wealth Factory BYOK design, but not through the legacy `/runs` contract alone. The checked-in boundary now strips raw launch secrets, and the repo now has the larger issue-launch plus synchronized `secret_ref` runtime-binding seams for registration, rotation, revoke, and worker launch refresh. The next step is live VPS verification that the installed Paperclip admin routes and token scope match the repo’s admin-lane assumptions.
+The current Paperclip install is capable of supporting the Wealth Factory BYOK design, but not through the legacy `/runs` contract alone. The checked-in boundary now strips raw launch secrets, and the repo now has the larger issue-launch plus synchronized `secret_ref` runtime-binding seams for registration, rotation, revoke, and worker launch refresh. The next step is live VPS verification that the installed Paperclip board-session routes and cookie scope match the repo's board-session assumptions.
 
 The secure direction is:
 
