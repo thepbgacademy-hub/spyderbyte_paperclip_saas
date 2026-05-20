@@ -6,11 +6,11 @@ Date: 2026-05-19
 
 This document maps the current Wealth Factory BYOK runtime model to the secure Paperclip runtime model that was proven on the VPS on 2026-05-19.
 
-The repo currently assumes Wealth Factory:
+The repo historically assumed Wealth Factory:
 
 - resolves the tenant provider connection
 - hydrates vault-backed `secretValues` in the worker
-- forwards those raw values to Paperclip per run
+- forwarded those raw values to Paperclip per run
 
 That model is represented in:
 
@@ -29,6 +29,8 @@ The live VPS discovery proved a different secure Paperclip contract:
 - plain issue-level env overrides are not safe for tenant secrets because they are persisted on the issue object
 
 That means the secure production path should move away from passing tenant `secretValues` into Paperclip issue launches and toward pre-provisioned Paperclip secret references bound to the target agent/runtime config.
+
+As of the checked-in hardening on 2026-05-19, the `/runs` launch boundary no longer forwards raw `secretValues` upstream. Wealth Factory may still hydrate secrets internally for run-bound validation or debug fallback policy, but the serialized Paperclip launch payload is now limited to safe `providerContext` fields such as capability, provider kind, label, `secretRef`, and metadata.
 
 ## Current Repo Model
 
@@ -50,11 +52,11 @@ Code points:
 
 ### Current Paperclip Assumption
 
-The checked-in Paperclip client still assumes a legacy launch contract:
+The checked-in Paperclip client still targets a legacy `/runs` launch route:
 
 - `POST /api/companies/:companyId/runs`
 - payload may include `providerContext`
-- `providerContext` may include raw `secretValues`
+- `providerContext` is now sanitized before serialization and no longer carries raw `secretValues`
 
 That is no longer aligned with the installed Paperclip build.
 
@@ -220,7 +222,7 @@ The launch contract should not include plain tenant secret values.
 Recommended future shape:
 
 - retain provider label/kind/capability for Wealth Factory audit/usefulness
-- remove or deprecate raw `secretValues` for Paperclip launch
+- keep raw `secretValues` out of the checked-in Paperclip launch payload
 - optionally include a safe Paperclip binding selector or alias if needed, but only if it does not expose tenant secret handles to customer-visible paths
 
 ### 5. Add Secret-Sync Idempotency
@@ -368,13 +370,13 @@ Primary files:
 3. Add a design-level Paperclip secret sync record in the app DB.
 4. Add a repo-side Paperclip secret sync service abstraction with mocked tests.
 5. Add a repo-side issue-launch adapter abstraction with mocked tests.
-6. Refactor `providerContext` so launch code no longer depends on raw `secretValues`.
+6. Preserve the new launch-boundary sanitizer so launch code continues to avoid raw `secretValues`, then continue the bigger issue-launch and secret-sync cutover.
 7. Keep current Wealth Factory vault hydration for debug fallback only until the new sync path is fully proven.
 8. Add cross-tenant, rotate/revoke, multi-capability, and no-plain-secret-on-issue tests before cutting over the live launch path.
 
 ## Immediate Conclusion
 
-The current Paperclip install is capable of supporting the Wealth Factory BYOK design, but not through the currently checked-in `/runs` plus raw `secretValues` contract.
+The current Paperclip install is capable of supporting the Wealth Factory BYOK design, but not through the legacy `/runs` contract alone. The checked-in boundary now strips raw launch secrets, and the next step is the larger issue-launch plus synchronized `secret_ref` runtime-binding cutover.
 
 The secure direction is:
 

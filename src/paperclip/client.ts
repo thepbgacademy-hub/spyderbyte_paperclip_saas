@@ -1,11 +1,12 @@
-import type {
-  CancelPaperclipRunInput,
-  CreatePaperclipRunInput,
-  GetPaperclipRunStatusInput,
-  PaperclipClient,
-  PaperclipHealth,
-  PaperclipRunReference,
-  PaperclipRunStatus
+import {
+  toPaperclipProviderContext,
+  type CancelPaperclipRunInput,
+  type CreatePaperclipRunInput,
+  type GetPaperclipRunStatusInput,
+  type PaperclipClient,
+  type PaperclipHealth,
+  type PaperclipRunReference,
+  type PaperclipRunStatus
 } from "./types.js";
 
 type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
@@ -66,7 +67,7 @@ export function createPaperclipClient(options: PaperclipClientOptions): Papercli
         body: JSON.stringify({
           workflowId: input.workflowId,
           externalRunId: input.spyderbyteRunId,
-          ...(input.providerContext ? { providerContext: input.providerContext } : {})
+          ...(input.providerContext ? { providerContext: toPaperclipProviderContext(input.providerContext) } : {})
         })
       });
 

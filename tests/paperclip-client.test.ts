@@ -70,7 +70,7 @@ describe("createPaperclipClient", () => {
     });
   });
 
-  it("forwards resolved provider execution context to the Paperclip run payload", async () => {
+  it("forwards only sanitized provider context to the Paperclip run payload", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       jsonResponse({
         id: "pc-run-1",
@@ -94,8 +94,7 @@ describe("createPaperclipClient", () => {
             providerKind: "openai_api",
             label: "Primary OpenAI",
             secretRef: "wf_secret_openai",
-            metadata: { projectId: "proj_123" },
-            secretValues: { apiKey: "sk-openai-secret" }
+            metadata: { projectId: "proj_123" }
           }
         ]
       })
@@ -119,8 +118,7 @@ describe("createPaperclipClient", () => {
             providerKind: "openai_api",
             label: "Primary OpenAI",
             secretRef: "wf_secret_openai",
-            metadata: { projectId: "proj_123" },
-            secretValues: { apiKey: "sk-openai-secret" }
+            metadata: { projectId: "proj_123" }
           }
         ]
       })

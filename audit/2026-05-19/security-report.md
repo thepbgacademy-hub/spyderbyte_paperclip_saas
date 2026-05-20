@@ -13,20 +13,20 @@
 
 This review was performed using the exact local `security-scanner` and `secret-scanner` skill workflows requested for this session. The codebase shows solid tenant-boundary intent: SQL access is parameterized, queue payloads are scrubbed for secret-like values, customer-facing responses are aggressively filtered for internal fields, and the encrypted vault uses authenticated encryption rather than weak custom crypto. Dependency hygiene is also currently clean: `package-lock.json` is present and `npm audit --omit=dev --json` reported zero known production vulnerabilities at scan time on May 19, 2026.
 
-The main remaining risks are architectural and operational rather than low-level coding flaws. The signed runtime session-token hardening landed during this phase, so the old shared static bearer-token finding is now resolved in the working tree. The most important remaining issue is that the checked-in Paperclip launch contract still allows hydrated `secretValues` to be forwarded upstream, which conflicts with the more secure `secret_ref` direction already documented elsewhere in the repo. Auditability also remains incomplete because secret lifecycle and runtime access events are still composed with no-op audit sinks in the API and worker runtimes.
+The main remaining risks are architectural and operational rather than low-level coding flaws. The signed runtime session-token hardening landed during this phase, and the checked-in Paperclip `/runs` launch path now strips hydrated `secretValues` before any upstream request body is serialized. The main unresolved issues are now the missing durable audit sinks around secret lifecycle/runtime access, process-local OAuth and rate-limit state, and the larger Paperclip issue-launch plus `secret_ref` sync cutover that still needs implementation. Auditability remains incomplete because secret lifecycle and runtime access events are still composed with no-op audit sinks in the API and worker runtimes.
 
 The repository did not show confirmed live secrets in tracked files or in the targeted git history scan. The main secret-handling concern inside the workspace is local-only material outside tracked git scope: an untracked `.env` and an untracked `sudo_deploy.txt` remain present and should continue to be treated as sensitive workstation-only files.
 
-**Overall Risk Score:** 19 (Moderate Risk)
+**Overall Risk Score:** 12 (Moderate Risk)
 
 | Severity | Count |
 |----------|-------|
 | Critical | 0   |
-| High     | 1   |
+| High     | 0   |
 | Medium   | 2   |
 | Low      | 2   |
 | Info     | 0   |
-| **Total**| **5** |
+| **Total**| **4** |
 
 ---
 
@@ -89,57 +89,7 @@ No issues identified. Checked: parameterized SQL usage in `src/db/acid-guard-rep
 
 ### A06:2025 - Insecure Design
 
-#### [HIGH] Paperclip launch contract still allows raw provider secret values to be forwarded upstream
-- **File:** `src/paperclip/types.ts`
-- **Line(s):** 11-18
-- **CWE:** CWE-201: Insertion of Sensitive Information Into Sent Data
-- **Description:** The checked-in launch contract still models `providerContext.secretValues` as a legal payload field. The live worker path hydrates tenant provider secrets just-in-time, and the Paperclip client then forwards the resulting `providerContext` body upstream. Even if this is currently intended only for a private integration lane, it keeps a raw-secret transport path alive in application code and conflicts with the safer `secret_ref`-based design already documented for production BYOK.
-- **Evidence:**
-  ```ts
-  export type CreatePaperclipRunInput = {
-    companyId: string;
-    workflowId: string;
-    spyderbyteRunId: string;
-    providerContext?: readonly {
-      capability: string;
-      providerKind: string;
-      label: string;
-      secretRef: string;
-      metadata: Record<string, unknown>;
-      secretValues?: Record<string, string>;
-    }[];
-  };
-  ```
-- **File:** `src/paperclip/client.ts`
-- **Line(s):** 63-70
-- **Evidence:**
-  ```ts
-  const body = await request(`/api/companies/${encodeURIComponent(input.companyId)}/runs`, {
-    method: "POST",
-    body: JSON.stringify({
-      workflowId: input.workflowId,
-      externalRunId: input.spyderbyteRunId,
-      ...(input.providerContext ? { providerContext: input.providerContext } : {})
-    })
-  });
-  ```
-- **Recommendation:**
-  ```ts
-  export type CreatePaperclipRunInput = {
-    companyId: string;
-    workflowId: string;
-    spyderbyteRunId: string;
-    providerContext?: readonly {
-      capability: string;
-      providerKind: string;
-      label: string;
-      secretRef: string;
-      metadata: Record<string, unknown>;
-      paperclipBindingId?: string;
-    }[];
-  };
-  ```
-  Move production execution to pre-provisioned Paperclip-managed secret bindings and remove raw `secretValues` from the upstream launch contract.
+No current issue identified in the checked-in `/runs` launch boundary. The working tree now strips hydrated `secretValues` before `providerContext` reaches the serialized Paperclip request body in `src/paperclip/types.ts`, `src/paperclip/client.ts`, and `src/workflows/run-service.ts`. The larger issue-launch plus Paperclip-managed `secret_ref` cutover remains a design/implementation task, but the raw-secret transport path is no longer present in the checked-in launch payload contract.
 
 #### [MEDIUM] Rate limiting and OAuth callback state are process-local and reset on restart
 - **File:** `src/security/rate-limit.ts`
@@ -274,13 +224,13 @@ Scoring: Critical = 10 pts, High = 7 pts, Medium = 4 pts, Low = 2 pts, Info = 0 
 | A03 - Supply Chain Failures        | 0 | 0 | 0 | 0 | 0 | 0 |
 | A04 - Cryptographic Failures       | 0 | 0 | 0 | 0 | 0 | 0 |
 | A05 - Injection                    | 0 | 0 | 0 | 0 | 0 | 0 |
-| A06 - Insecure Design              | 0 | 1 | 1 | 0 | 0 | 11 |
+| A06 - Insecure Design              | 0 | 0 | 1 | 0 | 0 | 4 |
 | A07 - Authentication Failures      | 0 | 0 | 0 | 0 | 0 | 0 |
 | A08 - Data Integrity Failures      | 0 | 0 | 0 | 0 | 0 | 0 |
 | A09 - Logging & Alerting Failures  | 0 | 0 | 1 | 0 | 0 | 4 |
 | A10 - Exceptional Conditions       | 0 | 0 | 0 | 0 | 0 | 0 |
 | Secret Exposure Scan               | 0 | 0 | 0 | 1 | 0 | 2 |
-| **Total**                          |     |     |     |     |     | **19** |
+| **Total**                          |     |     |     |     |     | **12** |
 
 **Risk Rating:** 0-10 = Low | 11-30 = Moderate | 31-60 = High | 61+ = Critical
 
@@ -288,9 +238,9 @@ Scoring: Critical = 10 pts, High = 7 pts, Medium = 4 pts, Low = 2 pts, Info = 0 
 
 ## Remediation Priority
 
-1. **Remove raw `secretValues` from the Paperclip launch contract** - Complete the move to synchronized Paperclip-managed `secret_ref` bindings so tenant BYOK secrets are not forwarded as plain execution payload values.
-2. **Add durable masked audit logging for secret lifecycle and access** - Wire persistent audit sinks into both API and worker secret composition paths.
-3. **Back OAuth state and rate limiting with a shared store** - Replace process-local `Map` state with Redis or another coordinated backend.
+1. **Add durable masked audit logging for secret lifecycle and access** - Wire persistent audit sinks into both API and worker secret composition paths.
+2. **Back OAuth state and rate limiting with a shared store** - Replace process-local `Map` state with Redis or another coordinated backend.
+3. **Complete the Paperclip `secret_ref` sync cutover** - The checked-in launch boundary no longer forwards raw secrets, but the repo still needs the full synchronized Paperclip-managed secret-binding path and supported issue-launch adapter.
 4. **Tighten frontend hardening and local secret hygiene** - Remove `style-src 'unsafe-inline'` where practical, and keep untracked local secret files outside any release or support artifact path.
 5. **Preserve the new session-token controls operationally** - Keep runtime session tokens short-lived, rebuild the server bundle before minting deploy smoke tokens, and retire any old shared deploy-token habits from operator workflows.
 

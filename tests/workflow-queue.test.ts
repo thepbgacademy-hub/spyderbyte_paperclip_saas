@@ -136,7 +136,7 @@ describe("run service", () => {
     });
   });
 
-  it("hydrates resolved provider context with secret values before calling Paperclip", async () => {
+  it("hydrates resolved provider context internally but strips secret values before calling Paperclip", async () => {
     const paperclipClient = {
       createRun: vi.fn().mockResolvedValue({ paperclipRunId: "pc-run-1", status: "queued" })
     };
@@ -182,8 +182,7 @@ describe("run service", () => {
           providerKind: "openai_api",
           label: "Primary OpenAI",
           secretRef: "wf_secret_openai",
-          metadata: { projectId: "proj_123" },
-          secretValues: { apiKey: "sk-openai-secret" }
+          metadata: { projectId: "proj_123" }
         }
       ]
     });
@@ -331,8 +330,7 @@ describe("run service", () => {
           providerKind: "openai_api",
           label: "Operator Debug Provider",
           secretRef: "wf_debug_shared_provider",
-          metadata: {},
-          secretValues: { apiKey: "sk-operator-debug" }
+          metadata: {}
         }
       ]
     });
@@ -388,8 +386,7 @@ describe("run service", () => {
           providerKind: "openai_api",
           label: "Tenant OpenAI",
           secretRef: "wf_secret_openai",
-          metadata: {},
-          secretValues: { apiKey: "sk-tenant" }
+          metadata: {}
         }
       ]
     });
@@ -606,7 +603,7 @@ describe("workflow worker", () => {
     expect(createRun).not.toHaveBeenCalled();
   });
 
-  it("worker hydrates provider secrets just-in-time before calling Paperclip", async () => {
+  it("worker hydrates provider secrets just-in-time but does not forward raw values to Paperclip", async () => {
     const createRun = vi.fn().mockResolvedValue({
       paperclipRunId: "pc-run-1",
       status: "queued"
@@ -655,8 +652,7 @@ describe("workflow worker", () => {
           providerKind: "openai_api",
           label: "Primary OpenAI",
           secretRef: "wf_secret_openai",
-          metadata: {},
-          secretValues: { apiKey: "sk-openai-secret" }
+          metadata: {}
         }
       ]
     });
@@ -743,8 +739,7 @@ describe("workflow worker", () => {
           providerKind: "openai_api",
           label: "Operator Debug Provider",
           secretRef: "wf_debug_shared_provider",
-          metadata: {},
-          secretValues: { apiKey: "sk-operator-debug" }
+          metadata: {}
         }
       ]
     });

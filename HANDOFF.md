@@ -345,6 +345,7 @@ Nuances to preserve:
   - a direct `secret_ref` issue override did not work in the company-token lane, and secret creation via the company token returned `403 Board access required`
 - Immediate repo implication:
   - keep the checked-in `/runs` adapter steady
+  - the checked-in `/runs` launch boundary now strips raw `secretValues` before serialization
   - only the worker healthcheck auth probe should change right now
   - the bigger adapter decision waits on a secure secret-ref/admin path for tenant BYOK injection
 
