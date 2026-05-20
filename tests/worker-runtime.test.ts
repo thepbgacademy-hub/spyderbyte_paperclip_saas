@@ -17,7 +17,7 @@ vi.mock("../src/db/supabase-repositories.js", () => ({
     revokeSecretReference: vi.fn(),
     findIdBySecretRef: vi.fn().mockResolvedValue("secret-1"),
     findSecretReferenceId: vi.fn().mockResolvedValue("11111111-1111-4111-8111-111111111111"),
-    resolvePaperclipCompanyMapping: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" })
+    resolvePaperclipCompanyMapping: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1", paperclipIssueAgentId: "pc-agent-1" })
   }))
 }));
 
@@ -66,7 +66,7 @@ vi.mock("../src/paperclip/secret-sync.js", () => ({
       paperclipSecretId: "pc-secret-1",
       paperclipSecretKey: "OPENAI_API_KEY",
       providerKind: "openai_api",
-      bindingStatus: "active",
+      bindingStatus: "synced",
       lastSyncedAt: "2026-05-19T00:00:00.000Z",
       lastError: null
     })
@@ -79,7 +79,12 @@ vi.mock("../src/paperclip/secret-sync.js", () => ({
       paperclipSecretVersion: "9"
     })
   })),
-  toPaperclipEnvBindings: vi.fn(() => [{ envKey: "OPENAI_API_KEY", secretValue: "sk-tenant" }])
+  toPaperclipEnvBindings: vi.fn(() => [{ envKey: "OPENAI_API_KEY", secretValue: "sk-tenant" }]),
+  toPaperclipSecretRefBinding: vi.fn(({ paperclipSecretId, paperclipSecretVersion }) => ({
+    type: "secret_ref",
+    secretId: paperclipSecretId,
+    version: Number(paperclipSecretVersion)
+  }))
 }));
 
 vi.mock("../src/paperclip/client.js", () => ({
@@ -146,7 +151,7 @@ describe("worker runtime", () => {
         WF_PAPERCLIP_LAUNCH_MODE: "issues",
         WF_PAPERCLIP_BOARD_SESSION_TOKEN: "board-session-token",
         WF_PAPERCLIP_BOARD_ORIGIN: "https://paperclip-board.internal.local/",
-        WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-1"
+        WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-fallback"
       })
     });
 
@@ -162,7 +167,7 @@ describe("worker runtime", () => {
       })
     );
     expect(createPaperclipSecretAdminHttpClient).toHaveBeenCalledWith({
-      baseUrl: "https://paperclip-internal.spyderbyte.cloud",
+      baseUrl: "https://paperclip-board.internal.local",
       adminToken: "board-session-token",
       origin: "https://paperclip-board.internal.local",
       referer: "https://paperclip-board.internal.local/"
@@ -182,7 +187,7 @@ describe("worker runtime", () => {
     await expect(issueLaunch?.syncProviderSecretRefs?.({
       companyId: "pc-company-1",
       workflowId: "workflow-1",
-      agentId: "agent-1",
+      agentId: "pc-agent-1",
       providerContext: [
         {
           capability: "text_generation",
@@ -199,7 +204,7 @@ describe("worker runtime", () => {
           OPENAI_API_KEY: {
             type: "secret_ref",
             secretId: "pc-secret-1",
-            version: "9"
+            version: 9
           }
         }
       }
@@ -210,13 +215,59 @@ describe("worker runtime", () => {
       tenantId: "tenant-1",
       wealthFactorySecretReferenceId: "11111111-1111-4111-8111-111111111111",
       paperclipCompanyId: "pc-company-1",
-      paperclipAgentId: "agent-1",
+      paperclipAgentId: "pc-agent-1",
       paperclipEnvKey: "OPENAI_API_KEY",
       providerKind: "openai_api",
       secretValue: "sk-tenant",
       paperclipSecretKey: "OPENAI_API_KEY",
       bindToAgent: false
     });
+
+    await expect(issueLaunch?.resolveLaunchTarget({
+      companyId: "pc-company-1",
+      workflowId: "workflow-1",
+      providerContext: []
+    })).resolves.toEqual({ agentId: "pc-agent-1" });
+
+    await expect(issueLaunch?.resolveServiceToken?.({
+      companyId: "pc-company-1",
+      workflowId: "workflow-1",
+      providerContext: []
+    })).resolves.toBe("paperclip-service-token");
+
+    await runtime.close();
+  });
+
+  it("uses a company-scoped Paperclip service token override when configured", async () => {
+    const { createPaperclipClient } = await import("../src/paperclip/client.js");
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_PAPERCLIP_LAUNCH_MODE: "issues",
+        WF_PAPERCLIP_BOARD_SESSION_TOKEN: "board-session-token",
+        WF_PAPERCLIP_BOARD_ORIGIN: "https://paperclip-board.internal.local/",
+        WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-fallback",
+        WF_PAPERCLIP_SERVICE_TOKEN_MAP: JSON.stringify({
+          "pc-company-1": "pc-company-1-token"
+        })
+      })
+    });
+
+    await runtime.processQueuePayload({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "workflow-1",
+      createdByUserId: "user-1",
+      idempotencyKey: "tenant-1:workflow-1:run-1",
+      createdAt: new Date().toISOString()
+    });
+
+    const issueLaunch = vi.mocked(createPaperclipClient).mock.calls.at(-1)?.[0].issueLaunch;
+    await expect(issueLaunch?.resolveServiceToken?.({
+      companyId: "pc-company-1",
+      workflowId: "workflow-1",
+      providerContext: []
+    })).resolves.toBe("pc-company-1-token");
 
     await runtime.close();
   });

@@ -4,7 +4,12 @@ type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
 export type PaperclipIssueLaunchOptions = {
   baseUrl: string;
-  serviceToken: string;
+  serviceToken?: string;
+  resolveServiceToken?(input: {
+    companyId: string;
+    workflowId: string;
+    providerContext: readonly PaperclipRuntimeProviderContext[];
+  }): Promise<string> | string;
   resolveLaunchTarget(input: {
     companyId: string;
     workflowId: string;
@@ -15,7 +20,7 @@ export type PaperclipIssueLaunchOptions = {
     workflowId: string;
     agentId: string;
     providerContext: readonly PaperclipRuntimeProviderContext[];
-  }): Promise<{ adapterConfig?: { env?: Record<string, { type: "secret_ref"; secretId: string; version: string }> } } | void>;
+  }): Promise<{ adapterConfig?: { env?: Record<string, { type: "secret_ref"; secretId: string; version: string | number }> } } | void>;
   fetchImpl?: FetchLike;
   pollIntervalMs?: number;
   maxPollAttempts?: number;
@@ -48,6 +53,7 @@ export function createPaperclipIssueLaunchAdapter(options: PaperclipIssueLaunchO
         workflowId: input.workflowId,
         providerContext: input.providerContext
       });
+      const serviceToken = await resolveIssueLaunchServiceToken(options, input);
       if (options.syncProviderSecretRefs) {
         const adapterOverrides = await options.syncProviderSecretRefs({
           companyId: input.companyId,
@@ -57,7 +63,7 @@ export function createPaperclipIssueLaunchAdapter(options: PaperclipIssueLaunchO
         });
         const created = await requestJson(fetchImpl, `${baseUrl}/api/companies/${encodeURIComponent(input.companyId)}/issues`, {
           method: "POST",
-          headers: createHeaders(options.serviceToken),
+          headers: createHeaders(serviceToken),
           body: JSON.stringify({
             title: target.issueTitle ?? `WF ${input.workflowId}`,
             body: target.issueBody ?? `External run ${input.spyderbyteRunId}`,
@@ -74,12 +80,12 @@ export function createPaperclipIssueLaunchAdapter(options: PaperclipIssueLaunchO
         if (!issueId) {
           throw new PaperclipIssueLaunchError("Paperclip issue creation did not return an identifier");
         }
-        return pollForExecutionRunId(fetchImpl, baseUrl, options.serviceToken, issueId, maxPollAttempts, pollIntervalMs, requestRetryAttempts, requestRetryDelayMs);
+        return pollForExecutionRunId(fetchImpl, baseUrl, serviceToken, issueId, maxPollAttempts, pollIntervalMs, requestRetryAttempts, requestRetryDelayMs);
       }
 
       const created = await requestJson(fetchImpl, `${baseUrl}/api/companies/${encodeURIComponent(input.companyId)}/issues`, {
         method: "POST",
-        headers: createHeaders(options.serviceToken),
+        headers: createHeaders(serviceToken),
         body: JSON.stringify({
           title: target.issueTitle ?? `WF ${input.workflowId}`,
           body: target.issueBody ?? `External run ${input.spyderbyteRunId}`,
@@ -95,7 +101,7 @@ export function createPaperclipIssueLaunchAdapter(options: PaperclipIssueLaunchO
       if (!issueId) {
         throw new PaperclipIssueLaunchError("Paperclip issue creation did not return an identifier");
       }
-      return pollForExecutionRunId(fetchImpl, baseUrl, options.serviceToken, issueId, maxPollAttempts, pollIntervalMs, requestRetryAttempts, requestRetryDelayMs);
+      return pollForExecutionRunId(fetchImpl, baseUrl, serviceToken, issueId, maxPollAttempts, pollIntervalMs, requestRetryAttempts, requestRetryDelayMs);
     }
   };
 }
@@ -185,4 +191,29 @@ function sleep(durationMs: number): Promise<void> {
 
 function shouldRetryIssueLaunchRequest(error: unknown): boolean {
   return error instanceof TypeError;
+}
+
+async function resolveIssueLaunchServiceToken(
+  options: PaperclipIssueLaunchOptions,
+  input: {
+    companyId: string;
+    workflowId: string;
+    spyderbyteRunId: string;
+    providerContext: readonly PaperclipRuntimeProviderContext[];
+  }
+): Promise<string> {
+  if (options.resolveServiceToken) {
+    const resolved = await options.resolveServiceToken({
+      companyId: input.companyId,
+      workflowId: input.workflowId,
+      providerContext: input.providerContext
+    });
+    if (typeof resolved === "string" && resolved.trim().length > 0) {
+      return resolved.trim();
+    }
+  }
+  if (typeof options.serviceToken === "string" && options.serviceToken.trim().length > 0) {
+    return options.serviceToken.trim();
+  }
+  throw new PaperclipIssueLaunchError(`Missing Paperclip issue-launch service token for company ${input.companyId}`);
 }

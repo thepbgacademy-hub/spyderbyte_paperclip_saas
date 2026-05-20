@@ -7,6 +7,7 @@ import { resolveProviderExecutionContext, type DebugSharedProviderResolver } fro
 
 export type TenantPaperclipMapping = {
   paperclipCompanyId: string;
+  paperclipIssueAgentId?: string;
 };
 
 export type TenantResolver = (tenantId: string) => Promise<TenantPaperclipMapping>;

@@ -24,6 +24,7 @@ describe("loadEnv", () => {
       workflowQueueName: "wfpc-workflow-runs",
       paperclipBaseUrl: "https://paperclip-internal.spyderbyte.cloud",
       paperclipServiceToken: "paperclip-service-token",
+      paperclipServiceTokensByCompany: {},
       vaultMasterKey: "test-master-key-with-enough-length",
       providerExecutionMode: "tenant_credentials_required",
       paperclipLaunchMode: "runs",
@@ -87,6 +88,25 @@ describe("loadEnv", () => {
       paperclipIssuePollIntervalMs: 1500,
       paperclipIssueMaxPollAttempts: 12
     });
+  });
+
+  it("parses an optional Paperclip company token map", () => {
+    expect(
+      loadEnv({
+        ...validEnv,
+        WF_PAPERCLIP_SERVICE_TOKEN_MAP: JSON.stringify({
+          "pc-company-1": "pcp-company-1",
+          "pc-company-2": "pcp-company-2"
+        })
+      }).paperclipServiceTokensByCompany
+    ).toEqual({
+      "pc-company-1": "pcp-company-1",
+      "pc-company-2": "pcp-company-2"
+    });
+  });
+
+  it("rejects an invalid Paperclip company token map", () => {
+    expect(() => loadEnv({ ...validEnv, WF_PAPERCLIP_SERVICE_TOKEN_MAP: '{"pc-company-1":""}' })).toThrow(/WF_PAPERCLIP_SERVICE_TOKEN_MAP/);
   });
 
   it("preserves the legacy admin token separately from the board-session token", () => {

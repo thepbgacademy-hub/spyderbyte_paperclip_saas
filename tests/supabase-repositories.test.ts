@@ -16,7 +16,7 @@ describe("Supabase wfpc repositories", () => {
   it("maps dashboard repositories from wfpc schema without exposing secret handles", async () => {
     const query = createQuery({
       "from wfpc.workflow_templates": [{ id: "wf-social-calendar", name: "Wealth Factory Social Calendar", provider_kind: "openai_api", enabled: true }],
-      "from wfpc.paperclip_company_mappings": [{ paperclip_company_id: "pc-company-1" }],
+      "from wfpc.paperclip_company_mappings": [{ paperclip_company_id: "pc-company-1", paperclip_issue_agent_id: "pc-agent-1" }],
       "from wfpc.tenant_package_installs": [{ id: "pkg-social", name: "Social Media Agency", kind: "industry", status: "active" }],
       "from wfpc.artifact_metadata": [
         { id: "artifact-1", filename: "post.png", artifact_type: "image", expires_at: "2026-05-11T00:00:00.000Z" }
@@ -66,7 +66,8 @@ describe("Supabase wfpc repositories", () => {
       { id: "artifact-1", filename: "post.png", artifactType: "image", expiresAt: "2026-05-11T00:00:00.000Z" }
     ]);
     await expect(repositories.resolvePaperclipCompanyMapping({ tenantId: "tenant-1" })).resolves.toEqual({
-      paperclipCompanyId: "pc-company-1"
+      paperclipCompanyId: "pc-company-1",
+      paperclipIssueAgentId: "pc-agent-1"
     });
     await expect(repositories.listProviderConnections({ tenantId: "tenant-1" })).resolves.toEqual([
       { providerKind: "openai_api", label: "OpenAI", connected: true }
@@ -257,7 +258,10 @@ describe("Supabase wfpc repositories", () => {
 
   it("persists provider credential references without raw secret values", async () => {
     const client = {
-      query: vi.fn().mockResolvedValue({ rows: [{ id: "secret-reference-1" }] })
+      query: vi
+        .fn()
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ id: "secret-reference-1" }] })
     };
     const repository = createSupabaseSecretRepository(client);
 
@@ -272,15 +276,45 @@ describe("Supabase wfpc repositories", () => {
       })
     ).resolves.toBe("secret-reference-1");
 
-    const call = client.query.mock.calls[0];
-    expect(call).toBeDefined();
-    if (!call) throw new Error("Expected secret reference insert query");
-    expect(String(call[0])).toMatch(/update wfpc\.secret_references/i);
-    expect(String(call[0])).toMatch(/provider_kind = \$2::wfpc\.provider_kind/i);
-    expect(String(call[0])).toMatch(/revoked_reason = 'superseded'/i);
-    expect(String(call[0])).toMatch(/insert into wfpc\.secret_references/i);
-    expect(JSON.stringify(call)).not.toContain("sk-");
-    expect(call[1]).toContain("wf_secret_opaque");
+    const revokeCall = client.query.mock.calls[0];
+    const insertCall = client.query.mock.calls[1];
+    expect(revokeCall).toBeDefined();
+    expect(insertCall).toBeDefined();
+    if (!revokeCall || !insertCall) throw new Error("Expected secret reference revoke + insert queries");
+    expect(String(revokeCall[0])).toMatch(/update wfpc\.secret_references/i);
+    expect(String(revokeCall[0])).toMatch(/provider_kind = \$2::wfpc\.provider_kind/i);
+    expect(String(revokeCall[0])).toMatch(/revoked_reason = 'superseded'/i);
+    expect(String(insertCall[0])).toMatch(/insert into wfpc\.secret_references/i);
+    expect(JSON.stringify(insertCall)).not.toContain("sk-");
+    expect(insertCall[1]).toContain("wf_secret_opaque");
+  });
+
+  it("uses a transaction runner for provider credential creation when one is supplied", async () => {
+    const transaction = {
+      query: vi
+        .fn()
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ id: "secret-reference-2" }] })
+    };
+    const runner = {
+      withTransaction: vi.fn().mockImplementation(async (callback: (client: typeof transaction) => Promise<unknown>) => callback(transaction))
+    };
+    const repository = createSupabaseSecretRepository({ query: vi.fn() }, runner);
+
+    await expect(
+      repository.create({
+        tenantId: "tenant-1",
+        providerKind: "openai_api",
+        label: "OpenAI",
+        secretRef: "wf_secret_runtime",
+        metadata: {},
+        revokedAt: null
+      })
+    ).resolves.toBe("secret-reference-2");
+
+    expect(runner.withTransaction).toHaveBeenCalledOnce();
+    expect(String(transaction.query.mock.calls[0]?.[0])).toMatch(/update wfpc\.secret_references/i);
+    expect(String(transaction.query.mock.calls[1]?.[0])).toMatch(/insert into wfpc\.secret_references/i);
   });
 
   it("describes secret references with provider kind for rotation-time projection", async () => {

@@ -17,8 +17,15 @@ vi.mock("../src/db/postgres-client.js", () => ({
 
 vi.mock("../src/db/supabase-repositories.js", () => ({
   createSupabaseStorageConnectorRepository: vi.fn(() => ({ register: vi.fn() })),
+  createSupabaseSecretRepository: vi.fn(() => ({
+    create: vi.fn(),
+    updateSecretRef: vi.fn(),
+    revoke: vi.fn(),
+    findIdBySecretRef: vi.fn(),
+    describeSecretRef: vi.fn()
+  })),
   createSupabaseRepositories: vi.fn(() => ({
-    resolvePaperclipCompanyMapping: vi.fn(),
+    resolvePaperclipCompanyMapping: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1", paperclipIssueAgentId: "pc-agent-1" }),
     requireTenantMember: vi.fn(),
     listWorkflows: vi.fn(),
     listPackages: vi.fn(),
@@ -47,8 +54,17 @@ vi.mock("../src/paperclip/secret-sync.js", () => ({
   }))
 }));
 
-vi.mock("../src/secrets/vault-backed-provider-registration.js", () => ({
-  createVaultBackedProviderCredentialRegistration: vi.fn(() => vi.fn())
+vi.mock("../src/secrets/provider-credential-service.js", () => ({
+  createProviderCredentialService: vi.fn(() => ({ register: vi.fn() }))
+}));
+
+vi.mock("../src/secrets/secret-service.js", () => ({
+  createSecretService: vi.fn(() => ({
+    rotate: vi.fn(),
+    registerProviderCredential: vi.fn(),
+    access: vi.fn(),
+    revoke: vi.fn()
+  }))
 }));
 
 vi.mock("../src/secrets/acid-secret-revoke-service.js", () => ({
@@ -192,7 +208,8 @@ describe("runtime server", () => {
   });
 
   it("wires provider credential registration to the runtime vault path", async () => {
-    const { createVaultBackedProviderCredentialRegistration } = await import("../src/secrets/vault-backed-provider-registration.js");
+    const { createProviderCredentialService } = await import("../src/secrets/provider-credential-service.js");
+    const { createSecretService } = await import("../src/secrets/secret-service.js");
     const { createAcidSecretRevokeService } = await import("../src/secrets/acid-secret-revoke-service.js");
     const runtime = createDashboardRuntime({
       env: {
@@ -207,10 +224,14 @@ describe("runtime server", () => {
     });
 
     expect(runtime.registerProviderCredential).toEqual(expect.any(Function));
+    expect(runtime.rotateProviderCredential).toEqual(expect.any(Function));
     expect(runtime.revokeProviderCredential).toEqual(expect.any(Function));
-    const registrationArgs = vi.mocked(createVaultBackedProviderCredentialRegistration).mock.calls.at(-1)?.[0];
-    expect(registrationArgs).toBeDefined();
-    expect(registrationArgs).not.toHaveProperty("projection");
+    const providerServiceArgs = vi.mocked(createProviderCredentialService).mock.calls.at(-1)?.[0];
+    expect(providerServiceArgs).toBeDefined();
+    expect(providerServiceArgs?.runtimeEnv).toEqual({});
+    const secretServiceArgs = vi.mocked(createSecretService).mock.calls.at(-1)?.[0];
+    expect(secretServiceArgs).toBeDefined();
+    expect(secretServiceArgs).not.toHaveProperty("projection");
     const revokeArgs = vi.mocked(createAcidSecretRevokeService).mock.calls.at(-1)?.[0];
     expect(revokeArgs).toBeDefined();
     expect(revokeArgs).not.toHaveProperty("projection");
@@ -218,7 +239,8 @@ describe("runtime server", () => {
   });
 
   it("wires Paperclip projection into provider registration when admin issue-launch env is configured", async () => {
-    const { createVaultBackedProviderCredentialRegistration } = await import("../src/secrets/vault-backed-provider-registration.js");
+    const { createProviderCredentialService } = await import("../src/secrets/provider-credential-service.js");
+    const { createSecretService } = await import("../src/secrets/secret-service.js");
     const { createAcidSecretRevokeService } = await import("../src/secrets/acid-secret-revoke-service.js");
     const { createPaperclipSecretAdminHttpClient, createPaperclipSecretProjectionService } = await import("../src/paperclip/secret-sync.js");
 
@@ -241,12 +263,19 @@ describe("runtime server", () => {
 
     expect(createPaperclipSecretProjectionService).toHaveBeenCalled();
     expect(createPaperclipSecretAdminHttpClient).toHaveBeenCalledWith({
-      baseUrl: "https://paperclip.internal.local",
+      baseUrl: "https://paperclip-board.internal.local/",
       adminToken: "board-session-token",
       origin: "https://paperclip-board.internal.local/",
       referer: "https://paperclip-board.internal.local/"
     });
-    expect(createVaultBackedProviderCredentialRegistration).toHaveBeenCalledWith(
+    expect(createProviderCredentialService).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runtimeEnv: expect.objectContaining({
+          PAPERCLIP_BASE_URL: "https://paperclip.internal.local"
+        })
+      })
+    );
+    expect(createSecretService).toHaveBeenCalledWith(
       expect.objectContaining({
         projection: expect.objectContaining({
           onRegistered: expect.any(Function),
@@ -255,6 +284,12 @@ describe("runtime server", () => {
         })
       })
     );
+    const projectionArgs = vi.mocked(createPaperclipSecretProjectionService).mock.calls.at(-1)?.[0];
+    await expect(projectionArgs?.resolveCompanyMapping({ tenantId: "tenant-1" })).resolves.toEqual({
+      paperclipCompanyId: "pc-company-1",
+      paperclipIssueAgentId: "pc-agent-1"
+    });
+    expect(projectionArgs?.defaultPaperclipAgentId).toBe("agent-1");
     expect(createAcidSecretRevokeService).toHaveBeenCalledWith(
       expect.objectContaining({
         projection: expect.objectContaining({

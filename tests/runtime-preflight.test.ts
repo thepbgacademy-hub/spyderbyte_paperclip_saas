@@ -55,7 +55,8 @@ describe("runtime preflight", () => {
     expect(summary.blockers).toContain("paperclip_company_mappings table is missing");
     expect(preflight.mapping).toEqual({
       exists: false,
-      paperclipCompanyId: null
+      paperclipCompanyId: null,
+      paperclipIssueAgentId: null
     });
   });
 

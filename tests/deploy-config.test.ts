@@ -50,6 +50,7 @@ describe("deployment POC config", () => {
     expect(runbook).toContain("WF_PAPERCLIP_BOARD_SESSION_TOKEN");
     expect(runbook).toContain("WF_PAPERCLIP_BOARD_ORIGIN");
     expect(runbook).toContain("WF_PAPERCLIP_ADMIN_TOKEN");
+    expect(runbook).toContain("WF_PAPERCLIP_SERVICE_TOKEN_MAP");
     expect(runbook).toContain("WF_PAPERCLIP_ISSUE_AGENT_ID");
     expect(runbook).toContain("WF_PAPERCLIP_ISSUE_POLL_INTERVAL_MS");
     expect(runbook).toContain("WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS");
@@ -89,6 +90,7 @@ describe("deployment POC config", () => {
 
   it("ships explicit server and worker container entrypoints for deployment", () => {
     expect(apiDockerfile).toContain('CMD ["node", "dist/api/server-main.js"]');
+    expect(apiDockerfile).toContain("COPY scripts ./scripts");
     expect(workerDockerfile).toContain('CMD ["node", "dist/worker/worker-main.js"]');
     expect(workerDockerfile).toContain('HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD ["node", "dist/worker/healthcheck.js"]');
     expect(workerDockerfile).toContain("npm run build:server");
@@ -96,6 +98,7 @@ describe("deployment POC config", () => {
     expect(runbook).toContain("verifies both Redis reachability and Paperclip health");
     expect(runbook).toContain("configured Paperclip service token is not rejected by an authenticated company-scoped route");
     expect(runbook).toContain("both receive `WF_PAPERCLIP_LAUNCH_MODE`, `WF_PAPERCLIP_BOARD_SESSION_TOKEN`, `WF_PAPERCLIP_BOARD_ORIGIN`, and `WF_PAPERCLIP_ISSUE_AGENT_ID`");
+    expect(runbook).toContain("company-scoped bearer token");
   });
 
   it("fails fast when required server-side secrets are missing", () => {
@@ -141,6 +144,8 @@ describe("deployment POC config", () => {
   it("documents the next staged/live VPS proof sequence for secret lifecycle validation", () => {
     expect(runbook).toContain("## Next VPS Proof Sequence");
     expect(runbook).toContain("Register or refresh a tenant provider credential");
+    expect(runbook).toContain("npm run prove:provider-lifecycle");
+    expect(runbook).toContain("seed:demo -- --lane secondary");
     expect(runbook).toContain("wfpc.paperclip_company_mappings");
     expect(runbook).toContain("Rotate the tenant credential");
     expect(runbook).toContain("Revoke the tenant credential");
@@ -148,6 +153,10 @@ describe("deployment POC config", () => {
     expect(runbook).toContain("POST /api/secrets/:secretId/rotate");
     expect(runbook).toContain("PATCH /api/secrets/:secretId");
     expect(runbook).toContain("PATCH /api/agents/:agentId");
+    expect(runbook).toContain("POST /api/agents/:agentId/keys");
+    expect(runbook).toContain("WF_LIFECYCLE_SECRET_VALUE");
+    expect(runbook).toContain("WF_LIFECYCLE_SECRET_VALUE_NEXT");
+    expect(runbook).toContain("patches the configured Paperclip issue agent with version-pinned `secret_ref` bindings");
   });
 });
 

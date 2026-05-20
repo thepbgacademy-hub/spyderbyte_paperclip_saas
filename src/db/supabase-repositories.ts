@@ -1,4 +1,5 @@
 import type { ProviderCapability } from "../packages/package-types.js";
+import type { ProviderKind } from "../providers/provider-types.js";
 import type { RuntimeProviderConnection } from "../providers/runtime-provider-resolution.js";
 import type { TransactionRunner } from "./acid-guard-repository.js";
 
@@ -45,14 +46,22 @@ function toStorageConnectorPublicTarget(value: unknown): Record<string, string> 
 export function createSupabaseRepositories(client: QueryClient) {
   return {
     async resolvePaperclipCompanyMapping(input: DashboardScope) {
-      const result = await client.query("select paperclip_company_id from wfpc.paperclip_company_mappings where tenant_id = $1 limit 1", [input.tenantId]);
+      const result = await client.query(
+        "select paperclip_company_id, paperclip_issue_agent_id from wfpc.paperclip_company_mappings where tenant_id = $1 limit 1",
+        [input.tenantId]
+      );
       const row = asRecord(result.rows[0]);
       const paperclipCompanyId = String(row.paperclip_company_id ?? "");
       if (!paperclipCompanyId) {
         throw new Error("Paperclip company mapping is required");
       }
 
-      return { paperclipCompanyId };
+      const paperclipIssueAgentId = readOptionalTrimmedString(row.paperclip_issue_agent_id);
+
+      return {
+        paperclipCompanyId,
+        ...(paperclipIssueAgentId ? { paperclipIssueAgentId } : {})
+      };
     },
 
     async requireTenantMember(input: MembershipScope): Promise<void> {
@@ -299,17 +308,18 @@ export function createSupabaseRepositories(client: QueryClient) {
       metadata: Record<string, unknown>;
       revokedAt: string | null;
     }): Promise<string> {
+      await client.query(
+        `update wfpc.secret_references
+         set revoked_at = coalesce(revoked_at, now()),
+             revoked_reason = 'superseded',
+             updated_at = now()
+         where tenant_id = $1
+           and provider_kind = $2::wfpc.provider_kind
+           and revoked_at is null`,
+        [input.tenantId, input.providerKind]
+      );
       const result = await client.query(
-         `with revoked_active as (
-           update wfpc.secret_references
-           set revoked_at = coalesce(revoked_at, now()),
-               revoked_reason = 'superseded',
-               updated_at = now()
-           where tenant_id = $1
-             and provider_kind = $2::wfpc.provider_kind
-             and revoked_at is null
-         )
-         insert into wfpc.secret_references
+         `insert into wfpc.secret_references
           (tenant_id, provider_kind, label, secret_ref, metadata, revoked_at)
          values ($1, $2::wfpc.provider_kind, $3, $4, $5::jsonb, $6)
          returning id`,
@@ -367,7 +377,7 @@ export function createSupabaseRepositories(client: QueryClient) {
       return typeof id === "string" ? id : "";
     },
 
-    async describeSecretReference(input: { tenantId: string; secretRef: string }): Promise<{ id: string; providerKind: string } | null> {
+    async describeSecretReference(input: { tenantId: string; secretRef: string }): Promise<{ id: string; providerKind: ProviderKind } | null> {
       const result = await client.query(
         `select id, provider_kind
          from wfpc.secret_references
@@ -382,7 +392,7 @@ export function createSupabaseRepositories(client: QueryClient) {
       }
       return {
         id: row.id,
-        providerKind: row.provider_kind
+        providerKind: row.provider_kind as ProviderKind
       };
     },
 
@@ -399,10 +409,18 @@ export function createSupabaseRepositories(client: QueryClient) {
   };
 }
 
-export function createSupabaseSecretRepository(client: QueryClient) {
+export function createSupabaseSecretRepository(client: QueryClient, runner?: TransactionRunner) {
   const repositories = createSupabaseRepositories(client);
   return {
-    create: repositories.createSecretReference,
+    create: async (reference: Parameters<typeof repositories.createSecretReference>[0]) => {
+      if (!runner) {
+        return repositories.createSecretReference(reference);
+      }
+      return runner.withTransaction(async (transaction) => {
+        const transactionalRepositories = createSupabaseRepositories(transaction);
+        return transactionalRepositories.createSecretReference(reference);
+      });
+    },
     updateSecretRef: repositories.updateSecretRef,
     revoke: repositories.revokeSecretReference,
     findIdBySecretRef: repositories.findSecretReferenceId,

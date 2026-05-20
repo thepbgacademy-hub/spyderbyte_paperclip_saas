@@ -16,6 +16,7 @@
     "create:runtime-session-token": "npm run build:server && node scripts/create-runtime-session-token.mjs",
     "check:live-runtime": "node scripts/check-live-runtime-readiness.mjs",
     "seed:demo": "node scripts/seed-wfpc-demo.mjs",
+    "prove:provider-lifecycle": "npm run build:server && node dist/tools/prove-provider-credential-lifecycle.js",
     "queue:live-run": "node scripts/queue-live-workflow-run.mjs",
     "inspect:live-run": "node scripts/inspect-live-workflow-run.mjs",
     "start:server": "node dist/api/server-main.js",

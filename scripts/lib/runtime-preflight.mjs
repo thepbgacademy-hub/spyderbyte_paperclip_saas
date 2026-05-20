@@ -37,7 +37,10 @@ export async function loadRuntimePreflight({ client, tenantId, workflowId }) {
     [tenantId, workflowId]
   );
   const mappingRows = asRecord(workerSignals.rows[0]).has_company_mapping
-    ? await client.query("select tenant_id, paperclip_company_id from wfpc.paperclip_company_mappings where tenant_id = $1 limit 1", [tenantId])
+    ? await client.query(
+        "select tenant_id, paperclip_company_id, paperclip_issue_agent_id from wfpc.paperclip_company_mappings where tenant_id = $1 limit 1",
+        [tenantId]
+      )
     : { rows: [] };
 
   const workflowRunColumnSet = new Set(workflowRunColumns.rows.map((row) => String(row.column_name)));
@@ -73,7 +76,8 @@ export async function loadRuntimePreflight({ client, tenantId, workflowId }) {
     },
     mapping: {
       exists: mappingRows.rows.length > 0,
-      paperclipCompanyId: typeof mapping.paperclip_company_id === "string" ? mapping.paperclip_company_id : null
+      paperclipCompanyId: typeof mapping.paperclip_company_id === "string" ? mapping.paperclip_company_id : null,
+      paperclipIssueAgentId: typeof mapping.paperclip_issue_agent_id === "string" ? mapping.paperclip_issue_agent_id : null
     }
   };
 }

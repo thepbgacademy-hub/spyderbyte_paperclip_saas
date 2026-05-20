@@ -16,9 +16,15 @@ type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 export type PaperclipClientOptions = {
   baseUrl: string;
   serviceToken: string;
+  resolveServiceToken?(input: { companyId: string }): Promise<string> | string;
   fetchImpl?: FetchLike;
   launchMode?: "runs" | "issues";
   issueLaunch?: {
+    resolveServiceToken?(input: {
+      companyId: string;
+      workflowId: string;
+      providerContext: readonly PaperclipRuntimeProviderContext[];
+    }): Promise<string> | string;
     resolveLaunchTarget(input: {
       companyId: string;
       workflowId: string;
@@ -29,7 +35,7 @@ export type PaperclipClientOptions = {
       workflowId: string;
       agentId: string;
       providerContext: readonly PaperclipRuntimeProviderContext[];
-    }): Promise<{ adapterConfig?: { env?: Record<string, { type: "secret_ref"; secretId: string; version: string }> } } | void>;
+    }): Promise<{ adapterConfig?: { env?: Record<string, { type: "secret_ref"; secretId: string; version: string | number }> } } | void>;
     pollIntervalMs?: number;
     maxPollAttempts?: number;
   };
@@ -55,6 +61,7 @@ export function createPaperclipClient(options: PaperclipClientOptions): Papercli
           baseUrl,
           serviceToken: options.serviceToken,
           fetchImpl,
+          ...(options.issueLaunch.resolveServiceToken ? { resolveServiceToken: options.issueLaunch.resolveServiceToken } : {}),
           resolveLaunchTarget: options.issueLaunch.resolveLaunchTarget,
           ...(options.issueLaunch.syncProviderSecretRefs ? { syncProviderSecretRefs: options.issueLaunch.syncProviderSecretRefs } : {}),
           ...(options.issueLaunch.pollIntervalMs ? { pollIntervalMs: options.issueLaunch.pollIntervalMs } : {}),

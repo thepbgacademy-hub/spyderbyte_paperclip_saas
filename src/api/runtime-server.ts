@@ -9,7 +9,7 @@ import { createStorageOAuthHttpHandler } from "./storage-oauth-http.js";
 import { createDurableAuditSink } from "../audit/durable-audit.js";
 import { createAcidGuardRepository } from "../db/acid-guard-repository.js";
 import { createPgPool, createPgPoolQueryClient, createPgTransactionRunner } from "../db/postgres-client.js";
-import { createSupabaseRepositories } from "../db/supabase-repositories.js";
+import { createSupabaseRepositories, createSupabaseSecretRepository } from "../db/supabase-repositories.js";
 import {
   createPaperclipSecretAdminHttpClient,
   createPaperclipSecretBindingRepository,
@@ -19,7 +19,8 @@ import { createPostgresFixedWindowRateLimiter } from "../security/postgres-rate-
 import { createEncryptedSecretVault } from "../secrets/encrypted-vault.js";
 import { createAcidSecretRevokeService } from "../secrets/acid-secret-revoke-service.js";
 import { createPostgresEncryptedVaultStore } from "../secrets/postgres-vault-store.js";
-import { createVaultBackedProviderCredentialRegistration } from "../secrets/vault-backed-provider-registration.js";
+import { createProviderCredentialService } from "../secrets/provider-credential-service.js";
+import { createSecretService } from "../secrets/secret-service.js";
 import { createStorageOAuthService, STORAGE_OAUTH_PROVIDER_CONFIGS } from "../storage/storage-oauth-service.js";
 import { createPostgresOAuthStateStore } from "../storage/postgres-oauth-state-store.js";
 import { createVaultBackedStorageOAuthRegistration } from "../storage/vault-backed-storage-oauth-registration.js";
@@ -99,6 +100,7 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
     connectionString: options.env.supabaseDbUrl,
     ...(options.env.supabaseDbSsl ? { sslMode: options.env.supabaseDbSsl } : {})
   });
+  const transactionRunner = createPgTransactionRunner(pool);
   const queryClient = createPgPoolQueryClient(pool);
   const repositories = createSupabaseRepositories(queryClient);
   const audit = createDurableAuditSink(queryClient);
@@ -108,40 +110,41 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
   });
   const paperclipSecretBindings = createPaperclipSecretBindingRepository(queryClient);
   const paperclipBoardSessionToken = options.env.runtimeEnv.WF_PAPERCLIP_BOARD_SESSION_TOKEN;
+  const paperclipBoardOrigin = options.env.runtimeEnv.WF_PAPERCLIP_BOARD_ORIGIN;
   const paperclipProjection =
     paperclipBoardSessionToken &&
-    options.env.runtimeEnv.WF_PAPERCLIP_ISSUE_AGENT_ID &&
     options.env.runtimeEnv.PAPERCLIP_BASE_URL
       ? createPaperclipSecretProjectionService({
           adminClient: createPaperclipSecretAdminHttpClient({
-            baseUrl: options.env.runtimeEnv.PAPERCLIP_BASE_URL,
+            baseUrl: paperclipBoardOrigin ?? options.env.runtimeEnv.PAPERCLIP_BASE_URL,
             adminToken: paperclipBoardSessionToken,
-            ...(options.env.runtimeEnv.WF_PAPERCLIP_BOARD_ORIGIN
+            ...(paperclipBoardOrigin
               ? {
-                  origin: options.env.runtimeEnv.WF_PAPERCLIP_BOARD_ORIGIN,
-                  referer: `${options.env.runtimeEnv.WF_PAPERCLIP_BOARD_ORIGIN.replace(/\/+$/, "")}/`
+                  origin: paperclipBoardOrigin,
+                  referer: `${paperclipBoardOrigin.replace(/\/+$/, "")}/`
                 }
               : {})
           }),
           bindings: paperclipSecretBindings,
           resolveCompanyMapping: async ({ tenantId }) => repositories.resolvePaperclipCompanyMapping({ tenantId }),
-          paperclipAgentId: options.env.runtimeEnv.WF_PAPERCLIP_ISSUE_AGENT_ID,
+          ...(options.env.runtimeEnv.WF_PAPERCLIP_ISSUE_AGENT_ID
+            ? { defaultPaperclipAgentId: options.env.runtimeEnv.WF_PAPERCLIP_ISSUE_AGENT_ID }
+            : {}),
           audit
         })
       : undefined;
-  const registerProviderCredential = createVaultBackedProviderCredentialRegistration({
+  const secretRepository = createSupabaseSecretRepository(queryClient, transactionRunner);
+  const secretService = createSecretService({
     vault,
-    repository: {
-      create: repositories.createSecretReference,
-      updateSecretRef: repositories.updateSecretRef,
-      revoke: repositories.revokeSecretReference,
-      findIdBySecretRef: repositories.findSecretReferenceId
-    },
+    repository: secretRepository,
     ...(paperclipProjection ? { projection: paperclipProjection } : {}),
     audit,
-    runtimeEnv: options.env.runtimeEnv
   });
-  const transactionRunner = createPgTransactionRunner(pool);
+  const registerProviderCredential = createProviderCredentialService({
+    secrets: secretService,
+    runtimeEnv: options.env.runtimeEnv
+  }).register;
+  const rotateProviderCredential = secretService.rotate;
   const acidRepository = createAcidGuardRepository(transactionRunner);
   const revokeProviderCredential = createAcidSecretRevokeService({
     repository: { revokeCredential: acidRepository.revokeCredential },
@@ -236,6 +239,7 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
   return {
     server: createServer(createNodeRequestListener(runtimeHandler)),
     registerProviderCredential,
+    rotateProviderCredential,
     revokeProviderCredential,
     storageOAuth,
     startWorkers: () => outboxPump?.start(),

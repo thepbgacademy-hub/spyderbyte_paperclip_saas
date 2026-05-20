@@ -7,6 +7,7 @@ export type AppEnv = {
   workflowQueueName: string;
   paperclipBaseUrl: string;
   paperclipServiceToken: string;
+  paperclipServiceTokensByCompany: Readonly<Record<string, string>>;
   paperclipBoardSessionToken?: string;
   paperclipBoardOrigin?: string;
   paperclipAdminToken?: string;
@@ -101,6 +102,10 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   const paperclipBoardSessionToken = hasValue(source.WF_PAPERCLIP_BOARD_SESSION_TOKEN)
     ? source.WF_PAPERCLIP_BOARD_SESSION_TOKEN.trim()
     : undefined;
+  const paperclipServiceTokensByCompany = readJsonStringMap(source.WF_PAPERCLIP_SERVICE_TOKEN_MAP);
+  if (source.WF_PAPERCLIP_SERVICE_TOKEN_MAP !== undefined && paperclipServiceTokensByCompany === null) {
+    invalidKeys.push("WF_PAPERCLIP_SERVICE_TOKEN_MAP");
+  }
   const paperclipBoardOrigin = hasValue(source.WF_PAPERCLIP_BOARD_ORIGIN) ? trimTrailingSlash(source.WF_PAPERCLIP_BOARD_ORIGIN) : undefined;
   const paperclipAdminToken = hasValue(source.WF_PAPERCLIP_ADMIN_TOKEN) ? source.WF_PAPERCLIP_ADMIN_TOKEN.trim() : undefined;
   if (paperclipBoardSessionToken && !paperclipBoardOrigin) {
@@ -128,6 +133,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     workflowQueueName: source.WF_WORKFLOW_QUEUE_NAME?.trim() || "wfpc-workflow-runs",
     paperclipBaseUrl: trimTrailingSlash(source.PAPERCLIP_BASE_URL as string),
     paperclipServiceToken: source.PAPERCLIP_SERVICE_TOKEN as string,
+    paperclipServiceTokensByCompany: paperclipServiceTokensByCompany ?? {},
     ...(paperclipBoardSessionToken ? { paperclipBoardSessionToken } : {}),
     ...(paperclipBoardOrigin ? { paperclipBoardOrigin } : {}),
     ...(paperclipAdminToken ? { paperclipAdminToken } : {}),
@@ -223,4 +229,25 @@ function readPositiveInteger(value: string | undefined, fallback: number): numbe
 
   const parsed = Number.parseInt(value, 10);
   return parsed >= 1 ? parsed : null;
+}
+
+function readJsonStringMap(value: string | undefined): Readonly<Record<string, string>> | null {
+  if (!hasValue(value)) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    const entries = Object.entries(parsed);
+    if (entries.some(([key, entryValue]) => key.trim().length === 0 || typeof entryValue !== "string" || entryValue.trim().length === 0)) {
+      return null;
+    }
+    return Object.freeze(
+      Object.fromEntries(entries.map(([key, entryValue]) => [key.trim(), (entryValue as string).trim()]))
+    );
+  } catch {
+    return null;
+  }
 }

@@ -9,7 +9,8 @@ import {
   createPaperclipSecretAdminHttpClient,
   createPaperclipSecretBindingRepository,
   createPaperclipSecretSyncService,
-  toPaperclipEnvBindings
+  toPaperclipEnvBindings,
+  toPaperclipSecretRefBinding
 } from "../paperclip/secret-sync.js";
 import { type ProviderKind } from "../providers/provider-types.js";
 import { createRuntimeProviderExecutionContextResolver } from "../providers/runtime-provider-execution.js";
@@ -48,7 +49,7 @@ export function createWorkerRuntime(options: { env: WorkerEnv }) {
     options.env.paperclipBoardSessionToken && options.env.paperclipLaunchMode === "issues"
       ? createPaperclipSecretSyncService({
           adminClient: createPaperclipSecretAdminHttpClient({
-            baseUrl: options.env.paperclipBaseUrl,
+            baseUrl: options.env.paperclipBoardOrigin ?? options.env.paperclipBaseUrl,
             adminToken: options.env.paperclipBoardSessionToken,
             ...(options.env.paperclipBoardOrigin
               ? {
@@ -63,6 +64,9 @@ export function createWorkerRuntime(options: { env: WorkerEnv }) {
   const audit = createDurableAuditSink(queryClient);
   const acidRepository = createAcidGuardRepository(transactionRunner);
   const recordWorkflowStatus = createAcidWorkflowStatusRecorder(acidRepository);
+  const companyIdToTenantId = new Map<string, string>();
+  const companyIdToIssueAgentId = new Map<string, string>();
+  const companyIdToServiceToken = new Map<string, string>();
   const vault = createEncryptedSecretVault({
     masterKey: options.env.vaultMasterKey,
     store: createPostgresEncryptedVaultStore(queryClient)
@@ -90,15 +94,28 @@ export function createWorkerRuntime(options: { env: WorkerEnv }) {
     baseUrl: options.env.paperclipBaseUrl,
     serviceToken: options.env.paperclipServiceToken,
     launchMode: options.env.paperclipLaunchMode,
-    ...(options.env.paperclipLaunchMode === "issues" && options.env.paperclipIssueAgentId
+    ...(options.env.paperclipLaunchMode === "issues"
       ? {
-          issueLaunch: {
-            resolveLaunchTarget: async () => ({
-              agentId: options.env.paperclipIssueAgentId as string
-            }),
+        issueLaunch: {
+            resolveServiceToken: async ({ companyId }) => {
+              const mappedToken = companyIdToServiceToken.get(companyId);
+              if (mappedToken) {
+                return mappedToken;
+              }
+              return options.env.paperclipServiceToken;
+            },
+            resolveLaunchTarget: async ({ companyId }) => {
+              const mappedAgentId = companyIdToIssueAgentId.get(companyId) ?? options.env.paperclipIssueAgentId;
+              if (!mappedAgentId) {
+                throw new Error(`Missing Paperclip issue agent mapping for company ${companyId}`);
+              }
+              return {
+                agentId: mappedAgentId
+              };
+            },
             syncProviderSecretRefs: async ({ companyId, agentId, providerContext }) => {
               const tenantId = companyIdToTenantId.get(companyId) ?? "";
-              const env: Record<string, { type: "secret_ref"; secretId: string; version: string }> = {};
+              const adapterEnv: Record<string, { type: "secret_ref"; secretId: string; version: string | number }> = {};
               for (const binding of providerContext) {
                 for (const bindingTarget of toPaperclipEnvBindings(binding.providerKind as ProviderKind, binding.secretValues ?? {})) {
                   if (!tenantId) {
@@ -118,14 +135,13 @@ export function createWorkerRuntime(options: { env: WorkerEnv }) {
                     if (!existing.paperclipSecretVersion) {
                       throw new Error(`Missing Paperclip secret version for ${binding.providerKind}:${bindingTarget.envKey}`);
                     }
-                    env[bindingTarget.envKey] = {
-                      type: "secret_ref",
-                      secretId: existing.paperclipSecretId,
-                      version: existing.paperclipSecretVersion
-                    };
+                    adapterEnv[bindingTarget.envKey] = toPaperclipSecretRefBinding({
+                      paperclipSecretId: existing.paperclipSecretId,
+                      paperclipSecretVersion: existing.paperclipSecretVersion
+                    });
                     continue;
                   }
-                  const syncedSecret = await paperclipSecretSync.syncBinding({
+                  const synced = await paperclipSecretSync.syncBinding({
                     tenantId,
                     wealthFactorySecretReferenceId: await repositories.findSecretReferenceId({
                       tenantId,
@@ -139,14 +155,17 @@ export function createWorkerRuntime(options: { env: WorkerEnv }) {
                     paperclipSecretKey: bindingTarget.envKey,
                     bindToAgent: false
                   });
-                  env[bindingTarget.envKey] = {
-                    type: "secret_ref",
-                    secretId: syncedSecret.paperclipSecretId,
-                    version: syncedSecret.paperclipSecretVersion
-                  };
+                  adapterEnv[bindingTarget.envKey] = toPaperclipSecretRefBinding({
+                    paperclipSecretId: synced.paperclipSecretId,
+                    paperclipSecretVersion: synced.paperclipSecretVersion
+                  });
                 }
               }
-              return Object.keys(env).length > 0 ? { adapterConfig: { env } } : undefined;
+              return {
+                adapterConfig: {
+                  env: adapterEnv
+                }
+              };
             },
             pollIntervalMs: options.env.paperclipIssuePollIntervalMs,
             maxPollAttempts: options.env.paperclipIssueMaxPollAttempts
@@ -158,7 +177,6 @@ export function createWorkerRuntime(options: { env: WorkerEnv }) {
     maxConcurrentRuns: options.env.workerConcurrency,
     maxConcurrentRunsPerTenant: options.env.workerMaxActivePerTenant
   });
-  const companyIdToTenantId = new Map<string, string>();
 
   return {
     async processQueuePayload(payload: unknown) {
@@ -173,7 +191,21 @@ export function createWorkerRuntime(options: { env: WorkerEnv }) {
             tenantResolver: async (tenantId) => {
               const mapping = await repositories.resolvePaperclipCompanyMapping({ tenantId });
               companyIdToTenantId.set(mapping.paperclipCompanyId, tenantId);
-              return { paperclipCompanyId: mapping.paperclipCompanyId };
+              if (mapping.paperclipIssueAgentId) {
+                companyIdToIssueAgentId.set(mapping.paperclipCompanyId, mapping.paperclipIssueAgentId);
+              } else {
+                companyIdToIssueAgentId.delete(mapping.paperclipCompanyId);
+              }
+              const mappedToken = options.env.paperclipServiceTokensByCompany[mapping.paperclipCompanyId];
+              if (mappedToken) {
+                companyIdToServiceToken.set(mapping.paperclipCompanyId, mappedToken);
+              } else {
+                companyIdToServiceToken.delete(mapping.paperclipCompanyId);
+              }
+              return {
+                paperclipCompanyId: mapping.paperclipCompanyId,
+                ...(mapping.paperclipIssueAgentId ? { paperclipIssueAgentId: mapping.paperclipIssueAgentId } : {})
+              };
             },
             authorizeRunStart: async () => true,
             isPaperclipEnabled: async () => true,

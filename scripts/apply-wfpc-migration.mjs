@@ -1,16 +1,11 @@
 import { readFileSync } from "node:fs";
 import { Client } from "pg";
 
+import { loadScriptEnv } from "./lib/script-env.mjs";
+
 /* global console */
 
-const env = readFileSync(".env", "utf8")
-  .split(/\r?\n/)
-  .filter((line) => line.trim() && !line.trim().startsWith("#"))
-  .map((line) => line.split(/=(.*)/s).slice(0, 2))
-  .reduce((acc, [key, value]) => {
-    acc[key.trim()] = value ?? "";
-    return acc;
-  }, {});
+const env = loadScriptEnv();
 
 const connectionString = env.SUPABASE_DB_URL;
 if (!connectionString || connectionString === "PLACE_HOLDER") {
@@ -132,6 +127,19 @@ try {
   if (!boundProviderReady) {
     await client.query(readFileSync("supabase/migrations/0005_bound_provider_context.sql", "utf8"));
   }
+  const activeProviderLaneExisting = await client.query(
+    `select
+      exists (
+        select 1
+        from pg_indexes
+        where schemaname = 'wfpc'
+          and indexname = 'secret_references_active_provider_lane_unique'
+      ) as has_active_provider_lane_index`
+  );
+  const activeProviderLaneReady = Object.values(activeProviderLaneExisting.rows[0] ?? {}).every(Boolean);
+  if (!activeProviderLaneReady) {
+    await client.query(readFileSync("supabase/migrations/0006_single_active_provider_lane.sql", "utf8"));
+  }
   const vaultExisting = await client.query(
     `select
       exists (select 1 from information_schema.tables where table_schema = 'wfpc_private' and table_name = 'vault_secrets') as has_table,
@@ -209,6 +217,34 @@ try {
   if (!paperclipSecretBindingVersionReady) {
     await client.query(readFileSync("supabase/migrations/0012_paperclip_secret_binding_versions.sql", "utf8"));
   }
+  const paperclipCompanyIssueAgentExisting = await client.query(
+    `select
+      exists (
+        select 1
+        from information_schema.columns
+        where table_schema = 'wfpc'
+          and table_name = 'paperclip_company_mappings'
+          and column_name = 'paperclip_issue_agent_id'
+      ) as has_issue_agent_column`
+  );
+  const paperclipCompanyIssueAgentReady = Object.values(paperclipCompanyIssueAgentExisting.rows[0] ?? {}).every(Boolean);
+  if (!paperclipCompanyIssueAgentReady) {
+    await client.query(readFileSync("supabase/migrations/0013_paperclip_company_issue_agents.sql", "utf8"));
+  }
+  const paperclipSecretBindingStatusExisting = await client.query(
+    `select
+      exists (
+        select 1
+        from pg_constraint
+        where conname = 'paperclip_secret_bindings_binding_status_check'
+          and conrelid = to_regclass('wfpc.paperclip_secret_bindings')
+          and pg_get_constraintdef(oid) like '%synced%'
+      ) as has_synced_status`
+  );
+  const paperclipSecretBindingStatusReady = Object.values(paperclipSecretBindingStatusExisting.rows[0] ?? {}).every(Boolean);
+  if (!paperclipSecretBindingStatusReady) {
+    await client.query(readFileSync("supabase/migrations/0014_paperclip_secret_binding_synced_status.sql", "utf8"));
+  }
   const { rows } = await client.query(
     "select table_schema, table_name from information_schema.tables where table_schema = 'wfpc' order by table_name"
   );
@@ -222,13 +258,16 @@ try {
           !purchaseReady ||
           !outboxReady ||
           !boundProviderReady ||
+          !activeProviderLaneReady ||
           !vaultReady ||
           !vaultKindReady ||
           !storageSecretReady ||
           !storageConnectorTenantFkReady ||
           !runtimeSharedStateReady ||
           !paperclipSecretBindingReady ||
-          !paperclipSecretBindingVersionReady,
+          !paperclipSecretBindingVersionReady ||
+          !paperclipCompanyIssueAgentReady ||
+          !paperclipSecretBindingStatusReady,
         tableCount: rows.length,
         tables: rows.map((row) => row.table_name)
       },

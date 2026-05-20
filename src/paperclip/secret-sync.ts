@@ -13,7 +13,7 @@ export type PaperclipSecretBindingRecord = {
   paperclipSecretKey: string;
   paperclipSecretVersion?: string;
   providerKind: ProviderKind;
-  bindingStatus: "active" | "revoked" | "error";
+  bindingStatus: "active" | "synced" | "revoked" | "error";
   lastSyncedAt: string;
   lastError: string | null;
 };
@@ -172,7 +172,7 @@ export function createPaperclipSecretBindingRepository(client: QueryClient) {
            on secrets.id = bindings.wealth_factory_secret_reference_id
          where bindings.tenant_id = $1
            and bindings.paperclip_company_id = $2
-           and bindings.binding_status = 'active'
+           and bindings.binding_status in ('active', 'synced')
            and ($4::text is null or bindings.paperclip_agent_id = $4)
            and ($5::text is null or bindings.paperclip_env_key = $5)
            and secrets.secret_ref = $3
@@ -216,7 +216,7 @@ export function createPaperclipSecretSyncService(options: {
       secretValue: string;
       paperclipSecretKey: string;
       bindToAgent?: boolean;
-    }): Promise<{ paperclipSecretId: string; paperclipSecretKey: string; paperclipSecretVersion: string }> {
+      }): Promise<{ paperclipSecretId: string; paperclipSecretKey: string; paperclipSecretVersion: string }> {
       try {
         const secret = await options.adminClient.upsertSecret({
           companyId: input.paperclipCompanyId,
@@ -242,7 +242,7 @@ export function createPaperclipSecretSyncService(options: {
           paperclipSecretKey: secret.paperclipSecretKey,
           paperclipSecretVersion: secret.paperclipSecretVersion,
           providerKind: input.providerKind,
-          bindingStatus: "active",
+          bindingStatus: input.bindToAgent ?? true ? "active" : "synced",
           lastError: null
         });
         return secret;
@@ -286,8 +286,8 @@ export function createPaperclipSecretSyncService(options: {
 export function createPaperclipSecretProjectionService(options: {
   adminClient: PaperclipSecretBoardSessionClient;
   bindings: ReturnType<typeof createPaperclipSecretBindingRepository>;
-  resolveCompanyMapping(input: { tenantId: string }): Promise<{ paperclipCompanyId: string }>;
-  paperclipAgentId: string;
+  resolveCompanyMapping(input: { tenantId: string }): Promise<{ paperclipCompanyId: string; paperclipIssueAgentId?: string }>;
+  defaultPaperclipAgentId?: string;
   audit?(event: {
     tenantId: string;
     eventType: string;
@@ -312,12 +312,16 @@ export function createPaperclipSecretProjectionService(options: {
       if (!company) {
         return;
       }
+      const paperclipAgentId = company.paperclipIssueAgentId ?? options.defaultPaperclipAgentId;
+      if (!paperclipAgentId) {
+        throw new Error("Paperclip issue agent mapping is required");
+      }
       for (const binding of toPaperclipEnvBindings(input.providerKind, input.secretValues)) {
         await syncService.syncBinding({
           tenantId: input.tenantId,
           wealthFactorySecretReferenceId: input.secretReferenceId,
           paperclipCompanyId: company.paperclipCompanyId,
-          paperclipAgentId: options.paperclipAgentId,
+          paperclipAgentId,
           paperclipEnvKey: binding.envKey,
           providerKind: input.providerKind,
           secretValue: binding.secretValue,
@@ -340,6 +344,10 @@ export function createPaperclipSecretProjectionService(options: {
       if (!company) {
         return;
       }
+      const paperclipAgentId = company.paperclipIssueAgentId ?? options.defaultPaperclipAgentId;
+      if (!paperclipAgentId) {
+        throw new Error("Paperclip issue agent mapping is required");
+      }
       const existingBindings = await options.bindings.listBindingsBySecretReference({
         tenantId: input.tenantId,
         wealthFactorySecretReferenceId: input.secretReferenceId
@@ -353,7 +361,7 @@ export function createPaperclipSecretProjectionService(options: {
             tenantId: input.tenantId,
             wealthFactorySecretReferenceId: input.secretReferenceId,
             paperclipCompanyId: company.paperclipCompanyId,
-            paperclipAgentId: options.paperclipAgentId,
+            paperclipAgentId,
             paperclipEnvKey: binding.envKey,
             providerKind: input.providerKind,
             secretValue: binding.secretValue,
@@ -415,7 +423,7 @@ async function resolveCompanyMappingSafely(
     entityId?: string;
     metadata: Record<string, unknown>;
   }
-): Promise<{ paperclipCompanyId: string } | null> {
+): Promise<{ paperclipCompanyId: string; paperclipIssueAgentId?: string } | null> {
   try {
     return await options.resolveCompanyMapping({ tenantId: input.tenantId });
   } catch (error) {
@@ -473,9 +481,10 @@ export function createPaperclipSecretBoardSessionHttpClient(options: {
         secretName: input.secretKey
       });
       const record = existingSecret
-        ? await rotateCompanySecret(fetchImpl, baseUrl, requestHeaders, {
+        ? await rotateOrRecoverCompanySecret(fetchImpl, baseUrl, requestHeaders, {
             paperclipSecretId: existingSecret.paperclipSecretId,
-            secretValue: input.secretValue
+            secretValue: input.secretValue,
+            ...(existingSecret.paperclipSecretStatus ? { existingStatus: existingSecret.paperclipSecretStatus } : {})
           })
         : await createOrRecoverCompanySecret(fetchImpl, baseUrl, requestHeaders, {
             companyId: input.companyId,
@@ -522,7 +531,7 @@ export function createPaperclipSecretBoardSessionHttpClient(options: {
                 [input.envKey]: {
                   type: "secret_ref",
                   secretId: input.paperclipSecretId,
-                  version: input.paperclipSecretVersion ?? "latest"
+                  version: toPaperclipVersionSelector(input.paperclipSecretVersion)
                 }
               }
             }
@@ -590,6 +599,17 @@ export function toPaperclipEnvBindings(
     default:
       throw new Error(`Unsupported Paperclip secret binding provider: ${providerKind}`);
   }
+}
+
+export function toPaperclipSecretRefBinding(input: {
+  paperclipSecretId: string;
+  paperclipSecretVersion?: string;
+}): { type: "secret_ref"; secretId: string; version: string | number } {
+  return {
+    type: "secret_ref",
+    secretId: input.paperclipSecretId,
+    version: toPaperclipVersionSelector(input.paperclipSecretVersion)
+  };
 }
 
 function toPaperclipSecretValue(envKey: string, secretValues: Record<string, string>): string {
@@ -660,6 +680,39 @@ async function rotateCompanySecret(
   });
 }
 
+async function rotateOrRecoverCompanySecret(
+  fetchImpl: FetchLike,
+  baseUrl: string,
+  headers: HeadersInit,
+  input: { paperclipSecretId: string; secretValue: string; existingStatus?: string }
+): Promise<unknown> {
+  if (input.existingStatus === "disabled") {
+    await setCompanySecretStatus(fetchImpl, baseUrl, headers, {
+      paperclipSecretId: input.paperclipSecretId,
+      status: "active"
+    });
+  }
+
+  try {
+    return await rotateCompanySecret(fetchImpl, baseUrl, headers, {
+      paperclipSecretId: input.paperclipSecretId,
+      secretValue: input.secretValue
+    });
+  } catch (error) {
+    if (!(error instanceof PaperclipBoardSessionHttpError) || error.status !== 422 || input.existingStatus === "disabled") {
+      throw error;
+    }
+    await setCompanySecretStatus(fetchImpl, baseUrl, headers, {
+      paperclipSecretId: input.paperclipSecretId,
+      status: "active"
+    });
+    return rotateCompanySecret(fetchImpl, baseUrl, headers, {
+      paperclipSecretId: input.paperclipSecretId,
+      secretValue: input.secretValue
+    });
+  }
+}
+
 async function createOrRecoverCompanySecret(
   fetchImpl: FetchLike,
   baseUrl: string,
@@ -688,9 +741,10 @@ async function createOrRecoverCompanySecret(
     if (!recoveredSecret) {
       throw error;
     }
-    return rotateCompanySecret(fetchImpl, baseUrl, headers, {
+    return rotateOrRecoverCompanySecret(fetchImpl, baseUrl, headers, {
       paperclipSecretId: recoveredSecret.paperclipSecretId,
-      secretValue: input.secretValue
+      secretValue: input.secretValue,
+      ...(recoveredSecret.paperclipSecretStatus ? { existingStatus: recoveredSecret.paperclipSecretStatus } : {})
     });
   }
 }
@@ -700,7 +754,7 @@ async function findCompanySecretByKey(
   baseUrl: string,
   headers: HeadersInit,
   input: { companyId: string; secretKey: string; secretName?: string }
-): Promise<{ paperclipSecretId: string; paperclipSecretKey: string; paperclipSecretVersion?: string } | null> {
+): Promise<{ paperclipSecretId: string; paperclipSecretKey: string; paperclipSecretVersion?: string; paperclipSecretStatus?: string } | null> {
   const body = await requestJson(fetchImpl, `${baseUrl}/api/companies/${encodeURIComponent(input.companyId)}/secrets`, {
     method: "GET",
     headers
@@ -708,17 +762,18 @@ async function findCompanySecretByKey(
   const records = extractSecretRecords(body);
   const normalizedSecretKey = normalizePaperclipSecretKey(input.secretKey);
   const normalizedSecretName = input.secretName ? normalizePaperclipSecretKey(input.secretName) : null;
-  const match = records.find((record) => {
+  const matches = records.filter((record) => {
     const keyMatch = normalizePaperclipSecretKey(record.paperclipSecretKey) === normalizedSecretKey;
     if (keyMatch) {
       return true;
     }
     return normalizedSecretName !== null && normalizePaperclipSecretKey(record.paperclipSecretName ?? "") === normalizedSecretName;
   });
-  return match ?? null;
+  const activeMatch = matches.find((record) => record.paperclipSecretStatus !== "disabled");
+  return activeMatch ?? matches[0] ?? null;
 }
 
-function extractSecretRecords(body: unknown): Array<{ paperclipSecretId: string; paperclipSecretKey: string; paperclipSecretVersion?: string; paperclipSecretName?: string }> {
+function extractSecretRecords(body: unknown): Array<{ paperclipSecretId: string; paperclipSecretKey: string; paperclipSecretVersion?: string; paperclipSecretStatus?: string; paperclipSecretName?: string }> {
   const record = asRecord(body);
   const candidates = Array.isArray(body)
     ? body
@@ -735,6 +790,7 @@ function extractSecretRecords(body: unknown): Array<{ paperclipSecretId: string;
       const paperclipSecretKey =
         typeof value.key === "string" ? value.key : typeof value.secretKey === "string" ? value.secretKey : "";
       const paperclipSecretVersion = readPaperclipSecretVersion(value);
+      const paperclipSecretStatus = typeof value.status === "string" ? value.status : undefined;
       const paperclipSecretName = typeof value.name === "string" ? value.name : undefined;
       if (!paperclipSecretId || !paperclipSecretKey) {
         return null;
@@ -743,15 +799,31 @@ function extractSecretRecords(body: unknown): Array<{ paperclipSecretId: string;
         paperclipSecretId,
         paperclipSecretKey,
         ...(paperclipSecretVersion ? { paperclipSecretVersion } : {}),
+        ...(paperclipSecretStatus ? { paperclipSecretStatus } : {}),
         ...(paperclipSecretName ? { paperclipSecretName } : {})
       };
     })
     .filter(
       (
         candidate
-      ): candidate is { paperclipSecretId: string; paperclipSecretKey: string; paperclipSecretVersion?: string; paperclipSecretName?: string } =>
+      ): candidate is { paperclipSecretId: string; paperclipSecretKey: string; paperclipSecretVersion?: string; paperclipSecretStatus?: string; paperclipSecretName?: string } =>
         candidate !== null
     );
+}
+
+async function setCompanySecretStatus(
+  fetchImpl: FetchLike,
+  baseUrl: string,
+  headers: HeadersInit,
+  input: { paperclipSecretId: string; status: "active" | "disabled" }
+): Promise<unknown> {
+  return requestJson(fetchImpl, `${baseUrl}/api/secrets/${encodeURIComponent(input.paperclipSecretId)}`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify({
+      status: input.status
+    })
+  });
 }
 
 function readAgentAdapterConfig(agent: unknown): Record<string, unknown> {
@@ -782,6 +854,16 @@ function readPaperclipSecretVersion(body: Record<string, unknown>, fallback?: st
     return value;
   }
   return fallback ?? "latest";
+}
+
+function toPaperclipVersionSelector(value?: string): string | number {
+  if (!value || value.trim().length === 0) {
+    return "latest";
+  }
+  if (/^\d+$/.test(value.trim())) {
+    return Number(value.trim());
+  }
+  return value;
 }
 
 class PaperclipBoardSessionHttpError extends Error {

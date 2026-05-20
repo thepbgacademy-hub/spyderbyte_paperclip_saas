@@ -157,6 +157,7 @@ describe("createPaperclipClient", () => {
       fetchImpl,
       launchMode: "issues",
       issueLaunch: {
+        resolveServiceToken: vi.fn().mockResolvedValue("service-token-company-1"),
         resolveLaunchTarget: vi.fn().mockResolvedValue({
           agentId: "agent-1",
           issueTitle: "WF workflow",
@@ -218,6 +219,10 @@ describe("createPaperclipClient", () => {
       "https://paperclip.internal.local/api/companies/pc-company-1/issues",
       expect.objectContaining({
         method: "POST",
+        headers: {
+          authorization: "Bearer service-token-company-1",
+          "content-type": "application/json"
+        },
         body: JSON.stringify({
           title: "WF workflow",
           body: "launch",
@@ -250,6 +255,17 @@ describe("createPaperclipClient", () => {
       })
     );
     expect(JSON.stringify(fetchImpl.mock.calls[0]?.[1]?.body)).not.toContain("sk-secret");
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      2,
+      "https://paperclip.internal.local/api/issues/WEA-21",
+      expect.objectContaining({
+        method: "GET",
+        headers: {
+          authorization: "Bearer service-token-company-1",
+          "content-type": "application/json"
+        }
+      })
+    );
   });
 
   it("translates Paperclip failures into safe internal error codes", async () => {

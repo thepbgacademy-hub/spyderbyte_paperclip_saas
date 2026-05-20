@@ -22,9 +22,10 @@ Set these on the VPS as root-owned environment files or deployment secrets. Do n
 - `SUPABASE_DB_URL`
 - `SUPABASE_DB_SSL`
 - `PAPERCLIP_SERVICE_TOKEN`
+- `WF_PAPERCLIP_SERVICE_TOKEN_MAP` optional JSON object mapping additional Paperclip company IDs to company-scoped bearer tokens for multi-company issue-launch lanes; keep `PAPERCLIP_SERVICE_TOKEN` as the default/fallback token
 - `WF_PAPERCLIP_LAUNCH_MODE` set to `issues` for the staged/live Paperclip board-session proof, otherwise leave the default `runs`
 - `WF_PAPERCLIP_BOARD_SESSION_TOKEN` required when verifying Paperclip secret projection, rotation, and revoke against the installed board session routes
-- `WF_PAPERCLIP_BOARD_ORIGIN` required with the board session token so trusted `Origin` / `Referer` headers match the Paperclip board host; use it for request headers, not as a replacement for the internal `PAPERCLIP_BASE_URL`
+- `WF_PAPERCLIP_BOARD_ORIGIN` required with the board session token so trusted `Origin` / `Referer` headers match the Paperclip board host; for the installed Paperclip board-session routes, this origin is also the HTTP base URL for secret-management calls, while `PAPERCLIP_BASE_URL` remains the internal launch/health target
 - `WF_PAPERCLIP_ADMIN_TOKEN` is deprecated for this issue-launch secret-projection path and should not be treated as a bearer-token compatibility lane
 - `WF_PAPERCLIP_ISSUE_AGENT_ID` required when `WF_PAPERCLIP_LAUNCH_MODE=issues`
 - `WF_PAPERCLIP_ISSUE_POLL_INTERVAL_MS` optional override for issue-launch run polling
@@ -71,9 +72,10 @@ $env:WF_PAPERCLIP_LAUNCH_MODE="issues"
 $env:WF_PAPERCLIP_BOARD_SESSION_TOKEN="<paperclip-board-session-token>"
 $env:WF_PAPERCLIP_BOARD_ORIGIN="https://paperclip-gwry.srv1605805.hstgr.cloud"
 $env:WF_PAPERCLIP_ISSUE_AGENT_ID="<paperclip-issue-agent-id>"
+$env:WF_PAPERCLIP_SERVICE_TOKEN_MAP='{"<paperclip-company-id>":"<company-scoped-paperclip-token>"}'
 ```
 
-Keep `PAPERCLIP_BASE_URL` pointed at the internal Paperclip service (`http://paperclip:3100` or equivalent private network target). `WF_PAPERCLIP_BOARD_ORIGIN` exists only so the board-session routes receive the expected trusted `Origin` / `Referer` headers.
+Keep `PAPERCLIP_BASE_URL` pointed at the internal Paperclip service (`http://paperclip:3100` or equivalent private network target) for launch and health traffic. On the currently installed Paperclip build, board-session secret routes must be called against `WF_PAPERCLIP_BOARD_ORIGIN` with matching trusted `Origin` / `Referer` headers.
 
 Leave `WF_PAPERCLIP_BOARD_SESSION_TOKEN` unset outside the board-session proof path so normal `/runs` deployments do not accidentally depend on board-scoped Paperclip credentials. Do not rely on `WF_PAPERCLIP_ADMIN_TOKEN` as a bearer-token fallback for this path.
 
@@ -108,7 +110,8 @@ Image build note:
 - treat that as an auth/readiness floor only; it does not prove the current token can execute the final Wealth Factory launch flow
 - the checked-in deploy compose now targets the installed Paperclip internal port and health route at `http://paperclip:3100/api/health`
 - for staged/live issue-launch proof, the deployed API and worker must both receive `WF_PAPERCLIP_LAUNCH_MODE`, `WF_PAPERCLIP_BOARD_SESSION_TOKEN`, `WF_PAPERCLIP_BOARD_ORIGIN`, and `WF_PAPERCLIP_ISSUE_AGENT_ID` so registration, rotation, revoke, and worker-side secret sync all use the same board-session contract
-- for that proof path specifically, keep `PAPERCLIP_BASE_URL` on the internal/private service and use `WF_PAPERCLIP_BOARD_ORIGIN` only for trusted board headers
+- when staging more than one Paperclip company in the same worker lane, also provide `WF_PAPERCLIP_SERVICE_TOKEN_MAP` so issue-launch requests use a company-scoped bearer token instead of reusing the primary company token across tenants
+- for that proof path specifically, keep `PAPERCLIP_BASE_URL` on the internal/private service for launch/health traffic; the secret-projection client uses `WF_PAPERCLIP_BOARD_ORIGIN` as the board-session request target because the installed Paperclip board routes do not accept the internal service host
 - do not reuse the API image for the worker unless its entrypoint is explicitly overridden to `node dist/worker/worker-main.js`
 
 ## Smoke Tests
@@ -270,7 +273,7 @@ Current staged-runtime finding on 2026-05-20:
 
 - the stage lane was rebuilt with version-pinned Paperclip secret binding support
 - the stage database now carries `wfpc.paperclip_secret_bindings.paperclip_secret_version`
-- the worker issue-launch path now syncs Paperclip secrets per run and injects issue-scoped `assigneeAdapterOverrides.adapterConfig.env` using explicit `secret_ref { secretId, version }`
+- the worker issue-launch path now syncs Paperclip secrets per run, patches the configured Paperclip issue agent with version-pinned `secret_ref` bindings, and does not forward raw secret values in the issue payload
 - the worker no longer falls back to Paperclip `version: "latest"` when reusing an existing binding for workflow launch; missing versions now fail closed
 - a fresh staged proof run (`040f4776-7636-4d08-9678-dc6b17ed1378`) confirmed:
   - run reservation succeeds
@@ -278,6 +281,10 @@ Current staged-runtime finding on 2026-05-20:
   - BullMQ job becomes reachable and completes
   - `wfpc.workflow_runs.status` advances to `running`
   - bound provider context remains attached to the run
+- a second staged tenant/company lane now also works after adding per-company Paperclip issue-agent mappings plus a company-scoped bearer token override:
+  - the secondary Paperclip company token must be minted through `POST /api/agents/:agentId/keys` using the public Paperclip board origin with trusted `Origin` / `Referer` headers
+  - reusing the primary company token against the secondary company fails with `403 Agent key cannot access another company`
+  - after setting `WF_PAPERCLIP_SERVICE_TOKEN_MAP`, a fresh secondary staged run (`cc59dcb9-4ed4-4aee-a2c4-f4637ce4a13c`) reached `running` with outbox `enqueued` and BullMQ `completed`
 
 Current Paperclip contract findings on 2026-05-19:
 
@@ -292,15 +299,15 @@ Current Paperclip contract findings on 2026-05-19:
 - sharp edge:
   - `executionRunId` and `checkoutRunId` are not durable on the issue object after the run transitions the issue to `blocked` or the issue later completes; they can fall back to `null`
   - for durable correlation, use the run id while it is present, then rely on issue activity/comment `runId` or `createdByRunId` plus `GET /api/heartbeat-runs/:runId`
-- issue-level `assigneeAdapterOverrides.adapterConfig.env` reaches the launched runtime:
+- issue-level `assigneeAdapterOverrides.adapterConfig.env` reaches the launched runtime for plain values:
   - a direct CTO probe issue successfully echoed an injected env value from runtime
   - this proves the installed Paperclip build supports issue-scoped adapter env overrides in execution
 - security sharp edge:
   - plain env override values are persisted on the Paperclip issue object and therefore must not be used for subscriber API keys or other tenant secrets
-  - a naive `secret_ref` issue override failed in the current company-token lane, and Paperclip secret creation from the company token returned `403 Board access required`
+  - on the installed Paperclip build, `secret_ref` issue overrides for provider env keys currently fail validation, so the staged Wealth Factory path uses agent-bound version-pinned `secret_ref` bindings instead of issue-scoped secret refs
 - current implication for Wealth Factory:
   - do not switch the checked-in adapter yet
-  - the installed Paperclip build now looks capable of deterministic issue-launch plus run-id polling, and the repo now assumes board-session secret projection via `WF_PAPERCLIP_BOARD_SESSION_TOKEN`, trusted `WF_PAPERCLIP_BOARD_ORIGIN` request headers, and `WF_PAPERCLIP_ISSUE_AGENT_ID`
+- the installed Paperclip build now looks capable of deterministic issue-launch plus run-id polling, and the repo now assumes board-session secret projection via `WF_PAPERCLIP_BOARD_SESSION_TOKEN`, `WF_PAPERCLIP_BOARD_ORIGIN` as the board-session secret-route base, and `WF_PAPERCLIP_ISSUE_AGENT_ID`
   - the live VPS contract no longer uses `/api/admin/...` bearer routes for secret lifecycle work; it now depends on the trusted board session routes `GET/POST /api/companies/:companyId/secrets`, `POST /api/secrets/:secretId/rotate`, `PATCH /api/secrets/:secretId`, and `PATCH /api/agents/:agentId`
 
 ## Next VPS Proof Sequence
@@ -309,9 +316,21 @@ After the stage/live containers are running with the issue-launch board-session 
 
 1. Register or refresh a tenant provider credential and confirm the API logs an audited projection attempt without breaking local registration if the Paperclip mapping is absent.
 2. Seed or confirm the matching `wfpc.paperclip_company_mappings` row, then repeat registration and confirm a Paperclip secret binding is created for the configured issue agent.
-3. Queue a real run and confirm the worker reuses the same board-session binding contract during issue-launch secret sync.
-4. Rotate the tenant credential and confirm a first-time or replacement binding is refreshed remotely without exposing raw secret values in the launch payload.
-5. Revoke the tenant credential and confirm future runs fail closed while the Paperclip binding cleanup path is attempted and audited.
+3. For any additional staged Paperclip company, mint a company-scoped agent key with `POST /api/agents/:agentId/keys` from the trusted public Paperclip board origin and add it to `WF_PAPERCLIP_SERVICE_TOKEN_MAP`.
+4. Queue a real run and confirm the worker reuses the same board-session binding contract during issue-launch secret sync, refreshing the Paperclip issue agent binding without exposing raw secret values in the issue payload.
+5. Rotate the tenant credential and confirm a first-time or replacement binding is refreshed remotely without exposing raw secret values in the launch payload.
+6. Revoke the tenant credential and confirm future runs fail closed while the Paperclip binding cleanup path is attempted and audited.
+
+Repeatable operator helpers for this proof lane:
+
+- `npm run prove:provider-lifecycle -- --tenant <tenant-id> --user <user-id> --provider-kind openai_api --label OpenAI`
+- `npm run seed:demo -- --lane secondary --paperclip-company-id <paperclip-company-id>`
+- the API runtime image now carries the repo `scripts/` folder, and `scripts/lib/script-env.mjs` tolerates a missing `.env`, so `docker exec wealth-factory-api-stage2 node scripts/inspect-live-workflow-run.mjs ...` no longer requires copying helper scripts or an ad hoc env file into the container first
+
+Set the lifecycle proof env before using the helper:
+
+- `WF_LIFECYCLE_SECRET_VALUE` for `register` and `full`
+- `WF_LIFECYCLE_SECRET_VALUE_NEXT` for `rotate` and `full`
 
 Do not treat a public Paperclip target as release-safe. Before commercial rollout, remove the host port publish and public router so Paperclip is reachable only from the Wealth Factory API and worker containers.
 

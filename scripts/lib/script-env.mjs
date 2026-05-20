@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import process from "node:process";
 
 export function parseDotEnvFile(path) {
@@ -11,8 +11,9 @@ export function parseDotEnvFile(path) {
 }
 
 export function loadScriptEnv(path = ".env") {
+  const fileEnv = existsSync(path) ? parseDotEnvFile(path) : {};
   return {
-    ...parseDotEnvFile(path),
+    ...fileEnv,
     ...Object.fromEntries(
       Object.entries(process.env).filter(([, value]) => typeof value === "string")
     )

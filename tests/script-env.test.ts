@@ -45,4 +45,14 @@ describe("script env loader", () => {
 
     expect(env.WF_DEMO_PAPERCLIP_COMPANY_ID).toBe("");
   });
+
+  it("falls back to process env when no dotenv file exists", () => {
+    tempDir = mkdtempSync(join(tmpdir(), "wfpc-script-env-"));
+    const envPath = join(tempDir, "missing.env");
+    process.env.WF_DEMO_PAPERCLIP_COMPANY_ID = "pc-company-from-process";
+
+    const env = loadScriptEnv(envPath);
+
+    expect(env.WF_DEMO_PAPERCLIP_COMPANY_ID).toBe("pc-company-from-process");
+  });
 });
