@@ -175,7 +175,15 @@ export function createWorkerRuntime(options: { env: WorkerEnv }) {
   });
   const executionGate = createTenantExecutionGate({
     maxConcurrentRuns: options.env.workerConcurrency,
-    maxConcurrentRunsPerTenant: options.env.workerMaxActivePerTenant
+    maxConcurrentRunsPerTenant: options.env.workerMaxActivePerTenant,
+    onSnapshot: (snapshot) => {
+      process.stdout.write(
+        `${JSON.stringify({
+          type: "wealth_factory_worker_fairness",
+          ...snapshot
+        })}\n`
+      );
+    }
   });
 
   return {

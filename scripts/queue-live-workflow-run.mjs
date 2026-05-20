@@ -2,7 +2,7 @@ import process from "node:process";
 
 import pg from "pg";
 
-import { createLiveRunRequest } from "./lib/live-run-drive.mjs";
+import { createLiveRunRequest, reserveLiveWorkflowRun } from "./lib/live-run-drive.mjs";
 import { loadRuntimePreflight, summarizeRuntimePreflight } from "./lib/runtime-preflight.mjs";
 import { loadScriptEnv } from "./lib/script-env.mjs";
 
@@ -59,7 +59,7 @@ try {
   } else {
     await client.query("begin");
 
-    const reservation = await reserveWorkflowRun({ client, ...request });
+    const reservation = await reserveLiveWorkflowRun({ client, ...request });
     await client.query("commit");
 
     if (!reservation.reserved) {
@@ -86,126 +86,6 @@ try {
   await client.end();
 }
 
-async function reserveWorkflowRun(input) {
-  const tenant = await input.client.query("select paused_at from wfpc.tenants where id = $1 for update", [input.tenantId]);
-  if (tenant.rows.length === 0) {
-    return { reserved: false, reason: "tenant_not_found" };
-  }
-  if (tenant.rows[0]?.paused_at !== null) {
-    return { reserved: false, reason: "tenant_paused" };
-  }
-
-  const membership = await input.client.query("select tenant_id from wfpc.tenant_memberships where tenant_id = $1 and user_id = $2", [input.tenantId, input.userId]);
-  if (membership.rows.length === 0) {
-    return { reserved: false, reason: "not_member" };
-  }
-
-  const workflow = await input.client.query(
-    "select id, package_id, provider_kind from wfpc.workflow_templates where tenant_id = $1 and id = $2 and enabled = true for update",
-    [input.tenantId, input.workflowId]
-  );
-  if (workflow.rows.length === 0) {
-    return { reserved: false, reason: "workflow_unavailable" };
-  }
-
-  const workflowRow = workflow.rows[0];
-  if (!workflowRow.package_id) {
-    return { reserved: false, reason: "entitlement_denied" };
-  }
-
-  const install = await input.client.query(
-    `select i.id
-     from wfpc.tenant_package_installs i
-     join wfpc.tenant_package_purchases p
-       on p.tenant_id = i.tenant_id
-      and p.package_id = i.package_id
-     where i.tenant_id = $1
-       and i.package_id = $2
-       and i.status = 'active'
-       and p.status = 'active'
-       and p.starts_at <= now()
-       and (p.ends_at is null or p.ends_at > now())
-     limit 1
-     for update`,
-    [input.tenantId, workflowRow.package_id]
-  );
-  if (install.rows.length === 0) {
-    return { reserved: false, reason: "entitlement_denied" };
-  }
-
-  const requirement = await input.client.query(
-    `select id, capability, provider_kind
-     from wfpc.package_provider_requirements
-     where package_id = $1
-       and (provider_kind is null or provider_kind = $2)
-     order by case when provider_kind = $2 then 0 else 1 end, capability`,
-    [workflowRow.package_id, workflowRow.provider_kind]
-  );
-  if (requirement.rows.length === 0) {
-    return { reserved: false, reason: "entitlement_denied" };
-  }
-
-  const credential = await input.client.query(
-    "select id, secret_ref, label, metadata from wfpc.secret_references where tenant_id = $1 and provider_kind = $2 and revoked_at is null limit 1 for update",
-    [input.tenantId, workflowRow.provider_kind]
-  );
-  if (credential.rows.length === 0) {
-    return { reserved: false, reason: "credential_revoked" };
-  }
-
-  const credentialRow = credential.rows[0];
-  const boundCapability = resolveBoundCapability({
-    providerKind: String(workflowRow.provider_kind),
-    requirementRows: requirement.rows
-  });
-  if (!boundCapability) {
-    return { reserved: false, reason: "entitlement_denied" };
-  }
-  const reservation = await input.client.query(
-    `insert into wfpc.workflow_run_reservations
-      (tenant_id, workflow_template_id, run_id, idempotency_key, reserved_by_user_id)
-     values ($1, $2, $3, $4, $5)
-     on conflict do nothing
-     returning id`,
-    [input.tenantId, input.workflowId, input.runId, input.idempotencyKey, input.userId]
-  );
-  if (reservation.rows.length === 0) {
-    return { reserved: false, reason: "duplicate" };
-  }
-
-  await input.client.query(
-    `insert into wfpc.workflow_runs
-      (id, tenant_id, workflow_template_id, created_by_user_id, status, bound_secret_reference_id, bound_provider_context)
-     values ($1, $2, $3, $4, 'queued', $5::uuid, $6::jsonb)`,
-    [
-      input.runId,
-      input.tenantId,
-      input.workflowId,
-      input.userId,
-      String(credentialRow.id),
-      JSON.stringify([
-        {
-          capability: boundCapability,
-          providerKind: String(workflowRow.provider_kind),
-          label: String(credentialRow.label),
-          secretRef: String(credentialRow.secret_ref),
-          metadata: credentialRow.metadata && typeof credentialRow.metadata === "object" ? credentialRow.metadata : {}
-        }
-      ])
-    ]
-  );
-
-  await input.client.query(
-    `insert into wfpc.workflow_queue_outbox
-      (tenant_id, run_id, workflow_template_id, created_by_user_id, idempotency_key)
-     values ($1, $2, $3, $4, $5)
-     on conflict (tenant_id, run_id) do nothing`,
-    [input.tenantId, input.runId, input.workflowId, input.userId, input.idempotencyKey]
-  );
-
-  return { reserved: true, runId: input.runId };
-}
-
 function parseArgs(values) {
   const args = {};
   for (let index = 0; index < values.length; index += 1) {
@@ -229,47 +109,4 @@ function resolveSsl(source) {
   }
 
   return { rejectUnauthorized: true };
-}
-
-function resolveBoundCapability(input) {
-  const normalizedCapabilities = [...new Set(input.requirementRows.map(asRecord).map((row) => normalizeProviderCapability(row.capability)).filter((value) => value !== null))];
-  if (normalizedCapabilities.length === 1) {
-    return normalizedCapabilities[0];
-  }
-
-  if (normalizedCapabilities.length > 1) {
-    return null;
-  }
-
-  return inferCapabilityFromProviderKind(input.providerKind);
-}
-
-function normalizeProviderCapability(value) {
-  if (value === "content_generation") {
-    return "text_generation";
-  }
-
-  return value === "text_generation" ||
-    value === "image_generation" ||
-    value === "video_generation" ||
-    value === "social_publishing" ||
-    value === "media_storage"
-    ? value
-    : null;
-}
-
-function inferCapabilityFromProviderKind(providerKind) {
-  return providerKind === "openai" ||
-    providerKind === "openai_api" ||
-    providerKind === "openai_chatgpt_codex_subscription" ||
-    providerKind === "anthropic_api" ||
-    providerKind === "xai_grok_api" ||
-    providerKind === "openrouter_api" ||
-    providerKind === "generic_api"
-    ? "text_generation"
-    : null;
-}
-
-function asRecord(value) {
-  return value && typeof value === "object" ? value : {};
 }

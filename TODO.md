@@ -232,4 +232,9 @@ This file tracks implementation progress. Keep it current after every phase.
     - [x] Prove plain issue-level env overrides are not safe for subscriber secrets because the values persist on the issue object.
     - [ ] Determine whether a board/admin secret-management lane can create Paperclip secrets usable by `secret_ref` issue overrides.
     - [ ] Determine whether company-token execution can consume `secret_ref` issue overrides after a valid secret exists.
-  - [ ] Decide whether Wealth Factory should adapt to issue-launch plus short polling for `executionRunId`, or whether Paperclip should be reconfigured/upgraded to expose a safer direct run-launch contract.
+- [ ] Decide whether Wealth Factory should adapt to issue-launch plus short polling for `executionRunId`, or whether Paperclip should be reconfigured/upgraded to expose a safer direct run-launch contract.
+- [x] Run a first staged parallel-load fairness proof with at least two tenant/company lanes.
+  - [x] Queue a skewed burst through the real reserve -> outbox -> BullMQ -> worker path.
+  - [x] Confirm both tenant lanes reach `running` without secret drift.
+  - [x] Confirm the staged worker emits tenant-safe fairness logs during admission/release.
+  - [ ] Extend from the first staged fairness proof to longer sustained pressure runs and multi-worker fairness validation.

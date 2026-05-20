@@ -82,7 +82,7 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 3. Use the temporary public Paperclip lane only for controlled testing: run `npm run verify:paperclip-target`, then use `npm run seed:demo`, `npm run queue:live-run`, and `npm run inspect:live-run` to validate the live Redis/BullMQ path end to end, confirming the outbox pump enqueues the run, the worker can claim it, and the bound provider path reaches Paperclip without using shared credentials in normal mode.
 4. Current live blocker as of 2026-05-19: the repo-side migration gap is fixed and `npm run check:live-runtime` now reports the VPS-backed database schema as bound-provider ready, but the running `wealth-factory-api` container is still an older partial runtime. It is missing the app/worker env needed for the full queue path, including `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `REDIS_URL`, `PAPERCLIP_BASE_URL`, `PAPERCLIP_SERVICE_TOKEN`, and the new signed-session auth env (`WF_API_SESSION_SIGNING_KEY`, plus optional issuer/audience overrides), and the VPS process list still shows no deployed `worker-main` process.
 5. Next live-ops step: redeploy the Wealth Factory API with the full queue/Paperclip env set, deploy/start the repo's `worker-main` process, seed a real `wfpc.paperclip_company_mappings` row with a Paperclip company ID, and then rerun the controlled live drive.
-6. Run parallel-load verification proving one tenant cannot monopolize execution under realistic ordering pressure, then tune `WF_WORKER_CONCURRENCY` and `WF_WORKER_MAX_ACTIVE_PER_TENANT` with measurement instead of assumption.
+6. Extend the first staged parallel-load fairness proof into longer sustained pressure runs, then tune `WF_WORKER_CONCURRENCY` and `WF_WORKER_MAX_ACTIVE_PER_TENANT` with measurement instead of assumption.
 7. Re-run `npm run smoke:external` after the final firewall/allowlist policy is applied; it is now the repeatable external gate for DNS, intended ports, private ports, auth/CORS route behavior, and response leak checks.
 8. Confirm the VPS runtime keeps using `createPostgresEncryptedVaultStore` with a strong `WF_VAULT_MASTER_KEY` and rotate any previously issued shared deploy tokens out of operator workflows now that the signed runtime session-token layer is in place.
 9. Keep the repo-side Paperclip adapter steady for now. The installed Paperclip build has now proven:
@@ -109,6 +109,19 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 12. Immediate next repo step:
    - verify the live VPS Paperclip admin lane against the real board/admin token path and confirm the expected admin routes on the installed build
    - rerun staged verification against the Paperclip issue-launch lane with real admin-token provisioning enabled
+
+13. Staged fairness checkpoint now landed:
+   - the repo now includes `scripts/lib/pressure-drive.mjs` plus the `npm run prove:live-fairness` helper
+   - the worker runtime now emits `wealth_factory_worker_fairness` logs with tenant-safe `queued` / `started` / `released` snapshots
+   - staged skewed burst proof succeeded with:
+     - primary run `afd2ceca-4754-4f24-8b33-03aca6070d20`
+     - secondary run `6614eac6-3ba1-4bd9-8f67-a5601c7535f4`
+     - second primary run `9428a32c-9e29-4d54-bf6a-48ad70965bee`
+   - all 3 runs reached `wfpc.workflow_runs.status = running`
+   - all 3 outbox rows reached `enqueued`
+   - BullMQ reported all 3 jobs `completed`
+   - the staged worker logs proved both tenants were admitted under the same single-worker lane while `WF_WORKER_CONCURRENCY=2` and `WF_WORKER_MAX_ACTIVE_PER_TENANT=1`
+   - limit: this is a single-worker fairness proof only; outbox claim order is still FIFO and cross-worker fairness is not yet globally proven
 
 ## Security Position
 

@@ -325,6 +325,7 @@ Repeatable operator helpers for this proof lane:
 
 - `npm run prove:provider-lifecycle -- --tenant <tenant-id> --user <user-id> --provider-kind openai_api --label OpenAI`
 - `npm run seed:demo -- --lane secondary --paperclip-company-id <paperclip-company-id>`
+- `npm run prove:live-fairness -- --primary-tenant <tenant-a> --primary-user <user-a> --primary-workflow <workflow-a> --primary-runs 2 --secondary-tenant <tenant-b> --secondary-user <user-b> --secondary-workflow <workflow-b> --secondary-runs 1`
 - the API runtime image now carries the repo `scripts/` folder, and `scripts/lib/script-env.mjs` tolerates a missing `.env`, so `docker exec wealth-factory-api-stage2 node scripts/inspect-live-workflow-run.mjs ...` no longer requires copying helper scripts or an ad hoc env file into the container first
 
 Set the lifecycle proof env before using the helper:

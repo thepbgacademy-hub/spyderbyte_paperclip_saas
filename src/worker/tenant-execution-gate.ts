@@ -1,6 +1,13 @@
 type TenantExecutionGateConfig = {
   maxConcurrentRuns: number;
   maxConcurrentRunsPerTenant: number;
+  onSnapshot?: (snapshot: {
+    event: "queued" | "started" | "released";
+    tenantId: string;
+    activeRuns: number;
+    activeByTenant: Record<string, number>;
+    queuedByTenant: Record<string, number>;
+  }) => void;
 };
 
 type QueuedExecution<T> = {
@@ -38,6 +45,7 @@ export function createTenantExecutionGate(config: TenantExecutionGateConfig) {
         if (!tenantOrder.includes(tenantId)) {
           tenantOrder.push(tenantId);
         }
+        emitSnapshot("queued", tenantId);
         drainQueue();
       });
     },
@@ -64,6 +72,7 @@ export function createTenantExecutionGate(config: TenantExecutionGateConfig) {
 
       activeRuns += 1;
       activeByTenant.set(next.tenantId, (activeByTenant.get(next.tenantId) ?? 0) + 1);
+      emitSnapshot("started", next.tenantId);
 
       void next.operation().then(
         (value) => {
@@ -127,7 +136,24 @@ export function createTenantExecutionGate(config: TenantExecutionGateConfig) {
     } else {
       activeByTenant.set(tenantId, activeForTenant);
     }
+    emitSnapshot("released", tenantId);
     drainQueue();
+  }
+
+  function emitSnapshot(event: "queued" | "started" | "released", tenantId: string) {
+    config.onSnapshot?.({
+      event,
+      tenantId,
+      ...{
+        activeRuns,
+        activeByTenant: Object.fromEntries(activeByTenant.entries()),
+        queuedByTenant: Object.fromEntries(
+          [...tenantQueues.entries()]
+            .filter(([, queue]) => queue.length > 0)
+            .map(([queuedTenantId, queue]) => [queuedTenantId, queue.length])
+        )
+      }
+    });
   }
 }
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 
 import { createWorkerRuntime, loadWorkerEnv } from "../src/worker/runtime.js";
 
@@ -92,6 +92,12 @@ vi.mock("../src/paperclip/client.js", () => ({
     createRun: vi.fn().mockResolvedValue({ paperclipRunId: "pc-run-1", status: "queued" })
   }))
 }));
+
+const stdoutWrite = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+afterAll(() => {
+  stdoutWrite.mockRestore();
+});
 
 describe("worker runtime", () => {
   const validEnv = {
@@ -268,6 +274,29 @@ describe("worker runtime", () => {
       workflowId: "workflow-1",
       providerContext: []
     })).resolves.toBe("pc-company-1-token");
+
+    await runtime.close();
+  });
+
+  it("emits tenant-safe fairness snapshots while processing queue payloads", async () => {
+    stdoutWrite.mockClear();
+    const runtime = createWorkerRuntime({ env: loadWorkerEnv(validEnv) });
+
+    await runtime.processQueuePayload({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "workflow-1",
+      createdByUserId: "user-1",
+      idempotencyKey: "tenant-1:workflow-1:run-1",
+      createdAt: new Date().toISOString()
+    });
+
+    const logged = stdoutWrite.mock.calls
+      .map(([value]) => String(value))
+      .filter((value) => value.includes("wealth_factory_worker_fairness"));
+
+    expect(logged.length).toBeGreaterThan(0);
+    expect(logged.some((line) => line.includes("\"tenantId\":\"tenant-1\""))).toBe(true);
 
     await runtime.close();
   });
