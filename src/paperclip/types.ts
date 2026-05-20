@@ -9,6 +9,7 @@ export type CreatePaperclipRunInput = {
   workflowId: string;
   spyderbyteRunId: string;
   providerContext?: readonly PaperclipProviderContext[];
+  runtimeProviderContext?: readonly PaperclipRuntimeProviderContext[];
 };
 
 export type PaperclipProviderContext = {
@@ -19,12 +20,12 @@ export type PaperclipProviderContext = {
   metadata: Record<string, unknown>;
 };
 
+export type PaperclipRuntimeProviderContext = PaperclipProviderContext & {
+  secretValues?: Record<string, string>;
+};
+
 export function toPaperclipProviderContext(
-  providerContext:
-    | readonly (PaperclipProviderContext & {
-        secretValues?: Record<string, string>;
-      })[]
-    | undefined
+  providerContext: readonly PaperclipRuntimeProviderContext[] | undefined
 ): readonly PaperclipProviderContext[] | undefined {
   if (!providerContext) {
     return undefined;

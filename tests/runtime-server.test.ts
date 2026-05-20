@@ -33,6 +33,10 @@ vi.mock("../src/db/supabase-repositories.js", () => ({
   }))
 }));
 
+vi.mock("../src/audit/durable-audit.js", () => ({
+  createDurableAuditSink: vi.fn(() => vi.fn().mockResolvedValue(undefined))
+}));
+
 vi.mock("../src/workflows/queue-outbox-pump.js", () => ({
   createQueueOutboxPump: vi.fn(() => ({
     start: vi.fn(),

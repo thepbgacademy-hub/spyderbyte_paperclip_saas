@@ -12,7 +12,7 @@ describe("dashboard HTTP boundary", () => {
     const handler = createDashboardHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
       dashboardApi,
-      rateLimiter: { consume: vi.fn().mockReturnValue({ allowed: true, remaining: 9, resetAt: 1 }) }
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
     });
 
     const response = await handler({
@@ -47,7 +47,7 @@ describe("dashboard HTTP boundary", () => {
     const handler = createDashboardHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
       dashboardApi,
-      rateLimiter: { consume: vi.fn().mockReturnValue({ allowed: true, remaining: 9, resetAt: 1 }) }
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
     });
 
     const response = await handler({
@@ -72,7 +72,7 @@ describe("dashboard HTTP boundary", () => {
     const handler = createDashboardHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
       dashboardApi,
-      rateLimiter: { consume: vi.fn().mockReturnValue({ allowed: true, remaining: 9, resetAt: 1 }) }
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
     });
 
     const response = await handler({
@@ -96,7 +96,7 @@ describe("dashboard HTTP boundary", () => {
     const handler = createDashboardHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
       dashboardApi,
-      rateLimiter: { consume: vi.fn().mockReturnValue({ allowed: false, remaining: 0, resetAt: 1 }) }
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: false, remaining: 0, resetAt: 1 }) }
     });
 
     const response = await handler({

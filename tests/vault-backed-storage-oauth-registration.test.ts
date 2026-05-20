@@ -23,9 +23,11 @@ describe("vault-backed storage OAuth registration", () => {
     const runner = {
       withTransaction: vi.fn().mockImplementation(async (callback: (client: typeof transaction) => Promise<unknown>) => callback(transaction))
     };
+    const audit = vi.fn().mockResolvedValue(undefined);
     const registration = createVaultBackedStorageOAuthRegistration({
       runner,
-      vaultMasterKey: "test-master-key-with-enough-length"
+      vaultMasterKey: "test-master-key-with-enough-length",
+      audit
     });
 
     await expect(
@@ -49,5 +51,17 @@ describe("vault-backed storage OAuth registration", () => {
     expect(String(transaction.query.mock.calls[0]?.[0])).toMatch(/insert into wfpc_private\.vault_secrets/i);
     expect(String(transaction.query.mock.calls[1]?.[0])).toMatch(/insert into wfpc\.storage_connectors/i);
     expect(String(transaction.query.mock.calls[2]?.[0])).toMatch(/insert into wfpc_private\.storage_connector_secrets/i);
+    expect(audit).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      actorUserId: "user-1",
+      eventType: "storage.oauth_connected",
+      entityType: "storage_connector",
+      entityId: "storage-connector-1",
+      metadata: {
+        providerKind: "google_drive",
+        displayName: "Company Drive",
+        folderLabel: "Exports"
+      }
+    });
   });
 });

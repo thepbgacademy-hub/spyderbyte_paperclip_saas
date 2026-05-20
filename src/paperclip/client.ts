@@ -1,4 +1,5 @@
 import {
+  type PaperclipRuntimeProviderContext,
   toPaperclipProviderContext,
   type CancelPaperclipRunInput,
   type CreatePaperclipRunInput,
@@ -8,6 +9,7 @@ import {
   type PaperclipRunReference,
   type PaperclipRunStatus
 } from "./types.js";
+import { createPaperclipIssueLaunchAdapter } from "./issue-launch.js";
 
 type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -15,6 +17,22 @@ export type PaperclipClientOptions = {
   baseUrl: string;
   serviceToken: string;
   fetchImpl?: FetchLike;
+  launchMode?: "runs" | "issues";
+  issueLaunch?: {
+    resolveLaunchTarget(input: {
+      companyId: string;
+      workflowId: string;
+      providerContext: readonly PaperclipRuntimeProviderContext[];
+    }): Promise<{ agentId: string; issueTitle?: string; issueBody?: string }>;
+    syncProviderSecretRefs?(input: {
+      companyId: string;
+      workflowId: string;
+      agentId: string;
+      providerContext: readonly PaperclipRuntimeProviderContext[];
+    }): Promise<void>;
+    pollIntervalMs?: number;
+    maxPollAttempts?: number;
+  };
 };
 
 export class PaperclipClientError extends Error {
@@ -31,6 +49,18 @@ export class PaperclipClientError extends Error {
 export function createPaperclipClient(options: PaperclipClientOptions): PaperclipClient {
   const baseUrl = options.baseUrl.replace(/\/+$/, "");
   const fetchImpl = options.fetchImpl ?? fetch;
+  const issueLaunchAdapter =
+    options.launchMode === "issues" && options.issueLaunch
+      ? createPaperclipIssueLaunchAdapter({
+          baseUrl,
+          serviceToken: options.serviceToken,
+          fetchImpl,
+          resolveLaunchTarget: options.issueLaunch.resolveLaunchTarget,
+          ...(options.issueLaunch.syncProviderSecretRefs ? { syncProviderSecretRefs: options.issueLaunch.syncProviderSecretRefs } : {}),
+          ...(options.issueLaunch.pollIntervalMs ? { pollIntervalMs: options.issueLaunch.pollIntervalMs } : {}),
+          ...(options.issueLaunch.maxPollAttempts ? { maxPollAttempts: options.issueLaunch.maxPollAttempts } : {})
+        })
+      : null;
 
   async function request(path: string, init: RequestInit): Promise<unknown> {
     let response: Response;
@@ -62,6 +92,15 @@ export function createPaperclipClient(options: PaperclipClientOptions): Papercli
     },
 
     async createRun(input: CreatePaperclipRunInput): Promise<PaperclipRunReference> {
+      if (issueLaunchAdapter) {
+        return issueLaunchAdapter.launch({
+          companyId: input.companyId,
+          workflowId: input.workflowId,
+          spyderbyteRunId: input.spyderbyteRunId,
+          providerContext: input.runtimeProviderContext ?? input.providerContext ?? []
+        });
+      }
+
       const body = await request(`/api/companies/${encodeURIComponent(input.companyId)}/runs`, {
         method: "POST",
         body: JSON.stringify({

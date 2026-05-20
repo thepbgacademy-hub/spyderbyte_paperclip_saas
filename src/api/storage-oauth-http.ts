@@ -16,7 +16,7 @@ type StorageOAuthService = {
 };
 
 type RateLimiter = {
-  consume(key: string): { allowed: boolean; remaining: number; resetAt: number };
+  consume(key: string): Promise<{ allowed: boolean; remaining: number; resetAt: number }>;
 };
 
 export function createStorageOAuthHttpHandler(options: {
@@ -57,7 +57,7 @@ export function createStorageOAuthHttpHandler(options: {
       return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
     }
 
-    const rateLimit = options.rateLimiter.consume(`${request.ip}:storage-oauth:${route.action}`);
+    const rateLimit = await options.rateLimiter.consume(`${request.ip}:storage-oauth:${route.action}`);
     if (!rateLimit.allowed) {
       return {
         status: 429,

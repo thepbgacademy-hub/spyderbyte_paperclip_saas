@@ -26,6 +26,9 @@ describe("loadEnv", () => {
       paperclipServiceToken: "paperclip-service-token",
       vaultMasterKey: "test-master-key-with-enough-length",
       providerExecutionMode: "tenant_credentials_required",
+      paperclipLaunchMode: "runs",
+      paperclipIssuePollIntervalMs: 1000,
+      paperclipIssueMaxPollAttempts: 10,
       workerConcurrency: 2,
       workerMaxActivePerTenant: 1
     });
@@ -63,6 +66,27 @@ describe("loadEnv", () => {
 
   it("rejects unknown provider execution modes", () => {
     expect(() => loadEnv({ ...validEnv, WF_PROVIDER_EXECUTION_MODE: "something_else" })).toThrow(/WF_PROVIDER_EXECUTION_MODE/);
+  });
+
+  it("accepts issue-launch mode when an agent id is configured", () => {
+    expect(
+      loadEnv({
+        ...validEnv,
+        WF_PAPERCLIP_LAUNCH_MODE: "issues",
+        WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-1",
+        WF_PAPERCLIP_ISSUE_POLL_INTERVAL_MS: "1500",
+        WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS: "12"
+      })
+    ).toMatchObject({
+      paperclipLaunchMode: "issues",
+      paperclipIssueAgentId: "agent-1",
+      paperclipIssuePollIntervalMs: 1500,
+      paperclipIssueMaxPollAttempts: 12
+    });
+  });
+
+  it("requires an agent id for issue-launch mode", () => {
+    expect(() => loadEnv({ ...validEnv, WF_PAPERCLIP_LAUNCH_MODE: "issues" })).toThrow(/WF_PAPERCLIP_ISSUE_AGENT_ID/);
   });
 
   it("accepts explicit worker concurrency settings", () => {

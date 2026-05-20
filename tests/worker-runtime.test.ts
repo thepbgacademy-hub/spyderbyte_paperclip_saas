@@ -16,6 +16,7 @@ vi.mock("../src/db/supabase-repositories.js", () => ({
     updateSecretRef: vi.fn(),
     revokeSecretReference: vi.fn(),
     findIdBySecretRef: vi.fn().mockResolvedValue("secret-1"),
+    findSecretReferenceId: vi.fn().mockResolvedValue("11111111-1111-4111-8111-111111111111"),
     resolvePaperclipCompanyMapping: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" })
   }))
 }));
@@ -50,6 +51,28 @@ vi.mock("../src/secrets/encrypted-vault.js", () => ({
 vi.mock("../src/secrets/secret-service.js", () => ({
   createSecretService: vi.fn(() => ({
     access: vi.fn().mockResolvedValue({ apiKey: "sk-tenant" })
+  }))
+}));
+
+vi.mock("../src/paperclip/secret-sync.js", () => ({
+  createPaperclipSecretBindingRepository: vi.fn(() => ({
+    findActiveBySecretRef: vi.fn().mockResolvedValue({
+      tenantId: "tenant-1",
+      wealthFactorySecretReferenceId: "11111111-1111-4111-8111-111111111111",
+      paperclipCompanyId: "pc-company-1",
+      paperclipAgentId: "agent-1",
+      paperclipEnvKey: "OPENAI_API_KEY",
+      paperclipSecretId: "pc-secret-1",
+      paperclipSecretKey: "OPENAI_API_KEY",
+      providerKind: "openai_api",
+      bindingStatus: "active",
+      lastSyncedAt: "2026-05-19T00:00:00.000Z",
+      lastError: null
+    })
+  })),
+  createPaperclipSecretAdminHttpClient: vi.fn(() => ({})),
+  createPaperclipSecretSyncService: vi.fn(() => ({
+    syncBinding: vi.fn().mockResolvedValue(undefined)
   }))
 }));
 
@@ -94,6 +117,32 @@ describe("worker runtime", () => {
       workflowId: "workflow-1",
       status: "queued"
     });
+
+    await runtime.close();
+  });
+
+  it("wires the issue-launch adapter into the worker runtime when configured", async () => {
+    const { createPaperclipClient } = await import("../src/paperclip/client.js");
+
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_PAPERCLIP_LAUNCH_MODE: "issues",
+        WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-1"
+      })
+    });
+
+    expect(createPaperclipClient).toHaveBeenCalledWith(
+      expect.objectContaining({
+        launchMode: "issues",
+        issueLaunch: expect.objectContaining({
+          pollIntervalMs: 1000,
+          maxPollAttempts: 10,
+          resolveLaunchTarget: expect.any(Function),
+          syncProviderSecretRefs: expect.any(Function)
+        })
+      })
+    );
 
     await runtime.close();
   });

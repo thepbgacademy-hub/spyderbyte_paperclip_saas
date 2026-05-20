@@ -96,6 +96,16 @@ describe("createPaperclipClient", () => {
             secretRef: "wf_secret_openai",
             metadata: { projectId: "proj_123" }
           }
+        ],
+        runtimeProviderContext: [
+          {
+            capability: "text_generation",
+            providerKind: "openai_api",
+            label: "Primary OpenAI",
+            secretRef: "wf_secret_openai",
+            metadata: { projectId: "proj_123" },
+            secretValues: { apiKey: "sk-secret" }
+          }
         ]
       })
     ).resolves.toEqual({
@@ -123,6 +133,77 @@ describe("createPaperclipClient", () => {
         ]
       })
     });
+  });
+
+  it("supports the issue-launch adapter path with secret sync hooks", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ id: "WEA-21" }))
+      .mockResolvedValueOnce(jsonResponse({ id: "WEA-21", executionRunId: "hb-run-21" }));
+    const syncProviderSecretRefs = vi.fn().mockResolvedValue(undefined);
+    const client = createPaperclipClient({
+      baseUrl: "https://paperclip.internal.local/",
+      serviceToken: "service-token",
+      fetchImpl,
+      launchMode: "issues",
+      issueLaunch: {
+        resolveLaunchTarget: vi.fn().mockResolvedValue({
+          agentId: "agent-1",
+          issueTitle: "WF workflow",
+          issueBody: "launch"
+        }),
+        syncProviderSecretRefs,
+        pollIntervalMs: 0,
+        maxPollAttempts: 2
+      }
+    });
+
+    await expect(
+      client.createRun({
+        companyId: "pc-company-1",
+        workflowId: "wf-intake",
+        spyderbyteRunId: "run-1",
+        providerContext: [
+          {
+            capability: "text_generation",
+            providerKind: "openai_api",
+            label: "Primary OpenAI",
+            secretRef: "wf_secret_openai",
+            metadata: { projectId: "proj_123" }
+          }
+        ],
+        runtimeProviderContext: [
+          {
+            capability: "text_generation",
+            providerKind: "openai_api",
+            label: "Primary OpenAI",
+            secretRef: "wf_secret_openai",
+            metadata: { projectId: "proj_123" },
+            secretValues: { apiKey: "sk-secret" }
+          }
+        ]
+      })
+    ).resolves.toEqual({
+      paperclipRunId: "hb-run-21",
+      status: "queued"
+    });
+
+    expect(syncProviderSecretRefs).toHaveBeenCalledWith({
+      companyId: "pc-company-1",
+      workflowId: "wf-intake",
+      agentId: "agent-1",
+      providerContext: [
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Primary OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: { projectId: "proj_123" },
+          secretValues: { apiKey: "sk-secret" }
+        }
+      ]
+    });
+    expect(JSON.stringify(fetchImpl.mock.calls[0]?.[1]?.body)).not.toContain("sk-secret");
   });
 
   it("translates Paperclip failures into safe internal error codes", async () => {

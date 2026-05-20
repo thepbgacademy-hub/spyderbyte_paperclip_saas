@@ -23,7 +23,7 @@ function createHandler() {
     authenticate: vi.fn().mockResolvedValue(session),
     requireTenantMember: vi.fn().mockResolvedValue(undefined),
     storageOAuth,
-    rateLimiter: { consume: vi.fn().mockReturnValue({ allowed: true, remaining: 59, resetAt: Date.now() + 60_000 }) }
+    rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 59, resetAt: Date.now() + 60_000 }) }
   });
   return { handler, storageOAuth };
 }

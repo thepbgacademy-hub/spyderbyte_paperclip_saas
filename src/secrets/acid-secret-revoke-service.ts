@@ -10,6 +10,10 @@ export type VaultRevoker = {
   revoke(input: { tenantId: string; secretRef: string }): Promise<void>;
 };
 
+export type SecretProjectionRevoker = {
+  revokeBySecretRef(input: { tenantId: string; secretRef: string }): Promise<void>;
+};
+
 export type SecretRevokeAudit = (event: {
   tenantId: string;
   actorUserId: string;
@@ -34,6 +38,7 @@ export function createAcidSecretRevokeService(options: {
   resolver: SecretReferenceResolver;
   vault: VaultRevoker;
   audit: SecretRevokeAudit;
+  projection?: SecretProjectionRevoker;
 }) {
   return {
     async revoke(input: { tenantId: string; actorUserId: string; secretRef: string }): Promise<void> {
@@ -44,6 +49,7 @@ export function createAcidSecretRevokeService(options: {
         revokedReason: "manual"
       });
       await options.vault.revoke({ tenantId: input.tenantId, secretRef: input.secretRef });
+      await options.projection?.revokeBySecretRef({ tenantId: input.tenantId, secretRef: input.secretRef });
       if (!revokeResult.revoked) {
         throw new CredentialAlreadyRevokedError();
       }

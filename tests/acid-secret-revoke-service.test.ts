@@ -13,8 +13,11 @@ describe("ACID secret revoke service", () => {
     const vault = {
       revoke: vi.fn().mockResolvedValue(undefined)
     };
+    const projection = {
+      revokeBySecretRef: vi.fn().mockResolvedValue(undefined)
+    };
     const audit = vi.fn();
-    const service = createAcidSecretRevokeService({ repository, resolver, vault, audit });
+    const service = createAcidSecretRevokeService({ repository, resolver, vault, audit, projection });
 
     await service.revoke({ tenantId: "tenant-1", actorUserId: "user-1", secretRef: "vault://secret-ref" });
 
@@ -24,6 +27,7 @@ describe("ACID secret revoke service", () => {
       revokedReason: "manual"
     });
     expect(vault.revoke).toHaveBeenCalledWith({ tenantId: "tenant-1", secretRef: "vault://secret-ref" });
+    expect(projection.revokeBySecretRef).toHaveBeenCalledWith({ tenantId: "tenant-1", secretRef: "vault://secret-ref" });
     expect(audit).toHaveBeenCalledWith({
       tenantId: "tenant-1",
       actorUserId: "user-1",

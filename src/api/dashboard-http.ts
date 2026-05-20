@@ -21,7 +21,7 @@ type DashboardApi = {
 };
 
 type RateLimiter = {
-  consume(key: string): { allowed: boolean; remaining: number; resetAt: number };
+  consume(key: string): Promise<{ allowed: boolean; remaining: number; resetAt: number }>;
 };
 
 export function createDashboardHttpHandler(options: {
@@ -59,7 +59,7 @@ export function createDashboardHttpHandler(options: {
       return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
     }
 
-    const rateLimit = options.rateLimiter.consume(`${request.ip}:dashboard`);
+    const rateLimit = await options.rateLimiter.consume(`${request.ip}:dashboard`);
     if (!rateLimit.allowed) {
       return {
         status: 429,

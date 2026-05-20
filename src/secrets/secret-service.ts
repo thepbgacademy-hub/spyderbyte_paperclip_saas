@@ -56,7 +56,11 @@ type SecretRepository = {
   findIdBySecretRef(input: { tenantId: string; secretRef: string; runId?: string }): Promise<string> | string;
 };
 
-export function createSecretService(options: { vault: Vault; audit: Audit; repository: SecretRepository }) {
+type SecretProjection = {
+  revokeBySecretRef?(input: { tenantId: string; secretRef: string }): Promise<void> | void;
+};
+
+export function createSecretService(options: { vault: Vault; audit: Audit; repository: SecretRepository; projection?: SecretProjection }) {
   async function register(input: {
     tenantId: string;
     actorUserId: string;
@@ -144,6 +148,7 @@ export function createSecretService(options: { vault: Vault; audit: Audit; repos
     async revoke(input: { tenantId: string; actorUserId: string; secretRef: string }): Promise<void> {
       await options.vault.revoke({ tenantId: input.tenantId, secretRef: input.secretRef });
       const secretReferenceId = await options.repository.revoke({ tenantId: input.tenantId, secretRef: input.secretRef });
+      await options.projection?.revokeBySecretRef?.({ tenantId: input.tenantId, secretRef: input.secretRef });
       await options.audit({
         tenantId: input.tenantId,
         actorUserId: input.actorUserId,

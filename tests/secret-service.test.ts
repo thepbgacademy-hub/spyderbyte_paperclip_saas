@@ -42,13 +42,16 @@ describe("secret service", () => {
       access: vi.fn()
     };
     const audit = vi.fn();
+    const projection = {
+      revokeBySecretRef: vi.fn().mockResolvedValue(undefined)
+    };
     const repository = {
       create: vi.fn().mockResolvedValue("11111111-1111-4111-8111-111111111111"),
       updateSecretRef: vi.fn(),
       revoke: vi.fn(),
       findIdBySecretRef: vi.fn()
     };
-    const service = createSecretService({ vault, audit, repository });
+    const service = createSecretService({ vault, audit, repository, projection });
 
     await expect(
       service.register({
@@ -167,13 +170,16 @@ describe("secret service", () => {
       access: vi.fn().mockResolvedValue("sk-runtime")
     };
     const audit = vi.fn();
+    const projection = {
+      revokeBySecretRef: vi.fn().mockResolvedValue(undefined)
+    };
     const repository = {
       create: vi.fn(),
       updateSecretRef: vi.fn().mockResolvedValue("22222222-2222-4222-8222-222222222222"),
       revoke: vi.fn().mockResolvedValue("22222222-2222-4222-8222-222222222222"),
       findIdBySecretRef: vi.fn().mockResolvedValue("")
     };
-    const service = createSecretService({ vault, audit, repository });
+    const service = createSecretService({ vault, audit, repository, projection });
 
     await expect(
       service.rotate({
@@ -201,6 +207,7 @@ describe("secret service", () => {
       nextSecretRef: "secret_ref_2"
     });
     expect(repository.revoke).toHaveBeenCalledWith({ tenantId: "tenant-1", secretRef: "secret_ref_2" });
+    expect(projection.revokeBySecretRef).toHaveBeenCalledWith({ tenantId: "tenant-1", secretRef: "secret_ref_2" });
   });
 
   it("allows already-bound runs to access a replaced credential by passing the run id to repository resolution", async () => {

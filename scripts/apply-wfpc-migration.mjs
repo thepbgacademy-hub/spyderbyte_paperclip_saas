@@ -175,6 +175,26 @@ try {
   if (!storageConnectorTenantFkReady) {
     await client.query(readFileSync("supabase/migrations/0008_storage_connector_tenant_fk.sql", "utf8"));
   }
+  const runtimeSharedStateExisting = await client.query(
+    `select
+      exists (select 1 from information_schema.tables where table_schema = 'wfpc_private' and table_name = 'oauth_pending_states') as has_oauth_pending_states,
+      exists (select 1 from pg_indexes where schemaname = 'wfpc_private' and indexname = 'oauth_pending_states_expires_at_idx') as has_oauth_pending_states_expires_idx,
+      exists (select 1 from information_schema.tables where table_schema = 'wfpc_private' and table_name = 'rate_limit_buckets') as has_rate_limit_buckets`
+  );
+  const runtimeSharedStateReady = Object.values(runtimeSharedStateExisting.rows[0] ?? {}).every(Boolean);
+  if (!runtimeSharedStateReady) {
+    await client.query(readFileSync("supabase/migrations/0010_runtime_shared_state.sql", "utf8"));
+  }
+  const paperclipSecretBindingExisting = await client.query(
+    `select
+      exists (select 1 from information_schema.tables where table_schema = 'wfpc' and table_name = 'paperclip_secret_bindings') as has_table,
+      exists (select 1 from pg_indexes where schemaname = 'wfpc' and indexname = 'paperclip_secret_bindings_tenant_id_idx') as has_tenant_index,
+      exists (select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'wfpc' and c.relname = 'paperclip_secret_bindings' and c.relrowsecurity) as has_rls`
+  );
+  const paperclipSecretBindingReady = Object.values(paperclipSecretBindingExisting.rows[0] ?? {}).every(Boolean);
+  if (!paperclipSecretBindingReady) {
+    await client.query(readFileSync("supabase/migrations/0011_paperclip_secret_bindings.sql", "utf8"));
+  }
   const { rows } = await client.query(
     "select table_schema, table_name from information_schema.tables where table_schema = 'wfpc' order by table_name"
   );
@@ -191,7 +211,9 @@ try {
           !vaultReady ||
           !vaultKindReady ||
           !storageSecretReady ||
-          !storageConnectorTenantFkReady,
+          !storageConnectorTenantFkReady ||
+          !runtimeSharedStateReady ||
+          !paperclipSecretBindingReady,
         tableCount: rows.length,
         tables: rows.map((row) => row.table_name)
       },

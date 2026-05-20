@@ -879,6 +879,8 @@ Mapping update from live Paperclip discovery:
   - current `bound_provider_context.capability` values are vendor-shaped instead of capability-shaped
   - current run binding storage is effectively single-provider even though the product model assumes future multi-capability workflows
   - a private runtime provider repository path is still needed for worker/sync use
+  - a configurable issue-launch adapter and `paperclip_secret_bindings` persistence are now in the repo, and the worker runtime can enforce explicit company/agent/env-key binding validation before issue launch
+  - the remaining Paperclip runtime gap is automatic admin-lane provisioning and rotation for missing bindings, not the basic issue-launch cutover seam
 
 ## Worker Capacity Guidance
 

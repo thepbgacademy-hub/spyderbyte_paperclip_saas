@@ -13,11 +13,11 @@
 
 This review was performed using the exact local `security-scanner` and `secret-scanner` skill workflows requested for this session. The codebase shows solid tenant-boundary intent: SQL access is parameterized, queue payloads are scrubbed for secret-like values, customer-facing responses are aggressively filtered for internal fields, and the encrypted vault uses authenticated encryption rather than weak custom crypto. Dependency hygiene is also currently clean: `package-lock.json` is present and `npm audit --omit=dev --json` reported zero known production vulnerabilities at scan time on May 19, 2026.
 
-The main remaining risks are architectural and operational rather than low-level coding flaws. The signed runtime session-token hardening landed during this phase, and the checked-in Paperclip `/runs` launch path now strips hydrated `secretValues` before any upstream request body is serialized. The main unresolved issues are now the missing durable audit sinks around secret lifecycle/runtime access, process-local OAuth and rate-limit state, and the larger Paperclip issue-launch plus `secret_ref` sync cutover that still needs implementation. Auditability remains incomplete because secret lifecycle and runtime access events are still composed with no-op audit sinks in the API and worker runtimes.
+The main remaining risks are architectural and operational rather than low-level coding flaws. The signed runtime session-token hardening landed during this phase, the checked-in Paperclip `/runs` launch path strips hydrated `secretValues` before any upstream request body is serialized, and the runtime now uses durable masked audit sinks plus DB-backed OAuth/rate-limit state. The main unresolved issue is the final Paperclip issue-launch plus managed `secret_ref` cutover wiring in the live worker/runtime path, along with the remaining frontend CSP tightening.
 
 The repository did not show confirmed live secrets in tracked files or in the targeted git history scan. The main secret-handling concern inside the workspace is local-only material outside tracked git scope: an untracked `.env` and an untracked `sudo_deploy.txt` remain present and should continue to be treated as sensitive workstation-only files.
 
-**Overall Risk Score:** 12 (Moderate Risk)
+**Overall Risk Score:** 8 (Low Risk)
 
 | Severity | Count |
 |----------|-------|
@@ -238,11 +238,9 @@ Scoring: Critical = 10 pts, High = 7 pts, Medium = 4 pts, Low = 2 pts, Info = 0 
 
 ## Remediation Priority
 
-1. **Add durable masked audit logging for secret lifecycle and access** - Wire persistent audit sinks into both API and worker secret composition paths.
-2. **Back OAuth state and rate limiting with a shared store** - Replace process-local `Map` state with Redis or another coordinated backend.
-3. **Complete the Paperclip `secret_ref` sync cutover** - The checked-in launch boundary no longer forwards raw secrets, but the repo still needs the full synchronized Paperclip-managed secret-binding path and supported issue-launch adapter.
-4. **Tighten frontend hardening and local secret hygiene** - Remove `style-src 'unsafe-inline'` where practical, and keep untracked local secret files outside any release or support artifact path.
-5. **Preserve the new session-token controls operationally** - Keep runtime session tokens short-lived, rebuild the server bundle before minting deploy smoke tokens, and retire any old shared deploy-token habits from operator workflows.
+1. **Complete the Paperclip admin-lane secret provisioning cutover** - The repo now has binding persistence, shared-state migrations, runtime launch-mode controls, and worker-side binding validation for the issue-launch path, but automatic remote provisioning/rotation of missing Paperclip bindings still depends on the higher-scope admin lane.
+2. **Tighten frontend hardening and local secret hygiene** - Remove `style-src 'unsafe-inline'` where practical, and keep untracked local secret files outside any release or support artifact path.
+3. **Preserve the new session-token and durable-audit controls operationally** - Keep runtime session tokens short-lived, keep audit rows masked, and retire any old shared deploy-token habits from operator workflows.
 
 ---
 

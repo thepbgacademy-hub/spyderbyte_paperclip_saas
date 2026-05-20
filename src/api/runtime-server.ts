@@ -6,14 +6,16 @@ import { createDashboardApi } from "./dashboard-api.js";
 import { createDashboardHttpHandler, type DashboardHttpRequest, type DashboardHttpResponse } from "./dashboard-http.js";
 import { createHealthHttpHandler } from "./health-http.js";
 import { createStorageOAuthHttpHandler } from "./storage-oauth-http.js";
+import { createDurableAuditSink } from "../audit/durable-audit.js";
 import { createAcidGuardRepository } from "../db/acid-guard-repository.js";
 import { createPgPool, createPgPoolQueryClient, createPgTransactionRunner } from "../db/postgres-client.js";
 import { createSupabaseRepositories } from "../db/supabase-repositories.js";
-import { createFixedWindowRateLimiter } from "../security/rate-limit.js";
+import { createPostgresFixedWindowRateLimiter } from "../security/postgres-rate-limit.js";
 import { createEncryptedSecretVault } from "../secrets/encrypted-vault.js";
 import { createPostgresEncryptedVaultStore } from "../secrets/postgres-vault-store.js";
 import { createVaultBackedProviderCredentialRegistration } from "../secrets/vault-backed-provider-registration.js";
-import { createMemoryOAuthStateStore, createStorageOAuthService, STORAGE_OAUTH_PROVIDER_CONFIGS } from "../storage/storage-oauth-service.js";
+import { createStorageOAuthService, STORAGE_OAUTH_PROVIDER_CONFIGS } from "../storage/storage-oauth-service.js";
+import { createPostgresOAuthStateStore } from "../storage/postgres-oauth-state-store.js";
 import { createVaultBackedStorageOAuthRegistration } from "../storage/vault-backed-storage-oauth-registration.js";
 import type { WorkflowRunEnqueuer } from "../workflows/acid-run-reservation.js";
 import { createQueueOutboxPump } from "../workflows/queue-outbox-pump.js";
@@ -93,6 +95,7 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
   });
   const queryClient = createPgPoolQueryClient(pool);
   const repositories = createSupabaseRepositories(queryClient);
+  const audit = createDurableAuditSink(queryClient);
   const registerProviderCredential = createVaultBackedProviderCredentialRegistration({
     vault: createEncryptedSecretVault({
       masterKey: options.env.vaultMasterKey,
@@ -104,7 +107,7 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
       revoke: repositories.revokeSecretReference,
       findIdBySecretRef: repositories.findSecretReferenceId
     },
-    audit: async () => undefined,
+    audit,
     runtimeEnv: options.env.runtimeEnv
   });
   const transactionRunner = createPgTransactionRunner(pool);
@@ -124,10 +127,11 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
               redirectUri: `${options.env.storageOAuthRedirectOrigin}/api/storage/oauth/dropbox/callback`
             })
           },
-          stateStore: createMemoryOAuthStateStore(),
+          stateStore: createPostgresOAuthStateStore(queryClient),
           registration: createVaultBackedStorageOAuthRegistration({
             runner: transactionRunner,
-            vaultMasterKey: options.env.vaultMasterKey
+            vaultMasterKey: options.env.vaultMasterKey,
+            audit
           }),
           fetch: globalThis.fetch
         })
@@ -153,7 +157,7 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
   const handler = createDashboardHttpHandler({
     allowedOrigins: options.env.allowedOrigins,
     dashboardApi,
-    rateLimiter: createFixedWindowRateLimiter({ limit: 120, windowMs: 60_000 })
+    rateLimiter: createPostgresFixedWindowRateLimiter({ runner: transactionRunner, limit: 120, windowMs: 60_000 })
   });
   const healthHandler = createHealthHttpHandler({
     allowedOrigins: options.env.allowedOrigins,
@@ -165,7 +169,7 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
         authenticate: options.auth.authenticate,
         requireTenantMember: repositories.requireTenantMember,
         storageOAuth,
-        rateLimiter: createFixedWindowRateLimiter({ limit: 60, windowMs: 60_000 })
+        rateLimiter: createPostgresFixedWindowRateLimiter({ runner: transactionRunner, limit: 60, windowMs: 60_000 })
       })
     : undefined;
   const appShellHandler = options.env.webAppEntryUrl

@@ -1,4 +1,4 @@
-import { toPaperclipProviderContext, type PaperclipClient, type PaperclipRunStatus } from "../paperclip/types.js";
+import { toPaperclipProviderContext, type PaperclipClient, type PaperclipRuntimeProviderContext, type PaperclipRunStatus } from "../paperclip/types.js";
 import type { EntitlementDecision, ProviderCapability } from "../packages/package-types.js";
 import type { ProviderExecutionMode } from "../providers/runtime-provider-fallback.js";
 import type { RuntimeProviderExecutionBinding } from "../providers/runtime-provider-execution.js";
@@ -116,7 +116,7 @@ export function createRunService(options: {
         ...(options.hydrateProviderContext ? { hydrateProviderContext: options.hydrateProviderContext } : {}),
         ...(options.resolveDebugSharedProvider ? { resolveDebugSharedProvider: options.resolveDebugSharedProvider } : {})
       });
-      const paperclipProviderContext = providerContext ? toPaperclipProviderContext(providerContext) : undefined;
+      const paperclipProviderContext = providerContext ? toPaperclipProviderContext(providerContext as readonly PaperclipRuntimeProviderContext[]) : undefined;
       const run = await options.paperclipClient.createRun({
         companyId: tenant.paperclipCompanyId,
         workflowId: input.workflowId,

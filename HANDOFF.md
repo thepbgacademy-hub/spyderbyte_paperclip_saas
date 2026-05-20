@@ -97,6 +97,16 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
    - before adapter cutover, fix 2 repo seams:
      - current `bound_provider_context.capability` values are vendor-shaped instead of capability-shaped
      - current run binding storage is effectively single-provider even though the product model assumes future multi-capability workflows
+11. Runtime hardening checkpoint now landed in the repo:
+   - durable masked audit events now flow through `src/audit/durable-audit.ts` for API/worker secret composition and storage OAuth registration
+   - OAuth callback state is now backed by `wfpc_private.oauth_pending_states`
+   - authenticated route rate limiting is now backed by `wfpc_private.rate_limit_buckets`
+   - `wfpc.paperclip_secret_bindings` now exists for Paperclip-managed secret sync bookkeeping
+   - the Paperclip client now has a configurable issue-launch seam plus optional secret-sync hook while preserving the default sanitized `/runs` path
+   - the worker runtime now honors explicit Paperclip launch-mode env controls and can validate bound company/agent/env-key secret bindings before issue launch
+12. Immediate next repo step:
+   - extend the runtime from binding validation to automatic Paperclip admin-lane secret provisioning and rotation
+   - rerun staged verification against the Paperclip issue-launch lane once the higher-scope provisioning token path is finalized
 
 ## Security Position
 
