@@ -129,6 +129,24 @@ Fix:
 - extend the queue inspection tests instead of replacing them
 - keep coverage on both the per-job lookup path and the queue-level snapshot path
 
+23. The first longer soak over `5` cycles and `50` total requests initially looked healthy from queue completion alone, but cycle-by-cycle fairness analysis showed repeated `cross_worker_lane_skew_detected` windows.
+Fix:
+- treat queue drain and fairness as separate verdicts
+- preserve the analyzer output instead of collapsing the result into a generic soak success
+- document the exact failing window: wave `2`, `windowSize=6`, `participatingWorkers=3`, `expectedUniqueLanes=6`, `uniqueLanesSeen=5`
+
+24. Private-Redis queue depth sampling from this Windows workstation remained an unreliable signal because the caller cannot reach the staged Redis service directly.
+Fix:
+- add `scripts/inspect-live-queue-snapshot.mjs` so queue snapshots can run inside the staged API container
+- sample queue depth from the VPS lane itself and fetch the resulting JSONL back locally for analysis
+- treat worker telemetry plus VPS-side queue evidence as the authoritative saturation source for this topology
+
+25. Nested PowerShell -> SSH -> sudo -> Docker quoting continued to waste time once repeated queue/resource samplers were needed.
+Fix:
+- prefer uploaded remote shell scripts plus local Node/JSON analyzers over nested one-liners on this workstation
+- use the stored sudo note only through stdin-driven helpers
+- fetch raw evidence files back locally and analyze them in-repo instead of chaining remote shell filters
+
 ## Outcome
 
 After the fixes above:
@@ -247,5 +265,32 @@ Additional skewed-soak checkpoint after adding queue snapshots, staggered orderi
   - saved proof files captured through `npm run ... | Out-File` can include a UTF BOM and npm banner lines before the JSON payload
   - the analyzer now strips BOM/prefix noise and trims to the first JSON object instead of treating the file as pristine JSON
 - implication:
-  - longer soak and skewed-burst behavior are now proven strongly enough for this bounded pod model
-  - the remaining pressure gap is explicit resource saturation sampling from inside the VPS lane, not whether the current multi-worker fairness model survives skewed bursts
+  - the shorter skewed-burst checkpoint was strong enough to justify a longer soak and direct saturation sampling
+  - it was not, by itself, final proof that the bounded pod remained fair under a longer skewed pattern
+
+Longer staged soak and VPS-side saturation checkpoint after adding repo-owned resource samplers:
+
+- a heavier staggered soak was run with `5` cycles and `50` total requests across the same six-lane / three-worker pod shape
+- all `50` workflow runs still reached `status = running`
+- all `50` outbox rows reached `enqueued`
+- BullMQ reported all `50` jobs `completed`
+- queue depth did not back up materially when sampled from inside the staged API container:
+  - `waiting` high-water: `0`
+  - `active` high-water: `2`
+- however, the fairness analyzer reported `phase = soak_cycle_distribution_failed`
+- repeated cycle-level failures showed `cross_worker_lane_skew_detected` in the second early coverage window:
+  - `windowSize = 6`
+  - `participatingWorkers = 3`
+  - `expectedUniqueLanes = 6`
+  - `uniqueLanesSeen = 5`
+- implication:
+  - the current six-tenant pod shape can still drain the longer skewed soak successfully
+  - but cross-worker lane coverage is not yet consistently fair enough cycle-by-cycle under this longer skewed pattern
+- VPS-side resource sampling also showed the dominant pressure is Paperclip, not Redis or the Wealth Factory workers:
+  - `paperclip-gwry-paperclip-1` peak CPU: `378.99%`
+  - peak memory: `2553358057` bytes (`15.23%`)
+  - peak PIDs: `1011`
+  - by comparison, Redis stayed low and the proof workers remained comparatively light
+- next implication:
+  - the next pressure gap is no longer "can this pod distribute six tenants at all"
+  - it is claim/start fairness under longer skewed soak plus Paperclip resource saturation behavior

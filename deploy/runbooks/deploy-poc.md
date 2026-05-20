@@ -388,7 +388,7 @@ Current staged sustained-burst checkpoint on 2026-05-20:
     - quaternary: `min=3845ms`, `median=4540ms`, `max=5739ms`
     - quinary: `min=3592ms`, `median=4386ms`, `max=5536ms`
     - senary: `min=3410ms`, `median=4191ms`, `max=5386ms`
-  - treat the bounded-pod model as proven for the six-client pod shape; the next backlog item is longer soak duration, skewed bursts, and resource saturation behavior
+  - treat this as a successful bounded-pod checkpoint for the six-client pod shape, not final proof of robustness; the next backlog item was longer soak duration, skewed bursts, and resource saturation behavior
   - current skewed-soak and saturation checkpoint on 2026-05-20:
     - a staggered six-lane / three-worker / three-cycle proof has now passed with `30` total requests and an intentionally skewed lane shape:
       - primary: `3` runs per cycle
@@ -408,8 +408,37 @@ Current staged sustained-burst checkpoint on 2026-05-20:
     - practical saturation note:
       - queue snapshots captured from this Windows workstation are not authoritative for the private BullMQ Redis lane because the local caller cannot reach the staged Redis service directly
       - treat worker telemetry plus VPS-side queue evidence as the source of truth for saturation in this deployment shape
+    - this shorter skewed-burst checkpoint alone is not enough to clear the longer-soak risk
+  - current longer-soak and VPS-side saturation checkpoint on 2026-05-20:
+    - the repo now includes:
+      - `scripts/inspect-live-queue-snapshot.mjs`
+      - `scripts/analyze-resource-saturation.mjs`
+      - `scripts/lib/resource-saturation.mjs`
+    - a longer staggered soak was then run with `5` cycles and `50` total requests across the same six-lane / three-worker pod shape
+    - all `50` workflow runs reached `status = running`
+    - all `50` outbox rows reached `enqueued`
+    - BullMQ reported all `50` jobs `completed`
+    - queue depth sampled from inside the staged API container stayed healthy:
+      - `waiting` high-water: `0`
+      - `active` high-water: `2`
+    - however, `scripts/analyze-worker-fairness.mjs` reported `phase = soak_cycle_distribution_failed`
+    - repeated cycle-level failures showed `cross_worker_lane_skew_detected` in the second early coverage window:
+      - `windowSize = 6`
+      - `participatingWorkers = 3`
+      - `expectedUniqueLanes = 6`
+      - `uniqueLanesSeen = 5`
+    - implication:
+      - the current bounded pod still drains the longer skewed soak successfully
+      - but cross-worker lane coverage is not yet consistently fair enough cycle-by-cycle under this longer skewed pattern
+    - VPS-side resource sampling showed the dominant pressure is Paperclip, not Redis or the Wealth Factory workers:
+      - `paperclip-gwry-paperclip-1`
+        - peak CPU: `378.99%`
+        - peak memory: `2553358057` bytes (`15.23%`)
+        - peak PIDs: `1011`
+      - Redis and the Wealth Factory proof workers remained comparatively light
     - next backlog item:
-      - longer-duration soak plus explicit CPU, memory, and queue-depth sampling from inside the VPS lane
+      - investigate claim/start fairness under longer skewed soak and determine whether scheduler or claim-layer changes are needed before treating the six-client pod shape as fully robust
+      - keep Paperclip resource saturation under close watch during any longer soak or heavier pod experiments
 
 Set the lifecycle proof env before using the helper:
 
