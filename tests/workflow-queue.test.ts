@@ -132,6 +132,15 @@ describe("run service", () => {
           secretRef: "wf_secret_openai",
           metadata: { projectId: "proj_123" }
         }
+      ],
+      runtimeProviderContext: [
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Primary OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: { projectId: "proj_123" }
+        }
       ]
     });
   });
@@ -183,6 +192,16 @@ describe("run service", () => {
           label: "Primary OpenAI",
           secretRef: "wf_secret_openai",
           metadata: { projectId: "proj_123" }
+        }
+      ],
+      runtimeProviderContext: [
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Primary OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: { projectId: "proj_123" },
+          secretValues: { apiKey: "sk-openai-secret" }
         }
       ]
     });
@@ -332,6 +351,16 @@ describe("run service", () => {
           secretRef: "wf_debug_shared_provider",
           metadata: {}
         }
+      ],
+      runtimeProviderContext: [
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Operator Debug Provider",
+          secretRef: "wf_debug_shared_provider",
+          metadata: {},
+          secretValues: { apiKey: "sk-operator-debug" }
+        }
       ]
     });
   });
@@ -387,6 +416,16 @@ describe("run service", () => {
           label: "Tenant OpenAI",
           secretRef: "wf_secret_openai",
           metadata: {}
+        }
+      ],
+      runtimeProviderContext: [
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Tenant OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: {},
+          secretValues: { apiKey: "sk-tenant" }
         }
       ]
     });
@@ -654,6 +693,16 @@ describe("workflow worker", () => {
           secretRef: "wf_secret_openai",
           metadata: {}
         }
+      ],
+      runtimeProviderContext: [
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Primary OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: {},
+          secretValues: { apiKey: "sk-openai-secret" }
+        }
       ]
     });
   });
@@ -740,6 +789,16 @@ describe("workflow worker", () => {
           label: "Operator Debug Provider",
           secretRef: "wf_debug_shared_provider",
           metadata: {}
+        }
+      ],
+      runtimeProviderContext: [
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Operator Debug Provider",
+          secretRef: "wf_debug_shared_provider",
+          metadata: {},
+          secretValues: { apiKey: "sk-operator-debug" }
         }
       ]
     });

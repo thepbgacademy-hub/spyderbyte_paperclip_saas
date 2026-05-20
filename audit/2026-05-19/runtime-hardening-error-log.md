@@ -25,3 +25,15 @@ Use this log to avoid repeating already-seen mistakes while finishing:
 
 8. Worker-side Paperclip binding helpers should cast or narrow provider kinds before strict helper calls.
    The runtime bridge passed a generic string into a `ProviderKind` helper and broke `tsc` under strict typing.
+
+9. Paperclip lifecycle projection must be best-effort at registration time.
+   A missing tenant-to-Paperclip company mapping should not make local BYOK registration fail after the secret is already stored and committed.
+
+10. Secret rotation hooks need provider metadata, not just the next secret ref.
+    Without the provider kind, first-time Paperclip binding on rotation cannot derive the correct env-key mapping.
+
+11. Runtime composition order matters when new cross-system seams reuse shared services.
+    A later patch failed because `paperclipProjection` captured `audit` before `audit` was initialized in `runtime-server.ts`.
+
+12. Keep mirrored projection contracts in sync across local and remote lifecycle types.
+    Adding `allowBootstrap` only on the Paperclip side broke `secret-service.ts` until the shared projection type was updated too.

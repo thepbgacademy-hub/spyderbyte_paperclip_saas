@@ -256,7 +256,8 @@ Current Paperclip contract findings on 2026-05-19:
   - a naive `secret_ref` issue override failed in the current company-token lane, and Paperclip secret creation from the company token returned `403 Board access required`
 - current implication for Wealth Factory:
   - do not switch the checked-in adapter yet
-  - the installed Paperclip build now looks capable of deterministic issue-launch plus run-id polling, but safe tenant-secret injection still needs a supported secret-ref/admin lane before commercial BYOK traffic should rely on it
+  - the installed Paperclip build now looks capable of deterministic issue-launch plus run-id polling, and the repo now assumes admin-lane secret projection via `WF_PAPERCLIP_ADMIN_TOKEN` plus `WF_PAPERCLIP_ISSUE_AGENT_ID`
+  - before commercial BYOK traffic relies on that path, verify the installed Paperclip build accepts the expected `/api/admin/...` secret-provisioning routes with the configured admin token
 
 Do not treat a public Paperclip target as release-safe. Before commercial rollout, remove the host port publish and public router so Paperclip is reachable only from the Wealth Factory API and worker containers.
 

@@ -189,7 +189,8 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Design app-side `paperclip_secret_bindings` persistence so Wealth Factory can track synced Paperclip secret ids, env keys, agent targets, sync status, and rotation/revoke drift.
 - [x] Add a configurable Paperclip issue-launch adapter seam plus secret-sync service scaffolding and tests.
 - [x] Wire the configurable issue-launch adapter into the live worker/runtime path with explicit launch-mode env controls and bound-secret-binding validation for company/agent/env-key resolution.
-- [ ] Extend the live worker/runtime path from binding validation to remote Paperclip secret provisioning once the higher-scope admin provisioning lane is finalized for production.
+- [x] Extend the live worker/runtime path from binding validation to admin-token-backed Paperclip secret provisioning and rotation when the higher-scope lane is configured.
+- [ ] Verify the live VPS Paperclip admin lane against the real board/admin token path and confirm the expected `/api/admin/...` routes match the installed build.
 - [ ] Replace the legacy Paperclip `/runs` assumption with a mocked issue-launch adapter plan after the secret-sync and runtime-binding seams are in place.
 - [x] Add worker-side concurrency defaults and tenant fairness gate before BullMQ consumer rollout.
 - [x] Wire the BullMQ enqueuer/consumer path into the API and worker runtime entrypoints.

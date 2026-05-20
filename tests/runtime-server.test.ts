@@ -37,6 +37,24 @@ vi.mock("../src/audit/durable-audit.js", () => ({
   createDurableAuditSink: vi.fn(() => vi.fn().mockResolvedValue(undefined))
 }));
 
+vi.mock("../src/paperclip/secret-sync.js", () => ({
+  createPaperclipSecretBindingRepository: vi.fn(() => ({})),
+  createPaperclipSecretAdminHttpClient: vi.fn(() => ({})),
+  createPaperclipSecretProjectionService: vi.fn(() => ({
+    onRegistered: vi.fn(),
+    onRotated: vi.fn(),
+    revokeBySecretRef: vi.fn()
+  }))
+}));
+
+vi.mock("../src/secrets/vault-backed-provider-registration.js", () => ({
+  createVaultBackedProviderCredentialRegistration: vi.fn(() => vi.fn())
+}));
+
+vi.mock("../src/secrets/acid-secret-revoke-service.js", () => ({
+  createAcidSecretRevokeService: vi.fn(() => ({ revoke: vi.fn() }))
+}));
+
 vi.mock("../src/workflows/queue-outbox-pump.js", () => ({
   createQueueOutboxPump: vi.fn(() => ({
     start: vi.fn(),
@@ -174,6 +192,8 @@ describe("runtime server", () => {
   });
 
   it("wires provider credential registration to the runtime vault path", async () => {
+    const { createVaultBackedProviderCredentialRegistration } = await import("../src/secrets/vault-backed-provider-registration.js");
+    const { createAcidSecretRevokeService } = await import("../src/secrets/acid-secret-revoke-service.js");
     const runtime = createDashboardRuntime({
       env: {
         supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
@@ -187,6 +207,55 @@ describe("runtime server", () => {
     });
 
     expect(runtime.registerProviderCredential).toEqual(expect.any(Function));
+    expect(runtime.revokeProviderCredential).toEqual(expect.any(Function));
+    const registrationArgs = vi.mocked(createVaultBackedProviderCredentialRegistration).mock.calls.at(-1)?.[0];
+    expect(registrationArgs).toBeDefined();
+    expect(registrationArgs).not.toHaveProperty("projection");
+    const revokeArgs = vi.mocked(createAcidSecretRevokeService).mock.calls.at(-1)?.[0];
+    expect(revokeArgs).toBeDefined();
+    expect(revokeArgs).not.toHaveProperty("projection");
+    await runtime.close();
+  });
+
+  it("wires Paperclip projection into provider registration when admin issue-launch env is configured", async () => {
+    const { createVaultBackedProviderCredentialRegistration } = await import("../src/secrets/vault-backed-provider-registration.js");
+    const { createAcidSecretRevokeService } = await import("../src/secrets/acid-secret-revoke-service.js");
+    const { createPaperclipSecretProjectionService } = await import("../src/paperclip/secret-sync.js");
+
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {
+          PAPERCLIP_BASE_URL: "https://paperclip.internal.local",
+          WF_PAPERCLIP_ADMIN_TOKEN: "admin-token",
+          WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-1"
+        }
+      },
+      auth: { authenticate: vi.fn() }
+    });
+
+    expect(createPaperclipSecretProjectionService).toHaveBeenCalled();
+    expect(createVaultBackedProviderCredentialRegistration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projection: expect.objectContaining({
+          onRegistered: expect.any(Function),
+          onRotated: expect.any(Function),
+          revokeBySecretRef: expect.any(Function)
+        })
+      })
+    );
+    expect(createAcidSecretRevokeService).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projection: expect.objectContaining({
+          revokeBySecretRef: expect.any(Function)
+        })
+      })
+    );
+
     await runtime.close();
   });
 

@@ -283,6 +283,24 @@ describe("Supabase wfpc repositories", () => {
     expect(call[1]).toContain("wf_secret_opaque");
   });
 
+  it("describes secret references with provider kind for rotation-time projection", async () => {
+    const client = {
+      query: vi
+        .fn()
+        .mockResolvedValueOnce({
+          rows: [{ id: "11111111-1111-4111-8111-111111111111", provider_kind: "openai_api" }]
+        })
+        .mockResolvedValueOnce({ rows: [] })
+    };
+    const repository = createSupabaseSecretRepository(client);
+
+    await expect(repository.describeSecretRef?.({ tenantId: "tenant-1", secretRef: "wf_secret_opaque" })).resolves.toEqual({
+      id: "11111111-1111-4111-8111-111111111111",
+      providerKind: "openai_api"
+    });
+    await expect(repository.describeSecretRef?.({ tenantId: "tenant-1", secretRef: "wf_secret_missing" })).resolves.toBeNull();
+  });
+
   it("persists storage connector summaries while keeping OAuth refs private", async () => {
     const client = {
       query: vi

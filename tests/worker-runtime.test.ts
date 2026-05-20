@@ -73,7 +73,8 @@ vi.mock("../src/paperclip/secret-sync.js", () => ({
   createPaperclipSecretAdminHttpClient: vi.fn(() => ({})),
   createPaperclipSecretSyncService: vi.fn(() => ({
     syncBinding: vi.fn().mockResolvedValue(undefined)
-  }))
+  })),
+  toPaperclipEnvBindings: vi.fn(() => [{ envKey: "OPENAI_API_KEY", secretValue: "sk-tenant" }])
 }));
 
 vi.mock("../src/paperclip/client.js", () => ({
@@ -123,12 +124,14 @@ describe("worker runtime", () => {
 
   it("wires the issue-launch adapter into the worker runtime when configured", async () => {
     const { createPaperclipClient } = await import("../src/paperclip/client.js");
+    const { createPaperclipSecretSyncService } = await import("../src/paperclip/secret-sync.js");
 
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
         WF_PAPERCLIP_LAUNCH_MODE: "issues",
-        WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-1"
+        WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-1",
+        WF_PAPERCLIP_ADMIN_TOKEN: "admin-token"
       })
     });
 
@@ -143,6 +146,45 @@ describe("worker runtime", () => {
         })
       })
     );
+
+    await runtime.processQueuePayload({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "workflow-1",
+      createdByUserId: "user-1",
+      idempotencyKey: "tenant-1:workflow-1:run-1",
+      createdAt: new Date().toISOString()
+    });
+
+    const issueLaunch = vi.mocked(createPaperclipClient).mock.calls.at(-1)?.[0].issueLaunch;
+    expect(issueLaunch).toBeDefined();
+    await issueLaunch?.syncProviderSecretRefs?.({
+      companyId: "pc-company-1",
+      workflowId: "workflow-1",
+      agentId: "agent-1",
+      providerContext: [
+        {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Bound OpenAI",
+          secretRef: "wf_secret_bound",
+          metadata: {},
+          secretValues: { apiKey: "sk-tenant" }
+        }
+      ]
+    });
+
+    const syncService = vi.mocked(createPaperclipSecretSyncService).mock.results[0]?.value;
+    expect(syncService.syncBinding).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      wealthFactorySecretReferenceId: "11111111-1111-4111-8111-111111111111",
+      paperclipCompanyId: "pc-company-1",
+      paperclipAgentId: "agent-1",
+      paperclipEnvKey: "OPENAI_API_KEY",
+      providerKind: "openai_api",
+      secretValue: "sk-tenant",
+      paperclipSecretKey: "OPENAI_API_KEY"
+    });
 
     await runtime.close();
   });

@@ -54,9 +54,26 @@ type SecretRepository = {
   updateSecretRef(input: { tenantId: string; previousSecretRef: string; nextSecretRef: string }): Promise<string> | string;
   revoke(input: { tenantId: string; secretRef: string }): Promise<string> | string;
   findIdBySecretRef(input: { tenantId: string; secretRef: string; runId?: string }): Promise<string> | string;
+  describeSecretRef?(input: { tenantId: string; secretRef: string }): Promise<{ id: string; providerKind: ProviderKind } | null> | { id: string; providerKind: ProviderKind } | null;
 };
 
 type SecretProjection = {
+  onRegistered?(input: {
+    tenantId: string;
+    secretReferenceId: string;
+    providerKind: ProviderKind;
+    secretRef: string;
+    secretValues: Record<string, string>;
+  }): Promise<void> | void;
+  onRotated?(input: {
+    tenantId: string;
+    secretReferenceId: string;
+    providerKind: ProviderKind;
+    allowBootstrap?: boolean;
+    previousSecretRef: string;
+    nextSecretRef: string;
+    nextSecretValues: Record<string, string>;
+  }): Promise<void> | void;
   revokeBySecretRef?(input: { tenantId: string; secretRef: string }): Promise<void> | void;
 };
 
@@ -95,6 +112,28 @@ export function createSecretService(options: { vault: Vault; audit: Audit; repos
           ...input.registration.metadata
         })
       });
+      try {
+        await options.projection?.onRegistered?.({
+          tenantId: input.tenantId,
+          secretReferenceId,
+          providerKind: input.registration.provider.kind,
+          secretRef,
+          secretValues: input.registration.secretValues
+        });
+      } catch (error) {
+        await options.audit({
+          tenantId: input.tenantId,
+          actorUserId: input.actorUserId,
+          eventType: "secret.projection_sync_failed",
+          entityType: "secret_reference",
+          entityId: secretReferenceId,
+          metadata: safeAuditMetadata({
+            lifecycle: "register",
+            providerKind: input.registration.provider.kind,
+            error: error instanceof Error ? error.message : "projection_sync_failed"
+          })
+        });
+      }
 
       return reference;
   }
@@ -122,6 +161,10 @@ export function createSecretService(options: { vault: Vault; audit: Audit; repos
       secretRef: string;
       nextSecretValues: Record<string, string>;
     }): Promise<{ secretRef: string }> {
+      const secretDescriptor = await options.repository.describeSecretRef?.({
+        tenantId: input.tenantId,
+        secretRef: input.secretRef
+      });
       const secretRef = await options.vault.rotate({
         tenantId: input.tenantId,
         secretRef: input.secretRef,
@@ -141,6 +184,31 @@ export function createSecretService(options: { vault: Vault; audit: Audit; repos
         entityId: secretReferenceId,
         metadata: safeAuditMetadata({})
       });
+
+      try {
+        await options.projection?.onRotated?.({
+          tenantId: input.tenantId,
+          secretReferenceId,
+          providerKind: secretDescriptor?.providerKind ?? "generic_api",
+          allowBootstrap: secretDescriptor?.id === secretReferenceId,
+          previousSecretRef: input.secretRef,
+          nextSecretRef: secretRef,
+          nextSecretValues: input.nextSecretValues
+        });
+      } catch (error) {
+        await options.audit({
+          tenantId: input.tenantId,
+          actorUserId: input.actorUserId,
+          eventType: "secret.projection_sync_failed",
+          entityType: "secret_reference",
+          entityId: secretReferenceId,
+          metadata: safeAuditMetadata({
+            lifecycle: "rotate",
+            providerKind: secretDescriptor?.providerKind ?? "generic_api",
+            error: error instanceof Error ? error.message : "projection_sync_failed"
+          })
+        });
+      }
 
       return { secretRef };
     },

@@ -238,7 +238,7 @@ Scoring: Critical = 10 pts, High = 7 pts, Medium = 4 pts, Low = 2 pts, Info = 0 
 
 ## Remediation Priority
 
-1. **Complete the Paperclip admin-lane secret provisioning cutover** - The repo now has binding persistence, shared-state migrations, runtime launch-mode controls, and worker-side binding validation for the issue-launch path, but automatic remote provisioning/rotation of missing Paperclip bindings still depends on the higher-scope admin lane.
+1. **Verify the live Paperclip admin lane on the VPS** - The repo now has binding persistence, shared-state migrations, runtime launch-mode controls, API-side projection hooks, and worker-side idempotent binding refresh for the issue-launch path. The remaining step is proving the installed Paperclip build accepts the expected admin-token secret provisioning routes and scope on the VPS.
 2. **Tighten frontend hardening and local secret hygiene** - Remove `style-src 'unsafe-inline'` where practical, and keep untracked local secret files outside any release or support artifact path.
 3. **Preserve the new session-token and durable-audit controls operationally** - Keep runtime session tokens short-lived, keep audit rows masked, and retire any old shared deploy-token habits from operator workflows.
 

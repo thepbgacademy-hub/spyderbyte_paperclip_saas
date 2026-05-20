@@ -121,7 +121,8 @@ export function createRunService(options: {
         companyId: tenant.paperclipCompanyId,
         workflowId: input.workflowId,
         spyderbyteRunId: input.runId,
-        ...(paperclipProviderContext ? { providerContext: paperclipProviderContext } : {})
+        ...(paperclipProviderContext ? { providerContext: paperclipProviderContext } : {}),
+        ...(providerContext ? { runtimeProviderContext: providerContext as readonly PaperclipRuntimeProviderContext[] } : {})
       });
 
       return {

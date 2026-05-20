@@ -367,6 +367,25 @@ export function createSupabaseRepositories(client: QueryClient) {
       return typeof id === "string" ? id : "";
     },
 
+    async describeSecretReference(input: { tenantId: string; secretRef: string }): Promise<{ id: string; providerKind: string } | null> {
+      const result = await client.query(
+        `select id, provider_kind
+         from wfpc.secret_references
+         where tenant_id = $1
+           and secret_ref = $2
+         limit 1`,
+        [input.tenantId, input.secretRef]
+      );
+      const row = asRecord(result.rows[0]);
+      if (typeof row.id !== "string" || typeof row.provider_kind !== "string") {
+        return null;
+      }
+      return {
+        id: row.id,
+        providerKind: row.provider_kind
+      };
+    },
+
     async registerStorageConnector(input: {
       tenantId: string;
       actorUserId: string;
@@ -386,7 +405,8 @@ export function createSupabaseSecretRepository(client: QueryClient) {
     create: repositories.createSecretReference,
     updateSecretRef: repositories.updateSecretRef,
     revoke: repositories.revokeSecretReference,
-    findIdBySecretRef: repositories.findSecretReferenceId
+    findIdBySecretRef: repositories.findSecretReferenceId,
+    describeSecretRef: repositories.describeSecretReference
   };
 }
 

@@ -104,9 +104,11 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
    - `wfpc.paperclip_secret_bindings` now exists for Paperclip-managed secret sync bookkeeping
    - the Paperclip client now has a configurable issue-launch seam plus optional secret-sync hook while preserving the default sanitized `/runs` path
    - the worker runtime now honors explicit Paperclip launch-mode env controls and can validate bound company/agent/env-key secret bindings before issue launch
+   - the API registration lifecycle can now project provider secrets into Paperclip through the admin lane when `WF_PAPERCLIP_ADMIN_TOKEN` and `WF_PAPERCLIP_ISSUE_AGENT_ID` are configured
+   - the worker issue-launch path now refreshes Paperclip bindings idempotently in issue mode instead of assuming an existing binding is current
 12. Immediate next repo step:
-   - extend the runtime from binding validation to automatic Paperclip admin-lane secret provisioning and rotation
-   - rerun staged verification against the Paperclip issue-launch lane once the higher-scope provisioning token path is finalized
+   - verify the live VPS Paperclip admin lane against the real board/admin token path and confirm the expected admin routes on the installed build
+   - rerun staged verification against the Paperclip issue-launch lane with real admin-token provisioning enabled
 
 ## Security Position
 

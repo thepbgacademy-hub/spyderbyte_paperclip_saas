@@ -10,8 +10,14 @@ import { createDurableAuditSink } from "../audit/durable-audit.js";
 import { createAcidGuardRepository } from "../db/acid-guard-repository.js";
 import { createPgPool, createPgPoolQueryClient, createPgTransactionRunner } from "../db/postgres-client.js";
 import { createSupabaseRepositories } from "../db/supabase-repositories.js";
+import {
+  createPaperclipSecretAdminHttpClient,
+  createPaperclipSecretBindingRepository,
+  createPaperclipSecretProjectionService
+} from "../paperclip/secret-sync.js";
 import { createPostgresFixedWindowRateLimiter } from "../security/postgres-rate-limit.js";
 import { createEncryptedSecretVault } from "../secrets/encrypted-vault.js";
+import { createAcidSecretRevokeService } from "../secrets/acid-secret-revoke-service.js";
 import { createPostgresEncryptedVaultStore } from "../secrets/postgres-vault-store.js";
 import { createVaultBackedProviderCredentialRegistration } from "../secrets/vault-backed-provider-registration.js";
 import { createStorageOAuthService, STORAGE_OAUTH_PROVIDER_CONFIGS } from "../storage/storage-oauth-service.js";
@@ -96,22 +102,47 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
   const queryClient = createPgPoolQueryClient(pool);
   const repositories = createSupabaseRepositories(queryClient);
   const audit = createDurableAuditSink(queryClient);
+  const vault = createEncryptedSecretVault({
+    masterKey: options.env.vaultMasterKey,
+    store: createPostgresEncryptedVaultStore(queryClient)
+  });
+  const paperclipSecretBindings = createPaperclipSecretBindingRepository(queryClient);
+  const paperclipProjection =
+    options.env.runtimeEnv.WF_PAPERCLIP_ADMIN_TOKEN &&
+    options.env.runtimeEnv.WF_PAPERCLIP_ISSUE_AGENT_ID &&
+    options.env.runtimeEnv.PAPERCLIP_BASE_URL
+      ? createPaperclipSecretProjectionService({
+          adminClient: createPaperclipSecretAdminHttpClient({
+            baseUrl: options.env.runtimeEnv.PAPERCLIP_BASE_URL,
+            adminToken: options.env.runtimeEnv.WF_PAPERCLIP_ADMIN_TOKEN
+          }),
+          bindings: paperclipSecretBindings,
+          resolveCompanyMapping: async ({ tenantId }) => repositories.resolvePaperclipCompanyMapping({ tenantId }),
+          paperclipAgentId: options.env.runtimeEnv.WF_PAPERCLIP_ISSUE_AGENT_ID,
+          audit
+        })
+      : undefined;
   const registerProviderCredential = createVaultBackedProviderCredentialRegistration({
-    vault: createEncryptedSecretVault({
-      masterKey: options.env.vaultMasterKey,
-      store: createPostgresEncryptedVaultStore(queryClient)
-    }),
+    vault,
     repository: {
       create: repositories.createSecretReference,
       updateSecretRef: repositories.updateSecretRef,
       revoke: repositories.revokeSecretReference,
       findIdBySecretRef: repositories.findSecretReferenceId
     },
+    ...(paperclipProjection ? { projection: paperclipProjection } : {}),
     audit,
     runtimeEnv: options.env.runtimeEnv
   });
   const transactionRunner = createPgTransactionRunner(pool);
   const acidRepository = createAcidGuardRepository(transactionRunner);
+  const revokeProviderCredential = createAcidSecretRevokeService({
+    repository: { revokeCredential: acidRepository.revokeCredential },
+    resolver: { findIdBySecretRef: repositories.findSecretReferenceId },
+    vault,
+    audit,
+    ...(paperclipProjection ? { projection: paperclipProjection } : {})
+  }).revoke;
   const storageOAuth =
     options.env.storageOAuthRedirectOrigin && options.env.googleDriveClientId && options.env.dropboxClientId
       ? createStorageOAuthService({
@@ -198,6 +229,7 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
   return {
     server: createServer(createNodeRequestListener(runtimeHandler)),
     registerProviderCredential,
+    revokeProviderCredential,
     storageOAuth,
     startWorkers: () => outboxPump?.start(),
     close: async () => {

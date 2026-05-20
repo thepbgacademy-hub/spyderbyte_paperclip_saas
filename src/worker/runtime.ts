@@ -8,15 +8,10 @@ import { createPaperclipClient } from "../paperclip/client.js";
 import {
   createPaperclipSecretAdminHttpClient,
   createPaperclipSecretBindingRepository,
-  createPaperclipSecretSyncService
+  createPaperclipSecretSyncService,
+  toPaperclipEnvBindings
 } from "../paperclip/secret-sync.js";
-import {
-  ANTHROPIC_PROVIDER,
-  OPENAI_API_PROVIDER,
-  OPENROUTER_PROVIDER,
-  type ProviderKind,
-  XAI_GROK_PROVIDER
-} from "../providers/provider-types.js";
+import { type ProviderKind } from "../providers/provider-types.js";
 import { createRuntimeProviderExecutionContextResolver } from "../providers/runtime-provider-execution.js";
 import { createDebugSharedProviderFallbackResolver } from "../providers/runtime-provider-fallback.js";
 import type { RuntimeProviderBinding } from "../providers/runtime-provider-resolution.js";
@@ -94,22 +89,24 @@ export function createWorkerRuntime(options: { env: WorkerEnv }) {
               agentId: options.env.paperclipIssueAgentId as string
             }),
             syncProviderSecretRefs: async ({ companyId, agentId, providerContext }) => {
+              const tenantId = companyIdToTenantId.get(companyId) ?? "";
               for (const binding of providerContext) {
-                for (const envKey of resolvePaperclipEnvKeys(binding.providerKind as ProviderKind)) {
-                  const existing = await paperclipSecretBindings.findActiveBySecretRef({
-                    tenantId: companyIdToTenantId.get(companyId) ?? "",
-                    paperclipCompanyId: companyId,
-                    paperclipAgentId: agentId,
-                    paperclipEnvKey: envKey,
-                    secretRef: binding.secretRef
-                  });
-                  if (existing) {
-                    continue;
+                for (const bindingTarget of toPaperclipEnvBindings(binding.providerKind as ProviderKind, binding.secretValues ?? {})) {
+                  if (!tenantId) {
+                    throw new Error(`Missing tenant context for Paperclip company ${companyId}`);
                   }
-                  const tenantId = companyIdToTenantId.get(companyId) ?? "";
-                  const assignment = resolvePaperclipEnvAssignment(binding.providerKind as ProviderKind, envKey, binding.secretValues ?? {});
-                  if (!paperclipSecretSync || !tenantId) {
-                    throw new Error(`Missing Paperclip secret binding for ${binding.providerKind}:${envKey}`);
+                  if (!paperclipSecretSync) {
+                    const existing = await paperclipSecretBindings.findActiveBySecretRef({
+                      tenantId,
+                      paperclipCompanyId: companyId,
+                      paperclipAgentId: agentId,
+                      paperclipEnvKey: bindingTarget.envKey,
+                      secretRef: binding.secretRef
+                    });
+                    if (!existing) {
+                      throw new Error(`Missing Paperclip secret binding for ${binding.providerKind}:${bindingTarget.envKey}`);
+                    }
+                    continue;
                   }
                   await paperclipSecretSync.syncBinding({
                     tenantId,
@@ -119,10 +116,10 @@ export function createWorkerRuntime(options: { env: WorkerEnv }) {
                     }),
                     paperclipCompanyId: companyId,
                     paperclipAgentId: agentId,
-                    paperclipEnvKey: envKey,
+                    paperclipEnvKey: bindingTarget.envKey,
                     providerKind: binding.providerKind as ProviderKind,
-                    secretValue: assignment,
-                    paperclipSecretKey: envKey
+                    secretValue: bindingTarget.secretValue,
+                    paperclipSecretKey: bindingTarget.envKey
                   });
                 }
               }
@@ -183,44 +180,4 @@ export function createWorkerRuntime(options: { env: WorkerEnv }) {
       await pool.end();
     }
   };
-}
-
-function resolvePaperclipEnvKeys(providerKind: ProviderKind): readonly string[] {
-  switch (providerKind) {
-    case "openai":
-    case "openai_api":
-      return OPENAI_API_PROVIDER.requiredSecrets.map((secret) => secret.envName);
-    case "anthropic_api":
-      return ANTHROPIC_PROVIDER.requiredSecrets.map((secret) => secret.envName);
-    case "xai_grok_api":
-      return XAI_GROK_PROVIDER.requiredSecrets.map((secret) => secret.envName);
-    case "openrouter_api":
-      return OPENROUTER_PROVIDER.requiredSecrets.map((secret) => secret.envName);
-    default:
-      throw new Error(`Unsupported Paperclip secret binding provider: ${providerKind}`);
-  }
-}
-
-function resolvePaperclipEnvAssignment(providerKind: ProviderKind, envKey: string, secretValues: Record<string, string>): string {
-  if ((providerKind === "openai" || providerKind === "openai_api") && envKey === "OPENAI_API_KEY") {
-    return requireSecretValue(secretValues, "apiKey");
-  }
-  if (providerKind === "anthropic_api" && envKey === "ANTHROPIC_API_KEY") {
-    return requireSecretValue(secretValues, "apiKey");
-  }
-  if (providerKind === "xai_grok_api" && envKey === "XAI_API_KEY") {
-    return requireSecretValue(secretValues, "apiKey");
-  }
-  if (providerKind === "openrouter_api" && envKey === "OPENROUTER_API_KEY") {
-    return requireSecretValue(secretValues, "apiKey");
-  }
-  throw new Error(`Unsupported Paperclip secret assignment for ${providerKind}:${envKey}`);
-}
-
-function requireSecretValue(secretValues: Record<string, string>, key: string): string {
-  const value = secretValues[key];
-  if (!value) {
-    throw new Error(`Missing provider secret value: ${key}`);
-  }
-  return value;
 }

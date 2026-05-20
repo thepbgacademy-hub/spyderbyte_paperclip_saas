@@ -37,6 +37,26 @@ export type PaperclipSecretAdminClient = {
   }): Promise<void>;
 };
 
+export type PaperclipSecretProjectionService = {
+  onRegistered(input: {
+    tenantId: string;
+    secretReferenceId: string;
+    providerKind: ProviderKind;
+    secretRef: string;
+    secretValues: Record<string, string>;
+  }): Promise<void>;
+  onRotated(input: {
+    tenantId: string;
+    secretReferenceId: string;
+    providerKind: ProviderKind;
+    allowBootstrap?: boolean;
+    previousSecretRef: string;
+    nextSecretRef: string;
+    nextSecretValues: Record<string, string>;
+  }): Promise<void>;
+  revokeBySecretRef(input: { tenantId: string; secretRef: string }): Promise<void>;
+};
+
 export function createPaperclipSecretBindingRepository(client: QueryClient) {
   return {
     async upsert(input: Omit<PaperclipSecretBindingRecord, "lastSyncedAt">): Promise<void> {
@@ -243,6 +263,153 @@ export function createPaperclipSecretSyncService(options: {
   };
 }
 
+export function createPaperclipSecretProjectionService(options: {
+  adminClient: PaperclipSecretAdminClient;
+  bindings: ReturnType<typeof createPaperclipSecretBindingRepository>;
+  resolveCompanyMapping(input: { tenantId: string }): Promise<{ paperclipCompanyId: string }>;
+  paperclipAgentId: string;
+  audit?(event: {
+    tenantId: string;
+    eventType: string;
+    entityType: string;
+    entityId?: string;
+    metadata: Record<string, unknown>;
+  }): Promise<void> | void;
+}) : PaperclipSecretProjectionService {
+  const syncService = createPaperclipSecretSyncService(options);
+
+  return {
+    async onRegistered(input) {
+      const company = await resolveCompanyMappingSafely(options, {
+        tenantId: input.tenantId,
+        eventType: "paperclip.secret_projection_skipped",
+        entityId: input.secretReferenceId,
+        metadata: {
+          lifecycle: "register",
+          providerKind: input.providerKind
+        }
+      });
+      if (!company) {
+        return;
+      }
+      for (const binding of toPaperclipEnvBindings(input.providerKind, input.secretValues)) {
+        await syncService.syncBinding({
+          tenantId: input.tenantId,
+          wealthFactorySecretReferenceId: input.secretReferenceId,
+          paperclipCompanyId: company.paperclipCompanyId,
+          paperclipAgentId: options.paperclipAgentId,
+          paperclipEnvKey: binding.envKey,
+          providerKind: input.providerKind,
+          secretValue: binding.secretValue,
+          paperclipSecretKey: binding.envKey
+        });
+      }
+    },
+
+    async onRotated(input) {
+      const company = await resolveCompanyMappingSafely(options, {
+        tenantId: input.tenantId,
+        eventType: "paperclip.secret_projection_skipped",
+        entityId: input.secretReferenceId,
+        metadata: {
+          lifecycle: "rotate",
+          providerKind: input.providerKind
+        }
+      });
+      if (!company) {
+        return;
+      }
+      const existingBindings = await options.bindings.listBindingsBySecretReference({
+        tenantId: input.tenantId,
+        wealthFactorySecretReferenceId: input.secretReferenceId
+      });
+      if (existingBindings.length === 0) {
+        if (!input.allowBootstrap) {
+          return;
+        }
+        for (const binding of toPaperclipEnvBindings(input.providerKind, input.nextSecretValues)) {
+          await syncService.syncBinding({
+            tenantId: input.tenantId,
+            wealthFactorySecretReferenceId: input.secretReferenceId,
+            paperclipCompanyId: company.paperclipCompanyId,
+            paperclipAgentId: options.paperclipAgentId,
+            paperclipEnvKey: binding.envKey,
+            providerKind: input.providerKind,
+            secretValue: binding.secretValue,
+            paperclipSecretKey: binding.envKey
+          });
+        }
+        return;
+      }
+      for (const existing of existingBindings) {
+        const secretValue = toPaperclipSecretValue(existing.paperclipEnvKey, input.nextSecretValues);
+        await syncService.syncBinding({
+          tenantId: input.tenantId,
+          wealthFactorySecretReferenceId: input.secretReferenceId,
+          paperclipCompanyId: company.paperclipCompanyId,
+          paperclipAgentId: existing.paperclipAgentId,
+          paperclipEnvKey: existing.paperclipEnvKey,
+          providerKind: existing.providerKind,
+          secretValue,
+          paperclipSecretKey: existing.paperclipSecretKey
+        });
+      }
+    },
+
+    async revokeBySecretRef(input) {
+      const company = await resolveCompanyMappingSafely(options, {
+        tenantId: input.tenantId,
+        eventType: "paperclip.secret_projection_skipped",
+        entityId: input.secretRef,
+        metadata: {
+          lifecycle: "revoke"
+        }
+      });
+      if (!company) {
+        return;
+      }
+      const binding = await options.bindings.findActiveBySecretRef({
+        tenantId: input.tenantId,
+        paperclipCompanyId: company.paperclipCompanyId,
+        secretRef: input.secretRef
+      });
+      if (!binding) {
+        return;
+      }
+      await syncService.revokeBinding({
+        tenantId: input.tenantId,
+        wealthFactorySecretReferenceId: binding.wealthFactorySecretReferenceId
+      });
+    }
+  };
+}
+
+async function resolveCompanyMappingSafely(
+  options: Pick<Parameters<typeof createPaperclipSecretProjectionService>[0], "resolveCompanyMapping" | "audit">,
+  input: {
+    tenantId: string;
+    eventType: string;
+    entityId?: string;
+    metadata: Record<string, unknown>;
+  }
+): Promise<{ paperclipCompanyId: string } | null> {
+  try {
+    return await options.resolveCompanyMapping({ tenantId: input.tenantId });
+  } catch (error) {
+    await options.audit?.({
+      tenantId: input.tenantId,
+      eventType: input.eventType,
+      entityType: "paperclip_secret_projection",
+      ...(input.entityId ? { entityId: input.entityId } : {}),
+      metadata: {
+        ...input.metadata,
+        error: error instanceof Error ? error.message : "paperclip_company_mapping_unavailable"
+      }
+    });
+    return null;
+  }
+}
+
 export function createPaperclipSecretAdminHttpClient(options: {
   baseUrl: string;
   adminToken: string;
@@ -306,6 +473,45 @@ export function createPaperclipSecretAdminHttpClient(options: {
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+export function toPaperclipEnvBindings(
+  providerKind: ProviderKind,
+  secretValues: Record<string, string>
+): readonly { envKey: string; secretValue: string }[] {
+  switch (providerKind) {
+    case "openai":
+    case "openai_api":
+      return [{ envKey: "OPENAI_API_KEY", secretValue: requireSecretValue(secretValues, "apiKey") }];
+    case "anthropic_api":
+      return [{ envKey: "ANTHROPIC_API_KEY", secretValue: requireSecretValue(secretValues, "apiKey") }];
+    case "xai_grok_api":
+      return [{ envKey: "XAI_API_KEY", secretValue: requireSecretValue(secretValues, "apiKey") }];
+    case "openrouter_api":
+      return [{ envKey: "OPENROUTER_API_KEY", secretValue: requireSecretValue(secretValues, "apiKey") }];
+    default:
+      throw new Error(`Unsupported Paperclip secret binding provider: ${providerKind}`);
+  }
+}
+
+function toPaperclipSecretValue(envKey: string, secretValues: Record<string, string>): string {
+  switch (envKey) {
+    case "OPENAI_API_KEY":
+    case "ANTHROPIC_API_KEY":
+    case "XAI_API_KEY":
+    case "OPENROUTER_API_KEY":
+      return requireSecretValue(secretValues, "apiKey");
+    default:
+      throw new Error(`Unsupported Paperclip env assignment: ${envKey}`);
+  }
+}
+
+function requireSecretValue(secretValues: Record<string, string>, key: string): string {
+  const value = secretValues[key];
+  if (!value) {
+    throw new Error(`Missing provider secret value: ${key}`);
+  }
+  return value;
 }
 
 function createHeaders(token: string): HeadersInit {

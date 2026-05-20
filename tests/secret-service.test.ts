@@ -49,7 +49,8 @@ describe("secret service", () => {
       create: vi.fn().mockResolvedValue("11111111-1111-4111-8111-111111111111"),
       updateSecretRef: vi.fn(),
       revoke: vi.fn(),
-      findIdBySecretRef: vi.fn()
+      findIdBySecretRef: vi.fn(),
+      describeSecretRef: vi.fn()
     };
     const service = createSecretService({ vault, audit, repository, projection });
 
@@ -89,6 +90,7 @@ describe("secret service", () => {
       metadata: { projectId: "proj_123" },
       revokedAt: null
     });
+    expect(projection.revokeBySecretRef).not.toHaveBeenCalled();
   });
 
   it("returns public provider connection state without exposing secret references", async () => {
@@ -105,7 +107,8 @@ describe("secret service", () => {
         create: vi.fn().mockResolvedValue("11111111-1111-4111-8111-111111111111"),
         updateSecretRef: vi.fn(),
         revoke: vi.fn(),
-        findIdBySecretRef: vi.fn()
+        findIdBySecretRef: vi.fn(),
+        describeSecretRef: vi.fn()
       }
     });
 
@@ -138,7 +141,8 @@ describe("secret service", () => {
         create: vi.fn().mockResolvedValue("11111111-1111-4111-8111-111111111111"),
         updateSecretRef: vi.fn(),
         revoke: vi.fn(),
-        findIdBySecretRef: vi.fn()
+        findIdBySecretRef: vi.fn(),
+        describeSecretRef: vi.fn()
       }
     });
 
@@ -177,7 +181,11 @@ describe("secret service", () => {
       create: vi.fn(),
       updateSecretRef: vi.fn().mockResolvedValue("22222222-2222-4222-8222-222222222222"),
       revoke: vi.fn().mockResolvedValue("22222222-2222-4222-8222-222222222222"),
-      findIdBySecretRef: vi.fn().mockResolvedValue("")
+      findIdBySecretRef: vi.fn().mockResolvedValue(""),
+      describeSecretRef: vi.fn().mockResolvedValue({
+        id: "22222222-2222-4222-8222-222222222222",
+        providerKind: "openai"
+      })
     };
     const service = createSecretService({ vault, audit, repository, projection });
 
@@ -210,6 +218,162 @@ describe("secret service", () => {
     expect(projection.revokeBySecretRef).toHaveBeenCalledWith({ tenantId: "tenant-1", secretRef: "secret_ref_2" });
   });
 
+  it("calls projection hooks on register and rotate when configured", async () => {
+    const projection = {
+      onRegistered: vi.fn().mockResolvedValue(undefined),
+      onRotated: vi.fn().mockResolvedValue(undefined),
+      revokeBySecretRef: vi.fn().mockResolvedValue(undefined)
+    };
+    const service = createSecretService({
+      vault: {
+        store: vi.fn().mockResolvedValue("secret_ref_1"),
+        rotate: vi.fn().mockResolvedValue("secret_ref_2"),
+        revoke: vi.fn(),
+        access: vi.fn()
+      },
+      audit: vi.fn(),
+      repository: {
+        create: vi.fn().mockResolvedValue("11111111-1111-4111-8111-111111111111"),
+        updateSecretRef: vi.fn().mockResolvedValue("11111111-1111-4111-8111-111111111111"),
+        revoke: vi.fn(),
+        findIdBySecretRef: vi.fn(),
+        describeSecretRef: vi.fn().mockResolvedValue({
+          id: "11111111-1111-4111-8111-111111111111",
+          providerKind: "openai"
+        })
+      },
+      projection
+    });
+
+    await service.registerProviderCredential({
+      tenantId: "tenant-1",
+      actorUserId: "user-1",
+      label: "OpenAI primary",
+      registration: createOpenAIProviderRegistration({ apiKey: "sk-openai", projectId: "proj_123" })
+    });
+    await service.rotate({
+      tenantId: "tenant-1",
+      actorUserId: "user-1",
+      secretRef: "secret_ref_1",
+      nextSecretValues: { apiKey: "sk-next" }
+    });
+
+    expect(projection.onRegistered).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      secretReferenceId: "11111111-1111-4111-8111-111111111111",
+      providerKind: "openai",
+      secretRef: "secret_ref_1",
+      secretValues: { apiKey: "sk-openai" }
+    });
+    expect(projection.onRotated).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      secretReferenceId: "11111111-1111-4111-8111-111111111111",
+      providerKind: "openai",
+      allowBootstrap: true,
+      previousSecretRef: "secret_ref_1",
+      nextSecretRef: "secret_ref_2",
+      nextSecretValues: { apiKey: "sk-next" }
+    });
+  });
+
+  it("keeps local registration successful when projection sync fails", async () => {
+    const audit = vi.fn();
+    const service = createSecretService({
+      vault: {
+        store: vi.fn().mockResolvedValue("secret_ref_1"),
+        rotate: vi.fn(),
+        revoke: vi.fn(),
+        access: vi.fn()
+      },
+      audit,
+      repository: {
+        create: vi.fn().mockResolvedValue("11111111-1111-4111-8111-111111111111"),
+        updateSecretRef: vi.fn(),
+        revoke: vi.fn(),
+        findIdBySecretRef: vi.fn(),
+        describeSecretRef: vi.fn()
+      },
+      projection: {
+        onRegistered: vi.fn().mockRejectedValue(new Error("mapping_missing"))
+      }
+    });
+
+    await expect(
+      service.registerProviderCredential({
+        tenantId: "tenant-1",
+        actorUserId: "user-1",
+        label: "OpenAI primary",
+        registration: createOpenAIProviderRegistration({ apiKey: "sk-openai", projectId: "proj_123" })
+      })
+    ).resolves.toEqual({
+      providerKind: "openai",
+      label: "OpenAI primary",
+      connected: true,
+      metadata: { projectId: "proj_123" }
+    });
+
+    expect(audit).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      actorUserId: "user-1",
+      eventType: "secret.projection_sync_failed",
+      entityType: "secret_reference",
+      entityId: "11111111-1111-4111-8111-111111111111",
+      metadata: {
+        lifecycle: "register",
+        providerKind: "openai",
+        error: "mapping_missing"
+      }
+    });
+  });
+
+  it("keeps local rotation successful when projection sync fails and preserves provider context in audit", async () => {
+    const audit = vi.fn();
+    const service = createSecretService({
+      vault: {
+        store: vi.fn(),
+        rotate: vi.fn().mockResolvedValue("secret_ref_2"),
+        revoke: vi.fn(),
+        access: vi.fn()
+      },
+      audit,
+      repository: {
+        create: vi.fn(),
+        updateSecretRef: vi.fn().mockResolvedValue("11111111-1111-4111-8111-111111111111"),
+        revoke: vi.fn(),
+        findIdBySecretRef: vi.fn(),
+        describeSecretRef: vi.fn().mockResolvedValue({
+          id: "11111111-1111-4111-8111-111111111111",
+          providerKind: "openai_api"
+        })
+      },
+      projection: {
+        onRotated: vi.fn().mockRejectedValue(new Error("paperclip_sync_unavailable"))
+      }
+    });
+
+    await expect(
+      service.rotate({
+        tenantId: "tenant-1",
+        actorUserId: "user-1",
+        secretRef: "secret_ref_1",
+        nextSecretValues: { apiKey: "sk-next" }
+      })
+    ).resolves.toEqual({ secretRef: "secret_ref_2" });
+
+    expect(audit).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      actorUserId: "user-1",
+      eventType: "secret.projection_sync_failed",
+      entityType: "secret_reference",
+      entityId: "11111111-1111-4111-8111-111111111111",
+      metadata: {
+        lifecycle: "rotate",
+        providerKind: "openai_api",
+        error: "paperclip_sync_unavailable"
+      }
+    });
+  });
+
   it("allows already-bound runs to access a replaced credential by passing the run id to repository resolution", async () => {
     const vault = {
       store: vi.fn(),
@@ -218,11 +382,12 @@ describe("secret service", () => {
       access: vi.fn().mockResolvedValue({ apiKey: "sk-old" })
     };
     const repository = {
-      create: vi.fn(),
-      updateSecretRef: vi.fn(),
-      revoke: vi.fn(),
-      findIdBySecretRef: vi.fn().mockResolvedValue("11111111-1111-4111-8111-111111111111")
-    };
+        create: vi.fn(),
+        updateSecretRef: vi.fn(),
+        revoke: vi.fn(),
+        findIdBySecretRef: vi.fn().mockResolvedValue("11111111-1111-4111-8111-111111111111"),
+        describeSecretRef: vi.fn()
+      };
     const service = createSecretService({ vault, audit: vi.fn(), repository });
 
     await expect(service.access({ tenantId: "tenant-1", runId: "run-queued-1", secretRef: "secret_ref_old" })).resolves.toEqual({
@@ -249,7 +414,8 @@ describe("secret service", () => {
         create: vi.fn(),
         updateSecretRef: vi.fn(),
         revoke: vi.fn(),
-        findIdBySecretRef: vi.fn().mockResolvedValue("")
+        findIdBySecretRef: vi.fn().mockResolvedValue(""),
+        describeSecretRef: vi.fn()
       }
     });
 

@@ -376,7 +376,7 @@ Primary files:
 
 ## Immediate Conclusion
 
-The current Paperclip install is capable of supporting the Wealth Factory BYOK design, but not through the legacy `/runs` contract alone. The checked-in boundary now strips raw launch secrets, and the next step is the larger issue-launch plus synchronized `secret_ref` runtime-binding cutover.
+The current Paperclip install is capable of supporting the Wealth Factory BYOK design, but not through the legacy `/runs` contract alone. The checked-in boundary now strips raw launch secrets, and the repo now has the larger issue-launch plus synchronized `secret_ref` runtime-binding seams for registration, rotation, revoke, and worker launch refresh. The next step is live VPS verification that the installed Paperclip admin routes and token scope match the repo’s admin-lane assumptions.
 
 The secure direction is:
 
