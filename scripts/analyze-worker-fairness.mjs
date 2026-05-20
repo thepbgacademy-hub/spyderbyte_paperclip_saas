@@ -4,24 +4,31 @@ import process from "node:process";
 import { summarizePressureProof } from "./lib/pressure-drive.mjs";
 
 const args = parseArgs(process.argv.slice(2));
+const workerEventPaths = toArray(args["worker-events"]);
 
-if (!args.proof || !args["worker-events"]) {
+if (!args.proof || workerEventPaths.length === 0) {
   throw new Error("Expected --proof <path> and --worker-events <path>");
 }
 
 const proof = JSON.parse(await readFile(args.proof, "utf8"));
-const workerEvents = (await readFile(args["worker-events"], "utf8"))
-  .split(/\r?\n/)
-  .map((line) => line.trim())
-  .filter(Boolean)
-  .flatMap((line) => {
-    try {
-      const parsed = JSON.parse(line);
-      return parsed?.type === "wealth_factory_worker_run" ? [parsed] : [];
-    } catch {
-      return [];
-    }
-  });
+const workerEvents = (
+  await Promise.all(workerEventPaths.map((path) => readFile(path, "utf8")))
+).flatMap((contents) =>
+  contents
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .flatMap((line) => {
+      try {
+        const parsed = JSON.parse(line);
+        return parsed?.type === "wealth_factory_worker_run" || parsed?.type === "wealth_factory_worker_claim"
+          ? [parsed]
+          : [];
+      } catch {
+        return [];
+      }
+    })
+);
 
 const summary = summarizePressureProof({
   requests: proof.requests,
@@ -52,8 +59,21 @@ function parseArgs(values) {
     if (!value.startsWith("--")) {
       continue;
     }
-    parsed[value.slice(2)] = values[index + 1];
+    const key = value.slice(2);
+    const nextValue = values[index + 1];
+    if (Object.hasOwn(parsed, key)) {
+      parsed[key] = [...toArray(parsed[key]), nextValue];
+    } else {
+      parsed[key] = nextValue;
+    }
     index += 1;
   }
   return parsed;
+}
+
+function toArray(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  return typeof value === "string" ? [value] : [];
 }

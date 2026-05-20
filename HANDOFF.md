@@ -146,9 +146,11 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
   - `prove:live-fairness --mode global-fairness` is now accepted as a capture alias, but it still records drain-phase proof and expects the analyzer to compute the final cross-worker verdict from worker logs
   - `workerInstanceId` is authoritative only when `WF_WORKER_INSTANCE_ID` is explicitly pinned in the worker env; the default `hostname:pid` fallback is best-effort staging telemetry
   - current global finding:
-    - repeated staged two-worker probes still returned `phase = single_worker_only`
-    - even with warmed proof workers at `WF_WORKER_CONCURRENCY=1`, one worker continued to drain the launch burst by itself
-    - conclusion: tenant fairness inside one worker is proven, but cross-worker claim distribution is not yet proven and now needs claim-layer investigation instead of more shell-only probing
+    - the first apparent `single_worker_only` result was a proof artifact caused by proof-worker env drift, a missing `WF_PAPERCLIP_SERVICE_TOKEN_MAP`, first-use Paperclip secret-sync collisions, and the analyzer only reading the last `--worker-events` file
+    - after fixing those issues and rerunning the staged proof with warmed workers, `scripts/analyze-worker-fairness.mjs` reported `phase = global_multi_worker_fairness_observed`
+    - proof worker `a` handled the primary lane while proof worker `b` handled the secondary lane
+    - all 8 workflow runs reached `status = running`, all 8 outbox rows reached `enqueued`, and BullMQ reported all 8 jobs `completed`
+    - conclusion: staged cross-worker fairness is now proven for the 2-worker / 2-tenant burst lane; the next pressure gap is higher tenant counts and longer soak behavior
 
 ## Security Position
 

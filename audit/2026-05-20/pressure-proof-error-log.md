@@ -66,6 +66,30 @@ Fix:
 - emit an explicit note that the final cross-worker verdict still requires `analyze-worker-fairness`
 - do not pretend the capture step alone can prove global fairness without worker-event analysis
 
+12. The first proof-worker recreation dropped worker-only env such as `WF_VAULT_MASTER_KEY` and `SUPABASE_DB_URL`, so the replacement workers died before they could emit any claim telemetry.
+Fix:
+- build proof workers from the staged worker env surface, not the API env surface
+- explicitly preserve worker-only secrets and DB settings during proof-worker recreation
+- verify replacement workers can boot before treating missing logs as a fairness verdict
+
+13. The first warmed two-worker burst failed only for the secondary tenant because the proof-worker recreation path omitted `WF_PAPERCLIP_SERVICE_TOKEN_MAP`, forcing the secondary Paperclip company through the wrong bearer token.
+Fix:
+- source staged proof workers from `/home/deploy/wf-stage-worker.env`
+- keep `WF_PAPERCLIP_SERVICE_TOKEN_MAP` intact when recreating proof workers
+- do not assume the API container env is sufficient for staged worker proof
+
+14. A true two-worker burst exposed a first-use Paperclip secret-sync race: both workers could try to sync the same tenant secret at once, and one side sometimes received a transient board-session `500`.
+Fix:
+- reuse an existing active/synced Paperclip binding before attempting a fresh remote sync
+- if remote sync still fails, re-read the binding and recover if another worker completed the sync first
+- cover that recovery path in `tests/worker-runtime.test.ts`
+
+15. The local fairness analyzer originally accepted repeated `--worker-events` flags but only read the last file, producing a false `single_worker_only` verdict even when both proof-worker logs contained real claims.
+Fix:
+- treat repeated `--worker-events` args as an array in `scripts/analyze-worker-fairness.mjs`
+- add a regression test that feeds two worker log files and expects both worker IDs to appear
+- do not trust a single-file fairness verdict when the staged proof lane writes one log file per worker
+
 ## Outcome
 
 After the fixes above:
@@ -102,8 +126,17 @@ Additional global multi-worker fairness checkpoint after adding worker-instance 
 - `scripts/analyze-worker-fairness.mjs` now turns a saved burst proof plus structured `wealth_factory_worker_run` log lines into a `global-fairness` verdict
 - staged two-worker proof attempts were run against warmed proof workers with explicit `WF_WORKER_INSTANCE_ID` values
 - `prove-live-fairness --mode global-fairness` is now accepted as a capture alias, but it intentionally records drain-phase proof plus guidance to run `analyze-worker-fairness` afterward
-- the analyzer still returned `phase = single_worker_only`
+- the first apparent `single_worker_only` result was a proof artifact caused by:
+  - proof-worker env drift
+  - missing `WF_PAPERCLIP_SERVICE_TOKEN_MAP`
+  - transient first-use secret-sync collisions
+  - a single-file analyzer bug
+- after fixing those issues and rerunning the staged proof with warmed workers, the analyzer reported `phase = global_multi_worker_fairness_observed`
 - observed implication:
-  - staged tenant fairness inside one worker remains good
-  - global cross-worker distribution is not yet proven
-  - the next step is no longer better scripting; it is claim-layer investigation or a different worker/queue coordination strategy
+  - proof worker `a` consistently claimed the primary lane
+  - proof worker `b` consistently claimed the secondary lane
+  - all 8 workflow runs reached `status = running`
+  - all 8 outbox rows reached `enqueued`
+  - BullMQ reported all 8 jobs `completed`
+  - global cross-worker fairness is now proven for the staged 2-worker / 2-tenant burst lane
+  - the next pressure gap is no longer “can two workers split tenants at all”; it is larger-tenant-count and longer-soak behavior

@@ -241,4 +241,5 @@ This file tracks implementation progress. Keep it current after every phase.
   - [x] Add a sustained single-worker burst drain proof with per-run timing, per-lane wait summaries, and retry visibility.
   - [x] Add worker-instance-aware fairness telemetry plus a repo-owned analyzer for structured `wealth_factory_worker_run` events.
   - [x] Generalize the staged fairness driver beyond hard-coded primary/secondary lanes.
-  - [ ] Resolve the staged `single_worker_only` finding before calling cross-worker fairness proven.
+  - [x] Resolve the staged `single_worker_only` proof artifact and prove cross-worker fairness for the staged 2-worker / 2-tenant burst lane.
+  - [ ] Extend the staged fairness proof from 2 tenants into higher-tenant-count and longer-soak pressure scenarios.

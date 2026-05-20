@@ -13,6 +13,20 @@ async function main() {
     queueName: env.workflowQueueName,
     concurrency: env.workerConcurrency,
     processPayload: (payload) => runtime.processQueuePayload(payload),
+    onJobEvent: (event, details) => {
+      process.stdout.write(
+        `${JSON.stringify({
+          type: "wealth_factory_worker_claim",
+          workerInstanceId,
+          observedAt: new Date().toISOString(),
+          event,
+          jobId: details.jobId,
+          tenantId: details.payload.tenantId,
+          runId: details.payload.runId,
+          workflowId: details.payload.workflowId
+        })}\n`
+      );
+    },
     onError: (error) => {
       const message = error instanceof Error ? error.stack ?? error.message : String(error);
       process.stderr.write(`${message}\n`);

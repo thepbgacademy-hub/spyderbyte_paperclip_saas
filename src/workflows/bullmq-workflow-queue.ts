@@ -52,11 +52,37 @@ export function createBullmqWorkflowConsumer(options: WorkflowQueueConnectionOpt
   concurrency: number;
   processPayload(payload: WorkflowQueuePayload): Promise<unknown>;
   onError?: (error: unknown) => void;
+  onJobEvent?: (event: "claimed" | "completed" | "failed", details: {
+    jobId: string | null;
+    payload: WorkflowQueuePayload;
+    error?: unknown;
+  }) => void;
 }) {
   const connection = createBullmqConnection(options.redisUrl);
   const worker = new Worker<WorkflowQueuePayload>(
     options.queueName,
-    async (job) => options.processPayload(job.data),
+    async (job) => {
+      options.onJobEvent?.("claimed", {
+        jobId: job.id ?? null,
+        payload: job.data
+      });
+
+      try {
+        const result = await options.processPayload(job.data);
+        options.onJobEvent?.("completed", {
+          jobId: job.id ?? null,
+          payload: job.data
+        });
+        return result;
+      } catch (error) {
+        options.onJobEvent?.("failed", {
+          jobId: job.id ?? null,
+          payload: job.data,
+          error
+        });
+        throw error;
+      }
+    },
     {
       connection,
       concurrency: options.concurrency,

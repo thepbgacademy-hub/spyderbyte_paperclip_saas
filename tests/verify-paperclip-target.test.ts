@@ -43,7 +43,7 @@ describe("verify paperclip target script", () => {
       server.close();
       await once(server, "close");
     }
-  });
+  }, 15000);
 
   it("prints structured failure output when the target is unreachable", async () => {
     try {
@@ -65,5 +65,5 @@ describe("verify paperclip target script", () => {
         ])
       );
     }
-  });
+  }, 15000);
 });

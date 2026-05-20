@@ -90,6 +90,38 @@ export function createWorkerRuntime(options: { env: WorkerEnv; workerInstanceId?
     ...(options.env.runtimeEnv.OPENAI_PROJECT_ID ? { projectId: options.env.runtimeEnv.OPENAI_PROJECT_ID } : {}),
     label: "Operator Debug Provider"
   });
+  async function resolveExistingPaperclipSecretRefBinding(input: {
+    tenantId: string;
+    companyId: string;
+    agentId: string;
+    envKey: string;
+    secretRef: string;
+  }) {
+    const existing =
+      await paperclipSecretBindings.findActiveBySecretRef({
+        tenantId: input.tenantId,
+        paperclipCompanyId: input.companyId,
+        paperclipAgentId: input.agentId,
+        paperclipEnvKey: input.envKey,
+        secretRef: input.secretRef
+      })
+      ?? await paperclipSecretBindings.findActiveBySecretRef({
+        tenantId: input.tenantId,
+        paperclipCompanyId: input.companyId,
+        paperclipEnvKey: input.envKey,
+        secretRef: input.secretRef
+      });
+    if (!existing) {
+      return null;
+    }
+    if (!existing.paperclipSecretVersion) {
+      throw new Error(`Missing Paperclip secret version for ${input.envKey}`);
+    }
+    return toPaperclipSecretRefBinding({
+      paperclipSecretId: existing.paperclipSecretId,
+      paperclipSecretVersion: existing.paperclipSecretVersion
+    });
+  }
   const paperclipClient = createPaperclipClient({
     baseUrl: options.env.paperclipBaseUrl,
     serviceToken: options.env.paperclipServiceToken,
@@ -121,44 +153,54 @@ export function createWorkerRuntime(options: { env: WorkerEnv; workerInstanceId?
                   if (!tenantId) {
                     throw new Error(`Missing tenant context for Paperclip company ${companyId}`);
                   }
+                  const existingBinding = await resolveExistingPaperclipSecretRefBinding({
+                    tenantId,
+                    companyId,
+                    agentId,
+                    envKey: bindingTarget.envKey,
+                    secretRef: binding.secretRef
+                  });
+                  if (existingBinding) {
+                    adapterEnv[bindingTarget.envKey] = existingBinding;
+                    continue;
+                  }
                   if (!paperclipSecretSync) {
-                    const existing = await paperclipSecretBindings.findActiveBySecretRef({
+                    throw new Error(`Missing Paperclip secret binding for ${binding.providerKind}:${bindingTarget.envKey}`);
+                  }
+                  try {
+                    const synced = await paperclipSecretSync.syncBinding({
                       tenantId,
+                      wealthFactorySecretReferenceId: await repositories.findSecretReferenceId({
+                        tenantId,
+                        secretRef: binding.secretRef
+                      }),
                       paperclipCompanyId: companyId,
                       paperclipAgentId: agentId,
                       paperclipEnvKey: bindingTarget.envKey,
-                      secretRef: binding.secretRef
+                      providerKind: binding.providerKind as ProviderKind,
+                      secretValue: bindingTarget.secretValue,
+                      paperclipSecretKey: bindingTarget.envKey,
+                      bindToAgent: false
                     });
-                    if (!existing) {
-                      throw new Error(`Missing Paperclip secret binding for ${binding.providerKind}:${bindingTarget.envKey}`);
-                    }
-                    if (!existing.paperclipSecretVersion) {
-                      throw new Error(`Missing Paperclip secret version for ${binding.providerKind}:${bindingTarget.envKey}`);
-                    }
                     adapterEnv[bindingTarget.envKey] = toPaperclipSecretRefBinding({
-                      paperclipSecretId: existing.paperclipSecretId,
-                      paperclipSecretVersion: existing.paperclipSecretVersion
+                      paperclipSecretId: synced.paperclipSecretId,
+                      paperclipSecretVersion: synced.paperclipSecretVersion
                     });
                     continue;
-                  }
-                  const synced = await paperclipSecretSync.syncBinding({
+                  } catch (error) {
+                  const recoveredBinding = await resolveExistingPaperclipSecretRefBinding({
                     tenantId,
-                    wealthFactorySecretReferenceId: await repositories.findSecretReferenceId({
-                      tenantId,
-                      secretRef: binding.secretRef
-                    }),
-                    paperclipCompanyId: companyId,
-                    paperclipAgentId: agentId,
-                    paperclipEnvKey: bindingTarget.envKey,
-                    providerKind: binding.providerKind as ProviderKind,
-                    secretValue: bindingTarget.secretValue,
-                    paperclipSecretKey: bindingTarget.envKey,
-                    bindToAgent: false
+                    companyId,
+                    agentId,
+                    envKey: bindingTarget.envKey,
+                    secretRef: binding.secretRef
                   });
-                  adapterEnv[bindingTarget.envKey] = toPaperclipSecretRefBinding({
-                    paperclipSecretId: synced.paperclipSecretId,
-                    paperclipSecretVersion: synced.paperclipSecretVersion
-                  });
+                  if (recoveredBinding) {
+                    adapterEnv[bindingTarget.envKey] = recoveredBinding;
+                    continue;
+                  }
+                  throw error;
+                  }
                 }
               }
               return {

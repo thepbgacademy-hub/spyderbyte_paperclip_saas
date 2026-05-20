@@ -356,9 +356,11 @@ Current staged sustained-burst checkpoint on 2026-05-20:
 - worker logs now also emit `wealth_factory_worker_run` start/release events so fairness output can be correlated back to concrete `runId` values without exposing secrets
 - current cross-worker checkpoint on 2026-05-20:
   - warmed two-worker proof lanes were exercised with explicit `WF_WORKER_INSTANCE_ID` values and a repo-owned analyzer
-  - the analyzer still returned `phase = single_worker_only`
-  - even dedicated proof workers at `WF_WORKER_CONCURRENCY=1` did not yet produce a staged burst where two distinct workers shared the observed launch claims
-  - treat this as a real backlog item, not a scripting artifact: the next step is claim-layer investigation or a different queue coordination strategy before calling global multi-worker fairness proven
+  - the first apparent `single_worker_only` result was a proof artifact caused by proof-worker env drift, a missing `WF_PAPERCLIP_SERVICE_TOKEN_MAP`, first-use Paperclip secret-sync collisions, and the analyzer only reading the last `--worker-events` file
+  - after fixing those issues and rerunning the staged proof with warmed workers, the analyzer reported `phase = global_multi_worker_fairness_observed`
+  - proof worker `a` handled the primary lane while proof worker `b` handled the secondary lane
+  - all 8 workflow runs reached `status = running`, all 8 outbox rows reached `enqueued`, and BullMQ reported all 8 jobs `completed`
+  - treat cross-worker fairness as proven for the staged 2-worker / 2-tenant burst lane; the next backlog item is larger-tenant-count and longer-soak pressure behavior, not basic two-worker distribution
 
 Set the lifecycle proof env before using the helper:
 

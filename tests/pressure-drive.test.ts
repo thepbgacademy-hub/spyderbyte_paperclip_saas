@@ -458,6 +458,120 @@ describe("pressure drive helpers", () => {
     expect(summary.phase).toBe("missing_worker_telemetry");
   });
 
+  it("uses BullMQ claim telemetry as the fairness start source when runtime start logs are absent", () => {
+    const summary = summarizePressureProof({
+      requests: [
+        { lane: "alpha", tenantId: "tenant-1", runId: "run-1" },
+        { lane: "beta", tenantId: "tenant-2", runId: "run-2" }
+      ],
+      snapshots: [
+        {
+          lane: "alpha",
+          tenantId: "tenant-1",
+          runId: "run-1",
+          runStatus: "running",
+          outboxStatus: "enqueued",
+          queueState: "completed",
+          observedFirstProgressAt: "2026-05-20T06:00:02.000Z",
+          observedFirstStartedAt: "2026-05-20T06:00:02.000Z"
+        },
+        {
+          lane: "beta",
+          tenantId: "tenant-2",
+          runId: "run-2",
+          runStatus: "running",
+          outboxStatus: "enqueued",
+          queueState: "completed",
+          observedFirstProgressAt: "2026-05-20T06:00:02.100Z",
+          observedFirstStartedAt: "2026-05-20T06:00:02.100Z"
+        }
+      ],
+      workerEvents: [
+        {
+          type: "wealth_factory_worker_claim",
+          event: "claimed",
+          workerInstanceId: "worker-a",
+          tenantId: "tenant-1",
+          runId: "run-1",
+          observedAt: "2026-05-20T06:00:01.900Z"
+        },
+        {
+          type: "wealth_factory_worker_claim",
+          event: "claimed",
+          workerInstanceId: "worker-b",
+          tenantId: "tenant-2",
+          runId: "run-2",
+          observedAt: "2026-05-20T06:00:01.950Z"
+        }
+      ],
+      mode: "global-fairness"
+    });
+
+    expect(summary.ok).toBe(true);
+    expect(summary.phase).toBe("global_multi_worker_fairness_observed");
+    expect(summary.workers.startedEvents.orderedStarts).toEqual([
+      expect.objectContaining({ event: "claimed", workerInstanceId: "worker-a", lane: "alpha" }),
+      expect.objectContaining({ event: "claimed", workerInstanceId: "worker-b", lane: "beta" })
+    ]);
+  });
+
+  it("preserves runtime start telemetry for runs that have no claim event in a mixed capture", () => {
+    const summary = summarizePressureProof({
+      requests: [
+        { lane: "alpha", tenantId: "tenant-1", runId: "run-1" },
+        { lane: "beta", tenantId: "tenant-2", runId: "run-2" }
+      ],
+      snapshots: [
+        {
+          lane: "alpha",
+          tenantId: "tenant-1",
+          runId: "run-1",
+          runStatus: "running",
+          outboxStatus: "enqueued",
+          queueState: "completed",
+          observedFirstProgressAt: "2026-05-20T06:00:02.000Z",
+          observedFirstStartedAt: "2026-05-20T06:00:02.000Z"
+        },
+        {
+          lane: "beta",
+          tenantId: "tenant-2",
+          runId: "run-2",
+          runStatus: "running",
+          outboxStatus: "enqueued",
+          queueState: "completed",
+          observedFirstProgressAt: "2026-05-20T06:00:02.100Z",
+          observedFirstStartedAt: "2026-05-20T06:00:02.100Z"
+        }
+      ],
+      workerEvents: [
+        {
+          type: "wealth_factory_worker_claim",
+          event: "claimed",
+          workerInstanceId: "worker-a",
+          tenantId: "tenant-1",
+          runId: "run-1",
+          observedAt: "2026-05-20T06:00:01.900Z"
+        },
+        {
+          type: "wealth_factory_worker_run",
+          event: "started",
+          workerInstanceId: "worker-b",
+          tenantId: "tenant-2",
+          runId: "run-2",
+          observedAt: "2026-05-20T06:00:02.050Z"
+        }
+      ],
+      mode: "global-fairness"
+    });
+
+    expect(summary.ok).toBe(true);
+    expect(summary.phase).toBe("global_multi_worker_fairness_observed");
+    expect(summary.workers.startedEvents.orderedStarts).toEqual([
+      expect.objectContaining({ event: "claimed", workerInstanceId: "worker-a", lane: "alpha" }),
+      expect.objectContaining({ event: "started", workerInstanceId: "worker-b", lane: "beta" })
+    ]);
+  });
+
   it("flags global fairness skew when one tenant monopolizes early multi-worker starts", () => {
     const summary = summarizePressureProof({
       requests: [

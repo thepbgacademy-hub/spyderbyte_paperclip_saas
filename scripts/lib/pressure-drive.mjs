@@ -426,14 +426,11 @@ function summarizeGlobalFairness(input) {
   const allWorkerEvents = (Array.isArray(input?.workerEvents) ? input.workerEvents : [])
     .map((event) => normalizeWorkerEvent(event))
     .filter((event) =>
-      event.type === "wealth_factory_worker_run"
+      (event.type === "wealth_factory_worker_run" || event.type === "wealth_factory_worker_claim")
       && event.workerInstanceId
       && requestedRunIds.has(event.runId)
     );
-  const startedEvents = allWorkerEvents
-    .filter((event) =>
-      event.event === "started"
-    )
+  const startedEvents = selectFairnessStartEvents(allWorkerEvents)
     .sort((left, right) => {
       const leftMs = left.observedAt ? Date.parse(left.observedAt) : Number.MAX_SAFE_INTEGER;
       const rightMs = right.observedAt ? Date.parse(right.observedAt) : Number.MAX_SAFE_INTEGER;
@@ -564,6 +561,21 @@ function summarizeWorkerEvents(events, runToLane = new Map()) {
     byWorker,
     orderedStarts
   };
+}
+
+function selectFairnessStartEvents(events) {
+  const startedByRun = new Map(
+    events
+      .filter((event) => event.type === "wealth_factory_worker_run" && event.event === "started")
+      .map((event) => [event.runId, event])
+  );
+  for (const event of events) {
+    if (event.type === "wealth_factory_worker_claim" && event.event === "claimed") {
+      startedByRun.set(event.runId, event);
+    }
+  }
+
+  return [...startedByRun.values()];
 }
 
 function summarizeCoverageWindows(startedEvents, laneCount, workerCount, runToLane = new Map()) {
