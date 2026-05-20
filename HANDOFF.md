@@ -121,7 +121,7 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 - all 3 outbox rows reached `enqueued`
 - BullMQ reported all 3 jobs `completed`
 - the staged worker logs proved both tenants were admitted under the same single-worker lane while `WF_WORKER_CONCURRENCY=2` and `WF_WORKER_MAX_ACTIVE_PER_TENANT=1`
-- limit: this is a single-worker fairness proof only; outbox claim order is still FIFO and cross-worker fairness is not yet globally proven
+- the earlier single-worker checkpoint is now superseded by the multi-worker staged proofs below
 - current sustained-burst checkpoint on 2026-05-20:
   - `prove:live-fairness` now supports `--mode drain` and emits per-run queue plus observed progress/start/completion timestamps, along with per-lane observed wait and retry summaries
   - it also now supports repeated `--lane lane:tenant:user:workflow:runs` inputs, so staged bursts are no longer limited to hard-coded primary/secondary/tertiary lanes
@@ -150,7 +150,32 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
     - after fixing those issues and rerunning the staged proof with warmed workers, `scripts/analyze-worker-fairness.mjs` reported `phase = global_multi_worker_fairness_observed`
     - proof worker `a` handled the primary lane while proof worker `b` handled the secondary lane
     - all 8 workflow runs reached `status = running`, all 8 outbox rows reached `enqueued`, and BullMQ reported all 8 jobs `completed`
-    - conclusion: staged cross-worker fairness is now proven for the 2-worker / 2-tenant burst lane; the next pressure gap is higher tenant counts and longer soak behavior
+    - conclusion: staged cross-worker fairness is now proven for the 2-worker / 2-tenant burst lane
+  - current bounded-pod soak checkpoint:
+    - a six-tenant / three-worker / three-cycle staged proof has now passed
+    - additional staged lanes were provisioned for:
+      - quaternary
+      - quinary
+      - senary
+    - all 18 workflow runs reached `status = running`
+    - all 18 outbox rows reached `enqueued`
+    - BullMQ reported all 18 jobs `completed`
+    - `scripts/analyze-worker-fairness.mjs` reported `phase = global_multi_worker_soak_observed`
+    - worker start distribution was balanced:
+      - `proof-a`: 6 starts
+      - `proof-b`: 6 starts
+      - `proof-c`: 6 starts
+    - early coverage windows showed:
+      - wave 1: first 3 starts covered 3 unique lanes across 3 workers
+      - wave 2: first 6 starts covered all 6 lanes across 3 workers
+    - observed wait-to-start:
+      - primary: `min=2665ms`, `median=2748ms`, `max=4659ms`
+      - secondary: `min=2579ms`, `median=2767ms`, `max=4465ms`
+      - tertiary: `min=2402ms`, `median=2559ms`, `max=4033ms`
+      - quaternary: `min=3845ms`, `median=4540ms`, `max=5739ms`
+      - quinary: `min=3592ms`, `median=4386ms`, `max=5536ms`
+      - senary: `min=3410ms`, `median=4191ms`, `max=5386ms`
+    - conclusion: the bounded-pod model is now proven through a six-tenant, three-worker staged soak; the next pressure gap is longer soak duration, skewed bursts, and resource saturation behavior
 
 ## Security Position
 

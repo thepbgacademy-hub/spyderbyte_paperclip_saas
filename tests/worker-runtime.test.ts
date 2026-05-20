@@ -17,7 +17,9 @@ vi.mock("../src/db/supabase-repositories.js", () => ({
     revokeSecretReference: vi.fn(),
     findIdBySecretRef: vi.fn().mockResolvedValue("secret-1"),
     findSecretReferenceId: vi.fn().mockResolvedValue("11111111-1111-4111-8111-111111111111"),
-    resolvePaperclipCompanyMapping: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1", paperclipIssueAgentId: "pc-agent-1" })
+    resolvePaperclipCompanyMapping: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1", paperclipIssueAgentId: "pc-agent-1" }),
+    hasActiveWorkflowRuns: vi.fn().mockResolvedValue(false),
+    countActiveWorkflowRuns: vi.fn().mockResolvedValue(1)
   }))
 }));
 
@@ -223,8 +225,7 @@ describe("worker runtime", () => {
       paperclipEnvKey: "OPENAI_API_KEY",
       providerKind: "openai_api",
       secretValue: "sk-tenant",
-      paperclipSecretKey: "OPENAI_API_KEY",
-      bindToAgent: false
+      paperclipSecretKey: "OPENAI_API_KEY"
     });
 
     await expect(issueLaunch?.resolveLaunchTarget({
@@ -310,6 +311,63 @@ describe("worker runtime", () => {
         }
       }
     });
+
+    const syncService = vi.mocked(createPaperclipSecretSyncService).mock.results[0]?.value;
+    expect(syncService.syncBinding).not.toHaveBeenCalled();
+
+    await runtime.close();
+  });
+
+  it("fails closed instead of rebinding the Paperclip issue agent while another tenant run is still active", async () => {
+    const { createPaperclipClient } = await import("../src/paperclip/client.js");
+    const {
+      createPaperclipSecretBindingRepository,
+      createPaperclipSecretSyncService
+    } = await import("../src/paperclip/secret-sync.js");
+    const { createSupabaseRepositories } = await import("../src/db/supabase-repositories.js");
+
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_PAPERCLIP_LAUNCH_MODE: "issues",
+        WF_PAPERCLIP_BOARD_SESSION_TOKEN: "board-session-token",
+        WF_PAPERCLIP_BOARD_ORIGIN: "https://paperclip-board.internal.local/",
+        WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-fallback"
+      })
+    });
+    const repositories = vi.mocked(createSupabaseRepositories).mock.results[0]?.value;
+    repositories.countActiveWorkflowRuns.mockResolvedValue(2);
+    await runtime.processQueuePayload({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "workflow-1",
+      createdByUserId: "user-1",
+      idempotencyKey: "tenant-1:workflow-1:run-1",
+      createdAt: new Date().toISOString()
+    });
+
+    const issueLaunch = vi.mocked(createPaperclipClient).mock.calls.at(-1)?.[0].issueLaunch;
+    expect(issueLaunch).toBeDefined();
+    const bindingRepository = vi.mocked(createPaperclipSecretBindingRepository).mock.results[0]?.value;
+    bindingRepository.findActiveBySecretRef.mockResolvedValue(null);
+
+    await expect(
+      issueLaunch?.syncProviderSecretRefs?.({
+        companyId: "pc-company-1",
+        workflowId: "workflow-1",
+        agentId: "pc-agent-1",
+        providerContext: [
+          {
+            capability: "text_generation",
+            providerKind: "openai_api",
+            label: "Bound OpenAI",
+            secretRef: "wf_secret_bound",
+            metadata: {},
+            secretValues: { apiKey: "sk-tenant" }
+          }
+        ]
+      })
+    ).rejects.toThrow("Paperclip secret binding refresh deferred");
 
     const syncService = vi.mocked(createPaperclipSecretSyncService).mock.results[0]?.value;
     expect(syncService.syncBinding).not.toHaveBeenCalled();

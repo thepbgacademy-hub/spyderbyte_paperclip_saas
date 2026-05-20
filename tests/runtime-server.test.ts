@@ -26,6 +26,8 @@ vi.mock("../src/db/supabase-repositories.js", () => ({
   })),
   createSupabaseRepositories: vi.fn(() => ({
     resolvePaperclipCompanyMapping: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1", paperclipIssueAgentId: "pc-agent-1" }),
+    hasActiveWorkflowRuns: vi.fn().mockResolvedValue(false),
+    countActiveWorkflowRuns: vi.fn().mockResolvedValue(0),
     requireTenantMember: vi.fn(),
     listWorkflows: vi.fn(),
     listPackages: vi.fn(),
@@ -289,6 +291,7 @@ describe("runtime server", () => {
       paperclipCompanyId: "pc-company-1",
       paperclipIssueAgentId: "pc-agent-1"
     });
+    await expect(projectionArgs?.hasActiveRuns?.({ tenantId: "tenant-1" })).resolves.toBe(false);
     expect(projectionArgs?.defaultPaperclipAgentId).toBe("agent-1");
     expect(createAcidSecretRevokeService).toHaveBeenCalledWith(
       expect.objectContaining({

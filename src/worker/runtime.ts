@@ -167,6 +167,12 @@ export function createWorkerRuntime(options: { env: WorkerEnv; workerInstanceId?
                   if (!paperclipSecretSync) {
                     throw new Error(`Missing Paperclip secret binding for ${binding.providerKind}:${bindingTarget.envKey}`);
                   }
+                  const activeRunCount = await repositories.countActiveWorkflowRuns({ tenantId });
+                  if (activeRunCount > 1) {
+                    throw new Error(
+                      `Paperclip secret binding refresh deferred for ${binding.providerKind}:${bindingTarget.envKey} while another tenant run is still active`
+                    );
+                  }
                   try {
                     const synced = await paperclipSecretSync.syncBinding({
                       tenantId,
@@ -179,8 +185,7 @@ export function createWorkerRuntime(options: { env: WorkerEnv; workerInstanceId?
                       paperclipEnvKey: bindingTarget.envKey,
                       providerKind: binding.providerKind as ProviderKind,
                       secretValue: bindingTarget.secretValue,
-                      paperclipSecretKey: bindingTarget.envKey,
-                      bindToAgent: false
+                      paperclipSecretKey: bindingTarget.envKey
                     });
                     adapterEnv[bindingTarget.envKey] = toPaperclipSecretRefBinding({
                       paperclipSecretId: synced.paperclipSecretId,

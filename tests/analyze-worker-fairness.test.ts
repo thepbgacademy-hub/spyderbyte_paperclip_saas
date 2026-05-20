@@ -120,4 +120,138 @@ describe("analyze-worker-fairness script", () => {
     expect(result.summary.workers.distinctWorkers).toEqual(["worker-a", "worker-b"]);
     expect(result.phase).not.toBe("single_worker_only");
   }, 15000);
+
+  it("keeps six requested lanes distinct across multiple worker event files", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "wf-analyze-fairness-"));
+    const proofPath = join(dir, "proof-six.json");
+    const workerAPath = join(dir, "worker-a.log");
+    const workerBPath = join(dir, "worker-b.log");
+    const workerCPath = join(dir, "worker-c.log");
+
+    const lanes = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"];
+    await writeFile(
+      proofPath,
+      JSON.stringify({
+        requests: lanes.map((lane, index) => ({
+          lane,
+          tenantId: `tenant-${index + 1}`,
+          userId: `user-${index + 1}`,
+          workflowId: `workflow-${index + 1}`,
+          runId: `run-${index + 1}`,
+          idempotencyKey: `tenant-${index + 1}:workflow-${index + 1}:run-${index + 1}`,
+          sequence: 1,
+          queuedAt: `2026-05-20T00:00:0${index}.000Z`
+        })),
+        snapshots: lanes.map((lane, index) => ({
+          lane,
+          tenantId: `tenant-${index + 1}`,
+          runId: `run-${index + 1}`,
+          workflowId: `workflow-${index + 1}`,
+          runStatus: "running",
+          outboxStatus: "enqueued",
+          queueState: "completed",
+          outboxAttempts: 1,
+          queueReachable: true,
+          queuedAt: `2026-05-20T00:00:0${index}.000Z`,
+          observedFirstProgressAt: `2026-05-20T00:00:1${index}.000Z`,
+          observedFirstStartedAt: `2026-05-20T00:00:2${index}.000Z`,
+          observedCompletedAt: null
+        }))
+      }),
+      "utf8"
+    );
+
+    await writeFile(
+      workerAPath,
+      [
+        {
+          type: "wealth_factory_worker_claim",
+          workerInstanceId: "worker-a",
+          observedAt: "2026-05-20T00:00:00.100Z",
+          event: "claimed",
+          tenantId: "tenant-1",
+          runId: "run-1",
+          workflowId: "workflow-1"
+        },
+        {
+          type: "wealth_factory_worker_claim",
+          workerInstanceId: "worker-a",
+          observedAt: "2026-05-20T00:00:00.400Z",
+          event: "claimed",
+          tenantId: "tenant-4",
+          runId: "run-4",
+          workflowId: "workflow-4"
+        }
+      ].map((event) => `${JSON.stringify(event)}\n`).join(""),
+      "utf8"
+    );
+    await writeFile(
+      workerBPath,
+      [
+        {
+          type: "wealth_factory_worker_claim",
+          workerInstanceId: "worker-b",
+          observedAt: "2026-05-20T00:00:00.200Z",
+          event: "claimed",
+          tenantId: "tenant-2",
+          runId: "run-2",
+          workflowId: "workflow-2"
+        },
+        {
+          type: "wealth_factory_worker_claim",
+          workerInstanceId: "worker-b",
+          observedAt: "2026-05-20T00:00:00.500Z",
+          event: "claimed",
+          tenantId: "tenant-5",
+          runId: "run-5",
+          workflowId: "workflow-5"
+        }
+      ].map((event) => `${JSON.stringify(event)}\n`).join(""),
+      "utf8"
+    );
+    await writeFile(
+      workerCPath,
+      [
+        {
+          type: "wealth_factory_worker_claim",
+          workerInstanceId: "worker-c",
+          observedAt: "2026-05-20T00:00:00.300Z",
+          event: "claimed",
+          tenantId: "tenant-3",
+          runId: "run-3",
+          workflowId: "workflow-3"
+        },
+        {
+          type: "wealth_factory_worker_claim",
+          workerInstanceId: "worker-c",
+          observedAt: "2026-05-20T00:00:00.600Z",
+          event: "claimed",
+          tenantId: "tenant-6",
+          runId: "run-6",
+          workflowId: "workflow-6"
+        }
+      ].map((event) => `${JSON.stringify(event)}\n`).join(""),
+      "utf8"
+    );
+
+    const { stdout } = await execFileAsync("node", [
+      "scripts/analyze-worker-fairness.mjs",
+      "--proof",
+      proofPath,
+      "--worker-events",
+      workerAPath,
+      "--worker-events",
+      workerBPath,
+      "--worker-events",
+      workerCPath
+    ], {
+      cwd: "E:\\REPOS\\spyderbyte_paperclip_saas"
+    });
+
+    const result = JSON.parse(stdout);
+    expect(result.workerEvents).toHaveLength(6);
+    expect(result.summary.workers.distinctWorkers).toEqual(["worker-a", "worker-b", "worker-c"]);
+    expect(Object.keys(result.summary.lanes)).toEqual(["alpha", "beta", "gamma", "delta", "epsilon", "zeta"]);
+    expect(result.phase).toBe("global_multi_worker_fairness_observed");
+  }, 15000);
 });

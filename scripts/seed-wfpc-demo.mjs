@@ -2,43 +2,9 @@ import process from "node:process";
 
 import pg from "pg";
 
+import { resolveDemoSeedProfile } from "./lib/demo-seed-profiles.mjs";
 import { loadRuntimePreflight, summarizeRuntimePreflight } from "./lib/runtime-preflight.mjs";
 import { loadScriptEnv } from "./lib/script-env.mjs";
-
-const DEMO_PROFILES = {
-  primary: {
-    userId: "11111111-1111-4111-8111-111111111111",
-    tenantId: "22222222-2222-4222-8222-222222222222",
-    packageId: "33333333-3333-4333-8333-333333333333",
-    workflowId: "44444444-4444-4444-8444-444444444444",
-    providerReferenceId: "55555555-5555-4555-8555-555555555555",
-    purchaseId: "66666666-6666-4666-8666-666666666666",
-    tenantName: "Wealth Factory Demo",
-    tenantSlug: "wealth-factory-demo",
-    userEmail: "demo@wealthfactory.local",
-    workflowName: "Wealth Factory Social Calendar",
-    workflowDescription: "Plan approved social posts for the installed package.",
-    providerLabel: "OpenAI",
-    providerSecretRef: "wf_secret_demo_openai",
-    providerMetadata: { project: "demo" }
-  },
-  secondary: {
-    userId: "11111111-1111-4111-8111-222222222222",
-    tenantId: "22222222-2222-4222-8222-333333333333",
-    packageId: "33333333-3333-4333-8333-333333333333",
-    workflowId: "44444444-4444-4444-8444-555555555555",
-    providerReferenceId: "55555555-5555-4555-8555-666666666666",
-    purchaseId: "66666666-6666-4666-8666-777777777777",
-    tenantName: "Wealth Factory Demo Two",
-    tenantSlug: "wealth-factory-demo-two",
-    userEmail: "demo-two@wealthfactory.local",
-    workflowName: "Wealth Factory Social Calendar Two",
-    workflowDescription: "Plan approved social posts for the installed package.",
-    providerLabel: "OpenAI",
-    providerSecretRef: "wf_secret_demo_two_openai",
-    providerMetadata: { project: "demo-two" }
-  }
-};
 
 const env = loadScriptEnv();
 const args = parseArgs(process.argv.slice(2));
@@ -291,27 +257,7 @@ function parseArgs(values) {
 }
 
 function buildSeedProfile(args, source) {
-  const preset = DEMO_PROFILES[args.lane ?? "primary"] ?? DEMO_PROFILES.primary;
-  return {
-    userId: args.user ?? source.WF_DEMO_USER_ID ?? preset.userId,
-    tenantId: args.tenant ?? source.WF_DEMO_TENANT_ID ?? preset.tenantId,
-    packageId: args.package ?? source.WF_DEMO_PACKAGE_ID ?? preset.packageId,
-    workflowId: args.workflow ?? source.WF_DEMO_WORKFLOW_ID ?? preset.workflowId,
-    providerReferenceId: args["provider-reference"] ?? source.WF_DEMO_PROVIDER_REFERENCE_ID ?? preset.providerReferenceId,
-    purchaseId: args.purchase ?? source.WF_DEMO_PURCHASE_ID ?? preset.purchaseId,
-    tenantName: args["tenant-name"] ?? source.WF_DEMO_TENANT_NAME ?? preset.tenantName,
-    tenantSlug: args["tenant-slug"] ?? source.WF_DEMO_TENANT_SLUG ?? preset.tenantSlug,
-    userEmail: args["user-email"] ?? source.WF_DEMO_USER_EMAIL ?? preset.userEmail,
-    workflowName: args["workflow-name"] ?? source.WF_DEMO_WORKFLOW_NAME ?? preset.workflowName,
-    workflowDescription: args["workflow-description"] ?? source.WF_DEMO_WORKFLOW_DESCRIPTION ?? preset.workflowDescription,
-    providerLabel: args["provider-label"] ?? source.WF_DEMO_PROVIDER_LABEL ?? preset.providerLabel,
-    providerSecretRef: args["provider-secret-ref"] ?? source.WF_DEMO_PROVIDER_SECRET_REF ?? preset.providerSecretRef,
-    providerMetadata: {
-      ...preset.providerMetadata,
-      ...parseJsonObject(source.WF_DEMO_PROVIDER_METADATA),
-      ...parseJsonObject(args["provider-metadata"])
-    }
-  };
+  return resolveDemoSeedProfile(args, source);
 }
 
 function resolvePaperclipCompanyId(args, source) {
@@ -322,12 +268,4 @@ function resolvePaperclipCompanyId(args, source) {
 function resolvePaperclipIssueAgentId(args, source) {
   const value = args["paperclip-issue-agent-id"] ?? source.WF_DEMO_PAPERCLIP_ISSUE_AGENT_ID;
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
-}
-
-function parseJsonObject(value) {
-  if (typeof value !== "string" || value.trim().length === 0) {
-    return {};
-  }
-  const parsed = JSON.parse(value);
-  return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
 }

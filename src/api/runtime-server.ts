@@ -127,6 +127,7 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
           }),
           bindings: paperclipSecretBindings,
           resolveCompanyMapping: async ({ tenantId }) => repositories.resolvePaperclipCompanyMapping({ tenantId }),
+          hasActiveRuns: async ({ tenantId }) => repositories.hasActiveWorkflowRuns({ tenantId }),
           ...(options.env.runtimeEnv.WF_PAPERCLIP_ISSUE_AGENT_ID
             ? { defaultPaperclipAgentId: options.env.runtimeEnv.WF_PAPERCLIP_ISSUE_AGENT_ID }
             : {}),

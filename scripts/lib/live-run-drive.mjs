@@ -132,40 +132,44 @@ export async function reserveLiveWorkflowRun(input) {
 }
 
 export async function loadWorkflowRunSnapshot({ client, tenantId, runId }) {
-  const [runResult, outboxResult] = await Promise.all([
-    client.query(
-      `select id, status, bound_secret_reference_id, bound_provider_context, created_at
-       from wfpc.workflow_runs
-       where tenant_id = $1 and id = $2
-       limit 1`,
-      [tenantId, runId]
-    ),
-    client.query(
-      `select id, status, attempts, last_error, created_at
-       from wfpc.workflow_queue_outbox
-       where tenant_id = $1 and run_id = $2
-       limit 1`,
-      [tenantId, runId]
-    )
-  ]);
+  const snapshotResult = await client.query(
+    `select
+        run.id as run_id,
+        run.status as run_status,
+        run.created_at as run_created_at,
+        run.bound_secret_reference_id,
+        run.bound_provider_context,
+        outbox.id as outbox_id,
+        outbox.status as outbox_status,
+        outbox.created_at as outbox_created_at,
+        outbox.attempts as outbox_attempts,
+        outbox.last_error as outbox_last_error
+     from wfpc.workflow_runs run
+     left join wfpc.workflow_queue_outbox outbox
+       on outbox.tenant_id = run.tenant_id
+      and outbox.run_id = run.id
+     where run.tenant_id = $1
+       and run.id = $2
+     limit 1`,
+    [tenantId, runId]
+  );
 
-  const runRow = asRecord(runResult.rows[0]);
-  const outboxRow = asRecord(outboxResult.rows[0]);
+  const row = asRecord(snapshotResult.rows[0]);
 
   return {
     run: {
-      id: String(runRow.id ?? ""),
-      status: String(runRow.status ?? ""),
-      createdAt: coerceTimestamp(runRow.created_at),
-      boundSecretReferenceId: String(runRow.bound_secret_reference_id ?? ""),
-      providerContext: toProviderContext(runRow.bound_provider_context)
+      id: String(row.run_id ?? ""),
+      status: String(row.run_status ?? ""),
+      createdAt: coerceTimestamp(row.run_created_at),
+      boundSecretReferenceId: String(row.bound_secret_reference_id ?? ""),
+      providerContext: toProviderContext(row.bound_provider_context)
     },
     outbox: {
-      id: String(outboxRow.id ?? ""),
-      status: String(outboxRow.status ?? ""),
-      createdAt: coerceTimestamp(outboxRow.created_at),
-      attempts: Number(outboxRow.attempts ?? 0),
-      lastError: typeof outboxRow.last_error === "string" ? outboxRow.last_error : null
+      id: String(row.outbox_id ?? ""),
+      status: String(row.outbox_status ?? ""),
+      createdAt: coerceTimestamp(row.outbox_created_at),
+      attempts: Number(row.outbox_attempts ?? 0),
+      lastError: typeof row.outbox_last_error === "string" ? row.outbox_last_error : null
     }
   };
 }

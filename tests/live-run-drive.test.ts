@@ -31,9 +31,9 @@ describe("live run drive helpers", () => {
         .mockResolvedValueOnce({
           rows: [
             {
-              id: "run-1",
-              status: "queued",
-              created_at: new Date("2026-05-20T06:00:00.000Z"),
+              run_id: "run-1",
+              run_status: "queued",
+              run_created_at: new Date("2026-05-20T06:00:00.000Z"),
               bound_secret_reference_id: "secret-ref-1",
               bound_provider_context: [
                 {
@@ -43,18 +43,12 @@ describe("live run drive helpers", () => {
                   secretRef: "wf_secret_demo",
                   metadata: { project: "demo" }
                 }
-              ]
-            }
-          ]
-        })
-        .mockResolvedValueOnce({
-          rows: [
-            {
-              id: "outbox-1",
-              status: "enqueued",
-              created_at: new Date("2026-05-20T06:00:01.000Z"),
-              attempts: 1,
-              last_error: null
+              ],
+              outbox_id: "outbox-1",
+              outbox_status: "enqueued",
+              outbox_created_at: new Date("2026-05-20T06:00:01.000Z"),
+              outbox_attempts: 1,
+              outbox_last_error: null
             }
           ]
         })

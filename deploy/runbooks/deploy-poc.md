@@ -274,6 +274,9 @@ Current staged-runtime finding on 2026-05-20:
 - the stage lane was rebuilt with version-pinned Paperclip secret binding support
 - the stage database now carries `wfpc.paperclip_secret_bindings.paperclip_secret_version`
 - the worker issue-launch path now syncs Paperclip secrets per run, patches the configured Paperclip issue agent with version-pinned `secret_ref` bindings, and does not forward raw secret values in the issue payload
+- registration and rotation projection now sync Paperclip secret/version state without patching the live issue agent; the worker keeps the just-in-time bind because the installed Paperclip build still needs that global agent env during first assignment execution
+- if a tenant still has queued or running workflow runs, remote Paperclip rotation projection is now deferred and audited so the shared issue-agent env is not flipped underneath an in-flight run
+- the worker launch path also fails closed instead of rebinding the shared issue agent when another run for that tenant is still queued or running and the new secret ref would require a fresh Paperclip bind
 - the worker no longer falls back to Paperclip `version: "latest"` when reusing an existing binding for workflow launch; missing versions now fail closed
 - a fresh staged proof run (`040f4776-7636-4d08-9678-dc6b17ed1378`) confirmed:
   - run reservation succeeds
@@ -325,15 +328,21 @@ Repeatable operator helpers for this proof lane:
 
 - `npm run prove:provider-lifecycle -- --tenant <tenant-id> --user <user-id> --provider-kind openai_api --label OpenAI`
 - `npm run seed:demo -- --lane secondary --paperclip-company-id <paperclip-company-id>`
+- `npm run seed:demo -- --lane quaternary --paperclip-company-id <paperclip-company-id>`
+- `npm run seed:demo -- --lane quinary --paperclip-company-id <paperclip-company-id>`
+- `npm run seed:demo -- --lane senary --paperclip-company-id <paperclip-company-id>`
 - `npm run prove:live-fairness -- --mode drain --primary-tenant <tenant-a> --primary-user <user-a> --primary-workflow <workflow-a> --primary-runs 3 --secondary-tenant <tenant-b> --secondary-user <user-b> --secondary-workflow <workflow-b> --secondary-runs 2`
 - `npm run prove:live-fairness -- --mode drain --lane alpha:<tenant-a>:<user-a>:<workflow-a>:3 --lane beta:<tenant-b>:<user-b>:<workflow-b>:3`
 - `npm run prove:live-fairness -- --mode global-fairness --lane alpha:<tenant-a>:<user-a>:<workflow-a>:3 --lane beta:<tenant-b>:<user-b>:<workflow-b>:3`
+- `npm run prove:live-fairness -- --mode global-fairness --cycles 3 --cycle-interval-ms 500 --lane primary:<tenant-a>:<user-a>:<workflow-a>:3 --lane secondary:<tenant-b>:<user-b>:<workflow-b>:3 --lane tertiary:<tenant-c>:<user-c>:<workflow-c>:3 --lane quaternary:<tenant-d>:<user-d>:<workflow-d>:3 --lane quinary:<tenant-e>:<user-e>:<workflow-e>:3 --lane senary:<tenant-f>:<user-f>:<workflow-f>:3`
 - `npm run analyze:worker-fairness -- --proof <saved-proof-json> --worker-events <combined-worker-run-jsonl>`
 - the API runtime image now carries the repo `scripts/` folder, and `scripts/lib/script-env.mjs` tolerates a missing `.env`, so `docker exec wealth-factory-api-stage2 node scripts/inspect-live-workflow-run.mjs ...` no longer requires copying helper scripts or an ad hoc env file into the container first
 - `prove:live-fairness` now emits per-run `queuedAt`, `observedFirstProgressAt`, `observedFirstStartedAt`, and `observedCompletedAt` plus per-lane observed wait and retry summaries, so the staged proof can distinguish burst drain from simple first progress without overstating timestamp precision
 - `prove:live-fairness --mode global-fairness` is a capture alias only; it still records drain-phase proof and expects `analyze-worker-fairness` to compute the final cross-worker verdict from worker logs
+- prefer repeated `--lane lane:tenant:user:workflow:runs` inputs once the proof goes beyond two or three lanes; the legacy `--primary-*` / `--secondary-*` surface is now only a convenience for small checks
 - the worker runtime now emits `workerInstanceId` and `observedAt` on structured `wealth_factory_worker_run` events so the analyzer can distinguish single-worker drain from real cross-worker participation
 - pin `WF_WORKER_INSTANCE_ID` explicitly for any fairness proof you plan to trust; the default `hostname:pid` fallback is only best-effort staging telemetry
+- after copying rebuilt `dist` files or proof helpers into worker containers, restart or recreate those workers before trusting telemetry; `docker cp` alone does not replace the already-running Node process
 
 Current staged sustained-burst checkpoint on 2026-05-20:
 
@@ -361,6 +370,25 @@ Current staged sustained-burst checkpoint on 2026-05-20:
   - proof worker `a` handled the primary lane while proof worker `b` handled the secondary lane
   - all 8 workflow runs reached `status = running`, all 8 outbox rows reached `enqueued`, and BullMQ reported all 8 jobs `completed`
   - treat cross-worker fairness as proven for the staged 2-worker / 2-tenant burst lane; the next backlog item is larger-tenant-count and longer-soak pressure behavior, not basic two-worker distribution
+- current bounded-pod soak checkpoint on 2026-05-20:
+  - a six-tenant / three-worker / three-cycle staged proof has now passed
+  - all 18 workflow runs reached `status = running`, all 18 outbox rows reached `enqueued`, and BullMQ reported all 18 jobs `completed`
+  - `scripts/analyze-worker-fairness.mjs` reported `phase = global_multi_worker_soak_observed`
+  - worker start distribution was balanced:
+    - `proof-a`: 6 starts
+    - `proof-b`: 6 starts
+    - `proof-c`: 6 starts
+  - early coverage windows showed:
+    - wave 1: first 3 starts covered 3 unique lanes across 3 workers
+    - wave 2: first 6 starts covered all 6 lanes across 3 workers
+  - observed wait-to-start:
+    - primary: `min=2665ms`, `median=2748ms`, `max=4659ms`
+    - secondary: `min=2579ms`, `median=2767ms`, `max=4465ms`
+    - tertiary: `min=2402ms`, `median=2559ms`, `max=4033ms`
+    - quaternary: `min=3845ms`, `median=4540ms`, `max=5739ms`
+    - quinary: `min=3592ms`, `median=4386ms`, `max=5536ms`
+    - senary: `min=3410ms`, `median=4191ms`, `max=5386ms`
+  - treat the bounded-pod model as proven for the six-client pod shape; the next backlog item is longer soak duration, skewed bursts, and resource saturation behavior
 
 Set the lifecycle proof env before using the helper:
 

@@ -64,6 +64,21 @@ export function createSupabaseRepositories(client: QueryClient) {
       };
     },
 
+    async hasActiveWorkflowRuns(input: DashboardScope): Promise<boolean> {
+      return (await this.countActiveWorkflowRuns(input)) > 0;
+    },
+
+    async countActiveWorkflowRuns(input: DashboardScope): Promise<number> {
+      const result = await client.query(
+        `select count(*)::int as active_run_count
+           from wfpc.workflow_runs
+           where tenant_id = $1
+             and status in ('queued', 'running')`,
+        [input.tenantId]
+      );
+      return Number(asRecord(result.rows[0]).active_run_count ?? 0);
+    },
+
     async requireTenantMember(input: MembershipScope): Promise<void> {
       const result = await client.query(
         "select tenant_id from wfpc.tenant_memberships where tenant_id = $1 and user_id = $2 limit 1",
@@ -256,25 +271,22 @@ export function createSupabaseRepositories(client: QueryClient) {
     },
 
     async getPlatformLoad(input: DashboardScope): Promise<CustomerSafePlatformLoad> {
-      const [outbox, activeRuns] = await Promise.all([
-        client.query(
-          `select count(*)::int as pending_count
-           from wfpc.workflow_queue_outbox
-           where tenant_id = $1
-             and status in ('pending', 'claimed', 'failed')`,
-          [input.tenantId]
-        ),
-        client.query(
-          `select count(*)::int as active_count
-           from wfpc.workflow_runs
-           where tenant_id = $1
-             and status in ('queued', 'running')`,
-          [input.tenantId]
-        )
-      ]);
+      const counts = await client.query(
+        `select
+            (select count(*)::int
+             from wfpc.workflow_queue_outbox
+             where tenant_id = $1
+               and status in ('pending', 'claimed', 'failed')) as pending_count,
+            (select count(*)::int
+             from wfpc.workflow_runs
+             where tenant_id = $1
+               and status in ('queued', 'running')) as active_count`,
+        [input.tenantId]
+      );
 
-      const pendingCount = Number(asRecord(outbox.rows[0]).pending_count ?? 0);
-      const activeCount = Number(asRecord(activeRuns.rows[0]).active_count ?? 0);
+      const countRow = asRecord(counts.rows[0]);
+      const pendingCount = Number(countRow.pending_count ?? 0);
+      const activeCount = Number(countRow.active_count ?? 0);
       const pressureScore = pendingCount + activeCount;
 
       if (pressureScore >= 10) {

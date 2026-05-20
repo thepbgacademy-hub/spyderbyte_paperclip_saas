@@ -242,4 +242,5 @@ This file tracks implementation progress. Keep it current after every phase.
   - [x] Add worker-instance-aware fairness telemetry plus a repo-owned analyzer for structured `wealth_factory_worker_run` events.
   - [x] Generalize the staged fairness driver beyond hard-coded primary/secondary lanes.
   - [x] Resolve the staged `single_worker_only` proof artifact and prove cross-worker fairness for the staged 2-worker / 2-tenant burst lane.
-  - [ ] Extend the staged fairness proof from 2 tenants into higher-tenant-count and longer-soak pressure scenarios.
+  - [x] Extend the staged fairness proof from 2 tenants into a six-tenant / three-worker bounded-pod soak.
+  - [ ] Extend the staged pressure proof into longer soak duration, skewed bursts, and resource saturation scenarios.

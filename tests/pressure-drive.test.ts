@@ -58,6 +58,56 @@ describe("pressure drive helpers", () => {
     ]);
   });
 
+  it("expands repeated cycles into paced alternating requests", () => {
+    expect(
+      expandPressureRequests({
+        lanes: [
+          { lane: "alpha", tenantId: "tenant-1", userId: "user-1", workflowId: "workflow-1", runs: 1 },
+          { lane: "beta", tenantId: "tenant-2", userId: "user-2", workflowId: "workflow-2", runs: 1 }
+        ],
+        cycles: 2
+      })
+    ).toEqual([
+      { lane: "alpha", tenantId: "tenant-1", userId: "user-1", workflowId: "workflow-1", sequence: 1, cycle: 1 },
+      { lane: "beta", tenantId: "tenant-2", userId: "user-2", workflowId: "workflow-2", sequence: 1, cycle: 1 },
+      { lane: "alpha", tenantId: "tenant-1", userId: "user-1", workflowId: "workflow-1", sequence: 1, cycle: 2 },
+      { lane: "beta", tenantId: "tenant-2", userId: "user-2", workflowId: "workflow-2", sequence: 1, cycle: 2 }
+    ]);
+  });
+
+  it("expands six arbitrary lanes across repeated soak cycles without collapsing them back to legacy named lanes", () => {
+    expect(
+      expandPressureRequests({
+        lanes: [
+          { lane: "alpha", tenantId: "tenant-1", userId: "user-1", workflowId: "workflow-1", runs: 1 },
+          { lane: "beta", tenantId: "tenant-2", userId: "user-2", workflowId: "workflow-2", runs: 1 },
+          { lane: "gamma", tenantId: "tenant-3", userId: "user-3", workflowId: "workflow-3", runs: 1 },
+          { lane: "delta", tenantId: "tenant-4", userId: "user-4", workflowId: "workflow-4", runs: 1 },
+          { lane: "epsilon", tenantId: "tenant-5", userId: "user-5", workflowId: "workflow-5", runs: 1 },
+          { lane: "zeta", tenantId: "tenant-6", userId: "user-6", workflowId: "workflow-6", runs: 1 }
+        ],
+        cycles: 2
+      }).map((request: { lane: string; cycle: number; tenantId: string }) => ({
+        lane: request.lane,
+        cycle: request.cycle,
+        tenantId: request.tenantId
+      }))
+    ).toEqual([
+      { lane: "alpha", cycle: 1, tenantId: "tenant-1" },
+      { lane: "beta", cycle: 1, tenantId: "tenant-2" },
+      { lane: "gamma", cycle: 1, tenantId: "tenant-3" },
+      { lane: "delta", cycle: 1, tenantId: "tenant-4" },
+      { lane: "epsilon", cycle: 1, tenantId: "tenant-5" },
+      { lane: "zeta", cycle: 1, tenantId: "tenant-6" },
+      { lane: "alpha", cycle: 2, tenantId: "tenant-1" },
+      { lane: "beta", cycle: 2, tenantId: "tenant-2" },
+      { lane: "gamma", cycle: 2, tenantId: "tenant-3" },
+      { lane: "delta", cycle: 2, tenantId: "tenant-4" },
+      { lane: "epsilon", cycle: 2, tenantId: "tenant-5" },
+      { lane: "zeta", cycle: 2, tenantId: "tenant-6" }
+    ]);
+  });
+
   it("summarizes a fair multi-tenant proof when both lanes make progress", () => {
     const summary = summarizePressureProof({
       requests: [
@@ -411,6 +461,39 @@ describe("pressure drive helpers", () => {
       { wave: 1, windowSize: 2, participatingWorkers: 2, expectedUniqueLanes: 2, uniqueLanesSeen: 2 },
       { wave: 2, windowSize: 3, participatingWorkers: 2, expectedUniqueLanes: 3, uniqueLanesSeen: 3 }
     ]);
+  });
+
+  it("summarizes a six-lane burst without collapsing distinct lanes into the same fairness bucket", () => {
+    const requests = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"].map((lane, index) => ({
+      lane,
+      tenantId: `tenant-${index + 1}`,
+      runId: `run-${index + 1}`
+    }));
+    const snapshots = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"].map((lane, index) => ({
+      lane,
+      tenantId: `tenant-${index + 1}`,
+      runId: `run-${index + 1}`,
+      runStatus: "running",
+      outboxStatus: "enqueued",
+      queueState: "completed",
+      outboxAttempts: 1,
+      queueReachable: true,
+      queuedAt: `2026-05-20T06:00:0${index}.000Z`,
+      observedFirstProgressAt: `2026-05-20T06:00:1${index}.000Z`,
+      observedFirstStartedAt: `2026-05-20T06:00:2${index}.000Z`,
+      observedCompletedAt: null
+    }));
+
+    const summary = summarizePressureProof({
+      requests,
+      snapshots,
+      mode: "drain"
+    });
+
+    expect(summary.ok).toBe(true);
+    expect(summary.phase).toBe("burst_drain_observed");
+    expect(Object.keys(summary.lanes)).toEqual(["alpha", "beta", "gamma", "delta", "epsilon", "zeta"]);
+    expect(summary.totals.totalRuns).toBe(6);
   });
 
   it("reports missing worker telemetry instead of single-worker-only when no matching start events exist", () => {
@@ -833,5 +916,70 @@ describe("pressure drive helpers", () => {
       expectedUniqueLanes: 3,
       uniqueLanesSeen: 3
     });
+  });
+
+  it("summarizes repeated cycles as a global soak proof when each cycle preserves cross-worker coverage", () => {
+    const summary = summarizePressureProof({
+      requests: [
+        { lane: "alpha", tenantId: "tenant-1", runId: "run-1", cycle: 1 },
+        { lane: "beta", tenantId: "tenant-2", runId: "run-2", cycle: 1 },
+        { lane: "gamma", tenantId: "tenant-3", runId: "run-3", cycle: 1 },
+        { lane: "alpha", tenantId: "tenant-1", runId: "run-4", cycle: 2 },
+        { lane: "beta", tenantId: "tenant-2", runId: "run-5", cycle: 2 },
+        { lane: "gamma", tenantId: "tenant-3", runId: "run-6", cycle: 2 }
+      ],
+      snapshots: [
+        { lane: "alpha", tenantId: "tenant-1", runId: "run-1", runStatus: "running", outboxStatus: "enqueued", queueState: "completed", observedFirstProgressAt: "2026-05-20T06:00:02.000Z", observedFirstStartedAt: "2026-05-20T06:00:02.000Z" },
+        { lane: "beta", tenantId: "tenant-2", runId: "run-2", runStatus: "running", outboxStatus: "enqueued", queueState: "completed", observedFirstProgressAt: "2026-05-20T06:00:02.100Z", observedFirstStartedAt: "2026-05-20T06:00:02.100Z" },
+        { lane: "gamma", tenantId: "tenant-3", runId: "run-3", runStatus: "running", outboxStatus: "enqueued", queueState: "completed", observedFirstProgressAt: "2026-05-20T06:00:03.000Z", observedFirstStartedAt: "2026-05-20T06:00:03.000Z" },
+        { lane: "alpha", tenantId: "tenant-1", runId: "run-4", runStatus: "running", outboxStatus: "enqueued", queueState: "completed", observedFirstProgressAt: "2026-05-20T06:00:07.000Z", observedFirstStartedAt: "2026-05-20T06:00:07.000Z" },
+        { lane: "beta", tenantId: "tenant-2", runId: "run-5", runStatus: "running", outboxStatus: "enqueued", queueState: "completed", observedFirstProgressAt: "2026-05-20T06:00:07.100Z", observedFirstStartedAt: "2026-05-20T06:00:07.100Z" },
+        { lane: "gamma", tenantId: "tenant-3", runId: "run-6", runStatus: "running", outboxStatus: "enqueued", queueState: "completed", observedFirstProgressAt: "2026-05-20T06:00:08.000Z", observedFirstStartedAt: "2026-05-20T06:00:08.000Z" }
+      ],
+      workerEvents: [
+        { type: "wealth_factory_worker_claim", event: "claimed", workerInstanceId: "worker-a", tenantId: "tenant-1", runId: "run-1", observedAt: "2026-05-20T06:00:01.900Z" },
+        { type: "wealth_factory_worker_claim", event: "claimed", workerInstanceId: "worker-b", tenantId: "tenant-2", runId: "run-2", observedAt: "2026-05-20T06:00:01.950Z" },
+        { type: "wealth_factory_worker_run", event: "started", workerInstanceId: "worker-a", tenantId: "tenant-3", runId: "run-3", observedAt: "2026-05-20T06:00:03.000Z" },
+        { type: "wealth_factory_worker_claim", event: "claimed", workerInstanceId: "worker-b", tenantId: "tenant-1", runId: "run-4", observedAt: "2026-05-20T06:00:06.900Z" },
+        { type: "wealth_factory_worker_claim", event: "claimed", workerInstanceId: "worker-a", tenantId: "tenant-2", runId: "run-5", observedAt: "2026-05-20T06:00:06.950Z" },
+        { type: "wealth_factory_worker_run", event: "started", workerInstanceId: "worker-b", tenantId: "tenant-3", runId: "run-6", observedAt: "2026-05-20T06:00:08.000Z" }
+      ],
+      mode: "global-fairness"
+    });
+
+    expect(summary.ok).toBe(true);
+    expect(summary.phase).toBe("global_multi_worker_soak_observed");
+    expect(summary.workers.cycles).toEqual([
+      expect.objectContaining({ cycle: 1, ok: true, phase: "global_multi_worker_fairness_observed" }),
+      expect.objectContaining({ cycle: 2, ok: true, phase: "global_multi_worker_fairness_observed" })
+    ]);
+  });
+
+  it("flags the specific soak cycle when a later cycle collapses to one worker", () => {
+    const summary = summarizePressureProof({
+      requests: [
+        { lane: "alpha", tenantId: "tenant-1", runId: "run-1", cycle: 1 },
+        { lane: "beta", tenantId: "tenant-2", runId: "run-2", cycle: 1 },
+        { lane: "alpha", tenantId: "tenant-1", runId: "run-3", cycle: 2 },
+        { lane: "beta", tenantId: "tenant-2", runId: "run-4", cycle: 2 }
+      ],
+      snapshots: [
+        { lane: "alpha", tenantId: "tenant-1", runId: "run-1", runStatus: "running", outboxStatus: "enqueued", queueState: "completed", observedFirstProgressAt: "2026-05-20T06:00:02.000Z", observedFirstStartedAt: "2026-05-20T06:00:02.000Z" },
+        { lane: "beta", tenantId: "tenant-2", runId: "run-2", runStatus: "running", outboxStatus: "enqueued", queueState: "completed", observedFirstProgressAt: "2026-05-20T06:00:02.100Z", observedFirstStartedAt: "2026-05-20T06:00:02.100Z" },
+        { lane: "alpha", tenantId: "tenant-1", runId: "run-3", runStatus: "running", outboxStatus: "enqueued", queueState: "completed", observedFirstProgressAt: "2026-05-20T06:00:07.000Z", observedFirstStartedAt: "2026-05-20T06:00:07.000Z" },
+        { lane: "beta", tenantId: "tenant-2", runId: "run-4", runStatus: "running", outboxStatus: "enqueued", queueState: "completed", observedFirstProgressAt: "2026-05-20T06:00:07.100Z", observedFirstStartedAt: "2026-05-20T06:00:07.100Z" }
+      ],
+      workerEvents: [
+        { type: "wealth_factory_worker_claim", event: "claimed", workerInstanceId: "worker-a", tenantId: "tenant-1", runId: "run-1", observedAt: "2026-05-20T06:00:01.900Z" },
+        { type: "wealth_factory_worker_claim", event: "claimed", workerInstanceId: "worker-b", tenantId: "tenant-2", runId: "run-2", observedAt: "2026-05-20T06:00:01.950Z" },
+        { type: "wealth_factory_worker_claim", event: "claimed", workerInstanceId: "worker-a", tenantId: "tenant-1", runId: "run-3", observedAt: "2026-05-20T06:00:06.900Z" },
+        { type: "wealth_factory_worker_claim", event: "claimed", workerInstanceId: "worker-a", tenantId: "tenant-2", runId: "run-4", observedAt: "2026-05-20T06:00:06.950Z" }
+      ],
+      mode: "global-fairness"
+    });
+
+    expect(summary.ok).toBe(false);
+    expect(summary.phase).toBe("soak_cycle_distribution_failed");
+    expect(summary.notes).toContain("Cycle 2 failed with phase single_worker_only.");
   });
 });

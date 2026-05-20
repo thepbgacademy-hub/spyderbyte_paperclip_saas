@@ -287,6 +287,7 @@ export function createPaperclipSecretProjectionService(options: {
   adminClient: PaperclipSecretBoardSessionClient;
   bindings: ReturnType<typeof createPaperclipSecretBindingRepository>;
   resolveCompanyMapping(input: { tenantId: string }): Promise<{ paperclipCompanyId: string; paperclipIssueAgentId?: string }>;
+  hasActiveRuns?(input: { tenantId: string }): Promise<boolean>;
   defaultPaperclipAgentId?: string;
   audit?(event: {
     tenantId: string;
@@ -332,6 +333,20 @@ export function createPaperclipSecretProjectionService(options: {
     },
 
     async onRotated(input) {
+      if (await options.hasActiveRuns?.({ tenantId: input.tenantId })) {
+        await options.audit?.({
+          tenantId: input.tenantId,
+          eventType: "paperclip.secret_projection_deferred",
+          entityType: "paperclip_secret_projection",
+          entityId: input.secretReferenceId,
+          metadata: {
+            lifecycle: "rotate",
+            providerKind: input.providerKind,
+            reason: "active_runs_present"
+          }
+        });
+        return;
+      }
       const company = await resolveCompanyMappingSafely(options, {
         tenantId: input.tenantId,
         eventType: "paperclip.secret_projection_skipped",

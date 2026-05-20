@@ -335,9 +335,16 @@ If Wealth Factory rotates a tenant secret while a run is queued or active:
 Current repo/stage resolution on 2026-05-20:
 
 - `wfpc.paperclip_secret_bindings` now persists `paperclip_secret_version`
+- registration and rotation projection now sync the Paperclip secret/version without mutating the live issue agent by default
+- when a tenant still has queued or running workflow runs, remote Paperclip rotation projection is deferred and audited so Wealth Factory does not flip the shared issue-agent env underneath an in-flight run
+- the worker keeps the just-in-time agent bind at launch time because the installed Paperclip build still needs that global agent env for first assignment execution
+- that launch-time bind now also fails closed if the tenant still has another queued or running workflow run and the new secret ref would require a fresh Paperclip rebind
 - issue-launch runtime sync now returns issue-scoped `assigneeAdapterOverrides.adapterConfig.env`
 - those launch overrides use explicit `secret_ref { secretId, version }` values instead of mutable `version: "latest"` semantics
 - when the worker must reuse an existing Paperclip binding for launch and no concrete version is stored, the launch now fails closed instead of silently drifting to the newest remote secret version
+- important installed-build nuance:
+  - the current Paperclip build still needs the provider secret globally bound on the issue agent for first assignment execution
+  - the run-scoped version-pinned `secret_ref` override is additive safety, not a substitute for the agent-bound secret on this build
 
 ### 4. Subscription Auth Lane
 

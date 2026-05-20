@@ -9,3 +9,9 @@ playwright-report/
 !.env.example
 npm-debug.log*
 *.tsbuildinfo
+.claude/
+api_stage*.log
+proof_*.log
+tmp_stage_*.json
+*_runs.json
+tmp_stage_six_companies.json

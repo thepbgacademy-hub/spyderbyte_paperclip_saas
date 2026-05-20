@@ -21,7 +21,8 @@ const execFileAsync = promisify(execFile);
 const modeConfig = parseModeArg(args.mode);
 const requests = expandPressureRequests({
   lanes,
-  order: "alternating"
+  order: "alternating",
+  cycles: parsePositiveInteger(args.cycles, 1, "cycles")
 }).map((request, index) => {
   const run = createLiveRunRequest({
     tenantId: request.tenantId,
@@ -35,7 +36,9 @@ const requests = expandPressureRequests({
     workflowId: request.workflowId,
     runId: run.runId,
     idempotencyKey: run.idempotencyKey,
-    sequence: index + 1
+    sequence: request.sequence,
+    ...(Number.isInteger(request.cycle) ? { cycle: request.cycle } : {}),
+    ordinal: index + 1
   };
 });
 
@@ -54,28 +57,32 @@ client.on("error", (error) => {
 await client.connect();
 
 try {
-  const preflightResults = await Promise.all(
-    lanes.map(async (lane) => {
-      const preflight = await loadRuntimePreflight({
-        client,
-        tenantId: lane.tenantId,
-        workflowId: lane.workflowId
-      });
-      return {
-        lane: lane.lane,
-        preflight,
-        summary: summarizeRuntimePreflight(preflight)
-      };
-    })
-  );
+  const preflightResults = [];
+  for (const lane of lanes) {
+    const preflight = await loadRuntimePreflight({
+      client,
+      tenantId: lane.tenantId,
+      workflowId: lane.workflowId
+    });
+    preflightResults.push({
+      lane: lane.lane,
+      preflight,
+      summary: summarizeRuntimePreflight(preflight)
+    });
+  }
 
   const failedPreflight = preflightResults.find((result) => !result.summary.ok);
   if (failedPreflight) {
     process.exitCode = 1;
     process.stdout.write(JSON.stringify({ ok: false, phase: "preflight_failed", preflight: preflightResults }, null, 2) + "\n");
   } else {
+    const cycleIntervalMs = parsePositiveInteger(args["cycle-interval-ms"], 0, "cycle-interval-ms", { allowZero: true });
+    let previousCycle = null;
     let queueFailure = false;
     for (const request of requests) {
+      if (previousCycle !== null && request.cycle !== undefined && request.cycle !== previousCycle && cycleIntervalMs > 0) {
+        await delay(cycleIntervalMs);
+      }
       const queueResult = await queuePressureRun(request);
       if (!queueResult.ok) {
         queueFailure = true;
@@ -95,6 +102,7 @@ try {
         break;
       }
       request.queuedAt = queueResult.snapshot?.outbox?.createdAt ?? queueResult.snapshot?.run?.createdAt ?? new Date().toISOString();
+      previousCycle = request.cycle ?? previousCycle;
     }
 
     if (!queueFailure) {
@@ -277,6 +285,18 @@ function isProgressing(runStatus, queueState) {
     runStatus === "failed" ||
     queueState === "active" ||
     queueState === "completed";
+}
+
+function parsePositiveInteger(value, fallback, label, options = {}) {
+  const allowZero = options.allowZero === true;
+  if (value === undefined || value === null || String(value).trim().length === 0) {
+    return fallback;
+  }
+  const parsed = Number.parseInt(String(value), 10);
+  if (!Number.isInteger(parsed) || parsed < 0 || (!allowZero && parsed < 1)) {
+    throw new Error(`Expected --${label} to be a ${allowZero ? "non-negative" : "positive"} integer`);
+  }
+  return parsed;
 }
 
 function toArray(value) {

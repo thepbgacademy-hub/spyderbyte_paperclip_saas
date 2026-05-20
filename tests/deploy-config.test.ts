@@ -146,6 +146,8 @@ describe("deployment POC config", () => {
     expect(runbook).toContain("Register or refresh a tenant provider credential");
     expect(runbook).toContain("npm run prove:provider-lifecycle");
     expect(runbook).toContain("seed:demo -- --lane secondary");
+    expect(runbook).toContain("seed:demo -- --lane quaternary");
+    expect(runbook).toContain("seed:demo -- --lane senary");
     expect(runbook).toContain("wfpc.paperclip_company_mappings");
     expect(runbook).toContain("Rotate the tenant credential");
     expect(runbook).toContain("Revoke the tenant credential");
@@ -157,6 +159,9 @@ describe("deployment POC config", () => {
     expect(runbook).toContain("WF_LIFECYCLE_SECRET_VALUE");
     expect(runbook).toContain("WF_LIFECYCLE_SECRET_VALUE_NEXT");
     expect(runbook).toContain("patches the configured Paperclip issue agent with version-pinned `secret_ref` bindings");
+    expect(runbook).toContain("prefer repeated `--lane lane:tenant:user:workflow:runs` inputs");
+    expect(runbook).toContain("restart or recreate those workers before trusting telemetry");
+    expect(runbook).toContain("phase = global_multi_worker_soak_observed");
   });
 });
 

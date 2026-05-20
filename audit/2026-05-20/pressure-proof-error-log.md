@@ -90,6 +90,30 @@ Fix:
 - add a regression test that feeds two worker log files and expects both worker IDs to appear
 - do not trust a single-file fairness verdict when the staged proof lane writes one log file per worker
 
+16. The staged fairness proof emitted `pg` deprecation warnings because multiple reads were dispatched at once on a shared `pg.Client`.
+Fix:
+- serialize shared-client preflight reads in `scripts/prove-live-fairness.mjs`
+- serialize queue snapshot reads in `scripts/lib/live-run-drive.mjs`
+- keep `src/db/supabase-repositories.ts#getPlatformLoad` sequential when a shared client or transaction is in play
+
+17. `seed-wfpc-demo.mjs` silently fell back to the `primary` lane when an unknown `--lane` value was passed, which could have written six-lane setup into the wrong tenant.
+Fix:
+- move lane presets into `scripts/lib/demo-seed-profiles.mjs`
+- fail closed on unknown lanes unless an explicit tenant/user/workflow/provider-reference/purchase tuple is supplied
+- add regression tests for `senary`, unknown-lane rejection, and explicit custom lanes
+
+18. Copying rebuilt `dist` files into running proof-worker containers did not update the in-memory Node process, which produced a false `missing_worker_telemetry` result on the first six-lane attempt.
+Fix:
+- treat `docker cp` as file sync only, not code activation
+- restart or recreate proof workers after copying updated `dist/worker/*`, `dist/workflows/*`, or fairness helper files
+- do not trust missing telemetry until the workers have been restarted on the new build
+
+19. Nested PowerShell -> SSH -> shell quoting kept drifting during worker recreation and log capture once multi-worker env and JSON token maps were involved.
+Fix:
+- prefer uploaded remote scripts plus Paramiko/SFTP over nested inline shell interpolation on this workstation
+- use remote scripts for multi-step worker recreation and local Node analyzers for evidence review
+- avoid compounding PowerShell quoting with remote JSON/env payloads when a file upload is safer
+
 ## Outcome
 
 After the fixes above:
@@ -139,4 +163,39 @@ Additional global multi-worker fairness checkpoint after adding worker-instance 
   - all 8 outbox rows reached `enqueued`
   - BullMQ reported all 8 jobs `completed`
   - global cross-worker fairness is now proven for the staged 2-worker / 2-tenant burst lane
-  - the next pressure gap is no longer “can two workers split tenants at all”; it is larger-tenant-count and longer-soak behavior
+  - the next pressure gap is larger-tenant-count and longer-soak behavior
+
+Bounded-pod soak checkpoint after provisioning lanes 4 through 6 and a third proof worker:
+
+- additional staged Paperclip companies and lanes were provisioned for:
+  - quaternary
+  - quinary
+  - senary
+- the staged six-lane / three-worker / three-cycle proof passed with all 18 requests reaching:
+  - workflow run `status = running`
+  - outbox `status = enqueued`
+  - BullMQ `state = completed`
+- `scripts/analyze-worker-fairness.mjs` reported:
+  - `ok = true`
+  - `phase = global_multi_worker_soak_observed`
+- worker start distribution was balanced across the proof workers:
+  - `proof-a`: 6 claimed starts
+  - `proof-b`: 6 claimed starts
+  - `proof-c`: 6 claimed starts
+- early coverage windows:
+  - wave 1: first 3 starts covered 3 unique lanes across 3 workers
+  - wave 2: first 6 starts covered all 6 lanes across 3 workers
+- per-cycle verdicts:
+  - cycle 1: `global_multi_worker_fairness_observed`
+  - cycle 2: `global_multi_worker_fairness_observed`
+  - cycle 3: `global_multi_worker_fairness_observed`
+- observed wait-to-start from the bounded-pod soak:
+  - primary: `min=2665ms`, `median=2748ms`, `max=4659ms`
+  - secondary: `min=2579ms`, `median=2767ms`, `max=4465ms`
+  - tertiary: `min=2402ms`, `median=2559ms`, `max=4033ms`
+  - quaternary: `min=3845ms`, `median=4540ms`, `max=5739ms`
+  - quinary: `min=3592ms`, `median=4386ms`, `max=5536ms`
+  - senary: `min=3410ms`, `median=4191ms`, `max=5386ms`
+- implication:
+  - the current bounded-pod model is now proven through a six-tenant, three-worker staged soak
+  - the next pressure gap is longer soak duration, skewed bursts, and resource saturation behavior, not basic lane distribution

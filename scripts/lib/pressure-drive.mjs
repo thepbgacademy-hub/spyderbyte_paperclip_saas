@@ -95,33 +95,44 @@ export function expandPressureRequests(input) {
   if (lanes.length === 0) {
     throw new Error("Expanded pressure requests require at least one lane");
   }
-  const order = input?.order === "grouped" ? "grouped" : "alternating";
-  if (order === "grouped") {
-    return lanes.flatMap((lane) =>
-      Array.from({ length: lane.runs }, (_value, index) => ({
-        lane: lane.lane,
-        tenantId: lane.tenantId,
-        userId: lane.userId,
-        workflowId: lane.workflowId,
-        sequence: index + 1
-      }))
-    );
+  const cycles = Number.isInteger(input?.cycles) ? Number(input.cycles) : 1;
+  if (cycles < 1) {
+    throw new Error("Expanded pressure requests require cycles >= 1");
   }
-
+  const order = input?.order === "grouped" ? "grouped" : "alternating";
   const requests = [];
-  const maxRuns = Math.max(...lanes.map((lane) => lane.runs));
-  for (let index = 0; index < maxRuns; index += 1) {
-    for (const lane of lanes) {
-      if (index >= lane.runs) {
-        continue;
+  for (let cycle = 1; cycle <= cycles; cycle += 1) {
+    if (order === "grouped") {
+      for (const lane of lanes) {
+        for (let index = 0; index < lane.runs; index += 1) {
+          requests.push({
+            lane: lane.lane,
+            tenantId: lane.tenantId,
+            userId: lane.userId,
+            workflowId: lane.workflowId,
+            sequence: index + 1,
+            ...(cycles > 1 ? { cycle } : {})
+          });
+        }
       }
-      requests.push({
-        lane: lane.lane,
-        tenantId: lane.tenantId,
-        userId: lane.userId,
-        workflowId: lane.workflowId,
-        sequence: index + 1
-      });
+      continue;
+    }
+
+    const maxRuns = Math.max(...lanes.map((lane) => lane.runs));
+    for (let index = 0; index < maxRuns; index += 1) {
+      for (const lane of lanes) {
+        if (index >= lane.runs) {
+          continue;
+        }
+        requests.push({
+          lane: lane.lane,
+          tenantId: lane.tenantId,
+          userId: lane.userId,
+          workflowId: lane.workflowId,
+          sequence: index + 1,
+          ...(cycles > 1 ? { cycle } : {})
+        });
+      }
     }
   }
   return requests;
@@ -329,7 +340,8 @@ function normalizeRequest(request) {
     tenantId: String(request?.tenantId ?? "").trim(),
     runId: String(request?.runId ?? "").trim(),
     workflowId: String(request?.workflowId ?? "").trim(),
-    queuedAt: toTimestamp(request?.queuedAt)
+    queuedAt: toTimestamp(request?.queuedAt),
+    cycle: Number.isInteger(request?.cycle) ? Number(request.cycle) : 1
   };
 }
 
@@ -419,9 +431,10 @@ function summarizeGlobalFairness(input) {
   const requests = Array.isArray(input?.requests) ? input.requests : [];
   const totals = input?.totals ?? {};
   const lanes = input?.lanes ?? {};
-  const runToLane = new Map(
-    requests.map((request) => [request.runId, request.lane])
+  const runToMeta = new Map(
+    requests.map((request) => [request.runId, { lane: request.lane, cycle: Number.isInteger(request.cycle) ? request.cycle : 1 }])
   );
+  const runToLane = new Map([...runToMeta.entries()].map(([runId, meta]) => [runId, meta.lane]));
   const requestedRunIds = new Set(requests.map((request) => request.runId));
   const allWorkerEvents = (Array.isArray(input?.workerEvents) ? input.workerEvents : [])
     .map((event) => normalizeWorkerEvent(event))
@@ -503,6 +516,32 @@ function summarizeGlobalFairness(input) {
 
   const coverageWindows = summarizeCoverageWindows(startedEvents, laneCount, distinctWorkers.length, runToLane);
   const failedCoverage = coverageWindows.find((window) => window.uniqueLanesSeen < window.expectedUniqueLanes);
+  const cycleFairness = summarizeCycleFairness({
+    requests,
+    startedEvents,
+    runToMeta,
+    runToLane
+  });
+  const failedCycle = cycleFairness.find((cycle) => !cycle.ok);
+  if (failedCycle && cycleFairness.length > 1) {
+    return {
+      ok: false,
+      phase: "soak_cycle_distribution_failed",
+      totals,
+      lanes,
+      workers: {
+        distinctWorkers,
+        observedEvents: summarizeWorkerEvents(allWorkerEvents, runToLane),
+        startedEvents: summarizeWorkerEvents(startedEvents, runToLane),
+        coverageWindows,
+        cycles: cycleFairness
+      },
+      notes: [
+        "More than one worker participated overall, but at least one soak cycle did not preserve the expected lane coverage.",
+        `Cycle ${failedCycle.cycle} failed with phase ${failedCycle.phase}.`
+      ]
+    };
+  }
   if (failedCoverage) {
     return {
       ok: false,
@@ -513,7 +552,8 @@ function summarizeGlobalFairness(input) {
         distinctWorkers,
         observedEvents: summarizeWorkerEvents(allWorkerEvents, runToLane),
         startedEvents: summarizeWorkerEvents(startedEvents, runToLane),
-        coverageWindows
+        coverageWindows,
+        cycles: cycleFairness
       },
       notes: [
         "Multiple workers participated, but early start order still showed lane skew.",
@@ -524,19 +564,21 @@ function summarizeGlobalFairness(input) {
 
   return {
     ok: true,
-    phase: "global_multi_worker_fairness_observed",
+    phase: cycleFairness.length > 1 ? "global_multi_worker_soak_observed" : "global_multi_worker_fairness_observed",
     totals,
     lanes,
     workers: {
       distinctWorkers,
       observedEvents: summarizeWorkerEvents(allWorkerEvents, runToLane),
       startedEvents: summarizeWorkerEvents(startedEvents, runToLane),
-      coverageWindows
+      coverageWindows,
+      cycles: cycleFairness
     },
     notes: [
       "All requested runs reached the burst drain checkpoint.",
       "More than one worker participated in the observed run starts.",
       "Early worker start coverage reached the expected lane count in each burst window.",
+      ...(cycleFairness.length > 1 ? ["Repeated soak cycles also preserved the expected lane coverage."] : []),
       "Observed start ordering is derived from worker log timestamps, not exact queue claim timestamps."
     ]
   };
@@ -606,6 +648,64 @@ function summarizeCoverageWindows(startedEvents, laneCount, workerCount, runToLa
     });
   }
   return windows;
+}
+
+function summarizeCycleFairness(input) {
+  const cycleIds = [...new Set(input.requests.map((request) => Number.isInteger(request.cycle) ? request.cycle : 1))].sort((left, right) => left - right);
+  return cycleIds.map((cycle) => {
+    const cycleRequests = input.requests.filter((request) => (Number.isInteger(request.cycle) ? request.cycle : 1) === cycle);
+    const cycleRunIds = new Set(cycleRequests.map((request) => request.runId));
+    const cycleStartedEvents = input.startedEvents.filter((event) => cycleRunIds.has(event.runId));
+    const distinctWorkers = [...new Set(cycleStartedEvents.map((event) => event.workerInstanceId))];
+    const laneIds = [...new Set(cycleRequests.map((request) => request.lane))];
+    const coverageWindows = summarizeCoverageWindows(cycleStartedEvents, laneIds.length, distinctWorkers.length, input.runToLane);
+    const missingStartedRuns = cycleRequests
+      .filter((request) => !cycleStartedEvents.some((event) => event.runId === request.runId))
+      .map((request) => `${request.lane}:${request.runId}`);
+
+    if (cycleStartedEvents.length === 0 || distinctWorkers.length < 2) {
+      return {
+        cycle,
+        ok: false,
+        phase: cycleStartedEvents.length === 0 ? "missing_worker_telemetry" : "single_worker_only",
+        distinctWorkers,
+        coverageWindows,
+        missingStartedRuns
+      };
+    }
+
+    if (missingStartedRuns.length > 0) {
+      return {
+        cycle,
+        ok: false,
+        phase: "worker_event_gaps",
+        distinctWorkers,
+        coverageWindows,
+        missingStartedRuns
+      };
+    }
+
+    const failedCoverage = coverageWindows.find((window) => window.uniqueLanesSeen < window.expectedUniqueLanes);
+    if (failedCoverage) {
+      return {
+        cycle,
+        ok: false,
+        phase: "cross_worker_lane_skew_detected",
+        distinctWorkers,
+        coverageWindows,
+        missingStartedRuns
+      };
+    }
+
+    return {
+      cycle,
+      ok: true,
+      phase: "global_multi_worker_fairness_observed",
+      distinctWorkers,
+      coverageWindows,
+      missingStartedRuns
+    };
+  });
 }
 
 function parseLaneSpec(spec) {

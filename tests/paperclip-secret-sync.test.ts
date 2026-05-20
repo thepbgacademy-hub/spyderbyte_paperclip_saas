@@ -157,7 +157,7 @@ describe("paperclip secret sync", () => {
     expect(String(query.mock.calls[1]?.[0])).toMatch(/update wfpc\.paperclip_secret_bindings/i);
   });
 
-  it("projects registration, rotation, and revoke through the board-session projection service", async () => {
+  it("projects registration and rotation as synced-only bindings while keeping revoke available for active bindings", async () => {
     const bindings = {
       upsert: vi.fn().mockResolvedValue(undefined),
       revoke: vi.fn().mockResolvedValue(undefined),
@@ -253,6 +253,7 @@ describe("paperclip secret sync", () => {
       secretKey: "OPENAI_API_KEY",
       secretValue: "sk-next"
     });
+    expect(adminClient.bindAgentSecretRef).not.toHaveBeenCalled();
     expect(adminClient.revokeSecretBinding).toHaveBeenCalledWith({
       companyId: "company-1",
       agentId: "agent-1",
@@ -261,7 +262,7 @@ describe("paperclip secret sync", () => {
     });
   });
 
-  it("bootstraps a new binding on rotation when no prior paperclip binding exists", async () => {
+  it("bootstraps a synced-only binding on rotation when no prior paperclip binding exists", async () => {
     const bindings = {
       upsert: vi.fn().mockResolvedValue(undefined),
       revoke: vi.fn().mockResolvedValue(undefined),
@@ -356,6 +357,73 @@ describe("paperclip secret sync", () => {
       metadata: {
         lifecycle: "revoke",
         error: "Paperclip company mapping is required"
+      }
+    });
+  });
+
+  it("defers remote rotation projection when active workflow runs are present for the tenant", async () => {
+    const bindings = {
+      upsert: vi.fn().mockResolvedValue(undefined),
+      revoke: vi.fn().mockResolvedValue(undefined),
+      listBindingsBySecretReference: vi.fn().mockResolvedValue([
+        {
+          tenantId: "tenant-1",
+          wealthFactorySecretReferenceId: "11111111-1111-4111-8111-111111111111",
+          paperclipCompanyId: "company-1",
+          paperclipAgentId: "agent-1",
+          paperclipEnvKey: "OPENAI_API_KEY",
+          paperclipSecretId: "pc-secret-1",
+          paperclipSecretKey: "OPENAI_API_KEY",
+          providerKind: "openai_api",
+          bindingStatus: "active",
+          lastSyncedAt: "2026-05-19T20:00:00.000Z",
+          lastError: null
+        }
+      ]),
+      findActiveBySecretRef: vi.fn().mockResolvedValue(null)
+    };
+    const adminClient = {
+      upsertSecret: vi.fn().mockResolvedValue({
+        paperclipSecretId: "pc-secret-1",
+        paperclipSecretKey: "OPENAI_API_KEY",
+        paperclipSecretVersion: "5"
+      }),
+      bindAgentSecretRef: vi.fn().mockResolvedValue(undefined),
+      revokeSecretBinding: vi.fn().mockResolvedValue(undefined)
+    };
+    const audit = vi.fn().mockResolvedValue(undefined);
+    const projection = createPaperclipSecretProjectionService({
+      adminClient: adminClient as never,
+      bindings: bindings as never,
+      resolveCompanyMapping: vi.fn().mockResolvedValue({ paperclipCompanyId: "company-1", paperclipIssueAgentId: "agent-1" }),
+      hasActiveRuns: vi.fn().mockResolvedValue(true),
+      audit
+    });
+
+    await expect(
+      projection.onRotated({
+        tenantId: "tenant-1",
+        secretReferenceId: "11111111-1111-4111-8111-111111111111",
+        providerKind: "openai_api",
+        allowBootstrap: true,
+        previousSecretRef: "wf_secret_1",
+        nextSecretRef: "wf_secret_2",
+        nextSecretValues: { apiKey: "sk-next" }
+      })
+    ).resolves.toBeUndefined();
+
+    expect(adminClient.upsertSecret).not.toHaveBeenCalled();
+    expect(adminClient.bindAgentSecretRef).not.toHaveBeenCalled();
+    expect(bindings.listBindingsBySecretReference).not.toHaveBeenCalled();
+    expect(audit).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      eventType: "paperclip.secret_projection_deferred",
+      entityType: "paperclip_secret_projection",
+      entityId: "11111111-1111-4111-8111-111111111111",
+      metadata: {
+        lifecycle: "rotate",
+        providerKind: "openai_api",
+        reason: "active_runs_present"
       }
     });
   });
