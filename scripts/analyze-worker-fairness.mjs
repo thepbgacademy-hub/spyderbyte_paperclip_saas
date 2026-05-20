@@ -10,7 +10,7 @@ if (!args.proof || workerEventPaths.length === 0) {
   throw new Error("Expected --proof <path> and --worker-events <path>");
 }
 
-const proof = JSON.parse(await readFile(args.proof, "utf8"));
+const proof = parseJsonDocument(await readFile(args.proof, "utf8"));
 const workerEvents = (
   await Promise.all(workerEventPaths.map((path) => readFile(path, "utf8")))
 ).flatMap((contents) =>
@@ -21,7 +21,9 @@ const workerEvents = (
     .flatMap((line) => {
       try {
         const parsed = JSON.parse(line);
-        return parsed?.type === "wealth_factory_worker_run" || parsed?.type === "wealth_factory_worker_claim"
+        return parsed?.type === "wealth_factory_worker_run"
+          || parsed?.type === "wealth_factory_worker_claim"
+          || parsed?.type === "wealth_factory_worker_fairness"
           ? [parsed]
           : [];
       } catch {
@@ -29,11 +31,22 @@ const workerEvents = (
       }
     })
 );
+const fairnessSnapshots = workerEvents
+  .filter((event) => event?.type === "wealth_factory_worker_fairness")
+  .map((event) => ({
+    workerInstanceId: event.workerInstanceId,
+    observedAt: event.observedAt,
+    activeRuns: event.activeRuns,
+    activeByTenant: event.activeByTenant,
+    queuedByTenant: event.queuedByTenant
+  }));
 
 const summary = summarizePressureProof({
   requests: proof.requests,
   snapshots: proof.snapshots,
   workerEvents,
+  queueSnapshots: Array.isArray(proof.queueSnapshots) ? proof.queueSnapshots : [],
+  fairnessSnapshots,
   mode: "global-fairness"
 });
 
@@ -45,6 +58,7 @@ process.stdout.write(
       requests: proof.requests,
       snapshots: proof.snapshots,
       workerEvents,
+      fairnessSnapshots,
       summary
     },
     null,
@@ -76,4 +90,13 @@ function toArray(value) {
     return value;
   }
   return typeof value === "string" ? [value] : [];
+}
+
+function parseJsonDocument(value) {
+  const trimmed = String(value).replace(/^\uFEFF/, "").trim();
+  const firstBrace = trimmed.indexOf("{");
+  if (firstBrace < 0) {
+    throw new Error("Proof file does not contain a JSON object");
+  }
+  return JSON.parse(trimmed.slice(firstBrace));
 }

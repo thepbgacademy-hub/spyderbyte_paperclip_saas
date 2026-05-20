@@ -114,6 +114,21 @@ Fix:
 - use remote scripts for multi-step worker recreation and local Node analyzers for evidence review
 - avoid compounding PowerShell quoting with remote JSON/env payloads when a file upload is safer
 
+20. The first `staggered` scheduler implementation was effectively identical to `alternating` for the six-lane skew used in this proof, which made the docs overstate what had actually been exercised.
+Fix:
+- make `staggered` pick one lane at a time using remaining-run pressure instead of sweeping every lane in one pass
+- add a regression test proving the six-lane skewed burst order now differs from the alternating scheduler
+
+21. `prove-live-fairness` was double-counting pacing delays at cycle boundaries by applying both `--cycle-interval-ms` and the generic `--queue-interval-ms` before the first request of the next cycle.
+Fix:
+- treat the cycle boundary as its own pacing event
+- skip the per-request queue delay for the first request in a new cycle so the CLI timing flags stay interpretable
+
+22. Queue snapshot coverage temporarily displaced direct `inspectQueueState` coverage even though the proof driver still depends on per-job BullMQ inspection during drain checks.
+Fix:
+- extend the queue inspection tests instead of replacing them
+- keep coverage on both the per-job lookup path and the queue-level snapshot path
+
 ## Outcome
 
 After the fixes above:
@@ -199,3 +214,38 @@ Bounded-pod soak checkpoint after provisioning lanes 4 through 6 and a third pro
 - implication:
   - the current bounded-pod model is now proven through a six-tenant, three-worker staged soak
   - the next pressure gap is longer soak duration, skewed bursts, and resource saturation behavior, not basic lane distribution
+
+Additional skewed-soak checkpoint after adding queue snapshots, staggered ordering, and direct VPS worker-log capture:
+
+- the local skewed soak proof succeeded with a six-lane staggered burst over `3` cycles and `30` total requests:
+  - primary: `3` runs per cycle
+  - secondary: `2` runs per cycle
+  - tertiary: `2` runs per cycle
+  - quaternary: `1` run per cycle
+  - quinary: `1` run per cycle
+  - senary: `1` run per cycle
+- all `30` workflow runs reached `status = running`
+- all `30` outbox rows reached `enqueued`
+- BullMQ reported all `30` jobs `completed`
+- `scripts/analyze-worker-fairness.mjs` reported:
+  - `ok = true`
+  - `phase = global_multi_worker_soak_observed`
+- worker start distribution under the skewed burst:
+  - `proof-a`: `12` starts
+  - `proof-b`: `9` starts
+  - `proof-c`: `9` starts
+- early coverage windows still showed real multi-worker spread:
+  - wave 1: first `3` starts covered `3` unique lanes across `2` participating workers
+  - wave 2: first `6` starts covered all `6` lanes across `3` participating workers
+- new practical friction and fix:
+  - queue snapshots captured from this Windows workstation are not authoritative for the staged private Redis lane because the local caller cannot reach BullMQ Redis directly and the proof recorded `Connection is closed.` snapshots
+  - use worker telemetry plus VPS-side queue evidence as the source of truth for saturation on this topology
+- PowerShell-specific operator fix:
+  - nested PowerShell -> SSH quoting kept burning time during worker-log capture and sudo commands
+  - prefer a local Node helper that reads `sudo_deploy.txt`, feeds `sudo -S` over stdin, and captures raw remote output instead of stacking more inline PowerShell quoting
+- analyzer robustness fix:
+  - saved proof files captured through `npm run ... | Out-File` can include a UTF BOM and npm banner lines before the JSON payload
+  - the analyzer now strips BOM/prefix noise and trims to the first JSON object instead of treating the file as pristine JSON
+- implication:
+  - longer soak and skewed-burst behavior are now proven strongly enough for this bounded pod model
+  - the remaining pressure gap is explicit resource saturation sampling from inside the VPS lane, not whether the current multi-worker fairness model survives skewed bursts

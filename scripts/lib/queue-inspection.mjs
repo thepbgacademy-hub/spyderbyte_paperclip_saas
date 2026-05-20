@@ -51,6 +51,64 @@ export async function inspectQueueState({
   }
 }
 
+export async function inspectQueueSnapshot({
+  redisUrl,
+  queueName,
+  connectTimeoutMs = 3000,
+  QueueClass = Queue,
+  RedisClass = Redis
+}) {
+  const connection = new RedisClass(redisUrl, {
+    lazyConnect: true,
+    enableOfflineQueue: false,
+    maxRetriesPerRequest: null,
+    connectTimeout: connectTimeoutMs
+  });
+  if (typeof connection.on === "function") {
+    connection.on("error", () => undefined);
+  }
+
+  let queue;
+  try {
+    await withTimeout(connection.connect(), connectTimeoutMs, "Redis connection timed out during queue snapshot");
+    queue = new QueueClass(queueName, { connection });
+    const counts = await withTimeout(
+      queue.getJobCounts("waiting", "active", "completed", "failed", "delayed", "paused", "prioritized", "waiting-children"),
+      connectTimeoutMs,
+      "BullMQ queue snapshot timed out"
+    );
+    return {
+      queueName,
+      reachable: true,
+      error: null,
+      counts: {
+        waiting: Number(counts.waiting ?? 0),
+        active: Number(counts.active ?? 0),
+        completed: Number(counts.completed ?? 0),
+        failed: Number(counts.failed ?? 0),
+        delayed: Number(counts.delayed ?? 0),
+        paused: Number(counts.paused ?? 0),
+        prioritized: Number(counts.prioritized ?? 0),
+        waitingChildren: Number(counts["waiting-children"] ?? 0)
+      }
+    };
+  } catch (error) {
+    return {
+      queueName,
+      reachable: false,
+      error: error instanceof Error ? error.message : "Queue snapshot failed",
+      counts: null
+    };
+  } finally {
+    if (queue) {
+      await withTimeout(queue.close(), connectTimeoutMs, "BullMQ queue close timed out").catch(() => undefined);
+    }
+    if (typeof connection.disconnect === "function") {
+      connection.disconnect();
+    }
+  }
+}
+
 async function withTimeout(promise, timeoutMs, message) {
   let timer;
   try {

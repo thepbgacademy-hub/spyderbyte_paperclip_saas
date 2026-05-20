@@ -22,6 +22,22 @@ The next session should continue from the live VPS API deployment that now answe
 - `deploy/runbooks/incident-response.md`
 - `TODO.md`
 
+## GitNexus Workflow Note
+
+Use GitNexus as a proactive confidence layer before planning changes in sensitive runtime areas. Prefer it for blast-radius discovery before broad file reading.
+
+Recommended local workflow:
+
+- Set `GITNEXUS_HOME=E:\GitNexusHome`
+- Exact commit truth: use `git diff` / `git log`
+- Recent blast radius: `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope compare --base-ref HEAD~3`
+- Structure and flow: use `gitnexus cypher`, `gitnexus context`, and `gitnexus impact`
+- Ranked keyword discovery on Windows: `node E:\GitNexusHome\tools\gitnexus-fts-query.mjs --repo-path E:\REPOS\spyderbyte_paperclip_saas --query "<terms>" --limit 8`
+
+Current caveat:
+
+- GitNexus is useful right now for architecture and blast radius, but if `gitnexus status` shows a stale index or missing FTS indexes, treat exact current-change findings as lower confidence until the graph is refreshed.
+
 ## Product Position
 
 Wealth Factory is the customer-facing SaaS. Paperclip is private infrastructure.
@@ -176,6 +192,31 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
       - quinary: `min=3592ms`, `median=4386ms`, `max=5536ms`
       - senary: `min=3410ms`, `median=4191ms`, `max=5386ms`
     - conclusion: the bounded-pod model is now proven through a six-tenant, three-worker staged soak; the next pressure gap is longer soak duration, skewed bursts, and resource saturation behavior
+  - current skewed-soak and saturation checkpoint on 2026-05-20:
+    - a heavier six-lane / three-worker / three-cycle skewed soak has now passed with staggered lane ordering and `30` total requests:
+      - primary: `3` runs per cycle
+      - secondary: `2` runs per cycle
+      - tertiary: `2` runs per cycle
+      - quaternary: `1` run per cycle
+      - quinary: `1` run per cycle
+      - senary: `1` run per cycle
+    - all `30` workflow runs reached `status = running`
+    - all `30` outbox rows reached `enqueued`
+    - BullMQ reported all `30` jobs `completed`
+    - `scripts/analyze-worker-fairness.mjs` reported `phase = global_multi_worker_soak_observed`
+    - worker start distribution remained healthy under the skewed burst:
+      - `proof-a`: `12` starts
+      - `proof-b`: `9` starts
+      - `proof-c`: `9` starts
+    - early coverage windows still showed meaningful multi-worker spread:
+      - wave 1: first `3` starts covered `3` unique lanes across `2` participating workers
+      - wave 2: first `6` starts covered all `6` lanes across `3` participating workers
+    - local queue saturation polling from this workstation is not authoritative for the staged private-Redis lane:
+      - the proof file recorded queue snapshots as unreachable because the local caller cannot see the private BullMQ Redis service directly
+      - use worker telemetry plus VPS-side queue evidence as the source of truth for saturation on this lane
+    - confirmed practical implication:
+      - multi-worker fairness still held under skewed burst pressure
+      - the next pressure gap is longer-duration soak and resource saturation measurement, not whether the current bounded pod can distribute a skewed burst at all
 
 ## Security Position
 

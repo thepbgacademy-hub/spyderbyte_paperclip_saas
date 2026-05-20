@@ -254,4 +254,74 @@ describe("analyze-worker-fairness script", () => {
     expect(Object.keys(result.summary.lanes)).toEqual(["alpha", "beta", "gamma", "delta", "epsilon", "zeta"]);
     expect(result.phase).toBe("global_multi_worker_fairness_observed");
   }, 15000);
+
+  it("parses a proof file captured through npm and PowerShell output wrappers", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "wf-analyze-fairness-"));
+    const proofPath = join(dir, "proof-banner.json");
+    const workerPath = join(dir, "worker.log");
+
+    await writeFile(
+      proofPath,
+      `\uFEFF\r\n> spyderbyte-paperclip-saas@0.1.0 prove:live-fairness\r\n> node scripts/prove-live-fairness.mjs --mode global-fairness\r\n\r\n${JSON.stringify({
+        requests: [
+          {
+            lane: "primary",
+            tenantId: "tenant-a",
+            userId: "user-a",
+            workflowId: "workflow-a",
+            runId: "run-a",
+            idempotencyKey: "tenant-a:workflow-a:run-a",
+            sequence: 1,
+            queuedAt: "2026-05-20T00:00:00.000Z"
+          }
+        ],
+        snapshots: [
+          {
+            lane: "primary",
+            tenantId: "tenant-a",
+            runId: "run-a",
+            workflowId: "workflow-a",
+            runStatus: "running",
+            outboxStatus: "enqueued",
+            queueState: "completed",
+            outboxAttempts: 1,
+            queueReachable: true,
+            queuedAt: "2026-05-20T00:00:00.000Z",
+            observedFirstProgressAt: "2026-05-20T00:00:01.000Z",
+            observedFirstStartedAt: "2026-05-20T00:00:02.000Z",
+            observedCompletedAt: null
+          }
+        ]
+      })}`,
+      "utf8"
+    );
+
+    await writeFile(
+      workerPath,
+      `${JSON.stringify({
+        type: "wealth_factory_worker_claim",
+        workerInstanceId: "worker-a",
+        observedAt: "2026-05-20T00:00:00.500Z",
+        event: "claimed",
+        tenantId: "tenant-a",
+        runId: "run-a",
+        workflowId: "workflow-a"
+      })}\n`,
+      "utf8"
+    );
+
+    const { stdout } = await execFileAsync("node", [
+      "scripts/analyze-worker-fairness.mjs",
+      "--proof",
+      proofPath,
+      "--worker-events",
+      workerPath
+    ], {
+      cwd: "E:\\REPOS\\spyderbyte_paperclip_saas"
+    });
+
+    const result = JSON.parse(stdout);
+    expect(result.requests).toHaveLength(1);
+    expect(result.phase).toBe("single_worker_only");
+  }, 15000);
 });

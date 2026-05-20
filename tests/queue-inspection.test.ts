@@ -1,65 +1,143 @@
 import { createRequire } from "node:module";
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 const require = createRequire(import.meta.url);
-const { inspectQueueState } = require("../scripts/lib/queue-inspection.mjs");
+const { inspectQueueSnapshot, inspectQueueState } = require("../scripts/lib/queue-inspection.mjs");
 
-describe("queue inspection", () => {
-  it("returns queue state when Redis and BullMQ are reachable", async () => {
-    const job = {
-      getState: vi.fn().mockResolvedValue("waiting")
-    };
-    const queue = {
-      getJob: vi.fn().mockResolvedValue(job),
-      close: vi.fn().mockResolvedValue(undefined)
-    };
-    const connection = {
-      connect: vi.fn().mockResolvedValue(undefined),
-      disconnect: vi.fn(),
-      on: vi.fn()
-    };
-    const QueueClass = vi.fn().mockImplementation(() => queue);
-    const RedisClass = vi.fn().mockImplementation(() => connection);
+describe("queue inspection helpers", () => {
+  it("captures BullMQ per-job state when Redis is reachable", async () => {
+    class FakeJob {
+      async getState() {
+        return "completed";
+      }
+    }
+
+    class FakeRedis {
+      async connect() {}
+      disconnect() {}
+      on() {}
+    }
+
+    class FakeQueue {
+      async getJob(jobId: string) {
+        expect(jobId).toBe("tenant:workflow:run");
+        return new FakeJob();
+      }
+
+      async close() {}
+    }
 
     await expect(
       inspectQueueState({
-        redisUrl: "redis://queue.internal:6379",
+        redisUrl: "redis://localhost:6379",
         queueName: "wfpc-workflow-runs",
-        jobId: "tenant-1:workflow-1:run-1",
-        QueueClass,
-        RedisClass
+        jobId: "tenant:workflow:run",
+        RedisClass: FakeRedis,
+        QueueClass: FakeQueue
       })
     ).resolves.toEqual({
       queueName: "wfpc-workflow-runs",
-      jobId: "tenant-1:workflow-1:run-1",
-      state: "waiting",
+      jobId: "tenant:workflow:run",
+      state: "completed",
       reachable: true,
       error: null
     });
   });
 
-  it("degrades cleanly when Redis is unreachable from the caller", async () => {
-    const connection = {
-      connect: vi.fn().mockRejectedValue(new Error("connect ECONNREFUSED 10.0.0.5:6379")),
-      disconnect: vi.fn(),
-      on: vi.fn()
-    };
-    const RedisClass = vi.fn().mockImplementation(() => connection);
+  it("reports an unreachable per-job queue inspection instead of throwing", async () => {
+    class FakeRedis {
+      async connect() {
+        throw new Error("job lookup unavailable");
+      }
+      disconnect() {}
+      on() {}
+    }
 
     await expect(
       inspectQueueState({
-        redisUrl: "redis://queue.internal:6379",
+        redisUrl: "redis://localhost:6379",
         queueName: "wfpc-workflow-runs",
-        jobId: "tenant-1:workflow-1:run-1",
-        RedisClass
+        jobId: "tenant:workflow:run",
+        RedisClass: FakeRedis
       })
     ).resolves.toEqual({
       queueName: "wfpc-workflow-runs",
-      jobId: "tenant-1:workflow-1:run-1",
+      jobId: "tenant:workflow:run",
       state: null,
       reachable: false,
-      error: "connect ECONNREFUSED 10.0.0.5:6379"
+      error: "job lookup unavailable"
+    });
+  });
+
+  it("captures BullMQ queue-level counts when Redis is reachable", async () => {
+    class FakeRedis {
+      async connect() {}
+      disconnect() {}
+      on() {}
+    }
+
+    class FakeQueue {
+      async getJobCounts() {
+        return {
+          waiting: 3,
+          active: 2,
+          completed: 5,
+          failed: 1,
+          delayed: 4,
+          paused: 0,
+          prioritized: 2,
+          "waiting-children": 6
+        };
+      }
+
+      async close() {}
+    }
+
+    await expect(
+      inspectQueueSnapshot({
+        redisUrl: "redis://localhost:6379",
+        queueName: "wfpc-workflow-runs",
+        RedisClass: FakeRedis,
+        QueueClass: FakeQueue
+      })
+    ).resolves.toEqual({
+      queueName: "wfpc-workflow-runs",
+      reachable: true,
+      error: null,
+      counts: {
+        waiting: 3,
+        active: 2,
+        completed: 5,
+        failed: 1,
+        delayed: 4,
+        paused: 0,
+        prioritized: 2,
+        waitingChildren: 6
+      }
+    });
+  });
+
+  it("reports an unreachable queue snapshot instead of throwing", async () => {
+    class FakeRedis {
+      async connect() {
+        throw new Error("no redis");
+      }
+      disconnect() {}
+      on() {}
+    }
+
+    await expect(
+      inspectQueueSnapshot({
+        redisUrl: "redis://localhost:6379",
+        queueName: "wfpc-workflow-runs",
+        RedisClass: FakeRedis
+      })
+    ).resolves.toEqual({
+      queueName: "wfpc-workflow-runs",
+      reachable: false,
+      error: "no redis",
+      counts: null
     });
   });
 });

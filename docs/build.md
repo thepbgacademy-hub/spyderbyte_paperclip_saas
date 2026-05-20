@@ -10,6 +10,20 @@
 
 ---
 
+## Proactive Discovery Rule
+
+Before planning or editing sensitive seams such as runtime composition, worker/queue flow, tenant security, provider credentials, or Paperclip integration, use GitNexus first to map the likely blast radius.
+
+Recommended workflow:
+
+- Set `GITNEXUS_HOME=E:\GitNexusHome`
+- Use `git diff` / `git log` for exact commit truth
+- Use `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope compare --base-ref HEAD~3` for recent symbol/process impact
+- Use `gitnexus cypher`, `gitnexus context`, and `gitnexus impact` for structure
+- On this Windows machine, prefer `node E:\GitNexusHome\tools\gitnexus-fts-query.mjs --repo-path E:\REPOS\spyderbyte_paperclip_saas --query "<terms>" --limit 8` for ranked keyword discovery until upstream FTS behavior is healthier
+
+This is a proactive step, not a replacement for tests or code review. Use it to reduce blind spots before implementation.
+
 ## Worker Rule
 
 Subagents and implementers are not alone in the codebase. They must keep file ownership narrow, avoid reverting others' work, and adapt to existing changes. All code requires reviewer scrutiny for error and accuracy control before a phase is accepted.

@@ -1,7 +1,7 @@
 export function createPressureRequests(input) {
   const lanes = Array.isArray(input?.lanes) ? input.lanes : [];
   const runsPerLane = Number.isInteger(input?.runsPerLane) ? input.runsPerLane : 0;
-  const order = input?.order === "grouped" ? "grouped" : "alternating";
+  const order = normalizeOrder(input?.order);
 
   if (lanes.length === 0) {
     throw new Error("Pressure requests require at least one lane");
@@ -99,7 +99,7 @@ export function expandPressureRequests(input) {
   if (cycles < 1) {
     throw new Error("Expanded pressure requests require cycles >= 1");
   }
-  const order = input?.order === "grouped" ? "grouped" : "alternating";
+  const order = normalizeOrder(input?.order);
   const requests = [];
   for (let cycle = 1; cycle <= cycles; cycle += 1) {
     if (order === "grouped") {
@@ -114,6 +114,43 @@ export function expandPressureRequests(input) {
             ...(cycles > 1 ? { cycle } : {})
           });
         }
+      }
+      continue;
+    }
+
+    if (order === "staggered") {
+      const queue = lanes.map((lane) => ({
+        ...lane,
+        remainingRuns: lane.runs,
+        scheduledRuns: 0
+      }));
+      let previousLane = null;
+      while (queue.some((lane) => lane.remainingRuns > 0)) {
+        queue.sort((left, right) => {
+          if (left.remainingRuns !== right.remainingRuns) {
+            return right.remainingRuns - left.remainingRuns;
+          }
+          if (left.scheduledRuns !== right.scheduledRuns) {
+            return left.scheduledRuns - right.scheduledRuns;
+          }
+          return left.lane.localeCompare(right.lane);
+        });
+
+        const nextLane =
+          queue.find((lane) => lane.remainingRuns > 0 && lane.lane !== previousLane) ??
+          queue.find((lane) => lane.remainingRuns > 0);
+
+        requests.push({
+          lane: nextLane.lane,
+          tenantId: nextLane.tenantId,
+          userId: nextLane.userId,
+          workflowId: nextLane.workflowId,
+          sequence: nextLane.scheduledRuns + 1,
+          ...(cycles > 1 ? { cycle } : {})
+        });
+        nextLane.remainingRuns -= 1;
+        nextLane.scheduledRuns += 1;
+        previousLane = nextLane.lane;
       }
       continue;
     }
@@ -146,6 +183,8 @@ export function summarizePressureProof(input) {
       return [normalized.runId, normalized];
     })
   );
+  const queueSnapshots = (Array.isArray(input?.queueSnapshots) ? input.queueSnapshots : []).map((snapshot) => normalizeQueueSnapshot(snapshot));
+  const fairnessSnapshots = (Array.isArray(input?.fairnessSnapshots) ? input.fairnessSnapshots : []).map((snapshot) => normalizeFairnessSnapshot(snapshot));
 
   const lanes = {};
   const totals = {
@@ -238,6 +277,10 @@ export function summarizePressureProof(input) {
       phase: "lane_starvation_detected",
       totals,
       lanes,
+      saturation: summarizeSaturation({
+        queueSnapshots,
+        fairnessSnapshots
+      }),
       notes: [
         "At least one requested lane never produced a progressing run.",
         `Starved lanes: ${laneWithoutProgress.join(", ")}`
@@ -251,6 +294,10 @@ export function summarizePressureProof(input) {
       phase: mode === "global-fairness" ? "global_fairness_incomplete" : "burst_drain_incomplete",
       totals,
       lanes,
+      saturation: summarizeSaturation({
+        queueSnapshots,
+        fairnessSnapshots
+      }),
       notes: [
         "Every lane produced progress, but not every requested run reached the burst drain checkpoint.",
         `Still waiting on: ${incompleteDrains.join(", ")}`
@@ -263,7 +310,9 @@ export function summarizePressureProof(input) {
       requests,
       totals,
       lanes,
-      workerEvents: Array.isArray(input?.workerEvents) ? input.workerEvents : []
+      workerEvents: Array.isArray(input?.workerEvents) ? input.workerEvents : [],
+      queueSnapshots,
+      fairnessSnapshots
     });
   }
 
@@ -273,6 +322,10 @@ export function summarizePressureProof(input) {
       phase: "incomplete_lane_progress",
       totals,
       lanes,
+      saturation: summarizeSaturation({
+        queueSnapshots,
+        fairnessSnapshots
+      }),
       notes: [
         "Every lane produced progress, but not every requested run has progressed yet.",
         `Still waiting on: ${stalledRuns.join(", ")}`
@@ -285,6 +338,10 @@ export function summarizePressureProof(input) {
     phase: mode === "drain" ? "burst_drain_observed" : "fair_progress_observed",
     totals,
     lanes,
+    saturation: summarizeSaturation({
+      queueSnapshots,
+      fairnessSnapshots
+    }),
     notes: mode === "drain"
       ? [
           "Every requested lane produced at least one progressing run.",
@@ -375,6 +432,45 @@ function normalizeWorkerEvent(event) {
   };
 }
 
+function normalizeQueueSnapshot(snapshot) {
+  const counts = snapshot?.counts && typeof snapshot.counts === "object" ? snapshot.counts : {};
+  return {
+    queueName: String(snapshot?.queueName ?? "").trim(),
+    observedAt: toTimestamp(snapshot?.observedAt) ?? null,
+    reachable: typeof snapshot?.reachable === "boolean" ? snapshot.reachable : null,
+    counts: {
+      waiting: safeNumber(counts.waiting),
+      active: safeNumber(counts.active),
+      completed: safeNumber(counts.completed),
+      failed: safeNumber(counts.failed),
+      delayed: safeNumber(counts.delayed),
+      paused: safeNumber(counts.paused),
+      prioritized: safeNumber(counts.prioritized),
+      waitingChildren: safeNumber(counts.waitingChildren)
+    }
+  };
+}
+
+function normalizeFairnessSnapshot(snapshot) {
+  const activeByTenant = snapshot?.activeByTenant && typeof snapshot.activeByTenant === "object" ? snapshot.activeByTenant : {};
+  const queuedByTenant = snapshot?.queuedByTenant && typeof snapshot.queuedByTenant === "object" ? snapshot.queuedByTenant : {};
+  return {
+    workerInstanceId: String(snapshot?.workerInstanceId ?? "").trim(),
+    observedAt: toTimestamp(snapshot?.observedAt) ?? null,
+    activeRuns: safeNumber(snapshot?.activeRuns),
+    activeByTenant: Object.fromEntries(
+      Object.entries(activeByTenant)
+        .map(([tenantId, value]) => [tenantId, safeNumber(value)])
+        .filter(([, value]) => value > 0)
+    ),
+    queuedByTenant: Object.fromEntries(
+      Object.entries(queuedByTenant)
+        .map(([tenantId, value]) => [tenantId, safeNumber(value)])
+        .filter(([, value]) => value > 0)
+    )
+  };
+}
+
 function toTimestamp(value) {
   return typeof value === "string" && value.trim().length > 0 ? value : null;
 }
@@ -415,6 +511,49 @@ function summarizeDurations(values) {
   };
 }
 
+function summarizeSaturation(input) {
+  const queueSnapshots = Array.isArray(input?.queueSnapshots) ? input.queueSnapshots : [];
+  const fairnessSnapshots = Array.isArray(input?.fairnessSnapshots) ? input.fairnessSnapshots : [];
+  const reachableQueueSnapshots = queueSnapshots.filter((snapshot) => snapshot.reachable && snapshot.counts);
+
+  return {
+    queue: {
+      samples: queueSnapshots.length,
+      reachableSamples: reachableQueueSnapshots.length,
+      unreachableSamples: queueSnapshots.filter((snapshot) => snapshot.reachable === false).length,
+      highWaterMarks: summarizeQueueHighWaterMarks(reachableQueueSnapshots)
+    },
+    worker: {
+      samples: fairnessSnapshots.length,
+      maxActiveRuns: maxOf(fairnessSnapshots.map((snapshot) => snapshot.activeRuns)),
+      maxQueuedRuns: maxOf(
+        fairnessSnapshots.map((snapshot) =>
+          Object.values(snapshot.queuedByTenant).reduce((total, value) => total + value, 0)
+        )
+      ),
+      maxQueuedTenants: maxOf(
+        fairnessSnapshots.map((snapshot) => Object.keys(snapshot.queuedByTenant).length)
+      ),
+      maxActiveTenants: maxOf(
+        fairnessSnapshots.map((snapshot) => Object.keys(snapshot.activeByTenant).length)
+      )
+    }
+  };
+}
+
+function summarizeQueueHighWaterMarks(queueSnapshots) {
+  return {
+    waiting: maxOf(queueSnapshots.map((snapshot) => snapshot.counts.waiting)),
+    active: maxOf(queueSnapshots.map((snapshot) => snapshot.counts.active)),
+    completed: maxOf(queueSnapshots.map((snapshot) => snapshot.counts.completed)),
+    failed: maxOf(queueSnapshots.map((snapshot) => snapshot.counts.failed)),
+    delayed: maxOf(queueSnapshots.map((snapshot) => snapshot.counts.delayed)),
+    paused: maxOf(queueSnapshots.map((snapshot) => snapshot.counts.paused)),
+    prioritized: maxOf(queueSnapshots.map((snapshot) => snapshot.counts.prioritized)),
+    waitingChildren: maxOf(queueSnapshots.map((snapshot) => snapshot.counts.waitingChildren))
+  };
+}
+
 function reachedDrainCheckpoint(snapshot) {
   if (!snapshot) {
     return false;
@@ -431,6 +570,10 @@ function summarizeGlobalFairness(input) {
   const requests = Array.isArray(input?.requests) ? input.requests : [];
   const totals = input?.totals ?? {};
   const lanes = input?.lanes ?? {};
+  const saturation = summarizeSaturation({
+    queueSnapshots: Array.isArray(input?.queueSnapshots) ? input.queueSnapshots : [],
+    fairnessSnapshots: Array.isArray(input?.fairnessSnapshots) ? input.fairnessSnapshots : []
+  });
   const runToMeta = new Map(
     requests.map((request) => [request.runId, { lane: request.lane, cycle: Number.isInteger(request.cycle) ? request.cycle : 1 }])
   );
@@ -466,6 +609,7 @@ function summarizeGlobalFairness(input) {
       phase: "missing_worker_telemetry",
       totals,
       lanes,
+      saturation,
       workers: {
         distinctWorkers,
         observedEvents: summarizeWorkerEvents(allWorkerEvents, runToLane),
@@ -484,6 +628,7 @@ function summarizeGlobalFairness(input) {
       phase: "single_worker_only",
       totals,
       lanes,
+      saturation,
       workers: {
         distinctWorkers,
         observedEvents: summarizeWorkerEvents(allWorkerEvents, runToLane),
@@ -502,6 +647,7 @@ function summarizeGlobalFairness(input) {
       phase: "worker_event_gaps",
       totals,
       lanes,
+      saturation,
       workers: {
         distinctWorkers,
         observedEvents: summarizeWorkerEvents(allWorkerEvents, runToLane),
@@ -529,6 +675,7 @@ function summarizeGlobalFairness(input) {
       phase: "soak_cycle_distribution_failed",
       totals,
       lanes,
+      saturation,
       workers: {
         distinctWorkers,
         observedEvents: summarizeWorkerEvents(allWorkerEvents, runToLane),
@@ -548,6 +695,7 @@ function summarizeGlobalFairness(input) {
       phase: "cross_worker_lane_skew_detected",
       totals,
       lanes,
+      saturation,
       workers: {
         distinctWorkers,
         observedEvents: summarizeWorkerEvents(allWorkerEvents, runToLane),
@@ -567,6 +715,7 @@ function summarizeGlobalFairness(input) {
     phase: cycleFairness.length > 1 ? "global_multi_worker_soak_observed" : "global_multi_worker_fairness_observed",
     totals,
     lanes,
+    saturation,
     workers: {
       distinctWorkers,
       observedEvents: summarizeWorkerEvents(allWorkerEvents, runToLane),
@@ -723,6 +872,13 @@ function parseLaneSpec(spec) {
   });
 }
 
+function normalizeOrder(value) {
+  if (value === "grouped" || value === "staggered") {
+    return value;
+  }
+  return "alternating";
+}
+
 function parseLaneRuns(value, fallback, label, options = {}) {
   const allowZero = options.allowZero === true;
   if (value === undefined || value === null || String(value).trim().length === 0) {
@@ -733,4 +889,15 @@ function parseLaneRuns(value, fallback, label, options = {}) {
     throw new Error(`Expected --${label} to be a ${allowZero ? "non-negative" : "positive"} integer`);
   }
   return parsed;
+}
+
+function maxOf(values) {
+  if (!Array.isArray(values) || values.length === 0) {
+    return 0;
+  }
+  return values.reduce((current, value) => (value > current ? value : current), 0);
+}
+
+function safeNumber(value) {
+  return Number.isFinite(value) ? Number(value) : 0;
 }

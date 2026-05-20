@@ -7,7 +7,7 @@ import pg from "pg";
 
 import { createLiveRunRequest, loadWorkflowRunSnapshot } from "./lib/live-run-drive.mjs";
 import { buildPressureLanes, expandPressureRequests, summarizePressureProof } from "./lib/pressure-drive.mjs";
-import { inspectQueueState } from "./lib/queue-inspection.mjs";
+import { inspectQueueSnapshot, inspectQueueState } from "./lib/queue-inspection.mjs";
 import { loadRuntimePreflight, summarizeRuntimePreflight } from "./lib/runtime-preflight.mjs";
 import { loadScriptEnv } from "./lib/script-env.mjs";
 
@@ -21,7 +21,7 @@ const execFileAsync = promisify(execFile);
 const modeConfig = parseModeArg(args.mode);
 const requests = expandPressureRequests({
   lanes,
-  order: "alternating",
+  order: parseOrderArg(args.order),
   cycles: parsePositiveInteger(args.cycles, 1, "cycles")
 }).map((request, index) => {
   const run = createLiveRunRequest({
@@ -77,11 +77,18 @@ try {
     process.stdout.write(JSON.stringify({ ok: false, phase: "preflight_failed", preflight: preflightResults }, null, 2) + "\n");
   } else {
     const cycleIntervalMs = parsePositiveInteger(args["cycle-interval-ms"], 0, "cycle-interval-ms", { allowZero: true });
+    const queueIntervalMs = parsePositiveInteger(args["queue-interval-ms"], 0, "queue-interval-ms", { allowZero: true });
     let previousCycle = null;
     let queueFailure = false;
-    for (const request of requests) {
-      if (previousCycle !== null && request.cycle !== undefined && request.cycle !== previousCycle && cycleIntervalMs > 0) {
+    for (let requestIndex = 0; requestIndex < requests.length; requestIndex += 1) {
+      const request = requests[requestIndex];
+      const crossedCycleBoundary =
+        previousCycle !== null && request.cycle !== undefined && request.cycle !== previousCycle;
+      if (crossedCycleBoundary && cycleIntervalMs > 0) {
         await delay(cycleIntervalMs);
+      }
+      if (requestIndex > 0 && queueIntervalMs > 0 && !crossedCycleBoundary) {
+        await delay(queueIntervalMs);
       }
       const queueResult = await queuePressureRun(request);
       if (!queueResult.ok) {
@@ -110,6 +117,7 @@ try {
       const deadlineMs = Number.parseInt(args.timeout ?? "45000", 10);
       const pollIntervalMs = Number.parseInt(args.interval ?? "1500", 10);
       const observations = new Map();
+      const queueSnapshots = [];
 
       while (Date.now() - startedAt < deadlineMs) {
         for (const request of requests) {
@@ -141,10 +149,18 @@ try {
             observedCompletedAt: previous?.observedCompletedAt ?? (snapshot.run.status === "completed" ? new Date().toISOString() : null)
           });
         }
+        queueSnapshots.push({
+          observedAt: new Date().toISOString(),
+          ...(await inspectQueueSnapshot({
+            redisUrl: env.REDIS_URL,
+            queueName: env.WF_WORKFLOW_QUEUE_NAME?.trim() || "wfpc-workflow-runs"
+          }))
+        });
 
         const summary = summarizePressureProof({
           requests,
           snapshots: [...observations.values()],
+          queueSnapshots,
           mode: modeConfig.summaryMode
         });
 
@@ -158,6 +174,7 @@ try {
                 summaryMode: modeConfig.summaryMode,
                 requests,
                 snapshots: [...observations.values()],
+                queueSnapshots,
                 summary,
                 notes: modeConfig.captureNotes
               },
@@ -174,6 +191,7 @@ try {
       const summary = summarizePressureProof({
         requests,
         snapshots: [...observations.values()],
+        queueSnapshots,
         mode: modeConfig.summaryMode
       });
       if (!summary.ok || process.exitCode) {
@@ -187,6 +205,7 @@ try {
               summaryMode: modeConfig.summaryMode,
               requests,
               snapshots: [...observations.values()],
+              queueSnapshots,
               summary,
               notes: modeConfig.captureNotes
             },
@@ -265,6 +284,17 @@ function parseModeArg(value) {
     };
   }
   throw new Error("Invalid --mode: expected 'progress', 'drain', or 'global-fairness'");
+}
+
+function parseOrderArg(value) {
+  if (value === undefined || value === null || String(value).trim().length === 0) {
+    return "alternating";
+  }
+  const normalized = String(value).trim();
+  if (normalized === "alternating" || normalized === "grouped" || normalized === "staggered") {
+    return normalized;
+  }
+  throw new Error("Invalid --order: expected 'alternating', 'grouped', or 'staggered'");
 }
 
 function resolveSsl(source) {

@@ -389,6 +389,27 @@ Current staged sustained-burst checkpoint on 2026-05-20:
     - quinary: `min=3592ms`, `median=4386ms`, `max=5536ms`
     - senary: `min=3410ms`, `median=4191ms`, `max=5386ms`
   - treat the bounded-pod model as proven for the six-client pod shape; the next backlog item is longer soak duration, skewed bursts, and resource saturation behavior
+  - current skewed-soak and saturation checkpoint on 2026-05-20:
+    - a staggered six-lane / three-worker / three-cycle proof has now passed with `30` total requests and an intentionally skewed lane shape:
+      - primary: `3` runs per cycle
+      - secondary: `2` runs per cycle
+      - tertiary: `2` runs per cycle
+      - quaternary: `1` run per cycle
+      - quinary: `1` run per cycle
+      - senary: `1` run per cycle
+    - all `30` workflow runs reached `status = running`
+    - all `30` outbox rows reached `enqueued`
+    - BullMQ reported all `30` jobs `completed`
+    - `scripts/analyze-worker-fairness.mjs` still reported `phase = global_multi_worker_soak_observed`
+    - worker start distribution stayed healthy under the skewed shape:
+      - `proof-a`: `12` starts
+      - `proof-b`: `9` starts
+      - `proof-c`: `9` starts
+    - practical saturation note:
+      - queue snapshots captured from this Windows workstation are not authoritative for the private BullMQ Redis lane because the local caller cannot reach the staged Redis service directly
+      - treat worker telemetry plus VPS-side queue evidence as the source of truth for saturation in this deployment shape
+    - next backlog item:
+      - longer-duration soak plus explicit CPU, memory, and queue-depth sampling from inside the VPS lane
 
 Set the lifecycle proof env before using the helper:
 

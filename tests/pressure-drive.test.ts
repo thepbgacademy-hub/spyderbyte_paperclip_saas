@@ -75,6 +75,57 @@ describe("pressure drive helpers", () => {
     ]);
   });
 
+  it("expands skewed lanes in staggered order so heavier lanes are interleaved first", () => {
+    expect(
+      expandPressureRequests({
+        lanes: [
+          { lane: "alpha", tenantId: "tenant-1", userId: "user-1", workflowId: "workflow-1", runs: 3 },
+          { lane: "beta", tenantId: "tenant-2", userId: "user-2", workflowId: "workflow-2", runs: 1 },
+          { lane: "gamma", tenantId: "tenant-3", userId: "user-3", workflowId: "workflow-3", runs: 2 }
+        ],
+        order: "staggered"
+      }).map((request: { lane: string; sequence: number }) => ({
+        lane: request.lane,
+        sequence: request.sequence
+      }))
+    ).toEqual([
+      { lane: "alpha", sequence: 1 },
+      { lane: "gamma", sequence: 1 },
+      { lane: "alpha", sequence: 2 },
+      { lane: "beta", sequence: 1 },
+      { lane: "gamma", sequence: 2 },
+      { lane: "alpha", sequence: 3 }
+    ]);
+  });
+
+  it("makes staggered order meaningfully different from alternating on a six-lane skewed burst", () => {
+    const lanes = [
+      { lane: "primary", tenantId: "tenant-1", userId: "user-1", workflowId: "workflow-1", runs: 3 },
+      { lane: "secondary", tenantId: "tenant-2", userId: "user-2", workflowId: "workflow-2", runs: 2 },
+      { lane: "tertiary", tenantId: "tenant-3", userId: "user-3", workflowId: "workflow-3", runs: 2 },
+      { lane: "quaternary", tenantId: "tenant-4", userId: "user-4", workflowId: "workflow-4", runs: 1 },
+      { lane: "quinary", tenantId: "tenant-5", userId: "user-5", workflowId: "workflow-5", runs: 1 },
+      { lane: "senary", tenantId: "tenant-6", userId: "user-6", workflowId: "workflow-6", runs: 1 }
+    ];
+
+    const alternating = expandPressureRequests({ lanes }).map((request: { lane: string }) => request.lane);
+    const staggered = expandPressureRequests({ lanes, order: "staggered" }).map((request: { lane: string }) => request.lane);
+
+    expect(staggered).not.toEqual(alternating);
+    expect(staggered).toEqual([
+      "primary",
+      "secondary",
+      "tertiary",
+      "primary",
+      "quaternary",
+      "quinary",
+      "senary",
+      "secondary",
+      "tertiary",
+      "primary"
+    ]);
+  });
+
   it("expands six arbitrary lanes across repeated soak cycles without collapsing them back to legacy named lanes", () => {
     expect(
       expandPressureRequests({
@@ -336,6 +387,116 @@ describe("pressure drive helpers", () => {
       minMs: 2000,
       medianMs: 2000,
       maxMs: 2000
+    });
+    expect(summary.saturation).toEqual({
+      queue: {
+        samples: 0,
+        reachableSamples: 0,
+        unreachableSamples: 0,
+        highWaterMarks: {
+          waiting: 0,
+          active: 0,
+          completed: 0,
+          failed: 0,
+          delayed: 0,
+          paused: 0,
+          prioritized: 0,
+          waitingChildren: 0
+        }
+      },
+      worker: {
+        samples: 0,
+        maxActiveRuns: 0,
+        maxQueuedRuns: 0,
+        maxQueuedTenants: 0,
+        maxActiveTenants: 0
+      }
+    });
+  });
+
+  it("summarizes queue and worker saturation alongside a successful proof", () => {
+    const summary = summarizePressureProof({
+      requests: [
+        { lane: "alpha", tenantId: "tenant-1", runId: "run-1" }
+      ],
+      snapshots: [
+        {
+          lane: "alpha",
+          tenantId: "tenant-1",
+          runId: "run-1",
+          runStatus: "running",
+          outboxStatus: "enqueued",
+          queueState: "completed",
+          queuedAt: "2026-05-20T06:00:00.000Z",
+          observedFirstProgressAt: "2026-05-20T06:00:01.000Z",
+          observedFirstStartedAt: "2026-05-20T06:00:01.000Z"
+        }
+      ],
+      queueSnapshots: [
+        {
+          queueName: "wfpc-workflow-runs",
+          observedAt: "2026-05-20T06:00:00.500Z",
+          reachable: true,
+          counts: {
+            waiting: 4,
+            active: 2,
+            completed: 0,
+            failed: 0,
+            delayed: 1,
+            paused: 0,
+            prioritized: 0,
+            waitingChildren: 0
+          }
+        },
+        {
+          queueName: "wfpc-workflow-runs",
+          observedAt: "2026-05-20T06:00:01.500Z",
+          reachable: false,
+          counts: null
+        }
+      ],
+      fairnessSnapshots: [
+        {
+          workerInstanceId: "worker-a",
+          observedAt: "2026-05-20T06:00:00.750Z",
+          activeRuns: 2,
+          activeByTenant: {
+            "tenant-1": 1,
+            "tenant-2": 1
+          },
+          queuedByTenant: {
+            "tenant-1": 2,
+            "tenant-2": 1
+          }
+        }
+      ],
+      mode: "drain"
+    });
+
+    expect(summary.ok).toBe(true);
+    expect(summary.saturation).toEqual({
+      queue: {
+        samples: 2,
+        reachableSamples: 1,
+        unreachableSamples: 1,
+        highWaterMarks: {
+          waiting: 4,
+          active: 2,
+          completed: 0,
+          failed: 0,
+          delayed: 1,
+          paused: 0,
+          prioritized: 0,
+          waitingChildren: 0
+        }
+      },
+      worker: {
+        samples: 1,
+        maxActiveRuns: 2,
+        maxQueuedRuns: 3,
+        maxQueuedTenants: 2,
+        maxActiveTenants: 2
+      }
     });
   });
 
