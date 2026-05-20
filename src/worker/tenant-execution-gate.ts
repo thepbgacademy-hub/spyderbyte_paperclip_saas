@@ -13,8 +13,16 @@ type TenantExecutionGateConfig = {
 type QueuedExecution<T> = {
   tenantId: string;
   operation: () => Promise<T>;
+  onStarted?: (snapshot: ExecutionSnapshot) => void;
+  onReleased?: (snapshot: ExecutionSnapshot) => void;
   resolve: (value: unknown) => void;
   reject: (reason?: unknown) => void;
+};
+
+type ExecutionSnapshot = {
+  activeRuns: number;
+  activeByTenant: Record<string, number>;
+  queuedByTenant: Record<string, number>;
 };
 
 export function createTenantExecutionGate(config: TenantExecutionGateConfig) {
@@ -27,7 +35,12 @@ export function createTenantExecutionGate(config: TenantExecutionGateConfig) {
   let nextTenantCursor = 0;
 
   return {
-    run<T>(input: { tenantId: string; operation: () => Promise<T> }): Promise<T> {
+    run<T>(input: {
+      tenantId: string;
+      operation: () => Promise<T>;
+      onStarted?: (snapshot: ExecutionSnapshot) => void;
+      onReleased?: (snapshot: ExecutionSnapshot) => void;
+    }): Promise<T> {
       const tenantId = input.tenantId.trim();
       if (tenantId.length === 0) {
         throw new Error("Execution gate tenantId is required");
@@ -38,6 +51,8 @@ export function createTenantExecutionGate(config: TenantExecutionGateConfig) {
         queue.push({
           tenantId,
           operation: input.operation,
+          ...(input.onStarted ? { onStarted: input.onStarted } : {}),
+          ...(input.onReleased ? { onReleased: input.onReleased } : {}),
           resolve: (value) => resolve(value as T),
           reject
         });
@@ -73,15 +88,16 @@ export function createTenantExecutionGate(config: TenantExecutionGateConfig) {
       activeRuns += 1;
       activeByTenant.set(next.tenantId, (activeByTenant.get(next.tenantId) ?? 0) + 1);
       emitSnapshot("started", next.tenantId);
+      next.onStarted?.(getSnapshot());
 
       void next.operation().then(
         (value) => {
           next.resolve(value);
-          release(next.tenantId);
+          release(next);
         },
         (error) => {
           next.reject(error);
-          release(next.tenantId);
+          release(next);
         }
       );
     }
@@ -128,7 +144,8 @@ export function createTenantExecutionGate(config: TenantExecutionGateConfig) {
     return null;
   }
 
-  function release(tenantId: string) {
+  function release(execution: QueuedExecution<unknown>) {
+    const tenantId = execution.tenantId;
     activeRuns = Math.max(0, activeRuns - 1);
     const activeForTenant = Math.max(0, (activeByTenant.get(tenantId) ?? 1) - 1);
     if (activeForTenant === 0) {
@@ -137,6 +154,7 @@ export function createTenantExecutionGate(config: TenantExecutionGateConfig) {
       activeByTenant.set(tenantId, activeForTenant);
     }
     emitSnapshot("released", tenantId);
+    execution.onReleased?.(getSnapshot());
     drainQueue();
   }
 
@@ -154,6 +172,18 @@ export function createTenantExecutionGate(config: TenantExecutionGateConfig) {
         )
       }
     });
+  }
+
+  function getSnapshot(): ExecutionSnapshot {
+    return {
+      activeRuns,
+      activeByTenant: Object.fromEntries(activeByTenant.entries()),
+      queuedByTenant: Object.fromEntries(
+        [...tenantQueues.entries()]
+          .filter(([, queue]) => queue.length > 0)
+          .map(([tenantId, queue]) => [tenantId, queue.length])
+      )
+    };
   }
 }
 

@@ -17,13 +17,19 @@ const lanes = buildLanes(args);
 const execFileAsync = promisify(execFile);
 const primaryRuns = parseRunsArg(args["primary-runs"], 2, "primary-runs");
 const secondaryRuns = parseRunsArg(args["secondary-runs"], 1, "secondary-runs");
+const tertiaryRuns = parseRunsArg(args["tertiary-runs"], 0, "tertiary-runs", { allowZero: true });
+const mode = parseModeArg(args.mode);
 const requests = createPressureRequests({
   lanes,
   runsPerLane: 1,
   order: "alternating"
 }).flatMap((request) => {
   const sourceLane = lanes.find((lane) => lane.lane === request.lane);
-  const runsForLane = request.lane === "primary" ? primaryRuns : secondaryRuns;
+  const runsForLane = request.lane === "primary"
+    ? primaryRuns
+    : request.lane === "secondary"
+      ? secondaryRuns
+      : tertiaryRuns;
   return Array.from({ length: runsForLane }, () =>
     createLiveRunRequest({
       tenantId: request.tenantId,
@@ -95,6 +101,7 @@ try {
         );
         break;
       }
+      request.queuedAt = queueResult.snapshot?.outbox?.createdAt ?? queueResult.snapshot?.run?.createdAt ?? new Date().toISOString();
     }
 
     if (!queueFailure) {
@@ -125,13 +132,19 @@ try {
             runStatus: snapshot.run.status,
             outboxStatus: snapshot.outbox.status,
             queueState: queue.state,
-            firstProgressAt: previous?.firstProgressAt ?? (progressing ? new Date().toISOString() : null)
+            outboxAttempts: snapshot.outbox.attempts,
+            queueReachable: queue.reachable,
+            queuedAt: previous?.queuedAt ?? snapshot.outbox.createdAt ?? snapshot.run.createdAt ?? request.queuedAt ?? new Date().toISOString(),
+            observedFirstProgressAt: previous?.observedFirstProgressAt ?? (progressing ? new Date().toISOString() : null),
+            observedFirstStartedAt: previous?.observedFirstStartedAt ?? (snapshot.run.status === "running" || snapshot.run.status === "completed" ? new Date().toISOString() : null),
+            observedCompletedAt: previous?.observedCompletedAt ?? (snapshot.run.status === "completed" ? new Date().toISOString() : null)
           });
         }
 
         const summary = summarizePressureProof({
           requests,
-          snapshots: [...observations.values()]
+          snapshots: [...observations.values()],
+          mode
         });
 
         if (summary.ok) {
@@ -156,7 +169,8 @@ try {
 
       const summary = summarizePressureProof({
         requests,
-        snapshots: [...observations.values()]
+        snapshots: [...observations.values()],
+        mode
       });
       if (!summary.ok || process.exitCode) {
         process.exitCode = summary.ok ? process.exitCode ?? 0 : 1;
@@ -243,25 +257,56 @@ function buildLanes(args) {
       tenantId: args["secondary-tenant"],
       userId: args["secondary-user"],
       workflowId: args["secondary-workflow"]
-    }
+    },
+    ...buildOptionalLane(args, "tertiary")
   ];
 }
 
-function parseRunsArg(value, fallback, label) {
+function buildOptionalLane(args, prefix) {
+  const required = [`${prefix}-tenant`, `${prefix}-user`, `${prefix}-workflow`];
+  const present = required.filter((key) => Boolean(args[key]));
+  if (present.length === 0) {
+    return [];
+  }
+  if (present.length !== required.length) {
+    throw new Error(`Optional ${prefix} lane requires --${required.join(", --")}`);
+  }
+  return [{
+    lane: prefix,
+    tenantId: args[`${prefix}-tenant`],
+    userId: args[`${prefix}-user`],
+    workflowId: args[`${prefix}-workflow`]
+  }];
+}
+
+function parseRunsArg(value, fallback, label, options = {}) {
   if (value === undefined) {
     return fallback;
   }
 
   if (!/^\d+$/.test(value)) {
-    throw new Error(`Invalid --${label}: expected a positive integer`);
+    throw new Error(`Invalid --${label}: expected a ${options.allowZero ? "non-negative" : "positive"} integer`);
   }
 
   const parsed = Number.parseInt(value, 10);
-  if (parsed < 1) {
-    throw new Error(`Invalid --${label}: expected a positive integer`);
+  const minimum = options.allowZero ? 0 : 1;
+  if (parsed < minimum) {
+    throw new Error(`Invalid --${label}: expected a ${options.allowZero ? "non-negative" : "positive"} integer`);
   }
 
   return parsed;
+}
+
+function parseModeArg(value) {
+  if (value === undefined) {
+    return "progress";
+  }
+
+  if (value !== "progress" && value !== "drain") {
+    throw new Error("Invalid --mode: expected 'progress' or 'drain'");
+  }
+
+  return value;
 }
 
 function resolveSsl(source) {

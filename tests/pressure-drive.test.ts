@@ -43,7 +43,7 @@ describe("pressure drive helpers", () => {
           runStatus: "running",
           outboxStatus: "enqueued",
           queueState: "active",
-          firstProgressAt: "2026-05-20T06:00:01.000Z"
+          observedFirstProgressAt: "2026-05-20T06:00:01.000Z"
         },
         {
           lane: "secondary",
@@ -52,7 +52,7 @@ describe("pressure drive helpers", () => {
           runStatus: "running",
           outboxStatus: "enqueued",
           queueState: "active",
-          firstProgressAt: "2026-05-20T06:00:02.000Z"
+          observedFirstProgressAt: "2026-05-20T06:00:02.000Z"
         },
         {
           lane: "primary",
@@ -61,7 +61,7 @@ describe("pressure drive helpers", () => {
           runStatus: "running",
           outboxStatus: "enqueued",
           queueState: "active",
-          firstProgressAt: "2026-05-20T06:00:03.000Z"
+          observedFirstProgressAt: "2026-05-20T06:00:03.000Z"
         },
         {
           lane: "secondary",
@@ -70,43 +70,48 @@ describe("pressure drive helpers", () => {
           runStatus: "running",
           outboxStatus: "enqueued",
           queueState: "active",
-          firstProgressAt: "2026-05-20T06:00:04.000Z"
+          observedFirstProgressAt: "2026-05-20T06:00:04.000Z"
         }
-      ]
+      ],
+      mode: "progress"
     });
 
-    expect(summary).toEqual({
-      ok: true,
-      phase: "fair_progress_observed",
-      totals: {
-        totalRuns: 4,
-        byRunStatus: {
-          running: 4
-        }
+    expect(summary.ok).toBe(true);
+    expect(summary.phase).toBe("fair_progress_observed");
+    expect(summary.totals).toEqual({
+      totalRuns: 4,
+      byRunStatus: {
+        running: 4
       },
-      lanes: {
-        primary: {
-          tenantId: "tenant-1",
-          totalRuns: 2,
-          byRunStatus: {
-            running: 2
-          },
-          firstProgressAt: "2026-05-20T06:00:01.000Z"
-        },
-        secondary: {
-          tenantId: "tenant-2",
-          totalRuns: 2,
-          byRunStatus: {
-            running: 2
-          },
-          firstProgressAt: "2026-05-20T06:00:02.000Z"
-        }
+      byOutboxStatus: {
+        enqueued: 4
       },
-      notes: [
-        "Every requested lane produced at least one progressing run.",
-        "Every requested run has produced observable progress.",
-        "No lane is completely starved at the current observation point."
-      ]
+      byQueueState: {
+        active: 4
+      }
+    });
+    expect(summary.lanes.primary).toMatchObject({
+      tenantId: "tenant-1",
+      totalRuns: 2,
+      firstProgressAt: "2026-05-20T06:00:01.000Z",
+      byRunStatus: {
+        running: 2
+      },
+      byOutboxStatus: {
+        enqueued: 2
+      },
+      byQueueState: {
+        active: 2
+      },
+      maxOutboxAttempts: 0,
+      runsWithRetries: 0,
+      runsWithQueueUnreachable: 0,
+      observedWaitToStart: {
+        count: 0,
+        minMs: null,
+        medianMs: null,
+        maxMs: null
+      }
     });
   });
 
@@ -124,7 +129,7 @@ describe("pressure drive helpers", () => {
           runStatus: "running",
           outboxStatus: "enqueued",
           queueState: "active",
-          firstProgressAt: "2026-05-20T06:00:01.000Z"
+          observedFirstProgressAt: "2026-05-20T06:00:01.000Z"
         },
         {
           lane: "secondary",
@@ -133,9 +138,10 @@ describe("pressure drive helpers", () => {
           runStatus: "queued",
           outboxStatus: "enqueued",
           queueState: "waiting",
-          firstProgressAt: null
+          observedFirstProgressAt: null
         }
-      ]
+      ],
+      mode: "progress"
     });
 
     expect(summary.ok).toBe(false);
@@ -158,7 +164,7 @@ describe("pressure drive helpers", () => {
           runStatus: "running",
           outboxStatus: "enqueued",
           queueState: "active",
-          firstProgressAt: "2026-05-20T06:00:01.000Z"
+          observedFirstProgressAt: "2026-05-20T06:00:01.000Z"
         },
         {
           lane: "secondary",
@@ -167,7 +173,7 @@ describe("pressure drive helpers", () => {
           runStatus: "running",
           outboxStatus: "enqueued",
           queueState: "active",
-          firstProgressAt: "2026-05-20T06:00:02.000Z"
+          observedFirstProgressAt: "2026-05-20T06:00:02.000Z"
         },
         {
           lane: "primary",
@@ -176,13 +182,123 @@ describe("pressure drive helpers", () => {
           runStatus: "queued",
           outboxStatus: "enqueued",
           queueState: "waiting",
-          firstProgressAt: null
+          observedFirstProgressAt: null
         }
-      ]
+      ],
+      mode: "progress"
     });
 
     expect(summary.ok).toBe(false);
     expect(summary.phase).toBe("incomplete_lane_progress");
     expect(summary.notes).toContain("Every lane produced progress, but not every requested run has progressed yet.");
+  });
+
+  it("summarizes burst drain timing and retry pressure once all runs reach the drain checkpoint", () => {
+    const summary = summarizePressureProof({
+      requests: [
+        { lane: "primary", tenantId: "tenant-1", runId: "run-1" },
+        { lane: "secondary", tenantId: "tenant-2", runId: "run-2" }
+      ],
+      snapshots: [
+        {
+          lane: "primary",
+          tenantId: "tenant-1",
+          runId: "run-1",
+          runStatus: "completed",
+          outboxStatus: "enqueued",
+          queueState: "completed",
+          outboxAttempts: 2,
+          queueReachable: true,
+          queuedAt: "2026-05-20T06:00:00.000Z",
+          observedFirstProgressAt: "2026-05-20T06:00:02.000Z",
+          observedFirstStartedAt: "2026-05-20T06:00:02.000Z",
+          observedCompletedAt: "2026-05-20T06:00:08.000Z"
+        },
+        {
+          lane: "secondary",
+          tenantId: "tenant-2",
+          runId: "run-2",
+          runStatus: "running",
+          outboxStatus: "enqueued",
+          queueState: "active",
+          outboxAttempts: 1,
+          queueReachable: true,
+          queuedAt: "2026-05-20T06:00:01.000Z",
+          observedFirstProgressAt: "2026-05-20T06:00:03.000Z",
+          observedFirstStartedAt: "2026-05-20T06:00:03.000Z",
+          observedCompletedAt: null
+        }
+      ],
+      mode: "drain"
+    });
+
+    expect(summary.ok).toBe(true);
+    expect(summary.phase).toBe("burst_drain_observed");
+    expect(summary.lanes.primary).toMatchObject({
+      maxOutboxAttempts: 2,
+      runsWithRetries: 1,
+      observedWaitToStart: {
+        count: 1,
+        minMs: 2000,
+        medianMs: 2000,
+        maxMs: 2000
+      },
+      observedWaitToComplete: {
+        count: 1,
+        minMs: 8000,
+        medianMs: 8000,
+        maxMs: 8000
+      }
+    });
+    expect(summary.lanes.secondary.observedWaitToStart).toMatchObject({
+      count: 1,
+      minMs: 2000,
+      medianMs: 2000,
+      maxMs: 2000
+    });
+  });
+
+  it("flags burst drain as incomplete when later runs never reach the stronger checkpoint", () => {
+    const summary = summarizePressureProof({
+      requests: [
+        { lane: "primary", tenantId: "tenant-1", runId: "run-1" },
+        { lane: "secondary", tenantId: "tenant-2", runId: "run-2" }
+      ],
+      snapshots: [
+        {
+          lane: "primary",
+          tenantId: "tenant-1",
+          runId: "run-1",
+          runStatus: "running",
+          outboxStatus: "enqueued",
+          queueState: "active",
+          outboxAttempts: 1,
+          queueReachable: true,
+          queuedAt: "2026-05-20T06:00:00.000Z",
+          observedFirstProgressAt: "2026-05-20T06:00:02.000Z",
+          observedFirstStartedAt: "2026-05-20T06:00:02.000Z",
+          observedCompletedAt: null
+        },
+        {
+          lane: "secondary",
+          tenantId: "tenant-2",
+          runId: "run-2",
+          runStatus: "queued",
+          outboxStatus: "enqueued",
+          queueState: "waiting",
+          outboxAttempts: 3,
+          queueReachable: false,
+          queuedAt: "2026-05-20T06:00:01.000Z",
+          observedFirstProgressAt: "2026-05-20T06:00:04.000Z",
+          observedFirstStartedAt: null,
+          observedCompletedAt: null
+        }
+      ],
+      mode: "drain"
+    });
+
+    expect(summary.ok).toBe(false);
+    expect(summary.phase).toBe("burst_drain_incomplete");
+    expect(summary.notes).toContain("Every lane produced progress, but not every requested run reached the burst drain checkpoint.");
   });
 });

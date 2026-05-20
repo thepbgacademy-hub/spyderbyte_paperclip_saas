@@ -31,6 +31,12 @@ Fix:
 - prove one direct `queue-live-workflow-run.mjs` invocation end to end first
 - only then fan back out to the larger `A1 -> B1 -> A2` staged burst
 
+6. The first sustained-burst timing summary stamped one shared `queuedAt` timestamp across the whole batch.
+Fix:
+- capture `queuedAt` immediately after each successful `queue-live-workflow-run.mjs` reservation
+- use the per-run queue timestamp when computing wait-to-start and wait-to-complete summaries
+- do not reuse the batch start time for every run in a staggered reservation burst
+
 ## Outcome
 
 After the fixes above:
@@ -41,3 +47,22 @@ After the fixes above:
 - the staged worker emitted `wealth_factory_worker_fairness` events proving both tenants were admitted under the same single-worker lane
 - the evidence confirms the current fairness proof is valid for one worker process with `WF_WORKER_CONCURRENCY=2` and `WF_WORKER_MAX_ACTIVE_PER_TENANT=1`
 
+Additional sustained-burst checkpoint after strengthening the proof harness:
+
+- staged burst drain proof succeeded in `mode=drain` with:
+  - primary runs:
+    - `82219491-8916-47ca-9f5b-6924e1a48961`
+    - `c656fdbb-3d90-4eb4-a2d1-07aeb18e6e9b`
+    - `5828f991-2e10-42c6-9c1a-5e2ab2cdd149`
+  - secondary runs:
+    - `58352127-e4ef-477a-b364-d5f68833294d`
+    - `7cb07fa7-7793-435f-a7a7-81c09e576073`
+- all 5 workflow runs reached `status = running`
+- all 5 outbox rows reached `enqueued`
+- BullMQ reported all 5 jobs `completed`
+- structured worker logs now correlate run starts/releases with fairness snapshots through `wealth_factory_worker_run`
+- staged burst summary now emits observed per-lane timing and retry metrics:
+  - primary observed wait-to-start: `min=2264ms`, `median=3493ms`, `max=4737ms`
+  - secondary observed wait-to-start: `min=2098ms`, `median=2722ms`, `max=3345ms`
+  - retries observed: `0`
+  - queue-unreachable observations: `0`

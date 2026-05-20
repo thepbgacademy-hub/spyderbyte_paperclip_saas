@@ -294,9 +294,13 @@ describe("worker runtime", () => {
     const logged = stdoutWrite.mock.calls
       .map(([value]) => String(value))
       .filter((value) => value.includes("wealth_factory_worker_fairness"));
+    const allOutput = stdoutWrite.mock.calls.map(([value]) => String(value));
 
     expect(logged.length).toBeGreaterThan(0);
     expect(logged.some((line) => line.includes("\"tenantId\":\"tenant-1\""))).toBe(true);
+    expect(allOutput.some((line) => line.includes("\"type\":\"wealth_factory_worker_run\""))).toBe(true);
+    expect(allOutput.some((line) => line.includes("\"runId\":\"run-1\""))).toBe(true);
+    expect(allOutput.some((line) => line.includes("\"event\":\"released\""))).toBe(true);
 
     await runtime.close();
   });

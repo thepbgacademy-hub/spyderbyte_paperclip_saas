@@ -33,6 +33,7 @@ describe("live run drive helpers", () => {
             {
               id: "run-1",
               status: "queued",
+              created_at: new Date("2026-05-20T06:00:00.000Z"),
               bound_secret_reference_id: "secret-ref-1",
               bound_provider_context: [
                 {
@@ -51,6 +52,7 @@ describe("live run drive helpers", () => {
             {
               id: "outbox-1",
               status: "enqueued",
+              created_at: new Date("2026-05-20T06:00:01.000Z"),
               attempts: 1,
               last_error: null
             }
@@ -62,6 +64,7 @@ describe("live run drive helpers", () => {
       run: {
         id: "run-1",
         status: "queued",
+        createdAt: "2026-05-20T06:00:00.000Z",
         boundSecretReferenceId: "secret-ref-1",
         providerContext: [
           {
@@ -76,6 +79,7 @@ describe("live run drive helpers", () => {
       outbox: {
         id: "outbox-1",
         status: "enqueued",
+        createdAt: "2026-05-20T06:00:01.000Z",
         attempts: 1,
         lastError: null
       }

@@ -237,4 +237,5 @@ This file tracks implementation progress. Keep it current after every phase.
   - [x] Queue a skewed burst through the real reserve -> outbox -> BullMQ -> worker path.
   - [x] Confirm both tenant lanes reach `running` without secret drift.
   - [x] Confirm the staged worker emits tenant-safe fairness logs during admission/release.
-  - [ ] Extend from the first staged fairness proof to longer sustained pressure runs and multi-worker fairness validation.
+- [ ] Extend from the first staged fairness proof to global multi-worker fairness validation.
+  - [x] Add a sustained single-worker burst drain proof with per-run timing, per-lane wait summaries, and retry visibility.

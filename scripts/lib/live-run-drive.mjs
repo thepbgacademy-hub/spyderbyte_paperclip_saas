@@ -134,14 +134,14 @@ export async function reserveLiveWorkflowRun(input) {
 export async function loadWorkflowRunSnapshot({ client, tenantId, runId }) {
   const [runResult, outboxResult] = await Promise.all([
     client.query(
-      `select id, status, bound_secret_reference_id, bound_provider_context
+      `select id, status, bound_secret_reference_id, bound_provider_context, created_at
        from wfpc.workflow_runs
        where tenant_id = $1 and id = $2
        limit 1`,
       [tenantId, runId]
     ),
     client.query(
-      `select id, status, attempts, last_error
+      `select id, status, attempts, last_error, created_at
        from wfpc.workflow_queue_outbox
        where tenant_id = $1 and run_id = $2
        limit 1`,
@@ -156,12 +156,14 @@ export async function loadWorkflowRunSnapshot({ client, tenantId, runId }) {
     run: {
       id: String(runRow.id ?? ""),
       status: String(runRow.status ?? ""),
+      createdAt: coerceTimestamp(runRow.created_at),
       boundSecretReferenceId: String(runRow.bound_secret_reference_id ?? ""),
       providerContext: toProviderContext(runRow.bound_provider_context)
     },
     outbox: {
       id: String(outboxRow.id ?? ""),
       status: String(outboxRow.status ?? ""),
+      createdAt: coerceTimestamp(outboxRow.created_at),
       attempts: Number(outboxRow.attempts ?? 0),
       lastError: typeof outboxRow.last_error === "string" ? outboxRow.last_error : null
     }
@@ -238,6 +240,18 @@ export function summarizeWorkflowRunVerification({ snapshot, queue }) {
 
 function asRecord(value) {
   return value && typeof value === "object" ? value : {};
+}
+
+function coerceTimestamp(value) {
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value;
+  }
+
+  if (value instanceof Date && Number.isFinite(value.getTime())) {
+    return value.toISOString();
+  }
+
+  return null;
 }
 
 function toProviderContext(value) {

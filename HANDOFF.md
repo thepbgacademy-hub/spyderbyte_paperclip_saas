@@ -111,17 +111,36 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
    - rerun staged verification against the Paperclip issue-launch lane with real admin-token provisioning enabled
 
 13. Staged fairness checkpoint now landed:
-   - the repo now includes `scripts/lib/pressure-drive.mjs` plus the `npm run prove:live-fairness` helper
-   - the worker runtime now emits `wealth_factory_worker_fairness` logs with tenant-safe `queued` / `started` / `released` snapshots
-   - staged skewed burst proof succeeded with:
-     - primary run `afd2ceca-4754-4f24-8b33-03aca6070d20`
+- the repo now includes `scripts/lib/pressure-drive.mjs` plus the `npm run prove:live-fairness` helper
+- the worker runtime now emits `wealth_factory_worker_fairness` logs with tenant-safe `queued` / `started` / `released` snapshots
+- staged skewed burst proof succeeded with:
+  - primary run `afd2ceca-4754-4f24-8b33-03aca6070d20`
      - secondary run `6614eac6-3ba1-4bd9-8f67-a5601c7535f4`
      - second primary run `9428a32c-9e29-4d54-bf6a-48ad70965bee`
    - all 3 runs reached `wfpc.workflow_runs.status = running`
-   - all 3 outbox rows reached `enqueued`
-   - BullMQ reported all 3 jobs `completed`
-   - the staged worker logs proved both tenants were admitted under the same single-worker lane while `WF_WORKER_CONCURRENCY=2` and `WF_WORKER_MAX_ACTIVE_PER_TENANT=1`
-   - limit: this is a single-worker fairness proof only; outbox claim order is still FIFO and cross-worker fairness is not yet globally proven
+- all 3 outbox rows reached `enqueued`
+- BullMQ reported all 3 jobs `completed`
+- the staged worker logs proved both tenants were admitted under the same single-worker lane while `WF_WORKER_CONCURRENCY=2` and `WF_WORKER_MAX_ACTIVE_PER_TENANT=1`
+- limit: this is a single-worker fairness proof only; outbox claim order is still FIFO and cross-worker fairness is not yet globally proven
+- current sustained-burst checkpoint on 2026-05-20:
+  - `prove:live-fairness` now supports `--mode drain` and emits per-run queue plus observed progress/start/completion timestamps, along with per-lane observed wait and retry summaries
+  - stage burst drain proof passed with:
+    - primary runs:
+      - `82219491-8916-47ca-9f5b-6924e1a48961`
+      - `c656fdbb-3d90-4eb4-a2d1-07aeb18e6e9b`
+      - `5828f991-2e10-42c6-9c1a-5e2ab2cdd149`
+    - secondary runs:
+      - `58352127-e4ef-477a-b364-d5f68833294d`
+      - `7cb07fa7-7793-435f-a7a7-81c09e576073`
+  - all 5 runs reached the stronger checkpoint:
+    - `wfpc.workflow_runs.status = running`
+    - outbox `status = enqueued`
+    - BullMQ `state = completed`
+  - observed wait-to-start:
+    - primary: `min=2264ms`, `median=3493ms`, `max=4737ms`
+    - secondary: `min=2098ms`, `median=2722ms`, `max=3345ms`
+  - no retries and no queue-unreachable observations were reported
+  - worker logs now also emit `wealth_factory_worker_run` start/release events so fairness output can be correlated back to concrete `runId` values
 
 ## Security Position
 

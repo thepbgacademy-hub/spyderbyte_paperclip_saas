@@ -192,6 +192,8 @@ export function createWorkerRuntime(options: { env: WorkerEnv }) {
 
       return executionGate.run({
         tenantId: validatedPayload.tenantId,
+        onStarted: (snapshot) => emitWorkerRunEvent("started", validatedPayload, snapshot),
+        onReleased: (snapshot) => emitWorkerRunEvent("released", validatedPayload, snapshot),
         operation: async () =>
           processWorkflowJob({
             payload: validatedPayload,
@@ -247,4 +249,21 @@ export function createWorkerRuntime(options: { env: WorkerEnv }) {
       await pool.end();
     }
   };
+
+  function emitWorkerRunEvent(
+    event: "started" | "released",
+    payload: { tenantId: string; runId: string; workflowId: string },
+    snapshot: { activeRuns: number; activeByTenant: Record<string, number>; queuedByTenant: Record<string, number> }
+  ) {
+    process.stdout.write(
+      `${JSON.stringify({
+        type: "wealth_factory_worker_run",
+        event,
+        tenantId: payload.tenantId,
+        runId: payload.runId,
+        workflowId: payload.workflowId,
+        execution: snapshot
+      })}\n`
+    );
+  }
 }

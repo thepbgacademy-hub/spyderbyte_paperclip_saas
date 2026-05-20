@@ -325,8 +325,29 @@ Repeatable operator helpers for this proof lane:
 
 - `npm run prove:provider-lifecycle -- --tenant <tenant-id> --user <user-id> --provider-kind openai_api --label OpenAI`
 - `npm run seed:demo -- --lane secondary --paperclip-company-id <paperclip-company-id>`
-- `npm run prove:live-fairness -- --primary-tenant <tenant-a> --primary-user <user-a> --primary-workflow <workflow-a> --primary-runs 2 --secondary-tenant <tenant-b> --secondary-user <user-b> --secondary-workflow <workflow-b> --secondary-runs 1`
+- `npm run prove:live-fairness -- --mode drain --primary-tenant <tenant-a> --primary-user <user-a> --primary-workflow <workflow-a> --primary-runs 3 --secondary-tenant <tenant-b> --secondary-user <user-b> --secondary-workflow <workflow-b> --secondary-runs 2`
 - the API runtime image now carries the repo `scripts/` folder, and `scripts/lib/script-env.mjs` tolerates a missing `.env`, so `docker exec wealth-factory-api-stage2 node scripts/inspect-live-workflow-run.mjs ...` no longer requires copying helper scripts or an ad hoc env file into the container first
+- `prove:live-fairness` now emits per-run `queuedAt`, `observedFirstProgressAt`, `observedFirstStartedAt`, and `observedCompletedAt` plus per-lane observed wait and retry summaries, so the staged proof can distinguish burst drain from simple first progress without overstating timestamp precision
+
+Current staged sustained-burst checkpoint on 2026-05-20:
+
+- the stage lane passed a stronger burst drain proof with:
+  - primary runs:
+    - `82219491-8916-47ca-9f5b-6924e1a48961`
+    - `c656fdbb-3d90-4eb4-a2d1-07aeb18e6e9b`
+    - `5828f991-2e10-42c6-9c1a-5e2ab2cdd149`
+  - secondary runs:
+    - `58352127-e4ef-477a-b364-d5f68833294d`
+    - `7cb07fa7-7793-435f-a7a7-81c09e576073`
+- all 5 runs reached the stronger checkpoint:
+  - `wfpc.workflow_runs.status = running`
+  - outbox `status = enqueued`
+  - BullMQ `state = completed`
+- observed lane timing from the staged burst:
+  - primary observed wait-to-start: `min=2264ms`, `median=3493ms`, `max=4737ms`
+  - secondary observed wait-to-start: `min=2098ms`, `median=2722ms`, `max=3345ms`
+  - no retries and no queue-unreachable observations were reported
+- worker logs now also emit `wealth_factory_worker_run` start/release events so fairness output can be correlated back to concrete `runId` values without exposing secrets
 
 Set the lifecycle proof env before using the helper:
 

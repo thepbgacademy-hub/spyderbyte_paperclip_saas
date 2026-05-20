@@ -92,4 +92,32 @@ describe("tenant execution gate", () => {
     expect(snapshots.map((snapshot) => snapshot.event)).toContain("started");
     expect(snapshots.map((snapshot) => snapshot.event)).toContain("released");
   });
+
+  it("invokes per-run lifecycle callbacks with post-release snapshots", async () => {
+    const transitions: Array<{ event: "started" | "released"; activeRuns: number }> = [];
+    const gate = createTenantExecutionGate({
+      maxConcurrentRuns: 1,
+      maxConcurrentRunsPerTenant: 1
+    });
+
+    let release = () => {};
+    const run = gate.run({
+      tenantId: "tenant-a",
+      onStarted: (snapshot) => transitions.push({ event: "started", activeRuns: snapshot.activeRuns }),
+      onReleased: (snapshot) => transitions.push({ event: "released", activeRuns: snapshot.activeRuns }),
+      operation: () =>
+        new Promise<string>((resolve) => {
+          release = () => resolve("done");
+        })
+    });
+
+    await Promise.resolve();
+    release();
+    await expect(run).resolves.toBe("done");
+
+    expect(transitions).toEqual([
+      { event: "started", activeRuns: 1 },
+      { event: "released", activeRuns: 0 }
+    ]);
+  });
 });
