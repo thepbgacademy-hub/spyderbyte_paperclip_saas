@@ -101,6 +101,19 @@ Intentional v1 differences:
 - Wealth Factory package and tenant wording everywhere
 - no exposure of Hermes or Paperclip names
 
+### Dashboard Visual Benchmark Note
+
+An additional visual benchmark has now been identified from the user's later dashboard screenshot reference. The Wealth Factory dashboard should preserve that same clean, organized cockpit feel:
+
+- clean left rail with simple, legible navigation groups
+- roomy cards with strong spacing and minimal clutter
+- high readability in a calm dark theme
+- restrained metrics blocks instead of loud analytics tiles
+- obvious hierarchy between current focus, actions, metrics, progress, and activity
+- a polished, premium, organized feel rather than an over-busy control room
+
+This note is intentionally directional, not final page-by-page layout lock-in. More screenshots and page references will be gathered later before the detailed dashboard layout spec is expanded.
+
 ## Core Run Model
 
 Each run begins inside a selected B.I.B. package boundary. The package provides:
