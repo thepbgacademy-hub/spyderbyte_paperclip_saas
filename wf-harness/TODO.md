@@ -6,8 +6,9 @@ This file tracks the new harness subproject only.
 
 - [x] Approve first harness direction.
 - [x] Write v1 design spec.
-- [ ] Review and refine the v1 design spec.
-- [ ] Write the implementation plan for the first harness slice.
+- [x] Review and refine the v1 design spec.
+- [x] Write the implementation plan for the first harness slice.
+- [ ] Choose execution mode for implementing the first harness slice.
 
 ## V1 Build Targets
 

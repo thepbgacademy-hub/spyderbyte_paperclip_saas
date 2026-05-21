@@ -29,6 +29,13 @@ The first design decision is now locked in:
 
 - `wf-harness/docs/2026-05-21-wf-harness-v1-design.md`
 
+## Plan Of Record
+
+- `wf-harness/docs/plans/2026-05-21-wf-harness-v1-implementation-plan.md`
+
 ## Next Step
 
-Ask the user to review the written spec. Once approved, move to the implementation-plan stage for the first harness slice.
+Choose the execution mode for implementing the first harness slice:
+
+- subagent-driven execution
+- inline execution
