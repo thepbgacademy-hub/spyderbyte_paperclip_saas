@@ -303,3 +303,56 @@ Longer staged soak and VPS-side saturation checkpoint after adding repo-owned re
 - next implication:
   - the next pressure gap is no longer "can this pod distribute six tenants at all"
   - it is longer-duration Paperclip resource saturation behavior and whether the six-client pod cap should stay as-is or be tuned down
+
+Strict `100`-request soak follow-up:
+
+- symptom:
+  - the first stricter staged soak still left partial failures even after the worker/runtime retry work
+  - the best intermediate result before the final fix was `96 running / 4 failed`
+  - the dominant remaining failure was `Paperclip issue launch did not resolve an execution run id`
+- root cause:
+  - the staged proof workers were still pinned to `WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS=30`
+  - the local repo had already moved to a larger issue-launch poll budget, but the staged worker env had not
+- fix:
+  - update the staged worker env to `WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS=120`
+  - recreate the proof workers so the new env is actually applied
+- result:
+  - the next strict staged soak reached `100/100` workflow runs at `status = running`
+  - all `100` outbox rows reached `status = enqueued`
+  - proof-worker logs no longer showed the earlier issue-launch or board-session failures
+
+False-negative fairness gate under the strict soak:
+
+- symptom:
+  - `scripts/analyze-worker-fairness.mjs` still reported `phase = global_fairness_incomplete` on the saved strict proof even after all `100` runs reached `running`
+- root cause:
+  - `summarizePressureProof(..., mode: "global-fairness")` was still inheriting the drain-only queue-state checkpoint before it evaluated worker events
+  - under the stricter soak, some per-run queue-state snapshots stayed partial even though the worker-event and run-state evidence were already complete
+- fix:
+  - only apply the `burst_drain_incomplete` checkpoint in `mode: "drain"`
+  - let `global-fairness` proceed to worker-event analysis once lane progress exists
+- result:
+  - the saved strict soak now re-analyzes to `ok = true`
+  - `phase = global_multi_worker_soak_observed`
+  - all `10` cycles report `global_multi_worker_fairness_observed`
+
+30. Repo-specific review after the strict soak surfaced a few real follow-up hardening issues.
+- root cause:
+  - `global-fairness` could still overclaim success when worker events existed but the repo had no confirmed `running`/`completed` workflow record for a requested run
+  - same-worker Paperclip secret-sync dedupe was keyed too broadly and could collide across different issue agents
+  - first-use Paperclip binding refresh was looking at queued plus running rows instead of actual concurrently running work
+  - the repo default issue-launch poll budget had drifted up too far when the longer staged override should stay explicit
+  - treating `checkoutRunId` as interchangeable with `executionRunId` would have created a latent follow-up bug on run status/cancel paths
+- fix:
+  - require worker-backed plus workflow-backed evidence for every requested run before `global-fairness` can pass
+  - include `agentId` in the in-flight Paperclip secret binding key
+  - gate first-use binding refresh on `countRunningWorkflowRuns`, not queued backlog
+  - restore the repo default issue-launch poll budget to `60` attempts while keeping the staged override explicit at `120`
+  - use only `executionRunId` as the Wealth Factory launch bridge
+
+Running-container sync reminder:
+
+- symptom:
+  - copying updated `dist/*.js` files into already-running proof workers produced misleading "fixed" assumptions because the Node process had already loaded the old modules
+- fix:
+  - after `docker cp`, restart or recreate the proof workers before trusting the next staged soak

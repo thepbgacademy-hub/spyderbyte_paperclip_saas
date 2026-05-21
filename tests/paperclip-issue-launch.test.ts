@@ -3,6 +3,37 @@ import { describe, expect, it, vi } from "vitest";
 import { createPaperclipIssueLaunchAdapter, PaperclipIssueLaunchError } from "../src/paperclip/issue-launch.js";
 
 describe("paperclip issue launch adapter", () => {
+  it("keeps polling long enough for delayed execution run ids when explicitly configured for an extended launch budget", async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(jsonResponse({ id: "WEA-22" }));
+    for (let attempt = 0; attempt < 90; attempt += 1) {
+      fetchImpl.mockResolvedValueOnce(jsonResponse({ id: "WEA-22" }));
+    }
+    fetchImpl.mockResolvedValueOnce(jsonResponse({ id: "WEA-22", executionRunId: "hb-run-22" }));
+
+    const adapter = createPaperclipIssueLaunchAdapter({
+      baseUrl: "https://paperclip.internal.local",
+      serviceToken: "pc-token",
+      fetchImpl,
+      pollIntervalMs: 0,
+      maxPollAttempts: 120,
+      resolveLaunchTarget: vi.fn().mockResolvedValue({
+        agentId: "agent-1"
+      })
+    });
+
+    await expect(
+      adapter.launch({
+        companyId: "company-1",
+        workflowId: "workflow-1",
+        spyderbyteRunId: "run-22",
+        providerContext: []
+      })
+    ).resolves.toEqual({
+      paperclipRunId: "hb-run-22",
+      status: "running"
+    });
+  });
+
   it("creates an issue and polls until executionRunId is available", async () => {
     const fetchImpl = vi
       .fn()
@@ -46,6 +77,34 @@ describe("paperclip issue launch adapter", () => {
         }
       })
     );
+  });
+
+  it("fails safely when paperclip only exposes checkoutRunId without an execution run id", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ id: "WEA-23" }))
+      .mockResolvedValueOnce(jsonResponse({ id: "WEA-23", checkoutRunId: "hb-run-checkout-1" }))
+      .mockResolvedValueOnce(jsonResponse({ id: "WEA-23", checkoutRunId: "hb-run-checkout-1" }));
+
+    const adapter = createPaperclipIssueLaunchAdapter({
+      baseUrl: "https://paperclip.internal.local",
+      serviceToken: "pc-token",
+      fetchImpl,
+      pollIntervalMs: 0,
+      maxPollAttempts: 2,
+      resolveLaunchTarget: vi.fn().mockResolvedValue({
+        agentId: "agent-1"
+      })
+    });
+
+    await expect(
+      adapter.launch({
+        companyId: "company-1",
+        workflowId: "workflow-1",
+        spyderbyteRunId: "run-23",
+        providerContext: []
+      })
+    ).rejects.toBeInstanceOf(PaperclipIssueLaunchError);
   });
 
   it("fails safely when paperclip never resolves an execution run id", async () => {

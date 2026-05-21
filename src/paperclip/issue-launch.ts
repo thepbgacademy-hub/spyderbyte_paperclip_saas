@@ -37,7 +37,7 @@ export function createPaperclipIssueLaunchAdapter(options: PaperclipIssueLaunchO
   const fetchImpl = options.fetchImpl ?? fetch;
   const baseUrl = options.baseUrl.replace(/\/+$/, "");
   const pollIntervalMs = options.pollIntervalMs ?? 1_000;
-  const maxPollAttempts = options.maxPollAttempts ?? 10;
+  const maxPollAttempts = options.maxPollAttempts ?? 60;
   const requestRetryAttempts = options.requestRetryAttempts ?? 3;
   const requestRetryDelayMs = options.requestRetryDelayMs ?? 250;
 

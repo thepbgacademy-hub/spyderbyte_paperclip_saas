@@ -46,4 +46,62 @@ describe("analyze-resource-saturation script", () => {
     expect(result.summary.docker.valid).toBe(false);
     expect(result.summary.queue.valid).toBe(false);
   }, 15000);
+
+  it("downgrades partially unreachable queue telemetry instead of treating it as a clean saturation run", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "wf-analyze-saturation-"));
+    const dockerPath = join(dir, "docker.jsonl");
+    const queuePath = join(dir, "queue.jsonl");
+
+    await writeFile(
+      dockerPath,
+      `${JSON.stringify({
+        Name: "paperclip",
+        CPUPerc: "210.0%",
+        MemPerc: "12.5%",
+        MemUsage: "2.0GiB / 16.0GiB",
+        PIDs: "1200"
+      })}\n`,
+      "utf8"
+    );
+    await writeFile(
+      queuePath,
+      [
+        {
+          observedAt: "2026-05-20T12:00:00.000Z",
+          reachable: true,
+          counts: {
+            waiting: 4,
+            active: 2,
+            completed: 9,
+            failed: 0,
+            delayed: 0,
+            paused: 0,
+            prioritized: 0,
+            waitingChildren: 0
+          }
+        },
+        {
+          observedAt: "2026-05-20T12:00:05.000Z",
+          reachable: false,
+          counts: null
+        }
+      ].map((line) => JSON.stringify(line)).join("\n") + "\n",
+      "utf8"
+    );
+
+    const { stdout } = await execFileAsync("node", [
+      "scripts/analyze-resource-saturation.mjs",
+      "--docker-stats",
+      dockerPath,
+      "--queue-snapshots",
+      queuePath
+    ], {
+      cwd: "E:\\REPOS\\spyderbyte_paperclip_saas"
+    });
+
+    const result = JSON.parse(stdout);
+    expect(result.ok).toBe(false);
+    expect(result.reasons).toContain("queue_snapshots_partially_unreachable");
+    expect(result.summary.queue.valid).toBe(false);
+  }, 15000);
 });

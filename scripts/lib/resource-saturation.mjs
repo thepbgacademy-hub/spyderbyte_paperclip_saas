@@ -38,7 +38,7 @@ export function summarizeResourceSaturation(input) {
       samples: queueSnapshots.length,
       reachableSamples: reachableQueueSnapshots.length,
       unreachableSamples: queueSnapshots.filter((snapshot) => snapshot.reachable === false).length,
-      valid: queueSnapshots.length > 0 && reachableQueueSnapshots.length > 0,
+      valid: queueSnapshots.length > 0 && reachableQueueSnapshots.length === queueSnapshots.length,
       highWaterMarks: {
         waiting: maxOf(reachableQueueSnapshots.map((snapshot) => snapshot.counts.waiting)),
         active: maxOf(reachableQueueSnapshots.map((snapshot) => snapshot.counts.active)),

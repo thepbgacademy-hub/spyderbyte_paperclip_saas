@@ -250,6 +250,28 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
     - next pressure gap:
       - keep Paperclip resource saturation under close watch during any longer soak or heavier pod experiments
       - decide whether the current six-client pod cap should stay as-is or be tuned down based on longer-duration Paperclip CPU, memory, and PID behavior
+    - strict staged soak follow-up:
+      - the proof workers were still pinned to `WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS=30` until the staged worker env was updated and the workers were recreated
+      - the repo default issue-launch poll budget is now `60` attempts; the current staged Paperclip lane still needs an explicit `120`-attempt override in `wf-stage-worker.env`
+      - after raising that staged issue-launch poll budget override to `120` attempts, the `10`-cycle / `100`-request staggered soak reached:
+        - `100` workflow runs at `status = running`
+        - `100` outbox rows at `status = enqueued`
+        - no remaining proof-worker log hits for `Paperclip issue launch did not resolve an execution run id` or `Paperclip board-session request failed: 500`
+      - one final proof-layer issue surfaced:
+        - `scripts/analyze-worker-fairness.mjs` was still inheriting the drain-only queue-state checkpoint before it evaluated worker start events
+        - under the stricter soak, some per-run queue-state snapshots stayed partial even though the worker-event and run-state evidence were already complete
+      - after tightening `global-fairness` to require worker-backed plus workflow-backed evidence for every requested run, the saved strict soak still re-analyzed cleanly:
+        - `ok = true`
+        - `phase = global_multi_worker_soak_observed`
+        - all `10` cycles reported `global_multi_worker_fairness_observed`
+      - same-worker Paperclip secret-sync dedupe is now agent-scoped; different issue agents no longer share the same in-flight binding promise
+      - updated strict-soak Paperclip saturation:
+        - peak CPU: `374.01%`
+        - peak memory: `3988950876` bytes (`23.79%`)
+        - peak PIDs: `2127`
+      - implication:
+        - the six-tenant / three-worker bounded pod has now survived the stricter staged `100`-request soak
+        - the next question is operational sizing, not whether the backend can sustain the current bounded-pod shape at all
 
 ## Security Position
 

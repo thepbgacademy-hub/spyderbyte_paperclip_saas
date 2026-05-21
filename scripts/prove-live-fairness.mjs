@@ -7,6 +7,12 @@ import pg from "pg";
 
 import { createLiveRunRequest, loadWorkflowRunSnapshot } from "./lib/live-run-drive.mjs";
 import { buildPressureLanes, expandPressureRequests, summarizePressureProof } from "./lib/pressure-drive.mjs";
+import {
+  buildProofOutput,
+  parseModeArg,
+  shouldInspectQueueState,
+  updateSuccessWindow
+} from "./lib/prove-live-fairness-support.mjs";
 import { inspectQueueSnapshot, inspectQueueState } from "./lib/queue-inspection.mjs";
 import { loadRuntimePreflight, summarizeRuntimePreflight } from "./lib/runtime-preflight.mjs";
 import { loadScriptEnv } from "./lib/script-env.mjs";
@@ -116,8 +122,16 @@ try {
       const startedAt = Date.now();
       const deadlineMs = Number.parseInt(args.timeout ?? "45000", 10);
       const pollIntervalMs = Number.parseInt(args.interval ?? "1500", 10);
+      const postSuccessObservationMs = parsePositiveInteger(
+        args["post-success-observation-ms"],
+        0,
+        "post-success-observation-ms",
+        { allowZero: true }
+      );
       const observations = new Map();
       const queueSnapshots = [];
+      let successObservedAt = null;
+      let emittedResult = false;
 
       while (Date.now() - startedAt < deadlineMs) {
         for (const request of requests) {
@@ -126,12 +140,23 @@ try {
             tenantId: request.tenantId,
             runId: request.runId
           });
-          const queue = await inspectQueueState({
-            redisUrl: env.REDIS_URL,
-            queueName: env.WF_WORKFLOW_QUEUE_NAME?.trim() || "wfpc-workflow-runs",
-            jobId: `${request.tenantId}:${request.workflowId}:${request.runId}`
-          });
           const previous = observations.get(request.runId) ?? null;
+          const queue = shouldInspectQueueState({
+            runStatus: snapshot.run.status,
+            previousObservation: previous
+          })
+            ? await inspectQueueState({
+                redisUrl: env.REDIS_URL,
+                queueName: env.WF_WORKFLOW_QUEUE_NAME?.trim() || "wfpc-workflow-runs",
+                jobId: `${request.tenantId}:${request.workflowId}:${request.runId}`
+              })
+            : {
+                queueName: env.WF_WORKFLOW_QUEUE_NAME?.trim() || "wfpc-workflow-runs",
+                jobId: `${request.tenantId}:${request.workflowId}:${request.runId}`,
+                state: previous?.queueState ?? null,
+                reachable: previous?.queueReachable ?? true,
+                error: previous?.queueError ?? null
+              };
           const progressing = isProgressing(snapshot.run.status, queue.state);
           observations.set(request.runId, {
             lane: request.lane,
@@ -141,6 +166,7 @@ try {
             runStatus: snapshot.run.status,
             outboxStatus: snapshot.outbox.status,
             queueState: queue.state,
+            queueError: queue.error,
             outboxAttempts: snapshot.outbox.attempts,
             queueReachable: queue.reachable,
             queuedAt: previous?.queuedAt ?? snapshot.outbox.createdAt ?? snapshot.run.createdAt ?? request.queuedAt ?? new Date().toISOString(),
@@ -164,24 +190,31 @@ try {
           mode: modeConfig.summaryMode
         });
 
-        if (summary.ok) {
+        const successWindow = updateSuccessWindow({
+          summaryOk: summary.ok,
+          nowMs: Date.now(),
+          postSuccessObservationMs,
+          successObservedAt
+        });
+        successObservedAt = successWindow.successObservedAt;
+
+        if (summary.ok && successWindow.readyToFinalize) {
           process.stdout.write(
             JSON.stringify(
-              {
-                ok: true,
-                phase: summary.phase,
-                requestedMode: modeConfig.requestedMode,
-                summaryMode: modeConfig.summaryMode,
+              buildProofOutput({
+                modeConfig,
+                summary,
                 requests,
                 snapshots: [...observations.values()],
                 queueSnapshots,
-                summary,
-                notes: modeConfig.captureNotes
-              },
+                observationDurationMs: Date.now() - startedAt,
+                postSuccessObservationMs
+              }),
               null,
               2
             ) + "\n"
           );
+          emittedResult = true;
           break;
         }
 
@@ -194,21 +227,21 @@ try {
         queueSnapshots,
         mode: modeConfig.summaryMode
       });
-      if (!summary.ok || process.exitCode) {
-        process.exitCode = summary.ok ? process.exitCode ?? 0 : 1;
+      if (!emittedResult) {
+        if (!summary.ok) {
+          process.exitCode = 1;
+        }
         process.stdout.write(
           JSON.stringify(
-            {
-              ok: summary.ok,
-              phase: summary.phase,
-              requestedMode: modeConfig.requestedMode,
-              summaryMode: modeConfig.summaryMode,
+            buildProofOutput({
+              modeConfig,
+              summary,
               requests,
               snapshots: [...observations.values()],
               queueSnapshots,
-              summary,
-              notes: modeConfig.captureNotes
-            },
+              observationDurationMs: Date.now() - startedAt,
+              postSuccessObservationMs
+            }),
             null,
               2
             ) + "\n"
@@ -262,28 +295,6 @@ function parseArgs(values) {
     index += 1;
   }
   return args;
-}
-
-function parseModeArg(value) {
-  const requestedMode = value === undefined ? "progress" : value;
-  if (requestedMode === "progress" || requestedMode === "drain") {
-    return {
-      requestedMode,
-      summaryMode: requestedMode,
-      captureNotes: []
-    };
-  }
-  if (requestedMode === "global-fairness") {
-    return {
-      requestedMode,
-      summaryMode: "drain",
-      captureNotes: [
-        "prove-live-fairness captures drain-phase proof only.",
-        "Use analyze-worker-fairness with captured worker logs to compute the final global fairness verdict."
-      ]
-    };
-  }
-  throw new Error("Invalid --mode: expected 'progress', 'drain', or 'global-fairness'");
 }
 
 function parseOrderArg(value) {

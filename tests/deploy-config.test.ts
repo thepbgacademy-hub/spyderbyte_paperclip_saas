@@ -126,7 +126,7 @@ describe("deployment POC config", () => {
     expect(compose).toContain("WF_PAPERCLIP_ADMIN_TOKEN: ${WF_PAPERCLIP_ADMIN_TOKEN:-}");
     expect(compose).toContain("WF_PAPERCLIP_ISSUE_AGENT_ID: ${WF_PAPERCLIP_ISSUE_AGENT_ID:-}");
     expect(compose).toContain("WF_PAPERCLIP_ISSUE_POLL_INTERVAL_MS: ${WF_PAPERCLIP_ISSUE_POLL_INTERVAL_MS:-1000}");
-    expect(compose).toContain("WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS: ${WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS:-10}");
+    expect(compose).toContain("WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS: ${WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS:-60}");
     expect(compose).toContain("WF_WORKER_CONCURRENCY: ${WF_WORKER_CONCURRENCY:-2}");
     expect(compose).toContain("WF_WORKER_MAX_ACTIVE_PER_TENANT: ${WF_WORKER_MAX_ACTIVE_PER_TENANT:-1}");
     expect(compose).toContain("WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID: ${WF_PAPERCLIP_AUTH_PROBE_COMPANY_ID:-}");

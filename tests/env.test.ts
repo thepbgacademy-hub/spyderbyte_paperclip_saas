@@ -29,7 +29,7 @@ describe("loadEnv", () => {
       providerExecutionMode: "tenant_credentials_required",
       paperclipLaunchMode: "runs",
       paperclipIssuePollIntervalMs: 1000,
-      paperclipIssueMaxPollAttempts: 10,
+      paperclipIssueMaxPollAttempts: 60,
       workerConcurrency: 2,
       workerMaxActivePerTenant: 1
     });

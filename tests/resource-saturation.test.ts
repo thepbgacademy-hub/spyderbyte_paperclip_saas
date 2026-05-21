@@ -158,7 +158,7 @@ describe("resource saturation helpers", () => {
         samples: 3,
         reachableSamples: 2,
         unreachableSamples: 1,
-        valid: true,
+        valid: false,
         highWaterMarks: {
           waiting: 5,
           active: 4,

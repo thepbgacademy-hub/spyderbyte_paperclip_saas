@@ -38,6 +38,9 @@ if (queueSnapshotPaths.length > 0 && summary.queue.samples < 1) {
 if (queueSnapshotPaths.length > 0 && summary.queue.reachableSamples < 1) {
   reasons.push("no_reachable_queue_snapshots");
 }
+if (queueSnapshotPaths.length > 0 && summary.queue.reachableSamples > 0 && summary.queue.reachableSamples < summary.queue.samples) {
+  reasons.push("queue_snapshots_partially_unreachable");
+}
 
 const ok = reasons.length === 0;
 

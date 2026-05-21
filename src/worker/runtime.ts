@@ -90,6 +90,8 @@ export function createWorkerRuntime(options: { env: WorkerEnv; workerInstanceId?
     ...(options.env.runtimeEnv.OPENAI_PROJECT_ID ? { projectId: options.env.runtimeEnv.OPENAI_PROJECT_ID } : {}),
     label: "Operator Debug Provider"
   });
+  const inFlightPaperclipSecretBindings = new Map<string, Promise<{ type: "secret_ref"; secretId: string; version: string | number }>>();
+
   async function resolveExistingPaperclipSecretRefBinding(input: {
     tenantId: string;
     companyId: string;
@@ -122,6 +124,123 @@ export function createWorkerRuntime(options: { env: WorkerEnv; workerInstanceId?
       paperclipSecretVersion: existing.paperclipSecretVersion
     });
   }
+
+  function createPaperclipBindingKey(input: {
+    tenantId: string;
+    companyId: string;
+    agentId: string;
+    envKey: string;
+    secretRef: string;
+  }) {
+    return `${input.tenantId}:${input.companyId}:${input.agentId}:${input.envKey}:${input.secretRef}`;
+  }
+
+  function isRetryablePaperclipSecretSyncError(error: unknown) {
+    if (!(error instanceof Error)) {
+      return false;
+    }
+    if (error.name === "PaperclipBoardSessionHttpError" && /\b(500|502|503|504)\b/.test(error.message)) {
+      return true;
+    }
+    return /Paperclip board-session request failed: (500|502|503|504)\b/.test(error.message);
+  }
+
+  async function resolveOrSyncPaperclipSecretRefBinding(input: {
+    tenantId: string;
+    companyId: string;
+    agentId: string;
+    envKey: string;
+    secretRef: string;
+    providerKind: ProviderKind;
+    secretValue: string;
+  }) {
+    const existingBinding = await resolveExistingPaperclipSecretRefBinding({
+      tenantId: input.tenantId,
+      companyId: input.companyId,
+      agentId: input.agentId,
+      envKey: input.envKey,
+      secretRef: input.secretRef
+    });
+    if (existingBinding) {
+      return existingBinding;
+    }
+    if (!paperclipSecretSync) {
+      throw new Error(`Missing Paperclip secret binding for ${input.providerKind}:${input.envKey}`);
+    }
+
+    const bindingKey = createPaperclipBindingKey(input);
+    const inFlightBinding = inFlightPaperclipSecretBindings.get(bindingKey);
+    if (inFlightBinding) {
+      return inFlightBinding;
+    }
+
+    const refreshPromise = (async () => {
+      const recoveredBeforeSync = await resolveExistingPaperclipSecretRefBinding({
+        tenantId: input.tenantId,
+        companyId: input.companyId,
+        agentId: input.agentId,
+        envKey: input.envKey,
+        secretRef: input.secretRef
+      });
+      if (recoveredBeforeSync) {
+        return recoveredBeforeSync;
+      }
+
+      const runningRunCount = await repositories.countRunningWorkflowRuns({ tenantId: input.tenantId });
+      if (runningRunCount > 0) {
+        throw new Error(
+          `Paperclip secret binding refresh deferred for ${input.providerKind}:${input.envKey} while another tenant run is still active`
+        );
+      }
+
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+          const synced = await paperclipSecretSync.syncBinding({
+            tenantId: input.tenantId,
+            wealthFactorySecretReferenceId: await repositories.findSecretReferenceId({
+              tenantId: input.tenantId,
+              secretRef: input.secretRef
+            }),
+            paperclipCompanyId: input.companyId,
+            paperclipAgentId: input.agentId,
+            paperclipEnvKey: input.envKey,
+            providerKind: input.providerKind,
+            secretValue: input.secretValue,
+            paperclipSecretKey: input.envKey
+          });
+          return toPaperclipSecretRefBinding({
+            paperclipSecretId: synced.paperclipSecretId,
+            paperclipSecretVersion: synced.paperclipSecretVersion
+          });
+        } catch (error) {
+          const recoveredBinding = await resolveExistingPaperclipSecretRefBinding({
+            tenantId: input.tenantId,
+            companyId: input.companyId,
+            agentId: input.agentId,
+            envKey: input.envKey,
+            secretRef: input.secretRef
+          });
+          if (recoveredBinding) {
+            return recoveredBinding;
+          }
+          if (attempt >= 3 || !isRetryablePaperclipSecretSyncError(error)) {
+            throw error;
+          }
+        }
+      }
+
+      throw new Error(`Paperclip secret binding refresh exhausted retries for ${input.providerKind}:${input.envKey}`);
+    })();
+
+    const trackedBindingPromise = refreshPromise.finally(() => {
+      if (inFlightPaperclipSecretBindings.get(bindingKey) === trackedBindingPromise) {
+        inFlightPaperclipSecretBindings.delete(bindingKey);
+      }
+    });
+    inFlightPaperclipSecretBindings.set(bindingKey, trackedBindingPromise);
+    return trackedBindingPromise;
+  }
+
   const paperclipClient = createPaperclipClient({
     baseUrl: options.env.paperclipBaseUrl,
     serviceToken: options.env.paperclipServiceToken,
@@ -153,59 +272,15 @@ export function createWorkerRuntime(options: { env: WorkerEnv; workerInstanceId?
                   if (!tenantId) {
                     throw new Error(`Missing tenant context for Paperclip company ${companyId}`);
                   }
-                  const existingBinding = await resolveExistingPaperclipSecretRefBinding({
+                  adapterEnv[bindingTarget.envKey] = await resolveOrSyncPaperclipSecretRefBinding({
                     tenantId,
-                    companyId,
-                    agentId,
+                    companyId: companyId,
+                    agentId: agentId,
                     envKey: bindingTarget.envKey,
-                    secretRef: binding.secretRef
+                    secretRef: binding.secretRef,
+                    providerKind: binding.providerKind as ProviderKind,
+                    secretValue: bindingTarget.secretValue
                   });
-                  if (existingBinding) {
-                    adapterEnv[bindingTarget.envKey] = existingBinding;
-                    continue;
-                  }
-                  if (!paperclipSecretSync) {
-                    throw new Error(`Missing Paperclip secret binding for ${binding.providerKind}:${bindingTarget.envKey}`);
-                  }
-                  const activeRunCount = await repositories.countActiveWorkflowRuns({ tenantId });
-                  if (activeRunCount > 1) {
-                    throw new Error(
-                      `Paperclip secret binding refresh deferred for ${binding.providerKind}:${bindingTarget.envKey} while another tenant run is still active`
-                    );
-                  }
-                  try {
-                    const synced = await paperclipSecretSync.syncBinding({
-                      tenantId,
-                      wealthFactorySecretReferenceId: await repositories.findSecretReferenceId({
-                        tenantId,
-                        secretRef: binding.secretRef
-                      }),
-                      paperclipCompanyId: companyId,
-                      paperclipAgentId: agentId,
-                      paperclipEnvKey: bindingTarget.envKey,
-                      providerKind: binding.providerKind as ProviderKind,
-                      secretValue: bindingTarget.secretValue,
-                      paperclipSecretKey: bindingTarget.envKey
-                    });
-                    adapterEnv[bindingTarget.envKey] = toPaperclipSecretRefBinding({
-                      paperclipSecretId: synced.paperclipSecretId,
-                      paperclipSecretVersion: synced.paperclipSecretVersion
-                    });
-                    continue;
-                  } catch (error) {
-                  const recoveredBinding = await resolveExistingPaperclipSecretRefBinding({
-                    tenantId,
-                    companyId,
-                    agentId,
-                    envKey: bindingTarget.envKey,
-                    secretRef: binding.secretRef
-                  });
-                  if (recoveredBinding) {
-                    adapterEnv[bindingTarget.envKey] = recoveredBinding;
-                    continue;
-                  }
-                  throw error;
-                  }
                 }
               }
               return {

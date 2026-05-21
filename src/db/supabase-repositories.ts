@@ -79,6 +79,17 @@ export function createSupabaseRepositories(client: QueryClient) {
       return Number(asRecord(result.rows[0]).active_run_count ?? 0);
     },
 
+    async countRunningWorkflowRuns(input: DashboardScope): Promise<number> {
+      const result = await client.query(
+        `select count(*)::int as running_run_count
+           from wfpc.workflow_runs
+           where tenant_id = $1
+             and status = 'running'`,
+        [input.tenantId]
+      );
+      return Number(asRecord(result.rows[0]).running_run_count ?? 0);
+    },
+
     async requireTenantMember(input: MembershipScope): Promise<void> {
       const result = await client.query(
         "select tenant_id from wfpc.tenant_memberships where tenant_id = $1 and user_id = $2 limit 1",

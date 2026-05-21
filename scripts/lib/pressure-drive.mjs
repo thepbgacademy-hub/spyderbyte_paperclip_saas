@@ -177,12 +177,8 @@ export function expandPressureRequests(input) {
 
 export function summarizePressureProof(input) {
   const requests = Array.isArray(input?.requests) ? input.requests.map(normalizeRequest) : [];
-  const snapshots = new Map(
-    (Array.isArray(input?.snapshots) ? input.snapshots : []).map((snapshot) => {
-      const normalized = normalizeSnapshot(snapshot);
-      return [normalized.runId, normalized];
-    })
-  );
+  const normalizedSnapshots = (Array.isArray(input?.snapshots) ? input.snapshots : []).map((snapshot) => normalizeSnapshot(snapshot));
+  const snapshots = new Map(normalizedSnapshots.map((snapshot) => [snapshot.runId, snapshot]));
   const queueSnapshots = (Array.isArray(input?.queueSnapshots) ? input.queueSnapshots : []).map((snapshot) => normalizeQueueSnapshot(snapshot));
   const fairnessSnapshots = (Array.isArray(input?.fairnessSnapshots) ? input.fairnessSnapshots : []).map((snapshot) => normalizeFairnessSnapshot(snapshot));
 
@@ -288,10 +284,10 @@ export function summarizePressureProof(input) {
     };
   }
 
-  if ((mode === "drain" || mode === "global-fairness") && incompleteDrains.length > 0) {
+  if (mode === "drain" && incompleteDrains.length > 0) {
     return {
       ok: false,
-      phase: mode === "global-fairness" ? "global_fairness_incomplete" : "burst_drain_incomplete",
+      phase: "burst_drain_incomplete",
       totals,
       lanes,
       saturation: summarizeSaturation({
@@ -308,6 +304,7 @@ export function summarizePressureProof(input) {
   if (mode === "global-fairness") {
     return summarizeGlobalFairness({
       requests,
+      snapshots: normalizedSnapshots,
       totals,
       lanes,
       workerEvents: Array.isArray(input?.workerEvents) ? input.workerEvents : [],
@@ -568,6 +565,7 @@ function reachedDrainCheckpoint(snapshot) {
 
 function summarizeGlobalFairness(input) {
   const requests = Array.isArray(input?.requests) ? input.requests : [];
+  const snapshots = Array.isArray(input?.snapshots) ? input.snapshots.map((snapshot) => normalizeSnapshot(snapshot)) : [];
   const totals = input?.totals ?? {};
   const lanes = input?.lanes ?? {};
   const saturation = summarizeSaturation({
@@ -577,6 +575,8 @@ function summarizeGlobalFairness(input) {
   const runToMeta = new Map(
     requests.map((request) => [request.runId, { lane: request.lane, cycle: Number.isInteger(request.cycle) ? request.cycle : 1 }])
   );
+  const snapshotByRun = new Map(snapshots.map((snapshot) => [snapshot.runId, snapshot]));
+  const allReachedDrainCheckpoint = requests.every((request) => reachedDrainCheckpoint(snapshotByRun.get(request.runId)));
   const runToLane = new Map([...runToMeta.entries()].map(([runId, meta]) => [runId, meta.lane]));
   const requestedRunIds = new Set(requests.map((request) => request.runId));
   const allWorkerEvents = (Array.isArray(input?.workerEvents) ? input.workerEvents : [])
@@ -600,6 +600,13 @@ function summarizeGlobalFairness(input) {
   const startedByRun = new Set(startedEvents.map((event) => event.runId));
   const missingStartedRuns = requests
     .filter((request) => !startedByRun.has(request.runId))
+    .map((request) => `${request.lane}:${request.runId}`);
+  const incompleteEvidenceRuns = requests
+    .filter((request) => !hasGlobalFairnessRunEvidence({
+      snapshot: snapshotByRun.get(request.runId) ?? null,
+      runId: request.runId,
+      startedByRun
+    }))
     .map((request) => `${request.lane}:${request.runId}`);
 
   if (allWorkerEvents.length === 0 || startedEvents.length === 0) {
@@ -653,8 +660,27 @@ function summarizeGlobalFairness(input) {
         startedEvents: summarizeWorkerEvents(startedEvents, runToLane)
       },
       notes: [
-        "At least one requested run reached the drain checkpoint without a matching worker start event.",
+        "At least one requested run produced workflow progress without a matching worker start event.",
         `Missing worker events: ${missingStartedRuns.join(", ")}`
+      ]
+    };
+  }
+
+  if (incompleteEvidenceRuns.length > 0) {
+    return {
+      ok: false,
+      phase: "global_fairness_evidence_incomplete",
+      totals,
+      lanes,
+      saturation,
+      workers: {
+        distinctWorkers,
+        observedEvents: summarizeWorkerEvents(allWorkerEvents, runToLane),
+        startedEvents: summarizeWorkerEvents(startedEvents, runToLane)
+      },
+      notes: [
+        "Global fairness requires worker start evidence plus a confirmed running/completed workflow record for every requested run.",
+        `Incomplete run evidence: ${incompleteEvidenceRuns.join(", ")}`
       ]
     };
   }
@@ -728,13 +754,27 @@ function summarizeGlobalFairness(input) {
       cycles: cycleFairness
     },
     notes: [
-      "All requested runs reached the burst drain checkpoint.",
+      "All requested runs produced worker-backed fairness evidence.",
       "More than one worker participated in the observed run starts.",
       "Early worker start coverage reached the expected lane count in each burst window.",
       ...(cycleFairness.length > 1 ? ["Repeated soak cycles also preserved the expected lane coverage."] : []),
-      "Observed start ordering is derived from worker log timestamps, not exact queue claim timestamps."
+      "Observed start ordering is derived from worker log timestamps, not exact queue claim timestamps.",
+      ...(allReachedDrainCheckpoint
+        ? ["Every requested run also reached the burst drain checkpoint."]
+        : ["Some runs were verified by worker plus workflow evidence even though per-run queue-state snapshots stayed partial."])
     ]
   };
+}
+
+function hasGlobalFairnessRunEvidence(input) {
+  const snapshot = input?.snapshot;
+  if (!snapshot) {
+    return false;
+  }
+  const runStatusReached = snapshot.runStatus === "running" || snapshot.runStatus === "completed";
+  const outboxReached = snapshot.outboxStatus === "enqueued";
+  const workerStarted = input?.startedByRun instanceof Set && input.startedByRun.has(input.runId);
+  return runStatusReached && outboxReached && workerStarted;
 }
 
 function summarizeWorkerEvents(events, runToLane = new Map()) {

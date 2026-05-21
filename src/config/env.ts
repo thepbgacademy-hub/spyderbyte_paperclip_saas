@@ -95,7 +95,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   if (paperclipIssuePollIntervalMs === null) {
     invalidKeys.push("WF_PAPERCLIP_ISSUE_POLL_INTERVAL_MS");
   }
-  const paperclipIssueMaxPollAttempts = readPositiveInteger(source.WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS, 10);
+  const paperclipIssueMaxPollAttempts = readPositiveInteger(source.WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS, 60);
   if (paperclipIssueMaxPollAttempts === null) {
     invalidKeys.push("WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS");
   }
@@ -165,7 +165,7 @@ export function validatePaperclipLaunchEnv(source: NodeJS.ProcessEnv = process.e
   if (paperclipIssuePollIntervalMs === null) {
     invalidKeys.push("WF_PAPERCLIP_ISSUE_POLL_INTERVAL_MS");
   }
-  const paperclipIssueMaxPollAttempts = readPositiveInteger(source.WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS, 10);
+  const paperclipIssueMaxPollAttempts = readPositiveInteger(source.WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS, 60);
   if (paperclipIssueMaxPollAttempts === null) {
     invalidKeys.push("WF_PAPERCLIP_ISSUE_MAX_POLL_ATTEMPTS");
   }

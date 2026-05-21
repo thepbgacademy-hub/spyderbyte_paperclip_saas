@@ -624,6 +624,137 @@ describe("pressure drive helpers", () => {
     ]);
   });
 
+  it("lets global fairness rely on worker start evidence when workflow status is running but per-run queue state is only partially observed", () => {
+    const summary = summarizePressureProof({
+      requests: [
+        { lane: "alpha", tenantId: "tenant-1", runId: "run-1" },
+        { lane: "beta", tenantId: "tenant-2", runId: "run-2" },
+        { lane: "gamma", tenantId: "tenant-3", runId: "run-3" }
+      ],
+      snapshots: [
+        {
+          lane: "alpha",
+          tenantId: "tenant-1",
+          runId: "run-1",
+          runStatus: "running",
+          outboxStatus: "enqueued",
+          queueState: "active",
+          queuedAt: "2026-05-20T06:00:00.000Z",
+          observedFirstProgressAt: "2026-05-20T06:00:02.000Z",
+          observedFirstStartedAt: "2026-05-20T06:00:02.000Z"
+        },
+        {
+          lane: "beta",
+          tenantId: "tenant-2",
+          runId: "run-2",
+          runStatus: "running",
+          outboxStatus: "enqueued",
+          queueState: null,
+          queuedAt: "2026-05-20T06:00:00.000Z",
+          observedFirstProgressAt: "2026-05-20T06:00:02.100Z",
+          observedFirstStartedAt: "2026-05-20T06:00:02.100Z"
+        },
+        {
+          lane: "gamma",
+          tenantId: "tenant-3",
+          runId: "run-3",
+          runStatus: "running",
+          outboxStatus: "enqueued",
+          queueState: null,
+          queuedAt: "2026-05-20T06:00:00.000Z",
+          observedFirstProgressAt: "2026-05-20T06:00:03.000Z",
+          observedFirstStartedAt: "2026-05-20T06:00:03.000Z"
+        }
+      ],
+      workerEvents: [
+        {
+          type: "wealth_factory_worker_claim",
+          event: "claimed",
+          workerInstanceId: "worker-a",
+          tenantId: "tenant-1",
+          runId: "run-1",
+          observedAt: "2026-05-20T06:00:01.900Z"
+        },
+        {
+          type: "wealth_factory_worker_claim",
+          event: "claimed",
+          workerInstanceId: "worker-b",
+          tenantId: "tenant-2",
+          runId: "run-2",
+          observedAt: "2026-05-20T06:00:01.950Z"
+        },
+        {
+          type: "wealth_factory_worker_run",
+          event: "started",
+          workerInstanceId: "worker-a",
+          tenantId: "tenant-3",
+          runId: "run-3",
+          observedAt: "2026-05-20T06:00:03.000Z"
+        }
+      ],
+      mode: "global-fairness"
+    });
+
+    expect(summary.ok).toBe(true);
+    expect(summary.phase).toBe("global_multi_worker_fairness_observed");
+    expect(summary.notes).toContain("Some runs were verified by worker plus workflow evidence even though per-run queue-state snapshots stayed partial.");
+  });
+
+  it("fails global fairness when worker evidence exists but a run never reaches a running or completed workflow state", () => {
+    const summary = summarizePressureProof({
+      requests: [
+        { lane: "alpha", tenantId: "tenant-1", runId: "run-1" },
+        { lane: "beta", tenantId: "tenant-2", runId: "run-2" }
+      ],
+      snapshots: [
+        {
+          lane: "alpha",
+          tenantId: "tenant-1",
+          runId: "run-1",
+          runStatus: "running",
+          outboxStatus: "enqueued",
+          queueState: "active",
+          queuedAt: "2026-05-20T06:00:00.000Z",
+          observedFirstProgressAt: "2026-05-20T06:00:01.000Z",
+          observedFirstStartedAt: "2026-05-20T06:00:01.000Z"
+        },
+        {
+          lane: "beta",
+          tenantId: "tenant-2",
+          runId: "run-2",
+          runStatus: "queued",
+          outboxStatus: "enqueued",
+          queueState: null,
+          queuedAt: "2026-05-20T06:00:00.000Z",
+          observedFirstProgressAt: "2026-05-20T06:00:01.050Z",
+          observedFirstStartedAt: "2026-05-20T06:00:01.050Z"
+        }
+      ],
+      workerEvents: [
+        {
+          type: "wealth_factory_worker_run",
+          event: "started",
+          workerInstanceId: "worker-a",
+          tenantId: "tenant-1",
+          runId: "run-1",
+          observedAt: "2026-05-20T06:00:01.000Z"
+        },
+        {
+          type: "wealth_factory_worker_run",
+          event: "started",
+          workerInstanceId: "worker-b",
+          tenantId: "tenant-2",
+          runId: "run-2",
+          observedAt: "2026-05-20T06:00:01.050Z"
+        }
+      ],
+      mode: "global-fairness"
+    });
+
+    expect(summary.ok).toBe(false);
+    expect(summary.phase).toBe("global_fairness_evidence_incomplete");
+  });
+
   it("summarizes a six-lane burst without collapsing distinct lanes into the same fairness bucket", () => {
     const requests = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"].map((lane, index) => ({
       lane,

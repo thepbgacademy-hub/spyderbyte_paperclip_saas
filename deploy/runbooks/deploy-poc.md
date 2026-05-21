@@ -296,12 +296,13 @@ Current Paperclip contract findings on 2026-05-19:
   - top-level `PAPERCLIP_PUBLIC_URL` had to point at `http://127.0.0.1:3100` so agent-injected `PAPERCLIP_API_URL` and `PAPERCLIP_RUNTIME_API_URL` stayed local instead of redirecting through the public hostname
 - with those fixes in place, assignment-triggered Paperclip heartbeat runs now succeed end to end on the temporary test lane
 - issue creation now exposes a usable run bridge:
-  - `POST /api/companies/:companyId/issues` returns the issue only
-  - within roughly `1.5s`, `GET /api/issues/:identifier` can populate `executionRunId` and `checkoutRunId`
-  - `GET /api/heartbeat-runs/:runId` returns the live run record
+- `POST /api/companies/:companyId/issues` returns the issue only
+- within roughly `1.5s`, `GET /api/issues/:identifier` can populate `executionRunId` and may also show `checkoutRunId`
+- `GET /api/heartbeat-runs/:runId` returns the live run record
 - sharp edge:
-  - `executionRunId` and `checkoutRunId` are not durable on the issue object after the run transitions the issue to `blocked` or the issue later completes; they can fall back to `null`
-  - for durable correlation, use the run id while it is present, then rely on issue activity/comment `runId` or `createdByRunId` plus `GET /api/heartbeat-runs/:runId`
+  - `executionRunId` is the durable launch bridge Wealth Factory should use for follow-up run status/cancel work
+  - `checkoutRunId` may appear transiently on the issue object, but treat it as informational only
+  - the issue object can still fall back to `null` after the run transitions the issue to `blocked` or the issue later completes; for durable correlation, rely on issue activity/comment `runId` or `createdByRunId` plus `GET /api/heartbeat-runs/:runId`
 - issue-level `assigneeAdapterOverrides.adapterConfig.env` reaches the launched runtime for plain values:
   - a direct CTO probe issue successfully echoed an injected env value from runtime
   - this proves the installed Paperclip build supports issue-scoped adapter env overrides in execution
@@ -442,6 +443,22 @@ Current staged sustained-burst checkpoint on 2026-05-20:
     - next backlog item:
       - keep Paperclip resource saturation under close watch during any longer soak or heavier pod experiments
       - decide whether the current six-client pod cap should stay as-is or be tuned down based on longer-duration Paperclip CPU, memory, and PID behavior
+    - strict soak follow-up:
+      - recreate the proof workers after changing any `WF_PAPERCLIP_ISSUE_*` env values; otherwise the stage lane silently keeps the old poll budget
+      - after lifting the staged issue-launch budget from `30` to `120` attempts and recreating the workers:
+        - all `100` workflow runs reached `status = running`
+        - all `100` outbox rows reached `status = enqueued`
+        - proof-worker logs no longer showed `Paperclip issue launch did not resolve an execution run id` or `Paperclip board-session request failed: 500`
+      - `scripts/analyze-worker-fairness.mjs` needed one final repo-side correction:
+        - `global-fairness` mode should not fail early just because some per-run queue-state snapshots are still missing once the runs are already `running` and worker start events are present
+        - the repo default issue-launch poll budget is now `60` attempts; keep the staged override at `120` for the current Paperclip lane until it no longer needs the extra patience
+        - after tightening the proof so every requested run still needs worker-backed plus workflow-backed evidence, the saved strict soak reported `ok = true` and `phase = global_multi_worker_soak_observed`
+      - updated strict-soak Paperclip hotspot:
+        - peak CPU: `374.01%`
+        - peak memory: `3988950876` bytes (`23.79%`)
+        - peak PIDs: `2127`
+      - practical operator note:
+        - `docker cp` into a running Node container is not enough for this proof lane; restart or recreate the worker after copying runtime files, or the already-loaded module graph will keep using the old code
 
 Set the lifecycle proof env before using the helper:
 
