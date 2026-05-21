@@ -578,3 +578,25 @@ Nuances to preserve:
   - Paperclip is the active bottleneck over longer duration.
   - Treat `6` tenants as the current stress ceiling, not yet a boringly safe launch cap.
   - The next business decision is whether launch should start below `6` active clients per VPS unless later soak data shows more Paperclip headroom.
+
+## 2026-05-21 Four-Tenant Cap Follow-Up
+
+- We also ran two follow-up decision tests after agreeing not to assume user load would always be light:
+  - `audit/2026-05-21/live-soak-capacity-4tenant-staggered-*.json*`
+  - `audit/2026-05-21/live-soak-capacity-4tenant-clustered-*.json*`
+- `4tenant-staggered` result:
+  - `80/80` runs reached `running`
+  - `80/80` outbox rows reached `enqueued`
+  - queue evidence remained reachable and valid
+  - Paperclip still peaked at `474.71%` CPU, `2990370980` bytes memory, and `1405` PIDs
+  - Paperclip hot-sample ratio `0.5333`, longest hot streak `16`
+- `4tenant-clustered` result:
+  - `40/40` runs reached `running`
+  - `40/40` outbox rows reached `enqueued`
+  - queue evidence remained reachable and valid
+  - Paperclip peaked at `351.31%` CPU, `2482491097` bytes memory, and `957` PIDs
+  - Paperclip hot-sample ratio `0.25`, longest hot streak `5`
+- Operational read:
+  - lowering the pod from six tenants to four reduces blast radius but still does not create a clearly boring long-soak margin on the current Paperclip/VPS shape
+  - the longer staggered four-tenant soak was actually harsher on Paperclip than the shorter cron-cluster approximation
+  - if launch happens on the current VPS shape, treat `4` as a strict upper cap with active monitoring, not as proof of roomy headroom

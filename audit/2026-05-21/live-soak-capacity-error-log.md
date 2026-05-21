@@ -41,3 +41,24 @@
 - `live-soak-capacity-v1` and `v2` timed out before a final merged verdict because the first orchestration pass still had the sample-loop and privilege issues above.
 - `live-soak-capacity-v3` proved the queue path stayed healthy, but its verdict was still tied to the earlier proof and sustained-hotspot semantics.
 - `live-soak-capacity-v4` is the first run using the corrected harness and is the authoritative result for this phase.
+- `live-soak-capacity-4tenant-staggered` and `live-soak-capacity-4tenant-clustered` are the follow-up decision runs used to test whether lowering the pod to four tenants created a genuinely safer operating zone.
+
+## Four-Tenant Follow-Up Read
+
+- `4tenant-staggered`
+  - `80/80` runs reached `running`
+  - `80/80` outbox rows reached `enqueued`
+  - queue evidence stayed reachable and valid for the whole run
+  - Paperclip still peaked at `474.71%` CPU, `2990370980` bytes memory, and `1405` PIDs
+  - hot-sample ratio `0.5333`, longest hot streak `16`
+
+- `4tenant-clustered`
+  - `40/40` runs reached `running`
+  - `40/40` outbox rows reached `enqueued`
+  - queue evidence stayed reachable and valid for the whole run
+  - Paperclip peaked at `351.31%` CPU, `2482491097` bytes memory, and `957` PIDs
+  - hot-sample ratio `0.25`, longest hot streak `5`
+
+- Operational read:
+  - clustered same-window bursts are hot, but the longer staggered four-tenant soak was harsher on Paperclip than the shorter cron-style burst
+  - lowering the pod from six tenants to four improves blast radius, but it still does not create a clearly boring long-duration margin on the current Paperclip/VPS shape
