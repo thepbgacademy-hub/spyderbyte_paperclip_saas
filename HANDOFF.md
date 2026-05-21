@@ -229,15 +229,18 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
     - queue depth sampled from inside the staged API container stayed healthy:
       - `waiting` high-water: `0`
       - `active` high-water: `2`
-    - however, `scripts/analyze-worker-fairness.mjs` reported `phase = soak_cycle_distribution_failed`
-    - repeated cycle-level failures showed `cross_worker_lane_skew_detected` in the second early coverage window:
-      - `windowSize = 6`
-      - `participatingWorkers = 3`
-      - `expectedUniqueLanes = 6`
-      - `uniqueLanesSeen = 5`
+    - the first analyzer pass reported `phase = soak_cycle_distribution_failed`, but that turned out to be a proof expectation bug, not a worker-runtime failure
+    - the staggered six-lane soak intentionally queued only `5` unique lanes inside the first `windowSize = 6` burst window, while the analyzer was incorrectly expecting `6`
+    - after correcting the fairness window semantics in `scripts/lib/pressure-drive.mjs`, the saved staged proof re-analyzed cleanly:
+      - `scripts/analyze-worker-fairness.mjs` reported `phase = global_multi_worker_soak_observed`
+      - each cycle returned `phase = global_multi_worker_fairness_observed`
+      - the second early coverage window now evaluates as:
+        - `windowSize = 6`
+        - `participatingWorkers = 3`
+        - `expectedUniqueLanes = 5`
+        - `uniqueLanesSeen = 5`
     - implication:
-      - the current bounded pod still drains the longer skewed soak successfully
-      - but cross-worker lane coverage is not yet consistently fair enough cycle-by-cycle under this longer skewed pattern
+      - the current bounded pod both drains the longer skewed soak successfully and preserves cross-worker lane fairness under the corrected staged proof semantics
     - VPS-side resource sampling showed the dominant pressure is Paperclip, not Redis or the Wealth Factory workers:
       - `paperclip-gwry-paperclip-1`
         - peak CPU: `378.99%`
@@ -245,8 +248,8 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
         - peak PIDs: `1011`
       - Redis and the Wealth Factory proof workers remained comparatively light
     - next pressure gap:
-      - investigate claim/start fairness under longer skewed soak and determine whether scheduler or claim-layer changes are needed before treating the six-client pod shape as fully robust
       - keep Paperclip resource saturation under close watch during any longer soak or heavier pod experiments
+      - decide whether the current six-client pod cap should stay as-is or be tuned down based on longer-duration Paperclip CPU, memory, and PID behavior
 
 ## Security Position
 

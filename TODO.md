@@ -245,5 +245,5 @@ This file tracks implementation progress. Keep it current after every phase.
   - [x] Extend the staged fairness proof from 2 tenants into a six-tenant / three-worker bounded-pod soak.
   - [x] Extend the staged pressure proof into longer soak duration and skewed burst scenarios.
   - [x] Add VPS-side resource saturation sampling so CPU, memory, and private queue depth are measured from inside the staged lane instead of inferred only from local polling and worker telemetry.
-  - [ ] Investigate and remediate longer-soak cross-worker lane skew under the six-lane / three-worker / five-cycle staggered soak (`50` total requests).
+  - [x] Investigate and remediate longer-soak cross-worker lane skew under the six-lane / three-worker / five-cycle staggered soak (`50` total requests).
   - [ ] Decide whether the current six-client pod limit should stay capped as-is or be reduced/tuned based on Paperclip saturation peaks (`378.99%` CPU, `2553358057` bytes memory, `1011` PIDs).

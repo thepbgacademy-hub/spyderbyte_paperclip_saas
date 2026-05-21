@@ -597,7 +597,6 @@ function summarizeGlobalFairness(input) {
     });
 
   const distinctWorkers = [...new Set(startedEvents.map((event) => event.workerInstanceId))];
-  const laneCount = Object.keys(lanes).length;
   const startedByRun = new Set(startedEvents.map((event) => event.runId));
   const missingStartedRuns = requests
     .filter((request) => !startedByRun.has(request.runId))
@@ -660,7 +659,12 @@ function summarizeGlobalFairness(input) {
     };
   }
 
-  const coverageWindows = summarizeCoverageWindows(startedEvents, laneCount, distinctWorkers.length, runToLane);
+  const coverageWindows = summarizeCoverageWindows({
+    startedEvents,
+    requestedLanes: requests.map((request) => request.lane),
+    workerCount: distinctWorkers.length,
+    runToLane
+  });
   const failedCoverage = coverageWindows.find((window) => window.uniqueLanesSeen < window.expectedUniqueLanes);
   const cycleFairness = summarizeCycleFairness({
     requests,
@@ -769,8 +773,13 @@ function selectFairnessStartEvents(events) {
   return [...startedByRun.values()];
 }
 
-function summarizeCoverageWindows(startedEvents, laneCount, workerCount, runToLane = new Map()) {
+function summarizeCoverageWindows(input) {
+  const startedEvents = Array.isArray(input?.startedEvents) ? input.startedEvents : [];
+  const requestedLanes = Array.isArray(input?.requestedLanes) ? input.requestedLanes.filter(Boolean) : [];
+  const workerCount = Number.isInteger(input?.workerCount) ? Number(input.workerCount) : 0;
+  const runToLane = input?.runToLane instanceof Map ? input.runToLane : new Map();
   const windows = [];
+  const laneCount = new Set(requestedLanes).size;
   if (laneCount < 1 || workerCount < 1) {
     return windows;
   }
@@ -788,11 +797,12 @@ function summarizeCoverageWindows(startedEvents, laneCount, workerCount, runToLa
       .map((event) => runToLane.get(event.runId))
       .filter(Boolean);
     const uniqueLanesSeen = new Set(laneIds).size;
+    const requestedWindowUniqueLanes = new Set(requestedLanes.slice(0, windowSize)).size;
     windows.push({
       wave,
       windowSize,
       participatingWorkers,
-      expectedUniqueLanes: Math.min(laneCount, Math.max(1, participatingWorkers) * wave),
+      expectedUniqueLanes: Math.min(requestedWindowUniqueLanes, Math.max(1, participatingWorkers) * wave),
       uniqueLanesSeen
     });
   }
@@ -806,8 +816,12 @@ function summarizeCycleFairness(input) {
     const cycleRunIds = new Set(cycleRequests.map((request) => request.runId));
     const cycleStartedEvents = input.startedEvents.filter((event) => cycleRunIds.has(event.runId));
     const distinctWorkers = [...new Set(cycleStartedEvents.map((event) => event.workerInstanceId))];
-    const laneIds = [...new Set(cycleRequests.map((request) => request.lane))];
-    const coverageWindows = summarizeCoverageWindows(cycleStartedEvents, laneIds.length, distinctWorkers.length, input.runToLane);
+    const coverageWindows = summarizeCoverageWindows({
+      startedEvents: cycleStartedEvents,
+      requestedLanes: cycleRequests.map((request) => request.lane),
+      workerCount: distinctWorkers.length,
+      runToLane: input.runToLane
+    });
     const missingStartedRuns = cycleRequests
       .filter((request) => !cycleStartedEvents.some((event) => event.runId === request.runId))
       .map((request) => `${request.lane}:${request.runId}`);

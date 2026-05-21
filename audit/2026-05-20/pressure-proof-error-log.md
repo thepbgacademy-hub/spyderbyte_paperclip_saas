@@ -129,11 +129,12 @@ Fix:
 - extend the queue inspection tests instead of replacing them
 - keep coverage on both the per-job lookup path and the queue-level snapshot path
 
-23. The first longer soak over `5` cycles and `50` total requests initially looked healthy from queue completion alone, but cycle-by-cycle fairness analysis showed repeated `cross_worker_lane_skew_detected` windows.
+23. The first longer soak over `5` cycles and `50` total requests initially looked healthy from queue completion alone, and the first analyzer pass appeared to show repeated `cross_worker_lane_skew_detected` windows.
 Fix:
 - treat queue drain and fairness as separate verdicts
 - preserve the analyzer output instead of collapsing the result into a generic soak success
-- document the exact failing window: wave `2`, `windowSize=6`, `participatingWorkers=3`, `expectedUniqueLanes=6`, `uniqueLanesSeen=5`
+- document the exact initially failing window: wave `2`, `windowSize=6`, `participatingWorkers=3`, `expectedUniqueLanes=6`, `uniqueLanesSeen=5`
+- later root-cause work confirmed this was a proof expectation bug in the analyzer, not a worker-runtime fairness failure; see the corrected note below for the final verdict
 
 24. Private-Redis queue depth sampling from this Windows workstation remained an unreliable signal because the caller cannot reach the staged Redis service directly.
 Fix:
@@ -277,15 +278,23 @@ Longer staged soak and VPS-side saturation checkpoint after adding repo-owned re
 - queue depth did not back up materially when sampled from inside the staged API container:
   - `waiting` high-water: `0`
   - `active` high-water: `2`
-- however, the fairness analyzer reported `phase = soak_cycle_distribution_failed`
-- repeated cycle-level failures showed `cross_worker_lane_skew_detected` in the second early coverage window:
-  - `windowSize = 6`
-  - `participatingWorkers = 3`
-  - `expectedUniqueLanes = 6`
-  - `uniqueLanesSeen = 5`
+- the first fairness analyzer pass reported `phase = soak_cycle_distribution_failed`
+- root cause:
+  - `scripts/lib/pressure-drive.mjs` was overestimating the expected unique-lane coverage for the second early window
+  - the staged `staggered` six-lane skew intentionally queued only `5` unique lanes inside the first `windowSize = 6` requests, but the analyzer expected `6`
+- fix:
+  - compute early-window `expectedUniqueLanes` from the unique lanes actually requested inside that window, still capped by participating workers and wave size
+  - add regression coverage proving the staggered six-lane longer-soak ordering no longer trips a false `cross_worker_lane_skew_detected`
+- corrected result:
+  - re-analyzing the saved staged proof now returns `phase = global_multi_worker_soak_observed`
+  - each cycle returns `phase = global_multi_worker_fairness_observed`
+  - the corrected second-window fairness evidence is:
+    - `windowSize = 6`
+    - `participatingWorkers = 3`
+    - `expectedUniqueLanes = 5`
+    - `uniqueLanesSeen = 5`
 - implication:
-  - the current six-tenant pod shape can still drain the longer skewed soak successfully
-  - but cross-worker lane coverage is not yet consistently fair enough cycle-by-cycle under this longer skewed pattern
+  - the current six-tenant pod shape drains the longer skewed soak successfully and preserves cross-worker lane fairness under the corrected proof semantics
 - VPS-side resource sampling also showed the dominant pressure is Paperclip, not Redis or the Wealth Factory workers:
   - `paperclip-gwry-paperclip-1` peak CPU: `378.99%`
   - peak memory: `2553358057` bytes (`15.23%`)
@@ -293,4 +302,4 @@ Longer staged soak and VPS-side saturation checkpoint after adding repo-owned re
   - by comparison, Redis stayed low and the proof workers remained comparatively light
 - next implication:
   - the next pressure gap is no longer "can this pod distribute six tenants at all"
-  - it is claim/start fairness under longer skewed soak plus Paperclip resource saturation behavior
+  - it is longer-duration Paperclip resource saturation behavior and whether the six-client pod cap should stay as-is or be tuned down

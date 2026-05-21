@@ -820,8 +820,8 @@ describe("pressure drive helpers", () => {
     const summary = summarizePressureProof({
       requests: [
         { lane: "alpha", tenantId: "tenant-1", runId: "run-1" },
-        { lane: "alpha", tenantId: "tenant-1", runId: "run-1b" },
         { lane: "beta", tenantId: "tenant-2", runId: "run-2" },
+        { lane: "alpha", tenantId: "tenant-1", runId: "run-1b" },
         { lane: "gamma", tenantId: "tenant-3", runId: "run-3" }
       ],
       snapshots: [
@@ -1114,6 +1114,78 @@ describe("pressure drive helpers", () => {
       expect.objectContaining({ cycle: 1, ok: true, phase: "global_multi_worker_fairness_observed" }),
       expect.objectContaining({ cycle: 2, ok: true, phase: "global_multi_worker_fairness_observed" })
     ]);
+  });
+
+  it("does not flag a five-cycle staggered six-lane skewed soak when early starts match the queued lane mix for each cycle", () => {
+    const requests = expandPressureRequests({
+      lanes: [
+        { lane: "primary", tenantId: "tenant-1", userId: "user-1", workflowId: "workflow-1", runs: 3 },
+        { lane: "secondary", tenantId: "tenant-2", userId: "user-2", workflowId: "workflow-2", runs: 2 },
+        { lane: "tertiary", tenantId: "tenant-3", userId: "user-3", workflowId: "workflow-3", runs: 2 },
+        { lane: "quaternary", tenantId: "tenant-4", userId: "user-4", workflowId: "workflow-4", runs: 1 },
+        { lane: "quinary", tenantId: "tenant-5", userId: "user-5", workflowId: "workflow-5", runs: 1 },
+        { lane: "senary", tenantId: "tenant-6", userId: "user-6", workflowId: "workflow-6", runs: 1 }
+      ],
+      cycles: 5,
+      order: "staggered"
+    }).map((request: { lane: string; tenantId: string; workflowId: string; cycle: number; sequence: number }, index: number) => ({
+      ...request,
+      runId: `run-${index + 1}`
+    }));
+
+    const snapshots = requests.map((request: { lane: string; tenantId: string; workflowId: string; runId: string }) => ({
+      lane: request.lane,
+      tenantId: request.tenantId,
+      runId: request.runId,
+      workflowId: request.workflowId,
+      runStatus: "running",
+      outboxStatus: "enqueued",
+      queueState: "completed",
+      observedFirstProgressAt: "2026-05-20T06:00:02.000Z",
+      observedFirstStartedAt: "2026-05-20T06:00:02.000Z"
+    }));
+
+    const workerEvents = requests.map((request: { tenantId: string; runId: string }, index: number) => ({
+      type: "wealth_factory_worker_claim",
+      event: "claimed",
+      workerInstanceId: index % 3 === 0 ? "worker-a" : index % 3 === 1 ? "worker-b" : "worker-c",
+      tenantId: request.tenantId,
+      runId: request.runId,
+      observedAt: `2026-05-20T06:00:${String(index).padStart(2, "0")}.000Z`
+    }));
+
+    const summary = summarizePressureProof({
+      requests,
+      snapshots,
+      workerEvents,
+      mode: "global-fairness"
+    });
+
+    expect(summary.ok).toBe(true);
+    expect(summary.phase).toBe("global_multi_worker_soak_observed");
+    expect(summary.workers.cycles).toHaveLength(5);
+    expect(summary.workers.cycles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cycle: 1,
+          ok: true,
+          phase: "global_multi_worker_fairness_observed"
+        }),
+        expect.objectContaining({
+          cycle: 5,
+          ok: true,
+          phase: "global_multi_worker_fairness_observed"
+        })
+      ])
+    );
+    expect(summary.workers.cycles[0].coverageWindows[1]).toEqual({
+      wave: 2,
+      windowSize: 6,
+      participatingWorkers: 3,
+      expectedUniqueLanes: 5,
+      uniqueLanesSeen: 5
+    });
+    expect(summary.workers.cycles.every((cycle: { ok: boolean; phase: string }) => cycle.ok && cycle.phase === "global_multi_worker_fairness_observed")).toBe(true);
   });
 
   it("flags the specific soak cycle when a later cycle collapses to one worker", () => {
