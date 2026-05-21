@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import process from "node:process";
 
 import {
+  DEFAULT_SATURATION_THRESHOLDS,
   parseDockerStatsDocument,
   parseQueueSnapshotsDocument,
   summarizeResourceSaturation
@@ -25,7 +26,12 @@ const queueSnapshots = (
 
 const summary = summarizeResourceSaturation({
   dockerSamples,
-  queueSnapshots
+  queueSnapshots,
+  thresholds: {
+    cpuPercent: parsePositiveInteger(args["cpu-hot"], DEFAULT_SATURATION_THRESHOLDS.cpuPercent, "cpu-hot"),
+    memoryUsageBytes: parseMemoryBytes(args, DEFAULT_SATURATION_THRESHOLDS.memoryUsageBytes),
+    pids: parsePositiveInteger(args["pids-hot"], DEFAULT_SATURATION_THRESHOLDS.pids, "pids-hot")
+  }
 });
 
 const reasons = [];
@@ -82,4 +88,29 @@ function toArray(value) {
     return value;
   }
   return typeof value === "string" ? [value] : [];
+}
+
+function parsePositiveInteger(value, fallback, label) {
+  if (value === undefined) {
+    return fallback;
+  }
+  const parsed = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    throw new Error(`Expected --${label} to be > 0`);
+  }
+  return parsed;
+}
+
+function parseMemoryBytes(args, fallback) {
+  if (args["memory-hot-bytes"] !== undefined) {
+    return parsePositiveInteger(args["memory-hot-bytes"], fallback, "memory-hot-bytes");
+  }
+  if (args["memory-hot-gib"] !== undefined) {
+    const parsed = Number.parseFloat(String(args["memory-hot-gib"]));
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      throw new Error("Expected --memory-hot-gib to be > 0");
+    }
+    return Math.round(parsed * 1024 ** 3);
+  }
+  return fallback;
 }

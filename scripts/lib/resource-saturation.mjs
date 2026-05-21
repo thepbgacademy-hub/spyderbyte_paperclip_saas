@@ -1,3 +1,9 @@
+export const DEFAULT_SATURATION_THRESHOLDS = {
+  cpuPercent: 250,
+  memoryUsageBytes: 2_147_483_648,
+  pids: 800
+};
+
 export function summarizeResourceSaturation(input) {
   const dockerSamples = Array.isArray(input?.dockerSamples)
     ? input.dockerSamples.map((sample) => normalizeDockerSample(sample))
@@ -5,22 +11,68 @@ export function summarizeResourceSaturation(input) {
   const queueSnapshots = Array.isArray(input?.queueSnapshots)
     ? input.queueSnapshots.map((snapshot) => normalizeQueueSnapshot(snapshot))
     : [];
+  const thresholds = normalizeThresholds(input?.thresholds);
 
   const byContainer = {};
   for (const sample of dockerSamples) {
     const container = byContainer[sample.name] ?? {
       samples: 0,
+      totalCpuPercent: 0,
+      totalMemoryUsageBytes: 0,
+      totalMemoryPercent: 0,
+      totalPids: 0,
       maxCpuPercent: 0,
       maxMemoryUsageBytes: 0,
       maxMemoryPercent: 0,
-      maxPids: 0
+      maxPids: 0,
+      hotSamples: {
+        cpuPercent: 0,
+        memoryUsageBytes: 0,
+        pids: 0,
+        any: 0
+      },
+      longestHotStreaks: {
+        cpuPercent: 0,
+        memoryUsageBytes: 0,
+        pids: 0,
+        any: 0
+      },
+      currentHotStreaks: {
+        cpuPercent: 0,
+        memoryUsageBytes: 0,
+        pids: 0,
+        any: 0
+      }
     };
     container.samples += 1;
+    container.totalCpuPercent += sample.cpuPercent;
+    container.totalMemoryUsageBytes += sample.memoryUsageBytes;
+    container.totalMemoryPercent += sample.memoryPercent;
+    container.totalPids += sample.pids;
     container.maxCpuPercent = Math.max(container.maxCpuPercent, sample.cpuPercent);
     container.maxMemoryUsageBytes = Math.max(container.maxMemoryUsageBytes, sample.memoryUsageBytes);
     container.maxMemoryPercent = Math.max(container.maxMemoryPercent, sample.memoryPercent);
     container.maxPids = Math.max(container.maxPids, sample.pids);
+    updateHotspotStats(container, sample, thresholds);
     byContainer[sample.name] = container;
+  }
+
+  for (const container of Object.values(byContainer)) {
+    container.avgCpuPercent = roundTo(container.totalCpuPercent / container.samples, 2);
+    container.avgMemoryUsageBytes = Math.round(container.totalMemoryUsageBytes / container.samples);
+    container.avgMemoryPercent = roundTo(container.totalMemoryPercent / container.samples, 2);
+    container.avgPids = roundTo(container.totalPids / container.samples, 2);
+    container.hotSampleRatios = {
+      cpuPercent: roundTo(container.hotSamples.cpuPercent / container.samples, 4),
+      memoryUsageBytes: roundTo(container.hotSamples.memoryUsageBytes / container.samples, 4),
+      pids: roundTo(container.hotSamples.pids / container.samples, 4),
+      any: roundTo(container.hotSamples.any / container.samples, 4)
+    };
+    delete container.totalCpuPercent;
+    delete container.totalMemoryUsageBytes;
+    delete container.totalMemoryPercent;
+    delete container.totalPids;
+    delete container.currentHotStreaks;
   }
 
   const reachableQueueSnapshots = queueSnapshots.filter((snapshot) => snapshot.reachable && snapshot.counts);
@@ -28,11 +80,16 @@ export function summarizeResourceSaturation(input) {
     docker: {
       samples: dockerSamples.length,
       valid: dockerSamples.length > 0,
+      thresholds,
       byContainer,
       maxCpuPercent: maxOf(dockerSamples.map((sample) => sample.cpuPercent)),
       maxMemoryUsageBytes: maxOf(dockerSamples.map((sample) => sample.memoryUsageBytes)),
       maxMemoryPercent: maxOf(dockerSamples.map((sample) => sample.memoryPercent)),
-      maxPids: maxOf(dockerSamples.map((sample) => sample.pids))
+      maxPids: maxOf(dockerSamples.map((sample) => sample.pids)),
+      hotContainers: Object.entries(byContainer)
+        .filter(([, container]) => container.hotSamples.any > 0)
+        .map(([name]) => name)
+        .sort()
     },
     queue: {
       samples: queueSnapshots.length,
@@ -67,20 +124,22 @@ export function normalizeDockerSample(sample) {
 }
 
 export function normalizeQueueSnapshot(snapshot) {
-  const counts = snapshot?.counts && typeof snapshot.counts === "object" ? snapshot.counts : {};
+  const counts = snapshot?.counts && typeof snapshot.counts === "object" ? snapshot.counts : null;
   return {
     observedAt: toTimestamp(snapshot?.observedAt),
     reachable: typeof snapshot?.reachable === "boolean" ? snapshot.reachable : null,
-    counts: {
-      waiting: parseInteger(counts.waiting),
-      active: parseInteger(counts.active),
-      completed: parseInteger(counts.completed),
-      failed: parseInteger(counts.failed),
-      delayed: parseInteger(counts.delayed),
-      paused: parseInteger(counts.paused),
-      prioritized: parseInteger(counts.prioritized),
-      waitingChildren: parseInteger(counts.waitingChildren)
-    }
+    counts: counts
+      ? {
+          waiting: parseInteger(counts.waiting),
+          active: parseInteger(counts.active),
+          completed: parseInteger(counts.completed),
+          failed: parseInteger(counts.failed),
+          delayed: parseInteger(counts.delayed),
+          paused: parseInteger(counts.paused),
+          prioritized: parseInteger(counts.prioritized),
+          waitingChildren: parseInteger(counts.waitingChildren)
+        }
+      : null
   };
 }
 
@@ -173,4 +232,46 @@ function maxOf(values) {
     return 0;
   }
   return values.reduce((current, value) => (value > current ? value : current), 0);
+}
+
+function normalizeThresholds(thresholds) {
+  return {
+    cpuPercent: toThreshold(thresholds?.cpuPercent, DEFAULT_SATURATION_THRESHOLDS.cpuPercent),
+    memoryUsageBytes: toThreshold(thresholds?.memoryUsageBytes, DEFAULT_SATURATION_THRESHOLDS.memoryUsageBytes),
+    pids: toThreshold(thresholds?.pids, DEFAULT_SATURATION_THRESHOLDS.pids)
+  };
+}
+
+function toThreshold(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function updateHotspotStats(container, sample, thresholds) {
+  const flags = {
+    cpuPercent: sample.cpuPercent >= thresholds.cpuPercent,
+    memoryUsageBytes: sample.memoryUsageBytes >= thresholds.memoryUsageBytes,
+    pids: sample.pids >= thresholds.pids
+  };
+  flags.any = flags.cpuPercent || flags.memoryUsageBytes || flags.pids;
+
+  for (const key of Object.keys(flags)) {
+    if (flags[key]) {
+      container.hotSamples[key] += 1;
+      container.currentHotStreaks[key] += 1;
+      container.longestHotStreaks[key] = Math.max(
+        container.longestHotStreaks[key],
+        container.currentHotStreaks[key]
+      );
+      continue;
+    }
+    container.currentHotStreaks[key] = 0;
+  }
+}
+
+function roundTo(value, digits) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Number(value.toFixed(digits));
 }

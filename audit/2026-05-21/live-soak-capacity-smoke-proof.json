@@ -1,0 +1,176 @@
+{
+  "ok": true,
+  "phase": "burst_drain_observed",
+  "analysisPending": false,
+  "captureOk": true,
+  "requestedMode": "drain",
+  "summaryMode": "drain",
+  "requests": [
+    {
+      "lane": "primary",
+      "tenantId": "22222222-2222-4222-8222-222222222222",
+      "userId": "11111111-1111-4111-8111-111111111111",
+      "workflowId": "44444444-4444-4444-8444-444444444444",
+      "runId": "3a0f7749-0113-4ae5-931c-67fd7cdca39b",
+      "idempotencyKey": "22222222-2222-4222-8222-222222222222:44444444-4444-4444-8444-444444444444:3a0f7749-0113-4ae5-931c-67fd7cdca39b",
+      "sequence": 1,
+      "ordinal": 1,
+      "queuedAt": "2026-05-21T06:10:24.463Z"
+    }
+  ],
+  "snapshots": [
+    {
+      "lane": "primary",
+      "tenantId": "22222222-2222-4222-8222-222222222222",
+      "runId": "3a0f7749-0113-4ae5-931c-67fd7cdca39b",
+      "workflowId": "44444444-4444-4444-8444-444444444444",
+      "runStatus": "running",
+      "outboxStatus": "enqueued",
+      "queueState": null,
+      "queueError": "Connection is closed.",
+      "outboxAttempts": 1,
+      "queueReachable": false,
+      "queuedAt": "2026-05-21T06:10:25.317Z",
+      "observedFirstProgressAt": "2026-05-21T06:10:26.116Z",
+      "observedFirstStartedAt": "2026-05-21T06:10:26.116Z",
+      "observedCompletedAt": null
+    }
+  ],
+  "queueSnapshots": [
+    {
+      "observedAt": "2026-05-21T06:10:24.531Z",
+      "queueName": "wfpc-workflow-runs",
+      "reachable": false,
+      "error": "Connection is closed.",
+      "counts": null
+    },
+    {
+      "observedAt": "2026-05-21T06:10:26.116Z",
+      "queueName": "wfpc-workflow-runs",
+      "reachable": false,
+      "error": "Connection is closed.",
+      "counts": null
+    },
+    {
+      "observedAt": "2026-05-21T06:10:27.766Z",
+      "queueName": "wfpc-workflow-runs",
+      "reachable": false,
+      "error": "Connection is closed.",
+      "counts": null
+    },
+    {
+      "observedAt": "2026-05-21T06:10:29.329Z",
+      "queueName": "wfpc-workflow-runs",
+      "reachable": false,
+      "error": "Connection is closed.",
+      "counts": null
+    },
+    {
+      "observedAt": "2026-05-21T06:10:31.050Z",
+      "queueName": "wfpc-workflow-runs",
+      "reachable": false,
+      "error": "Connection is closed.",
+      "counts": null
+    },
+    {
+      "observedAt": "2026-05-21T06:10:33.940Z",
+      "queueName": "wfpc-workflow-runs",
+      "reachable": false,
+      "error": "Connection is closed.",
+      "counts": null
+    },
+    {
+      "observedAt": "2026-05-21T06:10:35.497Z",
+      "queueName": "wfpc-workflow-runs",
+      "reachable": false,
+      "error": "Connection is closed.",
+      "counts": null
+    },
+    {
+      "observedAt": "2026-05-21T06:10:37.145Z",
+      "queueName": "wfpc-workflow-runs",
+      "reachable": false,
+      "error": "Connection is closed.",
+      "counts": null
+    }
+  ],
+  "summary": {
+    "ok": true,
+    "phase": "burst_drain_observed",
+    "totals": {
+      "totalRuns": 1,
+      "byRunStatus": {
+        "running": 1
+      },
+      "byOutboxStatus": {
+        "enqueued": 1
+      },
+      "byQueueState": {}
+    },
+    "lanes": {
+      "primary": {
+        "tenantId": "22222222-2222-4222-8222-222222222222",
+        "totalRuns": 1,
+        "byRunStatus": {
+          "running": 1
+        },
+        "byOutboxStatus": {
+          "enqueued": 1
+        },
+        "byQueueState": {},
+        "firstQueuedAt": "2026-05-21T06:10:25.317Z",
+        "firstProgressAt": "2026-05-21T06:10:26.116Z",
+        "firstStartedAt": "2026-05-21T06:10:26.116Z",
+        "completedAt": null,
+        "maxOutboxAttempts": 1,
+        "runsWithRetries": 0,
+        "runsWithQueueUnreachable": 1,
+        "observedWaitToStart": {
+          "count": 1,
+          "minMs": 799,
+          "medianMs": 799,
+          "maxMs": 799
+        },
+        "observedWaitToComplete": {
+          "count": 0,
+          "minMs": null,
+          "medianMs": null,
+          "maxMs": null
+        }
+      }
+    },
+    "saturation": {
+      "queue": {
+        "samples": 8,
+        "reachableSamples": 0,
+        "unreachableSamples": 8,
+        "highWaterMarks": {
+          "waiting": 0,
+          "active": 0,
+          "completed": 0,
+          "failed": 0,
+          "delayed": 0,
+          "paused": 0,
+          "prioritized": 0,
+          "waitingChildren": 0
+        }
+      },
+      "worker": {
+        "samples": 0,
+        "maxActiveRuns": 0,
+        "maxQueuedRuns": 0,
+        "maxQueuedTenants": 0,
+        "maxActiveTenants": 0
+      }
+    },
+    "notes": [
+      "Every requested lane produced at least one progressing run.",
+      "Every requested run reached the burst drain checkpoint.",
+      "Observed wait metrics are derived from polling timestamps, not exact server-side transition timestamps.",
+      "No lane is completely starved at the current observation point."
+    ]
+  },
+  "notes": [],
+  "observationDurationMs": 12685,
+  "postSuccessObservationMs": 10000
+}

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const require = createRequire(import.meta.url);
 const {
+  DEFAULT_SATURATION_THRESHOLDS,
   normalizeDockerSample,
   parseDockerStatsDocument,
   parseQueueSnapshotsDocument,
@@ -133,26 +134,72 @@ describe("resource saturation helpers", () => {
       docker: {
         samples: 3,
         valid: true,
+        thresholds: DEFAULT_SATURATION_THRESHOLDS,
         byContainer: {
           "worker-a": {
             samples: 2,
+            avgCpuPercent: 24.85,
+            avgMemoryUsageBytes: 2560,
+            avgMemoryPercent: 1.65,
+            avgPids: 9,
             maxCpuPercent: 37.2,
             maxMemoryUsageBytes: 4096,
             maxMemoryPercent: 2.2,
-            maxPids: 10
+            maxPids: 10,
+            hotSamples: {
+              cpuPercent: 0,
+              memoryUsageBytes: 0,
+              pids: 0,
+              any: 0
+            },
+            longestHotStreaks: {
+              cpuPercent: 0,
+              memoryUsageBytes: 0,
+              pids: 0,
+              any: 0
+            },
+            hotSampleRatios: {
+              cpuPercent: 0,
+              memoryUsageBytes: 0,
+              pids: 0,
+              any: 0
+            }
           },
           "worker-b": {
             samples: 1,
+            avgCpuPercent: 20.5,
+            avgMemoryUsageBytes: 2048,
+            avgMemoryPercent: 1.8,
+            avgPids: 6,
             maxCpuPercent: 20.5,
             maxMemoryUsageBytes: 2048,
             maxMemoryPercent: 1.8,
-            maxPids: 6
+            maxPids: 6,
+            hotSamples: {
+              cpuPercent: 0,
+              memoryUsageBytes: 0,
+              pids: 0,
+              any: 0
+            },
+            longestHotStreaks: {
+              cpuPercent: 0,
+              memoryUsageBytes: 0,
+              pids: 0,
+              any: 0
+            },
+            hotSampleRatios: {
+              cpuPercent: 0,
+              memoryUsageBytes: 0,
+              pids: 0,
+              any: 0
+            }
           }
         },
         maxCpuPercent: 37.2,
         maxMemoryUsageBytes: 4096,
         maxMemoryPercent: 2.2,
-        maxPids: 10
+        maxPids: 10,
+        hotContainers: []
       },
       queue: {
         samples: 3,
@@ -189,11 +236,13 @@ describe("resource saturation helpers", () => {
       docker: {
         samples: 0,
         valid: false,
+        thresholds: DEFAULT_SATURATION_THRESHOLDS,
         byContainer: {},
         maxCpuPercent: 0,
         maxMemoryUsageBytes: 0,
         maxMemoryPercent: 0,
-        maxPids: 0
+        maxPids: 0,
+        hotContainers: []
       },
       queue: {
         samples: 1,
@@ -210,6 +259,80 @@ describe("resource saturation helpers", () => {
           prioritized: 0,
           waitingChildren: 0
         }
+      }
+    });
+  });
+
+  it("preserves missing queue counts as null so malformed queue samples do not masquerade as empty healthy telemetry", () => {
+    expect(
+      parseQueueSnapshotsDocument('{"observedAt":"2026-05-20T12:00:00.000Z","reachable":true,"counts":null}\n')
+    ).toEqual([
+      {
+        observedAt: "2026-05-20T12:00:00.000Z",
+        reachable: true,
+        counts: null
+      }
+    ]);
+
+    expect(
+      summarizeResourceSaturation({
+        dockerSamples: [],
+        queueSnapshots: [
+          {
+            observedAt: "2026-05-20T12:00:00.000Z",
+            reachable: true,
+            counts: null
+          }
+        ]
+      }).queue
+    ).toEqual({
+      samples: 1,
+      reachableSamples: 0,
+      unreachableSamples: 0,
+      valid: false,
+      highWaterMarks: {
+        waiting: 0,
+        active: 0,
+        completed: 0,
+        failed: 0,
+        delayed: 0,
+        paused: 0,
+        prioritized: 0,
+        waitingChildren: 0
+      }
+    });
+  });
+
+  it("tracks sustained hotspot ratios and streaks for containers that stay hot across multiple samples", () => {
+    expect(
+      summarizeResourceSaturation({
+        dockerSamples: [
+          { name: "paperclip", cpuPercent: 260, memoryUsageBytes: 2_300_000_000, memoryPercent: 14.5, pids: 780 },
+          { name: "paperclip", cpuPercent: 315, memoryUsageBytes: 2_450_000_000, memoryPercent: 15.1, pids: 840 },
+          { name: "paperclip", cpuPercent: 340, memoryUsageBytes: 2_500_000_000, memoryPercent: 15.4, pids: 910 }
+        ],
+        queueSnapshots: []
+      }).docker.byContainer.paperclip
+    ).toMatchObject({
+      samples: 3,
+      avgCpuPercent: 305,
+      hotSamples: {
+        cpuPercent: 3,
+        memoryUsageBytes: 3,
+        pids: 2,
+        any: 3
+      },
+      longestHotStreaks: {
+        cpuPercent: 3,
+        memoryUsageBytes: 3,
+        pids: 2,
+        any: 3
+      },
+      hotSampleRatios: {
+        cpuPercent: 1,
+        memoryUsageBytes: 1,
+        pids: 0.6667,
+        any: 1
       }
     });
   });

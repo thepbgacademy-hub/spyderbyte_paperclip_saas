@@ -246,5 +246,5 @@ This file tracks implementation progress. Keep it current after every phase.
   - [x] Extend the staged pressure proof into longer soak duration and skewed burst scenarios.
   - [x] Add VPS-side resource saturation sampling so CPU, memory, and private queue depth are measured from inside the staged lane instead of inferred only from local polling and worker telemetry.
   - [x] Investigate and remediate longer-soak cross-worker lane skew under the six-lane / three-worker / five-cycle staggered soak (`50` total requests).
-  - [ ] Decide whether the current six-client pod limit should stay capped as-is or be reduced/tuned based on the stricter staged soak saturation peaks (`374.01%` CPU, `3988950876` bytes memory, `2127` PIDs).
+  - [ ] Decide whether the current six-client pod limit should stay capped as-is or be reduced/tuned based on the corrected longer-soak saturation evidence (`396.32%` CPU, `2501818450` bytes memory, `1018` PIDs, `0.5714` hot-sample ratio on Paperclip).
   - [ ] Add one more operator-facing pressure slice for cron/heartbeat clustering mitigation (`jitter`, schedule offsets, or queue smoothing) so tenants are not all encouraged to fire on the same minute boundaries.

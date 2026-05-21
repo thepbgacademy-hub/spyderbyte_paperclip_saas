@@ -553,3 +553,28 @@ Nuances to preserve:
 - Race conditions around subscriptions, package installs, add-ons, tenant pause, credential revoke/rotate, and queue enqueue must be blocked transactionally.
 - Subagents and implementers are not alone in the codebase. Do not revert others' work.
 - All code and docs require reviewer scrutiny before acceptance.
+
+## 2026-05-21 Longer Soak Capacity Status
+
+- The repo now has a VPS-backed long-soak orchestrator at `npm run prove:live-soak-capacity`.
+- It collects, in one run:
+  - staged fairness proof output from `scripts/prove-live-fairness.mjs`
+  - remote Docker saturation samples over SSH
+  - authoritative queue snapshots from inside the staged API container via `docker exec wealth-factory-api-stage2 node scripts/inspect-live-queue-snapshot.mjs`
+- The current authoritative run is `audit/2026-05-21/live-soak-capacity-v4-*.json*`.
+- Current live result:
+  - `80/80` workflow runs reached `running`
+  - `80/80` outbox rows reached `enqueued`
+  - queue snapshots stayed reachable for the whole soak and peaked at `waiting=2`, `active=3`
+  - the soak still failed overall because Paperclip remained a sustained hotspot
+- Current Paperclip saturation evidence from `v4`:
+  - `maxCpuPercent: 396.32`
+  - `maxMemoryUsageBytes: 2501818450`
+  - `maxPids: 1018`
+  - `hotSampleRatios.any: 0.5714`
+  - `longestHotStreaks.any: 16`
+- Operational read:
+  - Wealth Factory queueing, outbox, worker pickup, and tenant isolation are still holding under the six-lane soak.
+  - Paperclip is the active bottleneck over longer duration.
+  - Treat `6` tenants as the current stress ceiling, not yet a boringly safe launch cap.
+  - The next business decision is whether launch should start below `6` active clients per VPS unless later soak data shows more Paperclip headroom.
