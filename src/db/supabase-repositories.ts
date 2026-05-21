@@ -7,6 +7,20 @@ export type QueryClient = {
   query(sql: string, values: readonly unknown[]): Promise<{ rows: unknown[] }>;
 };
 
+export class TenantMembershipRequiredError extends Error {
+  constructor() {
+    super("Tenant membership is required");
+    this.name = "TenantMembershipRequiredError";
+  }
+}
+
+export class ActivePackageInstallRequiredError extends Error {
+  constructor() {
+    super("Active package install is required");
+    this.name = "ActivePackageInstallRequiredError";
+  }
+}
+
 export type CustomerSafePlatformLoad = {
   level: "light" | "moderate" | "heavy";
   summary: string;
@@ -96,7 +110,28 @@ export function createSupabaseRepositories(client: QueryClient) {
         [input.tenantId, input.userId]
       );
       if (result.rows.length === 0) {
-        throw new Error("Tenant membership is required");
+        throw new TenantMembershipRequiredError();
+      }
+    },
+
+    async requireActivePackageInstall(input: DashboardScope & { packageId: string }): Promise<void> {
+      const result = await client.query(
+        `select installs.id
+         from wfpc.tenant_package_installs installs
+         join wfpc.tenant_package_purchases purchases
+           on purchases.tenant_id = installs.tenant_id
+          and purchases.package_id = installs.package_id
+          and purchases.status = 'active'
+          and purchases.starts_at <= now()
+          and (purchases.ends_at is null or purchases.ends_at > now())
+         where installs.tenant_id = $1
+           and installs.package_id = $2
+           and installs.status = 'active'
+         limit 1`,
+        [input.tenantId, input.packageId]
+      );
+      if (result.rows.length === 0) {
+        throw new ActivePackageInstallRequiredError();
       }
     },
 

@@ -11,6 +11,7 @@ export function assertAllowedOrigin(origin: string | undefined, allowedOrigins: 
 
   return {
     "access-control-allow-origin": origin,
+    "access-control-allow-credentials": "true",
     vary: "Origin"
   };
 }

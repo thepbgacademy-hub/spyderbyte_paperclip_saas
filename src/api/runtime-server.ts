@@ -4,6 +4,7 @@ import { createAppShellHandler } from "./app-shell.js";
 import type { ApiSession } from "./dashboard-api.js";
 import { createDashboardApi } from "./dashboard-api.js";
 import { createDashboardHttpHandler, type DashboardHttpRequest, type DashboardHttpResponse } from "./dashboard-http.js";
+import { createHarnessHttpHandler } from "./harness-http.js";
 import { createHealthHttpHandler } from "./health-http.js";
 import { createStorageOAuthHttpHandler } from "./storage-oauth-http.js";
 import { createDurableAuditSink } from "../audit/durable-audit.js";
@@ -15,6 +16,8 @@ import {
   createPaperclipSecretBindingRepository,
   createPaperclipSecretProjectionService
 } from "../paperclip/secret-sync.js";
+import { createHarnessBoardService } from "../harness/board-service.js";
+import { createPostgresHarnessRepository } from "../harness/repository.js";
 import { createPostgresFixedWindowRateLimiter } from "../security/postgres-rate-limit.js";
 import { createEncryptedSecretVault } from "../secrets/encrypted-vault.js";
 import { createAcidSecretRevokeService } from "../secrets/acid-secret-revoke-service.js";
@@ -24,6 +27,7 @@ import { createSecretService } from "../secrets/secret-service.js";
 import { createStorageOAuthService, STORAGE_OAUTH_PROVIDER_CONFIGS } from "../storage/storage-oauth-service.js";
 import { createPostgresOAuthStateStore } from "../storage/postgres-oauth-state-store.js";
 import { createVaultBackedStorageOAuthRegistration } from "../storage/vault-backed-storage-oauth-registration.js";
+import { createHarnessWorkflowRegistry } from "../wealthfactory/workflow-registry.js";
 import type { WorkflowRunEnqueuer } from "../workflows/acid-run-reservation.js";
 import { createQueueOutboxPump } from "../workflows/queue-outbox-pump.js";
 import { createQueueOutboxWorker } from "../workflows/queue-outbox-worker.js";
@@ -102,6 +106,11 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
   });
   const transactionRunner = createPgTransactionRunner(pool);
   const queryClient = createPgPoolQueryClient(pool);
+  const harnessRepository = createPostgresHarnessRepository(queryClient);
+  const harnessWorkflowRegistry = createHarnessWorkflowRegistry({
+    harnessEnabledWorkflowIds:
+      options.env.runtimeEnv.WF_HARNESS_ENABLED_WORKFLOW_IDS?.split(",").map((entry) => entry.trim()).filter(Boolean) ?? []
+  });
   const repositories = createSupabaseRepositories(queryClient);
   const audit = createDurableAuditSink(queryClient);
   const vault = createEncryptedSecretVault({
@@ -196,9 +205,25 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
     listStorageConnectors: repositories.listStorageConnectors,
     getPlatformLoad: repositories.getPlatformLoad
   });
+  const harnessBoardApi = createHarnessBoardService({
+    authenticate: options.auth.authenticate,
+    requireTenantMember: repositories.requireTenantMember,
+    requireActivePackageInstall: repositories.requireActivePackageInstall,
+    repository: harnessRepository,
+    workflowRegistry: harnessWorkflowRegistry,
+    runAtomically: async (work) =>
+      transactionRunner.withTransaction(async (transaction) =>
+        work(createPostgresHarnessRepository(transaction))
+      )
+  });
   const handler = createDashboardHttpHandler({
     allowedOrigins: options.env.allowedOrigins,
     dashboardApi,
+    rateLimiter: createPostgresFixedWindowRateLimiter({ runner: transactionRunner, limit: 120, windowMs: 60_000 })
+  });
+  const harnessBoardHandler = createHarnessHttpHandler({
+    allowedOrigins: options.env.allowedOrigins,
+    listBoardState: harnessBoardApi.listBoardState,
     rateLimiter: createPostgresFixedWindowRateLimiter({ runner: transactionRunner, limit: 120, windowMs: 60_000 })
   });
   const healthHandler = createHealthHttpHandler({
@@ -230,6 +255,9 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
         return { status: 503, headers: {}, body: { code: "storage_oauth_unavailable" } };
       }
       return storageOAuthHandler(request);
+    }
+    if (request.path.startsWith("/api/harness/")) {
+      return harnessBoardHandler(request);
     }
     if (appShellHandler && !request.path.startsWith("/api/")) {
       return appShellHandler(request);

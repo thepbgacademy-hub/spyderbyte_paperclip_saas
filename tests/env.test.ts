@@ -30,6 +30,7 @@ describe("loadEnv", () => {
       paperclipLaunchMode: "runs",
       paperclipIssuePollIntervalMs: 1000,
       paperclipIssueMaxPollAttempts: 60,
+      harnessEnabledWorkflowIds: [],
       workerConcurrency: 2,
       workerMaxActivePerTenant: 1
     });
@@ -160,6 +161,15 @@ describe("loadEnv", () => {
       workerConcurrency: 4,
       workerMaxActivePerTenant: 2
     });
+  });
+
+  it("parses opted-in harness workflow ids", () => {
+    expect(
+      loadEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: " wf_connect_first_workflow , wf_package_followup "
+      }).harnessEnabledWorkflowIds
+    ).toEqual(["wf_connect_first_workflow", "wf_package_followup"]);
   });
 
   it("rejects invalid worker concurrency settings", () => {

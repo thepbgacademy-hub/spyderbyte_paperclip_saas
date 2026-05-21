@@ -1,5 +1,8 @@
 export type TenantRole = "owner" | "admin" | "member" | "operator";
 export type WorkflowRunStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
+export type HarnessRunStatus = "queued" | "planning" | "active" | "waiting" | "blocked" | "assembling" | "done" | "failed" | "cancelled";
+export type HarnessCardStatus = "queued" | "planning" | "approved" | "working" | "waiting" | "blocked" | "done" | "cancelled";
+export type HarnessCardEventKind = "created" | "state_changed" | "comment_added" | "subcard_proposed" | "result_recorded";
 export type ProviderKind = "openai" | "openai_api" | "openai_chatgpt_codex_subscription" | "anthropic_api" | "xai_grok_api" | "openrouter_api" | "generic_api";
 
 export type TenantRow = {
@@ -34,6 +37,43 @@ export type WorkflowRunRow = {
   status: WorkflowRunStatus;
   publicResult: Record<string, unknown>;
   errorCode: string | null;
+};
+
+export type HarnessRuntimeContextRow = {
+  providerKind: ProviderKind;
+  credentialLabel: string;
+};
+
+export type HarnessRunRow = {
+  id: string;
+  tenantId: string;
+  workflowId: string;
+  packageId: string;
+  orchestratorPersona: string;
+  state: HarnessRunStatus;
+  runtimeContext: HarnessRuntimeContextRow;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type HarnessCardRow = {
+  id: string;
+  runId: string;
+  parentCardId: string | null;
+  persona: string;
+  title: string;
+  deliverableType: string;
+  state: HarnessCardStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type HarnessCardEventRow = {
+  id: string;
+  cardId: string;
+  eventKind: HarnessCardEventKind;
+  payload: Record<string, unknown>;
+  createdAt: string;
 };
 
 export type SecretReferenceRow = {

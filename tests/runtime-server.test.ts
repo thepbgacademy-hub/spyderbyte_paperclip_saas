@@ -29,6 +29,7 @@ vi.mock("../src/db/supabase-repositories.js", () => ({
     hasActiveWorkflowRuns: vi.fn().mockResolvedValue(false),
     countActiveWorkflowRuns: vi.fn().mockResolvedValue(0),
     requireTenantMember: vi.fn(),
+    requireActivePackageInstall: vi.fn(),
     listWorkflows: vi.fn(),
     listPackages: vi.fn(),
     listArtifacts: vi.fn(),
@@ -44,6 +45,59 @@ vi.mock("../src/db/supabase-repositories.js", () => ({
 
 vi.mock("../src/audit/durable-audit.js", () => ({
   createDurableAuditSink: vi.fn(() => vi.fn().mockResolvedValue(undefined))
+}));
+
+vi.mock("../src/security/postgres-rate-limit.js", () => ({
+  createPostgresFixedWindowRateLimiter: vi.fn(() => ({
+    consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 })
+  }))
+}));
+
+vi.mock("../src/harness/board-service.js", () => ({
+  createHarnessBoardService: vi.fn(() => ({
+    listBoardState: vi.fn().mockResolvedValue({
+      runId: "run_123",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      columns: [
+        {
+          id: "planning",
+          title: "Planning",
+          description: "Work being shaped by the orchestrator.",
+          cardIds: ["card_1"]
+        }
+      ],
+      cards: [
+        {
+          id: "card_1",
+          persona: "CEO",
+          title: "Shape the launch plan",
+          summary: "Keep the board calm and tenant-safe.",
+          lane: "planning",
+          statusLabel: "Planning",
+          priorityLabel: "High priority",
+          deliverableLabel: "Launch Plan",
+          updatedAtLabel: "Updated recently",
+          outcome: "The next move is being clarified without backend chatter.",
+          focusPoints: ["Stay bounded", "Keep it clear", "Protect tenant context"],
+          activity: [
+            {
+              id: "activity_1",
+              label: "CEO opened the planning lane.",
+              timestampLabel: "recently"
+            }
+          ],
+          detailSections: [
+            {
+              id: "snapshot",
+              title: "Snapshot",
+              body: "This lane is ready to resume from persisted state."
+            }
+          ]
+        }
+      ]
+    })
+  }))
 }));
 
 vi.mock("../src/paperclip/secret-sync.js", () => ({
@@ -182,6 +236,40 @@ describe("runtime server", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toBe(JSON.stringify({ status: "ok", service: "wealth_factory_api" }));
+    await runtime.close();
+  });
+
+  it("routes harness board requests through the new harness HTTP surface", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() }
+    });
+
+    const request = createRequest({
+      method: "GET",
+      url: "/api/harness/board",
+      headers: {
+        authorization: "Bearer token",
+        origin: "https://www.spyderbyte.cloud",
+        "content-length": "0"
+      }
+    });
+    const response = createResponse();
+
+    runtime.server.emit("request", request as unknown as IncomingMessage, response as unknown as ServerResponse);
+    await response.finished;
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('"runId":"run_123"');
+    expect(response.body).toContain('"persona":"CEO"');
+    expect(response.body).not.toContain("prompt");
     await runtime.close();
   });
 

@@ -18,6 +18,7 @@ import { HIDDEN_SHELL_FLAGS, type HiddenShellFlag } from "./feature-flags.js";
 
 export type ShellRouteKey =
   | "home"
+  | "board"
   | "workflows"
   | "results"
   | "team"
@@ -74,6 +75,20 @@ export const VISIBLE_WEALTH_FACTORY_ROUTES: readonly ShellRouteDefinition[] = [
     pageTestId: "page-home",
     showInNavigation: true,
     testId: "nav-home"
+  },
+  {
+    group: "primary",
+    header: {
+      summary: "Track persona-owned work cards in a clean orchestrator board without exposing backend chatter.",
+      title: "Board"
+    },
+    icon: Library,
+    key: "board",
+    label: "Board",
+    path: "/board",
+    pageTestId: "page-board",
+    showInNavigation: true,
+    testId: "nav-board"
   },
   {
     group: "primary",

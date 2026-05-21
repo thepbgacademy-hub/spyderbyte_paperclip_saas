@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createWorkflowRegistry } from "../src/wealthfactory/workflow-registry.js";
+import { createHarnessWorkflowRegistry, createWorkflowRegistry } from "../src/wealthfactory/workflow-registry.js";
 import { mapRunToWealthFactorySummary } from "../src/wealthfactory/dto-mappers.js";
 import { assertWealthFactoryResponse } from "../src/wealthfactory/response-guard.js";
 import { toPublicWorkflowError } from "../src/wealthfactory/public-errors.js";
@@ -29,6 +29,42 @@ describe("Wealth Factory boundary layer", () => {
     ]);
     expect(JSON.stringify(registry.listPublicWorkflows())).not.toMatch(/paperclip|pc-workflow|pc-company/i);
     expect(registry.resolvePrivateMapping("wf-social-calendar")).toEqual({ paperclipWorkflowId: "pc-workflow-1", paperclipCompanyId: "pc-company-1" });
+    expect(registry.isHarnessEligible("wf-social-calendar")).toBe(false);
+  });
+
+  it("keeps harness eligibility private to the server-side workflow registry", () => {
+    const registry = createWorkflowRegistry([
+      {
+        publicId: "wf-connect-first-workflow",
+        packageId: "pkg-social",
+        publicName: "Connect First Workflow",
+        description: "Shape the opening business run.",
+        privateMapping: { paperclipWorkflowId: "pc-workflow-2", paperclipCompanyId: "pc-company-2" },
+        requiredCapabilities: ["text_generation"],
+        executionEngine: "wf_harness_v1"
+      }
+    ]);
+
+    expect(registry.isHarnessEligible("wf-connect-first-workflow")).toBe(true);
+    expect(registry.listHarnessEligibleWorkflowIds()).toEqual(["wf-connect-first-workflow"]);
+    expect(registry.listPublicWorkflows()).toEqual([
+      {
+        id: "wf-connect-first-workflow",
+        packageId: "pkg-social",
+        name: "Connect First Workflow",
+        description: "Shape the opening business run.",
+        requiredCapabilities: ["text_generation"]
+      }
+    ]);
+  });
+
+  it("uses enabled workflow ids to expose only the harness slice that is actually routed there", () => {
+    const disabledRegistry = createHarnessWorkflowRegistry({ harnessEnabledWorkflowIds: [] });
+    const enabledRegistry = createHarnessWorkflowRegistry({ harnessEnabledWorkflowIds: ["wf_connect_first_workflow"] });
+
+    expect(disabledRegistry.listHarnessEligibleWorkflowIds()).toEqual([]);
+    expect(enabledRegistry.listHarnessEligibleWorkflowIds()).toEqual(["wf_connect_first_workflow"]);
+    expect(enabledRegistry.getDefinition("wf_connect_first_workflow").packageId).toBe("pkg_bib_connect");
   });
 
   it("maps internal run records to Wealth Factory DTOs and blocks forbidden fields", () => {

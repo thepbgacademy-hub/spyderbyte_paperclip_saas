@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-
 
 import { createBrowserDashboardClient, type DashboardSnapshot } from "./dashboard-client.js";
 import DashboardPages, { type DashboardPageActions, type DashboardPageState } from "./pages/DashboardPages.js";
+import HarnessBoardPage from "./pages/HarnessBoardPage.js";
 import {
   createInitialConnectedProvidersFromSnapshot,
   getInitialSelectedRoleId,
@@ -238,7 +239,8 @@ export default function App() {
       onSearchChange={setSearchQuery}
     >
       <Routes>
-        {VISIBLE_WEALTH_FACTORY_ROUTES.map((route) => (
+        <Route path="/board" element={<HarnessBoardPage />} />
+        {VISIBLE_WEALTH_FACTORY_ROUTES.filter((route) => route.key !== "board").map((route) => (
           <Route
             key={route.key}
             path={route.path}

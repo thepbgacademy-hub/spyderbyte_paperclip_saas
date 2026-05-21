@@ -17,6 +17,7 @@ export type AppEnv = {
   paperclipIssueAgentId?: string;
   paperclipIssuePollIntervalMs: number;
   paperclipIssueMaxPollAttempts: number;
+  harnessEnabledWorkflowIds: readonly string[];
   workerConcurrency: number;
   workerMaxActivePerTenant: number;
 };
@@ -119,6 +120,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   if (workerMaxActivePerTenant === null) {
     invalidKeys.push("WF_WORKER_MAX_ACTIVE_PER_TENANT");
   }
+  const harnessEnabledWorkflowIds = parseCommaSeparatedValues(source.WF_HARNESS_ENABLED_WORKFLOW_IDS);
 
   if (missingKeys.length > 0 || invalidKeys.length > 0) {
     throw new EnvValidationError(missingKeys, invalidKeys);
@@ -143,6 +145,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     ...(paperclipIssueAgentId ? { paperclipIssueAgentId } : {}),
     paperclipIssuePollIntervalMs: paperclipIssuePollIntervalMs as number,
     paperclipIssueMaxPollAttempts: paperclipIssueMaxPollAttempts as number,
+    harnessEnabledWorkflowIds,
     workerConcurrency: workerConcurrency as number,
     workerMaxActivePerTenant: workerMaxActivePerTenant as number
   };
@@ -250,4 +253,15 @@ function readJsonStringMap(value: string | undefined): Readonly<Record<string, s
   } catch {
     return null;
   }
+}
+
+function parseCommaSeparatedValues(value: string | undefined): readonly string[] {
+  if (!hasValue(value)) {
+    return [];
+  }
+
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }

@@ -6,6 +6,7 @@ import { createFixedWindowRateLimiter } from "../src/security/rate-limit.js";
 describe("split-origin security boundary", () => {
   it("allows only configured portal origins", () => {
     expect(assertAllowedOrigin("https://portal.wealthfactory.example", ["https://portal.wealthfactory.example"])).toEqual({
+      "access-control-allow-credentials": "true",
       "access-control-allow-origin": "https://portal.wealthfactory.example",
       vary: "Origin"
     });
