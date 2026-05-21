@@ -76,6 +76,23 @@ export type HarnessCardEventRow = {
   createdAt: string;
 };
 
+export type HarnessProposalStatus = "proposed" | "approved";
+
+export type HarnessProposalRow = {
+  id: string;
+  runId: string;
+  parentCardId: string;
+  requestedByCardId: string;
+  requestedByPersona: string;
+  persona: string;
+  title: string;
+  deliverableType: string;
+  status: HarnessProposalStatus;
+  approvedCardId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type SecretReferenceRow = {
   id: string;
   tenantId: string;

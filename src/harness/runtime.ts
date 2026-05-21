@@ -193,19 +193,21 @@ export function createHarnessRuntime(options: HarnessRuntimeOptions = {}) {
       });
     },
 
-    approveSubCard(proposalId: string): HarnessCardRecord {
+    approveSubCard(proposalId: string, options?: { cardId?: string }): HarnessCardRecord {
       const proposal = requireProposal(proposalId);
       requireCeoCard(proposal.runId);
-      const approvedCard = storeCard(
-        buildCard({
-          runId: proposal.runId,
-          parentCardId: proposal.parentCardId,
-          persona: proposal.persona,
-          title: proposal.title,
-          deliverableType: proposal.deliverableType,
-          state: "queued"
-        })
-      );
+      const approvedCard = buildCard({
+        runId: proposal.runId,
+        parentCardId: proposal.parentCardId,
+        persona: proposal.persona,
+        title: proposal.title,
+        deliverableType: proposal.deliverableType,
+        state: "queued"
+      });
+      if (options?.cardId) {
+        approvedCard.id = options.cardId;
+      }
+      const storedCard = storeCard(approvedCard);
 
       proposalsById.delete(proposalId);
       proposalIdsByRun.set(
@@ -213,12 +215,22 @@ export function createHarnessRuntime(options: HarnessRuntimeOptions = {}) {
         (proposalIdsByRun.get(proposal.runId) ?? []).filter((id) => id !== proposalId)
       );
 
-      return approvedCard;
+      return storedCard;
     },
 
     resumeRun(savedState: HarnessPersistedState) {
+      const existingCardIds = cardIdsByRun.get(savedState.run.id) ?? [];
+      for (const cardId of existingCardIds) {
+        cardsById.delete(cardId);
+      }
+      const existingProposalIds = proposalIdsByRun.get(savedState.run.id) ?? [];
+      for (const proposalId of existingProposalIds) {
+        proposalsById.delete(proposalId);
+      }
+
       cardIdsByRun.set(savedState.run.id, []);
       proposalIdsByRun.set(savedState.run.id, []);
+      ceoCardIdByRun.delete(savedState.run.id);
       storeRun(savedState.run);
 
       for (const card of savedState.cards) {

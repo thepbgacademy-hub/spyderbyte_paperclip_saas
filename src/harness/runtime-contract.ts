@@ -1,4 +1,4 @@
-export type HarnessProposalStatus = "proposed";
+export type HarnessProposalStatus = "proposed" | "approved";
 
 import type { HarnessCardRecord, HarnessPersona, HarnessRunRecord, HarnessRuntimeContext } from "./types.js";
 
@@ -14,6 +14,7 @@ export interface HarnessSubCardProposal {
   title: string;
   deliverableType: string;
   status: HarnessProposalStatus;
+  approvedCardId?: string;
 }
 
 export interface StartHarnessRunInput {

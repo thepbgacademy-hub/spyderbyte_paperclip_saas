@@ -1,4 +1,5 @@
 import { ApiAuthError, type ApiSession } from "../api/dashboard-api.js";
+import { randomUUID } from "node:crypto";
 import type { HarnessCardEventRecord, HarnessCardRecord, HarnessRunRecord } from "./types.js";
 import { createHarnessCardEventRecord, type HarnessCardState } from "./types.js";
 import { transitionHarnessCard, transitionHarnessRun } from "./state-machine.js";
@@ -9,6 +10,7 @@ import {
   ActivePackageInstallRequiredError,
   TenantMembershipRequiredError
 } from "../db/supabase-repositories.js";
+import type { HarnessSubCardProposal } from "./runtime-contract.js";
 
 export type HarnessBoardActivityItem = {
   id: string;
@@ -51,6 +53,16 @@ export type HarnessBoardResponse = {
   packageId: string;
   columns: HarnessBoardColumnView[];
   cards: HarnessBoardCardView[];
+  pendingApprovals: HarnessPendingApprovalView[];
+};
+
+export type HarnessPendingApprovalView = {
+  id: string;
+  title: string;
+  requestedByPersona: string;
+  targetPersona: string;
+  deliverableLabel: string;
+  statusLabel: string;
 };
 
 type HarnessWorkflowRegistry = {
@@ -118,8 +130,115 @@ export function createHarnessBoardService(options: {
         options.repository.listCardsForRun(run.id),
         options.repository.listEventsForRun(run.id)
       ]);
+      const proposals = await options.repository.listProposalsForRun(run.id);
 
-      return buildHarnessBoardResponse({ run, cards, events });
+      return buildHarnessBoardResponse({ run, cards, events, proposals });
+    },
+
+    async approveProposal(request: { authorization: string; cookie?: string; proposalId: string }): Promise<{ cardId: string }> {
+      const session = await options.authenticate({
+        authorization: request.authorization,
+        ...(request.cookie ? { cookie: request.cookie } : {})
+      });
+      if (!session) {
+        throw new ApiAuthError();
+      }
+
+      const workflowId = options.workflowRegistry.listHarnessEligibleWorkflowIds()[0];
+      if (!workflowId) {
+        throw new Error("Harness workflow is not enabled");
+      }
+
+      const workflowDefinition = options.workflowRegistry.getDefinition(workflowId);
+      try {
+        await options.requireTenantMember({ tenantId: session.tenantId, userId: session.userId });
+        await options.requireActivePackageInstall({
+          tenantId: session.tenantId,
+          packageId: workflowDefinition.packageId
+        });
+      } catch (error) {
+        if (
+          error instanceof TenantMembershipRequiredError ||
+          error instanceof ActivePackageInstallRequiredError
+        ) {
+          throw new ApiAuthError();
+        }
+
+        throw error;
+      }
+
+      if (!options.runAtomically) {
+        throw new Error("Harness approval mutations require atomic execution");
+      }
+
+      const runApproval = async (repository: HarnessRepository) => {
+        const proposal = await repository.getProposal(request.proposalId);
+        if (!proposal) {
+          throw new Error("Harness proposal was not found");
+        }
+        if (proposal.status === "approved" && proposal.approvedCardId) {
+          return { cardId: proposal.approvedCardId };
+        }
+
+        const run = await repository.getRun(proposal.runId);
+        if (!run || run.tenantId !== session.tenantId) {
+          throw new ApiAuthError();
+        }
+
+        const [cards, proposals] = await Promise.all([
+          repository.listCardsForRun(run.id),
+          repository.listProposalsForRun(run.id)
+        ]);
+        runtime.resumeRun({
+          run,
+          cards,
+          proposals
+        });
+        const approvedCard = runtime.approveSubCard(request.proposalId, {
+          cardId: randomUUID()
+        });
+        const approvalUpdate = await repository.markProposalApproved({
+          proposalId: proposal.id,
+          approvedCardId: approvedCard.id
+        });
+        if (!approvalUpdate.updated) {
+          const updatedProposal = await repository.getProposal(proposal.id);
+          if (updatedProposal?.approvedCardId) {
+            return { cardId: updatedProposal.approvedCardId };
+          }
+          throw new Error("Harness proposal approval conflicted");
+        }
+
+        await repository.insertCard(approvedCard);
+        await repository.insertEvent(
+          createHarnessCardEventRecord({
+            cardId: proposal.parentCardId,
+            eventKind: "result_recorded",
+            payload: {
+              title: proposal.title,
+              targetPersona: proposal.persona,
+              approvedCardId: approvedCard.id
+            }
+          })
+        );
+        await repository.insertEvent(
+          createHarnessCardEventRecord({
+            cardId: approvedCard.id,
+            eventKind: "created",
+            payload: {
+              title: approvedCard.title,
+              persona: approvedCard.persona,
+              state: approvedCard.state
+            }
+          })
+        );
+
+        return { cardId: approvedCard.id };
+      };
+
+      const result = await options.runAtomically(runApproval);
+
+      return { cardId: result.cardId };
     }
   };
 }
@@ -258,6 +377,7 @@ function buildHarnessBoardResponse(input: {
   run: HarnessRunRecord;
   cards: readonly HarnessCardRecord[];
   events: readonly HarnessCardEventRecord[];
+  proposals: readonly HarnessSubCardProposal[];
 }): HarnessBoardResponse {
   const activityByCardId = new Map<string, HarnessBoardActivityItem[]>();
   for (const event of input.events) {
@@ -279,7 +399,17 @@ function buildHarnessBoardResponse(input: {
     workflowId: input.run.workflowId,
     packageId: input.run.packageId,
     columns,
-    cards
+    cards,
+    pendingApprovals: input.proposals
+      .filter((proposal) => proposal.status === "proposed")
+      .map((proposal) => ({
+        id: proposal.id,
+        title: proposal.title,
+        requestedByPersona: proposal.requestedByPersona.toUpperCase(),
+        targetPersona: proposal.persona.toUpperCase(),
+        deliverableLabel: humanizeDeliverableType(proposal.deliverableType),
+        statusLabel: "Pending CEO approval"
+      }))
   };
 }
 

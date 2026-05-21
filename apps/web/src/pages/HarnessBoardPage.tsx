@@ -184,6 +184,7 @@ export function HarnessBoardPage() {
 
   const cards = board?.cards ?? [];
   const columns = board?.columns ?? [];
+  const pendingApprovals = board?.pendingApprovals ?? [];
   const activeCard = cards.find((card) => card.id === openCardId) ?? null;
   const personaMetrics = useMemo(() => getPersonaMetrics(cards), [cards]);
   const currentFocus = activeCard?.title ?? cards[0]?.title ?? "Preparing the next move";
@@ -212,6 +213,10 @@ export function HarnessBoardPage() {
             <p style={styles.metricLabel}>Persona workload</p>
             <p style={styles.metricValue}>{personaMetrics.length > 1 ? "Balanced" : "Focused"}</p>
           </article>
+          <article style={styles.metricCard}>
+            <p style={styles.metricLabel}>CEO approvals</p>
+            <p style={styles.metricValue}>{pendingApprovals.length}</p>
+          </article>
         </div>
       </section>
 
@@ -236,6 +241,26 @@ export function HarnessBoardPage() {
               ))}
             </ul>
             {!board && loadError ? <p style={{ ...styles.panelBody, marginTop: "0.8rem" }}>{loadError}</p> : null}
+          </section>
+
+          <section style={styles.panel}>
+            <h2 style={styles.panelTitle}>CEO approvals</h2>
+            <p style={styles.panelBody}>Pending sub-card requests that still need CEO approval before new lanes open.</p>
+            <ul style={styles.personaList}>
+              {pendingApprovals.length === 0 ? (
+                <li style={styles.personaItem}>
+                  <span style={styles.personaName}>No pending approvals</span>
+                  <span style={styles.personaDetail}>Board is staying bounded</span>
+                </li>
+              ) : (
+                pendingApprovals.map((approval) => (
+                  <li key={approval.id} style={styles.personaItem}>
+                    <span style={styles.personaName}>{approval.targetPersona}</span>
+                    <span style={styles.personaDetail}>{approval.statusLabel}</span>
+                  </li>
+                ))
+              )}
+            </ul>
           </section>
 
           <HarnessCardDrawer card={activeCard} onClose={() => setOpenCardId("")} open={Boolean(activeCard)} />

@@ -34,3 +34,10 @@ Capture design-stage mistakes, false assumptions, and pressure-test lessons so t
 6. PowerShell separator quirks remain real on this machine. Prefer native sequential commands and explicit cleanup over bash-style chaining.
 7. Browser fallback data must stay loopback-only. A polished fake CEO/CFO board is useful for static local shell work, but it becomes a dangerous false green if remote or authenticated paths can silently keep showing it after API/auth failures.
 8. Tenant/package access denials and infrastructure faults cannot share the same generic error path. The harness board must fail closed on missing membership or package entitlement without masking DB outages as `401 unauthorized`.
+9. A narrow route expansion still needs the surrounding type surface updated immediately. Adding proposal approval behavior without extending the handler option type broke `tsc` even though the runtime logic was correct.
+10. Persisted CEO approvals need a real table, not just events. Proposal identity, pending status, and idempotent approval are too fragile if they are inferred from card-event history alone.
+11. PowerShell path expansion is not the same as shell glob expansion. Targeted `rg` scans should use explicit file lists or `--glob` filters, not raw `tests/harness-*.test.ts` path arguments, or the scan itself becomes a false sharp edge.
+12. Proposal approval ordering has to respect the real database contract, not just the in-memory repository. When an approval row references a newly created child card, the foreign key must either be deferred inside the transaction or the mutation order must change accordingly.
+13. Approval mutations are not safe as an optional best-effort multi-step write path. If a future harness mutation needs multiple writes to stay consistent, require an atomic runner explicitly instead of normalizing non-transactional usage in tests or public service construction.
+
+14. A stale .git/index.lock can linger after interrupted git operations on this machine. Clear it explicitly before staging instead of retrying blindly or assuming another live git process is still running.

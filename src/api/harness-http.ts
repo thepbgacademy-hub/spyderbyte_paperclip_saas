@@ -6,6 +6,7 @@ import { assertWealthFactoryResponse } from "../wealthfactory/response-guard.js"
 
 type HarnessApi = {
   listBoardState(request: { authorization: string; cookie?: string }): Promise<HarnessBoardResponse>;
+  approveProposal(request: { authorization: string; cookie?: string; proposalId: string }): Promise<{ cardId: string }>;
 };
 
 type RateLimiter = {
@@ -15,6 +16,7 @@ type RateLimiter = {
 export function createHarnessHttpHandler(options: {
   allowedOrigins: readonly string[];
   listBoardState: HarnessApi["listBoardState"];
+  approveProposal: HarnessApi["approveProposal"];
   rateLimiter: RateLimiter;
   maxBodyBytes?: number;
 }) {
@@ -30,24 +32,31 @@ export function createHarnessHttpHandler(options: {
       return { status: 403, headers: securityHeaders, body: { code: "request_rejected" } };
     }
 
-    if (request.method === "OPTIONS" && request.path === "/api/harness/board") {
+    if (
+      request.method === "OPTIONS" &&
+      (request.path === "/api/harness/board" || request.path.startsWith("/api/harness/proposals/"))
+    ) {
       return {
         status: 204,
         headers: {
           ...securityHeaders,
           ...corsHeaders,
-          "access-control-allow-methods": "GET, OPTIONS",
+          "access-control-allow-methods": "GET, POST, OPTIONS",
           "access-control-allow-headers": "authorization, content-type"
         },
         body: null
       };
     }
 
-    if (request.method !== "GET" || request.path !== "/api/harness/board") {
+    if (
+      request.method !== "GET" &&
+      !(request.method === "POST" && request.path.startsWith("/api/harness/proposals/"))
+    ) {
       return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
     }
 
-    const rateLimit = await options.rateLimiter.consume(`${request.ip}:harness-board`);
+    const routeKey = request.path === "/api/harness/board" ? "harness-board" : "harness-proposal-approve";
+    const rateLimit = await options.rateLimiter.consume(`${request.ip}:${routeKey}`);
     if (!rateLimit.allowed) {
       return {
         status: 429,
@@ -57,7 +66,22 @@ export function createHarnessHttpHandler(options: {
     }
 
     try {
-      const body = await options.listBoardState({
+      if (request.method === "GET" && request.path === "/api/harness/board") {
+        const body = await options.listBoardState({
+          authorization: request.headers.authorization ?? "",
+          ...(request.headers.cookie ? { cookie: request.headers.cookie } : {})
+        });
+        assertWealthFactoryResponse(body);
+        return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
+      }
+
+      const proposalMatch = /^\/api\/harness\/proposals\/([^/]+)\/approve$/u.exec(request.path);
+      if (!proposalMatch) {
+        return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
+      }
+
+      const body = await options.approveProposal({
+        proposalId: decodeURIComponent(proposalMatch[1] ?? ""),
         authorization: request.headers.authorization ?? "",
         ...(request.headers.cookie ? { cookie: request.headers.cookie } : {})
       });

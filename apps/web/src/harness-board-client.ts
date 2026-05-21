@@ -118,7 +118,8 @@ const defaultBoardResponse: HarnessBoardResponse = {
         }
       ]
     }
-  ]
+  ],
+  pendingApprovals: []
 };
 
 function isLoopbackHost(hostname: string): boolean {

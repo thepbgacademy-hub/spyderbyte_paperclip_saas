@@ -96,7 +96,8 @@ vi.mock("../src/harness/board-service.js", () => ({
           ]
         }
       ]
-    })
+    }),
+    approveProposal: vi.fn().mockResolvedValue({ cardId: "card_approved_1" })
   }))
 }));
 

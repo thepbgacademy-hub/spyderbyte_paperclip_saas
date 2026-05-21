@@ -10,6 +10,7 @@ import {
 import { createInMemoryHarnessRepository } from "../src/harness/repository.js";
 
 const migration = readFileSync("supabase/migrations/0013_wf_harness_runs_cards.sql", "utf8");
+const proposalMigration = readFileSync("supabase/migrations/0014_wf_harness_subcard_proposals.sql", "utf8");
 
 describe("harness persistence records", () => {
   it("creates run, card, and event records with durable ids and sanitized runtime context", () => {
@@ -78,10 +79,37 @@ describe("harness persistence records", () => {
     await repository.insertRun(run);
     await repository.insertCard(card);
     await repository.insertEvent(event);
+    await repository.insertProposal({
+      id: "proposal_1",
+      runId: run.id,
+      parentCardId: card.id,
+      requestedByCardId: card.id,
+      requestedByPersona: "ceo",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review",
+      status: "proposed"
+    });
+    await repository.markProposalApproved({
+      proposalId: "proposal_1",
+      approvedCardId: "approved_card_1"
+    });
 
     await expect(repository.getRun(run.id)).resolves.toEqual(run);
     await expect(repository.listCardsForRun(run.id)).resolves.toEqual([card]);
     await expect(repository.listEventsForCard(card.id)).resolves.toEqual([event]);
+    await expect(repository.getProposal("proposal_1")).resolves.toEqual({
+      id: "proposal_1",
+      runId: run.id,
+      parentCardId: card.id,
+      requestedByCardId: card.id,
+      requestedByPersona: "ceo",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review",
+      status: "approved",
+      approvedCardId: "approved_card_1"
+    });
   });
 });
 
@@ -96,5 +124,14 @@ describe("harness persistence migration", () => {
     expect(migration).toMatch(/create table if not exists wfpc\.harness_card_events/i);
     expect(migration).toMatch(/card_id uuid not null references wfpc\.harness_cards\(id\) on delete cascade/i);
     expect(migration).toMatch(/payload jsonb not null default '\{\}'::jsonb/i);
+  });
+
+  it("creates durable sub-card proposal storage for CEO approval work", () => {
+    expect(proposalMigration).toMatch(/create table if not exists wfpc\.harness_subcard_proposals/i);
+    expect(proposalMigration).toMatch(/run_id uuid not null references wfpc\.harness_runs\(id\) on delete cascade/i);
+    expect(proposalMigration).toMatch(/status text not null check \(status in \('proposed', 'approved'\)\)/i);
+    expect(proposalMigration).toMatch(
+      /approved_card_id uuid null references wfpc\.harness_cards\(id\) on delete set null deferrable initially deferred/i
+    );
   });
 });

@@ -14,6 +14,7 @@ The first harness implementation slice is now built and verified:
 - persist harness runs, cards, and card events in dedicated tables
 - expose a guarded harness board route backed by tenant-scoped persisted state
 - render the first Hermes-style board page through a real API path, with browser-only fallback data kept outside the production page component
+- persist sub-card proposals and expose the first guarded CEO approval mutation path
 
 ## Current Branch
 
@@ -50,24 +51,30 @@ The first harness implementation slice is now built and verified:
 ## Completed In This Phase
 
 - Added durable harness persistence with `wfpc.harness_runs`, `wfpc.harness_cards`, and `wfpc.harness_card_events`.
+- Added durable proposal persistence with `wfpc.harness_subcard_proposals`.
 - Added repository-backed harness board service that authenticates the tenant, enforces membership, seeds the first CEO/CFO/COO card set once, and reads customer-safe board state from persisted records.
+- Added persisted pending-approval hydration plus a guarded `POST /api/harness/proposals/:proposalId/approve` mutation that turns one pending proposal into one queued child card without widening the board into a generic editing surface.
 - Tightened the board access boundary so membership/package denials fail closed as auth, while real infrastructure faults still surface as internal failures instead of being masked as `401`.
 - Wired the runtime server to the real harness board service instead of static fixtures.
 - Wired the board page to fetch guarded board state from `/api/harness/board`, while keeping a loopback-only browser fallback board for static Vite development and Playwright stability.
 - Added harness workflow gating that now actually consumes `WF_HARNESS_ENABLED_WORKFLOW_IDS` through the harness workflow registry.
+- Added a lightweight CEO approvals panel to the board shell so pending approval work is visible without exposing backend chatter.
 - Re-ran the tenant/secret scans and updated the harness security report at `wf-harness/audit/2026-05-21/security-report.md`.
-- Cleared the final repo-specific reviewer pass with no remaining findings in the touched harness slice.
+- Cleared the final repo-specific reviewer pass on code correctness, with one remaining verification note: the deferred foreign-key approval seam is now guarded in code and migration text, but it is not yet exercised through a real database-backed transaction harness.
 
 ## Sharp Edges Logged
 
 - Reviewer surfaced that the first cut was still a static demo board, the board handler masked internal failures as `401`, and harness-enabled workflow ids were not consumed in a live path. All three were fixed in this phase.
 - Reviewer also surfaced that remote/authenticated board routes could not keep using fallback data and that DB outages in tenant/package gate checks must not be disguised as auth failures. Both edges were fixed and logged.
+- The next mutation slice exposed a new sharp edge: adding `approveProposal` behavior to the handler without updating the handler option type broke the TypeScript build immediately. This is logged as a seam reminder for future narrow-route expansions.
 - The intentional E2E fail step left a stray Python server on `127.0.0.1:5173`, which caused false directory-listing failures until the process was killed. This is logged so the mistake is not repeated.
+- The approval hardening pass revealed one remaining proof gap: the repo now requires atomic approval mutations and marks the proposal-to-card foreign key as deferred, but the exact transaction-backed DB seam still needs a stronger integration harness than the current in-memory passthrough tests.
 
 ## Next Step
 
 Continue the harness build by replacing more of the live execution slice behind the persisted CEO/card model:
 
-- move from seeded board bootstrap toward real run mutation paths
-- add explicit harness audit events beyond the current run/card/event persistence
-- start defining the CEO approval rules and sub-card policies in executable runtime code instead of seed defaults
+- move from approval-only persisted mutation toward broader real run/card mutation paths
+- add explicit harness audit events beyond the current run/card/event/proposal persistence
+- start defining richer CEO approval rules and card-count discipline in executable runtime code instead of seed defaults
+- add database-backed transaction coverage for the deferred proposal-approval seam so future refactors cannot silently break the approval-before-card-insert ordering again

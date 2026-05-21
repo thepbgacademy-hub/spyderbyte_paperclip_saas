@@ -106,6 +106,7 @@ describe("harness board UI", () => {
 
     expect(markup).toContain("Harness board");
     expect(markup).toContain("Persona workload");
+    expect(markup).toContain("CEO approvals");
     expect(markup).not.toContain("raw execution log");
     expect(markup).not.toContain("harness-browser-fallback");
   });

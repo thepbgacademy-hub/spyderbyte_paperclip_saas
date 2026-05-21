@@ -9,6 +9,7 @@ describe("harness HTTP boundary", () => {
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
       listBoardState,
+      approveProposal: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
     });
 
@@ -65,11 +66,13 @@ describe("harness HTTP boundary", () => {
             }
           ]
         }
-      ]
+      ],
+      pendingApprovals: []
     });
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
       listBoardState,
+      approveProposal: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
     });
 
@@ -101,6 +104,7 @@ describe("harness HTTP boundary", () => {
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
       listBoardState,
+      approveProposal: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
     });
 
@@ -123,6 +127,7 @@ describe("harness HTTP boundary", () => {
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
       listBoardState,
+      approveProposal: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: false, remaining: 0, resetAt: 1 }) }
     });
 
@@ -142,6 +147,7 @@ describe("harness HTTP boundary", () => {
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
       listBoardState: vi.fn().mockRejectedValueOnce(new ApiAuthError()).mockRejectedValueOnce(new Error("db_down")),
+      approveProposal: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
     });
 
@@ -159,5 +165,35 @@ describe("harness HTTP boundary", () => {
     expect(unauthorized.status).toBe(401);
     expect(serviceUnavailable.status).toBe(500);
     expect(serviceUnavailable.body).toEqual({ code: "service_unavailable" });
+  });
+
+  it("approves a persisted proposal through the guarded write route", async () => {
+    const approveProposal = vi.fn().mockResolvedValue({ cardId: "card_new_1" });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      approveProposal,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/proposals/proposal_1/approve",
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        cookie: "wf_session=abc"
+      },
+      bodyByteLength: 0,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(approveProposal).toHaveBeenCalledWith({
+      proposalId: "proposal_1",
+      authorization: "Bearer valid",
+      cookie: "wf_session=abc"
+    });
+    expect(response.body).toEqual({ cardId: "card_new_1" });
   });
 });

@@ -120,4 +120,52 @@ describe("harness runtime", () => {
     expect(approved.parentCardId).toBe("card_cfo");
     expect(runtime.listProposals("run_123")).toHaveLength(0);
   });
+
+  it("rejects proposal approval when resumed state is missing the CEO gate card", () => {
+    const runtime = createHarnessRuntime();
+    runtime.resumeRun({
+      run: {
+        id: "run_456",
+        tenantId: "tenant_123",
+        workflowId: "wf_connect_first_workflow",
+        packageId: "pkg_bib_connect",
+        orchestratorPersona: "ceo",
+        state: "active",
+        runtimeContext: {
+          providerKind: "openai_api",
+          credentialLabel: "Primary OpenAI"
+        },
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      },
+      cards: [
+        {
+          id: "card_cfo_only",
+          runId: "run_456",
+          parentCardId: null,
+          persona: "cfo",
+          title: "Review numbers",
+          deliverableType: "finance_review",
+          state: "working",
+          createdAt: "2026-05-21T10:01:00.000Z",
+          updatedAt: "2026-05-21T10:03:00.000Z"
+        }
+      ],
+      proposals: [
+        {
+          id: "proposal_orphaned",
+          runId: "run_456",
+          parentCardId: "card_cfo_only",
+          requestedByCardId: "card_cfo_only",
+          requestedByPersona: "cfo",
+          persona: "researcher",
+          title: "Gather competitor price anchors",
+          deliverableType: "research_brief",
+          status: "proposed"
+        }
+      ]
+    });
+
+    expect(() => runtime.approveSubCard("proposal_orphaned")).toThrow(/missing ceo card/i);
+  });
 });

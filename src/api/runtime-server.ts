@@ -224,6 +224,7 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
   const harnessBoardHandler = createHarnessHttpHandler({
     allowedOrigins: options.env.allowedOrigins,
     listBoardState: harnessBoardApi.listBoardState,
+    approveProposal: harnessBoardApi.approveProposal,
     rateLimiter: createPostgresFixedWindowRateLimiter({ runner: transactionRunner, limit: 120, windowMs: 60_000 })
   });
   const healthHandler = createHealthHttpHandler({

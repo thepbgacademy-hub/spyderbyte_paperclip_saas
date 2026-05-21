@@ -17,6 +17,8 @@ This file tracks the new harness subproject only.
 - [x] Define persisted run-state model for CEO orchestration.
 - [x] Define persisted hybrid-card model for child personas.
 - [ ] Define CEO approval rules for dynamic card creation beyond the seeded bootstrap defaults.
+  - [x] Persist sub-card proposals as first-class harness state.
+  - [x] Add a guarded CEO approval mutation path for persisted proposals.
 - [x] Define resume-from-crash behavior and checkpoint policy.
 - [x] Define Wealth Factory to harness runtime contract for resolved BYOK context.
 - [x] Define Hermes-style dashboard information architecture for Wealth Factory.
@@ -35,7 +37,8 @@ This file tracks the new harness subproject only.
 
 ## Next Slice
 
-- [ ] Replace seeded harness board defaults with real persisted CEO/card mutation paths.
-- [ ] Add explicit CEO approval logic for sub-card requests and card-count discipline.
+- [ ] Add database-backed transaction coverage for the deferred proposal-approval seam so approval-before-card-insert ordering is proven against the real persistence layer.
+- [ ] Replace seeded harness board defaults with broader real persisted CEO/card mutation paths beyond approval-only flow.
+- [ ] Add fuller CEO approval logic for sub-card requests and card-count discipline beyond the current persisted proposal/approve seam.
 - [ ] Add harness-specific audit publishing beyond the persisted card-event trail.
 - [ ] Expand the dashboard visual system once the additional Hermes/Obsidian reference screenshots are reviewed.
