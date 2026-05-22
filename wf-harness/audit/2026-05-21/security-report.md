@@ -27,6 +27,8 @@ Scope: First custom harness slice under `src/harness`, `src/api/harness-http.ts`
 - Re-ran the scan after adding persisted sub-card proposals and the guarded CEO approval mutation path; the only matches in the touched slice were expected auth header names, dummy `Bearer valid` test values, and the intentional runtime-context sanitization test fixture.
 - Re-ran the scan after the reviewer-fix pass for stale CEO gate reset and idempotent proposal approval. The only matches remained expected auth header names, dummy test placeholders, and the intentional `secretValues` sanitization fixture; no live secret material was introduced.
 - Re-ran the scan after hardening proposal approval to require an atomic runner and after deferring the approval-card foreign key for transaction-safe persistence. The result stayed clean: only expected auth header names, dummy placeholders, and the sanitization fixture matched.
+- Re-ran the scan after adding the guarded `POST /api/harness/cards` direct-child mutation and shrinking bootstrap seeding to CEO only. The result stayed clean: no live secret material was introduced, and the narrowed write seam still exposes only expected auth names, dummy placeholders, and the intentional sanitization fixture.
+- Re-ran the scan after hardening the direct-child mutation for retry idempotency, open-card limits, and non-nested atomic seeding. The result stayed clean: only expected auth names, dummy placeholders, and the intentional sanitization fixture remained in scope.
 
 ## OWASP-Oriented Findings
 

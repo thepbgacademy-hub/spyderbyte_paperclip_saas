@@ -5,7 +5,7 @@ import {
   ActivePackageInstallRequiredError,
   TenantMembershipRequiredError
 } from "../src/db/supabase-repositories.js";
-import { createHarnessBoardService } from "../src/harness/board-service.js";
+import { HarnessCardCreationConflictError, createHarnessBoardService } from "../src/harness/board-service.js";
 import { createInMemoryHarnessRepository } from "../src/harness/repository.js";
 import { createHarnessWorkflowRegistry } from "../src/wealthfactory/workflow-registry.js";
 
@@ -36,10 +36,9 @@ describe("harness board service", () => {
     expect(board.packageId).toBe("pkg_bib_connect");
     expect(board.columns.map((column) => column.id)).toEqual(["planning", "working", "waiting", "blocked", "done"]);
     expect(board.pendingApprovals).toEqual([]);
-    expect(board.cards).toHaveLength(3);
+    expect(board.cards).toHaveLength(1);
     expect(board.cards.some((card) => card.persona === "CEO")).toBe(true);
-    expect(board.cards.some((card) => card.persona === "CFO" && card.lane === "working")).toBe(true);
-    expect(board.cards.some((card) => card.persona === "COO" && card.lane === "done")).toBe(true);
+    expect(board.cards.every((card) => card.persona === "CEO")).toBe(true);
     expect(requireTenantMember).toHaveBeenCalledWith({ tenantId: "tenant_123", userId: "user_123" });
     expect(requireActivePackageInstall).toHaveBeenCalledWith({
       tenantId: "tenant_123",
@@ -51,8 +50,8 @@ describe("harness board service", () => {
       workflowId: "wf_connect_first_workflow"
     });
     expect(persistedRun?.state).toBe("active");
-    await expect(repository.listCardsForRun(board.runId)).resolves.toHaveLength(3);
-    await expect(repository.listEventsForRun(board.runId)).resolves.toHaveLength(6);
+    await expect(repository.listCardsForRun(board.runId)).resolves.toHaveLength(1);
+    await expect(repository.listEventsForRun(board.runId)).resolves.toHaveLength(2);
   });
 
   it("reuses the persisted board instead of reseeding duplicate runs", async () => {
@@ -76,7 +75,7 @@ describe("harness board service", () => {
     const secondBoard = await service.listBoardState({ authorization: "Bearer valid" });
 
     expect(secondBoard.runId).toBe(firstBoard.runId);
-    await expect(repository.listCardsForRun(firstBoard.runId)).resolves.toHaveLength(3);
+    await expect(repository.listCardsForRun(firstBoard.runId)).resolves.toHaveLength(1);
   });
 
   it("fails closed when the harness workflow is not enabled or the session is invalid", async () => {
@@ -193,14 +192,18 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const cfoCard = board.cards.find((card) => card.persona === "CFO");
-    expect(cfoCard).toBeDefined();
+    const created = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
 
     await repository.insertProposal({
       id: "proposal_approval_1",
       runId: board.runId,
-      parentCardId: cfoCard!.id,
-      requestedByCardId: cfoCard!.id,
+      parentCardId: created.cardId,
+      requestedByCardId: created.cardId,
       requestedByPersona: "cfo",
       persona: "researcher",
       title: "Gather competitor price anchors",
@@ -247,14 +250,18 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const cfoCard = board.cards.find((card) => card.persona === "CFO");
-    expect(cfoCard).toBeDefined();
+    const created = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
 
     await repository.insertProposal({
       id: "proposal_repeat_1",
       runId: board.runId,
-      parentCardId: cfoCard!.id,
-      requestedByCardId: cfoCard!.id,
+      parentCardId: created.cardId,
+      requestedByCardId: created.cardId,
       requestedByPersona: "cfo",
       persona: "researcher",
       title: "Validate renewal assumptions",
@@ -296,15 +303,15 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const cfoCard = board.cards.find((card) => card.persona === "CFO");
-    expect(cfoCard).toBeDefined();
+    const ceoCard = board.cards.find((card) => card.persona === "CEO");
+    expect(ceoCard).toBeDefined();
 
     await repository.insertProposal({
       id: "proposal_atomic_guard_1",
       runId: board.runId,
-      parentCardId: cfoCard!.id,
-      requestedByCardId: cfoCard!.id,
-      requestedByPersona: "cfo",
+      parentCardId: ceoCard!.id,
+      requestedByCardId: ceoCard!.id,
+      requestedByPersona: "ceo",
       persona: "researcher",
       title: "Gather expansion risk notes",
       deliverableType: "research_brief",
@@ -317,5 +324,259 @@ describe("harness board service", () => {
         proposalId: "proposal_atomic_guard_1"
       })
     ).rejects.toThrow(/require atomic execution/i);
+  });
+
+  it("creates a CEO-owned direct child card in approved state and persists bootstrap-style events", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const result = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    const cards = await repository.listCardsForRun(board.runId);
+    const createdCard = cards.find((card) => card.id === result.cardId);
+    const events = await repository.listEventsForCard(result.cardId);
+
+    expect(createdCard).toMatchObject({
+      id: result.cardId,
+      parentCardId: cards.find((card) => card.persona === "ceo")?.id,
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review",
+      state: "approved"
+    });
+    expect(events.map((event) => event.eventKind)).toEqual(["created", "state_changed"]);
+    expect(events[0]?.payload).toMatchObject({
+      title: "Pressure-test the pricing lane",
+      persona: "cfo",
+      state: "approved"
+    });
+    expect(events[1]?.payload).toEqual({ to: "approved" });
+  });
+
+  it("treats repeated direct child creation as idempotent for the same open assignment", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const first = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    const second = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+
+    const run = await repository.findLatestRunForTenantWorkflow({
+      tenantId: "tenant_123",
+      workflowId: "wf_connect_first_workflow"
+    });
+    const cards = await repository.listCardsForRun(run!.id);
+    const cfoCards = cards.filter((card) => card.persona === "cfo");
+
+    expect(second.cardId).toBe(first.cardId);
+    expect(cfoCards).toHaveLength(1);
+  });
+
+  it("fails closed when the direct child-card limit is reached", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    for (const assignment of [
+      { persona: "cfo", title: "Pressure-test the pricing lane", deliverableType: "pricing_review" },
+      { persona: "coo", title: "Prepare the fulfillment handoff", deliverableType: "ops_handoff" },
+      { persona: "researcher", title: "Gather competitor anchors", deliverableType: "research_brief" },
+      { persona: "cto", title: "Review the automation seams", deliverableType: "technical_review" },
+      { persona: "cmo", title: "Draft the launch narrative", deliverableType: "launch_copy" },
+      { persona: "analyst", title: "Estimate the revenue delta", deliverableType: "forecast_model" }
+    ]) {
+      await service.createTopLevelChildCard({
+        authorization: "Bearer valid",
+        persona: assignment.persona,
+        title: assignment.title,
+        deliverableType: assignment.deliverableType
+      });
+    }
+
+    await expect(
+      service.createTopLevelChildCard({
+        authorization: "Bearer valid",
+        persona: "legal",
+        title: "Review the offer language",
+        deliverableType: "legal_review"
+      })
+    ).rejects.toBeInstanceOf(HarnessCardCreationConflictError);
+  });
+
+  it("does not open a nested atomic block when the first direct child card seeds the run", async () => {
+    const repository = createInMemoryHarnessRepository();
+    let inAtomic = false;
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => {
+        if (inAtomic) {
+          throw new Error("nested atomic block");
+        }
+        inAtomic = true;
+        try {
+          return await work(repository);
+        } finally {
+          inAtomic = false;
+        }
+      },
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await expect(
+      service.createTopLevelChildCard({
+        authorization: "Bearer valid",
+        persona: "cfo",
+        title: "Pressure-test the pricing lane",
+        deliverableType: "pricing_review"
+      })
+    ).resolves.toMatchObject({
+      cardId: expect.any(String)
+    });
+  });
+
+  it("fails closed when direct child creation is invoked without an atomic runner", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await expect(
+      service.createTopLevelChildCard({
+        authorization: "Bearer valid",
+        persona: "cfo",
+        title: "Pressure-test the pricing lane",
+        deliverableType: "pricing_review"
+      })
+    ).rejects.toThrow(/require atomic execution/i);
+  });
+
+  it("fails closed when approving a proposal from another tenant", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const tenantOneService = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+    const tenantTwoService = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_456",
+        userId: "user_456",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await tenantOneService.listBoardState({ authorization: "Bearer tenant-one" });
+    const created = await tenantOneService.createTopLevelChildCard({
+      authorization: "Bearer tenant-one",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+
+    await repository.insertProposal({
+      id: "proposal_cross_tenant_1",
+      runId: board.runId,
+      parentCardId: created.cardId,
+      requestedByCardId: created.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief",
+      status: "proposed"
+    });
+
+    await expect(
+      tenantTwoService.approveProposal({
+        authorization: "Bearer tenant-two",
+        proposalId: "proposal_cross_tenant_1"
+      })
+    ).rejects.toBeInstanceOf(ApiAuthError);
   });
 });

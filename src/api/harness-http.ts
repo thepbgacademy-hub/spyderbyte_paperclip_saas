@@ -1,11 +1,18 @@
 import type { DashboardHttpRequest, DashboardHttpResponse } from "./dashboard-http.js";
 import { ApiAuthError } from "./dashboard-api.js";
 import { assertAllowedOrigin, createSecurityHeaders, validateRequestBodySize } from "../security/cors.js";
-import type { HarnessBoardResponse } from "../harness/board-service.js";
+import { HarnessCardCreationConflictError, type HarnessBoardResponse } from "../harness/board-service.js";
 import { assertWealthFactoryResponse } from "../wealthfactory/response-guard.js";
 
 type HarnessApi = {
   listBoardState(request: { authorization: string; cookie?: string }): Promise<HarnessBoardResponse>;
+  createTopLevelChildCard(request: {
+    authorization: string;
+    cookie?: string;
+    persona: string;
+    title: string;
+    deliverableType: string;
+  }): Promise<{ cardId: string }>;
   approveProposal(request: { authorization: string; cookie?: string; proposalId: string }): Promise<{ cardId: string }>;
 };
 
@@ -16,6 +23,7 @@ type RateLimiter = {
 export function createHarnessHttpHandler(options: {
   allowedOrigins: readonly string[];
   listBoardState: HarnessApi["listBoardState"];
+  createTopLevelChildCard: HarnessApi["createTopLevelChildCard"];
   approveProposal: HarnessApi["approveProposal"];
   rateLimiter: RateLimiter;
   maxBodyBytes?: number;
@@ -34,7 +42,11 @@ export function createHarnessHttpHandler(options: {
 
     if (
       request.method === "OPTIONS" &&
-      (request.path === "/api/harness/board" || request.path.startsWith("/api/harness/proposals/"))
+      (
+        request.path === "/api/harness/board" ||
+        request.path === "/api/harness/cards" ||
+        request.path.startsWith("/api/harness/proposals/")
+      )
     ) {
       return {
         status: 204,
@@ -50,12 +62,20 @@ export function createHarnessHttpHandler(options: {
 
     if (
       request.method !== "GET" &&
-      !(request.method === "POST" && request.path.startsWith("/api/harness/proposals/"))
+      !(
+        request.method === "POST" &&
+        (request.path === "/api/harness/cards" || request.path.startsWith("/api/harness/proposals/"))
+      )
     ) {
       return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
     }
 
-    const routeKey = request.path === "/api/harness/board" ? "harness-board" : "harness-proposal-approve";
+    const routeKey =
+      request.path === "/api/harness/board"
+        ? "harness-board"
+        : request.path === "/api/harness/cards"
+          ? "harness-card-create"
+          : "harness-proposal-approve";
     const rateLimit = await options.rateLimiter.consume(`${request.ip}:${routeKey}`);
     if (!rateLimit.allowed) {
       return {
@@ -70,6 +90,25 @@ export function createHarnessHttpHandler(options: {
         const body = await options.listBoardState({
           authorization: request.headers.authorization ?? "",
           ...(request.headers.cookie ? { cookie: request.headers.cookie } : {})
+        });
+        assertWealthFactoryResponse(body);
+        return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
+      }
+
+      if (request.method === "POST" && request.path === "/api/harness/cards") {
+        const persona = request.query?.persona?.trim() ?? "";
+        const title = request.query?.title?.trim() ?? "";
+        const deliverableType = request.query?.deliverableType?.trim() ?? "";
+        if (!persona || !title || !deliverableType) {
+          return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
+        }
+
+        const body = await options.createTopLevelChildCard({
+          authorization: request.headers.authorization ?? "",
+          ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
+          persona,
+          title,
+          deliverableType
         });
         assertWealthFactoryResponse(body);
         return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
@@ -90,6 +129,9 @@ export function createHarnessHttpHandler(options: {
     } catch (error) {
       if (error instanceof ApiAuthError) {
         return { status: 401, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "unauthorized" } };
+      }
+      if (error instanceof HarnessCardCreationConflictError) {
+        return { status: 409, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "conflict" } };
       }
 
       return { status: 500, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "service_unavailable" } };

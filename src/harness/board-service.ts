@@ -1,8 +1,8 @@
 import { ApiAuthError, type ApiSession } from "../api/dashboard-api.js";
 import { randomUUID } from "node:crypto";
 import type { HarnessCardEventRecord, HarnessCardRecord, HarnessRunRecord } from "./types.js";
-import { createHarnessCardEventRecord, type HarnessCardState } from "./types.js";
-import { transitionHarnessCard, transitionHarnessRun } from "./state-machine.js";
+import { createHarnessCardEventRecord } from "./types.js";
+import { transitionHarnessRun } from "./state-machine.js";
 import { createHarnessRuntime } from "./runtime.js";
 import type { HarnessRepository } from "./repository.js";
 import type { WealthFactoryWorkflowDefinition } from "../wealthfactory/workflow-registry.js";
@@ -70,6 +70,15 @@ type HarnessWorkflowRegistry = {
   getDefinition(publicWorkflowId: string): WealthFactoryWorkflowDefinition;
 };
 
+const MAX_OPEN_CHILD_CARDS = 6;
+
+export class HarnessCardCreationConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "HarnessCardCreationConflictError";
+  }
+}
+
 export function createHarnessBoardService(options: {
   authenticate(input: { authorization: string; cookie?: string }): Promise<ApiSession | null>;
   requireTenantMember(input: { tenantId: string; userId: string }): Promise<void>;
@@ -82,49 +91,21 @@ export function createHarnessBoardService(options: {
 
   return {
     async listBoardState(request: { authorization: string; cookie?: string }): Promise<HarnessBoardResponse> {
-      const session = await options.authenticate({
+      const access = await authorizeHarnessRequest({
+        authenticate: options.authenticate,
+        requireTenantMember: options.requireTenantMember,
+        requireActivePackageInstall: options.requireActivePackageInstall,
+        workflowRegistry: options.workflowRegistry,
         authorization: request.authorization,
         ...(request.cookie ? { cookie: request.cookie } : {})
       });
-      if (!session) {
-        throw new ApiAuthError();
-      }
-
-      const workflowId = options.workflowRegistry.listHarnessEligibleWorkflowIds()[0];
-      if (!workflowId) {
-        throw new Error("Harness workflow is not enabled");
-      }
-
-      const workflowDefinition = options.workflowRegistry.getDefinition(workflowId);
-      try {
-        await options.requireTenantMember({ tenantId: session.tenantId, userId: session.userId });
-        await options.requireActivePackageInstall({
-          tenantId: session.tenantId,
-          packageId: workflowDefinition.packageId
-        });
-      } catch (error) {
-        if (
-          error instanceof TenantMembershipRequiredError ||
-          error instanceof ActivePackageInstallRequiredError
-        ) {
-          throw new ApiAuthError();
-        }
-
-        throw error;
-      }
-
-      const run =
-        (await options.repository.findLatestRunForTenantWorkflow({
-          tenantId: session.tenantId,
-          workflowId
-        })) ??
-        (await ensureSeededHarnessRun({
-          repository: options.repository,
-          runtime,
-          tenantId: session.tenantId,
-          workflowDefinition,
-          ...(options.runAtomically ? { runAtomically: options.runAtomically } : {})
-        }));
+      const run = await getOrCreateCurrentRun({
+        repository: options.repository,
+        runtime,
+        tenantId: access.session.tenantId,
+        workflowDefinition: access.workflowDefinition,
+        ...(options.runAtomically ? { runAtomically: options.runAtomically } : {})
+      });
 
       const [cards, events] = await Promise.all([
         options.repository.listCardsForRun(run.id),
@@ -135,37 +116,78 @@ export function createHarnessBoardService(options: {
       return buildHarnessBoardResponse({ run, cards, events, proposals });
     },
 
-    async approveProposal(request: { authorization: string; cookie?: string; proposalId: string }): Promise<{ cardId: string }> {
-      const session = await options.authenticate({
+    async createTopLevelChildCard(request: {
+      authorization: string;
+      cookie?: string;
+      persona: string;
+      title: string;
+      deliverableType: string;
+    }): Promise<{ cardId: string }> {
+      const access = await authorizeHarnessRequest({
+        authenticate: options.authenticate,
+        requireTenantMember: options.requireTenantMember,
+        requireActivePackageInstall: options.requireActivePackageInstall,
+        workflowRegistry: options.workflowRegistry,
         authorization: request.authorization,
         ...(request.cookie ? { cookie: request.cookie } : {})
       });
-      if (!session) {
-        throw new ApiAuthError();
+
+      if (!options.runAtomically) {
+        throw new Error("Harness card creation mutations require atomic execution");
       }
 
-      const workflowId = options.workflowRegistry.listHarnessEligibleWorkflowIds()[0];
-      if (!workflowId) {
-        throw new Error("Harness workflow is not enabled");
-      }
-
-      const workflowDefinition = options.workflowRegistry.getDefinition(workflowId);
-      try {
-        await options.requireTenantMember({ tenantId: session.tenantId, userId: session.userId });
-        await options.requireActivePackageInstall({
-          tenantId: session.tenantId,
-          packageId: workflowDefinition.packageId
+      const result = await options.runAtomically(async (repository) => {
+        const run = await getOrCreateCurrentRun({
+          repository,
+          runtime,
+          tenantId: access.session.tenantId,
+          workflowDefinition: access.workflowDefinition
         });
-      } catch (error) {
-        if (
-          error instanceof TenantMembershipRequiredError ||
-          error instanceof ActivePackageInstallRequiredError
-        ) {
+        if (run.tenantId !== access.session.tenantId) {
           throw new ApiAuthError();
         }
 
-        throw error;
-      }
+        const cards = await repository.listCardsForRun(run.id);
+        const proposals = await repository.listProposalsForRun(run.id);
+        const existingCard = findMatchingOpenChildCard(cards, {
+          persona: request.persona,
+          title: request.title,
+          deliverableType: request.deliverableType
+        });
+        if (existingCard) {
+          return { cardId: existingCard.id };
+        }
+        if (countOpenChildCards(cards) >= MAX_OPEN_CHILD_CARDS) {
+          throw new HarnessCardCreationConflictError("Harness direct child-card limit reached for this run");
+        }
+
+        runtime.resumeRun({ run, cards, proposals });
+        const card = runtime.createApprovedChildCard(run.id, {
+          persona: request.persona,
+          title: request.title,
+          deliverableType: request.deliverableType
+        });
+
+        await repository.insertCard(card);
+        for (const event of createBootstrapEvents(card)) {
+          await repository.insertEvent(event);
+        }
+
+        return { cardId: card.id };
+      });
+
+      return { cardId: result.cardId };
+    },
+
+    async approveProposal(request: { authorization: string; cookie?: string; proposalId: string }): Promise<{ cardId: string }> {
+      const access = await authorizeHarnessRequest({
+        authenticate: options.authenticate,
+        requireTenantMember: options.requireTenantMember,
+        requireActivePackageInstall: options.requireActivePackageInstall,
+        workflowRegistry: options.workflowRegistry,
+        authorization: request.authorization,
+        ...(request.cookie ? { cookie: request.cookie } : {})
+      });
 
       if (!options.runAtomically) {
         throw new Error("Harness approval mutations require atomic execution");
@@ -181,7 +203,7 @@ export function createHarnessBoardService(options: {
         }
 
         const run = await repository.getRun(proposal.runId);
-        if (!run || run.tenantId !== session.tenantId) {
+        if (!run || run.tenantId !== access.session.tenantId) {
           throw new ApiAuthError();
         }
 
@@ -241,6 +263,70 @@ export function createHarnessBoardService(options: {
       return { cardId: result.cardId };
     }
   };
+}
+
+async function authorizeHarnessRequest(input: {
+  authenticate(input: { authorization: string; cookie?: string }): Promise<ApiSession | null>;
+  requireTenantMember(input: { tenantId: string; userId: string }): Promise<void>;
+  requireActivePackageInstall(input: { tenantId: string; packageId: string }): Promise<void>;
+  workflowRegistry: HarnessWorkflowRegistry;
+  authorization: string;
+  cookie?: string;
+}): Promise<{ session: ApiSession; workflowDefinition: WealthFactoryWorkflowDefinition }> {
+  const session = await input.authenticate({
+    authorization: input.authorization,
+    ...(input.cookie ? { cookie: input.cookie } : {})
+  });
+  if (!session) {
+    throw new ApiAuthError();
+  }
+
+  const workflowId = input.workflowRegistry.listHarnessEligibleWorkflowIds()[0];
+  if (!workflowId) {
+    throw new Error("Harness workflow is not enabled");
+  }
+
+  const workflowDefinition = input.workflowRegistry.getDefinition(workflowId);
+  try {
+    await input.requireTenantMember({ tenantId: session.tenantId, userId: session.userId });
+    await input.requireActivePackageInstall({
+      tenantId: session.tenantId,
+      packageId: workflowDefinition.packageId
+    });
+  } catch (error) {
+    if (
+      error instanceof TenantMembershipRequiredError ||
+      error instanceof ActivePackageInstallRequiredError
+    ) {
+      throw new ApiAuthError();
+    }
+
+    throw error;
+  }
+
+  return { session, workflowDefinition };
+}
+
+async function getOrCreateCurrentRun(input: {
+  repository: HarnessRepository;
+  runAtomically?<T>(work: (repository: HarnessRepository) => Promise<T>): Promise<T>;
+  runtime: ReturnType<typeof createHarnessRuntime>;
+  tenantId: string;
+  workflowDefinition: WealthFactoryWorkflowDefinition;
+}): Promise<HarnessRunRecord> {
+  return (
+    (await input.repository.findLatestRunForTenantWorkflow({
+      tenantId: input.tenantId,
+      workflowId: input.workflowDefinition.publicId
+    })) ??
+    (await ensureSeededHarnessRun({
+      repository: input.repository,
+      runtime: input.runtime,
+      tenantId: input.tenantId,
+      workflowDefinition: input.workflowDefinition,
+      ...(input.runAtomically ? { runAtomically: input.runAtomically } : {})
+    }))
+  );
 }
 
 async function ensureSeededHarnessRun(input: {
@@ -306,23 +392,7 @@ async function seedHarnessRun(input: {
 
   const run = transitionHarnessRun(session.run, "active");
   const ceoCard = session.ceoCard;
-  const cfoCard = advanceCardState(
-    input.runtime.createApprovedChildCard(run.id, {
-      persona: "cfo",
-      title: "Pressure-test the pricing lane",
-      deliverableType: "pricing_review"
-    }),
-    "working"
-  );
-  const cooCard = advanceCardState(
-    input.runtime.createApprovedChildCard(run.id, {
-      persona: "coo",
-      title: "Prepare the fulfillment handoff",
-      deliverableType: "ops_handoff"
-    }),
-    "done"
-  );
-  const cards = [ceoCard, cfoCard, cooCard];
+  const cards = [ceoCard];
 
   await input.repository.insertRun(run);
   for (const card of cards) {
@@ -333,22 +403,6 @@ async function seedHarnessRun(input: {
   }
 
   return run;
-}
-
-function advanceCardState(card: HarnessCardRecord, targetState: HarnessCardState): HarnessCardRecord {
-  if (card.state === targetState) {
-    return card;
-  }
-
-  const pathByState: Partial<Record<HarnessCardState, HarnessCardState[]>> = {
-    working: ["working"],
-    waiting: ["working", "waiting"],
-    blocked: ["blocked"],
-    done: ["working", "done"]
-  };
-  const path = pathByState[targetState] ?? [];
-
-  return path.reduce((current, nextState) => transitionHarnessCard(current, nextState), card);
 }
 
 function createBootstrapEvents(card: HarnessCardRecord): HarnessCardEventRecord[] {
@@ -371,6 +425,28 @@ function createBootstrapEvents(card: HarnessCardRecord): HarnessCardEventRecord[
   }
 
   return events;
+}
+
+function findMatchingOpenChildCard(
+  cards: readonly HarnessCardRecord[],
+  target: { persona: string; title: string; deliverableType: string }
+): HarnessCardRecord | undefined {
+  return cards.find(
+    (card) =>
+      card.persona !== "ceo" &&
+      isOpenCardState(card.state) &&
+      card.persona === target.persona &&
+      card.title === target.title &&
+      card.deliverableType === target.deliverableType
+  );
+}
+
+function countOpenChildCards(cards: readonly HarnessCardRecord[]): number {
+  return cards.filter((card) => card.persona !== "ceo" && isOpenCardState(card.state)).length;
+}
+
+function isOpenCardState(state: HarnessCardRecord["state"]): boolean {
+  return state !== "done" && state !== "cancelled";
 }
 
 function buildHarnessBoardResponse(input: {

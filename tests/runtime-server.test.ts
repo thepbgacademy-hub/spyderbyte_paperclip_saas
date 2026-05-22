@@ -97,7 +97,8 @@ vi.mock("../src/harness/board-service.js", () => ({
         }
       ]
     }),
-    approveProposal: vi.fn().mockResolvedValue({ cardId: "card_approved_1" })
+    approveProposal: vi.fn().mockResolvedValue({ cardId: "card_approved_1" }),
+    createTopLevelChildCard: vi.fn().mockResolvedValue({ cardId: "card_created_1" })
   }))
 }));
 
@@ -271,6 +272,38 @@ describe("runtime server", () => {
     expect(response.body).toContain('"runId":"run_123"');
     expect(response.body).toContain('"persona":"CEO"');
     expect(response.body).not.toContain("prompt");
+    await runtime.close();
+  });
+
+  it("routes the harness direct-child mutation through the runtime harness surface", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() }
+    });
+
+    const request = createRequest({
+      method: "POST",
+      url: "/api/harness/cards?persona=cfo&title=Pressure-test%20the%20pricing%20lane&deliverableType=pricing_review",
+      headers: {
+        authorization: "Bearer token",
+        origin: "https://www.spyderbyte.cloud",
+        "content-length": "0"
+      }
+    });
+    const response = createResponse();
+
+    runtime.server.emit("request", request as unknown as IncomingMessage, response as unknown as ServerResponse);
+    await response.finished;
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('"cardId":"card_created_1"');
     await runtime.close();
   });
 

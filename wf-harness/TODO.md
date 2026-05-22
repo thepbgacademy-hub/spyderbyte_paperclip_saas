@@ -26,6 +26,7 @@ This file tracks the new harness subproject only.
 - [x] Define migration slice boundary from the current Paperclip-backed runtime.
 - [x] Wire the board route to persisted tenant-scoped harness state instead of static fixtures.
 - [x] Consume harness-enabled workflow ids in a live runtime path.
+- [x] Replace the fixed seeded CFO/COO board defaults with a narrow persisted CEO-driven child-card creation seam.
 
 ## Guardrails
 
@@ -38,7 +39,7 @@ This file tracks the new harness subproject only.
 ## Next Slice
 
 - [ ] Add database-backed transaction coverage for the deferred proposal-approval seam so approval-before-card-insert ordering is proven against the real persistence layer.
-- [ ] Replace seeded harness board defaults with broader real persisted CEO/card mutation paths beyond approval-only flow.
+- [ ] Expand beyond CEO direct-child creation into richer persisted card progression and result-recording mutation paths.
 - [ ] Add fuller CEO approval logic for sub-card requests and card-count discipline beyond the current persisted proposal/approve seam.
 - [ ] Add harness-specific audit publishing beyond the persisted card-event trail.
 - [ ] Expand the dashboard visual system once the additional Hermes/Obsidian reference screenshots are reviewed.
