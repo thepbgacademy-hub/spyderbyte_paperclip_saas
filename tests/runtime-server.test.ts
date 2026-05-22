@@ -99,7 +99,9 @@ vi.mock("../src/harness/board-service.js", () => ({
             }
           ]
         }
-      ]
+      ],
+      pendingApprovals: [],
+      recentDecisions: []
     }),
     approveProposal: vi.fn().mockResolvedValue({ cardId: "card_approved_1" }),
     createTopLevelChildCard: vi.fn().mockResolvedValue({ cardId: "card_created_1" }),

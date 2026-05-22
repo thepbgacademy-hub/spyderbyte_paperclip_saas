@@ -17,6 +17,7 @@ import {
 const migration = readFileSync("supabase/migrations/0013_wf_harness_runs_cards.sql", "utf8");
 const proposalMigration = readFileSync("supabase/migrations/0014_wf_harness_subcard_proposals.sql", "utf8");
 const proposalResolutionMigration = readFileSync("supabase/migrations/0015_wf_harness_proposal_resolutions.sql", "utf8");
+const boardDecisionMigration = readFileSync("supabase/migrations/0016_wf_harness_board_decisions.sql", "utf8");
 const execFileAsync = promisify(execFile);
 
 const HARNESS_POSTGRES_IMAGE = "postgres:16-alpine";
@@ -113,6 +114,21 @@ describe("harness persistence records", () => {
     await repository.insertRun(run);
     await repository.insertCard(card);
     await repository.insertEvent(event);
+    await repository.insertDecision({
+      id: "decision_1",
+      runId: run.id,
+      tenantId: "tenant-123",
+      actorUserId: "user-123",
+      decisionKind: "lane_opened",
+      cardId: card.id,
+      proposalId: null,
+      targetCardId: card.id,
+      persona: "ceo",
+      deliverableType: "plan",
+      resolution: "create_lane",
+      decisionNote: null,
+      createdAt: "2026-05-22T00:00:00.000Z"
+    });
     await repository.insertProposal({
       id: "proposal_1",
       runId: run.id,
@@ -132,6 +148,13 @@ describe("harness persistence records", () => {
     await expect(repository.getRun(run.id)).resolves.toEqual(run);
     await expect(repository.listCardsForRun(run.id)).resolves.toEqual([card]);
     await expect(repository.listEventsForCard(card.id)).resolves.toEqual([event]);
+    await expect(repository.listDecisionsForRun(run.id)).resolves.toEqual([
+      expect.objectContaining({
+        id: "decision_1",
+        decisionKind: "lane_opened",
+        cardId: card.id
+      })
+    ]);
     await expect(repository.getProposal("proposal_1")).resolves.toEqual({
       id: "proposal_1",
       runId: run.id,
@@ -273,9 +296,103 @@ describe("harness persistence migration", () => {
       /approved_card_id uuid null references wfpc\.harness_cards\(id\) on delete set null deferrable initially deferred/i
     );
   });
+
+  it("creates durable harness board decision storage for CEO governance memory", () => {
+    expect(boardDecisionMigration).toMatch(/create table if not exists wfpc\.harness_board_decisions/i);
+    expect(boardDecisionMigration).toMatch(/run_id uuid not null references wfpc\.harness_runs\(id\) on delete cascade/i);
+    expect(boardDecisionMigration).toMatch(/proposal_id uuid null references wfpc\.harness_subcard_proposals\(id\) on delete set null/i);
+    expect(boardDecisionMigration).toMatch(/decision_kind text not null check \(decision_kind in \('lane_opened', 'proposal_approved', 'proposal_deferred', 'proposal_denied', 'run_completed'\)\)/i);
+    expect(boardDecisionMigration).toMatch(/create index if not exists harness_board_decisions_run_created_at_idx/i);
+  });
 });
 
 describeIfDocker("harness persistence real Postgres transaction proof", () => {
+  it(
+    "round-trips harness board decisions through the real Postgres repository mapping",
+    async () => {
+      const database = requireDisposableHarnessDatabase();
+      const client = new Client({ connectionString: database.connectionString });
+      await client.connect();
+
+      try {
+        const repository = createPostgresHarnessRepository({
+          query: async (sql: string, values: readonly unknown[]) => {
+            const result = await client.query(sql, [...values]);
+            return { rows: result.rows };
+          }
+        });
+        const tenantId = randomUUID();
+        const run = createHarnessRunRecord({
+          tenantId,
+          workflowId: "wf_connect_first_workflow",
+          packageId: "pkg_bib_connect",
+          orchestratorPersona: "ceo",
+          runtimeContext: {
+            providerKind: "openai_api",
+            credentialLabel: "Primary OpenAI"
+          }
+        });
+        const ceoCard = createHarnessCardRecord({
+          runId: run.id,
+          persona: "ceo",
+          title: "Plan the first workflow",
+          deliverableType: "plan"
+        });
+        const proposalId = randomUUID();
+
+        await resetHarnessProofDatabase(client);
+        await seedHarnessProofPrerequisites(client, tenantId);
+        await repository.insertRun(run);
+        await repository.insertCard(ceoCard);
+        await repository.insertProposal({
+          id: proposalId,
+          runId: run.id,
+          parentCardId: ceoCard.id,
+          requestedByCardId: ceoCard.id,
+          requestedByPersona: "ceo",
+          persona: "cfo",
+          title: "Validate pricing assumptions",
+          deliverableType: "pricing_review",
+          status: "deferred"
+        });
+
+        await repository.insertDecision({
+          id: randomUUID(),
+          runId: run.id,
+          tenantId,
+          actorUserId: "user-123",
+          decisionKind: "proposal_deferred",
+          cardId: ceoCard.id,
+          proposalId,
+          targetCardId: null,
+          persona: "cfo",
+          deliverableType: "pricing_review",
+          resolution: null,
+          decisionNote: "Wait for the current pricing owner to finish.",
+          createdAt: "2026-05-22T00:00:00.000Z"
+        });
+
+        await expect(repository.listDecisionsForRun(run.id)).resolves.toEqual([
+          expect.objectContaining({
+            runId: run.id,
+            tenantId,
+            actorUserId: "user-123",
+            decisionKind: "proposal_deferred",
+            cardId: ceoCard.id,
+            proposalId,
+            persona: "cfo",
+            deliverableType: "pricing_review",
+            resolution: null,
+            decisionNote: "Wait for the current pricing owner to finish."
+          })
+        ]);
+      } finally {
+        await client.end();
+      }
+    },
+    120_000
+  );
+
   it(
     "commits proposal approval before child-card insert when the deferred foreign key is satisfied by commit time",
     async () => {
@@ -559,6 +676,7 @@ async function resetHarnessProofDatabase(client: Client) {
   await client.query(migration);
   await client.query(proposalMigration);
   await client.query(proposalResolutionMigration);
+  await client.query(boardDecisionMigration);
 }
 
 async function seedHarnessProofPrerequisites(client: Client, tenantId: string) {

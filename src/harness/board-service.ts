@@ -1,8 +1,8 @@
 import { ApiAuthError, type ApiSession } from "../api/dashboard-api.js";
 import { randomUUID } from "node:crypto";
 import type { DurableAuditEvent } from "../audit/durable-audit.js";
-import type { HarnessCardEventRecord, HarnessCardRecord, HarnessRunRecord } from "./types.js";
-import { createHarnessCardEventRecord } from "./types.js";
+import type { HarnessBoardDecisionRecord, HarnessCardEventRecord, HarnessCardRecord, HarnessRunRecord } from "./types.js";
+import { createHarnessBoardDecisionRecord, createHarnessCardEventRecord } from "./types.js";
 import {
   isHarnessCardState,
   isHarnessChildPersona,
@@ -62,6 +62,7 @@ export type HarnessBoardResponse = {
   columns: HarnessBoardColumnView[];
   cards: HarnessBoardCardView[];
   pendingApprovals: HarnessPendingApprovalView[];
+  recentDecisions: HarnessRecentDecisionView[];
   completionPackage?: HarnessCompletionPackageView;
 };
 
@@ -84,6 +85,12 @@ export type HarnessCompletionPackageView = {
     deliverableLabel: string;
     outcome: string;
   }>;
+};
+
+export type HarnessRecentDecisionView = {
+  id: string;
+  label: string;
+  timestampLabel: string;
 };
 
 type HarnessWorkflowRegistry = {
@@ -145,13 +152,14 @@ export function createHarnessBoardService(options: {
         ...(options.runAtomically ? { runAtomically: options.runAtomically } : {})
       });
 
-      const [cards, events] = await Promise.all([
+      const [cards, events, decisions] = await Promise.all([
         options.repository.listCardsForRun(run.id),
-        options.repository.listEventsForRun(run.id)
+        options.repository.listEventsForRun(run.id),
+        options.repository.listDecisionsForRun(run.id)
       ]);
       const proposals = await options.repository.listProposalsForRun(run.id);
 
-      return buildHarnessBoardResponse({ run, cards, events, proposals });
+      return buildHarnessBoardResponse({ run, cards, events, decisions, proposals });
     },
 
     async createTopLevelChildCard(request: {
@@ -219,6 +227,19 @@ export function createHarnessBoardService(options: {
         for (const event of createBootstrapEvents(card)) {
           await repository.insertEvent(event);
         }
+        await repository.insertDecision(
+          createHarnessBoardDecisionRecord({
+            runId: run.id,
+            tenantId: access.session.tenantId,
+            actorUserId: access.session.userId,
+            decisionKind: "lane_opened",
+            cardId: card.id,
+            targetCardId: card.id,
+            persona: card.persona,
+            deliverableType: card.deliverableType,
+            resolution: "create_lane"
+          })
+        );
 
         const reconciledRun = await reconcileHarnessRunState({ repository, run });
 
@@ -305,10 +326,15 @@ export function createHarnessBoardService(options: {
 
         if (request.decision === "defer" || request.decision === "deny") {
           const status: HarnessProposalStatus = request.decision === "defer" ? "deferred" : "denied";
+          const defaultDecisionNote =
+            status === "deferred"
+              ? "CEO deferred this proposal to keep the current lane set bounded."
+              : "CEO denied this proposal because it would widen the workflow beyond the current boundary.";
+          const decisionNote = trimmedDecisionNote ?? defaultDecisionNote;
           const decisionUpdate = await repository.markProposalStatus({
             proposalId: proposal.id,
             status,
-            ...(trimmedDecisionNote ? { decisionNote: trimmedDecisionNote } : {})
+            decisionNote
           });
           if (!decisionUpdate.updated) {
             throw new Error("Harness proposal decision conflicted");
@@ -318,12 +344,21 @@ export function createHarnessBoardService(options: {
               cardId: proposal.parentCardId,
               eventKind: "comment_added",
               payload: {
-                message:
-                  trimmedDecisionNote ??
-                  (status === "deferred"
-                    ? "CEO deferred this proposal to keep the current lane set bounded."
-                    : "CEO denied this proposal because it would widen the workflow beyond the current boundary.")
+                message: decisionNote
               }
+            })
+          );
+          await repository.insertDecision(
+            createHarnessBoardDecisionRecord({
+              runId: run.id,
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              decisionKind: status === "deferred" ? "proposal_deferred" : "proposal_denied",
+              cardId: proposal.parentCardId,
+              proposalId: proposal.id,
+              persona: proposal.persona,
+              deliverableType: proposal.deliverableType,
+              decisionNote
             })
           );
           const reconciledRun = await reconcileHarnessRunState({ repository, run });
@@ -399,6 +434,21 @@ export function createHarnessBoardService(options: {
               })
             );
           }
+          await repository.insertDecision(
+            createHarnessBoardDecisionRecord({
+              runId: run.id,
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              decisionKind: "proposal_approved",
+              cardId: proposal.parentCardId,
+              proposalId: proposal.id,
+              targetCardId: exactExistingCard.id,
+              persona: proposal.persona,
+              deliverableType: proposal.deliverableType,
+              resolution: "update_existing_lane",
+              ...(trimmedDecisionNote ? { decisionNote: trimmedDecisionNote } : {})
+            })
+          );
           const reconciledRun = await reconcileHarnessRunState({ repository, run });
 
           return {
@@ -480,6 +530,21 @@ export function createHarnessBoardService(options: {
               })
             );
           }
+          await repository.insertDecision(
+            createHarnessBoardDecisionRecord({
+              runId: run.id,
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              decisionKind: "proposal_approved",
+              cardId: proposal.parentCardId,
+              proposalId: proposal.id,
+              targetCardId: existingCard.id,
+              persona: proposal.persona,
+              deliverableType: proposal.deliverableType,
+              resolution: "update_existing_lane",
+              ...(trimmedDecisionNote ? { decisionNote: trimmedDecisionNote } : {})
+            })
+          );
           const reconciledRun = await reconcileHarnessRunState({ repository, run });
 
           return {
@@ -512,15 +577,76 @@ export function createHarnessBoardService(options: {
           };
         }
         if (findOpenChildCardByDeliverableType(cards, proposal.deliverableType)) {
-          throw new HarnessCardCreationConflictError("Harness proposal approval would collide with another active deliverable owner");
-        }
-        if (countOpenChildCards(cards) >= MAX_OPEN_CHILD_CARDS) {
+          const decisionNote =
+            trimmedDecisionNote ??
+            "CEO deferred this proposal because another active persona already owns that deliverable lane.";
           const decisionUpdate = await repository.markProposalStatus({
             proposalId: proposal.id,
             status: "deferred",
-            ...(trimmedDecisionNote
-              ? { decisionNote: trimmedDecisionNote }
-              : { decisionNote: "CEO deferred this proposal because the current run is at its active lane cap." })
+            decisionNote
+          });
+          if (!decisionUpdate.updated) {
+            throw new Error("Harness proposal decision conflicted");
+          }
+          await repository.insertEvent(
+            createHarnessCardEventRecord({
+              cardId: proposal.parentCardId,
+              eventKind: "comment_added",
+              payload: {
+                message: decisionNote
+              }
+            })
+          );
+          await repository.insertDecision(
+            createHarnessBoardDecisionRecord({
+              runId: run.id,
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              decisionKind: "proposal_deferred",
+              cardId: proposal.parentCardId,
+              proposalId: proposal.id,
+              persona: proposal.persona,
+              deliverableType: proposal.deliverableType,
+              decisionNote
+            })
+          );
+          const reconciledRun = await reconcileHarnessRunState({ repository, run });
+
+          return {
+            status: "deferred",
+            auditEvents: [
+              createHarnessAuditEvent({
+                tenantId: access.session.tenantId,
+                actorUserId: access.session.userId,
+                eventType: "harness_proposal_decided",
+                entityId: proposal.id,
+                metadata: {
+                  runId: run.id,
+                  decision: "deferred",
+                  reason: "deliverable_owner_conflict",
+                  hasDecisionNote: Boolean(trimmedDecisionNote),
+                  requestedByPersona: proposal.requestedByPersona,
+                  targetPersona: proposal.persona,
+                  deliverableType: proposal.deliverableType
+                }
+              }),
+              ...toRunAuditEvents({
+                tenantId: access.session.tenantId,
+                actorUserId: access.session.userId,
+                runId: run.id,
+                previousState: run.state,
+                nextRun: reconciledRun
+              })
+            ]
+          };
+        }
+        if (countOpenChildCards(cards) >= MAX_OPEN_CHILD_CARDS) {
+          const decisionNote =
+            trimmedDecisionNote ?? "CEO deferred this proposal because the current run is at its active lane cap.";
+          const decisionUpdate = await repository.markProposalStatus({
+            proposalId: proposal.id,
+            status: "deferred",
+            decisionNote
           });
           if (!decisionUpdate.updated) {
             throw new Error("Harness proposal decision conflicted");
@@ -533,6 +659,19 @@ export function createHarnessBoardService(options: {
                 message:
                   trimmedDecisionNote ?? "CEO deferred this proposal because the current run is already carrying its maximum active lane count."
               }
+            })
+          );
+          await repository.insertDecision(
+            createHarnessBoardDecisionRecord({
+              runId: run.id,
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              decisionKind: "proposal_deferred",
+              cardId: proposal.parentCardId,
+              proposalId: proposal.id,
+              persona: proposal.persona,
+              deliverableType: proposal.deliverableType,
+              decisionNote
             })
           );
           const reconciledRun = await reconcileHarnessRunState({ repository, run });
@@ -609,6 +748,21 @@ export function createHarnessBoardService(options: {
               persona: approvedCard.persona,
               state: approvedCard.state
             }
+          })
+        );
+        await repository.insertDecision(
+          createHarnessBoardDecisionRecord({
+            runId: run.id,
+            tenantId: access.session.tenantId,
+            actorUserId: access.session.userId,
+            decisionKind: "proposal_approved",
+            cardId: proposal.parentCardId,
+            proposalId: proposal.id,
+            targetCardId: approvedCard.id,
+            persona: proposal.persona,
+            deliverableType: proposal.deliverableType,
+            resolution: "create_lane",
+            ...(trimmedDecisionNote ? { decisionNote: trimmedDecisionNote } : {})
           })
         );
 
@@ -833,6 +987,16 @@ export function createHarnessBoardService(options: {
             cardId: ceoCard.id,
             eventKind: "result_recorded",
             payload: { summary: trimmedCompletionSummary }
+          })
+        );
+        await repository.insertDecision(
+          createHarnessBoardDecisionRecord({
+            runId: run.id,
+            tenantId: access.session.tenantId,
+            actorUserId: access.session.userId,
+            decisionKind: "run_completed",
+            cardId: ceoCard.id,
+            persona: ceoCard.persona
           })
         );
         const completedRun = await repository.updateRunState({
@@ -1172,6 +1336,7 @@ function buildHarnessBoardResponse(input: {
   run: HarnessRunRecord;
   cards: readonly HarnessCardRecord[];
   events: readonly HarnessCardEventRecord[];
+  decisions: readonly HarnessBoardDecisionRecord[];
   proposals: readonly HarnessSubCardProposal[];
 }): HarnessBoardResponse {
   const activityByCardId = new Map<string, HarnessBoardActivityItem[]>();
@@ -1203,6 +1368,7 @@ function buildHarnessBoardResponse(input: {
     cards: input.cards,
     latestResultSummaryByCardId
   });
+  const recentDecisions = input.decisions.slice(0, 8).map(toRecentDecisionView);
 
   return {
     runId: input.run.id,
@@ -1220,6 +1386,7 @@ function buildHarnessBoardResponse(input: {
         deliverableLabel: humanizeDeliverableType(proposal.deliverableType),
         statusLabel: proposal.status === "deferred" ? "Deferred for later CEO review" : "Pending CEO approval"
       })),
+    recentDecisions,
     ...(completionPackage ? { completionPackage } : {})
   };
 }
@@ -1419,6 +1586,39 @@ function formatBoardTimestamp(value: string): string {
 
 function readOptionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function toRecentDecisionView(decision: HarnessBoardDecisionRecord): HarnessRecentDecisionView {
+  return {
+    id: decision.id,
+    label: describeBoardDecision(decision),
+    timestampLabel: formatBoardTimestamp(decision.createdAt)
+  };
+}
+
+function describeBoardDecision(decision: HarnessBoardDecisionRecord): string {
+  const persona = decision.persona ? decision.persona.toUpperCase() : "CEO";
+  const deliverable = decision.deliverableType
+    ? humanizeDeliverableType(decision.deliverableType).toLowerCase()
+    : "lane";
+
+  switch (decision.decisionKind) {
+    case "lane_opened":
+      return `CEO opened a new ${deliverable} lane for ${persona}.`;
+    case "proposal_approved":
+      if (decision.resolution === "update_existing_lane") {
+        return `CEO folded a proposal into the existing ${deliverable} lane.`;
+      }
+      return `CEO approved a new ${deliverable} lane for ${persona}.`;
+    case "proposal_deferred":
+      return `CEO deferred a ${deliverable} request for ${persona}.`;
+    case "proposal_denied":
+      return `CEO denied a ${deliverable} request for ${persona}.`;
+    case "run_completed":
+      return "CEO packaged the final board outcome for the tenant.";
+    default:
+      return "A board decision was recorded.";
+  }
 }
 
 function isUniqueConstraintViolation(error: unknown): boolean {

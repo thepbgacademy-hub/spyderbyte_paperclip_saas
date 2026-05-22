@@ -28,6 +28,7 @@ The first harness implementation slice is now built and verified:
 - dynamic card creation is allowed, but CEO-approved and card-count disciplined
 - restart recovery resumes from persisted card and run state
 - the first harness slice is a slice replacement, not a long-lived same-slice dual-engine setup
+- Wealth Factory keeps small runtime memory, while larger tenant-owned company memory can later live in Obsidian as a second-brain/record layer
 
 ## Source of Truth
 
@@ -64,7 +65,12 @@ The first harness implementation slice is now built and verified:
 - Added smarter CEO lane reuse behavior so proposal approval now prefers updating an existing exact-match or persona/deliverable lane before opening a new child card, which keeps the board bounded under sustained tenant pressure.
 - Added a first read-only completion-package seam to the board response so `assembling` and `done` runs can surface a durable summary plus completed non-CEO deliverables without exposing backend chatter.
 - Added harness migration `0015_wf_harness_proposal_resolutions.sql` plus migration-helper awareness, so local/staged environments can widen proposal status support and resolution metadata without hand-applied SQL drift.
+- Added harness migration `0016_wf_harness_board_decisions.sql` plus migration-helper awareness, so CEO board decisions now persist as first-class append-only governance records instead of being inferred from comments or audits.
 - Fixed the first cut of defer/reuse policy so deferred proposals stay visible for later CEO review, `/approve` cannot return `200` for non-approved outcomes, and reused-lane approvals now leave a visible parent-card note instead of silently disappearing from the originating lane.
+- Added a bounded `recentDecisions` board read model so the harness can surface governance history without exposing backend chatter or turning the board into a generic note stream.
+- Tightened CEO policy again so proposal approval now auto-defers when another active persona already owns the same deliverable lane, instead of surfacing that governance conflict as a low-level runtime failure.
+- Tightened the migration helper for the new board-decision table so it now re-checks the schema after applying `0016` and fails honestly if a drifted partial table shape still does not satisfy the runtime contract.
+- Kept `recentDecisions` bounded after review: the public board history now summarizes governance outcomes without replaying raw `decisionNote` text or duplicating the CEO completion summary as a second source of business-result truth.
 - Hardened the Node HTTP adapter so request-body limits are enforced on bytes actually read, not only on client-declared `Content-Length`, and loopback proxy headers now preserve the forwarded client IP for rate limiting.
 - Tightened the dashboard HTTP seam so auth failures still return `401`, but real downstream/runtime faults now surface as `500 service_unavailable` instead of being mislabeled as unauthorized.
 - Made harness workflow selection fail closed if more than one harness-eligible workflow is exposed without an explicit selector, instead of silently choosing the first configured id.
@@ -116,11 +122,16 @@ The first harness implementation slice is now built and verified:
 - The real deferred-FK proof is Docker-backed. Treat it as a strong integration proof where Docker is available, but remember it still skips cleanly on Dockerless machines instead of failing the whole suite.
 - On Windows, overlapping GitNexus FTS/cypher calls right after analyze can briefly lock `.gitnexus\\lbug` and produce a false tooling failure. Serialize those preflight calls instead of treating the lock as a repo regression.
 - The first cut of the real Postgres harness used blocking Docker child processes inside Vitest and triggered `[vitest-worker]: Timeout calling "onTaskUpdate"` on longer combined runs. The helper now uses async child-process calls; keep it that way or the proof suite can false-fail even when the database contract is correct.
+- This Vitest version does not support `--runInBand`; using it produces a CLI failure before the repo tests even start. Keep targeted proof runs on the repo's supported `vitest run ...` shape instead of cargo-culting Jest flags.
+- Board-memory persistence should stay append-only and transaction-local. Write the decision ledger inside the same atomic seam as the business mutation instead of trying to reconstruct governance history later from comments or audit events.
+- A cross-persona deliverable-owner conflict is a board-governance signal, not a runtime exception. The bounded behavior is to defer the proposal, keep it visible, and let the CEO revisit it later.
 
 ## Next Step
 
 Continue the harness build by replacing more of the live execution slice behind the persisted CEO/card model:
 
 - keep deepening CEO lane policy in executable runtime code, especially around when to defer versus deny and when to fold work into an existing lane instead of opening another card
-- widen harness completion beyond the current derived `completionPackage` into a fuller packaged result handoff only after the read-only seam stays stable under more execution slices
+- widen harness completion beyond the current derived `completionPackage` into a fuller packaged result handoff only after the read-only seam and decision ledger stay stable under more execution slices
 - expand the proposal/card mutation seam beyond the current child-card progression path without widening into generic editing APIs
+- design first-class board memory exports so recommendations, objections, approvals, and deferrals can later sync into tenant-owned Obsidian without making Obsidian live runtime truth
+- later, design the Obsidian integration as tenant-owned long memory and records, not as the live source of truth for harness execution state

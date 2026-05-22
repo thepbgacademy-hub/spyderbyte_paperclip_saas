@@ -306,6 +306,68 @@ try {
     await client.query(readFileSync("supabase/migrations/0014_wf_harness_subcard_proposals.sql", "utf8"));
     await client.query(readFileSync("supabase/migrations/0015_wf_harness_proposal_resolutions.sql", "utf8"));
   }
+  const queryHarnessBoardDecisionReady = () =>
+    client.query(
+      `select
+        exists (select 1 from information_schema.tables where table_schema = 'wfpc' and table_name = 'harness_board_decisions') as has_table,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'harness_board_decisions'
+            and column_name = 'decision_note'
+        ) as has_decision_note_column,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'harness_board_decisions'
+            and column_name = 'resolution'
+        ) as has_resolution_column,
+        exists (
+          select 1
+          from pg_constraint
+          where conname like '%decision_kind%'
+            and conrelid = to_regclass('wfpc.harness_board_decisions')
+            and pg_get_constraintdef(oid) like '%proposal_denied%'
+            and pg_get_constraintdef(oid) like '%run_completed%'
+        ) as has_kind_check,
+        exists (
+          select 1
+          from pg_constraint
+          where conrelid = to_regclass('wfpc.harness_board_decisions')
+            and pg_get_constraintdef(oid) like '%references wfpc.harness_subcard_proposals(id)%'
+        ) as has_proposal_fk,
+        exists (
+          select 1
+          from pg_constraint
+          where conrelid = to_regclass('wfpc.harness_board_decisions')
+            and pg_get_constraintdef(oid) like '%target_card_id%'
+            and pg_get_constraintdef(oid) like '%references wfpc.harness_cards(id)%'
+        ) as has_target_card_fk,
+        exists (
+          select 1
+          from pg_indexes
+          where schemaname = 'wfpc'
+            and indexname = 'harness_board_decisions_run_created_at_idx'
+        ) as has_run_created_idx,
+        exists (
+          select 1
+          from pg_indexes
+          where schemaname = 'wfpc'
+            and indexname = 'harness_board_decisions_tenant_created_at_idx'
+        ) as has_tenant_created_idx`
+    );
+  let harnessBoardDecisionExisting = await queryHarnessBoardDecisionReady();
+  let harnessBoardDecisionReady = Object.values(harnessBoardDecisionExisting.rows[0] ?? {}).every(Boolean);
+  if (!harnessBoardDecisionReady) {
+    await client.query(readFileSync("supabase/migrations/0016_wf_harness_board_decisions.sql", "utf8"));
+    harnessBoardDecisionExisting = await queryHarnessBoardDecisionReady();
+    harnessBoardDecisionReady = Object.values(harnessBoardDecisionExisting.rows[0] ?? {}).every(Boolean);
+    if (!harnessBoardDecisionReady) {
+      throw new Error("Harness board decisions migration did not produce the required schema shape");
+    }
+  }
   const { rows } = await client.query(
     "select table_schema, table_name from information_schema.tables where table_schema = 'wfpc' order by table_name"
   );
@@ -330,7 +392,8 @@ try {
           !paperclipCompanyIssueAgentReady ||
           !paperclipSecretBindingStatusReady ||
           !harnessRunsReady ||
-          !harnessProposalReady,
+          !harnessProposalReady ||
+          !harnessBoardDecisionReady,
         tableCount: rows.length,
         tables: rows.map((row) => row.table_name)
       },

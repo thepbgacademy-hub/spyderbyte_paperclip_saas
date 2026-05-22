@@ -23,7 +23,9 @@ describe("harness proposal resolution migration", () => {
     expect(helper).toMatch(/0013_wf_harness_runs_cards\.sql/i);
     expect(helper).toMatch(/0014_wf_harness_subcard_proposals\.sql/i);
     expect(helper).toMatch(/0015_wf_harness_proposal_resolutions\.sql/i);
+    expect(helper).toMatch(/0016_wf_harness_board_decisions\.sql/i);
     expect(helper).toMatch(/harness_subcard_proposals_resolution_check/i);
     expect(helper).toMatch(/harness_subcard_proposals_approved_card_idx/i);
+    expect(helper).toMatch(/harness_board_decisions_run_created_at_idx/i);
   });
 });

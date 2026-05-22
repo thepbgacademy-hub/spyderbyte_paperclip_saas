@@ -1,7 +1,14 @@
-import type { HarnessCardEventRow, HarnessCardRow, HarnessRunRow } from "../db/types.js";
+import type { HarnessBoardDecisionRow, HarnessCardEventRow, HarnessCardRow, HarnessRunRow } from "../db/types.js";
 import type { QueryClient } from "../db/supabase-repositories.js";
 import type { HarnessProposalResolution, HarnessProposalStatus, HarnessSubCardProposal } from "./runtime-contract.js";
-import type { HarnessCardEventRecord, HarnessCardRecord, HarnessCardState, HarnessRunRecord, HarnessRunState } from "./types.js";
+import type {
+  HarnessBoardDecisionRecord,
+  HarnessCardEventRecord,
+  HarnessCardRecord,
+  HarnessCardState,
+  HarnessRunRecord,
+  HarnessRunState
+} from "./types.js";
 
 export interface HarnessRepository {
   insertRun(run: HarnessRunRecord): Promise<void>;
@@ -15,6 +22,8 @@ export interface HarnessRepository {
   insertEvent(event: HarnessCardEventRecord): Promise<void>;
   listEventsForCard(cardId: string): Promise<HarnessCardEventRecord[]>;
   listEventsForRun(runId: string): Promise<HarnessCardEventRecord[]>;
+  insertDecision(decision: HarnessBoardDecisionRecord): Promise<void>;
+  listDecisionsForRun(runId: string): Promise<HarnessBoardDecisionRecord[]>;
   insertProposal(proposal: HarnessSubCardProposal): Promise<void>;
   getProposal(proposalId: string): Promise<HarnessSubCardProposal | null>;
   listProposalsForRun(runId: string): Promise<HarnessSubCardProposal[]>;
@@ -35,6 +44,7 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
   const runs = new Map<string, HarnessRunRecord>();
   const cards = new Map<string, HarnessCardRecord[]>();
   const events = new Map<string, HarnessCardEventRecord[]>();
+  const decisions = new Map<string, HarnessBoardDecisionRecord[]>();
   const proposals = new Map<string, HarnessSubCardProposal>();
 
   return {
@@ -121,6 +131,17 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
     async listEventsForRun(runId) {
       const runCards = cards.get(runId) ?? [];
       return runCards.flatMap((card) => events.get(card.id) ?? []);
+    },
+
+    async insertDecision(decision) {
+      const runDecisions = decisions.get(decision.runId) ?? [];
+      decisions.set(decision.runId, [...runDecisions, { ...decision }]);
+    },
+
+    async listDecisionsForRun(runId) {
+      return [...(decisions.get(runId) ?? [])]
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+        .map((decision) => ({ ...decision }));
     },
 
     async insertProposal(proposal) {
@@ -307,6 +328,40 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
       return result.rows.map(mapHarnessCardEventRow).filter((event): event is HarnessCardEventRecord => event !== null);
     },
 
+    async insertDecision(decision) {
+      await client.query(
+        `insert into wfpc.harness_board_decisions
+          (id, run_id, tenant_id, actor_user_id, decision_kind, card_id, proposal_id, target_card_id, persona, deliverable_type, resolution, decision_note, created_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::timestamptz)`,
+        [
+          decision.id,
+          decision.runId,
+          decision.tenantId,
+          decision.actorUserId,
+          decision.decisionKind,
+          decision.cardId,
+          decision.proposalId,
+          decision.targetCardId,
+          decision.persona,
+          decision.deliverableType,
+          decision.resolution,
+          decision.decisionNote,
+          decision.createdAt
+        ]
+      );
+    },
+
+    async listDecisionsForRun(runId) {
+      const result = await client.query(
+        `select id, run_id, tenant_id, actor_user_id, decision_kind, card_id, proposal_id, target_card_id, persona, deliverable_type, resolution, decision_note, created_at
+         from wfpc.harness_board_decisions
+         where run_id = $1
+         order by created_at desc`,
+        [runId]
+      );
+      return result.rows.map(mapHarnessBoardDecisionRow).filter((decision): decision is HarnessBoardDecisionRecord => decision !== null);
+    },
+
     async insertProposal(proposal) {
       await client.query(
         `insert into wfpc.harness_subcard_proposals
@@ -422,6 +477,24 @@ export function toHarnessCardEventRow(record: HarnessCardEventRecord): HarnessCa
   };
 }
 
+export function toHarnessBoardDecisionRow(record: HarnessBoardDecisionRecord): HarnessBoardDecisionRow {
+  return {
+    id: record.id,
+    runId: record.runId,
+    tenantId: record.tenantId,
+    actorUserId: record.actorUserId,
+    decisionKind: record.decisionKind,
+    cardId: record.cardId,
+    proposalId: record.proposalId,
+    targetCardId: record.targetCardId,
+    persona: record.persona,
+    deliverableType: record.deliverableType,
+    resolution: record.resolution,
+    decisionNote: record.decisionNote,
+    createdAt: record.createdAt
+  };
+}
+
 function asRecord(row: unknown): Record<string, unknown> {
   return row && typeof row === "object" ? (row as Record<string, unknown>) : {};
 }
@@ -518,6 +591,29 @@ function mapHarnessProposalRow(row: unknown): HarnessSubCardProposal | null {
   }
 
   return proposal;
+}
+
+function mapHarnessBoardDecisionRow(row: unknown): HarnessBoardDecisionRecord | null {
+  const record = asRecord(row);
+  if (!record.id || !record.run_id || !record.tenant_id || !record.actor_user_id || !record.decision_kind) {
+    return null;
+  }
+
+  return {
+    id: String(record.id),
+    runId: String(record.run_id),
+    tenantId: String(record.tenant_id),
+    actorUserId: String(record.actor_user_id),
+    decisionKind: String(record.decision_kind) as HarnessBoardDecisionRecord["decisionKind"],
+    cardId: typeof record.card_id === "string" ? record.card_id : null,
+    proposalId: typeof record.proposal_id === "string" ? record.proposal_id : null,
+    targetCardId: typeof record.target_card_id === "string" ? record.target_card_id : null,
+    persona: typeof record.persona === "string" ? record.persona : null,
+    deliverableType: typeof record.deliverable_type === "string" ? record.deliverable_type : null,
+    resolution: typeof record.resolution === "string" ? record.resolution : null,
+    decisionNote: typeof record.decision_note === "string" ? record.decision_note : null,
+    createdAt: String(record.created_at)
+  };
 }
 
 function normalizeRuntimeContext(value: unknown): HarnessRunRecord["runtimeContext"] {

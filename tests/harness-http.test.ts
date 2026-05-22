@@ -72,7 +72,8 @@ describe("harness HTTP boundary", () => {
           ]
         }
       ],
-      pendingApprovals: []
+      pendingApprovals: [],
+      recentDecisions: []
     });
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],

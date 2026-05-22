@@ -119,7 +119,14 @@ const defaultBoardResponse: HarnessBoardResponse = {
       ]
     }
   ],
-  pendingApprovals: []
+  pendingApprovals: [],
+  recentDecisions: [
+    {
+      id: "decision-fallback-1",
+      label: "CEO opened a new pricing review lane.",
+      timestampLabel: "recently"
+    }
+  ]
 };
 
 function isLoopbackHost(hostname: string): boolean {

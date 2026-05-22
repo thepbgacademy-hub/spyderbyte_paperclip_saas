@@ -7,6 +7,12 @@ export type HarnessCardState = "queued" | "planning" | "approved" | "working" | 
 export type HarnessPersona = string;
 export type HarnessDeliverableType = string;
 export type HarnessCardEventKind = "created" | "state_changed" | "comment_added" | "subcard_proposed" | "result_recorded";
+export type HarnessBoardDecisionKind =
+  | "lane_opened"
+  | "proposal_approved"
+  | "proposal_deferred"
+  | "proposal_denied"
+  | "run_completed";
 
 export const HARNESS_CHILD_PERSONAS = ["cfo", "coo", "researcher", "cto", "cmo", "analyst"] as const;
 export const HARNESS_DELIVERABLE_TYPES = [
@@ -56,6 +62,22 @@ export interface HarnessCardEventRecord {
   cardId: string;
   eventKind: HarnessCardEventKind;
   payload: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface HarnessBoardDecisionRecord {
+  id: string;
+  runId: string;
+  tenantId: string;
+  actorUserId: string;
+  decisionKind: HarnessBoardDecisionKind;
+  cardId: string | null;
+  proposalId: string | null;
+  targetCardId: string | null;
+  persona: string | null;
+  deliverableType: string | null;
+  resolution: string | null;
+  decisionNote: string | null;
   createdAt: string;
 }
 
@@ -157,6 +179,36 @@ export function createHarnessCardEventRecord(input: {
     cardId: input.cardId,
     eventKind: input.eventKind,
     payload: input.payload ?? {},
+    createdAt: new Date().toISOString()
+  };
+}
+
+export function createHarnessBoardDecisionRecord(input: {
+  runId: string;
+  tenantId: string;
+  actorUserId: string;
+  decisionKind: HarnessBoardDecisionKind;
+  cardId?: string | null;
+  proposalId?: string | null;
+  targetCardId?: string | null;
+  persona?: string | null;
+  deliverableType?: string | null;
+  resolution?: string | null;
+  decisionNote?: string | null;
+}): HarnessBoardDecisionRecord {
+  return {
+    id: randomUUID(),
+    runId: input.runId,
+    tenantId: input.tenantId,
+    actorUserId: input.actorUserId,
+    decisionKind: input.decisionKind,
+    cardId: input.cardId ?? null,
+    proposalId: input.proposalId ?? null,
+    targetCardId: input.targetCardId ?? null,
+    persona: input.persona ?? null,
+    deliverableType: input.deliverableType ?? null,
+    resolution: input.resolution ?? null,
+    decisionNote: input.decisionNote ?? null,
     createdAt: new Date().toISOString()
   };
 }

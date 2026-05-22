@@ -314,6 +314,41 @@ describe("harness board service", () => {
     expect(researcherCards[0]?.id).toBe(firstApproval.cardId);
   });
 
+  it("surfaces bounded recent board decisions without exposing backend chatter", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+
+    expect(board.recentDecisions).toEqual([
+      expect.objectContaining({
+        label: "CEO opened a new pricing review lane for CFO."
+      })
+    ]);
+    expect(JSON.stringify(board.recentDecisions)).not.toMatch(/tool|prompt|internal|secret/i);
+  });
+
   it("keeps deferred proposals visible for later CEO approval", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
@@ -379,6 +414,67 @@ describe("harness board service", () => {
 
     const approvedBoard = await service.listBoardState({ authorization: "Bearer valid" });
     expect(approvedBoard.pendingApprovals).toEqual([]);
+  });
+
+  it("defers approval when another active persona already owns the deliverable lane", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const parentCard = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+
+    await repository.insertProposal({
+      id: "proposal_owner_conflict_1",
+      runId: board.runId,
+      parentCardId: parentCard.cardId,
+      requestedByCardId: parentCard.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Research the pricing lane",
+      deliverableType: "pricing_review",
+      status: "proposed"
+    });
+
+    await expect(
+      service.decideProposal({
+        authorization: "Bearer valid",
+        proposalId: "proposal_owner_conflict_1",
+        decision: "approve"
+      })
+    ).resolves.toEqual({
+      status: "deferred"
+    });
+
+    const deferredBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(deferredBoard.pendingApprovals).toEqual([
+      expect.objectContaining({
+        id: "proposal_owner_conflict_1",
+        statusLabel: "Deferred for later CEO review"
+      })
+    ]);
+    expect(
+      deferredBoard.recentDecisions.some(
+        (decision) => decision.label === "CEO deferred a pricing review request for RESEARCHER."
+      )
+    ).toBe(true);
   });
 
   it("reuses an open persona deliverable lane instead of opening a duplicate card", async () => {

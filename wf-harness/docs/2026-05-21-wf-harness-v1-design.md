@@ -258,6 +258,64 @@ If the VPS restarts or the process crashes:
 - the CEO run reloads from storage
 - all card states reload from storage
 - the harness determines which work items were in progress
+
+## Memory Strategy
+
+Wealth Factory should separate short operational memory from long tenant-owned business memory.
+
+### Small Harness Memory
+
+The harness must keep a small retained memory layer for live continuity:
+
+- active run state
+- active card state
+- recent board decisions needed for flow
+- resumability after interruption
+- bounded context needed for the CEO and child personas to keep the workflow coherent
+
+This memory stays inside Wealth Factory because it is part of the live execution contract.
+
+### Long Business Memory
+
+The larger historical memory of the company should be designed as a tenant-owned record layer, not as an ever-growing harness runtime store.
+
+Strong candidate:
+
+- Obsidian as a tenant-owned long-memory and record system
+
+Good uses for that layer:
+
+- board meeting notes
+- strategy decisions
+- approved implementation direction
+- KPI and company-health snapshots
+- operating procedures
+- weekly executive summaries
+- recommendations made, accepted, rejected, or deferred
+- longitudinal business history
+
+This aligns with market interest in Obsidian as a second-brain and business knowledge system, and it lowers pressure for Wealth Factory to become a heavy long-term document-storage platform.
+
+### Boundary Rule
+
+Obsidian should not become the source of truth for live execution-critical state.
+
+Do not rely on Obsidian alone for:
+
+- active run locks
+- queue state
+- in-flight orchestration state
+- auth/session state
+- BYOK credential state
+- fairness or congestion control
+
+So the intended split is:
+
+- Wealth Factory owns runtime truth
+- Obsidian can own long-form business memory
+- cloud storage connectors like Google Drive or Dropbox can hold larger files and artifacts
+
+This preserves a leaner harness while turning tenant-owned memory into a feature rather than a storage burden.
 - the run continues from the last durable checkpoint
 
 Version 1 should resume from saved card state automatically and keep going.
