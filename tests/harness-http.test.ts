@@ -13,7 +13,7 @@ describe("harness HTTP boundary", () => {
       listBoardState,
       createTopLevelChildCard,
       advanceChildCard: vi.fn(),
-      approveProposal: vi.fn(),
+      decideProposal: vi.fn(),
       completeRun: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
     });
@@ -79,7 +79,7 @@ describe("harness HTTP boundary", () => {
       listBoardState,
       createTopLevelChildCard: vi.fn(),
       advanceChildCard: vi.fn(),
-      approveProposal: vi.fn(),
+      decideProposal: vi.fn(),
       completeRun: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
     });
@@ -115,7 +115,7 @@ describe("harness HTTP boundary", () => {
       listBoardState,
       createTopLevelChildCard,
       advanceChildCard: vi.fn(),
-      approveProposal: vi.fn(),
+      decideProposal: vi.fn(),
       completeRun: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
     });
@@ -142,7 +142,7 @@ describe("harness HTTP boundary", () => {
       listBoardState,
       createTopLevelChildCard,
       advanceChildCard: vi.fn(),
-      approveProposal: vi.fn(),
+      decideProposal: vi.fn(),
       completeRun: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: false, remaining: 0, resetAt: 1 }) }
     });
@@ -166,7 +166,7 @@ describe("harness HTTP boundary", () => {
       listBoardState: vi.fn().mockRejectedValueOnce(new ApiAuthError()).mockRejectedValueOnce(new Error("db_down")),
       createTopLevelChildCard: vi.fn(),
       advanceChildCard: vi.fn(),
-      approveProposal: vi.fn(),
+      decideProposal: vi.fn(),
       completeRun: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
     });
@@ -188,13 +188,13 @@ describe("harness HTTP boundary", () => {
   });
 
   it("approves a persisted proposal through the guarded write route", async () => {
-    const approveProposal = vi.fn().mockResolvedValue({ cardId: "card_new_1" });
+    const decideProposal = vi.fn().mockResolvedValue({ status: "approved", cardId: "card_new_1" });
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
       listBoardState: vi.fn(),
       createTopLevelChildCard: vi.fn(),
       advanceChildCard: vi.fn(),
-      approveProposal,
+      decideProposal,
       completeRun: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
     });
@@ -212,12 +212,81 @@ describe("harness HTTP boundary", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(approveProposal).toHaveBeenCalledWith({
+    expect(decideProposal).toHaveBeenCalledWith({
       proposalId: "proposal_1",
       authorization: "Bearer valid",
-      cookie: "wf_session=abc"
+      cookie: "wf_session=abc",
+      decision: "approve"
     });
-    expect(response.body).toEqual({ cardId: "card_new_1" });
+    expect(response.body).toEqual({ status: "approved", cardId: "card_new_1" });
+  });
+
+  it("accepts explicit defer decisions through the guarded proposal decision route", async () => {
+    const decideProposal = vi.fn().mockResolvedValue({ status: "deferred" });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      decideProposal,
+      completeRun: vi.fn(),
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/proposals/proposal_1/decision",
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        cookie: "wf_session=abc",
+        "content-type": "application/json"
+      },
+      body: {
+        decision: "defer",
+        decisionNote: "Wait for the current lane to finish first."
+      },
+      bodyByteLength: 74,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(decideProposal).toHaveBeenCalledWith({
+      proposalId: "proposal_1",
+      authorization: "Bearer valid",
+      cookie: "wf_session=abc",
+      decision: "defer",
+      decisionNote: "Wait for the current lane to finish first."
+    });
+    expect(response.body).toEqual({ status: "deferred" });
+  });
+
+  it("maps a non-approved /approve outcome back to conflict semantics", async () => {
+    const decideProposal = vi.fn().mockResolvedValue({ status: "denied" });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      decideProposal,
+      completeRun: vi.fn(),
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/proposals/proposal_1/approve",
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        cookie: "wf_session=abc"
+      },
+      bodyByteLength: 0,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({ code: "conflict" });
   });
 
   it("returns 404 for unknown proposal paths without burning the approval rate-limit bucket", async () => {
@@ -225,7 +294,7 @@ describe("harness HTTP boundary", () => {
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
       listBoardState: vi.fn(),
-      approveProposal: vi.fn(),
+      decideProposal: vi.fn(),
       createTopLevelChildCard: vi.fn(),
       advanceChildCard: vi.fn(),
       completeRun: vi.fn(),
@@ -254,7 +323,7 @@ describe("harness HTTP boundary", () => {
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
       listBoardState: vi.fn(),
-      approveProposal: vi.fn(),
+      decideProposal: vi.fn(),
       createTopLevelChildCard,
       advanceChildCard: vi.fn(),
       completeRun: vi.fn(),
@@ -295,7 +364,7 @@ describe("harness HTTP boundary", () => {
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
       listBoardState: vi.fn(),
-      approveProposal: vi.fn(),
+      decideProposal: vi.fn(),
       createTopLevelChildCard,
       advanceChildCard: vi.fn(),
       completeRun: vi.fn(),
@@ -332,7 +401,7 @@ describe("harness HTTP boundary", () => {
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
       listBoardState: vi.fn(),
-      approveProposal: vi.fn(),
+      decideProposal: vi.fn(),
       createTopLevelChildCard,
       advanceChildCard: vi.fn(),
       completeRun: vi.fn(),
@@ -372,7 +441,7 @@ describe("harness HTTP boundary", () => {
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
       listBoardState: vi.fn(),
-      approveProposal: vi.fn(),
+      decideProposal: vi.fn(),
       createTopLevelChildCard: vi.fn(),
       advanceChildCard,
       completeRun: vi.fn(),
@@ -414,7 +483,7 @@ describe("harness HTTP boundary", () => {
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
       listBoardState: vi.fn(),
-      approveProposal: vi.fn(),
+      decideProposal: vi.fn(),
       createTopLevelChildCard: vi.fn(),
       advanceChildCard,
       completeRun: vi.fn(),
@@ -452,7 +521,7 @@ describe("harness HTTP boundary", () => {
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
       listBoardState: vi.fn(),
-      approveProposal: vi.fn(),
+      decideProposal: vi.fn(),
       createTopLevelChildCard: vi.fn(),
       advanceChildCard,
       completeRun: vi.fn(),
@@ -500,7 +569,7 @@ describe("harness HTTP boundary", () => {
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
       listBoardState: vi.fn(),
-      approveProposal: vi.fn(),
+      decideProposal: vi.fn(),
       createTopLevelChildCard: vi.fn(),
       advanceChildCard: vi.fn(),
       completeRun,

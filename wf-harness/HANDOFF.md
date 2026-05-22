@@ -60,6 +60,11 @@ The first harness implementation slice is now built and verified:
 - Added an explicit CEO-gated final assembly/completion seam so an `assembling` run now transitions to `done` only through a persisted completion command instead of being inferred from child-card motion alone.
 - Replaced the narrow query-string mutation contract with parsed JSON-body input for the current harness command routes, keeping tenant-authored summaries off URL surfaces while preserving a bounded write API.
 - Tightened CEO card-discipline rules so direct child creation now blocks duplicate open deliverable lanes and proposal approval now blocks duplicate open persona/deliverable lanes.
+- Widened proposal policy from binary approve-only behavior into explicit `approve`, `defer`, and `deny` decisions, with persisted resolution metadata and decision notes stored on the proposal record.
+- Added smarter CEO lane reuse behavior so proposal approval now prefers updating an existing exact-match or persona/deliverable lane before opening a new child card, which keeps the board bounded under sustained tenant pressure.
+- Added a first read-only completion-package seam to the board response so `assembling` and `done` runs can surface a durable summary plus completed non-CEO deliverables without exposing backend chatter.
+- Added harness migration `0015_wf_harness_proposal_resolutions.sql` plus migration-helper awareness, so local/staged environments can widen proposal status support and resolution metadata without hand-applied SQL drift.
+- Fixed the first cut of defer/reuse policy so deferred proposals stay visible for later CEO review, `/approve` cannot return `200` for non-approved outcomes, and reused-lane approvals now leave a visible parent-card note instead of silently disappearing from the originating lane.
 - Hardened the Node HTTP adapter so request-body limits are enforced on bytes actually read, not only on client-declared `Content-Length`, and loopback proxy headers now preserve the forwarded client IP for rate limiting.
 - Tightened the dashboard HTTP seam so auth failures still return `401`, but real downstream/runtime faults now surface as `500 service_unavailable` instead of being mislabeled as unauthorized.
 - Made harness workflow selection fail closed if more than one harness-eligible workflow is exposed without an explicit selector, instead of silently choosing the first configured id.
@@ -93,6 +98,10 @@ The first harness implementation slice is now built and verified:
 - The intentional E2E fail step left a stray Python server on `127.0.0.1:5173`, which caused false directory-listing failures until the process was killed. This is logged so the mistake is not repeated.
 - The approval hardening pass revealed one remaining proof gap: the repo now requires atomic approval mutations and marks the proposal-to-card foreign key as deferred, but the exact transaction-backed DB seam still needs a stronger integration harness than the current in-memory passthrough tests.
 - The current CEO policy is stronger but still intentionally narrow. Exact-match retries remain idempotent, open child-card counts are capped, duplicate open deliverable lanes are blocked, and duplicate proposal approvals into the same persona/deliverable lane are blocked. Broader deny/defer semantics and smarter "update an existing lane instead of opening another one" logic still belong in a later slice.
+- Proposal decisions are now persisted as first-class policy outcomes. If future slices widen this seam, preserve the current bounded model: `approve`, `defer`, and `deny` are workflow decisions, not generic board-edit verbs, and lane reuse should stay preferred over lane creation.
+- `defer` is now a real revisit state, not a hidden terminal state. Keep deferred proposals visible in the approvals read model and allow a later CEO approval/denial pass unless a future product rule explicitly changes that lifecycle.
+- The first real packaging/result-handoff seam is intentionally read-only. `completionPackage` is a derived board view built from persisted CEO and child-card outcomes; do not start persisting a second duplicate package artifact until a later slice proves it is necessary.
+- The real disposable Postgres proof must apply every harness proposal migration in order. Forgetting `0015_wf_harness_proposal_resolutions.sql` produced a false red on the deferred-FK proof because the repository started writing `resolution` and `decision_note` before the disposable DB knew those columns existed.
 - Run reconciliation is intentionally deterministic and the final completion seam is intentionally explicit. The harness now derives `active`, `waiting`, `blocked`, and `assembling` from child-card/proposal state, then requires a separate CEO completion command to persist `done`.
 - Harness audit expansion is intentionally metadata-only. Do not persist raw `resultSummary` business text in durable audit payloads; use state metadata and booleans instead.
 - Harness audit publishing is post-commit and best-effort. If the durable audit sink is unavailable, the mutation still succeeds and logs a warning rather than pretending the committed state failed.
@@ -112,6 +121,6 @@ The first harness implementation slice is now built and verified:
 
 Continue the harness build by replacing more of the live execution slice behind the persisted CEO/card model:
 
-- start defining richer CEO approval rules and card-count discipline in executable runtime code instead of the current duplicate-lane/open-cap guardrails
-- widen harness completion beyond the current explicit CEO final-assembly command into fuller packaging and result handoff logic
+- keep deepening CEO lane policy in executable runtime code, especially around when to defer versus deny and when to fold work into an existing lane instead of opening another card
+- widen harness completion beyond the current derived `completionPackage` into a fuller packaged result handoff only after the read-only seam stays stable under more execution slices
 - expand the proposal/card mutation seam beyond the current child-card progression path without widening into generic editing APIs

@@ -33,7 +33,13 @@ type HarnessApi = {
     state: HarnessCardRecord["state"];
     resultSummary?: string;
   }): Promise<{ cardId: string; state: HarnessCardRecord["state"] }>;
-  approveProposal(request: { authorization: string; cookie?: string; proposalId: string }): Promise<{ cardId: string }>;
+  decideProposal(request: {
+    authorization: string;
+    cookie?: string;
+    proposalId: string;
+    decision: "approve" | "defer" | "deny";
+    decisionNote?: string;
+  }): Promise<{ status: "proposed" | "approved" | "deferred" | "denied"; cardId?: string }>;
   completeRun(request: {
     authorization: string;
     cookie?: string;
@@ -51,7 +57,7 @@ export function createHarnessHttpHandler(options: {
   listBoardState: HarnessApi["listBoardState"];
   createTopLevelChildCard: HarnessApi["createTopLevelChildCard"];
   advanceChildCard: HarnessApi["advanceChildCard"];
-  approveProposal: HarnessApi["approveProposal"];
+  decideProposal: HarnessApi["decideProposal"];
   completeRun: HarnessApi["completeRun"];
   rateLimiter: RateLimiter;
   maxBodyBytes?: number;
@@ -75,7 +81,7 @@ export function createHarnessHttpHandler(options: {
         request.path === "/api/harness/cards" ||
         /^\/api\/harness\/cards\/[^/]+\/advance$/u.test(request.path) ||
         /^\/api\/harness\/runs\/[^/]+\/complete$/u.test(request.path) ||
-        request.path.startsWith("/api/harness/proposals/")
+        /^\/api\/harness\/proposals\/[^/]+\/(approve|decision)$/u.test(request.path)
       )
     ) {
       return {
@@ -99,7 +105,7 @@ export function createHarnessHttpHandler(options: {
         ? "harness-card-advance"
       : request.method === "POST" && /^\/api\/harness\/runs\/[^/]+\/complete$/u.test(request.path)
         ? "harness-run-complete"
-      : request.method === "POST" && /^\/api\/harness\/proposals\/[^/]+\/approve$/u.test(request.path)
+      : request.method === "POST" && /^\/api\/harness\/proposals\/[^/]+\/(approve|decision)$/u.test(request.path)
         ? "harness-proposal-approve"
       : null;
 
@@ -184,21 +190,28 @@ export function createHarnessHttpHandler(options: {
         return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
       }
 
-      const proposalMatch = /^\/api\/harness\/proposals\/([^/]+)\/approve$/u.exec(request.path);
+      const proposalMatch = /^\/api\/harness\/proposals\/([^/]+)\/(approve|decision)$/u.exec(request.path);
       if (!proposalMatch) {
         return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
       }
       const bodyInput = readJsonObject(request.body);
       const decision = readOptionalString(bodyInput?.decision);
-      if (decision && decision !== "approve") {
+      const routeDecision = proposalMatch[2] === "approve" ? "approve" : decision ?? "";
+      if (!routeDecision || !["approve", "defer", "deny"].includes(routeDecision)) {
         return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
       }
+      const decisionNote = readOptionalString(bodyInput?.decisionNote);
 
-      const body = await options.approveProposal({
+      const body = await options.decideProposal({
         proposalId: decodeURIComponent(proposalMatch[1] ?? ""),
         authorization: request.headers.authorization ?? "",
-        ...(request.headers.cookie ? { cookie: request.headers.cookie } : {})
+        ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
+        decision: routeDecision as "approve" | "defer" | "deny",
+        ...(decisionNote ? { decisionNote } : {})
       });
+      if (proposalMatch[2] === "approve" && body.status !== "approved") {
+        return { status: 409, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "conflict" } };
+      }
       assertWealthFactoryResponse(body);
       return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
     } catch (error) {

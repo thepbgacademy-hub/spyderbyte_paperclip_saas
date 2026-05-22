@@ -1,4 +1,5 @@
-export type HarnessProposalStatus = "proposed" | "approved";
+export type HarnessProposalStatus = "proposed" | "approved" | "deferred" | "denied";
+export type HarnessProposalResolution = "create_lane" | "update_existing_lane";
 
 import type { HarnessCardRecord, HarnessPersona, HarnessRunRecord, HarnessRuntimeContext } from "./types.js";
 
@@ -14,6 +15,8 @@ export interface HarnessSubCardProposal {
   title: string;
   deliverableType: string;
   status: HarnessProposalStatus;
+  resolution?: HarnessProposalResolution;
+  decisionNote?: string;
   approvedCardId?: string;
 }
 

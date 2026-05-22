@@ -314,7 +314,74 @@ describe("harness board service", () => {
     expect(researcherCards[0]?.id).toBe(firstApproval.cardId);
   });
 
-  it("fails closed when proposal approval would duplicate an open persona deliverable lane", async () => {
+  it("keeps deferred proposals visible for later CEO approval", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const parentCard = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+
+    await repository.insertProposal({
+      id: "proposal_deferred_1",
+      runId: board.runId,
+      parentCardId: parentCard.cardId,
+      requestedByCardId: parentCard.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief",
+      status: "proposed"
+    });
+
+    await expect(
+      service.decideProposal({
+        authorization: "Bearer valid",
+        proposalId: "proposal_deferred_1",
+        decision: "defer",
+        decisionNote: "Wait for the pricing lane to settle first."
+      })
+    ).resolves.toEqual({ status: "deferred" });
+
+    const deferredBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(deferredBoard.pendingApprovals).toEqual([
+      expect.objectContaining({
+        id: "proposal_deferred_1",
+        statusLabel: "Deferred for later CEO review"
+      })
+    ]);
+
+    await expect(
+      service.approveProposal({
+        authorization: "Bearer valid",
+        proposalId: "proposal_deferred_1"
+      })
+    ).resolves.toEqual({
+      cardId: expect.stringMatching(/^[0-9a-f-]{36}$/i)
+    });
+
+    const approvedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(approvedBoard.pendingApprovals).toEqual([]);
+  });
+
+  it("reuses an open persona deliverable lane instead of opening a duplicate card", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
       authenticate: vi.fn().mockResolvedValue({
@@ -338,7 +405,7 @@ describe("harness board service", () => {
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
     });
-    await service.createTopLevelChildCard({
+    const existingLane = await service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "researcher",
       title: "Gather competitor price anchors",
@@ -362,7 +429,65 @@ describe("harness board service", () => {
         authorization: "Bearer valid",
         proposalId: "proposal_duplicate_lane_1"
       })
-    ).rejects.toBeInstanceOf(HarnessCardCreationConflictError);
+    ).resolves.toEqual({ cardId: existingLane.cardId });
+
+    const hydrated = await service.listBoardState({ authorization: "Bearer valid" });
+    const pricingReviewCards = hydrated.cards.filter(
+      (card) => card.persona === "RESEARCHER" && card.deliverableLabel === "Research Brief"
+    );
+    const parentEvents = await repository.listEventsForCard(created.cardId);
+    expect(pricingReviewCards).toHaveLength(1);
+    expect(hydrated.pendingApprovals).toEqual([]);
+    expect(parentEvents.at(-1)?.eventKind).toBe("comment_added");
+  });
+
+  it("does not duplicate approval notes when a proposal folds back into its own lane", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const existingLane = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief"
+    });
+
+    await repository.insertProposal({
+      id: "proposal_same_lane_1",
+      runId: board.runId,
+      parentCardId: existingLane.cardId,
+      requestedByCardId: existingLane.cardId,
+      requestedByPersona: "researcher",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief",
+      status: "proposed"
+    });
+
+    await expect(
+      service.approveProposal({
+        authorization: "Bearer valid",
+        proposalId: "proposal_same_lane_1"
+      })
+    ).resolves.toEqual({ cardId: existingLane.cardId });
+
+    const laneEvents = await repository.listEventsForCard(existingLane.cardId);
+    const approvalNotes = laneEvents.filter((event) => event.eventKind === "comment_added");
+    expect(approvalNotes).toHaveLength(1);
   });
 
   it("fails closed when approval mutation is invoked without an atomic runner", async () => {

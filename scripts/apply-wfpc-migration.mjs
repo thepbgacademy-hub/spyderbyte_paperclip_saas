@@ -245,6 +245,67 @@ try {
   if (!paperclipSecretBindingStatusReady) {
     await client.query(readFileSync("supabase/migrations/0014_paperclip_secret_binding_synced_status.sql", "utf8"));
   }
+  const harnessRunsExisting = await client.query(
+    `select
+      exists (select 1 from information_schema.tables where table_schema = 'wfpc' and table_name = 'harness_runs') as has_runs,
+      exists (select 1 from information_schema.tables where table_schema = 'wfpc' and table_name = 'harness_cards') as has_cards,
+      exists (select 1 from information_schema.tables where table_schema = 'wfpc' and table_name = 'harness_card_events') as has_events`
+  );
+  const harnessRunsReady = Object.values(harnessRunsExisting.rows[0] ?? {}).every(Boolean);
+  if (!harnessRunsReady) {
+    await client.query(readFileSync("supabase/migrations/0013_wf_harness_runs_cards.sql", "utf8"));
+  }
+  const harnessProposalExisting = await client.query(
+    `select
+      exists (select 1 from information_schema.tables where table_schema = 'wfpc' and table_name = 'harness_subcard_proposals') as has_table,
+      exists (
+        select 1
+        from pg_constraint
+        where conname = 'harness_subcard_proposals_status_check'
+          and conrelid = to_regclass('wfpc.harness_subcard_proposals')
+          and pg_get_constraintdef(oid) like '%deferred%'
+          and pg_get_constraintdef(oid) like '%denied%'
+      ) as has_wide_status_check,
+      exists (
+        select 1
+        from information_schema.columns
+        where table_schema = 'wfpc'
+          and table_name = 'harness_subcard_proposals'
+          and column_name = 'resolution'
+      ) as has_resolution_column,
+      exists (
+        select 1
+        from information_schema.columns
+        where table_schema = 'wfpc'
+          and table_name = 'harness_subcard_proposals'
+          and column_name = 'decision_note'
+      ) as has_decision_note_column,
+      exists (
+        select 1
+        from pg_constraint
+        where conname = 'harness_subcard_proposals_resolution_check'
+          and conrelid = to_regclass('wfpc.harness_subcard_proposals')
+          and pg_get_constraintdef(oid) like '%create_lane%'
+          and pg_get_constraintdef(oid) like '%update_existing_lane%'
+      ) as has_resolution_check,
+      exists (
+        select 1
+        from pg_indexes
+        where schemaname = 'wfpc'
+          and indexname = 'harness_subcard_proposals_run_status_idx'
+      ) as has_run_status_idx,
+      not exists (
+        select 1
+        from pg_indexes
+        where schemaname = 'wfpc'
+          and indexname in ('harness_subcard_proposals_approved_card_idx', 'wfpc.harness_subcard_proposals_approved_card_idx')
+      ) as dropped_approved_card_unique_idx`
+  );
+  const harnessProposalReady = Object.values(harnessProposalExisting.rows[0] ?? {}).every(Boolean);
+  if (!harnessProposalReady) {
+    await client.query(readFileSync("supabase/migrations/0014_wf_harness_subcard_proposals.sql", "utf8"));
+    await client.query(readFileSync("supabase/migrations/0015_wf_harness_proposal_resolutions.sql", "utf8"));
+  }
   const { rows } = await client.query(
     "select table_schema, table_name from information_schema.tables where table_schema = 'wfpc' order by table_name"
   );
@@ -267,7 +328,9 @@ try {
           !paperclipSecretBindingReady ||
           !paperclipSecretBindingVersionReady ||
           !paperclipCompanyIssueAgentReady ||
-          !paperclipSecretBindingStatusReady,
+          !paperclipSecretBindingStatusReady ||
+          !harnessRunsReady ||
+          !harnessProposalReady,
         tableCount: rows.length,
         tables: rows.map((row) => row.table_name)
       },

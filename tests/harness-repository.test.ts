@@ -16,6 +16,7 @@ import {
 
 const migration = readFileSync("supabase/migrations/0013_wf_harness_runs_cards.sql", "utf8");
 const proposalMigration = readFileSync("supabase/migrations/0014_wf_harness_subcard_proposals.sql", "utf8");
+const proposalResolutionMigration = readFileSync("supabase/migrations/0015_wf_harness_proposal_resolutions.sql", "utf8");
 const execFileAsync = promisify(execFile);
 
 const HARNESS_POSTGRES_IMAGE = "postgres:16-alpine";
@@ -557,6 +558,7 @@ async function resetHarnessProofDatabase(client: Client) {
   );
   await client.query(migration);
   await client.query(proposalMigration);
+  await client.query(proposalResolutionMigration);
 }
 
 async function seedHarnessProofPrerequisites(client: Client, tenantId: string) {

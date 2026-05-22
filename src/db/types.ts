@@ -76,7 +76,8 @@ export type HarnessCardEventRow = {
   createdAt: string;
 };
 
-export type HarnessProposalStatus = "proposed" | "approved";
+export type HarnessProposalStatus = "proposed" | "approved" | "deferred" | "denied";
+export type HarnessProposalResolution = "create_lane" | "update_existing_lane";
 
 export type HarnessProposalRow = {
   id: string;
@@ -88,6 +89,8 @@ export type HarnessProposalRow = {
   title: string;
   deliverableType: string;
   status: HarnessProposalStatus;
+  resolution: HarnessProposalResolution | null;
+  decisionNote: string | null;
   approvedCardId: string | null;
   createdAt: string;
   updatedAt: string;

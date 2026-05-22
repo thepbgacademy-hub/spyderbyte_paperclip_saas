@@ -52,5 +52,8 @@ This file tracks the new harness subproject only.
 - [x] Add a parsed request-body contract for harness mutations before tenant-authored outcome summaries are accepted over HTTP.
 - [x] Add richer CEO approval policy beyond exact-match idempotency and the current open-card cap.
 - [x] Widen run-level progression from the current derived `assembling` ceiling into explicit final assembly/completion logic.
-- [ ] Add deny/defer semantics and stronger "update existing lane vs create new lane" CEO policy beyond the current duplicate-lane guards.
-- [ ] Add richer packaging and result handoff logic on top of the current explicit CEO completion command.
+- [x] Add deny/defer semantics and stronger "update existing lane vs create new lane" CEO policy beyond the current duplicate-lane guards.
+- [x] Add an initial read-only packaging/result handoff seam on top of the explicit CEO completion command.
+- [x] Keep deferred proposals visible and re-approvable so CEO decisions can genuinely pause work instead of silently dropping it.
+- [ ] Deepen CEO decision policy so repeated sub-card requests prefer lane updates, then defer, then deny in a more explicit workflow-aware order.
+- [ ] Decide whether the current derived `completionPackage` should stay a read model or graduate into a persisted packaged-output artifact in a later slice.

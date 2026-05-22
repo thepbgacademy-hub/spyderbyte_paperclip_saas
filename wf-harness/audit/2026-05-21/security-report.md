@@ -39,6 +39,9 @@ Scope: First custom harness slice under `src/harness`, `src/api/harness-http.ts`
 - Re-ran the scan after closing the cross-tenant approved-proposal leak, bounding child-card persona/deliverable inputs to the approved catalog, and making storage OAuth degrade per provider with structured unavailable responses. The touched slice still introduced no live secret material, and no new secret-bearing response paths were added.
 - Re-ran the scan after binding storage OAuth callback completion to the route provider, validating `WF_STORAGE_OAUTH_REDIRECT_ORIGIN` against the allowed portal-origin set, and tightening harness route classification so dead proposal paths no longer consume the live approval rate-limit bucket. The touched slice still introduced no live secret material and did not add any new secret-bearing response paths.
 - Re-ran the scan after normalizing the accepted storage OAuth redirect origin and preserving pending OAuth state on provider-mismatch callback attempts. The touched slice still introduced no live secret material, and the callback integrity seam now fails closed without consuming the tenant's one valid retry path.
+- Re-ran the scan after widening harness proposal policy to support persisted `defer`/`deny` outcomes, lane-reuse decisions, and the derived `completionPackage` read model. The touched slice still introduced no live secret material, and the new decision notes remain bounded business text rather than secret-bearing config.
+- Re-ran the scan after wiring migration-helper support for `0015_wf_harness_proposal_resolutions.sql` and updating the disposable Postgres proof path. The touched slice still introduced no live secret material, and the new Docker-backed test path continues using isolated local-only credentials.
+- Re-ran the scan after making deferred proposals visible/re-approvable, restoring a parent-card approval trail for reused lanes, and tightening `/approve` to reject non-approved terminal outcomes. The touched slice still introduced no live secret material and did not widen any tenant secret or audit payload surface.
 
 ## OWASP-Oriented Findings
 
@@ -107,6 +110,8 @@ No issues identified in the harness slice. The board HTTP boundary now distingui
 - The narrowed provider-pattern scan matched only env-variable names, dummy test values, and authorization placeholders used in tests.
 - The new harness persistence layer strips `secretValues` before runtime context is stored or serialized, and the repository-backed board path continues using only sanitized runtime context fields.
 - The guarded harness mutation routes now accept tenant-authored summaries through parsed JSON bodies instead of URL query strings, which keeps business text out of browser history and intermediary URL logs.
+- The widened proposal policy stores only bounded workflow metadata (`status`, `resolution`, optional `decisionNote`) and does not introduce any new credential-bearing persistence paths.
+- The derived `completionPackage` board view is assembled from existing persisted CEO and child-card outcomes and does not persist raw provider secrets or expand the runtime-context trust boundary.
 
 ### Additional Hygiene Observations
 
@@ -137,4 +142,4 @@ No issues identified in the harness slice. The board HTTP boundary now distingui
 
 ## Conclusion
 
-The current Wealth Factory harness slice is in a good security position: no confirmed live secret exposure was introduced, no tenant secret values are persisted in the new harness records, the board API remains customer-safe and high-level, run reconciliation now operates on persisted child-card/proposal state, completion is explicit and CEO-gated, approved proposal lookups no longer leak across tenants, and the widened harness audit path stays metadata-only without storing raw tenant outcome text. The remaining work is operational hygiene and eventually moving audit publishing from the current best-effort post-commit path into a stronger guaranteed persistence seam, not an immediate security blocker for continued development.
+The current Wealth Factory harness slice is in a good security position: no confirmed live secret exposure was introduced, no tenant secret values are persisted in the new harness records, the board API remains customer-safe and high-level, run reconciliation now operates on persisted child-card/proposal state, completion is explicit and CEO-gated, proposal policy can now defer/deny or reuse an existing lane while keeping deferred work visible and reviewable, and the widened harness audit path stays metadata-only without storing raw tenant outcome text. The remaining work is operational hygiene and eventually moving audit publishing from the current best-effort post-commit path into a stronger guaranteed persistence seam, not an immediate security blocker for continued development.

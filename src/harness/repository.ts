@@ -1,6 +1,6 @@
 import type { HarnessCardEventRow, HarnessCardRow, HarnessRunRow } from "../db/types.js";
 import type { QueryClient } from "../db/supabase-repositories.js";
-import type { HarnessSubCardProposal } from "./runtime-contract.js";
+import type { HarnessProposalResolution, HarnessProposalStatus, HarnessSubCardProposal } from "./runtime-contract.js";
 import type { HarnessCardEventRecord, HarnessCardRecord, HarnessCardState, HarnessRunRecord, HarnessRunState } from "./types.js";
 
 export interface HarnessRepository {
@@ -18,7 +18,17 @@ export interface HarnessRepository {
   insertProposal(proposal: HarnessSubCardProposal): Promise<void>;
   getProposal(proposalId: string): Promise<HarnessSubCardProposal | null>;
   listProposalsForRun(runId: string): Promise<HarnessSubCardProposal[]>;
-  markProposalApproved(input: { proposalId: string; approvedCardId: string }): Promise<{ updated: boolean }>;
+  markProposalApproved(input: {
+    proposalId: string;
+    approvedCardId: string;
+    resolution?: HarnessProposalResolution;
+    decisionNote?: string;
+  }): Promise<{ updated: boolean }>;
+  markProposalStatus(input: {
+    proposalId: string;
+    status: Extract<HarnessProposalStatus, "deferred" | "denied">;
+    decisionNote?: string;
+  }): Promise<{ updated: boolean }>;
 }
 
 export function createInMemoryHarnessRepository(): HarnessRepository {
@@ -131,14 +141,33 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
       if (!proposal) {
         return { updated: false };
       }
-      if (proposal.status !== "proposed") {
+      if (proposal.status !== "proposed" && proposal.status !== "deferred") {
         return { updated: false };
       }
 
       proposals.set(input.proposalId, {
         ...proposal,
         status: "approved",
-        approvedCardId: input.approvedCardId
+        approvedCardId: input.approvedCardId,
+        ...(input.resolution ? { resolution: input.resolution } : {}),
+        ...(input.decisionNote ? { decisionNote: input.decisionNote } : {})
+      });
+      return { updated: true };
+    },
+
+    async markProposalStatus(input) {
+      const proposal = proposals.get(input.proposalId);
+      if (!proposal) {
+        return { updated: false };
+      }
+      if (proposal.status !== "proposed" && proposal.status !== "deferred") {
+        return { updated: false };
+      }
+
+      proposals.set(input.proposalId, {
+        ...proposal,
+        status: input.status,
+        ...(input.decisionNote ? { decisionNote: input.decisionNote } : {})
       });
       return { updated: true };
     }
@@ -281,8 +310,8 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
     async insertProposal(proposal) {
       await client.query(
         `insert into wfpc.harness_subcard_proposals
-          (id, run_id, parent_card_id, requested_by_card_id, requested_by_persona, persona, title, deliverable_type, status, approved_card_id, created_at, updated_at)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), now())`,
+          (id, run_id, parent_card_id, requested_by_card_id, requested_by_persona, persona, title, deliverable_type, status, resolution, decision_note, approved_card_id, created_at, updated_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now(), now())`,
         [
           proposal.id,
           proposal.runId,
@@ -293,6 +322,8 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
           proposal.title,
           proposal.deliverableType,
           proposal.status,
+          proposal.resolution ?? null,
+          proposal.decisionNote ?? null,
           proposal.approvedCardId ?? null
         ]
       );
@@ -300,7 +331,7 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
 
     async getProposal(proposalId) {
       const result = await client.query(
-        `select id, run_id, parent_card_id, requested_by_card_id, requested_by_persona, persona, title, deliverable_type, status, approved_card_id, created_at, updated_at
+        `select id, run_id, parent_card_id, requested_by_card_id, requested_by_persona, persona, title, deliverable_type, status, resolution, decision_note, approved_card_id, created_at, updated_at
          from wfpc.harness_subcard_proposals
          where id = $1
          limit 1`,
@@ -311,7 +342,7 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
 
     async listProposalsForRun(runId) {
       const result = await client.query(
-        `select id, run_id, parent_card_id, requested_by_card_id, requested_by_persona, persona, title, deliverable_type, status, approved_card_id, created_at, updated_at
+        `select id, run_id, parent_card_id, requested_by_card_id, requested_by_persona, persona, title, deliverable_type, status, resolution, decision_note, approved_card_id, created_at, updated_at
          from wfpc.harness_subcard_proposals
          where run_id = $1
          order by created_at asc`,
@@ -324,13 +355,29 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
       const result = await client.query(
         `update wfpc.harness_subcard_proposals
          set status = 'approved',
+             resolution = $3,
+             decision_note = $4,
              approved_card_id = $2,
              updated_at = now()
          where id = $1
-           and status = 'proposed'
-           and approved_card_id is null
+           and status in ('proposed', 'deferred')
          returning id`,
-        [input.proposalId, input.approvedCardId]
+        [input.proposalId, input.approvedCardId, input.resolution ?? "create_lane", input.decisionNote ?? null]
+      );
+      return { updated: result.rows.length > 0 };
+    },
+
+    async markProposalStatus(input) {
+      const result = await client.query(
+        `update wfpc.harness_subcard_proposals
+         set status = $2,
+             resolution = null,
+             decision_note = $3,
+             updated_at = now()
+         where id = $1
+           and status in ('proposed', 'deferred')
+         returning id`,
+        [input.proposalId, input.status, input.decisionNote ?? null]
       );
       return { updated: result.rows.length > 0 };
     }
@@ -448,7 +495,7 @@ function mapHarnessProposalRow(row: unknown): HarnessSubCardProposal | null {
     return null;
   }
 
-  return {
+  const proposal: HarnessSubCardProposal = {
     id: String(record.id),
     runId: String(record.run_id),
     parentCardId: String(record.parent_card_id),
@@ -457,9 +504,20 @@ function mapHarnessProposalRow(row: unknown): HarnessSubCardProposal | null {
     persona: String(record.persona),
     title: String(record.title),
     deliverableType: String(record.deliverable_type),
-    status: String(record.status) as HarnessSubCardProposal["status"],
-    ...(typeof record.approved_card_id === "string" ? { approvedCardId: record.approved_card_id } : {})
+    status: String(record.status) as HarnessSubCardProposal["status"]
   };
+
+  if (typeof record.resolution === "string") {
+    proposal.resolution = record.resolution as NonNullable<HarnessSubCardProposal["resolution"]>;
+  }
+  if (typeof record.decision_note === "string") {
+    proposal.decisionNote = record.decision_note;
+  }
+  if (typeof record.approved_card_id === "string") {
+    proposal.approvedCardId = record.approved_card_id;
+  }
+
+  return proposal;
 }
 
 function normalizeRuntimeContext(value: unknown): HarnessRunRecord["runtimeContext"] {
