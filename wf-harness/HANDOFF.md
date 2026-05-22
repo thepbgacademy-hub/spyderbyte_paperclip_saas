@@ -62,9 +62,9 @@ The first harness implementation slice is now built and verified:
 - Added harness workflow gating that now actually consumes `WF_HARNESS_ENABLED_WORKFLOW_IDS` through the harness workflow registry.
 - Added a lightweight CEO approvals panel to the board shell so pending approval work is visible without exposing backend chatter.
 - Reduced initial board seeding to CEO only, so additional persona lanes now appear through persisted mutations rather than hardcoded bootstrap cards.
-- Added transaction-pinned Postgres coverage for the deferred proposal-approval seam so `markProposalApproved()` and the follow-on child-card insert are now proven on one leased transaction client, including rollback behavior when the child-card insert fails after the proposal update.
+- Added transaction-client coverage for the deferred proposal-approval seam so `markProposalApproved()` and the follow-on child-card insert are now proven to share one leased transaction client, including rollback behavior when the child-card insert fails after the proposal update.
 - Re-ran the tenant/secret scans and updated the harness security report at `wf-harness/audit/2026-05-21/security-report.md`.
-- Cleared the final repo-specific reviewer pass on code correctness.
+- Cleared the final repo-specific reviewer pass on code correctness after tightening the wording around what this test seam does and does not prove.
 
 ## Sharp Edges Logged
 
@@ -76,6 +76,7 @@ The first harness implementation slice is now built and verified:
 - The new direct-child mutation currently uses guarded query parameters instead of a parsed JSON body because the existing dashboard HTTP request shape does not yet expose parsed request bodies. This keeps the slice narrow, but it is a contract seam to revisit before the mutation surface broadens.
 - The current direct-child guardrail is intentionally narrow: exact-match retries are idempotent and open child cards are capped, but richer CEO card-count policy still belongs in a later slice instead of being guessed inside this mutation.
 - On Windows, overlapping GitNexus FTS/cypher calls right after analyze can briefly lock `.gitnexus\\lbug` and produce a false tooling failure. Serialize those preflight calls instead of treating the lock as a repo regression.
+- The new harness repository test proves transaction-client pinning and rollback wiring, but it still does not exercise a live Postgres instance with the deferred foreign key applied. Keep the true real-database proof gap open until a real migration-backed integration harness exists.
 
 ## Next Step
 
@@ -84,4 +85,5 @@ Continue the harness build by replacing more of the live execution slice behind 
 - move from approval-only and direct-create persisted mutation toward broader real run/card progression paths
 - add explicit harness audit events beyond the current run/card/event/proposal persistence
 - start defining richer CEO approval rules and card-count discipline in executable runtime code instead of seed defaults
-- expand the proposal/card mutation seam beyond the current transaction-pinned proof without widening into generic editing APIs
+- add a real migration-backed Postgres integration harness for the deferred proposal/card foreign-key seam
+- then expand the proposal/card mutation seam beyond the current transaction-client proof without widening into generic editing APIs
