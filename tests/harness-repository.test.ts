@@ -1,13 +1,14 @@
 import { readFileSync } from "node:fs";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import { createPgTransactionRunner } from "../src/db/postgres-client.js";
+import { createInMemoryHarnessRepository, createPostgresHarnessRepository } from "../src/harness/repository.js";
 import {
   createHarnessCardEventRecord,
   createHarnessCardRecord,
   createHarnessRunRecord
 } from "../src/harness/types.js";
-import { createInMemoryHarnessRepository } from "../src/harness/repository.js";
 
 const migration = readFileSync("supabase/migrations/0013_wf_harness_runs_cards.sql", "utf8");
 const proposalMigration = readFileSync("supabase/migrations/0014_wf_harness_subcard_proposals.sql", "utf8");
@@ -110,6 +111,111 @@ describe("harness persistence records", () => {
       status: "approved",
       approvedCardId: "approved_card_1"
     });
+  });
+
+  it("keeps deferred proposal approval and child-card insert on one leased transaction client", async () => {
+    const card = {
+      ...createHarnessCardRecord({
+        runId: "run-123",
+        parentCardId: "parent-card-123",
+        persona: "researcher",
+        title: "Validate renewal assumptions",
+        deliverableType: "research_brief"
+      }),
+      state: "approved" as const
+    };
+    const leasedClient = {
+      query: vi.fn().mockImplementation(async (sql: string) => {
+        if (sql === "begin" || sql === "commit" || sql === "rollback") {
+          return { rows: [] };
+        }
+        if (sql.includes("update wfpc.harness_subcard_proposals")) {
+          return { rows: [{ id: "proposal_1" }] };
+        }
+        if (sql.includes("insert into wfpc.harness_cards")) {
+          return { rows: [] };
+        }
+
+        throw new Error(`Unexpected SQL: ${sql}`);
+      }),
+      release: vi.fn()
+    };
+    const pool = {
+      connect: vi.fn().mockResolvedValue(leasedClient)
+    };
+    const runner = createPgTransactionRunner(pool);
+
+    await runner.withTransaction(async (transaction) => {
+      const repository = createPostgresHarnessRepository(transaction);
+
+      await expect(
+        repository.markProposalApproved({
+          proposalId: "proposal_1",
+          approvedCardId: card.id
+        })
+      ).resolves.toEqual({ updated: true });
+      await expect(repository.insertCard(card)).resolves.toBeUndefined();
+    });
+
+    expect(leasedClient.query.mock.calls.map(([sql]) => sql)).toEqual([
+      "begin",
+      expect.stringContaining("update wfpc.harness_subcard_proposals"),
+      expect.stringContaining("insert into wfpc.harness_cards"),
+      "commit"
+    ]);
+    expect(leasedClient.release).toHaveBeenCalledOnce();
+  });
+
+  it("rolls back the deferred proposal approval transaction if the child-card insert fails", async () => {
+    const card = {
+      ...createHarnessCardRecord({
+        runId: "run-123",
+        parentCardId: "parent-card-123",
+        persona: "researcher",
+        title: "Validate renewal assumptions",
+        deliverableType: "research_brief"
+      }),
+      state: "approved" as const
+    };
+    const leasedClient = {
+      query: vi.fn().mockImplementation(async (sql: string) => {
+        if (sql === "begin" || sql === "commit" || sql === "rollback") {
+          return { rows: [] };
+        }
+        if (sql.includes("update wfpc.harness_subcard_proposals")) {
+          return { rows: [{ id: "proposal_1" }] };
+        }
+        if (sql.includes("insert into wfpc.harness_cards")) {
+          throw new Error("card insert failed");
+        }
+
+        throw new Error(`Unexpected SQL: ${sql}`);
+      }),
+      release: vi.fn()
+    };
+    const pool = {
+      connect: vi.fn().mockResolvedValue(leasedClient)
+    };
+    const runner = createPgTransactionRunner(pool);
+
+    await expect(
+      runner.withTransaction(async (transaction) => {
+        const repository = createPostgresHarnessRepository(transaction);
+        await repository.markProposalApproved({
+          proposalId: "proposal_1",
+          approvedCardId: card.id
+        });
+        await repository.insertCard(card);
+      })
+    ).rejects.toThrow("card insert failed");
+
+    expect(leasedClient.query.mock.calls.map(([sql]) => sql)).toEqual([
+      "begin",
+      expect.stringContaining("update wfpc.harness_subcard_proposals"),
+      expect.stringContaining("insert into wfpc.harness_cards"),
+      "rollback"
+    ]);
+    expect(leasedClient.release).toHaveBeenCalledOnce();
   });
 });
 

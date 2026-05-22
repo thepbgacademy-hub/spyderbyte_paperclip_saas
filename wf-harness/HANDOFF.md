@@ -52,7 +52,7 @@ The first harness implementation slice is now built and verified:
 
 - Added durable harness persistence with `wfpc.harness_runs`, `wfpc.harness_cards`, and `wfpc.harness_card_events`.
 - Added durable proposal persistence with `wfpc.harness_subcard_proposals`.
-- Added repository-backed harness board service that authenticates the tenant, enforces membership, seeds the first CEO/CFO/COO card set once, and reads customer-safe board state from persisted records.
+- Added repository-backed harness board service that authenticates the tenant, enforces membership, seeds the first CEO card set once, and reads customer-safe board state from persisted records.
 - Added persisted pending-approval hydration plus a guarded `POST /api/harness/proposals/:proposalId/approve` mutation that turns one pending proposal into one queued child card without widening the board into a generic editing surface.
 - Added a guarded `POST /api/harness/cards` mutation that lets the CEO create one direct top-level child card in persisted `approved` state, replacing the old fixed seeded CFO/COO board defaults with a real write seam.
 - Hardened the direct-child mutation so same-request retries reuse the existing open child card, the first write path does not nest a second atomic seed block, and open child-card growth is capped before the board turns into card sprawl.
@@ -62,8 +62,9 @@ The first harness implementation slice is now built and verified:
 - Added harness workflow gating that now actually consumes `WF_HARNESS_ENABLED_WORKFLOW_IDS` through the harness workflow registry.
 - Added a lightweight CEO approvals panel to the board shell so pending approval work is visible without exposing backend chatter.
 - Reduced initial board seeding to CEO only, so additional persona lanes now appear through persisted mutations rather than hardcoded bootstrap cards.
+- Added transaction-pinned Postgres coverage for the deferred proposal-approval seam so `markProposalApproved()` and the follow-on child-card insert are now proven on one leased transaction client, including rollback behavior when the child-card insert fails after the proposal update.
 - Re-ran the tenant/secret scans and updated the harness security report at `wf-harness/audit/2026-05-21/security-report.md`.
-- Cleared the final repo-specific reviewer pass on code correctness, with one remaining verification note: the deferred foreign-key approval seam is now guarded in code and migration text, but it is not yet exercised through a real database-backed transaction harness.
+- Cleared the final repo-specific reviewer pass on code correctness.
 
 ## Sharp Edges Logged
 
@@ -74,6 +75,7 @@ The first harness implementation slice is now built and verified:
 - The approval hardening pass revealed one remaining proof gap: the repo now requires atomic approval mutations and marks the proposal-to-card foreign key as deferred, but the exact transaction-backed DB seam still needs a stronger integration harness than the current in-memory passthrough tests.
 - The new direct-child mutation currently uses guarded query parameters instead of a parsed JSON body because the existing dashboard HTTP request shape does not yet expose parsed request bodies. This keeps the slice narrow, but it is a contract seam to revisit before the mutation surface broadens.
 - The current direct-child guardrail is intentionally narrow: exact-match retries are idempotent and open child cards are capped, but richer CEO card-count policy still belongs in a later slice instead of being guessed inside this mutation.
+- On Windows, overlapping GitNexus FTS/cypher calls right after analyze can briefly lock `.gitnexus\\lbug` and produce a false tooling failure. Serialize those preflight calls instead of treating the lock as a repo regression.
 
 ## Next Step
 
@@ -82,4 +84,4 @@ Continue the harness build by replacing more of the live execution slice behind 
 - move from approval-only and direct-create persisted mutation toward broader real run/card progression paths
 - add explicit harness audit events beyond the current run/card/event/proposal persistence
 - start defining richer CEO approval rules and card-count discipline in executable runtime code instead of seed defaults
-- add database-backed transaction coverage for the deferred proposal-approval seam so future refactors cannot silently break the approval-before-card-insert ordering again
+- expand the proposal/card mutation seam beyond the current transaction-pinned proof without widening into generic editing APIs
