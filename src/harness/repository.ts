@@ -1,13 +1,15 @@
 import type { HarnessCardEventRow, HarnessCardRow, HarnessRunRow } from "../db/types.js";
 import type { QueryClient } from "../db/supabase-repositories.js";
 import type { HarnessSubCardProposal } from "./runtime-contract.js";
-import type { HarnessCardEventRecord, HarnessCardRecord, HarnessRunRecord } from "./types.js";
+import type { HarnessCardEventRecord, HarnessCardRecord, HarnessCardState, HarnessRunRecord } from "./types.js";
 
 export interface HarnessRepository {
   insertRun(run: HarnessRunRecord): Promise<void>;
   getRun(runId: string): Promise<HarnessRunRecord | null>;
   findLatestRunForTenantWorkflow(input: { tenantId: string; workflowId: string }): Promise<HarnessRunRecord | null>;
   insertCard(card: HarnessCardRecord): Promise<void>;
+  getCard(cardId: string): Promise<HarnessCardRecord | null>;
+  updateCardState(input: { cardId: string; state: HarnessCardState }): Promise<HarnessCardRecord | null>;
   listCardsForRun(runId: string): Promise<HarnessCardRecord[]>;
   insertEvent(event: HarnessCardEventRecord): Promise<void>;
   listEventsForCard(cardId: string): Promise<HarnessCardEventRecord[]>;
@@ -43,6 +45,38 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
     async insertCard(card) {
       const runCards = cards.get(card.runId) ?? [];
       cards.set(card.runId, [...runCards, card]);
+    },
+
+    async getCard(cardId) {
+      for (const runCards of cards.values()) {
+        const card = runCards.find((candidate) => candidate.id === cardId);
+        if (card) {
+          return { ...card };
+        }
+      }
+      return null;
+    },
+
+    async updateCardState(input) {
+      for (const [runId, runCards] of cards.entries()) {
+        const existingCard = runCards.find((candidate) => candidate.id === input.cardId);
+        if (!existingCard) {
+          continue;
+        }
+
+        const updatedCard = {
+          ...existingCard,
+          state: input.state,
+          updatedAt: new Date().toISOString()
+        };
+        cards.set(
+          runId,
+          runCards.map((candidate) => (candidate.id === input.cardId ? updatedCard : candidate))
+        );
+        return { ...updatedCard };
+      }
+
+      return null;
     },
 
     async listCardsForRun(runId) {
@@ -147,6 +181,29 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
          values ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, $9::timestamptz)`,
         [card.id, card.runId, card.parentCardId, card.persona, card.title, card.deliverableType, card.state, card.createdAt, card.updatedAt]
       );
+    },
+
+    async getCard(cardId) {
+      const result = await client.query(
+        `select id, run_id, parent_card_id, persona, title, deliverable_type, state, created_at, updated_at
+         from wfpc.harness_cards
+         where id = $1
+         limit 1`,
+        [cardId]
+      );
+      return mapHarnessCardRow(result.rows[0]);
+    },
+
+    async updateCardState(input) {
+      const result = await client.query(
+        `update wfpc.harness_cards
+         set state = $2,
+             updated_at = now()
+         where id = $1
+         returning id, run_id, parent_card_id, persona, title, deliverable_type, state, created_at, updated_at`,
+        [input.cardId, input.state]
+      );
+      return mapHarnessCardRow(result.rows[0]);
     },
 
     async listCardsForRun(runId) {

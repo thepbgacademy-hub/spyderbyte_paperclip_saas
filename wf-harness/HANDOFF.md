@@ -55,7 +55,10 @@ The first harness implementation slice is now built and verified:
 - Added repository-backed harness board service that authenticates the tenant, enforces membership, seeds the first CEO card set once, and reads customer-safe board state from persisted records.
 - Added persisted pending-approval hydration plus a guarded `POST /api/harness/proposals/:proposalId/approve` mutation that turns one pending proposal into one queued child card without widening the board into a generic editing surface.
 - Added a guarded `POST /api/harness/cards` mutation that lets the CEO create one direct top-level child card in persisted `approved` state, replacing the old fixed seeded CFO/COO board defaults with a real write seam.
+- Added a guarded `POST /api/harness/cards/:cardId/advance` mutation that advances a persisted non-CEO child card through the existing state machine and can record a durable outcome snapshot when a lane reaches `done`.
 - Hardened the direct-child mutation so same-request retries reuse the existing open child card, the first write path does not nest a second atomic seed block, and open child-card growth is capped before the board turns into card sprawl.
+- Added a real disposable Postgres-backed harness proof path for the deferred `approved_card_id` foreign key. The repo now proves the actual approval-before-card-insert commit succeeds when the child card exists by commit time, and rolls back cleanly when the deferred FK reaches commit without a matching card.
+- Tightened the board read model so recorded result summaries surface back into the card outcome/detail view without exposing backend chatter.
 - Tightened the board access boundary so membership/package denials fail closed as auth, while real infrastructure faults still surface as internal failures instead of being masked as `401`.
 - Wired the runtime server to the real harness board service instead of static fixtures.
 - Wired the board page to fetch guarded board state from `/api/harness/board`, while keeping a loopback-only browser fallback board for static Vite development and Playwright stability.
@@ -75,15 +78,15 @@ The first harness implementation slice is now built and verified:
 - The approval hardening pass revealed one remaining proof gap: the repo now requires atomic approval mutations and marks the proposal-to-card foreign key as deferred, but the exact transaction-backed DB seam still needs a stronger integration harness than the current in-memory passthrough tests.
 - The new direct-child mutation currently uses guarded query parameters instead of a parsed JSON body because the existing dashboard HTTP request shape does not yet expose parsed request bodies. This keeps the slice narrow, but it is a contract seam to revisit before the mutation surface broadens.
 - The current direct-child guardrail is intentionally narrow: exact-match retries are idempotent and open child cards are capped, but richer CEO card-count policy still belongs in a later slice instead of being guessed inside this mutation.
+- The new child-card advancement seam is also intentionally narrow: it advances non-CEO cards and records durable events/results, but it does not yet reconcile the parent run state beyond the bootstrap path. Keep that next-step gap visible instead of assuming card progression already means full run progression.
 - On Windows, overlapping GitNexus FTS/cypher calls right after analyze can briefly lock `.gitnexus\\lbug` and produce a false tooling failure. Serialize those preflight calls instead of treating the lock as a repo regression.
-- The new harness repository test proves transaction-client pinning and rollback wiring, but it still does not exercise a live Postgres instance with the deferred foreign key applied. Keep the true real-database proof gap open until a real migration-backed integration harness exists.
+- The first cut of the real Postgres harness used blocking Docker child processes inside Vitest and triggered `[vitest-worker]: Timeout calling "onTaskUpdate"` on longer combined runs. The helper now uses async child-process calls; keep it that way or the proof suite can false-fail even when the database contract is correct.
 
 ## Next Step
 
 Continue the harness build by replacing more of the live execution slice behind the persisted CEO/card model:
 
-- move from approval-only and direct-create persisted mutation toward broader real run/card progression paths
+- reconcile run-level progression with the new persisted child-card advancement seam so harness run state tracks real execution instead of mostly reflecting bootstrap
 - add explicit harness audit events beyond the current run/card/event/proposal persistence
 - start defining richer CEO approval rules and card-count discipline in executable runtime code instead of seed defaults
-- add a real migration-backed Postgres integration harness for the deferred proposal/card foreign-key seam
-- then expand the proposal/card mutation seam beyond the current transaction-client proof without widening into generic editing APIs
+- expand the proposal/card mutation seam beyond the current child-card progression path without widening into generic editing APIs

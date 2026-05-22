@@ -225,6 +225,7 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
     allowedOrigins: options.env.allowedOrigins,
     listBoardState: harnessBoardApi.listBoardState,
     createTopLevelChildCard: harnessBoardApi.createTopLevelChildCard,
+    advanceChildCard: harnessBoardApi.advanceChildCard,
     approveProposal: harnessBoardApi.approveProposal,
     rateLimiter: createPostgresFixedWindowRateLimiter({ runner: transactionRunner, limit: 120, windowMs: 60_000 })
   });

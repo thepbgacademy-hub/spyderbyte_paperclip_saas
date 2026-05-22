@@ -2,7 +2,7 @@ import { ApiAuthError, type ApiSession } from "../api/dashboard-api.js";
 import { randomUUID } from "node:crypto";
 import type { HarnessCardEventRecord, HarnessCardRecord, HarnessRunRecord } from "./types.js";
 import { createHarnessCardEventRecord } from "./types.js";
-import { transitionHarnessRun } from "./state-machine.js";
+import { transitionHarnessCard, transitionHarnessRun } from "./state-machine.js";
 import { createHarnessRuntime } from "./runtime.js";
 import type { HarnessRepository } from "./repository.js";
 import type { WealthFactoryWorkflowDefinition } from "../wealthfactory/workflow-registry.js";
@@ -76,6 +76,13 @@ export class HarnessCardCreationConflictError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "HarnessCardCreationConflictError";
+  }
+}
+
+export class HarnessCardProgressionConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "HarnessCardProgressionConflictError";
   }
 }
 
@@ -261,6 +268,76 @@ export function createHarnessBoardService(options: {
       const result = await options.runAtomically(runApproval);
 
       return { cardId: result.cardId };
+    },
+
+    async advanceChildCard(request: {
+      authorization: string;
+      cookie?: string;
+      cardId: string;
+      state: HarnessCardRecord["state"];
+      resultSummary?: string;
+    }): Promise<{ cardId: string; state: HarnessCardRecord["state"] }> {
+      const access = await authorizeHarnessRequest({
+        authenticate: options.authenticate,
+        requireTenantMember: options.requireTenantMember,
+        requireActivePackageInstall: options.requireActivePackageInstall,
+        workflowRegistry: options.workflowRegistry,
+        authorization: request.authorization,
+        ...(request.cookie ? { cookie: request.cookie } : {})
+      });
+
+      if (!options.runAtomically) {
+        throw new Error("Harness card progression mutations require atomic execution");
+      }
+
+      const result = await options.runAtomically(async (repository) => {
+        const card = await repository.getCard(request.cardId);
+        if (!card) {
+          throw new HarnessCardProgressionConflictError("Harness child card was not found");
+        }
+        if (card.persona === "ceo") {
+          throw new HarnessCardProgressionConflictError("CEO cards cannot be advanced through the child-card seam");
+        }
+        const run = await repository.getRun(card.runId);
+        if (!run || run.tenantId !== access.session.tenantId) {
+          throw new ApiAuthError();
+        }
+
+        const nextCard = transitionHarnessCard(card, request.state);
+        const updatedCard = await repository.updateCardState({
+          cardId: card.id,
+          state: nextCard.state
+        });
+        if (!updatedCard) {
+          throw new HarnessCardProgressionConflictError("Harness child card progression conflicted");
+        }
+
+        await repository.insertEvent(
+          createHarnessCardEventRecord({
+            cardId: updatedCard.id,
+            eventKind: "state_changed",
+            payload: { from: card.state, to: updatedCard.state }
+          })
+        );
+
+        const trimmedSummary = request.resultSummary?.trim();
+        if (trimmedSummary) {
+          if (updatedCard.state !== "done") {
+            throw new HarnessCardProgressionConflictError("Outcome summaries can only be recorded when a card reaches done");
+          }
+          await repository.insertEvent(
+            createHarnessCardEventRecord({
+              cardId: updatedCard.id,
+              eventKind: "result_recorded",
+              payload: { summary: trimmedSummary }
+            })
+          );
+        }
+
+        return { cardId: updatedCard.id, state: updatedCard.state };
+      });
+
+      return result;
     }
   };
 }
@@ -456,15 +533,25 @@ function buildHarnessBoardResponse(input: {
   proposals: readonly HarnessSubCardProposal[];
 }): HarnessBoardResponse {
   const activityByCardId = new Map<string, HarnessBoardActivityItem[]>();
+  const latestResultSummaryByCardId = new Map<string, string>();
   for (const event of input.events) {
     const items = activityByCardId.get(event.cardId) ?? [];
     activityByCardId.set(event.cardId, [...items, toBoardActivityItem(event)]);
+    if (event.eventKind === "result_recorded") {
+      const summary = readOptionalString(event.payload.summary);
+      if (summary) {
+        latestResultSummaryByCardId.set(event.cardId, summary);
+      }
+    }
   }
 
   const cards = input.cards.map((card) =>
     toBoardCardView({
       card,
-      activity: activityByCardId.get(card.id) ?? []
+      activity: activityByCardId.get(card.id) ?? [],
+      ...(latestResultSummaryByCardId.has(card.id)
+        ? { resultSummary: latestResultSummaryByCardId.get(card.id)! }
+        : {})
     })
   );
 
@@ -492,12 +579,15 @@ function buildHarnessBoardResponse(input: {
 function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivityItem {
   const payloadTitle = readOptionalString(event.payload.title);
   const payloadState = readOptionalString(event.payload.to) ?? readOptionalString(event.payload.state);
+  const payloadSummary = readOptionalString(event.payload.summary);
   const labelByKind: Record<HarnessCardEventRecord["eventKind"], string> = {
     created: `${payloadTitle ?? "Card"} was opened for this persona lane.`,
     state_changed: `Lane status moved to ${humanizeLabel(payloadState ?? "updated")}.`,
     comment_added: "A new progress note was added to this lane.",
     subcard_proposed: "A supporting sub-card was proposed for CEO review.",
-    result_recorded: "A new outcome snapshot was recorded for this lane."
+    result_recorded: payloadSummary
+      ? `A new outcome snapshot was recorded for this lane: ${payloadSummary}`
+      : "A new outcome snapshot was recorded for this lane."
   };
 
   return {
@@ -507,11 +597,29 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
   };
 }
 
-function toBoardCardView(input: { card: HarnessCardRecord; activity: readonly HarnessBoardActivityItem[] }): HarnessBoardCardView {
+function toBoardCardView(input: {
+  card: HarnessCardRecord;
+  activity: readonly HarnessBoardActivityItem[];
+  resultSummary?: string;
+}): HarnessBoardCardView {
   const personaLabel = input.card.persona.toUpperCase();
   const lane = mapCardStateToLane(input.card.state);
   const deliverableLabel = humanizeDeliverableType(input.card.deliverableType);
   const activity = input.activity.length > 0 ? [...input.activity] : [defaultActivityForCard(input.card)];
+  const detailSections: HarnessBoardDetailSection[] = [
+    {
+      id: "snapshot",
+      title: "Snapshot",
+      body: `${personaLabel} owns a deliverable-focused card that can resume from persisted state after interruption.`
+    }
+  ];
+  if (input.resultSummary) {
+    detailSections.push({
+      id: "latest-outcome",
+      title: "Latest Outcome",
+      body: input.resultSummary
+    });
+  }
 
   return {
     id: input.card.id,
@@ -523,20 +631,14 @@ function toBoardCardView(input: { card: HarnessCardRecord; activity: readonly Ha
     priorityLabel: input.card.persona === "ceo" ? "High priority" : lane === "done" ? "Ready" : "Active",
     deliverableLabel,
     updatedAtLabel: `Updated ${formatBoardTimestamp(input.card.updatedAt)}`,
-    outcome: describeCardOutcome(input.card),
+    outcome: describeCardOutcome(input.card, input.resultSummary),
     focusPoints: [
       "Keep the tenant-facing update concise",
       "Advance the deliverable without backend noise",
       "Respect the package boundary before expanding scope"
     ],
     activity,
-    detailSections: [
-      {
-        id: "snapshot",
-        title: "Snapshot",
-        body: `${personaLabel} owns a deliverable-focused card that can resume from persisted state after interruption.`
-      }
-    ]
+    detailSections
   };
 }
 
@@ -577,7 +679,10 @@ function mapCardStateToLane(state: HarnessCardRecord["state"]): string {
   }
 }
 
-function describeCardOutcome(card: HarnessCardRecord): string {
+function describeCardOutcome(card: HarnessCardRecord, resultSummary?: string): string {
+  if (resultSummary) {
+    return resultSummary;
+  }
   const deliverable = humanizeDeliverableType(card.deliverableType).toLowerCase();
   if (card.state === "done") {
     return `This ${deliverable} is packaged and ready for the tenant-facing next step.`;

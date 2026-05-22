@@ -30,6 +30,7 @@ Scope: First custom harness slice under `src/harness`, `src/api/harness-http.ts`
 - Re-ran the scan after adding the guarded `POST /api/harness/cards` direct-child mutation and shrinking bootstrap seeding to CEO only. The result stayed clean: no live secret material was introduced, and the narrowed write seam still exposes only expected auth names, dummy placeholders, and the intentional sanitization fixture.
 - Re-ran the scan after hardening the direct-child mutation for retry idempotency, open-card limits, and non-nested atomic seeding. The result stayed clean: only expected auth names, dummy placeholders, and the intentional sanitization fixture remained in scope.
 - Re-ran the scan after adding transaction-client coverage for the deferred proposal-approval seam. The result stayed clean: the touched slice only exposed expected auth names, dummy placeholders, and the existing sanitization fixture; no live secret material was introduced.
+- Re-ran the scan after landing the real disposable-Postgres proof path plus the guarded child-card progression/result-recording seam. The touched slice still only exposed expected auth names, dummy placeholders, local disposable test credentials for the isolated Docker database, and the existing sanitization fixture; no live secret material was introduced.
 
 ## OWASP-Oriented Findings
 

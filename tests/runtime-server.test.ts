@@ -98,7 +98,8 @@ vi.mock("../src/harness/board-service.js", () => ({
       ]
     }),
     approveProposal: vi.fn().mockResolvedValue({ cardId: "card_approved_1" }),
-    createTopLevelChildCard: vi.fn().mockResolvedValue({ cardId: "card_created_1" })
+    createTopLevelChildCard: vi.fn().mockResolvedValue({ cardId: "card_created_1" }),
+    advanceChildCard: vi.fn().mockResolvedValue({ cardId: "card_created_1", state: "working" })
   }))
 }));
 
@@ -304,6 +305,39 @@ describe("runtime server", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('"cardId":"card_created_1"');
+    await runtime.close();
+  });
+
+  it("routes harness child-card progression through the runtime harness surface", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() }
+    });
+
+    const request = createRequest({
+      method: "POST",
+      url: "/api/harness/cards/card_created_1/advance?state=working",
+      headers: {
+        authorization: "Bearer token",
+        origin: "https://www.spyderbyte.cloud",
+        "content-length": "0"
+      }
+    });
+    const response = createResponse();
+
+    runtime.server.emit("request", request as unknown as IncomingMessage, response as unknown as ServerResponse);
+    await response.finished;
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('"cardId":"card_created_1"');
+    expect(response.body).toContain('"state":"working"');
     await runtime.close();
   });
 

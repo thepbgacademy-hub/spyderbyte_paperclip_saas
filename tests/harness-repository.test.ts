@@ -1,6 +1,10 @@
+import { execFile, spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { promisify } from "node:util";
 
-import { describe, expect, it, vi } from "vitest";
+import { Client } from "pg";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createPgTransactionRunner } from "../src/db/postgres-client.js";
 import { createInMemoryHarnessRepository, createPostgresHarnessRepository } from "../src/harness/repository.js";
@@ -12,6 +16,34 @@ import {
 
 const migration = readFileSync("supabase/migrations/0013_wf_harness_runs_cards.sql", "utf8");
 const proposalMigration = readFileSync("supabase/migrations/0014_wf_harness_subcard_proposals.sql", "utf8");
+const execFileAsync = promisify(execFile);
+
+const HARNESS_POSTGRES_IMAGE = "postgres:16-alpine";
+const HARNESS_POSTGRES_PASSWORD = "wf_harness_test_pw";
+const HARNESS_POSTGRES_DB = "wf_harness_test";
+const dockerAvailable = hasDockerRuntime();
+
+type DisposableHarnessDatabase = {
+  connectionString: string;
+  stop(): Promise<void>;
+};
+
+const describeIfDocker = dockerAvailable ? describe : describe.skip;
+
+let disposableHarnessDb: DisposableHarnessDatabase | null = null;
+
+beforeAll(async () => {
+  if (!dockerAvailable) {
+    return;
+  }
+
+  disposableHarnessDb = await startDisposableHarnessDatabase();
+}, 300_000);
+
+afterAll(async () => {
+  await disposableHarnessDb?.stop();
+  disposableHarnessDb = null;
+}, 60_000);
 
 describe("harness persistence records", () => {
   it("creates run, card, and event records with durable ids and sanitized runtime context", () => {
@@ -241,3 +273,296 @@ describe("harness persistence migration", () => {
     );
   });
 });
+
+describeIfDocker("harness persistence real Postgres transaction proof", () => {
+  it(
+    "commits proposal approval before child-card insert when the deferred foreign key is satisfied by commit time",
+    async () => {
+      const database = requireDisposableHarnessDatabase();
+      const client = new Client({ connectionString: database.connectionString });
+      await client.connect();
+
+      try {
+        const runner = createPgTransactionRunner({
+          connect: async () => ({
+            query: (sql: string, values: readonly unknown[]) => client.query(sql, [...values]),
+            release: () => undefined
+          })
+        });
+        const repository = createPostgresHarnessRepository({
+          query: async (sql: string, values: readonly unknown[]) => {
+            const result = await client.query(sql, [...values]);
+            return { rows: result.rows };
+          }
+        });
+        const tenantId = randomUUID();
+        const run = createHarnessRunRecord({
+          tenantId,
+          workflowId: "wf_connect_first_workflow",
+          packageId: "pkg_bib_connect",
+          orchestratorPersona: "ceo",
+          runtimeContext: {
+            providerKind: "openai_api",
+            credentialLabel: "Primary OpenAI"
+          }
+        });
+        const ceoCard = createHarnessCardRecord({
+          runId: run.id,
+          persona: "ceo",
+          title: "Plan the first workflow",
+          deliverableType: "plan"
+        });
+        const approvedChildCard = {
+          ...createHarnessCardRecord({
+            runId: run.id,
+            parentCardId: ceoCard.id,
+            persona: "cfo",
+            title: "Validate pricing assumptions",
+            deliverableType: "pricing_review"
+          }),
+          state: "approved" as const
+        };
+        const proposalId = randomUUID();
+
+        await resetHarnessProofDatabase(client);
+        await seedHarnessProofPrerequisites(client, tenantId);
+        await repository.insertRun(run);
+        await repository.insertCard(ceoCard);
+        await repository.insertProposal({
+          id: proposalId,
+          runId: run.id,
+          parentCardId: ceoCard.id,
+          requestedByCardId: ceoCard.id,
+          requestedByPersona: "ceo",
+          persona: approvedChildCard.persona,
+          title: approvedChildCard.title,
+          deliverableType: approvedChildCard.deliverableType,
+          status: "proposed"
+        });
+
+        await runner.withTransaction(async (transaction) => {
+          const transactionalRepository = createPostgresHarnessRepository(transaction);
+          await expect(
+            transactionalRepository.markProposalApproved({
+              proposalId,
+              approvedCardId: approvedChildCard.id
+            })
+          ).resolves.toEqual({ updated: true });
+          await expect(transactionalRepository.insertCard(approvedChildCard)).resolves.toBeUndefined();
+        });
+
+        await expect(repository.getProposal(proposalId)).resolves.toEqual(
+          expect.objectContaining({
+            id: proposalId,
+            status: "approved",
+            approvedCardId: approvedChildCard.id
+          })
+        );
+        await expect(repository.listCardsForRun(run.id)).resolves.toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ id: ceoCard.id }),
+            expect.objectContaining({ id: approvedChildCard.id, state: "approved" })
+          ])
+        );
+      } finally {
+        await client.end();
+      }
+    },
+    120_000
+  );
+
+  it(
+    "rolls back proposal approval when commit reaches the deferred foreign key without a matching child card",
+    async () => {
+      const database = requireDisposableHarnessDatabase();
+      const client = new Client({ connectionString: database.connectionString });
+      await client.connect();
+
+      try {
+        const runner = createPgTransactionRunner({
+          connect: async () => ({
+            query: (sql: string, values: readonly unknown[]) => client.query(sql, [...values]),
+            release: () => undefined
+          })
+        });
+        const repository = createPostgresHarnessRepository({
+          query: async (sql: string, values: readonly unknown[]) => {
+            const result = await client.query(sql, [...values]);
+            return { rows: result.rows };
+          }
+        });
+        const tenantId = randomUUID();
+        const run = createHarnessRunRecord({
+          tenantId,
+          workflowId: "wf_connect_first_workflow",
+          packageId: "pkg_bib_connect",
+          orchestratorPersona: "ceo",
+          runtimeContext: {
+            providerKind: "openai_api",
+            credentialLabel: "Primary OpenAI"
+          }
+        });
+        const ceoCard = createHarnessCardRecord({
+          runId: run.id,
+          persona: "ceo",
+          title: "Plan the first workflow",
+          deliverableType: "plan"
+        });
+        const missingApprovedCardId = randomUUID();
+        const proposalId = randomUUID();
+
+        await resetHarnessProofDatabase(client);
+        await seedHarnessProofPrerequisites(client, tenantId);
+        await repository.insertRun(run);
+        await repository.insertCard(ceoCard);
+        await repository.insertProposal({
+          id: proposalId,
+          runId: run.id,
+          parentCardId: ceoCard.id,
+          requestedByCardId: ceoCard.id,
+          requestedByPersona: "ceo",
+          persona: "cfo",
+          title: "Validate pricing assumptions",
+          deliverableType: "pricing_review",
+          status: "proposed"
+        });
+
+        await expect(
+          runner.withTransaction(async (transaction) => {
+            const transactionalRepository = createPostgresHarnessRepository(transaction);
+            await transactionalRepository.markProposalApproved({
+              proposalId,
+              approvedCardId: missingApprovedCardId
+            });
+          })
+        ).rejects.toThrow(/harness_subcard_proposals_approved_card_id_fkey|violates foreign key constraint/i);
+
+        await expect(repository.getProposal(proposalId)).resolves.toEqual(
+          expect.objectContaining({
+            id: proposalId,
+            status: "proposed"
+          })
+        );
+      } finally {
+        await client.end();
+      }
+    },
+    120_000
+  );
+});
+
+function hasDockerRuntime() {
+  return spawnSync("docker", ["--version"], { stdio: "ignore" }).status === 0;
+}
+
+async function startDisposableHarnessDatabase(): Promise<DisposableHarnessDatabase> {
+  const containerName = `wf-harness-proof-${randomUUID()}`;
+  await ensureHarnessPostgresImage();
+  await execFileAsync(
+    "docker",
+    [
+      "run",
+      "--detach",
+      "--rm",
+      "--name",
+      containerName,
+      "-e",
+      `POSTGRES_PASSWORD=${HARNESS_POSTGRES_PASSWORD}`,
+      "-e",
+      `POSTGRES_DB=${HARNESS_POSTGRES_DB}`,
+      "-P",
+      HARNESS_POSTGRES_IMAGE
+    ],
+  );
+
+  try {
+    const { stdout } = await execFileAsync("docker", ["port", containerName, "5432/tcp"]);
+    const hostPort = stdout
+      .toString()
+      .trim()
+      .split(":")
+      .at(-1);
+    if (!hostPort) {
+      throw new Error("Unable to resolve disposable Postgres port");
+    }
+
+    const connectionString = `postgresql://postgres:${HARNESS_POSTGRES_PASSWORD}@127.0.0.1:${hostPort}/${HARNESS_POSTGRES_DB}`;
+    await waitForHarnessDatabase(connectionString);
+    return {
+      connectionString,
+      async stop() {
+        try {
+          await execFileAsync("docker", ["rm", "-f", containerName], { timeout: 20_000 });
+        } catch {
+          // Container may already be gone because --rm is enabled.
+        }
+      }
+    };
+  } catch (error) {
+    await execFileAsync("docker", ["rm", "-f", containerName], { timeout: 20_000 });
+    throw error;
+  }
+}
+
+async function waitForHarnessDatabase(connectionString: string) {
+  const deadline = Date.now() + 120_000;
+  while (Date.now() < deadline) {
+    const client = new Client({ connectionString });
+    try {
+      await client.connect();
+      await client.query("select 1");
+      await client.end();
+      return;
+    } catch {
+      try {
+        await client.end();
+      } catch {
+        // ignore close errors during startup polling
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+
+  throw new Error("Timed out waiting for disposable Postgres harness database");
+}
+
+async function ensureHarnessPostgresImage() {
+  try {
+    await execFileAsync("docker", ["image", "inspect", HARNESS_POSTGRES_IMAGE]);
+  } catch {
+    await execFileAsync("docker", ["pull", HARNESS_POSTGRES_IMAGE]);
+  }
+}
+
+function requireDisposableHarnessDatabase() {
+  if (!disposableHarnessDb) {
+    throw new Error("Disposable Postgres harness database was not started");
+  }
+  return disposableHarnessDb;
+}
+
+async function resetHarnessProofDatabase(client: Client) {
+  await client.query("drop schema if exists wfpc cascade");
+  await client.query("create schema if not exists wfpc");
+  await client.query(
+    `create table if not exists wfpc.tenants (
+      id uuid primary key,
+      slug text not null,
+      name text not null,
+      status text not null default 'active',
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      paused_at timestamptz null
+    )`
+  );
+  await client.query(migration);
+  await client.query(proposalMigration);
+}
+
+async function seedHarnessProofPrerequisites(client: Client, tenantId: string) {
+  await client.query(
+    `insert into wfpc.tenants (id, slug, name, status)
+     values ($1, $2, $3, 'active')`,
+    [tenantId, `tenant-${tenantId.slice(0, 8)}`, "Harness Proof Tenant"]
+  );
+}

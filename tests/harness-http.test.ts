@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiAuthError } from "../src/api/dashboard-api.js";
-import { HarnessCardCreationConflictError } from "../src/harness/board-service.js";
+import { HarnessCardCreationConflictError, HarnessCardProgressionConflictError } from "../src/harness/board-service.js";
 import { createHarnessHttpHandler } from "../src/api/harness-http.js";
 
 describe("harness HTTP boundary", () => {
@@ -12,6 +12,7 @@ describe("harness HTTP boundary", () => {
       allowedOrigins: ["https://portal.wealthfactory.test"],
       listBoardState,
       createTopLevelChildCard,
+      advanceChildCard: vi.fn(),
       approveProposal: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
     });
@@ -76,6 +77,7 @@ describe("harness HTTP boundary", () => {
       allowedOrigins: ["https://portal.wealthfactory.test"],
       listBoardState,
       createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
       approveProposal: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
     });
@@ -110,6 +112,7 @@ describe("harness HTTP boundary", () => {
       allowedOrigins: ["https://portal.wealthfactory.test"],
       listBoardState,
       createTopLevelChildCard,
+      advanceChildCard: vi.fn(),
       approveProposal: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
     });
@@ -135,6 +138,7 @@ describe("harness HTTP boundary", () => {
       allowedOrigins: ["https://portal.wealthfactory.test"],
       listBoardState,
       createTopLevelChildCard,
+      advanceChildCard: vi.fn(),
       approveProposal: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: false, remaining: 0, resetAt: 1 }) }
     });
@@ -156,6 +160,7 @@ describe("harness HTTP boundary", () => {
       allowedOrigins: ["https://portal.wealthfactory.test"],
       listBoardState: vi.fn().mockRejectedValueOnce(new ApiAuthError()).mockRejectedValueOnce(new Error("db_down")),
       createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
       approveProposal: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
     });
@@ -182,6 +187,7 @@ describe("harness HTTP boundary", () => {
       allowedOrigins: ["https://portal.wealthfactory.test"],
       listBoardState: vi.fn(),
       createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
       approveProposal,
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
     });
@@ -214,6 +220,7 @@ describe("harness HTTP boundary", () => {
       listBoardState: vi.fn(),
       approveProposal: vi.fn(),
       createTopLevelChildCard,
+      advanceChildCard: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
     });
 
@@ -256,6 +263,7 @@ describe("harness HTTP boundary", () => {
       listBoardState: vi.fn(),
       approveProposal: vi.fn(),
       createTopLevelChildCard,
+      advanceChildCard: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
     });
 
@@ -266,6 +274,82 @@ describe("harness HTTP boundary", () => {
         persona: "cfo",
         title: "Pressure-test the pricing lane",
         deliverableType: "pricing_review"
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid"
+      },
+      bodyByteLength: 0,
+      ip: "203.0.113.10"
+    };
+
+    const unauthorized = await handler(baseRequest);
+    const conflict = await handler(baseRequest);
+    const serviceUnavailable = await handler(baseRequest);
+
+    expect(unauthorized.status).toBe(401);
+    expect(conflict.status).toBe(409);
+    expect(conflict.body).toEqual({ code: "conflict" });
+    expect(serviceUnavailable.status).toBe(500);
+    expect(serviceUnavailable.body).toEqual({ code: "service_unavailable" });
+  });
+
+  it("advances a persisted child card through the guarded write route", async () => {
+    const advanceChildCard = vi.fn().mockResolvedValue({ cardId: "card_new_2", state: "working" });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      approveProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/cards/card_new_2/advance",
+      query: {
+        state: "working"
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        cookie: "wf_session=abc"
+      },
+      bodyByteLength: 0,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(advanceChildCard).toHaveBeenCalledWith({
+      authorization: "Bearer valid",
+      cookie: "wf_session=abc",
+      cardId: "card_new_2",
+      state: "working"
+    });
+    expect(response.body).toEqual({ cardId: "card_new_2", state: "working" });
+  });
+
+  it("maps child-card progression conflicts without exposing backend details", async () => {
+    const advanceChildCard = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiAuthError())
+      .mockRejectedValueOnce(new HarnessCardProgressionConflictError("invalid transition"))
+      .mockRejectedValueOnce(new Error("db_down"));
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      approveProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const baseRequest = {
+      method: "POST" as const,
+      path: "/api/harness/cards/card_new_2/advance",
+      query: {
+        state: "working"
       },
       headers: {
         origin: "https://portal.wealthfactory.test",
