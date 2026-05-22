@@ -46,6 +46,21 @@ export interface HarnessCardEventRecord {
   createdAt: string;
 }
 
+export const HARNESS_CARD_STATES = [
+  "queued",
+  "planning",
+  "approved",
+  "working",
+  "waiting",
+  "blocked",
+  "done",
+  "cancelled"
+] as const satisfies readonly HarnessCardState[];
+
+export function isHarnessCardState(value: string): value is HarnessCardState {
+  return HARNESS_CARD_STATES.includes(value as HarnessCardState);
+}
+
 export function createHarnessRuntimeContext(input: {
   providerKind: ProviderKind;
   credentialLabel: string;

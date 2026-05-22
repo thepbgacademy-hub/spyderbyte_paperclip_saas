@@ -6,6 +6,7 @@ import {
   HarnessCardProgressionConflictError,
   type HarnessBoardResponse
 } from "../harness/board-service.js";
+import { isHarnessCardState } from "../harness/types.js";
 import { assertWealthFactoryResponse } from "../wealthfactory/response-guard.js";
 import type { HarnessCardRecord } from "../harness/types.js";
 
@@ -137,8 +138,10 @@ export function createHarnessHttpHandler(options: {
       const advanceMatch = /^\/api\/harness\/cards\/([^/]+)\/advance$/u.exec(request.path);
       if (advanceMatch) {
         const state = request.query?.state?.trim() ?? "";
-        const resultSummary = request.query?.resultSummary?.trim();
-        if (!state) {
+        if (!state || !isHarnessCardState(state)) {
+          return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
+        }
+        if (request.query?.resultSummary?.trim()) {
           return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
         }
 
@@ -146,8 +149,7 @@ export function createHarnessHttpHandler(options: {
           authorization: request.headers.authorization ?? "",
           ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
           cardId: decodeURIComponent(advanceMatch[1] ?? ""),
-          state: state as HarnessCardRecord["state"],
-          ...(resultSummary ? { resultSummary } : {})
+          state
         });
         assertWealthFactoryResponse(body);
         return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };

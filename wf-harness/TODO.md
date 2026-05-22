@@ -39,6 +39,7 @@ This file tracks the new harness subproject only.
 ## Next Slice
 
 - [x] Add true database-backed transaction coverage for the deferred proposal-approval seam so approval-before-card-insert ordering is proven against the real persistence layer.
+- [ ] Decide whether Docker-backed harness integration proofs need a CI lane or alternate local fallback so the deferred-FK contract is exercised outside Docker-capable machines too.
 - [x] Add transaction-client coverage proving the approval update and child-card insert share one leased transaction client and roll back together on failure.
 - [x] Expand beyond CEO direct-child creation into richer persisted card progression and result-recording mutation paths.
 - [ ] Add fuller CEO approval logic for sub-card requests and card-count discipline beyond the current persisted proposal/approve seam.
@@ -48,5 +49,6 @@ This file tracks the new harness subproject only.
 ## Next Slice
 
 - [ ] Reconcile persisted run-state progression with the new child-card advancement seam so run-level status is no longer effectively bootstrap-only.
+- [ ] Add a parsed request-body contract for harness mutations before tenant-authored outcome summaries are accepted over HTTP.
 - [ ] Add richer CEO approval policy beyond exact-match idempotency and the current open-card cap.
 - [ ] Add harness-specific audit publishing beyond the durable card-event trail.

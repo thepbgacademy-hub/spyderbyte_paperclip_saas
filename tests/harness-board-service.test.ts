@@ -5,7 +5,11 @@ import {
   ActivePackageInstallRequiredError,
   TenantMembershipRequiredError
 } from "../src/db/supabase-repositories.js";
-import { HarnessCardCreationConflictError, createHarnessBoardService } from "../src/harness/board-service.js";
+import {
+  HarnessCardCreationConflictError,
+  HarnessCardProgressionConflictError,
+  createHarnessBoardService
+} from "../src/harness/board-service.js";
 import { createInMemoryHarnessRepository } from "../src/harness/repository.js";
 import { createHarnessWorkflowRegistry } from "../src/wealthfactory/workflow-registry.js";
 
@@ -630,6 +634,40 @@ describe("harness board service", () => {
         state: "working"
       })
     ).rejects.toThrow(/require atomic execution/i);
+  });
+
+  it("fails closed when child-card advancement requests an unsupported state", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+
+    await expect(
+      service.advanceChildCard({
+        authorization: "Bearer valid",
+        cardId: created.cardId,
+        state: "invented" as never
+      })
+    ).rejects.toBeInstanceOf(HarnessCardProgressionConflictError);
   });
 
   it("fails closed when approving a proposal from another tenant", async () => {

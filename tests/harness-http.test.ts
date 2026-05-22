@@ -369,4 +369,49 @@ describe("harness HTTP boundary", () => {
     expect(serviceUnavailable.status).toBe(500);
     expect(serviceUnavailable.body).toEqual({ code: "service_unavailable" });
   });
+
+  it("rejects unsupported child-card states and query-string result summaries as invalid client input", async () => {
+    const advanceChildCard = vi.fn();
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      approveProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const invalidState = await handler({
+      method: "POST",
+      path: "/api/harness/cards/card_new_2/advance",
+      query: {
+        state: "invented"
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid"
+      },
+      bodyByteLength: 0,
+      ip: "203.0.113.10"
+    });
+
+    const querySummary = await handler({
+      method: "POST",
+      path: "/api/harness/cards/card_new_2/advance",
+      query: {
+        state: "done",
+        resultSummary: "Keep this off the URL surface."
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid"
+      },
+      bodyByteLength: 0,
+      ip: "203.0.113.10"
+    });
+
+    expect(invalidState.status).toBe(400);
+    expect(querySummary.status).toBe(400);
+    expect(advanceChildCard).not.toHaveBeenCalled();
+  });
 });

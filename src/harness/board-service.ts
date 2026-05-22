@@ -2,6 +2,7 @@ import { ApiAuthError, type ApiSession } from "../api/dashboard-api.js";
 import { randomUUID } from "node:crypto";
 import type { HarnessCardEventRecord, HarnessCardRecord, HarnessRunRecord } from "./types.js";
 import { createHarnessCardEventRecord } from "./types.js";
+import { isHarnessCardState } from "./types.js";
 import { transitionHarnessCard, transitionHarnessRun } from "./state-machine.js";
 import { createHarnessRuntime } from "./runtime.js";
 import type { HarnessRepository } from "./repository.js";
@@ -301,6 +302,9 @@ export function createHarnessBoardService(options: {
         const run = await repository.getRun(card.runId);
         if (!run || run.tenantId !== access.session.tenantId) {
           throw new ApiAuthError();
+        }
+        if (!isHarnessCardState(request.state)) {
+          throw new HarnessCardProgressionConflictError("Harness child card requested an unsupported state");
         }
 
         const nextCard = transitionHarnessCard(card, request.state);

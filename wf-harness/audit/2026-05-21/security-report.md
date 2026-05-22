@@ -31,6 +31,7 @@ Scope: First custom harness slice under `src/harness`, `src/api/harness-http.ts`
 - Re-ran the scan after hardening the direct-child mutation for retry idempotency, open-card limits, and non-nested atomic seeding. The result stayed clean: only expected auth names, dummy placeholders, and the intentional sanitization fixture remained in scope.
 - Re-ran the scan after adding transaction-client coverage for the deferred proposal-approval seam. The result stayed clean: the touched slice only exposed expected auth names, dummy placeholders, and the existing sanitization fixture; no live secret material was introduced.
 - Re-ran the scan after landing the real disposable-Postgres proof path plus the guarded child-card progression/result-recording seam. The touched slice still only exposed expected auth names, dummy placeholders, local disposable test credentials for the isolated Docker database, and the existing sanitization fixture; no live secret material was introduced.
+- Re-ran the scan after rejecting invalid child-card states at the HTTP seam, removing query-string outcome summaries from the public advancement route, and tightening the docs around Docker-gated proof coverage. The result stayed clean: no live secret material was introduced.
 
 ## OWASP-Oriented Findings
 
@@ -95,6 +96,7 @@ No issues identified in the harness slice. The board HTTP boundary now distingui
 - No confirmed live secrets were found in the tracked harness slice or the targeted history scan.
 - The narrowed provider-pattern scan matched only env-variable names, dummy test values, and authorization placeholders used in tests.
 - The new harness persistence layer strips `secretValues` before runtime context is stored or serialized, and the repository-backed board path continues using only sanitized runtime context fields.
+- The guarded child-card advancement route no longer accepts tenant-authored result summaries through URL query strings, which reduces business-data exposure through browser history and intermediary logs.
 
 ### Additional Hygiene Observations
 
@@ -121,7 +123,7 @@ No issues identified in the harness slice. The board HTTP boundary now distingui
 
 1. Maintain ignore/exclude hygiene for `.env` and local operational artifacts so the clean harness slice cannot be contaminated by deployment-time staging mistakes.
 2. Keep the harness `runtime_context` sanitization and response-guard tests in the full gate to prevent future regressions that reintroduce `secretValues` or customer-facing execution noise.
-3. When the harness begins using the durable repository for real run mutation, add harness-specific audit events so resume/recovery behavior is independently traceable.
+3. When the harness begins using the durable repository for broader run mutation, add harness-specific audit events so resume/recovery behavior is independently traceable, and keep tenant-authored summaries off URL surfaces until the HTTP contract supports parsed request bodies.
 
 ## Conclusion
 
