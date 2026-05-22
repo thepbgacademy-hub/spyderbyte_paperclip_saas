@@ -32,6 +32,8 @@ Scope: First custom harness slice under `src/harness`, `src/api/harness-http.ts`
 - Re-ran the scan after adding transaction-client coverage for the deferred proposal-approval seam. The result stayed clean: the touched slice only exposed expected auth names, dummy placeholders, and the existing sanitization fixture; no live secret material was introduced.
 - Re-ran the scan after landing the real disposable-Postgres proof path plus the guarded child-card progression/result-recording seam. The touched slice still only exposed expected auth names, dummy placeholders, local disposable test credentials for the isolated Docker database, and the existing sanitization fixture; no live secret material was introduced.
 - Re-ran the scan after rejecting invalid child-card states at the HTTP seam, removing query-string outcome summaries from the public advancement route, and tightening the docs around Docker-gated proof coverage. The result stayed clean: no live secret material was introduced.
+- Re-ran the scan after adding run-level reconciliation plus metadata-only harness audit publishing for child-card creation, proposal approval, and advancement. The touched slice still only exposed expected auth names, dummy placeholders, and the existing sanitization fixture; no live secret material or raw outcome text was introduced.
+- Re-ran the scan after hardening post-commit harness audit publishing so audit-sink outages log a warning instead of making already-committed mutations appear failed. The touched slice still introduced no live secret material and still keeps raw outcome text out of durable audit payloads.
 
 ## OWASP-Oriented Findings
 
@@ -76,14 +78,13 @@ No issues identified in the harness slice.
 
 ### A09 Security Logging and Alerting Failures
 
-#### [INFO] Harness slice now persists run/card/event state, but durable operator-facing audit expansion is still future work
+#### [INFO] Harness audit publishing is now metadata-only and best-effort, but sink outages can still drop audit rows after a successful mutation
 
 - Paths:
-  - `E:\REPOS\spyderbyte_paperclip_saas\src\api\runtime-server.ts`
   - `E:\REPOS\spyderbyte_paperclip_saas\src\harness\board-service.ts`
-  - `E:\REPOS\spyderbyte_paperclip_saas\src\harness\repository.ts`
-- Rationale: the slice now persists run/card/event data, which is good, but broader operator-oriented audit surfaces are still inherited from the existing runtime rather than purpose-built for the harness domain.
-- Recommendation: add explicit harness audit event publishing when mutation paths extend beyond the board bootstrap/read flow.
+  - `E:\REPOS\spyderbyte_paperclip_saas\src\api\runtime-server.ts`
+- Rationale: the harness now emits explicit audit events for the current card/proposal/run reconciliation mutations, and audit outages no longer make committed mutations look like failures. But because publishing happens after commit, a sink outage still means the business mutation succeeds while the durable audit row is skipped.
+- Recommendation: keep this best-effort path for the current bounded slice, but move audit publishing inside a stronger shared persistence or outbox seam before claiming full guaranteed audit durability.
 
 ### A10 Mishandling of Exceptional Conditions
 
@@ -123,8 +124,8 @@ No issues identified in the harness slice. The board HTTP boundary now distingui
 
 1. Maintain ignore/exclude hygiene for `.env` and local operational artifacts so the clean harness slice cannot be contaminated by deployment-time staging mistakes.
 2. Keep the harness `runtime_context` sanitization and response-guard tests in the full gate to prevent future regressions that reintroduce `secretValues` or customer-facing execution noise.
-3. When the harness begins using the durable repository for broader run mutation, add harness-specific audit events so resume/recovery behavior is independently traceable, and keep tenant-authored summaries off URL surfaces until the HTTP contract supports parsed request bodies.
+3. Keep tenant-authored summaries off URL surfaces until the HTTP contract supports parsed request bodies, and extend the same metadata-only audit discipline if broader harness mutation paths begin recording richer business outcomes.
 
 ## Conclusion
 
-The first Wealth Factory harness slice is in a good security position: no confirmed live secret exposure was introduced, no tenant secret values are persisted in the new harness records, the board API remains customer-safe and high-level, and the persisted board service continues to operate on sanitized runtime context only. The remaining work is operational hygiene and later audit-depth expansion, not an immediate security blocker for continued development.
+The current Wealth Factory harness slice is in a good security position: no confirmed live secret exposure was introduced, no tenant secret values are persisted in the new harness records, the board API remains customer-safe and high-level, run reconciliation now operates on persisted child-card/proposal state, and the widened harness audit path stays metadata-only without storing raw tenant outcome text. The remaining work is operational hygiene, richer mutation-body handling, and eventually moving audit publishing from the current best-effort post-commit path into a stronger guaranteed persistence seam, not an immediate security blocker for continued development.

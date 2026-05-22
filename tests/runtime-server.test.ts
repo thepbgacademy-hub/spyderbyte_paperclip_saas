@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createRuntimeSessionAuth, createRuntimeSessionToken } from "../src/api/runtime-auth.js";
 import { createDashboardRuntime, createNodeRequestListener, loadRuntimeEnv } from "../src/api/runtime-server.js";
+import { createDurableAuditSink } from "../src/audit/durable-audit.js";
+import { createHarnessBoardService } from "../src/harness/board-service.js";
 
 vi.mock("../src/db/postgres-client.js", () => ({
   createPgPool: vi.fn(() => ({
@@ -338,6 +340,29 @@ describe("runtime server", () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('"cardId":"card_created_1"');
     expect(response.body).toContain('"state":"working"');
+    await runtime.close();
+  });
+
+  it("wires the durable audit sink into the harness board service", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() }
+    });
+
+    const audit = vi.mocked(createDurableAuditSink).mock.results.at(-1)?.value;
+    expect(createHarnessBoardService).toHaveBeenCalledWith(
+      expect.objectContaining({
+        audit
+      })
+    );
+
     await runtime.close();
   });
 

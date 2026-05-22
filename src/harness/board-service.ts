@@ -1,9 +1,10 @@
 import { ApiAuthError, type ApiSession } from "../api/dashboard-api.js";
 import { randomUUID } from "node:crypto";
+import type { DurableAuditEvent } from "../audit/durable-audit.js";
 import type { HarnessCardEventRecord, HarnessCardRecord, HarnessRunRecord } from "./types.js";
 import { createHarnessCardEventRecord } from "./types.js";
 import { isHarnessCardState } from "./types.js";
-import { transitionHarnessCard, transitionHarnessRun } from "./state-machine.js";
+import { deriveHarnessRunState, transitionHarnessCard, transitionHarnessRun } from "./state-machine.js";
 import { createHarnessRuntime } from "./runtime.js";
 import type { HarnessRepository } from "./repository.js";
 import type { WealthFactoryWorkflowDefinition } from "../wealthfactory/workflow-registry.js";
@@ -87,6 +88,8 @@ export class HarnessCardProgressionConflictError extends Error {
   }
 }
 
+type HarnessAudit = (event: DurableAuditEvent) => Promise<void>;
+
 export function createHarnessBoardService(options: {
   authenticate(input: { authorization: string; cookie?: string }): Promise<ApiSession | null>;
   requireTenantMember(input: { tenantId: string; userId: string }): Promise<void>;
@@ -94,6 +97,7 @@ export function createHarnessBoardService(options: {
   repository: HarnessRepository;
   workflowRegistry: HarnessWorkflowRegistry;
   runAtomically?<T>(work: (repository: HarnessRepository) => Promise<T>): Promise<T>;
+  audit?: HarnessAudit;
 }) {
   const runtime = createHarnessRuntime();
 
@@ -181,9 +185,35 @@ export function createHarnessBoardService(options: {
           await repository.insertEvent(event);
         }
 
-        return { cardId: card.id };
+        const reconciledRun = await reconcileHarnessRunState({ repository, run });
+
+        return {
+          cardId: card.id,
+          auditEvents: [
+            createHarnessAuditEvent({
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              eventType: "harness_card_created",
+              entityId: card.id,
+              metadata: {
+                runId: run.id,
+                parentCardId: card.parentCardId,
+                persona: card.persona,
+                deliverableType: card.deliverableType
+              }
+            }),
+            ...toRunAuditEvents({
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              runId: run.id,
+              previousState: run.state,
+              nextRun: reconciledRun
+            })
+          ]
+        };
       });
 
+      await publishHarnessAuditEvents(options.audit, result.auditEvents ?? []);
       return { cardId: result.cardId };
     },
 
@@ -263,11 +293,39 @@ export function createHarnessBoardService(options: {
           })
         );
 
-        return { cardId: approvedCard.id };
+        const reconciledRun = await reconcileHarnessRunState({ repository, run });
+
+        return {
+          cardId: approvedCard.id,
+          auditEvents: [
+            createHarnessAuditEvent({
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              eventType: "harness_proposal_approved",
+              entityId: proposal.id,
+              metadata: {
+                runId: run.id,
+                approvedCardId: approvedCard.id,
+                parentCardId: proposal.parentCardId,
+                requestedByPersona: proposal.requestedByPersona,
+                targetPersona: proposal.persona,
+                deliverableType: proposal.deliverableType
+              }
+            }),
+            ...toRunAuditEvents({
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              runId: run.id,
+              previousState: run.state,
+              nextRun: reconciledRun
+            })
+          ]
+        };
       };
 
       const result = await options.runAtomically(runApproval);
 
+      await publishHarnessAuditEvents(options.audit, result.auditEvents ?? []);
       return { cardId: result.cardId };
     },
 
@@ -338,10 +396,39 @@ export function createHarnessBoardService(options: {
           );
         }
 
-        return { cardId: updatedCard.id, state: updatedCard.state };
+        const reconciledRun = await reconcileHarnessRunState({ repository, run });
+
+        return {
+          cardId: updatedCard.id,
+          state: updatedCard.state,
+          auditEvents: [
+            createHarnessAuditEvent({
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              eventType: "harness_card_advanced",
+              entityId: updatedCard.id,
+              metadata: {
+                runId: run.id,
+                persona: updatedCard.persona,
+                deliverableType: updatedCard.deliverableType,
+                fromState: card.state,
+                toState: updatedCard.state,
+                hasResultSummary: Boolean(trimmedSummary)
+              }
+            }),
+            ...toRunAuditEvents({
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              runId: run.id,
+              previousState: run.state,
+              nextRun: reconciledRun
+            })
+          ]
+        };
       });
 
-      return result;
+      await publishHarnessAuditEvents(options.audit, result.auditEvents ?? []);
+      return { cardId: result.cardId, state: result.state };
     }
   };
 }
@@ -506,6 +593,89 @@ function createBootstrapEvents(card: HarnessCardRecord): HarnessCardEventRecord[
   }
 
   return events;
+}
+
+async function reconcileHarnessRunState(input: {
+  repository: HarnessRepository;
+  run: HarnessRunRecord;
+}): Promise<HarnessRunRecord | null> {
+  const [cards, proposals] = await Promise.all([
+    input.repository.listCardsForRun(input.run.id),
+    input.repository.listProposalsForRun(input.run.id)
+  ]);
+  const nextState = deriveHarnessRunState({
+    run: input.run,
+    cards,
+    proposals
+  });
+  if (nextState === input.run.state) {
+    return null;
+  }
+
+  return input.repository.updateRunState({
+    runId: input.run.id,
+    state: nextState
+  });
+}
+
+function createHarnessAuditEvent(input: {
+  tenantId: string;
+  actorUserId: string;
+  eventType: string;
+  entityId: string;
+  metadata: Record<string, unknown>;
+}): DurableAuditEvent {
+  return {
+    tenantId: input.tenantId,
+    actorUserId: input.actorUserId,
+    eventType: input.eventType,
+    entityType: "harness",
+    entityId: input.entityId,
+    metadata: input.metadata
+  };
+}
+
+function toRunAuditEvents(input: {
+  tenantId: string;
+  actorUserId: string;
+  runId: string;
+  previousState: HarnessRunRecord["state"];
+  nextRun: HarnessRunRecord | null;
+}): DurableAuditEvent[] {
+  if (!input.nextRun || input.nextRun.state === input.previousState) {
+    return [];
+  }
+
+  return [
+    createHarnessAuditEvent({
+      tenantId: input.tenantId,
+      actorUserId: input.actorUserId,
+      eventType: "harness_run_reconciled",
+      entityId: input.runId,
+      metadata: {
+        fromState: input.previousState,
+        toState: input.nextRun.state
+      }
+    })
+  ];
+}
+
+async function publishHarnessAuditEvents(audit: HarnessAudit | undefined, events: readonly DurableAuditEvent[]) {
+  if (!audit || events.length === 0) {
+    return;
+  }
+
+  for (const event of events) {
+    try {
+      await audit(event);
+    } catch (error) {
+      console.warn("Harness audit publish failed after mutation commit", {
+        eventType: event.eventType,
+        entityId: event.entityId,
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
 }
 
 function findMatchingOpenChildCard(

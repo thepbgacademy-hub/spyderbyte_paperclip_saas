@@ -43,12 +43,12 @@ This file tracks the new harness subproject only.
 - [x] Add transaction-client coverage proving the approval update and child-card insert share one leased transaction client and roll back together on failure.
 - [x] Expand beyond CEO direct-child creation into richer persisted card progression and result-recording mutation paths.
 - [ ] Add fuller CEO approval logic for sub-card requests and card-count discipline beyond the current persisted proposal/approve seam.
-- [ ] Add harness-specific audit publishing beyond the persisted card-event trail.
+- [x] Add harness-specific audit publishing beyond the persisted card-event trail.
 - [ ] Expand the dashboard visual system once the additional Hermes/Obsidian reference screenshots are reviewed.
 
 ## Next Slice
 
-- [ ] Reconcile persisted run-state progression with the new child-card advancement seam so run-level status is no longer effectively bootstrap-only.
+- [x] Reconcile persisted run-state progression with the new child-card advancement seam so run-level status is no longer effectively bootstrap-only.
 - [ ] Add a parsed request-body contract for harness mutations before tenant-authored outcome summaries are accepted over HTTP.
 - [ ] Add richer CEO approval policy beyond exact-match idempotency and the current open-card cap.
-- [ ] Add harness-specific audit publishing beyond the durable card-event trail.
+- [ ] Widen run-level progression from the current derived `assembling` ceiling into explicit final assembly/completion logic.

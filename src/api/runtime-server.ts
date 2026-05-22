@@ -211,6 +211,7 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
     requireActivePackageInstall: repositories.requireActivePackageInstall,
     repository: harnessRepository,
     workflowRegistry: harnessWorkflowRegistry,
+    audit,
     runAtomically: async (work) =>
       transactionRunner.withTransaction(async (transaction) =>
         work(createPostgresHarnessRepository(transaction))

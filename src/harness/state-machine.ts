@@ -1,3 +1,4 @@
+import type { HarnessSubCardProposal } from "./runtime-contract.js";
 import type { HarnessCardRecord, HarnessCardState, HarnessRunRecord, HarnessRunState } from "./types.js";
 
 const RUN_TRANSITIONS: Record<HarnessRunState, readonly HarnessRunState[]> = {
@@ -53,4 +54,33 @@ export function transitionHarnessCard(card: HarnessCardRecord, to: HarnessCardSt
     state: assertValidCardTransition(card.state, to),
     updatedAt: new Date().toISOString()
   };
+}
+
+export function deriveHarnessRunState(input: {
+  run: HarnessRunRecord;
+  cards: readonly HarnessCardRecord[];
+  proposals?: readonly HarnessSubCardProposal[];
+}): HarnessRunState {
+  const childCards = input.cards.filter((card) => card.persona !== "ceo");
+  const pendingProposals = (input.proposals ?? []).filter((proposal) => proposal.status === "proposed");
+
+  if (childCards.some((card) => card.state === "working")) {
+    return "active";
+  }
+  if (childCards.some((card) => card.state === "waiting")) {
+    return "waiting";
+  }
+  if (childCards.some((card) => card.state === "blocked")) {
+    return "blocked";
+  }
+
+  const hasDoneChild = childCards.some((card) => card.state === "done");
+  const allChildrenTerminal =
+    childCards.length > 0 &&
+    childCards.every((card) => card.state === "done" || card.state === "cancelled");
+  if (allChildrenTerminal && hasDoneChild && pendingProposals.length === 0) {
+    return "assembling";
+  }
+
+  return "active";
 }

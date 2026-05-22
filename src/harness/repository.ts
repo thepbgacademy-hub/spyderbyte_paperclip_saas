@@ -1,12 +1,13 @@
 import type { HarnessCardEventRow, HarnessCardRow, HarnessRunRow } from "../db/types.js";
 import type { QueryClient } from "../db/supabase-repositories.js";
 import type { HarnessSubCardProposal } from "./runtime-contract.js";
-import type { HarnessCardEventRecord, HarnessCardRecord, HarnessCardState, HarnessRunRecord } from "./types.js";
+import type { HarnessCardEventRecord, HarnessCardRecord, HarnessCardState, HarnessRunRecord, HarnessRunState } from "./types.js";
 
 export interface HarnessRepository {
   insertRun(run: HarnessRunRecord): Promise<void>;
   getRun(runId: string): Promise<HarnessRunRecord | null>;
   findLatestRunForTenantWorkflow(input: { tenantId: string; workflowId: string }): Promise<HarnessRunRecord | null>;
+  updateRunState(input: { runId: string; state: HarnessRunState }): Promise<HarnessRunRecord | null>;
   insertCard(card: HarnessCardRecord): Promise<void>;
   getCard(cardId: string): Promise<HarnessCardRecord | null>;
   updateCardState(input: { cardId: string; state: HarnessCardState }): Promise<HarnessCardRecord | null>;
@@ -40,6 +41,21 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
         (run) => run.tenantId === input.tenantId && run.workflowId === input.workflowId
       );
       return matchingRuns.at(-1) ?? null;
+    },
+
+    async updateRunState(input) {
+      const existingRun = runs.get(input.runId);
+      if (!existingRun) {
+        return null;
+      }
+
+      const updatedRun = {
+        ...existingRun,
+        state: input.state,
+        updatedAt: new Date().toISOString()
+      };
+      runs.set(input.runId, updatedRun);
+      return { ...updatedRun, runtimeContext: { ...updatedRun.runtimeContext } };
     },
 
     async insertCard(card) {
@@ -170,6 +186,18 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
          order by updated_at desc, created_at desc
          limit 1`,
         [input.tenantId, input.workflowId]
+      );
+      return mapHarnessRunRow(result.rows[0]);
+    },
+
+    async updateRunState(input) {
+      const result = await client.query(
+        `update wfpc.harness_runs
+         set state = $2,
+             updated_at = now()
+         where id = $1
+         returning id, tenant_id, workflow_id, package_id, orchestrator_persona, state, runtime_context, created_at, updated_at`,
+        [input.runId, input.state]
       );
       return mapHarnessRunRow(result.rows[0]);
     },
