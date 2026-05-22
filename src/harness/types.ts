@@ -8,6 +8,19 @@ export type HarnessPersona = string;
 export type HarnessDeliverableType = string;
 export type HarnessCardEventKind = "created" | "state_changed" | "comment_added" | "subcard_proposed" | "result_recorded";
 
+export const HARNESS_CHILD_PERSONAS = ["cfo", "coo", "researcher", "cto", "cmo", "analyst"] as const;
+export const HARNESS_DELIVERABLE_TYPES = [
+  "plan",
+  "pricing_review",
+  "research_brief",
+  "ops_handoff",
+  "technical_review",
+  "launch_copy",
+  "forecast_model",
+  "finance_review",
+  "legal_review"
+] as const;
+
 export interface HarnessRuntimeContext {
   providerKind: ProviderKind;
   credentialLabel: string;
@@ -59,6 +72,22 @@ export const HARNESS_CARD_STATES = [
 
 export function isHarnessCardState(value: string): value is HarnessCardState {
   return HARNESS_CARD_STATES.includes(value as HarnessCardState);
+}
+
+export function normalizeHarnessPersona(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+export function normalizeHarnessDeliverableType(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+export function isHarnessChildPersona(value: string): value is (typeof HARNESS_CHILD_PERSONAS)[number] {
+  return HARNESS_CHILD_PERSONAS.includes(value as (typeof HARNESS_CHILD_PERSONAS)[number]);
+}
+
+export function isHarnessDeliverableType(value: string): value is (typeof HARNESS_DELIVERABLE_TYPES)[number] {
+  return HARNESS_DELIVERABLE_TYPES.includes(value as (typeof HARNESS_DELIVERABLE_TYPES)[number]);
 }
 
 export function createHarnessRuntimeContext(input: {

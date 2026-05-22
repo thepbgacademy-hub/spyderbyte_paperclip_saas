@@ -52,7 +52,7 @@ type FetchLike = (url: string, init: { method: "POST"; headers: Record<string, s
 }>;
 
 export function createStorageOAuthService(options: {
-  providers: Record<StorageOAuthProviderKind, OAuthProviderConfig>;
+  providers: Partial<Record<StorageOAuthProviderKind, OAuthProviderConfig>>;
   stateStore: OAuthStateStore;
   registration: StorageOAuthRegistration;
   fetch: FetchLike;
@@ -61,6 +61,10 @@ export function createStorageOAuthService(options: {
   const now = options.now ?? (() => new Date());
 
   return {
+    isProviderAvailable(providerKind: StorageOAuthProviderKind): boolean {
+      return Boolean(options.providers[providerKind]);
+    },
+
     async begin(input: {
       tenantId: string;
       actorUserId: string;
@@ -71,6 +75,9 @@ export function createStorageOAuthService(options: {
       assertPublicTarget(input.publicTarget);
       const publicTarget = normalizePublicTarget(input.publicTarget);
       const provider = options.providers[input.providerKind];
+      if (!provider) {
+        throw new Error("Storage provider is unavailable");
+      }
       const state = randomToken();
       const codeVerifier = randomToken();
       const expiresAt = new Date(now().getTime() + 10 * 60_000).toISOString();
@@ -103,13 +110,20 @@ export function createStorageOAuthService(options: {
       return { authorizationUrl: authorizationUrl.toString(), expiresAt };
     },
 
-    async complete(input: { state: string; code: string }): Promise<unknown> {
+    async complete(input: { state: string; code: string; providerKind: StorageOAuthProviderKind }): Promise<unknown> {
       const pending = await options.stateStore.consume({ state: input.state });
       if (!pending || Date.parse(pending.expiresAt) <= now().getTime()) {
         throw new Error("Storage authorization expired");
       }
+      if (pending.providerKind !== input.providerKind) {
+        await options.stateStore.save({ state: input.state, value: pending });
+        throw new Error("Storage provider mismatch");
+      }
 
       const provider = options.providers[pending.providerKind];
+      if (!provider) {
+        throw new Error("Storage provider is unavailable");
+      }
       const body = new URLSearchParams({
         grant_type: "authorization_code",
         code: input.code,

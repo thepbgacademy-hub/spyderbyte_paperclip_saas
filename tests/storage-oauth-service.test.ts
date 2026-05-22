@@ -68,7 +68,7 @@ describe("storage OAuth service", () => {
     });
     const state = new URL(begin.authorizationUrl).searchParams.get("state") ?? "";
 
-    const response = await service.complete({ state, code: "oauth-code" });
+    const response = await service.complete({ state, code: "oauth-code", providerKind: "google_drive" });
 
     expect(fetch).toHaveBeenCalledWith(
       "https://oauth2.googleapis.com/token",
@@ -98,7 +98,40 @@ describe("storage OAuth service", () => {
       })
     ).rejects.toThrow("Storage target cannot contain secret-like fields");
 
-    await expect(service.complete({ state: "missing", code: "oauth-code" })).rejects.toThrow("Storage authorization expired");
+    await expect(service.complete({ state: "missing", code: "oauth-code", providerKind: "dropbox" })).rejects.toThrow(
+      "Storage authorization expired"
+    );
+  });
+
+  it("reports per-provider availability instead of requiring every provider to be configured", async () => {
+    const registration = {
+      register: vi.fn()
+    };
+    const fetch = vi.fn();
+    const service = createStorageOAuthService({
+      providers: {
+        google_drive: STORAGE_OAUTH_PROVIDER_CONFIGS.googleDrive({
+          clientId: "google-client",
+          redirectUri: "https://api.spyderbyte.cloud/api/storage/oauth/google/callback"
+        })
+      },
+      stateStore: createMemoryOAuthStateStore(),
+      registration,
+      fetch,
+      now: () => new Date("2026-05-11T00:00:00.000Z")
+    });
+
+    expect(service.isProviderAvailable("google_drive")).toBe(true);
+    expect(service.isProviderAvailable("dropbox")).toBe(false);
+    await expect(
+      service.begin({
+        tenantId: "tenant-1",
+        actorUserId: "user-1",
+        providerKind: "dropbox",
+        displayName: "Dropbox",
+        publicTarget: {}
+      })
+    ).rejects.toThrow("Storage provider is unavailable");
   });
 
   it("requires provider refresh tokens for customer-owned storage connectors", async () => {
@@ -116,7 +149,9 @@ describe("storage OAuth service", () => {
       publicTarget: { folderLabel: "Exports" }
     });
 
-    await expect(service.complete({ state: new URL(begin.authorizationUrl).searchParams.get("state") ?? "", code: "oauth-code" })).rejects.toThrow(
+    await expect(
+      service.complete({ state: new URL(begin.authorizationUrl).searchParams.get("state") ?? "", code: "oauth-code", providerKind: "google_drive" })
+    ).rejects.toThrow(
       "Storage authorization did not return offline access"
     );
     expect(registration.register).not.toHaveBeenCalled();
@@ -132,7 +167,11 @@ describe("storage OAuth service", () => {
       publicTarget: { folderLabel: " Exports ", theme: "blue", nested: { label: "safe" } }
     });
 
-    await service.complete({ state: new URL(begin.authorizationUrl).searchParams.get("state") ?? "", code: "oauth-code" });
+    await service.complete({
+      state: new URL(begin.authorizationUrl).searchParams.get("state") ?? "",
+      code: "oauth-code",
+      providerKind: "google_drive"
+    });
 
     expect(registration.register).toHaveBeenCalledWith(expect.objectContaining({ publicTarget: { folderLabel: "Exports" } }));
   });
@@ -149,5 +188,33 @@ describe("storage OAuth service", () => {
         publicTarget: { folderLabel: "Exports", nested: { refreshToken: "not-allowed" } }
       })
     ).rejects.toThrow("Storage target cannot contain secret-like fields");
+  });
+
+  it("fails closed when the callback route provider does not match the pending OAuth state", async () => {
+    const { service } = createService();
+    const begin = await service.begin({
+      tenantId: "tenant-1",
+      actorUserId: "user-1",
+      providerKind: "google_drive",
+      displayName: "Company Drive",
+      publicTarget: { folderLabel: "Exports" }
+    });
+
+    await expect(
+      service.complete({ state: new URL(begin.authorizationUrl).searchParams.get("state") ?? "", code: "oauth-code", providerKind: "dropbox" })
+    ).rejects.toThrow("Storage provider mismatch");
+
+    await expect(
+      service.complete({
+        state: new URL(begin.authorizationUrl).searchParams.get("state") ?? "",
+        code: "oauth-code",
+        providerKind: "google_drive"
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: "storage-connector-1",
+        providerKind: "google_drive"
+      })
+    );
   });
 });

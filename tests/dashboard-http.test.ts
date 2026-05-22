@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { ApiAuthError } from "../src/api/dashboard-api.js";
 import { createDashboardHttpHandler } from "../src/api/dashboard-http.js";
 
 const session = { userId: "user-1", tenantId: "tenant-1", role: "member" as const };
@@ -108,6 +109,42 @@ describe("dashboard HTTP boundary", () => {
     });
 
     expect(response.status).toBe(429);
+    expect(response.headers["retry-after"]).toBe("0");
     expect(dashboardApi.listDashboard).not.toHaveBeenCalled();
+  });
+
+  it("separates dashboard auth failures from internal service faults", async () => {
+    const unauthorizedHandler = createDashboardHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      dashboardApi: { listDashboard: vi.fn().mockRejectedValue(new ApiAuthError()) },
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
+    });
+
+    const unauthorizedResponse = await unauthorizedHandler({
+      method: "GET",
+      path: "/api/dashboard",
+      headers: { origin: "https://portal.wealthfactory.test", authorization: "Bearer valid" },
+      bodyByteLength: 0,
+      ip: "203.0.113.10"
+    });
+
+    expect(unauthorizedResponse.status).toBe(401);
+
+    const unavailableHandler = createDashboardHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      dashboardApi: { listDashboard: vi.fn().mockRejectedValue(new Error("database unavailable")) },
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
+    });
+
+    const unavailableResponse = await unavailableHandler({
+      method: "GET",
+      path: "/api/dashboard",
+      headers: { origin: "https://portal.wealthfactory.test", authorization: "Bearer valid" },
+      bodyByteLength: 0,
+      ip: "203.0.113.10"
+    });
+
+    expect(unavailableResponse.status).toBe(500);
+    expect(unavailableResponse.body).toEqual({ code: "service_unavailable" });
   });
 });

@@ -34,6 +34,11 @@ Scope: First custom harness slice under `src/harness`, `src/api/harness-http.ts`
 - Re-ran the scan after rejecting invalid child-card states at the HTTP seam, removing query-string outcome summaries from the public advancement route, and tightening the docs around Docker-gated proof coverage. The result stayed clean: no live secret material was introduced.
 - Re-ran the scan after adding run-level reconciliation plus metadata-only harness audit publishing for child-card creation, proposal approval, and advancement. The touched slice still only exposed expected auth names, dummy placeholders, and the existing sanitization fixture; no live secret material or raw outcome text was introduced.
 - Re-ran the scan after hardening post-commit harness audit publishing so audit-sink outages log a warning instead of making already-committed mutations appear failed. The touched slice still introduced no live secret material and still keeps raw outcome text out of durable audit payloads.
+- Re-ran the scan after moving harness mutations to parsed JSON bodies, adding the explicit CEO completion command, and tightening duplicate-lane policy. The touched slice still introduced no live secret material, and tenant-authored summaries now stay off URL surfaces while remaining excluded from durable audit payloads.
+- Re-ran the scan after hardening the Node adapter to enforce request-size limits on bytes actually read, splitting dashboard `401` vs `500` outcomes, and making the touched runtime-server test fixture use the clearly fake `db.invalid` host plus a placeholder password. The touched slice still introduced no live secret material.
+- Re-ran the scan after closing the cross-tenant approved-proposal leak, bounding child-card persona/deliverable inputs to the approved catalog, and making storage OAuth degrade per provider with structured unavailable responses. The touched slice still introduced no live secret material, and no new secret-bearing response paths were added.
+- Re-ran the scan after binding storage OAuth callback completion to the route provider, validating `WF_STORAGE_OAUTH_REDIRECT_ORIGIN` against the allowed portal-origin set, and tightening harness route classification so dead proposal paths no longer consume the live approval rate-limit bucket. The touched slice still introduced no live secret material and did not add any new secret-bearing response paths.
+- Re-ran the scan after normalizing the accepted storage OAuth redirect origin and preserving pending OAuth state on provider-mismatch callback attempts. The touched slice still introduced no live secret material, and the callback integrity seam now fails closed without consuming the tenant's one valid retry path.
 
 ## OWASP-Oriented Findings
 
@@ -72,6 +77,10 @@ No issues identified in the harness slice. The new board route is read-only and 
 
 No issues identified in the harness slice. The new board handler reuses the guarded request shape with authorization/cookie passthrough rather than introducing a parallel trust model.
 
+### A07/A10 Storage OAuth Callback Integrity
+
+No confirmed issue remains in the current slice. The callback handler now requires the public route provider to match the pending OAuth state before token exchange begins, so a miswired callback path fails closed instead of silently finishing the wrong provider flow.
+
 ### A08 Software or Data Integrity Failures
 
 No issues identified in the harness slice.
@@ -97,7 +106,7 @@ No issues identified in the harness slice. The board HTTP boundary now distingui
 - No confirmed live secrets were found in the tracked harness slice or the targeted history scan.
 - The narrowed provider-pattern scan matched only env-variable names, dummy test values, and authorization placeholders used in tests.
 - The new harness persistence layer strips `secretValues` before runtime context is stored or serialized, and the repository-backed board path continues using only sanitized runtime context fields.
-- The guarded child-card advancement route no longer accepts tenant-authored result summaries through URL query strings, which reduces business-data exposure through browser history and intermediary logs.
+- The guarded harness mutation routes now accept tenant-authored summaries through parsed JSON bodies instead of URL query strings, which keeps business text out of browser history and intermediary URL logs.
 
 ### Additional Hygiene Observations
 
@@ -117,15 +126,15 @@ No issues identified in the harness slice. The board HTTP boundary now distingui
   - `E:\REPOS\spyderbyte_paperclip_saas\tests\env.test.ts`
   - `E:\REPOS\spyderbyte_paperclip_saas\tests\runtime-server.test.ts`
   - `E:\REPOS\spyderbyte_paperclip_saas\tests\harness-http.test.ts`
-- Evidence: examples include masked/dummy values like `service-role-key`, `paperclip-service-token`, and `Bearer valid`.
+- Evidence: examples include masked/dummy values like `service-role-key`, `paperclip-service-token`, `Bearer valid`, and the clearly fake `postgresql://postgres.tenant:***@db.invalid:5432/postgres` test fixture.
 - Recommendation: keep using clearly fake placeholders and continue avoiding live provider-shaped values in tests.
 
 ## Remediation Priority
 
 1. Maintain ignore/exclude hygiene for `.env` and local operational artifacts so the clean harness slice cannot be contaminated by deployment-time staging mistakes.
 2. Keep the harness `runtime_context` sanitization and response-guard tests in the full gate to prevent future regressions that reintroduce `secretValues` or customer-facing execution noise.
-3. Keep tenant-authored summaries off URL surfaces until the HTTP contract supports parsed request bodies, and extend the same metadata-only audit discipline if broader harness mutation paths begin recording richer business outcomes.
+3. Keep tenant-authored summaries on parsed body surfaces only, and extend the same metadata-only audit discipline if broader harness mutation paths begin recording richer business outcomes.
 
 ## Conclusion
 
-The current Wealth Factory harness slice is in a good security position: no confirmed live secret exposure was introduced, no tenant secret values are persisted in the new harness records, the board API remains customer-safe and high-level, run reconciliation now operates on persisted child-card/proposal state, and the widened harness audit path stays metadata-only without storing raw tenant outcome text. The remaining work is operational hygiene, richer mutation-body handling, and eventually moving audit publishing from the current best-effort post-commit path into a stronger guaranteed persistence seam, not an immediate security blocker for continued development.
+The current Wealth Factory harness slice is in a good security position: no confirmed live secret exposure was introduced, no tenant secret values are persisted in the new harness records, the board API remains customer-safe and high-level, run reconciliation now operates on persisted child-card/proposal state, completion is explicit and CEO-gated, approved proposal lookups no longer leak across tenants, and the widened harness audit path stays metadata-only without storing raw tenant outcome text. The remaining work is operational hygiene and eventually moving audit publishing from the current best-effort post-commit path into a stronger guaranteed persistence seam, not an immediate security blocker for continued development.

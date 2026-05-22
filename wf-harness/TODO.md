@@ -36,19 +36,21 @@ This file tracks the new harness subproject only.
 - [x] Keep dashboard noise-free and high-level.
 - [x] Keep test findings from the Paperclip build as design constraints, not historical trivia.
 
-## Next Slice
+## Progress Since Bootstrap
 
 - [x] Add true database-backed transaction coverage for the deferred proposal-approval seam so approval-before-card-insert ordering is proven against the real persistence layer.
 - [ ] Decide whether Docker-backed harness integration proofs need a CI lane or alternate local fallback so the deferred-FK contract is exercised outside Docker-capable machines too.
 - [x] Add transaction-client coverage proving the approval update and child-card insert share one leased transaction client and roll back together on failure.
 - [x] Expand beyond CEO direct-child creation into richer persisted card progression and result-recording mutation paths.
-- [ ] Add fuller CEO approval logic for sub-card requests and card-count discipline beyond the current persisted proposal/approve seam.
+- [ ] Add fuller CEO approval logic for sub-card requests and card-count discipline beyond the current duplicate-lane/open-cap guardrails.
 - [x] Add harness-specific audit publishing beyond the persisted card-event trail.
 - [ ] Expand the dashboard visual system once the additional Hermes/Obsidian reference screenshots are reviewed.
 
-## Next Slice
+## Current Next Slice
 
 - [x] Reconcile persisted run-state progression with the new child-card advancement seam so run-level status is no longer effectively bootstrap-only.
-- [ ] Add a parsed request-body contract for harness mutations before tenant-authored outcome summaries are accepted over HTTP.
-- [ ] Add richer CEO approval policy beyond exact-match idempotency and the current open-card cap.
-- [ ] Widen run-level progression from the current derived `assembling` ceiling into explicit final assembly/completion logic.
+- [x] Add a parsed request-body contract for harness mutations before tenant-authored outcome summaries are accepted over HTTP.
+- [x] Add richer CEO approval policy beyond exact-match idempotency and the current open-card cap.
+- [x] Widen run-level progression from the current derived `assembling` ceiling into explicit final assembly/completion logic.
+- [ ] Add deny/defer semantics and stronger "update existing lane vs create new lane" CEO policy beyond the current duplicate-lane guards.
+- [ ] Add richer packaging and result handoff logic on top of the current explicit CEO completion command.

@@ -1,10 +1,12 @@
 import type { ApiSession } from "./dashboard-api.js";
 import type { DashboardHttpRequest, DashboardHttpResponse } from "./dashboard-http.js";
 import { assertAllowedOrigin, createSecurityHeaders, validateRequestBodySize } from "../security/cors.js";
+import { TenantMembershipRequiredError } from "../db/supabase-repositories.js";
 import type { StorageOAuthProviderKind } from "../storage/storage-oauth-service.js";
 import { assertWealthFactoryResponse } from "../wealthfactory/response-guard.js";
 
 type StorageOAuthService = {
+  isProviderAvailable(providerKind: StorageOAuthProviderKind): boolean;
   begin(input: {
     tenantId: string;
     actorUserId: string;
@@ -12,7 +14,7 @@ type StorageOAuthService = {
     displayName: string;
     publicTarget: Record<string, unknown>;
   }): Promise<{ authorizationUrl: string; expiresAt: string }>;
-  complete(input: { state: string; code: string }): Promise<unknown>;
+  complete(input: { state: string; code: string; providerKind: StorageOAuthProviderKind }): Promise<unknown>;
 };
 
 type RateLimiter = {
@@ -61,13 +63,16 @@ export function createStorageOAuthHttpHandler(options: {
     if (!rateLimit.allowed) {
       return {
         status: 429,
-        headers: { ...securityHeaders, ...corsHeaders, "retry-after": String(Math.ceil((rateLimit.resetAt - Date.now()) / 1000)) },
+        headers: { ...securityHeaders, ...corsHeaders, "retry-after": String(retryAfterSeconds(rateLimit.resetAt)) },
         body: { code: "rate_limited" }
       };
     }
 
     try {
       if (route.action === "begin") {
+        if (!options.storageOAuth.isProviderAvailable(route.providerKind)) {
+          return { status: 503, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "storage_oauth_unavailable" } };
+        }
         const session = await options.authenticate({
           authorization: request.headers.authorization ?? "",
           ...(request.headers.cookie ? { cookie: request.headers.cookie } : {})
@@ -92,13 +97,37 @@ export function createStorageOAuthHttpHandler(options: {
       if (!state || !code) {
         return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_oauth_callback" } };
       }
-      const body = await options.storageOAuth.complete({ state, code });
+      const body = await options.storageOAuth.complete({ state, code, providerKind: route.providerKind });
       assertWealthFactoryResponse(body);
       return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
-    } catch {
-      return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "storage_authorization_failed" } };
+    } catch (error) {
+      if (error instanceof TenantMembershipRequiredError) {
+        return { status: 401, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "unauthorized" } };
+      }
+      if (error instanceof Error && error.message === "Storage provider is unavailable") {
+        return { status: 503, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "storage_oauth_unavailable" } };
+      }
+      if (
+        error instanceof Error &&
+        [
+          "Storage authorization failed",
+          "Storage authorization expired",
+          "Storage provider mismatch",
+          "Storage authorization did not return offline access",
+          "Storage authorization returned an invalid token response",
+          "Storage target cannot contain secret-like fields"
+        ].includes(error.message)
+      ) {
+        return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "storage_authorization_failed" } };
+      }
+
+      return { status: 500, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "service_unavailable" } };
     }
   };
+}
+
+function retryAfterSeconds(resetAt: number): number {
+  return Math.max(0, Math.ceil((resetAt - Date.now()) / 1000));
 }
 
 function matchStorageOAuthRoute(path: string): { providerKind: StorageOAuthProviderKind; action: "begin" | "callback" } | null {

@@ -8,6 +8,7 @@ import {
 import {
   HarnessCardCreationConflictError,
   HarnessCardProgressionConflictError,
+  HarnessRunCompletionConflictError,
   createHarnessBoardService
 } from "../src/harness/board-service.js";
 import { createInMemoryHarnessRepository } from "../src/harness/repository.js";
@@ -113,6 +114,29 @@ describe("harness board service", () => {
 
     await expect(disabledService.listBoardState({ authorization: "Bearer valid" })).rejects.toThrow(
       /Harness workflow is not enabled/
+    );
+  });
+
+  it("fails closed when multiple harness workflows are exposed without an explicit selector", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: {
+        listHarnessEligibleWorkflowIds: () => ["wf_connect_first_workflow", "wf_package_followup"],
+        getDefinition: vi.fn()
+      }
+    });
+
+    await expect(service.listBoardState({ authorization: "Bearer valid" })).rejects.toThrow(
+      /Harness workflow selector is ambiguous/
     );
   });
 
@@ -290,6 +314,57 @@ describe("harness board service", () => {
     expect(researcherCards[0]?.id).toBe(firstApproval.cardId);
   });
 
+  it("fails closed when proposal approval would duplicate an open persona deliverable lane", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief"
+    });
+
+    await repository.insertProposal({
+      id: "proposal_duplicate_lane_1",
+      runId: board.runId,
+      parentCardId: created.cardId,
+      requestedByCardId: created.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Refresh pricing anchors",
+      deliverableType: "research_brief",
+      status: "proposed"
+    });
+
+    await expect(
+      service.approveProposal({
+        authorization: "Bearer valid",
+        proposalId: "proposal_duplicate_lane_1"
+      })
+    ).rejects.toBeInstanceOf(HarnessCardCreationConflictError);
+  });
+
   it("fails closed when approval mutation is invoked without an atomic runner", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
@@ -414,6 +489,67 @@ describe("harness board service", () => {
 
     expect(second.cardId).toBe(first.cardId);
     expect(cfoCards).toHaveLength(1);
+  });
+
+  it("fails closed when another open card already owns the same deliverable lane", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+
+    await expect(
+      service.createTopLevelChildCard({
+        authorization: "Bearer valid",
+        persona: "analyst",
+        title: "Model the renewal downside",
+        deliverableType: "pricing_review"
+      })
+    ).rejects.toBeInstanceOf(HarnessCardCreationConflictError);
+  });
+
+  it("rejects child-card requests outside the approved persona and deliverable catalog", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await expect(
+      service.createTopLevelChildCard({
+        authorization: "Bearer valid",
+        persona: "rogue_persona",
+        title: "Open a surprise lane",
+        deliverableType: "surprise_output"
+      })
+    ).rejects.toBeInstanceOf(HarnessCardCreationConflictError);
   });
 
   it("fails closed when the direct child-card limit is reached", async () => {
@@ -727,6 +863,233 @@ describe("harness board service", () => {
     expect(run?.state).toBe("active");
   });
 
+  it("completes an assembling run through an explicit CEO assembly seam", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const audit = vi.fn().mockResolvedValue(undefined);
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      audit,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "done",
+      resultSummary: "Pricing floor is stable enough for launch."
+    });
+
+    await expect(
+      service.completeRun({
+        authorization: "Bearer valid",
+        runId: board.runId,
+        completionSummary: "The CEO packaged the final business-facing outcome."
+      })
+    ).resolves.toEqual({
+      runId: board.runId,
+      state: "done"
+    });
+
+    const run = await repository.findLatestRunForTenantWorkflow({
+      tenantId: "tenant_123",
+      workflowId: "wf_connect_first_workflow"
+    });
+    const cards = await repository.listCardsForRun(board.runId);
+    const ceoCard = cards.find((card) => card.persona === "ceo");
+    const ceoEvents = await repository.listEventsForCard(ceoCard!.id);
+
+    expect(run?.state).toBe("done");
+    expect(ceoEvents.at(-1)?.eventKind).toBe("result_recorded");
+    expect(ceoEvents.at(-1)?.payload).toEqual({
+      summary: "The CEO packaged the final business-facing outcome."
+    });
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "harness_run_completed",
+        metadata: expect.objectContaining({
+          fromState: "assembling",
+          toState: "done",
+          hasCompletionSummary: true
+        })
+      })
+    );
+    expect(audit.mock.calls.some(([event]) => JSON.stringify(event).includes("The CEO packaged the final business-facing outcome."))).toBe(
+      false
+    );
+  });
+
+  it("rejects completion before the run reaches assembling", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+
+    await expect(
+      service.completeRun({
+        authorization: "Bearer valid",
+        runId: board.runId,
+        completionSummary: "Too early."
+      })
+    ).rejects.toBeInstanceOf(HarnessRunCompletionConflictError);
+  });
+
+  it("treats repeated run completion as idempotent", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "done",
+      resultSummary: "Pricing floor is stable enough for launch."
+    });
+
+    await service.completeRun({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      completionSummary: "The CEO packaged the final business-facing outcome."
+    });
+
+    await expect(
+      service.completeRun({
+        authorization: "Bearer valid",
+        runId: board.runId,
+        completionSummary: "The CEO packaged the final business-facing outcome."
+      })
+    ).resolves.toEqual({
+      runId: board.runId,
+      state: "done"
+    });
+  });
+
+  it("keeps committed run completion successful when post-commit audit publishing fails", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      audit: vi.fn().mockRejectedValue(new Error("audit unavailable")),
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    try {
+      const board = await service.listBoardState({ authorization: "Bearer valid" });
+      const created = await service.createTopLevelChildCard({
+        authorization: "Bearer valid",
+        persona: "cfo",
+        title: "Pressure-test the pricing lane",
+        deliverableType: "pricing_review"
+      });
+      await service.advanceChildCard({
+        authorization: "Bearer valid",
+        cardId: created.cardId,
+        state: "working"
+      });
+      await service.advanceChildCard({
+        authorization: "Bearer valid",
+        cardId: created.cardId,
+        state: "done",
+        resultSummary: "Pricing floor is stable enough for launch."
+      });
+
+      await expect(
+        service.completeRun({
+          authorization: "Bearer valid",
+          runId: board.runId,
+          completionSummary: "The CEO packaged the final business-facing outcome."
+        })
+      ).resolves.toEqual({
+        runId: board.runId,
+        state: "done"
+      });
+
+      const run = await repository.findLatestRunForTenantWorkflow({
+        tenantId: "tenant_123",
+        workflowId: "wf_connect_first_workflow"
+      });
+      expect(run?.state).toBe("done");
+      expect(warn).toHaveBeenCalledWith(
+        "Harness audit publish failed after mutation commit",
+        expect.objectContaining({
+          eventType: "harness_run_completed",
+          entityId: board.runId,
+          message: "audit unavailable"
+        })
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("keeps a committed mutation successful when post-commit audit publishing fails", async () => {
     const repository = createInMemoryHarnessRepository();
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -919,6 +1282,66 @@ describe("harness board service", () => {
       tenantTwoService.approveProposal({
         authorization: "Bearer tenant-two",
         proposalId: "proposal_cross_tenant_1"
+      })
+    ).rejects.toBeInstanceOf(ApiAuthError);
+  });
+
+  it("fails closed when another tenant targets an already-approved proposal", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const tenantOneService = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+    const tenantTwoService = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_456",
+        userId: "user_456",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await tenantOneService.listBoardState({ authorization: "Bearer tenant-one" });
+    const created = await tenantOneService.createTopLevelChildCard({
+      authorization: "Bearer tenant-one",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+
+    await repository.insertProposal({
+      id: "proposal_cross_tenant_approved_1",
+      runId: board.runId,
+      parentCardId: created.cardId,
+      requestedByCardId: created.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief",
+      status: "approved",
+      approvedCardId: "card_existing_research"
+    });
+
+    await expect(
+      tenantTwoService.approveProposal({
+        authorization: "Bearer tenant-two",
+        proposalId: "proposal_cross_tenant_approved_1"
       })
     ).rejects.toBeInstanceOf(ApiAuthError);
   });

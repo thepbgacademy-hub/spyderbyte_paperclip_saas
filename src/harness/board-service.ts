@@ -3,7 +3,13 @@ import { randomUUID } from "node:crypto";
 import type { DurableAuditEvent } from "../audit/durable-audit.js";
 import type { HarnessCardEventRecord, HarnessCardRecord, HarnessRunRecord } from "./types.js";
 import { createHarnessCardEventRecord } from "./types.js";
-import { isHarnessCardState } from "./types.js";
+import {
+  isHarnessCardState,
+  isHarnessChildPersona,
+  isHarnessDeliverableType,
+  normalizeHarnessDeliverableType,
+  normalizeHarnessPersona
+} from "./types.js";
 import { deriveHarnessRunState, transitionHarnessCard, transitionHarnessRun } from "./state-machine.js";
 import { createHarnessRuntime } from "./runtime.js";
 import type { HarnessRepository } from "./repository.js";
@@ -88,6 +94,13 @@ export class HarnessCardProgressionConflictError extends Error {
   }
 }
 
+export class HarnessRunCompletionConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "HarnessRunCompletionConflictError";
+  }
+}
+
 type HarnessAudit = (event: DurableAuditEvent) => Promise<void>;
 
 export function createHarnessBoardService(options: {
@@ -148,6 +161,12 @@ export function createHarnessBoardService(options: {
         throw new Error("Harness card creation mutations require atomic execution");
       }
 
+      const normalizedPersona = normalizeHarnessPersona(request.persona);
+      const normalizedDeliverableType = normalizeHarnessDeliverableType(request.deliverableType);
+      if (!isHarnessChildPersona(normalizedPersona) || !isHarnessDeliverableType(normalizedDeliverableType)) {
+        throw new HarnessCardCreationConflictError("Harness child-card request is outside the approved workflow boundary");
+      }
+
       const result = await options.runAtomically(async (repository) => {
         const run = await getOrCreateCurrentRun({
           repository,
@@ -162,12 +181,15 @@ export function createHarnessBoardService(options: {
         const cards = await repository.listCardsForRun(run.id);
         const proposals = await repository.listProposalsForRun(run.id);
         const existingCard = findMatchingOpenChildCard(cards, {
-          persona: request.persona,
+          persona: normalizedPersona,
           title: request.title,
-          deliverableType: request.deliverableType
+          deliverableType: normalizedDeliverableType
         });
         if (existingCard) {
           return { cardId: existingCard.id };
+        }
+        if (findOpenChildCardByDeliverableType(cards, normalizedDeliverableType)) {
+          throw new HarnessCardCreationConflictError("Harness direct child-card deliverable lane is already open");
         }
         if (countOpenChildCards(cards) >= MAX_OPEN_CHILD_CARDS) {
           throw new HarnessCardCreationConflictError("Harness direct child-card limit reached for this run");
@@ -175,9 +197,9 @@ export function createHarnessBoardService(options: {
 
         runtime.resumeRun({ run, cards, proposals });
         const card = runtime.createApprovedChildCard(run.id, {
-          persona: request.persona,
+          persona: normalizedPersona,
           title: request.title,
-          deliverableType: request.deliverableType
+          deliverableType: normalizedDeliverableType
         });
 
         await repository.insertCard(card);
@@ -236,19 +258,33 @@ export function createHarnessBoardService(options: {
         if (!proposal) {
           throw new Error("Harness proposal was not found");
         }
-        if (proposal.status === "approved" && proposal.approvedCardId) {
-          return { cardId: proposal.approvedCardId };
-        }
 
         const run = await repository.getRun(proposal.runId);
         if (!run || run.tenantId !== access.session.tenantId) {
           throw new ApiAuthError();
+        }
+        if (proposal.status === "approved" && proposal.approvedCardId) {
+          return { cardId: proposal.approvedCardId };
+        }
+        if (
+          !isHarnessChildPersona(normalizeHarnessPersona(proposal.persona)) ||
+          !isHarnessDeliverableType(normalizeHarnessDeliverableType(proposal.deliverableType))
+        ) {
+          throw new HarnessCardCreationConflictError("Harness proposal is outside the approved workflow boundary");
         }
 
         const [cards, proposals] = await Promise.all([
           repository.listCardsForRun(run.id),
           repository.listProposalsForRun(run.id)
         ]);
+        if (
+          findOpenChildCardByPersonaDeliverable(cards, {
+            persona: proposal.persona,
+            deliverableType: proposal.deliverableType
+          })
+        ) {
+          throw new HarnessCardCreationConflictError("Harness proposal approval would duplicate an open persona lane");
+        }
         runtime.resumeRun({
           run,
           cards,
@@ -429,6 +465,107 @@ export function createHarnessBoardService(options: {
 
       await publishHarnessAuditEvents(options.audit, result.auditEvents ?? []);
       return { cardId: result.cardId, state: result.state };
+    },
+
+    async completeRun(request: {
+      authorization: string;
+      cookie?: string;
+      runId: string;
+      completionSummary: string;
+    }): Promise<{ runId: string; state: "done" }> {
+      const access = await authorizeHarnessRequest({
+        authenticate: options.authenticate,
+        requireTenantMember: options.requireTenantMember,
+        requireActivePackageInstall: options.requireActivePackageInstall,
+        workflowRegistry: options.workflowRegistry,
+        authorization: request.authorization,
+        ...(request.cookie ? { cookie: request.cookie } : {})
+      });
+
+      if (!options.runAtomically) {
+        throw new Error("Harness completion mutations require atomic execution");
+      }
+
+      const result = await options.runAtomically(async (repository) => {
+        const trimmedCompletionSummary = request.completionSummary.trim();
+        if (trimmedCompletionSummary.length === 0) {
+          throw new HarnessRunCompletionConflictError("Harness run completion summary is required");
+        }
+        const run = await repository.getRun(request.runId);
+        if (!run || run.tenantId !== access.session.tenantId) {
+          throw new ApiAuthError();
+        }
+        if (run.state === "done") {
+          return { runId: run.id, state: "done" as const };
+        }
+
+        const [cards, proposals] = await Promise.all([
+          repository.listCardsForRun(run.id),
+          repository.listProposalsForRun(run.id)
+        ]);
+        const derivedState = deriveHarnessRunState({
+          run,
+          cards,
+          proposals
+        });
+        if (derivedState !== "assembling") {
+          throw new HarnessRunCompletionConflictError("Harness run is not ready for final assembly");
+        }
+
+        let currentRun = run;
+        if (run.state !== "assembling") {
+          const reconciledRun = await repository.updateRunState({
+            runId: run.id,
+            state: "assembling"
+          });
+          if (!reconciledRun) {
+            throw new HarnessRunCompletionConflictError("Harness run reconciliation conflicted before completion");
+          }
+          currentRun = reconciledRun;
+        }
+
+        const ceoCard = cards.find((card) => card.persona === "ceo" && card.parentCardId === null);
+        if (!ceoCard) {
+          throw new HarnessRunCompletionConflictError("Harness run is missing the CEO assembly lane");
+        }
+
+        await repository.insertEvent(
+          createHarnessCardEventRecord({
+            cardId: ceoCard.id,
+            eventKind: "result_recorded",
+            payload: { summary: trimmedCompletionSummary }
+          })
+        );
+        const completedRun = await repository.updateRunState({
+          runId: run.id,
+          state: "done"
+        });
+        if (!completedRun) {
+          throw new HarnessRunCompletionConflictError("Harness run completion conflicted");
+        }
+
+        return {
+          runId: completedRun.id,
+          state: "done" as const,
+          auditEvents: [
+            createHarnessAuditEvent({
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              eventType: "harness_run_completed",
+              entityId: completedRun.id,
+              metadata: {
+                fromState: currentRun.state,
+                toState: completedRun.state,
+                ceoCardId: ceoCard.id,
+                hasCompletionSummary: true
+              }
+            })
+          ]
+        };
+      });
+
+      await publishHarnessAuditEvents(options.audit, result.auditEvents ?? []);
+      return { runId: result.runId, state: result.state };
     }
   };
 }
@@ -449,7 +586,14 @@ async function authorizeHarnessRequest(input: {
     throw new ApiAuthError();
   }
 
-  const workflowId = input.workflowRegistry.listHarnessEligibleWorkflowIds()[0];
+  const workflowIds = input.workflowRegistry.listHarnessEligibleWorkflowIds();
+  if (workflowIds.length === 0) {
+    throw new Error("Harness workflow is not enabled");
+  }
+  if (workflowIds.length > 1) {
+    throw new Error("Harness workflow selector is ambiguous");
+  }
+  const workflowId = workflowIds[0];
   if (!workflowId) {
     throw new Error("Harness workflow is not enabled");
   }
@@ -688,6 +832,31 @@ function findMatchingOpenChildCard(
       isOpenCardState(card.state) &&
       card.persona === target.persona &&
       card.title === target.title &&
+      card.deliverableType === target.deliverableType
+  );
+}
+
+function findOpenChildCardByDeliverableType(
+  cards: readonly HarnessCardRecord[],
+  deliverableType: string
+): HarnessCardRecord | undefined {
+  return cards.find(
+    (card) =>
+      card.persona !== "ceo" &&
+      isOpenCardState(card.state) &&
+      card.deliverableType === deliverableType
+  );
+}
+
+function findOpenChildCardByPersonaDeliverable(
+  cards: readonly HarnessCardRecord[],
+  target: { persona: string; deliverableType: string }
+): HarnessCardRecord | undefined {
+  return cards.find(
+    (card) =>
+      card.persona !== "ceo" &&
+      isOpenCardState(card.state) &&
+      card.persona === target.persona &&
       card.deliverableType === target.deliverableType
   );
 }

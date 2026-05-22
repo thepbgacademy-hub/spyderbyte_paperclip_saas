@@ -14,6 +14,7 @@ describe("harness HTTP boundary", () => {
       createTopLevelChildCard,
       advanceChildCard: vi.fn(),
       approveProposal: vi.fn(),
+      completeRun: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
     });
 
@@ -79,6 +80,7 @@ describe("harness HTTP boundary", () => {
       createTopLevelChildCard: vi.fn(),
       advanceChildCard: vi.fn(),
       approveProposal: vi.fn(),
+      completeRun: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
     });
 
@@ -114,6 +116,7 @@ describe("harness HTTP boundary", () => {
       createTopLevelChildCard,
       advanceChildCard: vi.fn(),
       approveProposal: vi.fn(),
+      completeRun: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
     });
 
@@ -140,6 +143,7 @@ describe("harness HTTP boundary", () => {
       createTopLevelChildCard,
       advanceChildCard: vi.fn(),
       approveProposal: vi.fn(),
+      completeRun: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: false, remaining: 0, resetAt: 1 }) }
     });
 
@@ -152,6 +156,7 @@ describe("harness HTTP boundary", () => {
     });
 
     expect(response.status).toBe(429);
+    expect(response.headers["retry-after"]).toBe("0");
     expect(listBoardState).not.toHaveBeenCalled();
   });
 
@@ -162,6 +167,7 @@ describe("harness HTTP boundary", () => {
       createTopLevelChildCard: vi.fn(),
       advanceChildCard: vi.fn(),
       approveProposal: vi.fn(),
+      completeRun: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
     });
 
@@ -189,6 +195,7 @@ describe("harness HTTP boundary", () => {
       createTopLevelChildCard: vi.fn(),
       advanceChildCard: vi.fn(),
       approveProposal,
+      completeRun: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
     });
 
@@ -213,6 +220,35 @@ describe("harness HTTP boundary", () => {
     expect(response.body).toEqual({ cardId: "card_new_1" });
   });
 
+  it("returns 404 for unknown proposal paths without burning the approval rate-limit bucket", async () => {
+    const rateLimiter = { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) };
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      approveProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      rateLimiter
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/proposals/proposal_1/reject",
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        "content-type": "application/json"
+      },
+      body: {},
+      bodyByteLength: 2,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(404);
+    expect(rateLimiter.consume).not.toHaveBeenCalled();
+  });
+
   it("creates a CEO direct child card through the single guarded mutation route", async () => {
     const createTopLevelChildCard = vi.fn().mockResolvedValue({ cardId: "card_new_2" });
     const handler = createHarnessHttpHandler({
@@ -221,13 +257,14 @@ describe("harness HTTP boundary", () => {
       approveProposal: vi.fn(),
       createTopLevelChildCard,
       advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
     });
 
     const response = await handler({
       method: "POST",
       path: "/api/harness/cards",
-      query: {
+      body: {
         persona: "cfo",
         title: "Pressure-test the pricing lane",
         deliverableType: "pricing_review"
@@ -235,9 +272,10 @@ describe("harness HTTP boundary", () => {
       headers: {
         origin: "https://portal.wealthfactory.test",
         authorization: "Bearer valid",
-        cookie: "wf_session=abc"
+        cookie: "wf_session=abc",
+        "content-type": "application/json"
       },
-      bodyByteLength: 0,
+      bodyByteLength: 89,
       ip: "203.0.113.10"
     });
 
@@ -252,6 +290,39 @@ describe("harness HTTP boundary", () => {
     expect(response.body).toEqual({ cardId: "card_new_2" });
   });
 
+  it("rejects out-of-bound child-card personas and deliverables at the HTTP seam", async () => {
+    const createTopLevelChildCard = vi.fn();
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      approveProposal: vi.fn(),
+      createTopLevelChildCard,
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/cards",
+      body: {
+        persona: "rogue_persona",
+        title: "Open a surprise lane",
+        deliverableType: "surprise_output"
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        "content-type": "application/json"
+      },
+      bodyByteLength: 84,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(400);
+    expect(createTopLevelChildCard).not.toHaveBeenCalled();
+  });
+
   it("maps mutation route failures without exposing backend details", async () => {
     const createTopLevelChildCard = vi
       .fn()
@@ -264,22 +335,24 @@ describe("harness HTTP boundary", () => {
       approveProposal: vi.fn(),
       createTopLevelChildCard,
       advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
     });
 
     const baseRequest = {
       method: "POST" as const,
       path: "/api/harness/cards",
-      query: {
+      body: {
         persona: "cfo",
         title: "Pressure-test the pricing lane",
         deliverableType: "pricing_review"
       },
       headers: {
         origin: "https://portal.wealthfactory.test",
-        authorization: "Bearer valid"
+        authorization: "Bearer valid",
+        "content-type": "application/json"
       },
-      bodyByteLength: 0,
+      bodyByteLength: 89,
       ip: "203.0.113.10"
     };
 
@@ -302,21 +375,23 @@ describe("harness HTTP boundary", () => {
       approveProposal: vi.fn(),
       createTopLevelChildCard: vi.fn(),
       advanceChildCard,
+      completeRun: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
     });
 
     const response = await handler({
       method: "POST",
       path: "/api/harness/cards/card_new_2/advance",
-      query: {
+      body: {
         state: "working"
       },
       headers: {
         origin: "https://portal.wealthfactory.test",
         authorization: "Bearer valid",
-        cookie: "wf_session=abc"
+        cookie: "wf_session=abc",
+        "content-type": "application/json"
       },
-      bodyByteLength: 0,
+      bodyByteLength: 19,
       ip: "203.0.113.10"
     });
 
@@ -342,20 +417,22 @@ describe("harness HTTP boundary", () => {
       approveProposal: vi.fn(),
       createTopLevelChildCard: vi.fn(),
       advanceChildCard,
+      completeRun: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
     });
 
     const baseRequest = {
       method: "POST" as const,
       path: "/api/harness/cards/card_new_2/advance",
-      query: {
+      body: {
         state: "working"
       },
       headers: {
         origin: "https://portal.wealthfactory.test",
-        authorization: "Bearer valid"
+        authorization: "Bearer valid",
+        "content-type": "application/json"
       },
-      bodyByteLength: 0,
+      bodyByteLength: 19,
       ip: "203.0.113.10"
     };
 
@@ -370,7 +447,7 @@ describe("harness HTTP boundary", () => {
     expect(serviceUnavailable.body).toEqual({ code: "service_unavailable" });
   });
 
-  it("rejects unsupported child-card states and query-string result summaries as invalid client input", async () => {
+  it("rejects unsupported child-card states while allowing parsed-body result summaries", async () => {
     const advanceChildCard = vi.fn();
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
@@ -378,40 +455,81 @@ describe("harness HTTP boundary", () => {
       approveProposal: vi.fn(),
       createTopLevelChildCard: vi.fn(),
       advanceChildCard,
+      completeRun: vi.fn(),
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
     });
 
     const invalidState = await handler({
       method: "POST",
       path: "/api/harness/cards/card_new_2/advance",
-      query: {
+      body: {
         state: "invented"
       },
       headers: {
         origin: "https://portal.wealthfactory.test",
-        authorization: "Bearer valid"
+        authorization: "Bearer valid",
+        "content-type": "application/json"
       },
-      bodyByteLength: 0,
+      bodyByteLength: 20,
       ip: "203.0.113.10"
     });
 
     const querySummary = await handler({
       method: "POST",
       path: "/api/harness/cards/card_new_2/advance",
-      query: {
+      body: {
         state: "done",
         resultSummary: "Keep this off the URL surface."
       },
       headers: {
         origin: "https://portal.wealthfactory.test",
-        authorization: "Bearer valid"
+        authorization: "Bearer valid",
+        "content-type": "application/json"
       },
-      bodyByteLength: 0,
+      bodyByteLength: 64,
       ip: "203.0.113.10"
     });
 
     expect(invalidState.status).toBe(400);
-    expect(querySummary.status).toBe(400);
-    expect(advanceChildCard).not.toHaveBeenCalled();
+    expect(querySummary.status).toBe(200);
+    expect(advanceChildCard).toHaveBeenCalledTimes(1);
+  });
+
+  it("completes an assembling run through the guarded write route", async () => {
+    const completeRun = vi.fn().mockResolvedValue({ runId: "run_123", state: "done" });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      approveProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/complete",
+      body: {
+        completionSummary: "The CEO packaged the final business-facing outcome."
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        cookie: "wf_session=abc",
+        "content-type": "application/json"
+      },
+      bodyByteLength: 77,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(completeRun).toHaveBeenCalledWith({
+      authorization: "Bearer valid",
+      cookie: "wf_session=abc",
+      runId: "run_123",
+      completionSummary: "The CEO packaged the final business-facing outcome."
+    });
+    expect(response.body).toEqual({ runId: "run_123", state: "done" });
   });
 });

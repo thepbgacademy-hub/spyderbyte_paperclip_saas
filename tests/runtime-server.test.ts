@@ -7,6 +7,8 @@ import { createDashboardRuntime, createNodeRequestListener, loadRuntimeEnv } fro
 import { createDurableAuditSink } from "../src/audit/durable-audit.js";
 import { createHarnessBoardService } from "../src/harness/board-service.js";
 
+const TEST_SUPABASE_DB_URL = "postgresql://postgres.tenant:placeholder-password@db.invalid:5432/postgres";
+
 vi.mock("../src/db/postgres-client.js", () => ({
   createPgPool: vi.fn(() => ({
     query: vi.fn(),
@@ -101,7 +103,8 @@ vi.mock("../src/harness/board-service.js", () => ({
     }),
     approveProposal: vi.fn().mockResolvedValue({ cardId: "card_approved_1" }),
     createTopLevelChildCard: vi.fn().mockResolvedValue({ cardId: "card_created_1" }),
-    advanceChildCard: vi.fn().mockResolvedValue({ cardId: "card_created_1", state: "working" })
+    advanceChildCard: vi.fn().mockResolvedValue({ cardId: "card_created_1", state: "working" }),
+    completeRun: vi.fn().mockResolvedValue({ runId: "run_123", state: "done" })
   }))
 }));
 
@@ -143,14 +146,14 @@ describe("runtime server", () => {
   it("loads explicit split-origin runtime settings", () => {
     expect(
       loadRuntimeEnv({
-        SUPABASE_DB_URL: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        SUPABASE_DB_URL: TEST_SUPABASE_DB_URL,
         SUPABASE_DB_SSL: "false",
         WF_ALLOWED_ORIGINS: "https://www.spyderbyte.cloud, https://portal.spyderbyte.cloud",
         WF_API_PORT: "8081",
         WF_VAULT_MASTER_KEY: "test-master-key-with-enough-length"
       })
     ).toMatchObject({
-      supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+      supabaseDbUrl: TEST_SUPABASE_DB_URL,
       supabaseDbSsl: "false",
       allowedOrigins: ["https://www.spyderbyte.cloud", "https://portal.spyderbyte.cloud"],
       apiPort: 8081,
@@ -161,7 +164,7 @@ describe("runtime server", () => {
   it("rejects wildcard portal origins for authenticated APIs", () => {
     expect(() =>
       loadRuntimeEnv({
-        SUPABASE_DB_URL: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        SUPABASE_DB_URL: TEST_SUPABASE_DB_URL,
         WF_ALLOWED_ORIGINS: "*",
         WF_VAULT_MASTER_KEY: "test-master-key-with-enough-length"
       })
@@ -171,10 +174,32 @@ describe("runtime server", () => {
   it("requires a vault master key for runtime credential storage", () => {
     expect(() =>
       loadRuntimeEnv({
-        SUPABASE_DB_URL: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        SUPABASE_DB_URL: TEST_SUPABASE_DB_URL,
         WF_ALLOWED_ORIGINS: "https://www.spyderbyte.cloud"
       })
     ).toThrow(/WF_VAULT_MASTER_KEY/);
+  });
+
+  it("requires the storage OAuth redirect origin to match an allowed portal origin", () => {
+    expect(() =>
+      loadRuntimeEnv({
+        SUPABASE_DB_URL: TEST_SUPABASE_DB_URL,
+        WF_ALLOWED_ORIGINS: "https://portal.spyderbyte.cloud",
+        WF_STORAGE_OAUTH_REDIRECT_ORIGIN: "https://api.spyderbyte.cloud",
+        WF_VAULT_MASTER_KEY: "test-master-key-with-enough-length"
+      })
+    ).toThrow(/WF_STORAGE_OAUTH_REDIRECT_ORIGIN/);
+  });
+
+  it("normalizes the accepted storage OAuth redirect origin before storing it in runtime config", () => {
+    expect(
+      loadRuntimeEnv({
+        SUPABASE_DB_URL: TEST_SUPABASE_DB_URL,
+        WF_ALLOWED_ORIGINS: "https://portal.spyderbyte.cloud",
+        WF_STORAGE_OAUTH_REDIRECT_ORIGIN: "https://portal.spyderbyte.cloud/",
+        WF_VAULT_MASTER_KEY: "test-master-key-with-enough-length"
+      }).storageOAuthRedirectOrigin
+    ).toBe("https://portal.spyderbyte.cloud");
   });
 
   it("adapts Node requests to the guarded dashboard HTTP handler", async () => {
@@ -207,16 +232,66 @@ describe("runtime server", () => {
       },
       query: { tab: "runs" },
       bodyByteLength: 0,
-      ip: "127.0.0.1"
+      ip: "203.0.113.7"
     });
     expect(response.statusCode).toBe(200);
     expect(response.body).toBe(JSON.stringify({ ok: true }));
   });
 
+  it("rejects oversized chunked request bodies based on bytes actually read", async () => {
+    const handler = vi.fn();
+    const request = createRequest({
+      method: "POST",
+      url: "/api/harness/cards",
+      headers: {
+        authorization: "Bearer token",
+        origin: "https://www.spyderbyte.cloud",
+        "content-type": "application/json"
+      },
+      bodyChunks: [Buffer.alloc(10_000, "a"), Buffer.alloc(8_000, "b")]
+    });
+    const response = createResponse();
+
+    createNodeRequestListener(handler)(request as unknown as IncomingMessage, response as unknown as ServerResponse);
+    await response.finished;
+
+    expect(handler).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(413);
+    expect(response.body).toBe(JSON.stringify({ code: "request_rejected" }));
+  });
+
+  it("keeps security and CORS headers on malformed JSON adapter rejections", async () => {
+    const handler = vi.fn();
+    const request = createRequest({
+      method: "POST",
+      url: "/api/harness/cards",
+      headers: {
+        authorization: "Bearer token",
+        origin: "https://www.spyderbyte.cloud",
+        "content-type": "application/json"
+      },
+      body: "{not-json",
+      remoteAddress: "127.0.0.1"
+    });
+    const response = createResponse();
+
+    createNodeRequestListener(handler, ["https://www.spyderbyte.cloud"])(
+      request as unknown as IncomingMessage,
+      response as unknown as ServerResponse
+    );
+    await response.finished;
+
+    expect(handler).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(400);
+    expect(response.headers["access-control-allow-origin"]).toBe("https://www.spyderbyte.cloud");
+    expect(response.headers["x-content-type-options"]).toBe("nosniff");
+    expect(response.body).toBe(JSON.stringify({ code: "invalid_request" }));
+  });
+
   it("routes health checks through the runtime readiness handler", async () => {
     const runtime = createDashboardRuntime({
       env: {
-        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
         supabaseDbSsl: "false",
         allowedOrigins: ["https://www.spyderbyte.cloud"],
         apiPort: 8081,
@@ -247,7 +322,7 @@ describe("runtime server", () => {
   it("routes harness board requests through the new harness HTTP surface", async () => {
     const runtime = createDashboardRuntime({
       env: {
-        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
         supabaseDbSsl: "false",
         allowedOrigins: ["https://www.spyderbyte.cloud"],
         apiPort: 8081,
@@ -281,7 +356,7 @@ describe("runtime server", () => {
   it("routes the harness direct-child mutation through the runtime harness surface", async () => {
     const runtime = createDashboardRuntime({
       env: {
-        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
         supabaseDbSsl: "false",
         allowedOrigins: ["https://www.spyderbyte.cloud"],
         apiPort: 8081,
@@ -293,12 +368,18 @@ describe("runtime server", () => {
 
     const request = createRequest({
       method: "POST",
-      url: "/api/harness/cards?persona=cfo&title=Pressure-test%20the%20pricing%20lane&deliverableType=pricing_review",
+      url: "/api/harness/cards",
       headers: {
         authorization: "Bearer token",
         origin: "https://www.spyderbyte.cloud",
-        "content-length": "0"
-      }
+        "content-length": "89",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        persona: "cfo",
+        title: "Pressure-test the pricing lane",
+        deliverableType: "pricing_review"
+      })
     });
     const response = createResponse();
 
@@ -313,7 +394,7 @@ describe("runtime server", () => {
   it("routes harness child-card progression through the runtime harness surface", async () => {
     const runtime = createDashboardRuntime({
       env: {
-        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
         supabaseDbSsl: "false",
         allowedOrigins: ["https://www.spyderbyte.cloud"],
         apiPort: 8081,
@@ -325,12 +406,14 @@ describe("runtime server", () => {
 
     const request = createRequest({
       method: "POST",
-      url: "/api/harness/cards/card_created_1/advance?state=working",
+      url: "/api/harness/cards/card_created_1/advance",
       headers: {
         authorization: "Bearer token",
         origin: "https://www.spyderbyte.cloud",
-        "content-length": "0"
-      }
+        "content-length": "19",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ state: "working" })
     });
     const response = createResponse();
 
@@ -343,10 +426,47 @@ describe("runtime server", () => {
     await runtime.close();
   });
 
+  it("routes harness completion through the runtime harness surface", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() }
+    });
+
+    const request = createRequest({
+      method: "POST",
+      url: "/api/harness/runs/run_123/complete",
+      headers: {
+        authorization: "Bearer token",
+        origin: "https://www.spyderbyte.cloud",
+        "content-length": "69",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        completionSummary: "The CEO packaged the final business-facing outcome."
+      })
+    });
+    const response = createResponse();
+
+    runtime.server.emit("request", request as unknown as IncomingMessage, response as unknown as ServerResponse);
+    await response.finished;
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('"runId":"run_123"');
+    expect(response.body).toContain('"state":"done"');
+    await runtime.close();
+  });
+
   it("wires the durable audit sink into the harness board service", async () => {
     const runtime = createDashboardRuntime({
       env: {
-        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
         supabaseDbSsl: "false",
         allowedOrigins: ["https://www.spyderbyte.cloud"],
         apiPort: 8081,
@@ -370,7 +490,7 @@ describe("runtime server", () => {
     const { createQueueOutboxPump } = await import("../src/workflows/queue-outbox-pump.js");
     const runtime = createDashboardRuntime({
       env: {
-        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
         supabaseDbSsl: "false",
         allowedOrigins: ["https://www.spyderbyte.cloud"],
         apiPort: 8081,
@@ -396,7 +516,7 @@ describe("runtime server", () => {
     const { createAcidSecretRevokeService } = await import("../src/secrets/acid-secret-revoke-service.js");
     const runtime = createDashboardRuntime({
       env: {
-        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
         supabaseDbSsl: "false",
         allowedOrigins: ["https://www.spyderbyte.cloud"],
         apiPort: 8081,
@@ -429,7 +549,7 @@ describe("runtime server", () => {
 
     const runtime = createDashboardRuntime({
       env: {
-        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
         supabaseDbSsl: "false",
         allowedOrigins: ["https://www.spyderbyte.cloud"],
         apiPort: 8081,
@@ -488,7 +608,7 @@ describe("runtime server", () => {
   it("wires customer-owned storage OAuth when provider clients are configured", async () => {
     const runtime = createDashboardRuntime({
       env: {
-        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
         supabaseDbSsl: "false",
         allowedOrigins: ["https://www.spyderbyte.cloud"],
         apiPort: 8081,
@@ -502,13 +622,85 @@ describe("runtime server", () => {
     });
 
     expect(runtime.storageOAuth).toEqual(expect.objectContaining({ begin: expect.any(Function), complete: expect.any(Function) }));
+    expect(runtime.storageOAuth?.isProviderAvailable("google_drive")).toBe(true);
+    expect(runtime.storageOAuth?.isProviderAvailable("dropbox")).toBe(true);
+    await runtime.close();
+  });
+
+  it("keeps storage OAuth available for configured providers and returns structured 503s for missing ones", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {},
+        storageOAuthRedirectOrigin: "https://api.spyderbyte.cloud",
+        googleDriveClientId: "google-client"
+      },
+      auth: { authenticate: vi.fn() }
+    });
+
+    expect(runtime.storageOAuth?.isProviderAvailable("google_drive")).toBe(true);
+    expect(runtime.storageOAuth?.isProviderAvailable("dropbox")).toBe(false);
+
+    const request = createRequest({
+      method: "GET",
+      url: "/api/storage/oauth/dropbox/begin",
+      headers: {
+        authorization: "Bearer token",
+        origin: "https://www.spyderbyte.cloud",
+        "content-length": "0"
+      }
+    });
+    const response = createResponse();
+
+    runtime.server.emit("request", request as unknown as IncomingMessage, response as unknown as ServerResponse);
+    await response.finished;
+
+    expect(response.statusCode).toBe(503);
+    expect(response.headers["access-control-allow-origin"]).toBe("https://www.spyderbyte.cloud");
+    expect(response.headers["x-content-type-options"]).toBe("nosniff");
+    expect(response.body).toBe(JSON.stringify({ code: "storage_oauth_unavailable" }));
+    await runtime.close();
+  });
+
+  it("returns a structured 503 for unavailable storage OAuth callback paths even without Origin", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() }
+    });
+
+    const request = createRequest({
+      method: "GET",
+      url: "/api/storage/oauth/dropbox/callback?state=opaque&code=oauth-code",
+      headers: {
+        "content-length": "0"
+      }
+    });
+    const response = createResponse();
+
+    runtime.server.emit("request", request as unknown as IncomingMessage, response as unknown as ServerResponse);
+    await response.finished;
+
+    expect(response.statusCode).toBe(503);
+    expect(response.headers["x-content-type-options"]).toBe("nosniff");
+    expect(response.body).toBe(JSON.stringify({ code: "storage_oauth_unavailable" }));
     await runtime.close();
   });
 
   it("serves an authenticated HTML shell with bootstrap JSON when a web entry URL is configured", async () => {
     const runtime = createDashboardRuntime({
       env: {
-        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
         supabaseDbSsl: "false",
         allowedOrigins: ["https://www.spyderbyte.cloud"],
         apiPort: 8081,
@@ -579,7 +771,7 @@ describe("runtime server", () => {
     });
     const runtime = createDashboardRuntime({
       env: {
-        supabaseDbUrl: "postgresql://postgres.tenant:pw@187.77.19.83:5432/postgres",
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
         supabaseDbSsl: "false",
         allowedOrigins: ["https://www.spyderbyte.cloud"],
         apiPort: 8081,
@@ -612,13 +804,32 @@ describe("runtime server", () => {
   });
 });
 
-function createRequest(input: { method: string; url: string; headers: Record<string, string> }) {
-  return Object.assign(new EventEmitter(), {
+function createRequest(input: {
+  method: string;
+  url: string;
+  headers: Record<string, string>;
+  body?: string;
+  bodyChunks?: readonly (string | Buffer)[];
+  remoteAddress?: string;
+}) {
+  const request = Object.assign(new EventEmitter(), {
     method: input.method,
     url: input.url,
     headers: input.headers,
-    socket: { remoteAddress: "127.0.0.1" }
+    socket: { remoteAddress: input.remoteAddress ?? "127.0.0.1" },
+    resume: vi.fn()
   });
+  process.nextTick(() => {
+    if (input.bodyChunks) {
+      for (const chunk of input.bodyChunks) {
+        request.emit("data", chunk);
+      }
+    } else if (input.body) {
+      request.emit("data", Buffer.from(input.body));
+    }
+    request.emit("end");
+  });
+  return request;
 }
 
 function createResponse() {

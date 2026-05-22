@@ -1,4 +1,5 @@
 import { assertAllowedOrigin, createSecurityHeaders, validateRequestBodySize } from "../security/cors.js";
+import { ApiAuthError } from "./dashboard-api.js";
 import { assertWealthFactoryResponse } from "../wealthfactory/response-guard.js";
 
 export type DashboardHttpRequest = {
@@ -6,6 +7,7 @@ export type DashboardHttpRequest = {
   path: string;
   headers: Record<string, string | undefined>;
   query?: Record<string, string>;
+  body?: unknown;
   bodyByteLength: number;
   ip: string;
 };
@@ -63,7 +65,7 @@ export function createDashboardHttpHandler(options: {
     if (!rateLimit.allowed) {
       return {
         status: 429,
-        headers: { ...securityHeaders, ...corsHeaders, "retry-after": String(Math.ceil((rateLimit.resetAt - Date.now()) / 1000)) },
+        headers: { ...securityHeaders, ...corsHeaders, "retry-after": String(retryAfterSeconds(rateLimit.resetAt)) },
         body: { code: "rate_limited" }
       };
     }
@@ -75,8 +77,16 @@ export function createDashboardHttpHandler(options: {
       });
       assertWealthFactoryResponse(body);
       return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
-    } catch {
-      return { status: 401, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "unauthorized" } };
+    } catch (error) {
+      if (error instanceof ApiAuthError) {
+        return { status: 401, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "unauthorized" } };
+      }
+
+      return { status: 500, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "service_unavailable" } };
     }
   };
+}
+
+function retryAfterSeconds(resetAt: number): number {
+  return Math.max(0, Math.ceil((resetAt - Date.now()) / 1000));
 }
