@@ -71,5 +71,6 @@ This file tracks the new harness subproject only.
 - [x] Add explicit packaging policy for how recommendations, objections, and deferred governance items should shape the tenant-facing final handoff.
 - [ ] Decide whether denied governance items should remain derived read-model packaging only or become exportable board-memory artifacts later.
 - [x] Decide whether completed-lane runs should reject or boundedly reopen new follow-on proposals instead of falling back to generic lane-creation rules.
-- [ ] Decide whether a future explicit "start a fresh board cycle" command should reopen follow-on work from `completed_lanes_only` deferrals instead of keeping that recovery path manual.
+- [x] Decide whether a future explicit "start a fresh board cycle" command should reopen follow-on work from `completed_lanes_only` deferrals instead of keeping that recovery path manual.
+- [ ] Deepen the fresh-cycle policy so the CEO can choose between reopening only deferred follow-on work versus starting a completely clean board cycle when no follow-through should carry forward.
 - [ ] Define the split between small harness continuity memory and larger tenant-owned long memory in Obsidian, including what gets written there and what must remain Wealth Factory runtime truth.

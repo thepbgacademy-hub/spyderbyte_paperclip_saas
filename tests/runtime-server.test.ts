@@ -105,9 +105,11 @@ vi.mock("../src/harness/board-service.js", () => ({
       recentDecisions: []
     }),
     approveProposal: vi.fn().mockResolvedValue({ cardId: "card_approved_1" }),
+    decideProposal: vi.fn().mockResolvedValue({ status: "approved", cardId: "card_approved_1" }),
     createTopLevelChildCard: vi.fn().mockResolvedValue({ cardId: "card_created_1" }),
     advanceChildCard: vi.fn().mockResolvedValue({ cardId: "card_created_1", state: "working" }),
-    completeRun: vi.fn().mockResolvedValue({ runId: "run_123", state: "done" })
+    completeRun: vi.fn().mockResolvedValue({ runId: "run_123", state: "done" }),
+    startFreshCycle: vi.fn().mockResolvedValue({ runId: "run_124", reopenedProposalCount: 1 })
   }))
 }));
 
@@ -463,6 +465,39 @@ describe("runtime server", () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('"runId":"run_123"');
     expect(response.body).toContain('"state":"done"');
+    await runtime.close();
+  });
+
+  it("routes harness fresh-cycle reopening through the runtime harness surface", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() }
+    });
+
+    const request = createRequest({
+      method: "POST",
+      url: "/api/harness/runs/run_123/fresh-cycle",
+      headers: {
+        authorization: "Bearer token",
+        origin: "https://www.spyderbyte.cloud",
+        "content-length": "0"
+      }
+    });
+    const response = createResponse();
+
+    runtime.server.emit("request", request as unknown as IncomingMessage, response as unknown as ServerResponse);
+    await response.finished;
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('"runId":"run_124"');
+    expect(response.body).toContain('"reopenedProposalCount":1');
     await runtime.close();
   });
 

@@ -263,6 +263,7 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
     advanceChildCard: harnessBoardApi.advanceChildCard,
     decideProposal: harnessBoardApi.decideProposal,
     completeRun: harnessBoardApi.completeRun,
+    startFreshCycle: harnessBoardApi.startFreshCycle,
     rateLimiter: createPostgresFixedWindowRateLimiter({ runner: transactionRunner, limit: 120, windowMs: 60_000 })
   });
   const healthHandler = createHealthHttpHandler({

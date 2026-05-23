@@ -5,6 +5,7 @@ import {
   HarnessCardCreationConflictError,
   HarnessCardProgressionConflictError,
   HarnessRunCompletionConflictError,
+  HarnessRunCycleConflictError,
   type HarnessBoardResponse
 } from "../harness/board-service.js";
 import {
@@ -47,6 +48,11 @@ type HarnessApi = {
     runId: string;
     completionSummary: string;
   }): Promise<{ runId: string; state: "done" }>;
+  startFreshCycle?(request: {
+    authorization: string;
+    cookie?: string;
+    runId: string;
+  }): Promise<{ runId: string; reopenedProposalCount: number }>;
 };
 
 type RateLimiter = {
@@ -60,6 +66,7 @@ export function createHarnessHttpHandler(options: {
   advanceChildCard: HarnessApi["advanceChildCard"];
   decideProposal: HarnessApi["decideProposal"];
   completeRun: HarnessApi["completeRun"];
+  startFreshCycle?: HarnessApi["startFreshCycle"];
   rateLimiter: RateLimiter;
   maxBodyBytes?: number;
 }) {
@@ -82,6 +89,7 @@ export function createHarnessHttpHandler(options: {
         request.path === "/api/harness/cards" ||
         /^\/api\/harness\/cards\/[^/]+\/advance$/u.test(request.path) ||
         /^\/api\/harness\/runs\/[^/]+\/complete$/u.test(request.path) ||
+        /^\/api\/harness\/runs\/[^/]+\/fresh-cycle$/u.test(request.path) ||
         /^\/api\/harness\/proposals\/[^/]+\/(approve|decision)$/u.test(request.path)
       )
     ) {
@@ -106,6 +114,8 @@ export function createHarnessHttpHandler(options: {
         ? "harness-card-advance"
       : request.method === "POST" && /^\/api\/harness\/runs\/[^/]+\/complete$/u.test(request.path)
         ? "harness-run-complete"
+      : request.method === "POST" && /^\/api\/harness\/runs\/[^/]+\/fresh-cycle$/u.test(request.path)
+        ? "harness-run-fresh-cycle"
       : request.method === "POST" && /^\/api\/harness\/proposals\/[^/]+\/(approve|decision)$/u.test(request.path)
         ? "harness-proposal-approve"
       : null;
@@ -191,6 +201,20 @@ export function createHarnessHttpHandler(options: {
         return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
       }
 
+      const freshCycleMatch = /^\/api\/harness\/runs\/([^/]+)\/fresh-cycle$/u.exec(request.path);
+      if (freshCycleMatch) {
+        if (!options.startFreshCycle) {
+          return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
+        }
+        const body = await options.startFreshCycle({
+          authorization: request.headers.authorization ?? "",
+          ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
+          runId: decodeURIComponent(freshCycleMatch[1] ?? "")
+        });
+        assertWealthFactoryResponse(body);
+        return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
+      }
+
       const proposalMatch = /^\/api\/harness\/proposals\/([^/]+)\/(approve|decision)$/u.exec(request.path);
       if (!proposalMatch) {
         return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
@@ -224,7 +248,8 @@ export function createHarnessHttpHandler(options: {
       if (
         error instanceof HarnessCardCreationConflictError ||
         error instanceof HarnessCardProgressionConflictError ||
-        error instanceof HarnessRunCompletionConflictError
+        error instanceof HarnessRunCompletionConflictError ||
+        error instanceof HarnessRunCycleConflictError
       ) {
         return { status: 409, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "conflict" } };
       }

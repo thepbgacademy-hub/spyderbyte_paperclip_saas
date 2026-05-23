@@ -112,6 +112,8 @@ The first harness implementation slice is now built and verified:
 - Added a lightweight CEO approvals panel to the board shell so pending approval work is visible without exposing backend chatter.
 - Reduced initial board seeding to CEO only, so additional persona lanes now appear through persisted mutations rather than hardcoded bootstrap cards.
 - Added transaction-client coverage for the deferred proposal-approval seam so `markProposalApproved()` and the follow-on child-card insert are now proven to share one leased transaction client, including rollback behavior when the child-card insert fails after the proposal update.
+- Added an explicit `startFreshCycle` mutation that opens a new persisted run from a packaged board cycle instead of reopening a terminal run in place.
+- Limited fresh-cycle carry-forward to deferred proposals whose latest governance reason is `completed_lanes_only`, so packaged follow-on work reopens intentionally without reviving unrelated lane-pressure or scope-boundary pauses.
 - Re-ran the tenant/secret scans and updated the harness security report at `wf-harness/audit/2026-05-21/security-report.md`.
 - Cleared the final repo-specific reviewer pass on code correctness after tightening the wording around what this test seam does and does not prove.
 
@@ -128,6 +130,7 @@ The first harness implementation slice is now built and verified:
 - The first real packaging/result-handoff seam is intentionally read-only. `completionPackage` is a derived board view built from persisted CEO and child-card outcomes; do not start persisting a second duplicate package artifact until a later slice proves it is necessary.
 - The real disposable Postgres proof must apply every harness proposal migration in order. Forgetting `0015_wf_harness_proposal_resolutions.sql` produced a false red on the deferred-FK proof because the repository started writing `resolution` and `decision_note` before the disposable DB knew those columns existed.
 - Run reconciliation is intentionally deterministic and the final completion seam is intentionally explicit. The harness now derives `active`, `waiting`, `blocked`, and `assembling` from child-card/proposal state, then requires a separate CEO completion command to persist `done`.
+- The first fresh-cycle regression was too trusting of live decision helpers during test setup. The alternate deferred proposal accidentally picked up `completed_lanes_only` too, so the proof looked like a carry-forward bug when it was really a test-fixture bug. Pin alternate governance reasons explicitly when the seam under test is policy-sensitive.
 - Harness audit expansion is intentionally metadata-only. Do not persist raw `resultSummary` business text in durable audit payloads; use state metadata and booleans instead.
 - Harness audit publishing is post-commit and best-effort. If the durable audit sink is unavailable, the mutation still succeeds and logs a warning rather than pretending the committed state failed.
 - Mutation summaries now travel through parsed JSON bodies instead of URL query strings. Keep it that way; do not reopen URL surfaces for tenant-authored business text.
@@ -167,7 +170,7 @@ Continue the harness build by replacing more of the live execution slice behind 
 - keep deepening CEO lane policy in executable runtime code, especially around when to update an existing lane versus defer versus deny as the board accumulates more governance memory
 - keep widening reusable-lane execution truth so absorbed proposal work becomes structured lane state, not only comment history, whenever the CEO folds follow-on work into an existing card
 - keep deepening follow-through memory from the decision ledger so the board can later export a clean suggested-versus-implemented history to Obsidian without introducing a second persisted notes system
-- design an explicit future "start a fresh board cycle" seam if `completed_lanes_only` deferred follow-on work should later reopen without manual repo/operator intervention
+- deepen the explicit `startFreshCycle` seam so the CEO can choose between reopening only `completed_lanes_only` deferred follow-on work and starting a completely clean new cycle
 - keep tightening derived run-state truth so terminal-but-empty child-lane outcomes surface as honest blocked states rather than falling back to fake active work
 - widen harness completion beyond the current derived `completionPackage` into a fuller packaged result handoff only after the bounded governance-memory seam stays stable under more execution slices
 - decide whether denied governance items should stay only in the derived tenant-facing handoff package or graduate into a later persisted export artifact/Obsidian sync record

@@ -159,6 +159,13 @@ export class HarnessRunCompletionConflictError extends Error {
   }
 }
 
+export class HarnessRunCycleConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "HarnessRunCycleConflictError";
+  }
+}
+
 type HarnessAudit = (event: DurableAuditEvent) => Promise<void>;
 
 export function createHarnessBoardService(options: {
@@ -1402,6 +1409,140 @@ export function createHarnessBoardService(options: {
 
       await publishHarnessAuditEvents(options.audit, result.auditEvents ?? []);
       return { runId: result.runId, state: result.state };
+    },
+
+    async startFreshCycle(request: {
+      authorization: string;
+      cookie?: string;
+      runId: string;
+    }): Promise<{ runId: string; reopenedProposalCount: number }> {
+      const access = await authorizeHarnessRequest({
+        authenticate: options.authenticate,
+        requireTenantMember: options.requireTenantMember,
+        requireActivePackageInstall: options.requireActivePackageInstall,
+        workflowRegistry: options.workflowRegistry,
+        authorization: request.authorization,
+        ...(request.cookie ? { cookie: request.cookie } : {})
+      });
+
+      if (!options.runAtomically) {
+        throw new Error("Harness cycle mutations require atomic execution");
+      }
+
+      const result = await options.runAtomically(async (repository) => {
+        const run = await repository.getRun(request.runId);
+        if (!run || run.tenantId !== access.session.tenantId) {
+          throw new ApiAuthError();
+        }
+        if (run.state !== "assembling" && run.state !== "done") {
+          throw new HarnessRunCycleConflictError("Harness fresh cycle can only start from a packaged run");
+        }
+        const latestRun = await repository.findLatestRunForTenantWorkflow({
+          tenantId: run.tenantId,
+          workflowId: run.workflowId
+        });
+        if (!latestRun || latestRun.id !== run.id) {
+          throw new HarnessRunCycleConflictError("Harness fresh cycle must start from the latest packaged run");
+        }
+
+        const [cards, proposals, decisions] = await Promise.all([
+          repository.listCardsForRun(run.id),
+          repository.listProposalsForRun(run.id),
+          repository.listDecisionsForRun(run.id)
+        ]);
+        const ceoCard = cards.find((card) => card.persona === "ceo" && card.parentCardId === null);
+        if (!ceoCard) {
+          throw new HarnessRunCycleConflictError("Harness packaged run is missing the CEO card");
+        }
+
+        const nextRun = await seedFreshHarnessRun({
+          repository,
+          runtime,
+          fromRun: run
+        });
+        const nextRunCards = await repository.listCardsForRun(nextRun.id);
+        const nextRunCeoCard = nextRunCards.find((card) => card.persona === "ceo" && card.parentCardId === null);
+        if (!nextRunCeoCard) {
+          throw new HarnessRunCycleConflictError("Harness fresh cycle is missing the CEO card");
+        }
+
+        const latestDecisionByProposalId = new Map<string, HarnessBoardDecisionRecord>();
+        for (const decision of decisions) {
+          if (decision.proposalId && !latestDecisionByProposalId.has(decision.proposalId)) {
+            latestDecisionByProposalId.set(decision.proposalId, decision);
+          }
+        }
+
+        const carryForwardProposals = proposals.filter((proposal) => {
+          if (proposal.status !== "deferred") {
+            return false;
+          }
+          return latestDecisionByProposalId.get(proposal.id)?.policyReason === "completed_lanes_only";
+        });
+
+        for (const proposal of carryForwardProposals) {
+          await repository.insertProposal({
+            id: randomUUID(),
+            runId: nextRun.id,
+            parentCardId: nextRunCeoCard.id,
+            requestedByCardId: nextRunCeoCard.id,
+            requestedByPersona: proposal.requestedByPersona,
+            persona: proposal.persona,
+            title: proposal.title,
+            deliverableType: proposal.deliverableType,
+            status: "proposed"
+          });
+        }
+
+        await repository.insertEvent(
+          createHarnessCardEventRecord({
+            cardId: ceoCard.id,
+            eventKind: "comment_added",
+            payload: {
+              message:
+                carryForwardProposals.length > 0
+                  ? `CEO started a fresh board cycle and carried ${carryForwardProposals.length} deferred follow-on request${carryForwardProposals.length === 1 ? "" : "s"} forward.`
+                  : "CEO started a fresh board cycle for the next round of board work."
+            }
+          })
+        );
+        await repository.insertEvent(
+          createHarnessCardEventRecord({
+            cardId: nextRunCeoCard.id,
+            eventKind: "comment_added",
+            payload: {
+              message:
+                carryForwardProposals.length > 0
+                  ? `CEO reopened ${carryForwardProposals.length} deferred follow-on request${carryForwardProposals.length === 1 ? "" : "s"} for this new board cycle.`
+                  : "CEO opened a fresh board cycle for the next round of work."
+            }
+          })
+        );
+
+        return {
+          runId: nextRun.id,
+          reopenedProposalCount: carryForwardProposals.length,
+          auditEvents: [
+            createHarnessAuditEvent({
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              eventType: "harness_fresh_cycle_started",
+              entityId: nextRun.id,
+              metadata: {
+                previousRunId: run.id,
+                previousRunState: run.state,
+                reopenedProposalCount: carryForwardProposals.length
+              }
+            })
+          ]
+        };
+      });
+
+      await publishHarnessAuditEvents(options.audit, result.auditEvents ?? []);
+      return {
+        runId: result.runId,
+        reopenedProposalCount: result.reopenedProposalCount
+      };
     }
   };
 }
@@ -1548,6 +1689,33 @@ async function seedHarnessRun(input: {
     for (const event of createBootstrapEvents(card)) {
       await input.repository.insertEvent(event);
     }
+  }
+
+  return run;
+}
+
+async function seedFreshHarnessRun(input: {
+  repository: HarnessRepository;
+  runtime: ReturnType<typeof createHarnessRuntime>;
+  fromRun: HarnessRunRecord;
+}): Promise<HarnessRunRecord> {
+  const session = input.runtime.startRun({
+    tenantId: input.fromRun.tenantId,
+    workflowId: input.fromRun.workflowId,
+    packageId: input.fromRun.packageId,
+    runtimeContext: {
+      providerKind: input.fromRun.runtimeContext.providerKind,
+      credentialLabel: input.fromRun.runtimeContext.credentialLabel
+    }
+  });
+
+  const run = transitionHarnessRun(session.run, "active");
+  const ceoCard = session.ceoCard;
+
+  await input.repository.insertRun(run);
+  await input.repository.insertCard(ceoCard);
+  for (const event of createBootstrapEvents(ceoCard)) {
+    await input.repository.insertEvent(event);
   }
 
   return run;

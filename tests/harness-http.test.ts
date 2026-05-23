@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiAuthError } from "../src/api/dashboard-api.js";
-import { HarnessCardCreationConflictError, HarnessCardProgressionConflictError } from "../src/harness/board-service.js";
+import {
+  HarnessCardCreationConflictError,
+  HarnessCardProgressionConflictError,
+  HarnessRunCycleConflictError
+} from "../src/harness/board-service.js";
 import { createHarnessHttpHandler } from "../src/api/harness-http.js";
 
 describe("harness HTTP boundary", () => {
@@ -642,5 +646,78 @@ describe("harness HTTP boundary", () => {
       completionSummary: "The CEO packaged the final business-facing outcome."
     });
     expect(response.body).toEqual({ runId: "run_123", state: "done" });
+  });
+
+  it("starts a fresh board cycle through the guarded write route", async () => {
+    const startFreshCycle = vi.fn().mockResolvedValue({ runId: "run_124", reopenedProposalCount: 2 });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      startFreshCycle,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/fresh-cycle",
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        cookie: "wf_session=abc"
+      },
+      bodyByteLength: 0,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(startFreshCycle).toHaveBeenCalledWith({
+      authorization: "Bearer valid",
+      cookie: "wf_session=abc",
+      runId: "run_123"
+    });
+    expect(response.body).toEqual({ runId: "run_124", reopenedProposalCount: 2 });
+  });
+
+  it("maps fresh-cycle conflicts without exposing backend details", async () => {
+    const startFreshCycle = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiAuthError())
+      .mockRejectedValueOnce(new HarnessRunCycleConflictError("not packaged"))
+      .mockRejectedValueOnce(new Error("db_down"));
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      startFreshCycle,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const baseRequest = {
+      method: "POST" as const,
+      path: "/api/harness/runs/run_123/fresh-cycle",
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid"
+      },
+      bodyByteLength: 0,
+      ip: "203.0.113.10"
+    };
+
+    const unauthorized = await handler(baseRequest);
+    const conflict = await handler(baseRequest);
+    const serviceUnavailable = await handler(baseRequest);
+
+    expect(unauthorized.status).toBe(401);
+    expect(conflict.status).toBe(409);
+    expect(conflict.body).toEqual({ code: "conflict" });
+    expect(serviceUnavailable.status).toBe(500);
+    expect(serviceUnavailable.body).toEqual({ code: "service_unavailable" });
   });
 });

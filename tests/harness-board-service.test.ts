@@ -1209,6 +1209,283 @@ describe("harness board service", () => {
     expect(run?.state).toBe("done");
   });
 
+  it("starts a fresh board cycle and carries only completed-lanes-only deferred proposals forward", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "done",
+      resultSummary: "Pricing floor is stable enough for launch."
+    });
+    await service.completeRun({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      completionSummary: "The CEO packaged the final business-facing outcome."
+    });
+
+    await repository.insertProposal({
+      id: "proposal_fresh_cycle_reopen_1",
+      runId: board.runId,
+      parentCardId: created.cardId,
+      requestedByCardId: created.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Research the next pricing iteration",
+      deliverableType: "pricing_review",
+      status: "proposed"
+    });
+    await service.decideProposal({
+      authorization: "Bearer valid",
+      proposalId: "proposal_fresh_cycle_reopen_1",
+      decision: "approve"
+    });
+
+    await repository.insertProposal({
+      id: "proposal_fresh_cycle_hold_1",
+      runId: board.runId,
+      parentCardId: created.cardId,
+      requestedByCardId: created.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief",
+      status: "deferred"
+    });
+    await repository.insertDecision({
+      id: "decision_fresh_cycle_hold_1",
+      runId: board.runId,
+      tenantId: "tenant_123",
+      actorUserId: "user_123",
+      decisionKind: "proposal_deferred",
+      cardId: created.cardId,
+      proposalId: "proposal_fresh_cycle_hold_1",
+      targetCardId: null,
+      persona: "researcher",
+      deliverableType: "research_brief",
+      policyReason: "lane_cap",
+      resolution: null,
+      decisionNote: "Wait for the active lane count to drop first.",
+      recommendationSummary: "Finish or close one active lane before reopening this research brief request.",
+      objectionSummary: "Hold this research brief request until the active lane count drops.",
+      createdAt: new Date().toISOString()
+    });
+
+    const reopened = await service.startFreshCycle({
+      authorization: "Bearer valid",
+      runId: board.runId
+    });
+
+    const latestBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const oldRun = await repository.getRun(board.runId);
+
+    expect(reopened).toEqual({
+      runId: expect.stringMatching(/^[0-9a-f-]{36}$/i),
+      reopenedProposalCount: 1
+    });
+    expect(reopened.runId).not.toBe(board.runId);
+    expect(oldRun?.state).toBe("done");
+    expect(latestBoard.runId).toBe(reopened.runId);
+    expect(latestBoard.pendingApprovals).toEqual([
+      expect.objectContaining({
+        requestedByPersona: "CFO",
+        targetPersona: "RESEARCHER",
+        statusLabel: "Pending CEO approval",
+        title: "Research the next pricing iteration"
+      })
+    ]);
+    expect(latestBoard.pendingApprovals.some((approval) => approval.title === "Gather competitor price anchors")).toBe(false);
+  });
+
+  it("fails closed when a fresh board cycle is requested before the run is packaged", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+
+    await expect(
+      service.startFreshCycle({
+        authorization: "Bearer valid",
+        runId: board.runId
+      })
+    ).rejects.toThrow(/fresh cycle can only start from a packaged run/i);
+  });
+
+  it("fails closed when the same packaged run is reopened twice", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "done",
+      resultSummary: "Pricing floor is stable enough for launch."
+    });
+    await service.completeRun({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      completionSummary: "The CEO packaged the final business-facing outcome."
+    });
+
+    await service.startFreshCycle({
+      authorization: "Bearer valid",
+      runId: board.runId
+    });
+
+    await expect(
+      service.startFreshCycle({
+        authorization: "Bearer valid",
+        runId: board.runId
+      })
+    ).rejects.toThrow(/latest packaged run/i);
+  });
+
+  it("fails closed when a historical packaged run is reopened after a newer cycle exists", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const firstBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "done",
+      resultSummary: "Pricing floor is stable enough for launch."
+    });
+    await service.completeRun({
+      authorization: "Bearer valid",
+      runId: firstBoard.runId,
+      completionSummary: "The CEO packaged the final business-facing outcome."
+    });
+
+    const secondCycle = await service.startFreshCycle({
+      authorization: "Bearer valid",
+      runId: firstBoard.runId
+    });
+    const secondBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(secondBoard.runId).toBe(secondCycle.runId);
+    const secondCreated = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane again",
+      deliverableType: "pricing_review"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: secondCreated.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: secondCreated.cardId,
+      state: "done",
+      resultSummary: "Second cycle packaged its own pricing outcome."
+    });
+    await service.completeRun({
+      authorization: "Bearer valid",
+      runId: secondCycle.runId,
+      completionSummary: "The CEO packaged the second-cycle outcome."
+    });
+    await service.startFreshCycle({
+      authorization: "Bearer valid",
+      runId: secondCycle.runId
+    });
+
+    await expect(
+      service.startFreshCycle({
+        authorization: "Bearer valid",
+        runId: firstBoard.runId
+      })
+    ).rejects.toThrow(/latest packaged run/i);
+  });
+
   it("keeps raw defer notes out of the tenant-facing board activity feed", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
