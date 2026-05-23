@@ -71,6 +71,9 @@ The first harness implementation slice is now built and verified:
 - Tightened CEO policy again so proposal approval now auto-defers when another active persona already owns the same deliverable lane, instead of surfacing that governance conflict as a low-level runtime failure.
 - Tightened the migration helper for the new board-decision table so it now re-checks the schema after applying `0016` and fails honestly if a drifted partial table shape still does not satisfy the runtime contract.
 - Kept `recentDecisions` bounded after review: the public board history now summarizes governance outcomes without replaying raw `decisionNote` text or duplicating the CEO completion summary as a second source of business-result truth.
+- Added harness migration `0017_wf_harness_board_memory.sql` plus migration-helper awareness, so the append-only decision ledger now carries bounded `policyReason`, `recommendationSummary`, and `objectionSummary` fields without introducing a second memory store.
+- Widened the board read model so deferred approvals now surface bounded policy metadata (`policyReasonLabel`, `nextReviewTrigger`, `lastDecisionAtLabel`) instead of just a generic deferred status string.
+- Widened `recentDecisions` and `completionPackage` so the board can surface bounded governance memory, deferred-approval caveats, and board recommendation/objection summaries without replaying raw CEO notes or backend chatter.
 - Hardened the Node HTTP adapter so request-body limits are enforced on bytes actually read, not only on client-declared `Content-Length`, and loopback proxy headers now preserve the forwarded client IP for rate limiting.
 - Tightened the dashboard HTTP seam so auth failures still return `401`, but real downstream/runtime faults now surface as `500 service_unavailable` instead of being mislabeled as unauthorized.
 - Made harness workflow selection fail closed if more than one harness-eligible workflow is exposed without an explicit selector, instead of silently choosing the first configured id.
@@ -125,13 +128,17 @@ The first harness implementation slice is now built and verified:
 - This Vitest version does not support `--runInBand`; using it produces a CLI failure before the repo tests even start. Keep targeted proof runs on the repo's supported `vitest run ...` shape instead of cargo-culting Jest flags.
 - Board-memory persistence should stay append-only and transaction-local. Write the decision ledger inside the same atomic seam as the business mutation instead of trying to reconstruct governance history later from comments or audit events.
 - A cross-persona deliverable-owner conflict is a board-governance signal, not a runtime exception. The bounded behavior is to defer the proposal, keep it visible, and let the CEO revisit it later.
+- Board-memory widening should stay bounded and additive. Use the existing append-only decision ledger plus derived board views, not a generic notes table or a second persisted package-memory store.
+- Governance caveats belong in the read model, not in raw note replay. Deferred approvals should expose why they are paused and what reopens them, but the public board still should not echo full `decisionNote` text back to the tenant.
+- Migration-helper readiness checks must cover every live enum literal, not just one or two sentinel values. A partial `policy_reason` constraint can look "ready" and still reject the first real board decision insert.
+- `completionPackage` should summarize current governance state, not replay stale historical objections. Deferred or denied guidance that is later resolved must fall out of the final handoff package instead of lingering as old board noise.
 
 ## Next Step
 
 Continue the harness build by replacing more of the live execution slice behind the persisted CEO/card model:
 
-- keep deepening CEO lane policy in executable runtime code, especially around when to defer versus deny and when to fold work into an existing lane instead of opening another card
-- widen harness completion beyond the current derived `completionPackage` into a fuller packaged result handoff only after the read-only seam and decision ledger stay stable under more execution slices
+- keep deepening CEO lane policy in executable runtime code, especially around when to update an existing lane versus defer versus deny as the board accumulates more governance memory
+- widen harness completion beyond the current derived `completionPackage` into a fuller packaged result handoff only after the bounded governance-memory seam stays stable under more execution slices
 - expand the proposal/card mutation seam beyond the current child-card progression path without widening into generic editing APIs
 - design first-class board memory exports so recommendations, objections, approvals, and deferrals can later sync into tenant-owned Obsidian without making Obsidian live runtime truth
 - later, design the Obsidian integration as tenant-owned long memory and records, not as the live source of truth for harness execution state

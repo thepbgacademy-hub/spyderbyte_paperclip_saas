@@ -18,6 +18,7 @@ const migration = readFileSync("supabase/migrations/0013_wf_harness_runs_cards.s
 const proposalMigration = readFileSync("supabase/migrations/0014_wf_harness_subcard_proposals.sql", "utf8");
 const proposalResolutionMigration = readFileSync("supabase/migrations/0015_wf_harness_proposal_resolutions.sql", "utf8");
 const boardDecisionMigration = readFileSync("supabase/migrations/0016_wf_harness_board_decisions.sql", "utf8");
+const boardMemoryMigration = readFileSync("supabase/migrations/0017_wf_harness_board_memory.sql", "utf8");
 const execFileAsync = promisify(execFile);
 
 const HARNESS_POSTGRES_IMAGE = "postgres:16-alpine";
@@ -125,8 +126,11 @@ describe("harness persistence records", () => {
       targetCardId: card.id,
       persona: "ceo",
       deliverableType: "plan",
+      policyReason: "created_new_lane",
       resolution: "create_lane",
       decisionNote: null,
+      recommendationSummary: "Open a dedicated plan lane for CEO.",
+      objectionSummary: null,
       createdAt: "2026-05-22T00:00:00.000Z"
     });
     await repository.insertProposal({
@@ -152,7 +156,10 @@ describe("harness persistence records", () => {
       expect.objectContaining({
         id: "decision_1",
         decisionKind: "lane_opened",
-        cardId: card.id
+        cardId: card.id,
+        policyReason: "created_new_lane",
+        recommendationSummary: "Open a dedicated plan lane for CEO.",
+        objectionSummary: null
       })
     ]);
     await expect(repository.getProposal("proposal_1")).resolves.toEqual({
@@ -304,6 +311,16 @@ describe("harness persistence migration", () => {
     expect(boardDecisionMigration).toMatch(/decision_kind text not null check \(decision_kind in \('lane_opened', 'proposal_approved', 'proposal_deferred', 'proposal_denied', 'run_completed'\)\)/i);
     expect(boardDecisionMigration).toMatch(/create index if not exists harness_board_decisions_run_created_at_idx/i);
   });
+
+  it("widens harness board decisions with bounded policy and board-memory columns", () => {
+    expect(boardMemoryMigration).toMatch(/alter table wfpc\.harness_board_decisions/i);
+    expect(boardMemoryMigration).toMatch(/add column if not exists policy_reason text null/i);
+    expect(boardMemoryMigration).toMatch(/add column if not exists recommendation_summary text null/i);
+    expect(boardMemoryMigration).toMatch(/add column if not exists objection_summary text null/i);
+    expect(boardMemoryMigration).toMatch(/harness_board_decisions_policy_reason_check/i);
+    expect(boardMemoryMigration).toMatch(/deliverable_owner_conflict/i);
+    expect(boardMemoryMigration).toMatch(/completed_lanes_only/i);
+  });
 });
 
 describeIfDocker("harness persistence real Postgres transaction proof", () => {
@@ -367,8 +384,11 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
           targetCardId: null,
           persona: "cfo",
           deliverableType: "pricing_review",
+          policyReason: "deliverable_owner_conflict",
           resolution: null,
           decisionNote: "Wait for the current pricing owner to finish.",
+          recommendationSummary: null,
+          objectionSummary: "Wait for the current pricing review owner to clear or hand off that lane first.",
           createdAt: "2026-05-22T00:00:00.000Z"
         });
 
@@ -382,8 +402,11 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
             proposalId,
             persona: "cfo",
             deliverableType: "pricing_review",
+            policyReason: "deliverable_owner_conflict",
             resolution: null,
-            decisionNote: "Wait for the current pricing owner to finish."
+            decisionNote: "Wait for the current pricing owner to finish.",
+            recommendationSummary: null,
+            objectionSummary: "Wait for the current pricing review owner to clear or hand off that lane first."
           })
         ]);
       } finally {
@@ -677,6 +700,7 @@ async function resetHarnessProofDatabase(client: Client) {
   await client.query(proposalMigration);
   await client.query(proposalResolutionMigration);
   await client.query(boardDecisionMigration);
+  await client.query(boardMemoryMigration);
 }
 
 async function seedHarnessProofPrerequisites(client: Client, tenantId: string) {

@@ -13,6 +13,13 @@ export type HarnessBoardDecisionKind =
   | "proposal_deferred"
   | "proposal_denied"
   | "run_completed";
+export type HarnessBoardPolicyReason =
+  | "created_new_lane"
+  | "reused_existing_lane"
+  | "deliverable_owner_conflict"
+  | "lane_cap"
+  | "scope_guardrail"
+  | "completed_lanes_only";
 
 export const HARNESS_CHILD_PERSONAS = ["cfo", "coo", "researcher", "cto", "cmo", "analyst"] as const;
 export const HARNESS_DELIVERABLE_TYPES = [
@@ -76,8 +83,11 @@ export interface HarnessBoardDecisionRecord {
   targetCardId: string | null;
   persona: string | null;
   deliverableType: string | null;
+  policyReason: HarnessBoardPolicyReason | null;
   resolution: string | null;
   decisionNote: string | null;
+  recommendationSummary: string | null;
+  objectionSummary: string | null;
   createdAt: string;
 }
 
@@ -193,8 +203,11 @@ export function createHarnessBoardDecisionRecord(input: {
   targetCardId?: string | null;
   persona?: string | null;
   deliverableType?: string | null;
+  policyReason?: HarnessBoardPolicyReason | null;
   resolution?: string | null;
   decisionNote?: string | null;
+  recommendationSummary?: string | null;
+  objectionSummary?: string | null;
 }): HarnessBoardDecisionRecord {
   return {
     id: randomUUID(),
@@ -207,8 +220,11 @@ export function createHarnessBoardDecisionRecord(input: {
     targetCardId: input.targetCardId ?? null,
     persona: input.persona ?? null,
     deliverableType: input.deliverableType ?? null,
+    policyReason: input.policyReason ?? null,
     resolution: input.resolution ?? null,
     decisionNote: input.decisionNote ?? null,
+    recommendationSummary: input.recommendationSummary ?? null,
+    objectionSummary: input.objectionSummary ?? null,
     createdAt: new Date().toISOString()
   };
 }

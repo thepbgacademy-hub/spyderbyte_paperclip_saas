@@ -73,11 +73,19 @@ export type HarnessPendingApprovalView = {
   targetPersona: string;
   deliverableLabel: string;
   statusLabel: string;
+  policyReasonLabel?: string;
+  nextReviewTrigger?: string;
+  lastDecisionAtLabel?: string;
 };
 
 export type HarnessCompletionPackageView = {
   status: "assembling" | "done";
   summary?: string;
+  deferredApprovalCount: number;
+  hasOpenGovernanceItems: boolean;
+  packageNote?: string;
+  recommendations: string[];
+  objections: string[];
   deliverables: Array<{
     cardId: string;
     persona: string;
@@ -89,7 +97,12 @@ export type HarnessCompletionPackageView = {
 
 export type HarnessRecentDecisionView = {
   id: string;
+  decisionKind: string;
   label: string;
+  resolution?: string;
+  policyReasonLabel?: string;
+  recommendationSummary?: string;
+  objectionSummary?: string;
   timestampLabel: string;
 };
 
@@ -237,7 +250,13 @@ export function createHarnessBoardService(options: {
             targetCardId: card.id,
             persona: card.persona,
             deliverableType: card.deliverableType,
-            resolution: "create_lane"
+            policyReason: "created_new_lane",
+            resolution: "create_lane",
+            recommendationSummary: createLaneRecommendationSummary({
+              persona: card.persona,
+              deliverableType: card.deliverableType,
+              policyReason: "created_new_lane"
+            })
           })
         );
 
@@ -358,7 +377,12 @@ export function createHarnessBoardService(options: {
               proposalId: proposal.id,
               persona: proposal.persona,
               deliverableType: proposal.deliverableType,
-              decisionNote
+              policyReason: "scope_guardrail",
+              decisionNote,
+              objectionSummary: createGovernanceObjectionSummary({
+                deliverableType: proposal.deliverableType,
+                policyReason: "scope_guardrail"
+              })
             })
           );
           const reconciledRun = await reconcileHarnessRunState({ repository, run });
@@ -445,8 +469,14 @@ export function createHarnessBoardService(options: {
               targetCardId: exactExistingCard.id,
               persona: proposal.persona,
               deliverableType: proposal.deliverableType,
+              policyReason: "reused_existing_lane",
               resolution: "update_existing_lane",
-              ...(trimmedDecisionNote ? { decisionNote: trimmedDecisionNote } : {})
+              ...(trimmedDecisionNote ? { decisionNote: trimmedDecisionNote } : {}),
+              recommendationSummary: createLaneRecommendationSummary({
+                persona: proposal.persona,
+                deliverableType: proposal.deliverableType,
+                policyReason: "reused_existing_lane"
+              })
             })
           );
           const reconciledRun = await reconcileHarnessRunState({ repository, run });
@@ -541,8 +571,14 @@ export function createHarnessBoardService(options: {
               targetCardId: existingCard.id,
               persona: proposal.persona,
               deliverableType: proposal.deliverableType,
+              policyReason: "reused_existing_lane",
               resolution: "update_existing_lane",
-              ...(trimmedDecisionNote ? { decisionNote: trimmedDecisionNote } : {})
+              ...(trimmedDecisionNote ? { decisionNote: trimmedDecisionNote } : {}),
+              recommendationSummary: createLaneRecommendationSummary({
+                persona: proposal.persona,
+                deliverableType: proposal.deliverableType,
+                policyReason: "reused_existing_lane"
+              })
             })
           );
           const reconciledRun = await reconcileHarnessRunState({ repository, run });
@@ -607,7 +643,12 @@ export function createHarnessBoardService(options: {
               proposalId: proposal.id,
               persona: proposal.persona,
               deliverableType: proposal.deliverableType,
-              decisionNote
+              policyReason: "deliverable_owner_conflict",
+              decisionNote,
+              objectionSummary: createGovernanceObjectionSummary({
+                deliverableType: proposal.deliverableType,
+                policyReason: "deliverable_owner_conflict"
+              })
             })
           );
           const reconciledRun = await reconcileHarnessRunState({ repository, run });
@@ -671,7 +712,12 @@ export function createHarnessBoardService(options: {
               proposalId: proposal.id,
               persona: proposal.persona,
               deliverableType: proposal.deliverableType,
-              decisionNote
+              policyReason: "lane_cap",
+              decisionNote,
+              objectionSummary: createGovernanceObjectionSummary({
+                deliverableType: proposal.deliverableType,
+                policyReason: "lane_cap"
+              })
             })
           );
           const reconciledRun = await reconcileHarnessRunState({ repository, run });
@@ -761,8 +807,14 @@ export function createHarnessBoardService(options: {
             targetCardId: approvedCard.id,
             persona: proposal.persona,
             deliverableType: proposal.deliverableType,
+            policyReason: "created_new_lane",
             resolution: "create_lane",
-            ...(trimmedDecisionNote ? { decisionNote: trimmedDecisionNote } : {})
+            ...(trimmedDecisionNote ? { decisionNote: trimmedDecisionNote } : {}),
+            recommendationSummary: createLaneRecommendationSummary({
+              persona: proposal.persona,
+              deliverableType: proposal.deliverableType,
+              policyReason: "created_new_lane"
+            })
           })
         );
 
@@ -996,7 +1048,9 @@ export function createHarnessBoardService(options: {
             actorUserId: access.session.userId,
             decisionKind: "run_completed",
             cardId: ceoCard.id,
-            persona: ceoCard.persona
+            persona: ceoCard.persona,
+            policyReason: "completed_lanes_only",
+            recommendationSummary: "Package only completed lanes into the tenant-facing board outcome."
           })
         );
         const completedRun = await repository.updateRunState({
@@ -1366,9 +1420,17 @@ function buildHarnessBoardResponse(input: {
   const completionPackage = buildCompletionPackage({
     run: input.run,
     cards: input.cards,
-    latestResultSummaryByCardId
+    latestResultSummaryByCardId,
+    proposals: input.proposals,
+    decisions: input.decisions
   });
   const recentDecisions = input.decisions.slice(0, 8).map(toRecentDecisionView);
+  const latestDecisionByProposalId = new Map<string, HarnessBoardDecisionRecord>();
+  for (const decision of input.decisions) {
+    if (decision.proposalId && !latestDecisionByProposalId.has(decision.proposalId)) {
+      latestDecisionByProposalId.set(decision.proposalId, decision);
+    }
+  }
 
   return {
     runId: input.run.id,
@@ -1384,7 +1446,11 @@ function buildHarnessBoardResponse(input: {
         requestedByPersona: proposal.requestedByPersona.toUpperCase(),
         targetPersona: proposal.persona.toUpperCase(),
         deliverableLabel: humanizeDeliverableType(proposal.deliverableType),
-        statusLabel: proposal.status === "deferred" ? "Deferred for later CEO review" : "Pending CEO approval"
+        statusLabel: proposal.status === "deferred" ? "Deferred for later CEO review" : "Pending CEO approval",
+        ...(toPendingApprovalPolicyView({
+          proposal,
+          latestDecision: latestDecisionByProposalId.get(proposal.id) ?? null
+        }))
       })),
     recentDecisions,
     ...(completionPackage ? { completionPackage } : {})
@@ -1462,6 +1528,8 @@ function buildCompletionPackage(input: {
   run: HarnessRunRecord;
   cards: readonly HarnessCardRecord[];
   latestResultSummaryByCardId: ReadonlyMap<string, string>;
+  proposals: readonly HarnessSubCardProposal[];
+  decisions: readonly HarnessBoardDecisionRecord[];
 }): HarnessCompletionPackageView | undefined {
   if (input.run.state !== "assembling" && input.run.state !== "done") {
     return undefined;
@@ -1483,10 +1551,38 @@ function buildCompletionPackage(input: {
 
   const ceoCard = input.cards.find((card) => card.persona === "ceo" && card.parentCardId === null);
   const summary = ceoCard ? input.latestResultSummaryByCardId.get(ceoCard.id) : undefined;
+  const latestDecisionByProposalId = new Map<string, HarnessBoardDecisionRecord>();
+  for (const decision of input.decisions) {
+    if (decision.proposalId && !latestDecisionByProposalId.has(decision.proposalId)) {
+      latestDecisionByProposalId.set(decision.proposalId, decision);
+    }
+  }
+  const latestRunCompletedDecision = input.decisions.find((decision) => decision.decisionKind === "run_completed") ?? null;
+  const deferredApprovalCount = input.proposals.filter((proposal) => proposal.status === "deferred").length;
+  const recommendations = latestRunCompletedDecision?.recommendationSummary
+    ? [latestRunCompletedDecision.recommendationSummary]
+    : [];
+  const objections = input.proposals
+    .filter((proposal) => proposal.status === "deferred")
+    .map((proposal) => latestDecisionByProposalId.get(proposal.id)?.objectionSummary ?? null)
+    .filter((summary): summary is string => Boolean(summary))
+    .filter((summary, index, values) => values.indexOf(summary) === index)
+    .slice(0, 4);
+  const hasOpenGovernanceItems = deferredApprovalCount > 0;
+  const packageNote = buildCompletionPackageNote({
+    deferredApprovalCount,
+    recommendationCount: recommendations.length,
+    objectionCount: objections.length
+  });
 
   return {
     status: input.run.state,
     ...(summary ? { summary } : {}),
+    deferredApprovalCount,
+    hasOpenGovernanceItems,
+    ...(packageNote ? { packageNote } : {}),
+    recommendations,
+    objections,
     deliverables
   };
 }
@@ -1591,7 +1687,12 @@ function readOptionalString(value: unknown): string | undefined {
 function toRecentDecisionView(decision: HarnessBoardDecisionRecord): HarnessRecentDecisionView {
   return {
     id: decision.id,
+    decisionKind: decision.decisionKind,
     label: describeBoardDecision(decision),
+    ...(decision.resolution ? { resolution: decision.resolution } : {}),
+    ...(decision.policyReason ? { policyReasonLabel: humanizePolicyReason(decision.policyReason) } : {}),
+    ...(decision.recommendationSummary ? { recommendationSummary: decision.recommendationSummary } : {}),
+    ...(decision.objectionSummary ? { objectionSummary: decision.objectionSummary } : {}),
     timestampLabel: formatBoardTimestamp(decision.createdAt)
   };
 }
@@ -1618,6 +1719,103 @@ function describeBoardDecision(decision: HarnessBoardDecisionRecord): string {
       return "CEO packaged the final board outcome for the tenant.";
     default:
       return "A board decision was recorded.";
+  }
+}
+
+function toPendingApprovalPolicyView(input: {
+  proposal: HarnessSubCardProposal;
+  latestDecision: HarnessBoardDecisionRecord | null;
+}): Partial<HarnessPendingApprovalView> {
+  if (input.proposal.status !== "deferred") {
+    return {};
+  }
+
+  const decision = input.latestDecision;
+  return {
+    ...(decision?.policyReason ? { policyReasonLabel: humanizePolicyReason(decision.policyReason) } : {}),
+    nextReviewTrigger: describeNextReviewTrigger(decision?.policyReason ?? null),
+    ...(decision ? { lastDecisionAtLabel: formatBoardTimestamp(decision.createdAt) } : {})
+  };
+}
+
+function buildCompletionPackageNote(input: {
+  deferredApprovalCount: number;
+  recommendationCount: number;
+  objectionCount: number;
+}): string | undefined {
+  if (input.deferredApprovalCount > 0) {
+    return "The board is packaging completed work while keeping deferred follow-up requests visible for later CEO review.";
+  }
+  if (input.objectionCount > 0) {
+    return "The board outcome includes completed work alongside bounded objections that still need attention.";
+  }
+  if (input.recommendationCount > 0) {
+    return "The board outcome includes clear next-step recommendations for the tenant-facing handoff.";
+  }
+  return undefined;
+}
+
+function createLaneRecommendationSummary(input: {
+  persona: string;
+  deliverableType: string;
+  policyReason: "created_new_lane" | "reused_existing_lane" | "completed_lanes_only";
+}): string {
+  const deliverable = humanizeDeliverableType(input.deliverableType).toLowerCase();
+  const persona = input.persona.toUpperCase();
+  if (input.policyReason === "reused_existing_lane") {
+    return `Advance this ${deliverable} inside the existing ${persona} lane.`;
+  }
+  if (input.policyReason === "completed_lanes_only") {
+    return "Package only completed lanes into the tenant-facing board outcome.";
+  }
+  return `Open a dedicated ${deliverable} lane for ${persona}.`;
+}
+
+function createGovernanceObjectionSummary(input: {
+  deliverableType: string;
+  policyReason: "deliverable_owner_conflict" | "lane_cap" | "scope_guardrail";
+}): string {
+  const deliverable = humanizeDeliverableType(input.deliverableType).toLowerCase();
+  switch (input.policyReason) {
+    case "deliverable_owner_conflict":
+      return `Wait for the current ${deliverable} owner to clear or hand off that lane first.`;
+    case "lane_cap":
+      return `Hold this ${deliverable} request until the active lane count drops.`;
+    case "scope_guardrail":
+    default:
+      return `Do not widen this run beyond the approved ${deliverable} workflow boundary.`;
+  }
+}
+
+function humanizePolicyReason(value: NonNullable<HarnessBoardDecisionRecord["policyReason"]>): string {
+  switch (value) {
+    case "created_new_lane":
+      return "New lane approved";
+    case "reused_existing_lane":
+      return "Existing lane reused";
+    case "deliverable_owner_conflict":
+      return "Waiting on current lane owner";
+    case "lane_cap":
+      return "Lane cap protection";
+    case "scope_guardrail":
+      return "Scope guardrail";
+    case "completed_lanes_only":
+      return "Completed lanes only";
+    default:
+      return humanizeLabel(value);
+  }
+}
+
+function describeNextReviewTrigger(policyReason: HarnessBoardDecisionRecord["policyReason"]): string {
+  switch (policyReason) {
+    case "deliverable_owner_conflict":
+      return "Review again when the current deliverable owner clears or hands off the lane.";
+    case "lane_cap":
+      return "Review again when one of the active child lanes closes.";
+    case "scope_guardrail":
+      return "Review again only if the CEO widens the approved workflow boundary.";
+    default:
+      return "Review again when the CEO reopens this request for board consideration.";
   }
 }
 

@@ -4,6 +4,13 @@ export type HarnessRunStatus = "queued" | "planning" | "active" | "waiting" | "b
 export type HarnessCardStatus = "queued" | "planning" | "approved" | "working" | "waiting" | "blocked" | "done" | "cancelled";
 export type HarnessCardEventKind = "created" | "state_changed" | "comment_added" | "subcard_proposed" | "result_recorded";
 export type HarnessBoardDecisionKind = "lane_opened" | "proposal_approved" | "proposal_deferred" | "proposal_denied" | "run_completed";
+export type HarnessBoardPolicyReason =
+  | "created_new_lane"
+  | "reused_existing_lane"
+  | "deliverable_owner_conflict"
+  | "lane_cap"
+  | "scope_guardrail"
+  | "completed_lanes_only";
 export type ProviderKind = "openai" | "openai_api" | "openai_chatgpt_codex_subscription" | "anthropic_api" | "xai_grok_api" | "openrouter_api" | "generic_api";
 
 export type TenantRow = {
@@ -108,8 +115,11 @@ export type HarnessBoardDecisionRow = {
   targetCardId: string | null;
   persona: string | null;
   deliverableType: string | null;
+  policyReason: HarnessBoardPolicyReason | null;
   resolution: string | null;
   decisionNote: string | null;
+  recommendationSummary: string | null;
+  objectionSummary: string | null;
   createdAt: string;
 };
 

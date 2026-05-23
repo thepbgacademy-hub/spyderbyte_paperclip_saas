@@ -331,8 +331,8 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
     async insertDecision(decision) {
       await client.query(
         `insert into wfpc.harness_board_decisions
-          (id, run_id, tenant_id, actor_user_id, decision_kind, card_id, proposal_id, target_card_id, persona, deliverable_type, resolution, decision_note, created_at)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::timestamptz)`,
+          (id, run_id, tenant_id, actor_user_id, decision_kind, card_id, proposal_id, target_card_id, persona, deliverable_type, policy_reason, resolution, decision_note, recommendation_summary, objection_summary, created_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::timestamptz)`,
         [
           decision.id,
           decision.runId,
@@ -344,8 +344,11 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
           decision.targetCardId,
           decision.persona,
           decision.deliverableType,
+          decision.policyReason,
           decision.resolution,
           decision.decisionNote,
+          decision.recommendationSummary,
+          decision.objectionSummary,
           decision.createdAt
         ]
       );
@@ -353,7 +356,7 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
 
     async listDecisionsForRun(runId) {
       const result = await client.query(
-        `select id, run_id, tenant_id, actor_user_id, decision_kind, card_id, proposal_id, target_card_id, persona, deliverable_type, resolution, decision_note, created_at
+        `select id, run_id, tenant_id, actor_user_id, decision_kind, card_id, proposal_id, target_card_id, persona, deliverable_type, policy_reason, resolution, decision_note, recommendation_summary, objection_summary, created_at
          from wfpc.harness_board_decisions
          where run_id = $1
          order by created_at desc`,
@@ -489,8 +492,11 @@ export function toHarnessBoardDecisionRow(record: HarnessBoardDecisionRecord): H
     targetCardId: record.targetCardId,
     persona: record.persona,
     deliverableType: record.deliverableType,
+    policyReason: record.policyReason,
     resolution: record.resolution,
     decisionNote: record.decisionNote,
+    recommendationSummary: record.recommendationSummary,
+    objectionSummary: record.objectionSummary,
     createdAt: record.createdAt
   };
 }
@@ -610,8 +616,12 @@ function mapHarnessBoardDecisionRow(row: unknown): HarnessBoardDecisionRecord | 
     targetCardId: typeof record.target_card_id === "string" ? record.target_card_id : null,
     persona: typeof record.persona === "string" ? record.persona : null,
     deliverableType: typeof record.deliverable_type === "string" ? record.deliverable_type : null,
+    policyReason: typeof record.policy_reason === "string" ? (record.policy_reason as HarnessBoardDecisionRecord["policyReason"]) : null,
     resolution: typeof record.resolution === "string" ? record.resolution : null,
     decisionNote: typeof record.decision_note === "string" ? record.decision_note : null,
+    recommendationSummary:
+      typeof record.recommendation_summary === "string" ? record.recommendation_summary : null,
+    objectionSummary: typeof record.objection_summary === "string" ? record.objection_summary : null,
     createdAt: String(record.created_at)
   };
 }

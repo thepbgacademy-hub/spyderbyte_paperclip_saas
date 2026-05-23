@@ -368,6 +368,53 @@ try {
       throw new Error("Harness board decisions migration did not produce the required schema shape");
     }
   }
+  const queryHarnessBoardMemoryReady = () =>
+    client.query(
+      `select
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'harness_board_decisions'
+            and column_name = 'policy_reason'
+        ) as has_policy_reason_column,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'harness_board_decisions'
+            and column_name = 'recommendation_summary'
+        ) as has_recommendation_summary_column,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'harness_board_decisions'
+            and column_name = 'objection_summary'
+        ) as has_objection_summary_column,
+        exists (
+          select 1
+          from pg_constraint
+          where conname = 'harness_board_decisions_policy_reason_check'
+            and conrelid = to_regclass('wfpc.harness_board_decisions')
+            and pg_get_constraintdef(oid) like '%created_new_lane%'
+            and pg_get_constraintdef(oid) like '%reused_existing_lane%'
+            and pg_get_constraintdef(oid) like '%deliverable_owner_conflict%'
+            and pg_get_constraintdef(oid) like '%lane_cap%'
+            and pg_get_constraintdef(oid) like '%scope_guardrail%'
+            and pg_get_constraintdef(oid) like '%completed_lanes_only%'
+        ) as has_policy_reason_check`
+    );
+  let harnessBoardMemoryExisting = await queryHarnessBoardMemoryReady();
+  let harnessBoardMemoryReady = Object.values(harnessBoardMemoryExisting.rows[0] ?? {}).every(Boolean);
+  if (!harnessBoardMemoryReady) {
+    await client.query(readFileSync("supabase/migrations/0017_wf_harness_board_memory.sql", "utf8"));
+    harnessBoardMemoryExisting = await queryHarnessBoardMemoryReady();
+    harnessBoardMemoryReady = Object.values(harnessBoardMemoryExisting.rows[0] ?? {}).every(Boolean);
+    if (!harnessBoardMemoryReady) {
+      throw new Error("Harness board memory migration did not produce the required schema shape");
+    }
+  }
   const { rows } = await client.query(
     "select table_schema, table_name from information_schema.tables where table_schema = 'wfpc' order by table_name"
   );
@@ -393,7 +440,8 @@ try {
           !paperclipSecretBindingStatusReady ||
           !harnessRunsReady ||
           !harnessProposalReady ||
-          !harnessBoardDecisionReady,
+          !harnessBoardDecisionReady ||
+          !harnessBoardMemoryReady,
         tableCount: rows.length,
         tables: rows.map((row) => row.table_name)
       },

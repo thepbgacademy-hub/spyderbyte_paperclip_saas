@@ -343,7 +343,11 @@ describe("harness board service", () => {
 
     expect(board.recentDecisions).toEqual([
       expect.objectContaining({
-        label: "CEO opened a new pricing review lane for CFO."
+        decisionKind: "lane_opened",
+        label: "CEO opened a new pricing review lane for CFO.",
+        resolution: "create_lane",
+        policyReasonLabel: "New lane approved",
+        recommendationSummary: "Open a dedicated pricing review lane for CFO."
       })
     ]);
     expect(JSON.stringify(board.recentDecisions)).not.toMatch(/tool|prompt|internal|secret/i);
@@ -399,7 +403,9 @@ describe("harness board service", () => {
     expect(deferredBoard.pendingApprovals).toEqual([
       expect.objectContaining({
         id: "proposal_deferred_1",
-        statusLabel: "Deferred for later CEO review"
+        statusLabel: "Deferred for later CEO review",
+        policyReasonLabel: "Scope guardrail",
+        nextReviewTrigger: "Review again only if the CEO widens the approved workflow boundary."
       })
     ]);
 
@@ -414,6 +420,102 @@ describe("harness board service", () => {
 
     const approvedBoard = await service.listBoardState({ authorization: "Bearer valid" });
     expect(approvedBoard.pendingApprovals).toEqual([]);
+  });
+
+  it("does not carry stale deferred objections into the final completion package after later approval", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const parentCard = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+
+    await repository.insertProposal({
+      id: "proposal_deferred_then_approved_1",
+      runId: board.runId,
+      parentCardId: parentCard.cardId,
+      requestedByCardId: parentCard.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief",
+      status: "proposed"
+    });
+
+    await service.decideProposal({
+      authorization: "Bearer valid",
+      proposalId: "proposal_deferred_then_approved_1",
+      decision: "defer"
+    });
+
+    const approval = await service.approveProposal({
+      authorization: "Bearer valid",
+      proposalId: "proposal_deferred_then_approved_1"
+    });
+
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: parentCard.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: parentCard.cardId,
+      state: "done",
+      resultSummary: "Pricing floor is stable enough for launch."
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: approval.cardId,
+      state: "planning"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: approval.cardId,
+      state: "approved"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: approval.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: approval.cardId,
+      state: "done",
+      resultSummary: "Competitor price anchors are packaged for the board."
+    });
+    await service.completeRun({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      completionSummary: "The CEO packaged the final business-facing outcome."
+    });
+
+    const completedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(completedBoard.completionPackage).toEqual(
+      expect.objectContaining({
+        deferredApprovalCount: 0,
+        hasOpenGovernanceItems: false,
+        objections: []
+      })
+    );
   });
 
   it("defers approval when another active persona already owns the deliverable lane", async () => {
@@ -467,12 +569,17 @@ describe("harness board service", () => {
     expect(deferredBoard.pendingApprovals).toEqual([
       expect.objectContaining({
         id: "proposal_owner_conflict_1",
-        statusLabel: "Deferred for later CEO review"
+        statusLabel: "Deferred for later CEO review",
+        policyReasonLabel: "Waiting on current lane owner",
+        nextReviewTrigger: "Review again when the current deliverable owner clears or hands off the lane."
       })
     ]);
     expect(
       deferredBoard.recentDecisions.some(
-        (decision) => decision.label === "CEO deferred a pricing review request for RESEARCHER."
+        (decision) =>
+          decision.label === "CEO deferred a pricing review request for RESEARCHER." &&
+          decision.policyReasonLabel === "Waiting on current lane owner" &&
+          decision.objectionSummary === "Wait for the current pricing review owner to clear or hand off that lane first."
       )
     ).toBe(true);
   });
@@ -1140,6 +1247,7 @@ describe("harness board service", () => {
     const cards = await repository.listCardsForRun(board.runId);
     const ceoCard = cards.find((card) => card.persona === "ceo");
     const ceoEvents = await repository.listEventsForCard(ceoCard!.id);
+    const hydratedBoard = await service.listBoardState({ authorization: "Bearer valid" });
 
     expect(run?.state).toBe("done");
     expect(ceoEvents.at(-1)?.eventKind).toBe("result_recorded");
@@ -1158,6 +1266,16 @@ describe("harness board service", () => {
     );
     expect(audit.mock.calls.some(([event]) => JSON.stringify(event).includes("The CEO packaged the final business-facing outcome."))).toBe(
       false
+    );
+    expect(hydratedBoard.completionPackage).toEqual(
+      expect.objectContaining({
+        status: "done",
+        deferredApprovalCount: 0,
+        hasOpenGovernanceItems: false,
+        packageNote: "The board outcome includes clear next-step recommendations for the tenant-facing handoff.",
+        recommendations: expect.arrayContaining(["Package only completed lanes into the tenant-facing board outcome."]),
+        objections: []
+      })
     );
   });
 

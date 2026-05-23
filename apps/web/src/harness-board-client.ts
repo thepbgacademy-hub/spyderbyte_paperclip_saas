@@ -123,7 +123,11 @@ const defaultBoardResponse: HarnessBoardResponse = {
   recentDecisions: [
     {
       id: "decision-fallback-1",
+      decisionKind: "lane_opened",
       label: "CEO opened a new pricing review lane.",
+      resolution: "create_lane",
+      policyReasonLabel: "New lane approved",
+      recommendationSummary: "Open a dedicated pricing review lane for CFO.",
       timestampLabel: "recently"
     }
   ]
