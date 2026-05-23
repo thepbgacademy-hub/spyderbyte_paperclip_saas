@@ -120,6 +120,16 @@ const defaultBoardResponse: HarnessBoardResponse = {
     }
   ],
   pendingApprovals: [],
+  followThroughItems: [
+    {
+      id: "follow-through-fallback-1",
+      action: "opened_lane",
+      summary: "CEO opened a new pricing review lane for CFO.",
+      timestampLabel: "recently",
+      persona: "CFO",
+      deliverableLabel: "Pricing Review"
+    }
+  ],
   recentDecisions: [
     {
       id: "decision-fallback-1",

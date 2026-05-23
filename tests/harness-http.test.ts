@@ -73,6 +73,7 @@ describe("harness HTTP boundary", () => {
         }
       ],
       pendingApprovals: [],
+      followThroughItems: [],
       recentDecisions: []
     });
     const handler = createHarnessHttpHandler({

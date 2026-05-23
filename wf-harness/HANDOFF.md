@@ -146,6 +146,7 @@ The first harness implementation slice is now built and verified:
 - Board-memory persistence should stay append-only and transaction-local. Write the decision ledger inside the same atomic seam as the business mutation instead of trying to reconstruct governance history later from comments or audit events.
 - A cross-persona deliverable-owner conflict is a board-governance signal, not a runtime exception. The bounded behavior is to defer the proposal, keep it visible, and let the CEO revisit it later.
 - Board-memory widening should stay bounded and additive. Use the existing append-only decision ledger plus derived board views, not a generic notes table or a second persisted package-memory store.
+- Implemented board history should come from the decision ledger too. If the tenant needs to see what governance actions were actually carried out, derive that from `lane_opened`, `proposal_approved`, and `run_completed` decisions instead of replaying raw card chatter or CEO notes.
 - Governance caveats belong in the read model, not in raw note replay. Deferred approvals should expose why they are paused and what reopens them, but the public board still should not echo full `decisionNote` text back to the tenant.
 - Public lane activity must stay bounded too. Even if free-form CEO notes remain useful in persisted proposal or decision state, do not replay them into the tenant-facing activity feed; emit a bounded public status message instead.
 - Those bounded public status messages still need to stay policy-aware. Do not flatten every denied proposal into a generic workflow-boundary message when the real governing reason was lane pressure or another persona actively owning the deliverable.
@@ -165,6 +166,7 @@ Continue the harness build by replacing more of the live execution slice behind 
 
 - keep deepening CEO lane policy in executable runtime code, especially around when to update an existing lane versus defer versus deny as the board accumulates more governance memory
 - keep widening reusable-lane execution truth so absorbed proposal work becomes structured lane state, not only comment history, whenever the CEO folds follow-on work into an existing card
+- keep deepening follow-through memory from the decision ledger so the board can later export a clean suggested-versus-implemented history to Obsidian without introducing a second persisted notes system
 - design an explicit future "start a fresh board cycle" seam if `completed_lanes_only` deferred follow-on work should later reopen without manual repo/operator intervention
 - keep tightening derived run-state truth so terminal-but-empty child-lane outcomes surface as honest blocked states rather than falling back to fake active work
 - widen harness completion beyond the current derived `completionPackage` into a fuller packaged result handoff only after the bounded governance-memory seam stays stable under more execution slices

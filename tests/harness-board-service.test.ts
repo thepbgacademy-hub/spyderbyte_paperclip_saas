@@ -353,6 +353,75 @@ describe("harness board service", () => {
     expect(JSON.stringify(board.recentDecisions)).not.toMatch(/tool|prompt|internal|secret/i);
   });
 
+  it("derives tenant-safe board follow-through items from implemented governance decisions", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    await repository.insertProposal({
+      id: "proposal_followthrough_1",
+      runId: board.runId,
+      parentCardId: created.cardId,
+      requestedByCardId: created.cardId,
+      requestedByPersona: "cfo",
+      persona: "cfo",
+      title: "Add renewal downside analysis",
+      deliverableType: "pricing_review",
+      status: "proposed"
+    });
+
+    await expect(
+      service.decideProposal({
+        authorization: "Bearer valid",
+        proposalId: "proposal_followthrough_1",
+        decision: "approve"
+      })
+    ).resolves.toEqual({
+      status: "approved",
+      cardId: created.cardId
+    });
+
+    const hydrated = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(hydrated.followThroughItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "opened_lane",
+          summary: "CEO opened a new pricing review lane for CFO.",
+          persona: "CFO",
+          deliverableLabel: "Pricing Review"
+        }),
+        expect.objectContaining({
+          action: "reused_lane",
+          proposalId: "proposal_followthrough_1",
+          targetCardId: created.cardId,
+          summary: "CEO folded a proposal into the existing pricing review lane.",
+          persona: "CFO",
+          deliverableLabel: "Pricing Review"
+        })
+      ])
+    );
+    expect(JSON.stringify(hydrated.followThroughItems)).not.toMatch(/decisionNote|tool|prompt|internal|secret/i);
+  });
+
   it("keeps deferred proposals visible for later CEO approval", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
@@ -836,8 +905,20 @@ describe("harness board service", () => {
           decision.policyReasonLabel === "Waiting on current lane owner" &&
           decision.recommendationSummary ===
             "Hand this pricing review lane to RESEARCHER and continue the work inside the existing board lane."
-      )
+        )
     ).toBe(true);
+    expect(hydratedBoard.followThroughItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "handed_off_lane",
+          proposalId: "proposal_owner_conflict_handoff_1",
+          targetCardId: parentCard.cardId,
+          summary: "CEO handed the active pricing review lane to RESEARCHER.",
+          persona: "RESEARCHER",
+          deliverableLabel: "Pricing Review"
+        })
+      ])
+    );
     expect(hydratedBoard.pendingApprovals).toEqual([]);
   });
 
@@ -2202,6 +2283,14 @@ describe("harness board service", () => {
         objections: [],
         governanceItems: []
       })
+    );
+    expect(hydratedBoard.followThroughItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "packaged_outcome",
+          summary: "CEO packaged the final board outcome for the tenant."
+        })
+      ])
     );
   });
 

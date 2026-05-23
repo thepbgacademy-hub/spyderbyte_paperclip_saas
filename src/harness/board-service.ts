@@ -63,7 +63,19 @@ export type HarnessBoardResponse = {
   cards: HarnessBoardCardView[];
   pendingApprovals: HarnessPendingApprovalView[];
   recentDecisions: HarnessRecentDecisionView[];
+  followThroughItems: HarnessFollowThroughView[];
   completionPackage?: HarnessCompletionPackageView;
+};
+
+export type HarnessFollowThroughView = {
+  id: string;
+  action: "opened_lane" | "reused_lane" | "handed_off_lane" | "packaged_outcome";
+  summary: string;
+  timestampLabel: string;
+  targetCardId?: string;
+  proposalId?: string;
+  persona?: string;
+  deliverableLabel?: string;
 };
 
 export type HarnessPendingApprovalView = {
@@ -1741,6 +1753,10 @@ function buildHarnessBoardResponse(input: {
     decisions: input.decisions
   });
   const recentDecisions = input.decisions.slice(0, 8).map(toRecentDecisionView);
+  const followThroughItems = input.decisions
+    .filter(isFollowThroughDecision)
+    .slice(0, 8)
+    .map(toFollowThroughView);
   const latestDecisionByProposalId = new Map<string, HarnessBoardDecisionRecord>();
   for (const decision of input.decisions) {
     if (decision.proposalId && !latestDecisionByProposalId.has(decision.proposalId)) {
@@ -1770,6 +1786,7 @@ function buildHarnessBoardResponse(input: {
         }))
       })),
     recentDecisions,
+    followThroughItems,
     ...(completionPackage ? { completionPackage } : {})
   };
 }
@@ -2082,6 +2099,39 @@ function toRecentDecisionView(decision: HarnessBoardDecisionRecord): HarnessRece
     ...(decision.objectionSummary ? { objectionSummary: decision.objectionSummary } : {}),
     timestampLabel: formatBoardTimestamp(decision.createdAt)
   };
+}
+
+function isFollowThroughDecision(decision: HarnessBoardDecisionRecord): boolean {
+  return decision.decisionKind === "lane_opened" || decision.decisionKind === "proposal_approved" || decision.decisionKind === "run_completed";
+}
+
+function toFollowThroughView(decision: HarnessBoardDecisionRecord): HarnessFollowThroughView {
+  return {
+    id: decision.id,
+    action: classifyFollowThroughAction(decision),
+    summary: describeBoardDecision(decision),
+    timestampLabel: formatBoardTimestamp(decision.createdAt),
+    ...(decision.targetCardId ? { targetCardId: decision.targetCardId } : {}),
+    ...(decision.proposalId ? { proposalId: decision.proposalId } : {}),
+    ...(decision.persona ? { persona: decision.persona.toUpperCase() } : {}),
+    ...(decision.deliverableType ? { deliverableLabel: humanizeDeliverableType(decision.deliverableType) } : {})
+  };
+}
+
+function classifyFollowThroughAction(decision: HarnessBoardDecisionRecord): HarnessFollowThroughView["action"] {
+  if (decision.decisionKind === "lane_opened") {
+    return "opened_lane";
+  }
+  if (decision.decisionKind === "run_completed") {
+    return "packaged_outcome";
+  }
+  if (decision.resolution === "create_lane") {
+    return "opened_lane";
+  }
+  if (decision.resolution === "handoff_existing_lane") {
+    return "handed_off_lane";
+  }
+  return "reused_lane";
 }
 
 function describeBoardDecision(decision: HarnessBoardDecisionRecord): string {

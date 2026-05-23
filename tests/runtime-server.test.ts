@@ -101,6 +101,7 @@ vi.mock("../src/harness/board-service.js", () => ({
         }
       ],
       pendingApprovals: [],
+      followThroughItems: [],
       recentDecisions: []
     }),
     approveProposal: vi.fn().mockResolvedValue({ cardId: "card_approved_1" }),

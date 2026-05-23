@@ -47,6 +47,7 @@ This file tracks the new harness subproject only.
 - [x] Persist structured absorbed-work state when the CEO folds a proposal into an existing lane, so lane reuse becomes real engine state instead of comment-only history.
 - [x] Add first-class board decision memory so approvals, deferrals, denials, lane opens, and CEO completion become durable harness records instead of inferred chatter.
 - [x] Widen board decision memory with bounded policy reasons and recommendation/objection summaries instead of introducing a second generic notes store.
+- [x] Derive tenant-safe board follow-through history from the decision ledger so implemented governance actions are visible without replaying raw notes or card chatter.
 - [x] Add harness-specific audit publishing beyond the persisted card-event trail.
 - [ ] Expand the dashboard visual system once the additional Hermes/Obsidian reference screenshots are reviewed.
 - [ ] Design the Obsidian long-memory integration so board records, decisions, and company history can live in tenant-owned knowledge space without becoming live runtime state.
