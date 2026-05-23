@@ -60,6 +60,7 @@ This file tracks the new harness subproject only.
 - [x] Add deny/defer semantics and stronger "update existing lane vs create new lane" CEO policy beyond the current duplicate-lane guards.
 - [x] Add an initial read-only packaging/result handoff seam on top of the explicit CEO completion command.
 - [x] Keep deferred proposals visible and re-approvable so CEO decisions can genuinely pause work instead of silently dropping it.
+- [x] Make the owner-conflict "clear or hand off that lane" promise real with a bounded CEO handoff path instead of leaving it as board text only.
 - [ ] Deepen CEO decision policy so repeated sub-card requests prefer lane updates, then defer, then deny in a more explicit workflow-aware order.
 - [x] Surface absorbed follow-on work back through bounded board activity/detail views when a proposal is folded into an existing lane.
 - [x] Keep raw CEO decision notes out of the tenant-facing activity feed while preserving bounded public governance status.
@@ -68,4 +69,5 @@ This file tracks the new harness subproject only.
 - [ ] Decide whether the widened derived `completionPackage` should stay a read model or graduate into a persisted packaged-output artifact in a later slice.
 - [x] Add explicit packaging policy for how recommendations, objections, and deferred governance items should shape the tenant-facing final handoff.
 - [ ] Decide whether denied governance items should remain derived read-model packaging only or become exportable board-memory artifacts later.
+- [ ] Decide whether completed-lane runs should reject or boundedly reopen new follow-on proposals instead of falling back to generic lane-creation rules.
 - [ ] Define the split between small harness continuity memory and larger tenant-owned long memory in Obsidian, including what gets written there and what must remain Wealth Factory runtime truth.

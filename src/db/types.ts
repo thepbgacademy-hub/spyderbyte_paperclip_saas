@@ -8,6 +8,7 @@ export type HarnessCardEventKind =
   | "comment_added"
   | "subcard_proposed"
   | "proposal_absorbed"
+  | "lane_handed_off"
   | "result_recorded";
 export type HarnessBoardDecisionKind = "lane_opened" | "proposal_approved" | "proposal_deferred" | "proposal_denied" | "run_completed";
 export type HarnessBoardPolicyReason =
@@ -91,7 +92,7 @@ export type HarnessCardEventRow = {
 };
 
 export type HarnessProposalStatus = "proposed" | "approved" | "deferred" | "denied";
-export type HarnessProposalResolution = "create_lane" | "update_existing_lane";
+export type HarnessProposalResolution = "create_lane" | "update_existing_lane" | "handoff_existing_lane";
 
 export type HarnessProposalRow = {
   id: string;

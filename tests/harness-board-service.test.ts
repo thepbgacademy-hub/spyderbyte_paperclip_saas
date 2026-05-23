@@ -707,6 +707,17 @@ describe("harness board service", () => {
       status: "proposed"
     });
 
+    const proposedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(proposedBoard.pendingApprovals).toEqual([
+      expect.objectContaining({
+        id: "proposal_owner_conflict_1",
+        statusLabel: "Pending CEO approval",
+        handoffTargetCardId: parentCard.cardId,
+        handoffTargetPersona: "CFO",
+        handoffTargetTitle: "Pressure-test the pricing lane"
+      })
+    ]);
+
     await expect(
       service.decideProposal({
         authorization: "Bearer valid",
@@ -723,7 +734,10 @@ describe("harness board service", () => {
         id: "proposal_owner_conflict_1",
         statusLabel: "Deferred for later CEO review",
         policyReasonLabel: "Waiting on current lane owner",
-        nextReviewTrigger: "Review again when the current deliverable owner clears or hands off the lane."
+        nextReviewTrigger: "Review again when the current deliverable owner clears or hands off the lane.",
+        handoffTargetCardId: parentCard.cardId,
+        handoffTargetPersona: "CFO",
+        handoffTargetTitle: "Pressure-test the pricing lane"
       })
     ]);
     expect(
@@ -734,6 +748,154 @@ describe("harness board service", () => {
           decision.objectionSummary === "Wait for the current pricing review owner to clear or hand off that lane first."
       )
     ).toBe(true);
+  });
+
+  it("approves an owner-conflict proposal by handing off the active lane to the requested persona", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const parentCard = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+
+    await repository.insertProposal({
+      id: "proposal_owner_conflict_handoff_1",
+      runId: board.runId,
+      parentCardId: parentCard.cardId,
+      requestedByCardId: parentCard.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Research the pricing lane",
+      deliverableType: "pricing_review",
+      status: "proposed"
+    });
+
+    await expect(
+      service.decideProposal({
+        authorization: "Bearer valid",
+        proposalId: "proposal_owner_conflict_handoff_1",
+        decision: "approve",
+        targetCardId: parentCard.cardId
+      })
+    ).resolves.toEqual({
+      status: "approved",
+      cardId: parentCard.cardId
+    });
+
+    const persistedCard = await repository.getCard(parentCard.cardId);
+    expect(persistedCard).toEqual(
+      expect.objectContaining({
+        id: parentCard.cardId,
+        persona: "researcher",
+        title: "Research the pricing lane",
+        deliverableType: "pricing_review"
+      })
+    );
+
+    const proposal = await repository.getProposal("proposal_owner_conflict_handoff_1");
+    expect(proposal).toEqual(
+      expect.objectContaining({
+        status: "approved",
+        approvedCardId: parentCard.cardId,
+        resolution: "handoff_existing_lane"
+      })
+    );
+
+    const laneEvents = await repository.listEventsForCard(parentCard.cardId);
+    expect(laneEvents.some((event) => event.eventKind === "lane_handed_off")).toBe(true);
+    expect(laneEvents.some((event) => event.eventKind === "proposal_absorbed")).toBe(true);
+
+    const hydratedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const handedOffCard = hydratedBoard.cards.find((card) => card.id === parentCard.cardId);
+    expect(handedOffCard?.persona).toBe("RESEARCHER");
+    expect(handedOffCard?.title).toBe("Research the pricing lane");
+    expect(handedOffCard?.activity.some((item) => item.label.includes("CEO handed this lane from CFO to RESEARCHER."))).toBe(
+      true
+    );
+    expect(
+      hydratedBoard.recentDecisions.some(
+        (decision) =>
+          decision.label === "CEO handed the active pricing review lane to RESEARCHER." &&
+          decision.policyReasonLabel === "Waiting on current lane owner" &&
+          decision.recommendationSummary ===
+            "Hand this pricing review lane to RESEARCHER and continue the work inside the existing board lane."
+      )
+    ).toBe(true);
+    expect(hydratedBoard.pendingApprovals).toEqual([]);
+  });
+
+  it("falls back to deferred governance when an owner-conflict approval receives a stale handoff target", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const parentCard = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+
+    await repository.insertProposal({
+      id: "proposal_owner_conflict_stale_target_1",
+      runId: board.runId,
+      parentCardId: parentCard.cardId,
+      requestedByCardId: parentCard.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Research the pricing lane",
+      deliverableType: "pricing_review",
+      status: "proposed"
+    });
+
+    await expect(
+      service.decideProposal({
+        authorization: "Bearer valid",
+        proposalId: "proposal_owner_conflict_stale_target_1",
+        decision: "approve",
+        targetCardId: "card_missing"
+      })
+    ).resolves.toEqual({
+      status: "deferred"
+    });
+
+    const proposal = await repository.getProposal("proposal_owner_conflict_stale_target_1");
+    expect(proposal).toEqual(
+      expect.objectContaining({
+        status: "deferred",
+        decisionNote: "CEO deferred this proposal because another active persona already owns that deliverable lane."
+      })
+    );
   });
 
   it("uses the live governance reason when the CEO manually defers a request", async () => {

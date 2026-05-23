@@ -39,6 +39,7 @@ type HarnessApi = {
     proposalId: string;
     decision: "approve" | "defer" | "deny";
     decisionNote?: string;
+    targetCardId?: string;
   }): Promise<{ status: "proposed" | "approved" | "deferred" | "denied"; cardId?: string }>;
   completeRun(request: {
     authorization: string;
@@ -201,13 +202,15 @@ export function createHarnessHttpHandler(options: {
         return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
       }
       const decisionNote = readOptionalString(bodyInput?.decisionNote);
+      const targetCardId = readOptionalString(bodyInput?.targetCardId);
 
       const body = await options.decideProposal({
         proposalId: decodeURIComponent(proposalMatch[1] ?? ""),
         authorization: request.headers.authorization ?? "",
         ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
         decision: routeDecision as "approve" | "defer" | "deny",
-        ...(decisionNote ? { decisionNote } : {})
+        ...(decisionNote ? { decisionNote } : {}),
+        ...(targetCardId ? { targetCardId } : {})
       });
       if (proposalMatch[2] === "approve" && body.status !== "approved") {
         return { status: 409, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "conflict" } };

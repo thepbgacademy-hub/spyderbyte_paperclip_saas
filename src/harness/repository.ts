@@ -18,6 +18,7 @@ export interface HarnessRepository {
   insertCard(card: HarnessCardRecord): Promise<void>;
   getCard(cardId: string): Promise<HarnessCardRecord | null>;
   updateCardState(input: { cardId: string; state: HarnessCardState }): Promise<HarnessCardRecord | null>;
+  updateCardAssignment(input: { cardId: string; persona: string; title: string }): Promise<HarnessCardRecord | null>;
   listCardsForRun(runId: string): Promise<HarnessCardRecord[]>;
   insertEvent(event: HarnessCardEventRecord): Promise<void>;
   listEventsForCard(cardId: string): Promise<HarnessCardEventRecord[]>;
@@ -103,6 +104,29 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
         const updatedCard = {
           ...existingCard,
           state: input.state,
+          updatedAt: new Date().toISOString()
+        };
+        cards.set(
+          runId,
+          runCards.map((candidate) => (candidate.id === input.cardId ? updatedCard : candidate))
+        );
+        return { ...updatedCard };
+      }
+
+      return null;
+    },
+
+    async updateCardAssignment(input) {
+      for (const [runId, runCards] of cards.entries()) {
+        const existingCard = runCards.find((candidate) => candidate.id === input.cardId);
+        if (!existingCard) {
+          continue;
+        }
+
+        const updatedCard = {
+          ...existingCard,
+          persona: input.persona,
+          title: input.title,
           updatedAt: new Date().toISOString()
         };
         cards.set(
@@ -280,6 +304,19 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
          where id = $1
          returning id, run_id, parent_card_id, persona, title, deliverable_type, state, created_at, updated_at`,
         [input.cardId, input.state]
+      );
+      return mapHarnessCardRow(result.rows[0]);
+    },
+
+    async updateCardAssignment(input) {
+      const result = await client.query(
+        `update wfpc.harness_cards
+         set persona = $2,
+             title = $3,
+             updated_at = now()
+         where id = $1
+         returning id, run_id, parent_card_id, persona, title, deliverable_type, state, created_at, updated_at`,
+        [input.cardId, input.persona, input.title]
       );
       return mapHarnessCardRow(result.rows[0]);
     },

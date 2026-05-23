@@ -1,5 +1,5 @@
 export type HarnessProposalStatus = "proposed" | "approved" | "deferred" | "denied";
-export type HarnessProposalResolution = "create_lane" | "update_existing_lane";
+export type HarnessProposalResolution = "create_lane" | "update_existing_lane" | "handoff_existing_lane";
 
 import type { HarnessCardRecord, HarnessPersona, HarnessRunRecord, HarnessRuntimeContext } from "./types.js";
 

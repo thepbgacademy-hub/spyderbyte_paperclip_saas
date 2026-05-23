@@ -287,6 +287,7 @@ try {
           and conrelid = to_regclass('wfpc.harness_subcard_proposals')
           and pg_get_constraintdef(oid) like '%create_lane%'
           and pg_get_constraintdef(oid) like '%update_existing_lane%'
+          and pg_get_constraintdef(oid) like '%handoff_existing_lane%'
       ) as has_resolution_check,
       exists (
         select 1
@@ -324,6 +325,15 @@ try {
             and table_name = 'harness_board_decisions'
             and column_name = 'resolution'
         ) as has_resolution_column,
+        exists (
+          select 1
+          from pg_constraint
+          where conname like '%resolution%'
+            and conrelid = to_regclass('wfpc.harness_board_decisions')
+            and pg_get_constraintdef(oid) like '%create_lane%'
+            and pg_get_constraintdef(oid) like '%update_existing_lane%'
+            and pg_get_constraintdef(oid) like '%handoff_existing_lane%'
+        ) as has_resolution_check,
         exists (
           select 1
           from pg_constraint
@@ -414,6 +424,27 @@ try {
     if (!harnessBoardMemoryReady) {
       throw new Error("Harness board memory migration did not produce the required schema shape");
     }
+  }
+  const harnessLaneHandoffExisting = await client.query(
+    `select
+      exists (
+        select 1
+        from pg_constraint
+        where conname = 'harness_subcard_proposals_resolution_check'
+          and conrelid = to_regclass('wfpc.harness_subcard_proposals')
+          and pg_get_constraintdef(oid) like '%handoff_existing_lane%'
+      ) as has_proposal_handoff_resolution,
+      exists (
+        select 1
+        from pg_constraint
+        where conname like '%resolution%'
+          and conrelid = to_regclass('wfpc.harness_board_decisions')
+          and pg_get_constraintdef(oid) like '%handoff_existing_lane%'
+      ) as has_decision_handoff_resolution`
+  );
+  const harnessLaneHandoffReady = Object.values(harnessLaneHandoffExisting.rows[0] ?? {}).every(Boolean);
+  if (!harnessLaneHandoffReady) {
+    await client.query(readFileSync("supabase/migrations/0018_wf_harness_lane_handoff.sql", "utf8"));
   }
   const { rows } = await client.query(
     "select table_schema, table_name from information_schema.tables where table_schema = 'wfpc' order by table_name"

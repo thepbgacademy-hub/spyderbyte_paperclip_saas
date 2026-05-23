@@ -12,6 +12,7 @@ export type HarnessCardEventKind =
   | "comment_added"
   | "subcard_proposed"
   | "proposal_absorbed"
+  | "lane_handed_off"
   | "result_recorded";
 export type HarnessBoardDecisionKind =
   | "lane_opened"

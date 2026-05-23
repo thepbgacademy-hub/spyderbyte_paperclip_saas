@@ -76,6 +76,9 @@ export type HarnessPendingApprovalView = {
   policyReasonLabel?: string;
   nextReviewTrigger?: string;
   lastDecisionAtLabel?: string;
+  handoffTargetCardId?: string;
+  handoffTargetPersona?: string;
+  handoffTargetTitle?: string;
 };
 
 export type HarnessCompletionPackageView = {
@@ -308,6 +311,7 @@ export function createHarnessBoardService(options: {
       proposalId: string;
       decision: "approve" | "defer" | "deny";
       decisionNote?: string;
+      targetCardId?: string;
     }): Promise<{ status: HarnessProposalStatus; cardId?: string }> {
       const access = await authorizeHarnessRequest({
         authenticate: options.authenticate,
@@ -353,6 +357,7 @@ export function createHarnessBoardService(options: {
           repository.listDecisionsForRun(run.id)
         ]);
         const trimmedDecisionNote = request.decisionNote?.trim();
+        const trimmedTargetCardId = request.targetCardId?.trim();
         const proposalPolicyReason = determineProposalPolicyReason({
           cards,
           proposal
@@ -450,6 +455,142 @@ export function createHarnessBoardService(options: {
               })
             ]
           };
+        }
+
+        if (trimmedTargetCardId) {
+          const targetCard = cards.find((card) => card.id === trimmedTargetCardId) ?? null;
+          const canHandOff =
+            targetCard &&
+            targetCard.persona !== "ceo" &&
+            isOpenCardState(targetCard.state) &&
+            targetCard.deliverableType === proposal.deliverableType &&
+            targetCard.persona !== proposal.persona &&
+            proposalPolicyReason === "deliverable_owner_conflict";
+          if (canHandOff) {
+            const previousPersona = targetCard.persona;
+            const previousTitle = targetCard.title;
+            const reassignedCard = await repository.updateCardAssignment({
+              cardId: targetCard.id,
+              persona: proposal.persona,
+              title: proposal.title
+            });
+            if (!reassignedCard) {
+              throw new HarnessCardCreationConflictError("Harness lane handoff conflicted");
+            }
+
+            const approvalUpdate = await repository.markProposalApproved({
+              proposalId: proposal.id,
+              approvedCardId: reassignedCard.id,
+              resolution: "handoff_existing_lane",
+              ...(trimmedDecisionNote ? { decisionNote: trimmedDecisionNote } : {})
+            });
+            if (!approvalUpdate.updated) {
+              throw new Error("Harness proposal approval conflicted");
+            }
+
+            await repository.insertEvent(
+              createHarnessCardEventRecord({
+                cardId: reassignedCard.id,
+                eventKind: "lane_handed_off",
+                payload: {
+                  proposalId: proposal.id,
+                  parentCardId: proposal.parentCardId,
+                  fromPersona: previousPersona,
+                  toPersona: proposal.persona,
+                  previousTitle,
+                  nextTitle: proposal.title,
+                  deliverableType: proposal.deliverableType
+                }
+              })
+            );
+            await repository.insertEvent(
+              createHarnessCardEventRecord({
+                cardId: reassignedCard.id,
+                eventKind: "proposal_absorbed",
+                payload: {
+                  proposalId: proposal.id,
+                  parentCardId: proposal.parentCardId,
+                  requestedByPersona: proposal.requestedByPersona,
+                  requestedTitle: proposal.title,
+                  deliverableType: proposal.deliverableType,
+                  resolution: "handoff_existing_lane"
+                }
+              })
+            );
+            await repository.insertEvent(
+              createHarnessCardEventRecord({
+                cardId: reassignedCard.id,
+                eventKind: "comment_added",
+                payload: {
+                  message: `CEO handed this active ${humanizeDeliverableType(proposal.deliverableType).toLowerCase()} lane from ${previousPersona.toUpperCase()} to ${proposal.persona.toUpperCase()}.`
+                }
+              })
+            );
+            if (proposal.parentCardId !== reassignedCard.id) {
+              await repository.insertEvent(
+                createHarnessCardEventRecord({
+                  cardId: proposal.parentCardId,
+                  eventKind: "comment_added",
+                  payload: {
+                    message: `CEO approved this request by handing the active ${humanizeDeliverableType(
+                      proposal.deliverableType
+                    ).toLowerCase()} lane to ${proposal.persona.toUpperCase()}.`
+                  }
+                })
+              );
+            }
+            await repository.insertDecision(
+              createHarnessBoardDecisionRecord({
+                runId: run.id,
+                tenantId: access.session.tenantId,
+                actorUserId: access.session.userId,
+                decisionKind: "proposal_approved",
+                cardId: proposal.parentCardId,
+                proposalId: proposal.id,
+                targetCardId: reassignedCard.id,
+                persona: proposal.persona,
+                deliverableType: proposal.deliverableType,
+                policyReason: "deliverable_owner_conflict",
+                resolution: "handoff_existing_lane",
+                ...(trimmedDecisionNote ? { decisionNote: trimmedDecisionNote } : {}),
+                recommendationSummary: createHandoffRecommendationSummary({
+                  persona: proposal.persona,
+                  deliverableType: proposal.deliverableType
+                })
+              })
+            );
+            const reconciledRun = await reconcileHarnessRunState({ repository, run });
+
+            return {
+              status: "approved",
+              cardId: reassignedCard.id,
+              auditEvents: [
+                createHarnessAuditEvent({
+                  tenantId: access.session.tenantId,
+                  actorUserId: access.session.userId,
+                  eventType: "harness_proposal_approved",
+                  entityId: proposal.id,
+                  metadata: {
+                    runId: run.id,
+                    approvedCardId: reassignedCard.id,
+                    resolution: "handoff_existing_lane",
+                    requestedByPersona: proposal.requestedByPersona,
+                    targetPersona: proposal.persona,
+                    previousPersona,
+                    deliverableType: proposal.deliverableType,
+                    hasDecisionNote: Boolean(trimmedDecisionNote)
+                  }
+                }),
+                ...toRunAuditEvents({
+                  tenantId: access.session.tenantId,
+                  actorUserId: access.session.userId,
+                  runId: run.id,
+                  previousState: run.state,
+                  nextRun: reconciledRun
+                })
+              ]
+            };
+          }
         }
 
         const exactExistingCard = findMatchingOpenChildCard(cards, {
@@ -1529,6 +1670,7 @@ function buildHarnessBoardResponse(input: {
         deliverableLabel: humanizeDeliverableType(proposal.deliverableType),
         statusLabel: proposal.status === "deferred" ? "Deferred for later CEO review" : "Pending CEO approval",
         ...(toPendingApprovalPolicyView({
+          cards: input.cards,
           proposal,
           latestDecision: latestDecisionByProposalId.get(proposal.id) ?? null
         }))
@@ -1545,6 +1687,8 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
   const payloadMessage = readOptionalString(event.payload.message);
   const payloadRequestedTitle = readOptionalString(event.payload.requestedTitle);
   const payloadRequestedByPersona = readOptionalString(event.payload.requestedByPersona);
+  const payloadFromPersona = readOptionalString(event.payload.fromPersona);
+  const payloadToPersona = readOptionalString(event.payload.toPersona);
   const labelByKind: Record<HarnessCardEventRecord["eventKind"], string> = {
     created: `${payloadTitle ?? "Card"} was opened for this persona lane.`,
     state_changed: `Lane status moved to ${humanizeLabel(payloadState ?? "updated")}.`,
@@ -1554,6 +1698,10 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
       payloadRequestedTitle && payloadRequestedByPersona
         ? `${payloadRequestedByPersona.toUpperCase()} folded "${payloadRequestedTitle}" into this active lane.`
         : "The CEO folded a supporting request into this active lane.",
+    lane_handed_off:
+      payloadFromPersona && payloadToPersona
+        ? `CEO handed this lane from ${payloadFromPersona.toUpperCase()} to ${payloadToPersona.toUpperCase()}.`
+        : "CEO handed this active lane to a new persona owner.",
     result_recorded: payloadSummary
       ? `A new outcome snapshot was recorded for this lane: ${payloadSummary}`
       : "A new outcome snapshot was recorded for this lane."
@@ -1852,6 +2000,9 @@ function describeBoardDecision(decision: HarnessBoardDecisionRecord): string {
     case "lane_opened":
       return `CEO opened a new ${deliverable} lane for ${persona}.`;
     case "proposal_approved":
+      if (decision.resolution === "handoff_existing_lane") {
+        return `CEO handed the active ${deliverable} lane to ${persona}.`;
+      }
       if (decision.resolution === "update_existing_lane") {
         return `CEO folded a proposal into the existing ${deliverable} lane.`;
       }
@@ -1868,19 +2019,60 @@ function describeBoardDecision(decision: HarnessBoardDecisionRecord): string {
 }
 
 function toPendingApprovalPolicyView(input: {
+  cards: readonly HarnessCardRecord[];
   proposal: HarnessSubCardProposal;
   latestDecision: HarnessBoardDecisionRecord | null;
 }): Partial<HarnessPendingApprovalView> {
+  const handoffTarget = selectDeliverableOwnerConflictTarget({
+    cards: input.cards,
+    proposal: input.proposal
+  });
   if (input.proposal.status !== "deferred") {
-    return {};
+    return handoffTarget
+      ? {
+          handoffTargetCardId: handoffTarget.id,
+          handoffTargetPersona: handoffTarget.persona.toUpperCase(),
+          handoffTargetTitle: handoffTarget.title
+        }
+      : {};
   }
 
   const decision = input.latestDecision;
   return {
     ...(decision?.policyReason ? { policyReasonLabel: humanizePolicyReason(decision.policyReason) } : {}),
     nextReviewTrigger: describeNextReviewTrigger(decision?.policyReason ?? null),
-    ...(decision ? { lastDecisionAtLabel: formatBoardTimestamp(decision.createdAt) } : {})
+    ...(decision ? { lastDecisionAtLabel: formatBoardTimestamp(decision.createdAt) } : {}),
+    ...(handoffTarget
+      ? {
+          handoffTargetCardId: handoffTarget.id,
+          handoffTargetPersona: handoffTarget.persona.toUpperCase(),
+          handoffTargetTitle: handoffTarget.title
+        }
+      : {})
   };
+}
+
+function selectDeliverableOwnerConflictTarget(input: {
+  cards: readonly HarnessCardRecord[];
+  proposal: Pick<HarnessSubCardProposal, "persona" | "deliverableType">;
+}): HarnessCardRecord | null {
+  const policyReason = determineProposalPolicyReason({
+    cards: input.cards,
+    proposal: input.proposal
+  });
+  if (policyReason !== "deliverable_owner_conflict") {
+    return null;
+  }
+
+  return (
+    input.cards.find(
+      (card) =>
+        card.persona !== "ceo" &&
+        isOpenCardState(card.state) &&
+        card.deliverableType === input.proposal.deliverableType &&
+        card.persona !== input.proposal.persona
+    ) ?? null
+  );
 }
 
 function buildCompletionPackageNote(input: {
@@ -1918,6 +2110,15 @@ function createLaneRecommendationSummary(input: {
     return "Package only completed lanes into the tenant-facing board outcome.";
   }
   return `Open a dedicated ${deliverable} lane for ${persona}.`;
+}
+
+function createHandoffRecommendationSummary(input: {
+  persona: string;
+  deliverableType: string;
+}): string {
+  const deliverable = humanizeDeliverableType(input.deliverableType).toLowerCase();
+  const persona = input.persona.toUpperCase();
+  return `Hand this ${deliverable} lane to ${persona} and continue the work inside the existing board lane.`;
 }
 
 function createGovernanceObjectionSummary(input: {

@@ -222,6 +222,46 @@ describe("harness HTTP boundary", () => {
     expect(response.body).toEqual({ status: "approved", cardId: "card_new_1" });
   });
 
+  it("passes an explicit handoff target through the guarded proposal route", async () => {
+    const decideProposal = vi.fn().mockResolvedValue({ status: "approved", cardId: "card_owner_1" });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      decideProposal,
+      completeRun: vi.fn(),
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/proposals/proposal_1/decision",
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        cookie: "wf_session=abc",
+        "content-type": "application/json"
+      },
+      body: {
+        decision: "approve",
+        targetCardId: "card_owner_1"
+      },
+      bodyByteLength: 64,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(decideProposal).toHaveBeenCalledWith({
+      proposalId: "proposal_1",
+      authorization: "Bearer valid",
+      cookie: "wf_session=abc",
+      decision: "approve",
+      targetCardId: "card_owner_1"
+    });
+    expect(response.body).toEqual({ status: "approved", cardId: "card_owner_1" });
+  });
+
   it("accepts explicit defer decisions through the guarded proposal decision route", async () => {
     const decideProposal = vi.fn().mockResolvedValue({ status: "deferred" });
     const handler = createHarnessHttpHandler({

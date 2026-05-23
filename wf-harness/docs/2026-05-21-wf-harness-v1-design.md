@@ -204,6 +204,7 @@ The CEO owns:
 - maintaining card count discipline
 - final answer assembly
 - deciding whether an update belongs in an existing card or truly warrants a new card
+- explicitly handing off an active deliverable lane when another persona should take ownership, without turning the board into a generic lane editor
 
 The CEO may answer naturally about a child persona's work, but should not sound like a ventriloquist relaying raw child chatter.
 
