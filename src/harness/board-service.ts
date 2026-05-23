@@ -120,6 +120,8 @@ export type HarnessCompletionPackageView = {
   }>;
 };
 
+export type HarnessFreshCycleMode = "reopen_deferred" | "clean";
+
 export type HarnessRecentDecisionView = {
   id: string;
   decisionKind: string;
@@ -1415,6 +1417,7 @@ export function createHarnessBoardService(options: {
       authorization: string;
       cookie?: string;
       runId: string;
+      mode?: HarnessFreshCycleMode;
     }): Promise<{ runId: string; reopenedProposalCount: number }> {
       const access = await authorizeHarnessRequest({
         authenticate: options.authenticate,
@@ -1445,6 +1448,8 @@ export function createHarnessBoardService(options: {
           throw new HarnessRunCycleConflictError("Harness fresh cycle must start from the latest packaged run");
         }
 
+        const freshCycleMode = request.mode ?? "reopen_deferred";
+
         const [cards, proposals, decisions] = await Promise.all([
           repository.listCardsForRun(run.id),
           repository.listProposalsForRun(run.id),
@@ -1473,12 +1478,15 @@ export function createHarnessBoardService(options: {
           }
         }
 
-        const carryForwardProposals = proposals.filter((proposal) => {
-          if (proposal.status !== "deferred") {
-            return false;
-          }
-          return latestDecisionByProposalId.get(proposal.id)?.policyReason === "completed_lanes_only";
-        });
+        const carryForwardProposals =
+          freshCycleMode === "clean"
+            ? []
+            : proposals.filter((proposal) => {
+                if (proposal.status !== "deferred") {
+                  return false;
+                }
+                return latestDecisionByProposalId.get(proposal.id)?.policyReason === "completed_lanes_only";
+              });
 
         for (const proposal of carryForwardProposals) {
           await repository.insertProposal({
@@ -1500,9 +1508,11 @@ export function createHarnessBoardService(options: {
             eventKind: "comment_added",
             payload: {
               message:
-                carryForwardProposals.length > 0
-                  ? `CEO started a fresh board cycle and carried ${carryForwardProposals.length} deferred follow-on request${carryForwardProposals.length === 1 ? "" : "s"} forward.`
-                  : "CEO started a fresh board cycle for the next round of board work."
+                freshCycleMode === "clean"
+                  ? "CEO started a completely clean board cycle without carrying deferred follow-on requests forward."
+                  : carryForwardProposals.length > 0
+                    ? `CEO started a fresh board cycle and carried ${carryForwardProposals.length} deferred follow-on request${carryForwardProposals.length === 1 ? "" : "s"} forward.`
+                    : "CEO started a fresh board cycle for the next round of board work."
             }
           })
         );
@@ -1512,9 +1522,11 @@ export function createHarnessBoardService(options: {
             eventKind: "comment_added",
             payload: {
               message:
-                carryForwardProposals.length > 0
-                  ? `CEO reopened ${carryForwardProposals.length} deferred follow-on request${carryForwardProposals.length === 1 ? "" : "s"} for this new board cycle.`
-                  : "CEO opened a fresh board cycle for the next round of work."
+                freshCycleMode === "clean"
+                  ? "CEO opened a clean board cycle with no carried follow-on work."
+                  : carryForwardProposals.length > 0
+                    ? `CEO reopened ${carryForwardProposals.length} deferred follow-on request${carryForwardProposals.length === 1 ? "" : "s"} for this new board cycle.`
+                    : "CEO opened a fresh board cycle for the next round of work."
             }
           })
         );
@@ -1531,6 +1543,7 @@ export function createHarnessBoardService(options: {
               metadata: {
                 previousRunId: run.id,
                 previousRunState: run.state,
+                mode: freshCycleMode,
                 reopenedProposalCount: carryForwardProposals.length
               }
             })

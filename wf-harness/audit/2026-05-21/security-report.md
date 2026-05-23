@@ -56,6 +56,7 @@ Scope: First custom harness slice under `src/harness`, `src/api/harness-http.ts`
 - Re-ran the scan after making `assembling`/`done` runs fail closed on both follow-on proposal approvals and direct CEO child-lane creation under `completed_lanes_only`, and after making terminal runs read-only at the child-card seam instead of relying only on reconciliation. The touched slice still introduced no live secret material and did not widen any credential-bearing persistence or response surface.
 - Re-ran the scan after adding derived `followThroughItems` from the persisted decision ledger so the board can show implemented governance history without replaying raw `decisionNote` text or card chatter. The touched slice still introduced no live secret material and kept implemented history bounded to existing safe decision fields.
 - Re-ran the scan after adding the explicit `startFreshCycle` seam plus fresh-cycle carry-forward filtering for `completed_lanes_only` deferred proposals. The touched slice still introduced no live secret material and reopened follow-on work only by cloning bounded proposal metadata into a new run, not by widening runtime-context or credential persistence.
+- Re-ran the scan after widening `startFreshCycle` with an explicit clean-vs-reopen mode and JSON-body parsing at the HTTP seam. The touched slice still introduced no live secret material and still keeps fresh-cycle inputs bounded to run id plus a small policy mode, with no BYOK, runtime-context, or tenant-authored business text widening.
 
 ## OWASP-Oriented Findings
 

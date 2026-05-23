@@ -487,17 +487,26 @@ describe("runtime server", () => {
       headers: {
         authorization: "Bearer token",
         origin: "https://www.spyderbyte.cloud",
-        "content-length": "0"
-      }
+        "content-type": "application/json",
+        "content-length": String(JSON.stringify({ mode: "clean" }).length)
+      },
+      body: JSON.stringify({ mode: "clean" })
     });
     const response = createResponse();
 
     runtime.server.emit("request", request as unknown as IncomingMessage, response as unknown as ServerResponse);
     await response.finished;
+    const harnessBoardService = vi.mocked(createHarnessBoardService).mock.results.at(-1)?.value;
 
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('"runId":"run_124"');
     expect(response.body).toContain('"reopenedProposalCount":1');
+    expect(harnessBoardService?.startFreshCycle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runId: "run_123",
+        mode: "clean"
+      })
+    );
     await runtime.close();
   });
 

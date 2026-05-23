@@ -669,7 +669,8 @@ describe("harness HTTP boundary", () => {
         authorization: "Bearer valid",
         cookie: "wf_session=abc"
       },
-      bodyByteLength: 0,
+      body: { mode: "clean" },
+      bodyByteLength: JSON.stringify({ mode: "clean" }).length,
       ip: "203.0.113.10"
     });
 
@@ -677,9 +678,40 @@ describe("harness HTTP boundary", () => {
     expect(startFreshCycle).toHaveBeenCalledWith({
       authorization: "Bearer valid",
       cookie: "wf_session=abc",
-      runId: "run_123"
+      runId: "run_123",
+      mode: "clean"
     });
     expect(response.body).toEqual({ runId: "run_124", reopenedProposalCount: 2 });
+  });
+
+  it("rejects invalid fresh-cycle modes before calling the service", async () => {
+    const startFreshCycle = vi.fn();
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      startFreshCycle,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/fresh-cycle",
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid"
+      },
+      body: { mode: "reopen_everything" },
+      bodyByteLength: JSON.stringify({ mode: "reopen_everything" }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ code: "invalid_request" });
+    expect(startFreshCycle).not.toHaveBeenCalled();
   });
 
   it("maps fresh-cycle conflicts without exposing backend details", async () => {

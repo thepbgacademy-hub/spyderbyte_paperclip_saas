@@ -6,7 +6,8 @@ import {
   HarnessCardProgressionConflictError,
   HarnessRunCompletionConflictError,
   HarnessRunCycleConflictError,
-  type HarnessBoardResponse
+  type HarnessBoardResponse,
+  type HarnessFreshCycleMode
 } from "../harness/board-service.js";
 import {
   isHarnessCardState,
@@ -52,6 +53,7 @@ type HarnessApi = {
     authorization: string;
     cookie?: string;
     runId: string;
+    mode?: HarnessFreshCycleMode;
   }): Promise<{ runId: string; reopenedProposalCount: number }>;
 };
 
@@ -206,10 +208,23 @@ export function createHarnessHttpHandler(options: {
         if (!options.startFreshCycle) {
           return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
         }
-        const body = await options.startFreshCycle({
+        const bodyInput = readJsonObject(request.body);
+        const freshCycleMode = readOptionalString(bodyInput?.mode);
+        if (freshCycleMode && freshCycleMode !== "reopen_deferred" && freshCycleMode !== "clean") {
+          return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
+        }
+        const validatedFreshCycleMode: HarnessFreshCycleMode | undefined =
+          freshCycleMode === "reopen_deferred" || freshCycleMode === "clean" ? freshCycleMode : undefined;
+        const freshCycleRequest: Parameters<NonNullable<typeof options.startFreshCycle>>[0] = {
           authorization: request.headers.authorization ?? "",
           ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
           runId: decodeURIComponent(freshCycleMatch[1] ?? "")
+        };
+        if (validatedFreshCycleMode) {
+          freshCycleRequest.mode = validatedFreshCycleMode;
+        }
+        const body = await options.startFreshCycle({
+          ...freshCycleRequest
         });
         assertWealthFactoryResponse(body);
         return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };

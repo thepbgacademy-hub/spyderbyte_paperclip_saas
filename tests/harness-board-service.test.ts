@@ -1486,6 +1486,92 @@ describe("harness board service", () => {
     ).rejects.toThrow(/latest packaged run/i);
   });
 
+  it("can start a completely clean fresh board cycle without carrying deferred follow-on work forward", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "done",
+      resultSummary: "Pricing floor is stable enough for launch."
+    });
+    await service.completeRun({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      completionSummary: "The CEO packaged the final business-facing outcome."
+    });
+
+    await repository.insertProposal({
+      id: "proposal_clean_cycle_1",
+      runId: board.runId,
+      parentCardId: created.cardId,
+      requestedByCardId: created.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Research the next pricing iteration",
+      deliverableType: "research_brief",
+      status: "deferred"
+    });
+    await repository.insertDecision({
+      id: "decision_clean_cycle_1",
+      runId: board.runId,
+      tenantId: "tenant_123",
+      actorUserId: "user_123",
+      decisionKind: "proposal_deferred",
+      cardId: created.cardId,
+      proposalId: "proposal_clean_cycle_1",
+      targetCardId: null,
+      persona: "researcher",
+      deliverableType: "research_brief",
+      policyReason: "completed_lanes_only",
+      resolution: null,
+      decisionNote: "Hold this for the next cycle if the CEO chooses to reopen it.",
+      recommendationSummary: "Reopen this research brief only when the next cycle needs pricing follow-through.",
+      objectionSummary: "This research brief stays deferred while the current board cycle is already packaged.",
+      createdAt: new Date().toISOString()
+    });
+
+    const reopened = await service.startFreshCycle({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      mode: "clean"
+    });
+    const latestBoard = await service.listBoardState({ authorization: "Bearer valid" });
+
+    expect(reopened).toEqual({
+      runId: expect.stringMatching(/^[0-9a-f-]{36}$/i),
+      reopenedProposalCount: 0
+    });
+    expect(latestBoard.runId).toBe(reopened.runId);
+    expect(latestBoard.pendingApprovals).toEqual([]);
+  });
+
   it("keeps raw defer notes out of the tenant-facing board activity feed", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
