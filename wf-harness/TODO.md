@@ -69,5 +69,6 @@ This file tracks the new harness subproject only.
 - [ ] Decide whether the widened derived `completionPackage` should stay a read model or graduate into a persisted packaged-output artifact in a later slice.
 - [x] Add explicit packaging policy for how recommendations, objections, and deferred governance items should shape the tenant-facing final handoff.
 - [ ] Decide whether denied governance items should remain derived read-model packaging only or become exportable board-memory artifacts later.
-- [ ] Decide whether completed-lane runs should reject or boundedly reopen new follow-on proposals instead of falling back to generic lane-creation rules.
+- [x] Decide whether completed-lane runs should reject or boundedly reopen new follow-on proposals instead of falling back to generic lane-creation rules.
+- [ ] Decide whether a future explicit "start a fresh board cycle" command should reopen follow-on work from `completed_lanes_only` deferrals instead of keeping that recovery path manual.
 - [ ] Define the split between small harness continuity memory and larger tenant-owned long memory in Obsidian, including what gets written there and what must remain Wealth Factory runtime truth.

@@ -53,6 +53,7 @@ Scope: First custom harness slice under `src/harness`, `src/api/harness-http.ts`
 - Re-ran the scan after making denied public board messages policy-aware again for owner-conflict and lane-cap cases. The touched slice still introduced no live secret material, and the narrower public activity feed now stays both bounded and truthful without replaying raw CEO notes.
 - Re-ran the scan after adding the bounded owner-conflict lane-handoff seam, widening harness resolution checks with `handoff_existing_lane`, and accepting a guarded `targetCardId` on proposal approval routes. The touched slice still introduced no live secret material and only reassigns persisted lane metadata without widening the BYOK or runtime-secret boundary.
 - Re-ran the scan after surfacing bounded handoff-target hints in deferred owner-conflict approvals and making stale `targetCardId` hints fall back to normal governance instead of hard-failing a valid approval path. The touched slice still introduced no live secret material and did not widen any credential or runtime-secret boundary.
+- Re-ran the scan after making `assembling`/`done` runs fail closed on both follow-on proposal approvals and direct CEO child-lane creation under `completed_lanes_only`, and after making terminal runs read-only at the child-card seam instead of relying only on reconciliation. The touched slice still introduced no live secret material and did not widen any credential-bearing persistence or response surface.
 
 ## OWASP-Oriented Findings
 

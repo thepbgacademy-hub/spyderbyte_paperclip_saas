@@ -151,6 +151,8 @@ The first harness implementation slice is now built and verified:
 - Those bounded public status messages still need to stay policy-aware. Do not flatten every denied proposal into a generic workflow-boundary message when the real governing reason was lane pressure or another persona actively owning the deliverable.
 - If the board copy tells tenants to wait until a deliverable owner clears or hands off a lane, that promise should map to a real bounded engine action. The harness now supports an explicit CEO lane handoff path for owner-conflict proposals; future governance wording should stay tied to executable paths like that.
 - If a guarded mutation accepts a bounded targeting hint like `targetCardId`, the board read model must surface the matching bounded hint too, and stale hints should degrade into normal governance fallback instead of turning a valid approval into a hard conflict.
+- Completed board cycles now fail closed on follow-on work creation, not only on proposal approvals. When a run is already `assembling` or `done`, the harness defers new proposal approvals under `completed_lanes_only` and rejects direct CEO child-lane creation instead of silently reopening child work through generic lane creation.
+- Terminal runs should be read-only at the child-card seam, not only at run reconciliation. Once a run is `done`, `failed`, or `cancelled`, reject direct child-card progression writes and keep reconciliation read-only so later activity cannot drive invalid reverse state transitions.
 - Migration-helper readiness checks must cover every live enum literal, not just one or two sentinel values. A partial `policy_reason` constraint can look "ready" and still reject the first real board decision insert.
 - `completionPackage` should summarize current governance state, not replay stale historical objections. Deferred or denied guidance that is later resolved must fall out of the final handoff package instead of lingering as old board noise.
 - Repeated defer actions need the same card-discipline as repeated lane opens. If the CEO has not changed the note or the policy context, treat the second defer as idempotent instead of expanding the governance ledger with duplicate pause decisions.
@@ -163,7 +165,7 @@ Continue the harness build by replacing more of the live execution slice behind 
 
 - keep deepening CEO lane policy in executable runtime code, especially around when to update an existing lane versus defer versus deny as the board accumulates more governance memory
 - keep widening reusable-lane execution truth so absorbed proposal work becomes structured lane state, not only comment history, whenever the CEO folds follow-on work into an existing card
-- decide whether completed-lane runs should reject, defer, or boundedly reopen new follow-on proposals instead of leaving that seam implicit
+- design an explicit future "start a fresh board cycle" seam if `completed_lanes_only` deferred follow-on work should later reopen without manual repo/operator intervention
 - keep tightening derived run-state truth so terminal-but-empty child-lane outcomes surface as honest blocked states rather than falling back to fake active work
 - widen harness completion beyond the current derived `completionPackage` into a fuller packaged result handoff only after the bounded governance-memory seam stays stable under more execution slices
 - decide whether denied governance items should stay only in the derived tenant-facing handoff package or graduate into a later persisted export artifact/Obsidian sync record
