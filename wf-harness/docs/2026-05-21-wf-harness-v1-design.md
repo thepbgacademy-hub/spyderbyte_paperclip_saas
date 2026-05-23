@@ -43,6 +43,45 @@ Not chosen:
 - Full drop-in coexistence with Paperclip for the same workflow slice
 - Rebuilding all of Hermes or all of Paperclip
 
+## Adjacent Reference: Archon
+
+Archon is a useful adjacent reference, but not a base platform choice for Wealth Factory.
+
+Why it is relevant:
+
+- it treats AI work as a deterministic workflow engine with explicit stages
+- it separates AI steps from deterministic validation and shell steps
+- it supports loop nodes, approval gates, and fresh-context iterations
+- it reinforces the idea that the harness should own structure while the model supplies bounded intelligence
+
+Why it is not the target architecture:
+
+- Archon is optimized for AI coding workflows, Git worktrees, PRs, tests, and review loops
+- Wealth Factory needs multi-tenant business orchestration, not software-delivery orchestration
+- Wealth Factory also needs board memory, BYOK boundaries, tenant-safe governance, and long-running business operations
+
+Concepts worth borrowing:
+
+- explicit workflow graph definitions instead of implicit model drift
+- bounded loop nodes with clear stop conditions
+- deterministic validation gates between AI steps
+- human/CEO approval gates as first-class runtime seams
+- fresh-context worker iterations for sub-persona work
+- clear execution monitoring and replayable progress traces
+
+Concepts not to import directly:
+
+- coding-specific worktree/PR assumptions
+- GitHub-issue or code-review centric workflow defaults
+- broad “workflow builder” scope before the Wealth Factory engine room is settled
+
+Working rule:
+
+- use Archon as a process-orchestration reference
+- use Hermes as a dashboard/UX reference
+- use Paperclip as a persona/value-shape reference
+- keep the Wealth Factory harness purpose-built around the pressure-test lessons and tenant-safe business execution
+
 ## Architectural Boundary
 
 ### Wealth Factory Control Plane

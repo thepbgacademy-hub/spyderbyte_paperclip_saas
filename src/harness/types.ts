@@ -6,7 +6,13 @@ export type HarnessRunState = "queued" | "planning" | "active" | "waiting" | "bl
 export type HarnessCardState = "queued" | "planning" | "approved" | "working" | "waiting" | "blocked" | "done" | "cancelled";
 export type HarnessPersona = string;
 export type HarnessDeliverableType = string;
-export type HarnessCardEventKind = "created" | "state_changed" | "comment_added" | "subcard_proposed" | "result_recorded";
+export type HarnessCardEventKind =
+  | "created"
+  | "state_changed"
+  | "comment_added"
+  | "subcard_proposed"
+  | "proposal_absorbed"
+  | "result_recorded";
 export type HarnessBoardDecisionKind =
   | "lane_opened"
   | "proposal_approved"

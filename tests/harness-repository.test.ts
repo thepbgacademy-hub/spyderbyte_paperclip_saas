@@ -593,7 +593,10 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
 });
 
 function hasDockerRuntime() {
-  return spawnSync("docker", ["--version"], { stdio: "ignore" }).status === 0;
+  if (spawnSync("docker", ["--version"], { stdio: "ignore" }).status !== 0) {
+    return false;
+  }
+  return spawnSync("docker", ["info", "--format", "{{.ServerVersion}}"], { stdio: "ignore" }).status === 0;
 }
 
 async function startDisposableHarnessDatabase(): Promise<DisposableHarnessDatabase> {

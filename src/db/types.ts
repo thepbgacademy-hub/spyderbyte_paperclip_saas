@@ -2,7 +2,13 @@ export type TenantRole = "owner" | "admin" | "member" | "operator";
 export type WorkflowRunStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 export type HarnessRunStatus = "queued" | "planning" | "active" | "waiting" | "blocked" | "assembling" | "done" | "failed" | "cancelled";
 export type HarnessCardStatus = "queued" | "planning" | "approved" | "working" | "waiting" | "blocked" | "done" | "cancelled";
-export type HarnessCardEventKind = "created" | "state_changed" | "comment_added" | "subcard_proposed" | "result_recorded";
+export type HarnessCardEventKind =
+  | "created"
+  | "state_changed"
+  | "comment_added"
+  | "subcard_proposed"
+  | "proposal_absorbed"
+  | "result_recorded";
 export type HarnessBoardDecisionKind = "lane_opened" | "proposal_approved" | "proposal_deferred" | "proposal_denied" | "run_completed";
 export type HarnessBoardPolicyReason =
   | "created_new_lane"

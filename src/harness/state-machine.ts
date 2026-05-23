@@ -6,7 +6,7 @@ const RUN_TRANSITIONS: Record<HarnessRunState, readonly HarnessRunState[]> = {
   planning: ["active", "blocked", "cancelled"],
   active: ["waiting", "assembling", "blocked", "failed", "cancelled"],
   waiting: ["active", "blocked", "cancelled"],
-  blocked: ["planning", "cancelled", "failed"],
+  blocked: ["planning", "active", "waiting", "assembling", "cancelled", "failed"],
   assembling: ["done", "failed", "cancelled"],
   done: [],
   failed: [],
@@ -80,6 +80,9 @@ export function deriveHarnessRunState(input: {
     childCards.every((card) => card.state === "done" || card.state === "cancelled");
   if (allChildrenTerminal && hasDoneChild && pendingProposals.length === 0) {
     return "assembling";
+  }
+  if (allChildrenTerminal && !hasDoneChild && pendingProposals.length === 0) {
+    return "blocked";
   }
 
   return "active";

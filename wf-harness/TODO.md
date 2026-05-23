@@ -35,6 +35,7 @@ This file tracks the new harness subproject only.
 - [x] Keep child personas bounded and non-conversational to the tenant.
 - [x] Keep dashboard noise-free and high-level.
 - [x] Keep test findings from the Paperclip build as design constraints, not historical trivia.
+- [x] Keep Archon as a process-orchestration reference only, not a target runtime architecture.
 
 ## Progress Since Bootstrap
 
@@ -43,6 +44,7 @@ This file tracks the new harness subproject only.
 - [x] Add transaction-client coverage proving the approval update and child-card insert share one leased transaction client and roll back together on failure.
 - [x] Expand beyond CEO direct-child creation into richer persisted card progression and result-recording mutation paths.
 - [ ] Add fuller CEO approval logic for sub-card requests and card-count discipline beyond the current duplicate-lane/open-cap guardrails.
+- [x] Persist structured absorbed-work state when the CEO folds a proposal into an existing lane, so lane reuse becomes real engine state instead of comment-only history.
 - [x] Add first-class board decision memory so approvals, deferrals, denials, lane opens, and CEO completion become durable harness records instead of inferred chatter.
 - [x] Widen board decision memory with bounded policy reasons and recommendation/objection summaries instead of introducing a second generic notes store.
 - [x] Add harness-specific audit publishing beyond the persisted card-event trail.
@@ -59,6 +61,8 @@ This file tracks the new harness subproject only.
 - [x] Add an initial read-only packaging/result handoff seam on top of the explicit CEO completion command.
 - [x] Keep deferred proposals visible and re-approvable so CEO decisions can genuinely pause work instead of silently dropping it.
 - [ ] Deepen CEO decision policy so repeated sub-card requests prefer lane updates, then defer, then deny in a more explicit workflow-aware order.
+- [x] Surface absorbed follow-on work back through bounded board activity/detail views when a proposal is folded into an existing lane.
+- [x] Keep raw CEO decision notes out of the tenant-facing activity feed while preserving bounded public governance status.
 - [x] Make repeated defer decisions idempotent when no new note or policy context is introduced.
 - [ ] Decide which board-memory records should stay purely operational in Wealth Factory versus which ones should later export into tenant-owned Obsidian as long-memory business records.
 - [ ] Decide whether the widened derived `completionPackage` should stay a read model or graduate into a persisted packaged-output artifact in a later slice.

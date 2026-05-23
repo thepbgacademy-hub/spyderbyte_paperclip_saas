@@ -390,7 +390,11 @@ export function createHarnessBoardService(options: {
               cardId: proposal.parentCardId,
               eventKind: "comment_added",
               payload: {
-                message: decisionNote
+                message: createPublicProposalDecisionMessage({
+                  status,
+                  deliverableType: proposal.deliverableType,
+                  policyReason: proposalPolicyReason
+                })
               }
             })
           );
@@ -466,13 +470,25 @@ export function createHarnessBoardService(options: {
           await repository.insertEvent(
             createHarnessCardEventRecord({
               cardId: exactExistingCard.id,
+              eventKind: "proposal_absorbed",
+              payload: {
+                proposalId: proposal.id,
+                parentCardId: proposal.parentCardId,
+                requestedByPersona: proposal.requestedByPersona,
+                requestedTitle: proposal.title,
+                deliverableType: proposal.deliverableType,
+                resolution: "update_existing_lane"
+              }
+            })
+          );
+          await repository.insertEvent(
+            createHarnessCardEventRecord({
+              cardId: exactExistingCard.id,
               eventKind: "comment_added",
               payload: {
-                message:
-                  trimmedDecisionNote ??
-                  `${proposal.requestedByPersona.toUpperCase()} folded this request into the existing ${humanizeDeliverableType(
-                    proposal.deliverableType
-                  ).toLowerCase()} lane.`
+                message: `${proposal.requestedByPersona.toUpperCase()} folded this request into the existing ${humanizeDeliverableType(
+                  proposal.deliverableType
+                ).toLowerCase()} lane.`
               }
             })
           );
@@ -482,11 +498,9 @@ export function createHarnessBoardService(options: {
                 cardId: proposal.parentCardId,
                 eventKind: "comment_added",
                 payload: {
-                  message:
-                    trimmedDecisionNote ??
-                    `${proposal.requestedByPersona.toUpperCase()} approved this request and folded it into the existing ${humanizeDeliverableType(
-                      proposal.deliverableType
-                    ).toLowerCase()} lane.`
+                  message: `${proposal.requestedByPersona.toUpperCase()} approved this request and folded it into the existing ${humanizeDeliverableType(
+                    proposal.deliverableType
+                  ).toLowerCase()} lane.`
                 }
               })
             );
@@ -568,13 +582,25 @@ export function createHarnessBoardService(options: {
           await repository.insertEvent(
             createHarnessCardEventRecord({
               cardId: existingCard.id,
+              eventKind: "proposal_absorbed",
+              payload: {
+                proposalId: proposal.id,
+                parentCardId: proposal.parentCardId,
+                requestedByPersona: proposal.requestedByPersona,
+                requestedTitle: proposal.title,
+                deliverableType: proposal.deliverableType,
+                resolution: "update_existing_lane"
+              }
+            })
+          );
+          await repository.insertEvent(
+            createHarnessCardEventRecord({
+              cardId: existingCard.id,
               eventKind: "comment_added",
               payload: {
-                message:
-                  trimmedDecisionNote ??
-                  `${proposal.requestedByPersona.toUpperCase()} added follow-on work to the existing ${humanizeDeliverableType(
-                    proposal.deliverableType
-                  ).toLowerCase()} lane instead of opening a new card.`
+                message: `${proposal.requestedByPersona.toUpperCase()} added follow-on work to the existing ${humanizeDeliverableType(
+                  proposal.deliverableType
+                ).toLowerCase()} lane instead of opening a new card.`
               }
             })
           );
@@ -584,11 +610,9 @@ export function createHarnessBoardService(options: {
                 cardId: proposal.parentCardId,
                 eventKind: "comment_added",
                 payload: {
-                  message:
-                    trimmedDecisionNote ??
-                    `${proposal.requestedByPersona.toUpperCase()} approved this request and attached it to the existing ${humanizeDeliverableType(
-                      proposal.deliverableType
-                    ).toLowerCase()} lane.`
+                  message: `${proposal.requestedByPersona.toUpperCase()} approved this request and attached it to the existing ${humanizeDeliverableType(
+                    proposal.deliverableType
+                  ).toLowerCase()} lane.`
                 }
               })
             );
@@ -662,7 +686,11 @@ export function createHarnessBoardService(options: {
               cardId: proposal.parentCardId,
               eventKind: "comment_added",
               payload: {
-                message: decisionNote
+                message: createPublicProposalDecisionMessage({
+                  status: "deferred",
+                  deliverableType: proposal.deliverableType,
+                  policyReason: "deliverable_owner_conflict"
+                })
               }
             })
           );
@@ -735,8 +763,11 @@ export function createHarnessBoardService(options: {
               cardId: proposal.parentCardId,
               eventKind: "comment_added",
               payload: {
-                message:
-                  trimmedDecisionNote ?? "CEO deferred this proposal because the current run is already carrying its maximum active lane count."
+                message: createPublicProposalDecisionMessage({
+                  status: "deferred",
+                  deliverableType: proposal.deliverableType,
+                  policyReason: "lane_cap"
+                })
               }
             })
           );
@@ -950,6 +981,11 @@ export function createHarnessBoardService(options: {
         }
 
         const nextCard = transitionHarnessCard(card, request.state);
+        const trimmedSummary = request.resultSummary?.trim();
+        if (trimmedSummary && nextCard.state !== "done") {
+          throw new HarnessCardProgressionConflictError("Outcome summaries can only be recorded when a card reaches done");
+        }
+
         const updatedCard = await repository.updateCardState({
           cardId: card.id,
           state: nextCard.state
@@ -966,11 +1002,7 @@ export function createHarnessBoardService(options: {
           })
         );
 
-        const trimmedSummary = request.resultSummary?.trim();
         if (trimmedSummary) {
-          if (updatedCard.state !== "done") {
-            throw new HarnessCardProgressionConflictError("Outcome summaries can only be recorded when a card reaches done");
-          }
           await repository.insertEvent(
             createHarnessCardEventRecord({
               cardId: updatedCard.id,
@@ -1062,9 +1094,10 @@ export function createHarnessBoardService(options: {
 
         let currentRun = run;
         if (run.state !== "assembling") {
+          const assemblingRun = transitionHarnessRun(run, "assembling");
           const reconciledRun = await repository.updateRunState({
             runId: run.id,
-            state: "assembling"
+            state: assemblingRun.state
           });
           if (!reconciledRun) {
             throw new HarnessRunCompletionConflictError("Harness run reconciliation conflicted before completion");
@@ -1316,9 +1349,10 @@ async function reconcileHarnessRunState(input: {
     return null;
   }
 
+  const transitionedRun = transitionHarnessRun(input.run, nextState);
   return input.repository.updateRunState({
     runId: input.run.id,
-    state: nextState
+    state: transitionedRun.state
   });
 }
 
@@ -1436,9 +1470,12 @@ function buildHarnessBoardResponse(input: {
   decisions: readonly HarnessBoardDecisionRecord[];
   proposals: readonly HarnessSubCardProposal[];
 }): HarnessBoardResponse {
+  const eventsByCardId = new Map<string, HarnessCardEventRecord[]>();
   const activityByCardId = new Map<string, HarnessBoardActivityItem[]>();
   const latestResultSummaryByCardId = new Map<string, string>();
   for (const event of input.events) {
+    const cardEvents = eventsByCardId.get(event.cardId) ?? [];
+    eventsByCardId.set(event.cardId, [...cardEvents, event]);
     const items = activityByCardId.get(event.cardId) ?? [];
     activityByCardId.set(event.cardId, [...items, toBoardActivityItem(event)]);
     if (event.eventKind === "result_recorded") {
@@ -1452,6 +1489,7 @@ function buildHarnessBoardResponse(input: {
   const cards = input.cards.map((card) =>
     toBoardCardView({
       card,
+      cardEvents: eventsByCardId.get(card.id) ?? [],
       activity: activityByCardId.get(card.id) ?? [],
       ...(latestResultSummaryByCardId.has(card.id)
         ? { resultSummary: latestResultSummaryByCardId.get(card.id)! }
@@ -1505,11 +1543,17 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
   const payloadState = readOptionalString(event.payload.to) ?? readOptionalString(event.payload.state);
   const payloadSummary = readOptionalString(event.payload.summary);
   const payloadMessage = readOptionalString(event.payload.message);
+  const payloadRequestedTitle = readOptionalString(event.payload.requestedTitle);
+  const payloadRequestedByPersona = readOptionalString(event.payload.requestedByPersona);
   const labelByKind: Record<HarnessCardEventRecord["eventKind"], string> = {
     created: `${payloadTitle ?? "Card"} was opened for this persona lane.`,
     state_changed: `Lane status moved to ${humanizeLabel(payloadState ?? "updated")}.`,
     comment_added: payloadMessage ?? "A new progress note was added to this lane.",
     subcard_proposed: "A supporting sub-card was proposed for CEO review.",
+    proposal_absorbed:
+      payloadRequestedTitle && payloadRequestedByPersona
+        ? `${payloadRequestedByPersona.toUpperCase()} folded "${payloadRequestedTitle}" into this active lane.`
+        : "The CEO folded a supporting request into this active lane.",
     result_recorded: payloadSummary
       ? `A new outcome snapshot was recorded for this lane: ${payloadSummary}`
       : "A new outcome snapshot was recorded for this lane."
@@ -1524,6 +1568,7 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
 
 function toBoardCardView(input: {
   card: HarnessCardRecord;
+  cardEvents: readonly HarnessCardEventRecord[];
   activity: readonly HarnessBoardActivityItem[];
   resultSummary?: string;
 }): HarnessBoardCardView {
@@ -1531,6 +1576,7 @@ function toBoardCardView(input: {
   const lane = mapCardStateToLane(input.card.state);
   const deliverableLabel = humanizeDeliverableType(input.card.deliverableType);
   const activity = input.activity.length > 0 ? [...input.activity] : [defaultActivityForCard(input.card)];
+  const absorbedWorkItems = extractAbsorbedWorkItems(input.cardEvents);
   const detailSections: HarnessBoardDetailSection[] = [
     {
       id: "snapshot",
@@ -1543,6 +1589,13 @@ function toBoardCardView(input: {
       id: "latest-outcome",
       title: "Latest Outcome",
       body: input.resultSummary
+    });
+  }
+  if (absorbedWorkItems.length > 0) {
+    detailSections.push({
+      id: "absorbed-work",
+      title: "Absorbed Work",
+      body: absorbedWorkItems.map((item) => `- ${item}`).join("\n")
     });
   }
 
@@ -1734,6 +1787,16 @@ function defaultActivityForCard(card: HarnessCardRecord): HarnessBoardActivityIt
   };
 }
 
+function extractAbsorbedWorkItems(events: readonly HarnessCardEventRecord[]): string[] {
+  return events
+    .filter((event) => event.eventKind === "proposal_absorbed")
+    .map((event) => {
+      const requestedTitle = readOptionalString(event.payload.requestedTitle) ?? "follow-on work";
+      const requestedByPersona = readOptionalString(event.payload.requestedByPersona)?.toUpperCase() ?? "A BOARD PERSONA";
+      return `${requestedByPersona}: ${requestedTitle}`;
+    });
+}
+
 function humanizeDeliverableType(value: string): string {
   return humanizeLabel(value.replace(/_/gu, " "));
 }
@@ -1908,6 +1971,29 @@ function createGovernanceRecommendationSummary(input: {
       return input.status === "denied"
         ? `Keep this ${deliverable} work inside the current approved package boundary unless the CEO deliberately widens scope.`
         : `Revisit this ${deliverable} request only if the CEO deliberately widens the approved workflow boundary.`;
+  }
+}
+
+function createPublicProposalDecisionMessage(input: {
+  status: "deferred" | "denied";
+  deliverableType: string;
+  policyReason: "deliverable_owner_conflict" | "lane_cap" | "scope_guardrail";
+}): string {
+  const deliverable = humanizeDeliverableType(input.deliverableType).toLowerCase();
+  switch (input.policyReason) {
+    case "deliverable_owner_conflict":
+      return input.status === "denied"
+        ? `CEO denied this ${deliverable} request because the current lane owner still controls that work.`
+        : `CEO deferred this ${deliverable} request until the current lane owner clears or hands off the work.`;
+    case "lane_cap":
+      return input.status === "denied"
+        ? `CEO denied this ${deliverable} request because the current run is already carrying its maximum active lane count.`
+        : `CEO deferred this ${deliverable} request because the current run is already carrying its maximum active lane count.`;
+    case "scope_guardrail":
+    default:
+      return input.status === "denied"
+        ? `CEO denied this ${deliverable} request to keep the board inside the approved workflow boundary.`
+        : `CEO deferred this ${deliverable} request until the approved workflow boundary is widened.`;
   }
 }
 

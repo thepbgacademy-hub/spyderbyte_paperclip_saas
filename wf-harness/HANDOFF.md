@@ -30,6 +30,15 @@ The first harness implementation slice is now built and verified:
 - the first harness slice is a slice replacement, not a long-lived same-slice dual-engine setup
 - Wealth Factory keeps small runtime memory, while larger tenant-owned company memory can later live in Obsidian as a second-brain/record layer
 
+## External References
+
+- Paperclip remains the persona/value-shape reference.
+- Hermes remains the dashboard/UX reference.
+- Archon is now explicitly a process-orchestration reference only:
+  - borrow deterministic workflow-graph ideas
+  - borrow loop/approval/validation-gate ideas
+  - do not drift into a coding-agent or PR/worktree-centric architecture
+
 ## Source of Truth
 
 - `wf-harness/docs/2026-05-21-wf-harness-v1-design.md`
@@ -77,6 +86,10 @@ The first harness implementation slice is now built and verified:
 - Tightened repeated-governance handling so a second defer decision with no new note now stays idempotent instead of appending duplicate decision/event noise to the board memory ledger.
 - Widened `completionPackage` again so deferred and denied governance outcomes now surface as first-class bounded `governanceItems`, with policy labels, objection/recommendation summaries, and deferred next-review triggers derived from the decision ledger instead of from raw notes.
 - Corrected the first packaging cut so top-level recommendation/objection summaries now derive from the full deferred/denied governance set, not only the first visible `governanceItems`, and denied-only governance packages now still advertise visible governance content instead of hiding behind a false `hasOpenGovernanceItems: false`.
+- Made reused-lane approvals persist structured absorbed-work state on the target lane instead of relying only on free-form comments, so folded follow-on work now survives as actionable card history in the board read model.
+- Widened the card read model so active lanes expose absorbed proposal work through bounded activity labels plus an `Absorbed Work` detail section, without widening the board into a generic notes surface.
+- Tightened the public board activity feed so proposal defer/deny/approve mutations no longer echo raw `decisionNote` text back to the tenant; the board now emits bounded public status messages while keeping free-form CEO notes internal to proposal/decision state.
+- Corrected run-state derivation so a run whose non-CEO child lanes are all terminal-but-cancelled now resolves to `blocked` instead of falling back to a misleading `active` state with no live work left.
 - Hardened the Node HTTP adapter so request-body limits are enforced on bytes actually read, not only on client-declared `Content-Length`, and loopback proxy headers now preserve the forwarded client IP for rate limiting.
 - Tightened the dashboard HTTP seam so auth failures still return `401`, but real downstream/runtime faults now surface as `500 service_unavailable` instead of being mislabeled as unauthorized.
 - Made harness workflow selection fail closed if more than one harness-eligible workflow is exposed without an explicit selector, instead of silently choosing the first configured id.
@@ -126,6 +139,7 @@ The first harness implementation slice is now built and verified:
 - Failing closed on a provider-mismatch callback should not destroy the pending OAuth state. Preserve the state so the correct callback can still succeed on retry.
 - Harness rate-limit buckets should be charged only after a concrete route match. Dead or mistyped paths must not burn the budget for real approval traffic.
 - The real deferred-FK proof is Docker-backed. Treat it as a strong integration proof where Docker is available, but remember it still skips cleanly on Dockerless machines instead of failing the whole suite.
+- On this machine, `docker --version` can succeed even while the Docker daemon pipe is unavailable. Treat the disposable Postgres proof as Docker-ready only when `docker info` also succeeds, or the suite will false-red trying to pull images through a dead daemon connection.
 - On Windows, overlapping GitNexus FTS/cypher calls right after analyze can briefly lock `.gitnexus\\lbug` and produce a false tooling failure. Serialize those preflight calls instead of treating the lock as a repo regression.
 - The first cut of the real Postgres harness used blocking Docker child processes inside Vitest and triggered `[vitest-worker]: Timeout calling "onTaskUpdate"` on longer combined runs. The helper now uses async child-process calls; keep it that way or the proof suite can false-fail even when the database contract is correct.
 - This Vitest version does not support `--runInBand`; using it produces a CLI failure before the repo tests even start. Keep targeted proof runs on the repo's supported `vitest run ...` shape instead of cargo-culting Jest flags.
@@ -133,6 +147,8 @@ The first harness implementation slice is now built and verified:
 - A cross-persona deliverable-owner conflict is a board-governance signal, not a runtime exception. The bounded behavior is to defer the proposal, keep it visible, and let the CEO revisit it later.
 - Board-memory widening should stay bounded and additive. Use the existing append-only decision ledger plus derived board views, not a generic notes table or a second persisted package-memory store.
 - Governance caveats belong in the read model, not in raw note replay. Deferred approvals should expose why they are paused and what reopens them, but the public board still should not echo full `decisionNote` text back to the tenant.
+- Public lane activity must stay bounded too. Even if free-form CEO notes remain useful in persisted proposal or decision state, do not replay them into the tenant-facing activity feed; emit a bounded public status message instead.
+- Those bounded public status messages still need to stay policy-aware. Do not flatten every denied proposal into a generic workflow-boundary message when the real governing reason was lane pressure or another persona actively owning the deliverable.
 - Migration-helper readiness checks must cover every live enum literal, not just one or two sentinel values. A partial `policy_reason` constraint can look "ready" and still reject the first real board decision insert.
 - `completionPackage` should summarize current governance state, not replay stale historical objections. Deferred or denied guidance that is later resolved must fall out of the final handoff package instead of lingering as old board noise.
 - Repeated defer actions need the same card-discipline as repeated lane opens. If the CEO has not changed the note or the policy context, treat the second defer as idempotent instead of expanding the governance ledger with duplicate pause decisions.
@@ -144,6 +160,8 @@ The first harness implementation slice is now built and verified:
 Continue the harness build by replacing more of the live execution slice behind the persisted CEO/card model:
 
 - keep deepening CEO lane policy in executable runtime code, especially around when to update an existing lane versus defer versus deny as the board accumulates more governance memory
+- keep widening reusable-lane execution truth so absorbed proposal work becomes structured lane state, not only comment history, whenever the CEO folds follow-on work into an existing card
+- keep tightening derived run-state truth so terminal-but-empty child-lane outcomes surface as honest blocked states rather than falling back to fake active work
 - widen harness completion beyond the current derived `completionPackage` into a fuller packaged result handoff only after the bounded governance-memory seam stays stable under more execution slices
 - decide whether denied governance items should stay only in the derived tenant-facing handoff package or graduate into a later persisted export artifact/Obsidian sync record
 - expand the proposal/card mutation seam beyond the current child-card progression path without widening into generic editing APIs
