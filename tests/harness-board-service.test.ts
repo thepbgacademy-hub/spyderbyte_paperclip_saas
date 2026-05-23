@@ -422,6 +422,157 @@ describe("harness board service", () => {
     expect(approvedBoard.pendingApprovals).toEqual([]);
   });
 
+  it("treats repeated defer decisions without a new note as idempotent", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const parentCard = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+
+    await repository.insertProposal({
+      id: "proposal_deferred_repeat_1",
+      runId: board.runId,
+      parentCardId: parentCard.cardId,
+      requestedByCardId: parentCard.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief",
+      status: "deferred",
+      decisionNote: "Wait for the pricing lane to settle first."
+    });
+    await repository.insertDecision({
+      id: "decision_deferred_repeat_1",
+      runId: board.runId,
+      tenantId: "tenant_123",
+      actorUserId: "user_123",
+      decisionKind: "proposal_deferred",
+      cardId: parentCard.cardId,
+      proposalId: "proposal_deferred_repeat_1",
+      targetCardId: null,
+      persona: "researcher",
+      deliverableType: "research_brief",
+      policyReason: "scope_guardrail",
+      resolution: null,
+      decisionNote: "Wait for the pricing lane to settle first.",
+      recommendationSummary: "Revisit this research brief request only if the CEO deliberately widens the approved workflow boundary.",
+      objectionSummary: "Do not widen this run beyond the approved research brief workflow boundary.",
+      createdAt: new Date().toISOString()
+    });
+
+    const decisionsBefore = await repository.listDecisionsForRun(board.runId);
+    const eventsBefore = await repository.listEventsForCard(parentCard.cardId);
+
+    await expect(
+      service.decideProposal({
+        authorization: "Bearer valid",
+        proposalId: "proposal_deferred_repeat_1",
+        decision: "defer"
+      })
+    ).resolves.toEqual({ status: "deferred" });
+
+    const decisionsAfter = await repository.listDecisionsForRun(board.runId);
+    const eventsAfter = await repository.listEventsForCard(parentCard.cardId);
+    expect(decisionsAfter).toHaveLength(decisionsBefore.length);
+    expect(eventsAfter).toHaveLength(eventsBefore.length);
+  });
+
+  it("records a fresh defer decision when the governance reason changes even if the note does not", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const parentCard = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+
+    await repository.insertProposal({
+      id: "proposal_deferred_reason_change_1",
+      runId: board.runId,
+      parentCardId: parentCard.cardId,
+      requestedByCardId: parentCard.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Research the pricing lane",
+      deliverableType: "pricing_review",
+      status: "deferred",
+      decisionNote: "Hold this for now."
+    });
+    await repository.insertDecision({
+      id: "decision_deferred_reason_change_1",
+      runId: board.runId,
+      tenantId: "tenant_123",
+      actorUserId: "user_123",
+      decisionKind: "proposal_deferred",
+      cardId: parentCard.cardId,
+      proposalId: "proposal_deferred_reason_change_1",
+      targetCardId: null,
+      persona: "researcher",
+      deliverableType: "pricing_review",
+      policyReason: "scope_guardrail",
+      resolution: null,
+      decisionNote: "Hold this for now.",
+      recommendationSummary:
+        "Revisit this pricing review request only if the CEO deliberately widens the approved workflow boundary.",
+      objectionSummary: "Do not widen this run beyond the approved pricing review workflow boundary.",
+      createdAt: new Date(Date.now() - 1000).toISOString()
+    });
+
+    await expect(
+      service.decideProposal({
+        authorization: "Bearer valid",
+        proposalId: "proposal_deferred_reason_change_1",
+        decision: "defer",
+        decisionNote: "Hold this for now."
+      })
+    ).resolves.toEqual({ status: "deferred" });
+
+    const decisionsAfter = await repository.listDecisionsForRun(board.runId);
+    const latestDecision = decisionsAfter.find((decision) => decision.proposalId === "proposal_deferred_reason_change_1");
+    expect(decisionsAfter.filter((decision) => decision.proposalId === "proposal_deferred_reason_change_1")).toHaveLength(2);
+    expect(latestDecision).toEqual(
+      expect.objectContaining({
+        policyReason: "deliverable_owner_conflict",
+        recommendationSummary: "Keep advancing the current pricing review lane and revisit this request after a clear handoff.",
+        objectionSummary: "Wait for the current pricing review owner to clear or hand off that lane first."
+      })
+    );
+  });
+
   it("does not carry stale deferred objections into the final completion package after later approval", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
@@ -513,7 +664,8 @@ describe("harness board service", () => {
       expect.objectContaining({
         deferredApprovalCount: 0,
         hasOpenGovernanceItems: false,
-        objections: []
+        objections: [],
+        governanceItems: []
       })
     );
   });
@@ -579,6 +731,72 @@ describe("harness board service", () => {
         (decision) =>
           decision.label === "CEO deferred a pricing review request for RESEARCHER." &&
           decision.policyReasonLabel === "Waiting on current lane owner" &&
+          decision.objectionSummary === "Wait for the current pricing review owner to clear or hand off that lane first."
+      )
+    ).toBe(true);
+  });
+
+  it("uses the live governance reason when the CEO manually defers a request", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const parentCard = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+
+    await repository.insertProposal({
+      id: "proposal_manual_owner_conflict_1",
+      runId: board.runId,
+      parentCardId: parentCard.cardId,
+      requestedByCardId: parentCard.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Research the pricing lane",
+      deliverableType: "pricing_review",
+      status: "proposed"
+    });
+
+    await expect(
+      service.decideProposal({
+        authorization: "Bearer valid",
+        proposalId: "proposal_manual_owner_conflict_1",
+        decision: "defer"
+      })
+    ).resolves.toEqual({ status: "deferred" });
+
+    const deferredBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(deferredBoard.pendingApprovals).toEqual([
+      expect.objectContaining({
+        id: "proposal_manual_owner_conflict_1",
+        statusLabel: "Deferred for later CEO review",
+        policyReasonLabel: "Waiting on current lane owner",
+        nextReviewTrigger: "Review again when the current deliverable owner clears or hands off the lane."
+      })
+    ]);
+    expect(
+      deferredBoard.recentDecisions.some(
+        (decision) =>
+          decision.label === "CEO deferred a pricing review request for RESEARCHER." &&
+          decision.policyReasonLabel === "Waiting on current lane owner" &&
+          decision.recommendationSummary ===
+            "Keep advancing the current pricing review lane and revisit this request after a clear handoff." &&
           decision.objectionSummary === "Wait for the current pricing review owner to clear or hand off that lane first."
       )
     ).toBe(true);
@@ -1274,8 +1492,335 @@ describe("harness board service", () => {
         hasOpenGovernanceItems: false,
         packageNote: "The board outcome includes clear next-step recommendations for the tenant-facing handoff.",
         recommendations: expect.arrayContaining(["Package only completed lanes into the tenant-facing board outcome."]),
-        objections: []
+        objections: [],
+        governanceItems: []
       })
+    );
+  });
+
+  it("packages deferred and denied governance items into the tenant-facing completion package without leaking raw notes", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "done",
+      resultSummary: "Pricing floor is stable enough for launch."
+    });
+
+    await repository.insertProposal({
+      id: "proposal_completion_deferred_1",
+      runId: board.runId,
+      parentCardId: created.cardId,
+      requestedByCardId: created.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief",
+      status: "deferred",
+      decisionNote: "This note should not surface directly."
+    });
+    await repository.insertDecision({
+      id: "decision_completion_deferred_1",
+      runId: board.runId,
+      tenantId: "tenant_123",
+      actorUserId: "user_123",
+      decisionKind: "proposal_deferred",
+      cardId: created.cardId,
+      proposalId: "proposal_completion_deferred_1",
+      targetCardId: null,
+      persona: "researcher",
+      deliverableType: "research_brief",
+      policyReason: "lane_cap",
+      resolution: null,
+      decisionNote: "This note should not surface directly.",
+      recommendationSummary: "Finish or close one active lane before reopening this research brief request.",
+      objectionSummary: "Hold this research brief request until the active lane count drops.",
+      createdAt: new Date().toISOString()
+    });
+    await repository.insertProposal({
+      id: "proposal_completion_denied_1",
+      runId: board.runId,
+      parentCardId: created.cardId,
+      requestedByCardId: created.cardId,
+      requestedByPersona: "cfo",
+      persona: "cto",
+      title: "Open an extra technical review lane",
+      deliverableType: "technical_review",
+      status: "denied",
+      decisionNote: "Another note that should stay out of the package."
+    });
+    await repository.insertDecision({
+      id: "decision_completion_denied_1",
+      runId: board.runId,
+      tenantId: "tenant_123",
+      actorUserId: "user_123",
+      decisionKind: "proposal_denied",
+      cardId: created.cardId,
+      proposalId: "proposal_completion_denied_1",
+      targetCardId: null,
+      persona: "cto",
+      deliverableType: "technical_review",
+      policyReason: "scope_guardrail",
+      resolution: null,
+      decisionNote: "Another note that should stay out of the package.",
+      recommendationSummary:
+        "Keep this technical review work inside the current approved package boundary unless the CEO deliberately widens scope.",
+      objectionSummary: "Do not widen this run beyond the approved technical review workflow boundary.",
+      createdAt: new Date(Date.now() - 1000).toISOString()
+    });
+
+    await service.completeRun({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      completionSummary: "The CEO packaged the final business-facing outcome."
+    });
+
+    const completedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(completedBoard.completionPackage).toEqual(
+      expect.objectContaining({
+        status: "done",
+        deferredApprovalCount: 1,
+        hasOpenGovernanceItems: true,
+        packageNote: "The board is packaging completed work while keeping deferred follow-up requests visible for later CEO review.",
+        recommendations: expect.arrayContaining([
+          "Package only completed lanes into the tenant-facing board outcome.",
+          "Finish or close one active lane before reopening this research brief request.",
+          "Keep this technical review work inside the current approved package boundary unless the CEO deliberately widens scope."
+        ]),
+        objections: expect.arrayContaining([
+          "Hold this research brief request until the active lane count drops.",
+          "Do not widen this run beyond the approved technical review workflow boundary."
+        ]),
+        governanceItems: [
+          expect.objectContaining({
+            proposalId: "proposal_completion_deferred_1",
+            statusLabel: "Deferred for later CEO review",
+            persona: "RESEARCHER",
+            deliverableLabel: "Research Brief",
+            policyReasonLabel: "Lane cap protection",
+            recommendationSummary: "Finish or close one active lane before reopening this research brief request.",
+            objectionSummary: "Hold this research brief request until the active lane count drops.",
+            nextReviewTrigger: "Review again when one of the active child lanes closes."
+          }),
+          expect.objectContaining({
+            proposalId: "proposal_completion_denied_1",
+            statusLabel: "Denied by the CEO",
+            persona: "CTO",
+            deliverableLabel: "Technical Review",
+            policyReasonLabel: "Scope guardrail",
+            recommendationSummary:
+              "Keep this technical review work inside the current approved package boundary unless the CEO deliberately widens scope.",
+            objectionSummary: "Do not widen this run beyond the approved technical review workflow boundary."
+          })
+        ]
+      })
+    );
+    expect(JSON.stringify(completedBoard.completionPackage)).not.toContain("This note should not surface directly.");
+    expect(JSON.stringify(completedBoard.completionPackage)).not.toContain("Another note that should stay out of the package.");
+  });
+
+  it("keeps denied-only governance items visible in the completion package", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "done",
+      resultSummary: "Pricing floor is stable enough for launch."
+    });
+
+    await repository.insertProposal({
+      id: "proposal_completion_denied_only_1",
+      runId: board.runId,
+      parentCardId: created.cardId,
+      requestedByCardId: created.cardId,
+      requestedByPersona: "cfo",
+      persona: "cto",
+      title: "Open an extra technical review lane",
+      deliverableType: "technical_review",
+      status: "denied"
+    });
+    await repository.insertDecision({
+      id: "decision_completion_denied_only_1",
+      runId: board.runId,
+      tenantId: "tenant_123",
+      actorUserId: "user_123",
+      decisionKind: "proposal_denied",
+      cardId: created.cardId,
+      proposalId: "proposal_completion_denied_only_1",
+      targetCardId: null,
+      persona: "cto",
+      deliverableType: "technical_review",
+      policyReason: "scope_guardrail",
+      resolution: null,
+      decisionNote: "No extra lane.",
+      recommendationSummary:
+        "Keep this technical review work inside the current approved package boundary unless the CEO deliberately widens scope.",
+      objectionSummary: "Do not widen this run beyond the approved technical review workflow boundary.",
+      createdAt: new Date().toISOString()
+    });
+
+    await service.completeRun({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      completionSummary: "The CEO packaged the final business-facing outcome."
+    });
+
+    const completedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(completedBoard.completionPackage).toEqual(
+      expect.objectContaining({
+        deferredApprovalCount: 0,
+        hasOpenGovernanceItems: true,
+        packageNote: "The board outcome keeps denied governance requests visible so the tenant can see where the CEO held the workflow boundary.",
+        governanceItems: [
+          expect.objectContaining({
+            proposalId: "proposal_completion_denied_only_1",
+            statusLabel: "Denied by the CEO"
+          })
+        ]
+      })
+    );
+  });
+
+  it("derives package-level recommendations and objections from the full governance set, not only the visible slice", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "done",
+      resultSummary: "Pricing floor is stable enough for launch."
+    });
+
+    for (let index = 1; index <= 7; index += 1) {
+      const uniqueTail = index === 7;
+      await repository.insertProposal({
+        id: `proposal_completion_slice_${index}`,
+        runId: board.runId,
+        parentCardId: created.cardId,
+        requestedByCardId: created.cardId,
+        requestedByPersona: "cfo",
+        persona: uniqueTail ? "cto" : "researcher",
+        title: `Follow-up request ${index}`,
+        deliverableType: uniqueTail ? "technical_review" : "research_brief",
+        status: "denied"
+      });
+      await repository.insertDecision({
+        id: `decision_completion_slice_${index}`,
+        runId: board.runId,
+        tenantId: "tenant_123",
+        actorUserId: "user_123",
+        decisionKind: "proposal_denied",
+        cardId: created.cardId,
+        proposalId: `proposal_completion_slice_${index}`,
+        targetCardId: null,
+        persona: uniqueTail ? "cto" : "researcher",
+        deliverableType: uniqueTail ? "technical_review" : "research_brief",
+        policyReason: "scope_guardrail",
+        resolution: null,
+        decisionNote: `Internal note ${index}`,
+        recommendationSummary: uniqueTail
+          ? "Keep this technical review work inside the current approved package boundary unless the CEO deliberately widens scope."
+          : "Revisit this research brief request only if the CEO deliberately widens the approved workflow boundary.",
+        objectionSummary: uniqueTail
+          ? "Do not widen this run beyond the approved technical review workflow boundary."
+          : "Do not widen this run beyond the approved research brief workflow boundary.",
+        createdAt: new Date(Date.now() - index * 1000).toISOString()
+      });
+    }
+
+    await service.completeRun({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      completionSummary: "The CEO packaged the final business-facing outcome."
+    });
+
+    const completedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(completedBoard.completionPackage?.governanceItems).toHaveLength(6);
+    expect(completedBoard.completionPackage?.recommendations).toContain(
+      "Keep this technical review work inside the current approved package boundary unless the CEO deliberately widens scope."
+    );
+    expect(completedBoard.completionPackage?.objections).toContain(
+      "Do not widen this run beyond the approved technical review workflow boundary."
     );
   });
 

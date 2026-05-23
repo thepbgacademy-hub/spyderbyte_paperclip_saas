@@ -46,6 +46,8 @@ Scope: First custom harness slice under `src/harness`, `src/api/harness-http.ts`
 - Re-ran the scan after the reviewer pass tightened board-decision semantics: the migration helper now re-checks the `0016` schema after apply, `recentDecisions` no longer echoes raw `decisionNote` text, and the CEO completion summary is no longer duplicated into the decision ledger. The touched slice still introduced no live secret material.
 - Re-ran the scan after widening the board-decision ledger with bounded policy reasons plus recommendation/objection summaries, and after teaching deferred approvals plus `completionPackage` to surface governance caveats from that ledger. The touched slice still introduced no live secret material and still kept raw CEO notes out of the public board feed.
 - Re-ran the scan after tightening the migration-helper constraint check and trimming stale governance history out of `completionPackage`. The final touched slice still introduced no live secret material; only expected auth placeholders and the isolated Docker test DSN remained in scope.
+- Re-ran the scan after making repeated defer decisions idempotent and widening `completionPackage` into structured governance items for deferred/denied requests. The touched slice still introduced no live secret material and still kept raw `decisionNote` text out of the public tenant-facing package.
+- Re-ran the scan after fixing reviewer-found packaging edge cases so governance summaries now derive from the full decision set and denied-only packages still keep governance content visible. The touched slice still introduced no live secret material and still kept raw `decisionNote` text out of the public tenant-facing package.
 
 ## OWASP-Oriented Findings
 
@@ -116,6 +118,7 @@ No issues identified in the harness slice. The board HTTP boundary now distingui
 - The guarded harness mutation routes now accept tenant-authored summaries through parsed JSON bodies instead of URL query strings, which keeps business text out of browser history and intermediary URL logs.
 - The widened proposal policy and new board-decision ledger store only bounded workflow metadata (`status`, `resolution`, optional `decisionNote`) and do not introduce any new credential-bearing persistence paths. The public `recentDecisions` feed now renders bounded summaries instead of replaying raw decision-note text.
 - The derived `completionPackage` board view is assembled from existing persisted CEO and child-card outcomes and does not persist raw provider secrets or expand the runtime-context trust boundary.
+- The new `governanceItems` completion-package view is derived from bounded ledger fields (`policyReason`, `recommendationSummary`, `objectionSummary`) and intentionally excludes raw `decisionNote` text, which keeps ad hoc CEO notes out of the public board handoff.
 
 ### Additional Hygiene Observations
 

@@ -59,7 +59,9 @@ This file tracks the new harness subproject only.
 - [x] Add an initial read-only packaging/result handoff seam on top of the explicit CEO completion command.
 - [x] Keep deferred proposals visible and re-approvable so CEO decisions can genuinely pause work instead of silently dropping it.
 - [ ] Deepen CEO decision policy so repeated sub-card requests prefer lane updates, then defer, then deny in a more explicit workflow-aware order.
+- [x] Make repeated defer decisions idempotent when no new note or policy context is introduced.
 - [ ] Decide which board-memory records should stay purely operational in Wealth Factory versus which ones should later export into tenant-owned Obsidian as long-memory business records.
 - [ ] Decide whether the widened derived `completionPackage` should stay a read model or graduate into a persisted packaged-output artifact in a later slice.
-- [ ] Add explicit packaging policy for how recommendations, objections, and deferred governance items should shape the tenant-facing final handoff.
+- [x] Add explicit packaging policy for how recommendations, objections, and deferred governance items should shape the tenant-facing final handoff.
+- [ ] Decide whether denied governance items should remain derived read-model packaging only or become exportable board-memory artifacts later.
 - [ ] Define the split between small harness continuity memory and larger tenant-owned long memory in Obsidian, including what gets written there and what must remain Wealth Factory runtime truth.

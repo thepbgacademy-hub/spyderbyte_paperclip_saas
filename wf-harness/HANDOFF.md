@@ -74,6 +74,9 @@ The first harness implementation slice is now built and verified:
 - Added harness migration `0017_wf_harness_board_memory.sql` plus migration-helper awareness, so the append-only decision ledger now carries bounded `policyReason`, `recommendationSummary`, and `objectionSummary` fields without introducing a second memory store.
 - Widened the board read model so deferred approvals now surface bounded policy metadata (`policyReasonLabel`, `nextReviewTrigger`, `lastDecisionAtLabel`) instead of just a generic deferred status string.
 - Widened `recentDecisions` and `completionPackage` so the board can surface bounded governance memory, deferred-approval caveats, and board recommendation/objection summaries without replaying raw CEO notes or backend chatter.
+- Tightened repeated-governance handling so a second defer decision with no new note now stays idempotent instead of appending duplicate decision/event noise to the board memory ledger.
+- Widened `completionPackage` again so deferred and denied governance outcomes now surface as first-class bounded `governanceItems`, with policy labels, objection/recommendation summaries, and deferred next-review triggers derived from the decision ledger instead of from raw notes.
+- Corrected the first packaging cut so top-level recommendation/objection summaries now derive from the full deferred/denied governance set, not only the first visible `governanceItems`, and denied-only governance packages now still advertise visible governance content instead of hiding behind a false `hasOpenGovernanceItems: false`.
 - Hardened the Node HTTP adapter so request-body limits are enforced on bytes actually read, not only on client-declared `Content-Length`, and loopback proxy headers now preserve the forwarded client IP for rate limiting.
 - Tightened the dashboard HTTP seam so auth failures still return `401`, but real downstream/runtime faults now surface as `500 service_unavailable` instead of being mislabeled as unauthorized.
 - Made harness workflow selection fail closed if more than one harness-eligible workflow is exposed without an explicit selector, instead of silently choosing the first configured id.
@@ -132,6 +135,9 @@ The first harness implementation slice is now built and verified:
 - Governance caveats belong in the read model, not in raw note replay. Deferred approvals should expose why they are paused and what reopens them, but the public board still should not echo full `decisionNote` text back to the tenant.
 - Migration-helper readiness checks must cover every live enum literal, not just one or two sentinel values. A partial `policy_reason` constraint can look "ready" and still reject the first real board decision insert.
 - `completionPackage` should summarize current governance state, not replay stale historical objections. Deferred or denied guidance that is later resolved must fall out of the final handoff package instead of lingering as old board noise.
+- Repeated defer actions need the same card-discipline as repeated lane opens. If the CEO has not changed the note or the policy context, treat the second defer as idempotent instead of expanding the governance ledger with duplicate pause decisions.
+- Tenant-facing governance packaging should be derived from the decision ledger, not from raw `decisionNote` text. Surface bounded policy labels, recommendation/objection summaries, and review triggers, but keep ad hoc CEO notes internal unless a later explicit export seam proves they belong in long memory.
+- If the board shows only a capped visible subset of governance items, the package-level summaries still need to derive from the full current governance set. Otherwise larger boards under-report active objections and recommendations.
 
 ## Next Step
 
@@ -139,6 +145,7 @@ Continue the harness build by replacing more of the live execution slice behind 
 
 - keep deepening CEO lane policy in executable runtime code, especially around when to update an existing lane versus defer versus deny as the board accumulates more governance memory
 - widen harness completion beyond the current derived `completionPackage` into a fuller packaged result handoff only after the bounded governance-memory seam stays stable under more execution slices
+- decide whether denied governance items should stay only in the derived tenant-facing handoff package or graduate into a later persisted export artifact/Obsidian sync record
 - expand the proposal/card mutation seam beyond the current child-card progression path without widening into generic editing APIs
 - design first-class board memory exports so recommendations, objections, approvals, and deferrals can later sync into tenant-owned Obsidian without making Obsidian live runtime truth
 - later, design the Obsidian integration as tenant-owned long memory and records, not as the live source of truth for harness execution state

@@ -86,6 +86,16 @@ export type HarnessCompletionPackageView = {
   packageNote?: string;
   recommendations: string[];
   objections: string[];
+  governanceItems: Array<{
+    proposalId: string;
+    statusLabel: string;
+    persona: string;
+    deliverableLabel: string;
+    policyReasonLabel?: string;
+    recommendationSummary?: string;
+    objectionSummary?: string;
+    nextReviewTrigger?: string;
+  }>;
   deliverables: Array<{
     cardId: string;
     persona: string;
@@ -337,11 +347,28 @@ export function createHarnessBoardService(options: {
           throw new HarnessCardCreationConflictError("Harness proposal is outside the approved workflow boundary");
         }
 
-        const [cards, proposals] = await Promise.all([
+        const [cards, proposals, decisions] = await Promise.all([
           repository.listCardsForRun(run.id),
-          repository.listProposalsForRun(run.id)
+          repository.listProposalsForRun(run.id),
+          repository.listDecisionsForRun(run.id)
         ]);
         const trimmedDecisionNote = request.decisionNote?.trim();
+        const proposalPolicyReason = determineProposalPolicyReason({
+          cards,
+          proposal
+        });
+        const latestDecisionForProposal =
+          decisions.find((decision) => decision.proposalId === proposal.id) ?? null;
+        if (proposal.status === "deferred" && request.decision === "defer") {
+          const unchangedDecisionNote =
+            !trimmedDecisionNote ||
+            trimmedDecisionNote === proposal.decisionNote?.trim();
+          const unchangedPolicyReason =
+            latestDecisionForProposal?.policyReason === proposalPolicyReason;
+          if (unchangedDecisionNote && unchangedPolicyReason) {
+            return { status: "deferred" };
+          }
+        }
 
         if (request.decision === "defer" || request.decision === "deny") {
           const status: HarnessProposalStatus = request.decision === "defer" ? "deferred" : "denied";
@@ -377,11 +404,16 @@ export function createHarnessBoardService(options: {
               proposalId: proposal.id,
               persona: proposal.persona,
               deliverableType: proposal.deliverableType,
-              policyReason: "scope_guardrail",
+              policyReason: proposalPolicyReason,
               decisionNote,
+              recommendationSummary: createGovernanceRecommendationSummary({
+                deliverableType: proposal.deliverableType,
+                policyReason: proposalPolicyReason,
+                status
+              }),
               objectionSummary: createGovernanceObjectionSummary({
                 deliverableType: proposal.deliverableType,
-                policyReason: "scope_guardrail"
+                policyReason: proposalPolicyReason
               })
             })
           );
@@ -398,6 +430,7 @@ export function createHarnessBoardService(options: {
                 metadata: {
                   runId: run.id,
                   decision: status,
+                  reason: proposalPolicyReason,
                   hasDecisionNote: Boolean(trimmedDecisionNote),
                   requestedByPersona: proposal.requestedByPersona,
                   targetPersona: proposal.persona,
@@ -645,6 +678,11 @@ export function createHarnessBoardService(options: {
               deliverableType: proposal.deliverableType,
               policyReason: "deliverable_owner_conflict",
               decisionNote,
+              recommendationSummary: createGovernanceRecommendationSummary({
+                deliverableType: proposal.deliverableType,
+                policyReason: "deliverable_owner_conflict",
+                status: "deferred"
+              }),
               objectionSummary: createGovernanceObjectionSummary({
                 deliverableType: proposal.deliverableType,
                 policyReason: "deliverable_owner_conflict"
@@ -714,6 +752,11 @@ export function createHarnessBoardService(options: {
               deliverableType: proposal.deliverableType,
               policyReason: "lane_cap",
               decisionNote,
+              recommendationSummary: createGovernanceRecommendationSummary({
+                deliverableType: proposal.deliverableType,
+                policyReason: "lane_cap",
+                status: "deferred"
+              }),
               objectionSummary: createGovernanceObjectionSummary({
                 deliverableType: proposal.deliverableType,
                 policyReason: "lane_cap"
@@ -1559,18 +1602,56 @@ function buildCompletionPackage(input: {
   }
   const latestRunCompletedDecision = input.decisions.find((decision) => decision.decisionKind === "run_completed") ?? null;
   const deferredApprovalCount = input.proposals.filter((proposal) => proposal.status === "deferred").length;
-  const recommendations = latestRunCompletedDecision?.recommendationSummary
-    ? [latestRunCompletedDecision.recommendationSummary]
-    : [];
-  const objections = input.proposals
-    .filter((proposal) => proposal.status === "deferred")
-    .map((proposal) => latestDecisionByProposalId.get(proposal.id)?.objectionSummary ?? null)
+  const deniedApprovalCount = input.proposals.filter((proposal) => proposal.status === "denied").length;
+  const governanceEntries = input.proposals
+    .filter((proposal) => proposal.status === "deferred" || proposal.status === "denied")
+    .map((proposal) => {
+      const latestDecision = latestDecisionByProposalId.get(proposal.id) ?? null;
+      return {
+        proposalId: proposal.id,
+        status: proposal.status,
+        createdAt: latestDecision?.createdAt ?? "",
+        item: {
+          proposalId: proposal.id,
+          statusLabel:
+            proposal.status === "deferred" ? "Deferred for later CEO review" : "Denied by the CEO",
+          persona: proposal.persona.toUpperCase(),
+          deliverableLabel: humanizeDeliverableType(proposal.deliverableType),
+          ...(latestDecision?.policyReason ? { policyReasonLabel: humanizePolicyReason(latestDecision.policyReason) } : {}),
+          ...(latestDecision?.recommendationSummary
+            ? { recommendationSummary: latestDecision.recommendationSummary }
+            : {}),
+          ...(latestDecision?.objectionSummary ? { objectionSummary: latestDecision.objectionSummary } : {}),
+          ...(proposal.status === "deferred"
+            ? { nextReviewTrigger: describeNextReviewTrigger(latestDecision?.policyReason ?? null) }
+            : {})
+        }
+      };
+    })
+    .sort((left, right) => {
+      if (left.status !== right.status) {
+        return left.status === "deferred" ? -1 : 1;
+      }
+      return right.createdAt.localeCompare(left.createdAt);
+    });
+  const governanceItems = governanceEntries.map((entry) => entry.item).slice(0, 6);
+  const recommendations = [
+    ...(latestRunCompletedDecision?.recommendationSummary ? [latestRunCompletedDecision.recommendationSummary] : []),
+    ...governanceEntries
+      .map((entry) => entry.item.recommendationSummary ?? null)
+      .filter((summary): summary is string => Boolean(summary))
+  ]
+    .filter((summary, index, values) => values.indexOf(summary) === index)
+    .slice(0, 4);
+  const objections = governanceEntries
+    .map((entry) => entry.item.objectionSummary ?? null)
     .filter((summary): summary is string => Boolean(summary))
     .filter((summary, index, values) => values.indexOf(summary) === index)
     .slice(0, 4);
-  const hasOpenGovernanceItems = deferredApprovalCount > 0;
+  const hasOpenGovernanceItems = governanceEntries.length > 0;
   const packageNote = buildCompletionPackageNote({
     deferredApprovalCount,
+    deniedApprovalCount,
     recommendationCount: recommendations.length,
     objectionCount: objections.length
   });
@@ -1583,6 +1664,7 @@ function buildCompletionPackage(input: {
     ...(packageNote ? { packageNote } : {}),
     recommendations,
     objections,
+    governanceItems,
     deliverables
   };
 }
@@ -1740,11 +1822,15 @@ function toPendingApprovalPolicyView(input: {
 
 function buildCompletionPackageNote(input: {
   deferredApprovalCount: number;
+  deniedApprovalCount: number;
   recommendationCount: number;
   objectionCount: number;
 }): string | undefined {
   if (input.deferredApprovalCount > 0) {
     return "The board is packaging completed work while keeping deferred follow-up requests visible for later CEO review.";
+  }
+  if (input.deniedApprovalCount > 0) {
+    return "The board outcome keeps denied governance requests visible so the tenant can see where the CEO held the workflow boundary.";
   }
   if (input.objectionCount > 0) {
     return "The board outcome includes completed work alongside bounded objections that still need attention.";
@@ -1784,6 +1870,44 @@ function createGovernanceObjectionSummary(input: {
     case "scope_guardrail":
     default:
       return `Do not widen this run beyond the approved ${deliverable} workflow boundary.`;
+  }
+}
+
+function determineProposalPolicyReason(input: {
+  cards: readonly HarnessCardRecord[];
+  proposal: Pick<HarnessSubCardProposal, "persona" | "deliverableType">;
+}): "deliverable_owner_conflict" | "lane_cap" | "scope_guardrail" {
+  if (
+    findOpenChildCardByDeliverableType(input.cards, input.proposal.deliverableType) &&
+    !findOpenChildCardByPersonaDeliverable(input.cards, {
+      persona: input.proposal.persona,
+      deliverableType: input.proposal.deliverableType
+    })
+  ) {
+    return "deliverable_owner_conflict";
+  }
+  if (countOpenChildCards(input.cards) >= MAX_OPEN_CHILD_CARDS) {
+    return "lane_cap";
+  }
+  return "scope_guardrail";
+}
+
+function createGovernanceRecommendationSummary(input: {
+  deliverableType: string;
+  policyReason: "deliverable_owner_conflict" | "lane_cap" | "scope_guardrail";
+  status: "deferred" | "denied";
+}): string {
+  const deliverable = humanizeDeliverableType(input.deliverableType).toLowerCase();
+  switch (input.policyReason) {
+    case "deliverable_owner_conflict":
+      return `Keep advancing the current ${deliverable} lane and revisit this request after a clear handoff.`;
+    case "lane_cap":
+      return `Finish or close one active lane before reopening this ${deliverable} request.`;
+    case "scope_guardrail":
+    default:
+      return input.status === "denied"
+        ? `Keep this ${deliverable} work inside the current approved package boundary unless the CEO deliberately widens scope.`
+        : `Revisit this ${deliverable} request only if the CEO deliberately widens the approved workflow boundary.`;
   }
 }
 
