@@ -12,6 +12,7 @@ import {
 } from "../harness/worker-executor.js";
 import { createPostgresHarnessRepository } from "../harness/repository.js";
 import { createPaperclipClient } from "../paperclip/client.js";
+import type { PaperclipRunStatus } from "../paperclip/types.js";
 import {
   createPaperclipSecretAdminHttpClient,
   createPaperclipSecretBindingRepository,
@@ -591,7 +592,7 @@ async function processHarnessLaneOutcome(options: {
       >
     ) => Promise<T>
   ) => Promise<T>;
-  recordStatus?: (status: { tenantId: string; runId: string; workflowId: string; status: "running" }) => void | Promise<void>;
+  recordStatus?: (status: { tenantId: string; runId: string; workflowId: string; status: PaperclipRunStatus }) => void | Promise<void>;
   onOutcome?: (outcome: HarnessWorkerLaneOutcome) => void;
 }) {
   const outcome = await commitHarnessWorkerLaneOutcome({
@@ -605,16 +606,44 @@ async function processHarnessLaneOutcome(options: {
     ...(options.payload.resumeSummary ? { resumeSummary: options.payload.resumeSummary } : {}),
     ...(options.runAtomically ? { runAtomically: options.runAtomically } : {})
   });
-  if (outcome.status === "committed" && outcome.nextDispatch?.laneExecution) {
-    await options.recordStatus?.({
-      tenantId: options.payload.tenantId,
-      runId: outcome.nextDispatch.runId,
-      workflowId: outcome.nextDispatch.workflowId,
-      status: "running"
-    });
+  if (outcome.status === "committed") {
+    const workflowStatus = deriveHarnessWorkflowStatusFromOutcome(outcome);
+    if (workflowStatus) {
+      await options.recordStatus?.({
+        tenantId: options.payload.tenantId,
+        runId: outcome.runId,
+        workflowId: outcome.workflowId,
+        status: workflowStatus
+      });
+    }
   }
   if (outcome.status === "committed") {
     options.onOutcome?.(outcome);
   }
   return outcome;
+}
+
+function deriveHarnessWorkflowStatusFromOutcome(outcome: HarnessWorkerLaneOutcome): PaperclipRunStatus | null {
+  if (outcome.status !== "committed") {
+    return null;
+  }
+  if (outcome.nextDispatch?.laneExecution) {
+    return "running";
+  }
+
+  switch (outcome.laneExecution?.runState) {
+    case "done":
+      return "completed";
+    case "failed":
+      return "failed";
+    case "cancelled":
+      return "cancelled";
+    case "active":
+    case "waiting":
+    case "blocked":
+    case "assembling":
+      return "queued";
+    default:
+      return null;
+  }
 }

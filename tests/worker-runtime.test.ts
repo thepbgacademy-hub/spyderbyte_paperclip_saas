@@ -259,7 +259,7 @@ describe("worker runtime", () => {
     expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith({
       tenantId: "tenant-1",
       runId: "run-1",
-      from: ["queued"],
+      from: ["queued", "running"],
       to: "queued"
     });
     expect(createPaperclipClient).toHaveBeenCalled();
@@ -394,7 +394,7 @@ describe("worker runtime", () => {
     });
 
     const harnessRepository = harnessRepositoryRef.current;
-    harnessRepository.listCardsForRun.mockResolvedValueOnce([
+    harnessRepository.listCardsForRun.mockResolvedValue([
       {
         id: "card_ceo",
         runId: "run-1",
@@ -483,6 +483,7 @@ describe("worker runtime", () => {
   });
 
   it("commits a private harness lane outcome and emits a bounded worker event", async () => {
+    const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
@@ -558,6 +559,13 @@ describe("worker runtime", () => {
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"status\":\"committed\"")
     );
+    const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
+    expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      from: ["queued", "running"],
+      to: "queued"
+    });
 
     await runtime.close();
   });

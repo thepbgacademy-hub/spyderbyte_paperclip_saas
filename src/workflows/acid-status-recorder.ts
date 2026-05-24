@@ -18,7 +18,7 @@ export function createAcidWorkflowStatusRecorder(repository: WorkflowStatusTrans
 function allowedPreviousStatuses(status: PaperclipRunStatus): readonly string[] {
   switch (status) {
     case "queued":
-      return ["queued"];
+      return ["queued", "running"];
     case "running":
       return ["queued", "running"];
     case "completed":
