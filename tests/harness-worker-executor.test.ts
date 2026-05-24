@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createInMemoryHarnessRepository } from "../src/harness/repository.js";
-import { buildHarnessWorkerDispatch } from "../src/harness/worker-executor.js";
+import { buildHarnessWorkerDispatch, commitHarnessWorkerLaneOutcome } from "../src/harness/worker-executor.js";
 import {
   createHarnessCardEventRecord,
   createHarnessCardContinuityRecord,
@@ -399,5 +399,192 @@ describe("harness worker executor", () => {
         state: "active"
       })
     );
+  });
+
+  it("commits a done worker outcome through the private lane seam and reconciles the run to assembling", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "working";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+
+    await expect(
+      commitHarnessWorkerLaneOutcome({
+        repository,
+        tenantId: "tenant-1",
+        runId: run.id,
+        workflowId: "wf_connect_first_workflow",
+        cardId: cfoCard.id,
+        state: "done",
+        resultSummary: "Validated the pricing model and preserved the final floor."
+      })
+    ).resolves.toEqual({
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow",
+      status: "committed",
+      laneExecution: {
+        cardId: cfoCard.id,
+        state: "done",
+        runState: "assembling",
+        latestResultSummary: "Validated the pricing model and preserved the final floor."
+      }
+    });
+
+    await expect(repository.getCard(cfoCard.id)).resolves.toEqual(
+      expect.objectContaining({
+        id: cfoCard.id,
+        state: "done"
+      })
+    );
+    await expect(repository.getRun(run.id)).resolves.toEqual(
+      expect.objectContaining({
+        id: run.id,
+        state: "assembling"
+      })
+    );
+    await expect(repository.listEventsForCard(cfoCard.id)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventKind: "state_changed",
+          payload: {
+            from: "working",
+            to: "done"
+          }
+        }),
+        expect.objectContaining({
+          eventKind: "result_recorded",
+          payload: {
+            summary: "Validated the pricing model and preserved the final floor."
+          }
+        })
+      ])
+    );
+  });
+
+  it("commits a waiting worker outcome with a bounded resume summary", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Wait for revenue assumptions",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "working";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+
+    await expect(
+      commitHarnessWorkerLaneOutcome({
+        repository,
+        tenantId: "tenant-1",
+        runId: run.id,
+        workflowId: "wf_connect_first_workflow",
+        cardId: cfoCard.id,
+        state: "waiting",
+        resumeSummary: "CFO should resume this lane once the tenant confirms the latest revenue assumption."
+      })
+    ).resolves.toEqual({
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow",
+      status: "committed",
+      laneExecution: {
+        cardId: cfoCard.id,
+        state: "waiting",
+        runState: "waiting",
+        resumeFocus: "CFO should resume this lane once the tenant confirms the latest revenue assumption."
+      }
+    });
+  });
+
+  it("ignores worker outcome commits for lanes that are no longer working", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Already paused",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "waiting";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+
+    await expect(
+      commitHarnessWorkerLaneOutcome({
+        repository,
+        tenantId: "tenant-1",
+        runId: run.id,
+        workflowId: "wf_connect_first_workflow",
+        cardId: cfoCard.id,
+        state: "done",
+        resultSummary: "This should not commit."
+      })
+    ).resolves.toEqual({
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow",
+      status: "ignored",
+      reason: "lane_not_working"
+    });
   });
 });

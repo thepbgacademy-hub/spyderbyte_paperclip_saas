@@ -18,6 +18,17 @@ const { makeHarnessRepository, harnessRepositoryRef } = vi.hoisted(() => {
       createdAt: "2026-05-21T10:00:00.000Z",
       updatedAt: "2026-05-21T10:00:00.000Z"
     }),
+    getCard: vi.fn().mockResolvedValue({
+      id: "card_cfo",
+      runId: "run-1",
+      parentCardId: "card_ceo",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review",
+      state: "working",
+      createdAt: "2026-05-21T10:01:00.000Z",
+      updatedAt: "2026-05-21T10:04:00.000Z"
+    }),
     listCardsForRun: vi.fn().mockResolvedValue([
       {
         id: "card_ceo",
@@ -53,6 +64,17 @@ const { makeHarnessRepository, harnessRepositoryRef } = vi.hoisted(() => {
       createdAt: "2026-05-21T10:01:00.000Z",
       updatedAt: "2026-05-21T10:04:00.000Z"
     }),
+    transitionCardState: vi.fn().mockImplementation(async ({ cardId, state }) => ({
+      id: cardId,
+      runId: "run-1",
+      parentCardId: "card_ceo",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review",
+      state,
+      createdAt: "2026-05-21T10:01:00.000Z",
+      updatedAt: "2026-05-21T10:05:00.000Z"
+    })),
     updateRunState: vi.fn().mockImplementation(async ({ runId, state }) => ({
       id: runId,
       tenantId: "tenant-1",
@@ -69,6 +91,14 @@ const { makeHarnessRepository, harnessRepositoryRef } = vi.hoisted(() => {
     })),
     insertEvent: vi.fn().mockResolvedValue(undefined),
     upsertCardContinuity: vi.fn().mockResolvedValue(undefined),
+    getCardContinuity: vi.fn().mockResolvedValue({
+      cardId: "card_cfo",
+      runId: "run-1",
+      continuitySummary: "CFO should continue this active pricing review lane: Pressure-test the pricing lane.",
+      latestResultSummary: "Initial pricing floor is stable.",
+      absorbedWorkItems: [],
+      updatedAt: "2026-05-21T10:03:00.000Z"
+    }),
     listProposalsForRun: vi.fn().mockResolvedValue([]),
     listCardContinuityForRun: vi.fn().mockResolvedValue([
       {
@@ -448,6 +478,109 @@ describe("worker runtime", () => {
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
     );
     expect(acidRepository.transitionWorkflowRunStatus).not.toHaveBeenCalled();
+
+    await runtime.close();
+  });
+
+  it("commits a private harness lane outcome and emits a bounded worker event", async () => {
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-outcome"
+    });
+
+    stdoutWrite.mockClear();
+    await expect(
+      runtime.commitHarnessLaneOutcome({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        state: "done",
+        resultSummary: "Validated the pricing model and preserved the final floor."
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "committed",
+      laneExecution: {
+        cardId: "card_cfo",
+        state: "done",
+        runState: "active",
+        latestResultSummary: "Validated the pricing model and preserved the final floor."
+      }
+    });
+
+    const harnessRepository = harnessRepositoryRef.current;
+    expect(harnessRepository.transitionCardState).toHaveBeenCalledWith({
+      cardId: "card_cfo",
+      expectedState: "working",
+      state: "done"
+    });
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "result_recorded",
+        payload: {
+          summary: "Validated the pricing model and preserved the final floor."
+        }
+      })
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"status\":\"committed\"")
+    );
+
+    await runtime.close();
+  });
+
+  it("keeps quiet when a private harness lane outcome targets a lane that is no longer working", async () => {
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-outcome-idle"
+    });
+
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.getCard.mockResolvedValueOnce({
+      id: "card_cfo",
+      runId: "run-1",
+      parentCardId: "card_ceo",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review",
+      state: "waiting",
+      createdAt: "2026-05-21T10:01:00.000Z",
+      updatedAt: "2026-05-21T10:04:00.000Z"
+    });
+
+    stdoutWrite.mockClear();
+    await expect(
+      runtime.commitHarnessLaneOutcome({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        state: "done",
+        resultSummary: "This should not commit."
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "ignored",
+      reason: "lane_not_working"
+    });
+
+    expect(harnessRepository.transitionCardState).not.toHaveBeenCalled();
+    expect(stdoutWrite).not.toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome\"")
+    );
 
     await runtime.close();
   });

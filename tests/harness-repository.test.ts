@@ -254,6 +254,52 @@ describe("harness persistence records", () => {
     );
   });
 
+  it("only transitions an in-memory card when the expected prior state still matches", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-123",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const card = {
+      ...createHarnessCardRecord({
+        runId: run.id,
+        persona: "cfo",
+        title: "Pressure-test the pricing lane",
+        deliverableType: "pricing_review"
+      }),
+      state: "working" as const
+    };
+
+    await repository.insertRun(run);
+    await repository.insertCard(card);
+
+    await expect(
+      repository.transitionCardState({
+        cardId: card.id,
+        expectedState: "working",
+        state: "done"
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: card.id,
+        state: "done"
+      })
+    );
+    await expect(
+      repository.transitionCardState({
+        cardId: card.id,
+        expectedState: "working",
+        state: "cancelled"
+      })
+    ).resolves.toBeNull();
+  });
+
   it("keeps deferred proposal approval and child-card insert on one leased transaction client", async () => {
     const card = {
       ...createHarnessCardRecord({
@@ -548,6 +594,72 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
             state: "approved"
           })
         );
+      } finally {
+        await client.end();
+      }
+    },
+    120_000
+  );
+
+  it(
+    "round-trips compare-and-set harness card transitions through the real Postgres repository mapping",
+    async () => {
+      const database = requireDisposableHarnessDatabase();
+      const client = new Client({ connectionString: database.connectionString });
+      await client.connect();
+
+      try {
+        const repository = createPostgresHarnessRepository({
+          query: async (sql: string, values: readonly unknown[]) => {
+            const result = await client.query(sql, [...values]);
+            return { rows: result.rows };
+          }
+        });
+        const tenantId = randomUUID();
+        const run = createHarnessRunRecord({
+          tenantId,
+          workflowId: "wf_connect_first_workflow",
+          packageId: "pkg_bib_connect",
+          orchestratorPersona: "ceo",
+          runtimeContext: {
+            providerKind: "openai_api",
+            credentialLabel: "Primary OpenAI"
+          }
+        });
+        const childCard = {
+          ...createHarnessCardRecord({
+            runId: run.id,
+            persona: "cfo",
+            title: "Pressure-test the pricing lane",
+            deliverableType: "pricing_review"
+          }),
+          state: "working" as const
+        };
+
+        await resetHarnessProofDatabase(client);
+        await seedHarnessProofPrerequisites(client, tenantId);
+        await repository.insertRun(run);
+        await repository.insertCard(childCard);
+
+        await expect(
+          repository.transitionCardState({
+            cardId: childCard.id,
+            expectedState: "working",
+            state: "done"
+          })
+        ).resolves.toEqual(
+          expect.objectContaining({
+            id: childCard.id,
+            state: "done"
+          })
+        );
+        await expect(
+          repository.transitionCardState({
+            cardId: childCard.id,
+            expectedState: "working",
+            state: "cancelled"
+          })
+        ).resolves.toBeNull();
       } finally {
         await client.end();
       }

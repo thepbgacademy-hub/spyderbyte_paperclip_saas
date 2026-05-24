@@ -6,6 +6,7 @@ import {
   createHarnessCardEventRecord,
   type HarnessCardContinuityRecord,
   type HarnessCardRecord,
+  type HarnessCardState,
   type HarnessRunRecord
 } from "./types.js";
 
@@ -26,6 +27,20 @@ export type HarnessWorkerDispatch = {
   laneExecution: HarnessWorkerLaneExecution | null;
 };
 
+export type HarnessWorkerLaneOutcome = {
+  runId: string;
+  workflowId: string;
+  status: "committed" | "ignored";
+  reason?: "terminal_run" | "lane_not_working";
+  laneExecution?: {
+    cardId: string;
+    state: HarnessCardState;
+    runState: HarnessRunRecord["state"];
+    resumeFocus?: string;
+    latestResultSummary?: string;
+  };
+};
+
 type HarnessDispatchRepository = Pick<
   HarnessRepository,
   | "getRun"
@@ -33,6 +48,19 @@ type HarnessDispatchRepository = Pick<
   | "listProposalsForRun"
   | "listCardContinuityForRun"
   | "claimCardForExecution"
+  | "insertEvent"
+  | "upsertCardContinuity"
+  | "updateRunState"
+>;
+
+type HarnessOutcomeRepository = Pick<
+  HarnessRepository,
+  | "getRun"
+  | "getCard"
+  | "getCardContinuity"
+  | "listCardsForRun"
+  | "listProposalsForRun"
+  | "transitionCardState"
   | "insertEvent"
   | "upsertCardContinuity"
   | "updateRunState"
@@ -141,6 +169,118 @@ export async function buildHarnessWorkerDispatch(input: {
   });
 }
 
+export async function commitHarnessWorkerLaneOutcome(input: {
+  repository: HarnessOutcomeRepository;
+  tenantId: string;
+  runId: string;
+  workflowId: string;
+  cardId: string;
+  state: Extract<HarnessCardState, "waiting" | "done" | "blocked" | "cancelled">;
+  resultSummary?: string;
+  resumeSummary?: string;
+  runAtomically?: <T>(work: (repository: HarnessOutcomeRepository) => Promise<T>) => Promise<T>;
+}): Promise<HarnessWorkerLaneOutcome> {
+  const runWork = input.runAtomically ?? (async <T>(work: (repository: HarnessOutcomeRepository) => Promise<T>) => work(input.repository));
+  return runWork(async (repository) => {
+    const run = await repository.getRun(input.runId);
+    if (!run || run.tenantId !== input.tenantId || run.workflowId !== input.workflowId) {
+      throw new Error(`Unknown harness run for worker lane outcome: ${input.runId}`);
+    }
+    if (NON_EXECUTABLE_RUN_STATES.has(run.state)) {
+      return {
+        runId: run.id,
+        workflowId: run.workflowId,
+        status: "ignored",
+        reason: "terminal_run"
+      };
+    }
+
+    const card = await repository.getCard(input.cardId);
+    if (!card || card.runId !== run.id || card.persona === "ceo") {
+      throw new Error(`Unknown harness child lane for worker outcome: ${input.cardId}`);
+    }
+    if (card.state !== "working") {
+      return {
+        runId: run.id,
+        workflowId: run.workflowId,
+        status: "ignored",
+        reason: "lane_not_working"
+      };
+    }
+
+    const trimmedSummary = input.resultSummary?.trim();
+    const trimmedResumeSummary = input.resumeSummary?.trim();
+    if (trimmedSummary && input.state !== "done") {
+      throw new Error("Worker lane result summaries can only be recorded for done outcomes");
+    }
+    if (trimmedResumeSummary && input.state === "done") {
+      throw new Error("Worker lane resume summaries cannot be recorded for done outcomes");
+    }
+
+    const updatedCard = await repository.transitionCardState({
+      cardId: card.id,
+      expectedState: "working",
+      state: input.state
+    });
+    if (!updatedCard) {
+      return {
+        runId: run.id,
+        workflowId: run.workflowId,
+        status: "ignored",
+        reason: "lane_not_working"
+      };
+    }
+
+    await repository.insertEvent(
+      createHarnessCardEventRecord({
+        cardId: updatedCard.id,
+        eventKind: "state_changed",
+        payload: { from: card.state, to: updatedCard.state }
+      })
+    );
+
+    let continuity: HarnessCardContinuityRecord;
+    if (trimmedSummary) {
+      await repository.insertEvent(
+        createHarnessCardEventRecord({
+          cardId: updatedCard.id,
+          eventKind: "result_recorded",
+          payload: { summary: trimmedSummary }
+        })
+      );
+      continuity = await recordLatestResultContinuity({
+        repository,
+        card: updatedCard,
+        resultSummary: trimmedSummary
+      });
+    } else {
+      continuity = await recordCardStateContinuity({
+          repository,
+          card: updatedCard,
+          ...(trimmedResumeSummary ? { resumeSummary: trimmedResumeSummary } : {})
+        });
+    }
+
+    const reconciledRun = await reconcileHarnessRunState({
+      repository,
+      run
+    });
+    const nextRun = reconciledRun ?? run;
+    return {
+      runId: run.id,
+      workflowId: run.workflowId,
+      status: "committed",
+      laneExecution: {
+        cardId: updatedCard.id,
+        state: updatedCard.state,
+        runState: nextRun.state,
+        ...(continuity.continuitySummary ? { resumeFocus: continuity.continuitySummary } : {}),
+        ...(continuity.latestResultSummary ? { latestResultSummary: continuity.latestResultSummary } : {})
+      }
+    };
+  });
+}
+
 async function claimLaneForExecution(input: {
   repository: HarnessDispatchRepository;
   lane: HarnessCardRecord;
@@ -226,8 +366,54 @@ async function persistWorkerStartState(input: {
   return updatedContinuity;
 }
 
+async function reconcileHarnessRunState(input: {
+  repository: Pick<HarnessRepository, "listCardsForRun" | "listProposalsForRun" | "updateRunState">;
+  run: HarnessRunRecord;
+}): Promise<HarnessRunRecord | null> {
+  const [cards, proposals] = await Promise.all([
+    input.repository.listCardsForRun(input.run.id),
+    input.repository.listProposalsForRun(input.run.id)
+  ]);
+  const nextState = deriveHarnessRunState({
+    run: input.run,
+    cards,
+    proposals
+  });
+  if (nextState === input.run.state) {
+    return null;
+  }
+  return input.repository.updateRunState({
+    runId: input.run.id,
+    state: nextState
+  });
+}
+
 function createActiveResumeSummary(card: HarnessCardRecord): string {
   return `${card.persona.toUpperCase()} should continue this active ${humanizeDeliverableType(card.deliverableType).toLowerCase()} lane: ${card.title}.`;
+}
+
+function createDefaultResumeSummary(card: HarnessCardRecord): string | null {
+  const personaLabel = card.persona.toUpperCase();
+  const deliverableLabel = humanizeDeliverableType(card.deliverableType).toLowerCase();
+  switch (card.state) {
+    case "queued":
+      return `${personaLabel} should start this queued ${deliverableLabel} lane from the approved assignment "${card.title}".`;
+    case "planning":
+      return `${personaLabel} should shape the next bounded move for "${card.title}".`;
+    case "approved":
+      return `${personaLabel} should begin this approved ${deliverableLabel} lane: ${card.title}.`;
+    case "working":
+      return createActiveResumeSummary(card);
+    case "waiting":
+      return `${personaLabel} should resolve the waiting dependency before restarting "${card.title}".`;
+    case "blocked":
+      return `${personaLabel} should unblock this ${deliverableLabel} lane before more work starts.`;
+    case "done":
+    case "cancelled":
+      return null;
+    default:
+      return `${personaLabel} should resume this ${deliverableLabel} lane from persisted state.`;
+  }
 }
 
 function humanizeDeliverableType(value: string): string {
@@ -246,4 +432,39 @@ function mergeContinuityRecord(
     ...existing.filter((candidate) => candidate.cardId !== record.cardId),
     record
   ];
+}
+
+async function recordCardStateContinuity(input: {
+  repository: Pick<HarnessRepository, "getCardContinuity" | "upsertCardContinuity">;
+  card: HarnessCardRecord;
+  resumeSummary?: string;
+}): Promise<HarnessCardContinuityRecord> {
+  const existing = await input.repository.getCardContinuity(input.card.id);
+  const record = createHarnessCardContinuityRecord({
+    cardId: input.card.id,
+    runId: input.card.runId,
+    continuitySummary: input.resumeSummary ?? createDefaultResumeSummary(input.card),
+    latestResultSummary: existing?.latestResultSummary ?? null,
+    absorbedWorkItems: existing?.absorbedWorkItems ?? []
+  });
+  await input.repository.upsertCardContinuity(record);
+  return record;
+}
+
+async function recordLatestResultContinuity(input: {
+  repository: Pick<HarnessRepository, "getCardContinuity" | "upsertCardContinuity">;
+  card: HarnessCardRecord;
+  resultSummary: string;
+  resumeSummary?: string;
+}): Promise<HarnessCardContinuityRecord> {
+  const existing = await input.repository.getCardContinuity(input.card.id);
+  const record = createHarnessCardContinuityRecord({
+    cardId: input.card.id,
+    runId: input.card.runId,
+    continuitySummary: input.resumeSummary ?? createDefaultResumeSummary(input.card),
+    latestResultSummary: input.resultSummary,
+    absorbedWorkItems: existing?.absorbedWorkItems ?? []
+  });
+  await input.repository.upsertCardContinuity(record);
+  return record;
 }

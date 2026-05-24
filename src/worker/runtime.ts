@@ -4,7 +4,12 @@ import { createDurableAuditSink } from "../audit/durable-audit.js";
 import { createAcidGuardRepository } from "../db/acid-guard-repository.js";
 import { createPgPool, createPgPoolQueryClient, createPgTransactionRunner } from "../db/postgres-client.js";
 import { createSupabaseRepositories } from "../db/supabase-repositories.js";
-import { buildHarnessWorkerDispatch, type HarnessWorkerDispatch } from "../harness/worker-executor.js";
+import {
+  buildHarnessWorkerDispatch,
+  commitHarnessWorkerLaneOutcome,
+  type HarnessWorkerDispatch,
+  type HarnessWorkerLaneOutcome
+} from "../harness/worker-executor.js";
 import { createPostgresHarnessRepository } from "../harness/repository.js";
 import { createPaperclipClient } from "../paperclip/client.js";
 import {
@@ -398,6 +403,40 @@ export function createWorkerRuntime(options: { env: WorkerEnv; workerInstanceId?
       return executionGate.getSnapshot();
     },
 
+    async commitHarnessLaneOutcome(input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      cardId: string;
+      state: "waiting" | "done" | "blocked" | "cancelled";
+      resultSummary?: string;
+      resumeSummary?: string;
+    }) {
+      if (!harnessWorkflowRegistry.isHarnessEligible(input.workflowId)) {
+        throw new Error(`Harness lane outcome is not enabled for workflow ${input.workflowId}`);
+      }
+
+      const outcome = await processHarnessLaneOutcome({
+        payload: input,
+        repository: harnessRepository,
+        runAtomically: (work) =>
+          transactionRunner.withTransaction((transaction) =>
+            work(createPostgresHarnessRepository(transaction))
+          ),
+        onOutcome: (committedOutcome) => {
+          process.stdout.write(
+            `${JSON.stringify({
+              type: "wealth_factory_harness_lane_outcome",
+              workerInstanceId: options.workerInstanceId ?? "worker",
+              observedAt: new Date().toISOString(),
+              ...committedOutcome
+            })}\n`
+          );
+        }
+      });
+      return outcome;
+    },
+
     async close() {
       await pool.end();
     }
@@ -432,10 +471,13 @@ async function processHarnessWorkflowJob(options: {
   repository: Pick<
     ReturnType<typeof createPostgresHarnessRepository>,
     | "getRun"
+    | "getCard"
+    | "getCardContinuity"
     | "listCardsForRun"
     | "listProposalsForRun"
     | "listCardContinuityForRun"
     | "claimCardForExecution"
+    | "transitionCardState"
     | "insertEvent"
     | "upsertCardContinuity"
     | "updateRunState"
@@ -445,10 +487,13 @@ async function processHarnessWorkflowJob(options: {
       repository: Pick<
         ReturnType<typeof createPostgresHarnessRepository>,
         | "getRun"
+        | "getCard"
+        | "getCardContinuity"
         | "listCardsForRun"
         | "listProposalsForRun"
         | "listCardContinuityForRun"
         | "claimCardForExecution"
+        | "transitionCardState"
         | "insertEvent"
         | "upsertCardContinuity"
         | "updateRunState"
@@ -489,4 +534,61 @@ async function processHarnessWorkflowJob(options: {
     });
     throw error;
   }
+}
+
+async function processHarnessLaneOutcome(options: {
+  payload: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    cardId: string;
+    state: "waiting" | "done" | "blocked" | "cancelled";
+    resultSummary?: string;
+    resumeSummary?: string;
+  };
+  repository: Pick<
+    ReturnType<typeof createPostgresHarnessRepository>,
+    | "getRun"
+    | "getCard"
+    | "getCardContinuity"
+    | "listCardsForRun"
+    | "listProposalsForRun"
+    | "transitionCardState"
+    | "insertEvent"
+    | "upsertCardContinuity"
+    | "updateRunState"
+  >;
+  runAtomically?: <T>(
+    work: (
+      repository: Pick<
+        ReturnType<typeof createPostgresHarnessRepository>,
+        | "getRun"
+        | "getCard"
+        | "getCardContinuity"
+        | "listCardsForRun"
+        | "listProposalsForRun"
+        | "transitionCardState"
+        | "insertEvent"
+        | "upsertCardContinuity"
+        | "updateRunState"
+      >
+    ) => Promise<T>
+  ) => Promise<T>;
+  onOutcome?: (outcome: HarnessWorkerLaneOutcome) => void;
+}) {
+  const outcome = await commitHarnessWorkerLaneOutcome({
+    repository: options.repository,
+    tenantId: options.payload.tenantId,
+    runId: options.payload.runId,
+    workflowId: options.payload.workflowId,
+    cardId: options.payload.cardId,
+    state: options.payload.state,
+    ...(options.payload.resultSummary ? { resultSummary: options.payload.resultSummary } : {}),
+    ...(options.payload.resumeSummary ? { resumeSummary: options.payload.resumeSummary } : {}),
+    ...(options.runAtomically ? { runAtomically: options.runAtomically } : {})
+  });
+  if (outcome.status === "committed") {
+    options.onOutcome?.(outcome);
+  }
+  return outcome;
 }

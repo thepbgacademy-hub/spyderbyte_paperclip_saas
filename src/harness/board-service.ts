@@ -1384,8 +1384,9 @@ export function createHarnessBoardService(options: {
           throw new HarnessCardProgressionConflictError("Resume summaries cannot be recorded when a card reaches done");
         }
 
-        const updatedCard = await repository.updateCardState({
+        const updatedCard = await repository.transitionCardState({
           cardId: card.id,
+          expectedState: card.state,
           state: nextCard.state
         });
         if (!updatedCard) {
