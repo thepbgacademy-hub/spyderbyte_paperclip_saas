@@ -427,9 +427,9 @@ async function processHarnessWorkflowJob(options: {
   };
   repository: Pick<
     ReturnType<typeof createPostgresHarnessRepository>,
-    "getRun" | "listCardsForRun" | "listProposalsForRun" | "listCardContinuityForRun"
+    "getRun" | "listCardsForRun" | "listProposalsForRun" | "listCardContinuityForRun" | "claimCardForExecution"
   >;
-  recordStatus?: (status: { tenantId: string; runId: string; workflowId: string; status: "queued" | "failed" }) => void | Promise<void>;
+  recordStatus?: (status: { tenantId: string; runId: string; workflowId: string; status: "queued" | "running" | "failed" }) => void | Promise<void>;
   onDispatch?: (dispatch: HarnessWorkerDispatch) => void;
 }) {
   try {

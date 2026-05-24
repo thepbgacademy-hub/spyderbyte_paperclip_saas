@@ -15,19 +15,19 @@ export type HarnessWorkerLaneExecution = {
 export type HarnessWorkerDispatch = {
   runId: string;
   workflowId: string;
-  status: "queued";
+  status: "queued" | "running";
   laneExecution: HarnessWorkerLaneExecution | null;
 };
 
 type HarnessDispatchRepository = Pick<
   HarnessRepository,
-  "getRun" | "listCardsForRun" | "listProposalsForRun" | "listCardContinuityForRun"
+  "getRun" | "listCardsForRun" | "listProposalsForRun" | "listCardContinuityForRun" | "claimCardForExecution"
 >;
 
 const ACTIONABLE_CARD_PRIORITIES: Readonly<Record<HarnessCardRecord["state"], number | null>> = {
   working: 0,
   approved: 1,
-  queued: 2,
+  queued: null,
   planning: null,
   waiting: null,
   blocked: null,
@@ -75,23 +75,52 @@ export async function buildHarnessWorkerDispatch(input: {
     };
   }
 
-  const resumeFocus = runtime.getResumeFocus(lane.id);
-  const laneContinuity = continuity.find((record) => record.cardId === lane.id) ?? null;
+  const claimedLane = await claimLaneForExecution({
+    repository: input.repository,
+    lane
+  });
+  if (!claimedLane || claimedLane.state !== "working") {
+    return {
+      runId: run.id,
+      workflowId: run.workflowId,
+      status: "queued",
+      laneExecution: null
+    };
+  }
+
+  const resumeFocus = runtime.getResumeFocus(claimedLane.id);
+  const laneContinuity = continuity.find((record) => record.cardId === claimedLane.id) ?? null;
 
   return {
     runId: run.id,
     workflowId: run.workflowId,
-    status: "queued",
+    status: "running",
     laneExecution: {
-      cardId: lane.id,
-      persona: lane.persona,
-      title: lane.title,
-      deliverableType: lane.deliverableType,
-      state: lane.state,
+      cardId: claimedLane.id,
+      persona: claimedLane.persona,
+      title: claimedLane.title,
+      deliverableType: claimedLane.deliverableType,
+      state: claimedLane.state,
       ...(resumeFocus ? { resumeFocus } : {}),
       ...(laneContinuity?.latestResultSummary ? { latestResultSummary: laneContinuity.latestResultSummary } : {})
     }
   };
+}
+
+async function claimLaneForExecution(input: {
+  repository: HarnessDispatchRepository;
+  lane: HarnessCardRecord;
+}): Promise<HarnessCardRecord | null> {
+  if (input.lane.state === "working") {
+    return input.lane;
+  }
+  if (input.lane.state !== "approved") {
+    return null;
+  }
+  return input.repository.claimCardForExecution({
+    cardId: input.lane.id,
+    expectedState: "approved"
+  });
 }
 
 function selectNextActionableLane(cards: readonly HarnessCardRecord[]): HarnessCardRecord | null {

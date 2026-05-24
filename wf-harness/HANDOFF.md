@@ -123,6 +123,8 @@ The first harness implementation slice is now built and verified:
 - Tightened child-card progression so `resumeSummary` is now rejected when a lane reaches `done`, which keeps completed-lane continuity fail-closed and prevents stale restart instructions from overriding the completed-lane snapshot or latest recorded outcome.
 - Added the first live worker-side harness lane-dispatch seam. Harness-enabled workflows now branch away from the generic Paperclip run-start path, load persisted harness run/card/proposal/continuity state, select the next actionable non-CEO lane, and emit a bounded worker dispatch payload that carries `resumeFocus` plus the latest recorded lane outcome when available.
 - Kept that worker seam intentionally narrow: it does not widen BYOK, it does not reopen the board service, and it does not invent a new memory store. It only turns the existing continuity-backed lane truth into a live execution payload for later worker/orchestrator depth.
+- Deepened the worker seam into a durable single-lane claim/start boundary. The worker now atomically claims exactly one `approved` non-CEO lane into `working` before dispatch, returns `running` only after that compare-and-set succeeds, and stays quiet when the claim loses a race.
+- Deliberately fail-closed the queued-lane mismatch in the worker slice. Raw `queued` child lanes are now treated as non-executable until another bounded path promotes them, which preserves the CEO approval boundary and avoids fake progress under load.
 - Re-ran the tenant/secret scans and updated the harness security report at `wf-harness/audit/2026-05-21/security-report.md`.
 - Cleared the final repo-specific reviewer pass on code correctness after tightening the wording around what this test seam does and does not prove.
 
@@ -185,6 +187,9 @@ The first harness implementation slice is now built and verified:
 - Tenant-facing governance packaging should be derived from the decision ledger, not from raw `decisionNote` text. Surface bounded policy labels, recommendation/objection summaries, and review triggers, but keep ad hoc CEO notes internal unless a later explicit export seam proves they belong in long memory.
 - If the board shows only a capped visible subset of governance items, the package-level summaries still need to derive from the full current governance set. Otherwise larger boards under-report active objections and recommendations.
 - The `approveProposal()` helper alias is only valid for branches that must return a lane target. When a test is proving an `approve` request now resolves to `deferred` or `denied`, call `decideProposal(... decision: "approve")` directly or the helper will false-red with `Harness proposal approval did not produce a lane target`.
+- Worker-side harness progress needs a durable claim boundary before it can be trusted. Selecting a lane without atomically moving `approved -> working` recreates Paperclip-style false progress, so dispatch and `running` status must happen only after the compare-and-set claim succeeds.
+- The current `queued` child-lane state is intentionally still non-executable in the worker seam. Treating `queued` as actionable would silently bypass the CEO/approval boundary; keep it fail-closed until a later bounded promotion path exists.
+- GitNexus preflight still matters even when Windows tooling gets flaky. If `gitnexus analyze` times out or Ladybug/PowerShell gets unpredictable, fall back to `node E:\GitNexusHome\tools\gitnexus-fts-query.mjs ...` for seam orientation instead of skipping the map.
 
 ## Next Step
 

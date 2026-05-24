@@ -34,7 +34,7 @@ describe("harness worker executor", () => {
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
     });
-    cfoCard.state = "working";
+    cfoCard.state = "approved";
 
     await repository.insertRun(run);
     await repository.insertCard(ceoCard);
@@ -58,7 +58,7 @@ describe("harness worker executor", () => {
     ).resolves.toEqual({
       runId: run.id,
       workflowId: "wf_connect_first_workflow",
-      status: "queued",
+      status: "running",
       laneExecution: {
         cardId: cfoCard.id,
         persona: "cfo",
@@ -69,6 +69,13 @@ describe("harness worker executor", () => {
         latestResultSummary: "Initial pricing floor is stable."
       }
     });
+
+    await expect(repository.getCard(cfoCard.id)).resolves.toEqual(
+      expect.objectContaining({
+        id: cfoCard.id,
+        state: "working"
+      })
+    );
   });
 
   it("returns no lane execution when all child lanes are terminal or blocked", async () => {
@@ -147,6 +154,101 @@ describe("harness worker executor", () => {
     await repository.insertRun(run);
     await repository.insertCard(ceoCard);
     await repository.insertCard(cfoCard);
+
+    await expect(
+      buildHarnessWorkerDispatch({
+        repository,
+        tenantId: "tenant-1",
+        runId: run.id,
+        workflowId: "wf_connect_first_workflow"
+      })
+    ).resolves.toEqual({
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow",
+      status: "queued",
+      laneExecution: null
+    });
+  });
+
+  it("fails closed and stays queued when the next approved lane loses its execution claim", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "approved";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+    await repository.updateCardState({
+      cardId: cfoCard.id,
+      state: "blocked"
+    });
+
+    await expect(
+      buildHarnessWorkerDispatch({
+        repository,
+        tenantId: "tenant-1",
+        runId: run.id,
+        workflowId: "wf_connect_first_workflow"
+      })
+    ).resolves.toEqual({
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow",
+      status: "queued",
+      laneExecution: null
+    });
+  });
+
+  it("deliberately leaves queued child lanes undispatched until another path promotes them", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const researcherCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief"
+    });
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(researcherCard);
 
     await expect(
       buildHarnessWorkerDispatch({

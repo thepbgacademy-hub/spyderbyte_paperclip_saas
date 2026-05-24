@@ -37,11 +37,22 @@ vi.mock("../src/harness/repository.js", () => ({
         persona: "cfo",
         title: "Pressure-test the pricing lane",
         deliverableType: "pricing_review",
-        state: "working",
+        state: "approved",
         createdAt: "2026-05-21T10:01:00.000Z",
         updatedAt: "2026-05-21T10:02:00.000Z"
       }
     ]),
+    claimCardForExecution: vi.fn().mockResolvedValue({
+      id: "card_cfo",
+      runId: "run-1",
+      parentCardId: "card_ceo",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review",
+      state: "working",
+      createdAt: "2026-05-21T10:01:00.000Z",
+      updatedAt: "2026-05-21T10:04:00.000Z"
+    }),
     listProposalsForRun: vi.fn().mockResolvedValue([]),
     listCardContinuityForRun: vi.fn().mockResolvedValue([
       {
@@ -221,14 +232,21 @@ describe("worker runtime", () => {
     ).resolves.toEqual({
       runId: "run-1",
       workflowId: "wf_connect_first_workflow",
-      status: "queued"
+      status: "running"
     });
 
     const harnessRepository = vi.mocked(createPostgresHarnessRepository).mock.results[0]?.value;
     expect(harnessRepository.getRun).toHaveBeenCalledWith("run-1");
+    expect(harnessRepository.claimCardForExecution).toHaveBeenCalledWith({
+      cardId: "card_cfo",
+      expectedState: "approved"
+    });
     expect(vi.mocked(createPaperclipClient).mock.results.at(-1)?.value.createRun).not.toHaveBeenCalled();
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"status\":\"running\"")
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"resumeFocus\":\"Resume the pricing lane from the revised assumptions workbook.\"")
@@ -325,6 +343,45 @@ describe("worker runtime", () => {
         updatedAt: "2026-05-21T10:02:00.000Z"
       }
     ]);
+
+    stdoutWrite.mockClear();
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "queued"
+    });
+
+    const acidRepository = vi.mocked(createAcidGuardRepository).mock.results[0]?.value;
+    expect(stdoutWrite).not.toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
+    );
+    expect(acidRepository.transitionWorkflowRunStatus).not.toHaveBeenCalled();
+
+    await runtime.close();
+  });
+
+  it("stays quiet when the worker loses the approved-lane claim race", async () => {
+    const { createPostgresHarnessRepository } = await import("../src/harness/repository.js");
+    const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-raced"
+    });
+
+    const harnessRepository = vi.mocked(createPostgresHarnessRepository).mock.results.at(-1)?.value;
+    harnessRepository.claimCardForExecution.mockResolvedValueOnce(null);
 
     stdoutWrite.mockClear();
     await expect(

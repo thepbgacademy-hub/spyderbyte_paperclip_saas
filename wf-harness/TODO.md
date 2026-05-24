@@ -83,3 +83,5 @@ This file tracks the new harness subproject only.
   - [x] Keep live lane continuity inside Wealth Factory as bounded operational snapshot state instead of reconstructing it only from card-event replay.
   - [ ] Decide whether the current continuity trio (`continuitySummary`, `latestResultSummary`, `absorbedWorkItems`) is the final bounded runtime-memory shape before any Obsidian export seam is added.
 - [ ] Deepen the worker-side harness execution seam beyond the current single-lane dispatch payload and into real orchestrator/child execution behavior without reopening the old Paperclip-style hotspot model.
+  - [x] Require a durable worker claim/start boundary so harness-enabled jobs now move exactly one `approved` lane to `working` before dispatch and stay quiet when the claim race is lost.
+  - [x] Keep raw `queued` child lanes fail-closed in the worker slice so execution still respects the CEO approval boundary until a later bounded promotion path exists.
