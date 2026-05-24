@@ -231,6 +231,41 @@ Child personas may not:
 - expand scope outside package boundaries
 - create unlimited new cards without CEO approval
 
+### Refinement Rule
+
+Worker and board outcomes do not automatically imply a fresh run.
+
+If the tenant or the CEO asks for a refinement of the same bounded assignment, the harness should prefer keeping that work inside the existing lane. This preserves:
+
+- persona continuity
+- prior outcome context
+- absorbed follow-on requests
+- governance history
+
+Examples that should usually stay in the same lane:
+
+- revising a pricing review with updated assumptions
+- tightening a marketing plan that already exists
+- expanding an existing research brief with a few more bounded inputs
+
+If the follow-up request is related but materially different, it may justify a new lane.
+
+If the request changes the larger board objective, starts a new operating phase, or reorients the company direction, it should usually become a fresh board cycle or fresh run instead of overloading the existing lane.
+
+Examples that should usually become a fresh cycle:
+
+- rebuilding the go-to-market plan around a different market segment
+- pausing launch to rework the business model
+- starting the next operating cycle after the board packages the prior one
+
+Working rule:
+
+- same lane for bounded refinement of the same deliverable
+- new lane for related but materially distinct deliverable work
+- fresh cycle for broader directional or phase-change work
+
+Fresh cycle does not mean memory loss. A new run should still inherit the durable institutional memory of what was recommended, implemented, deferred, denied, and learned, while keeping execution state clean for the new board cycle.
+
 ### Coordination Rule
 
 All coordination flows through the CEO orchestrator. Child-to-child free conversation is not allowed.

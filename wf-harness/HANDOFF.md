@@ -29,6 +29,7 @@ The first harness implementation slice is now built and verified:
 - restart recovery resumes from persisted card and run state
 - the first harness slice is a slice replacement, not a long-lived same-slice dual-engine setup
 - Wealth Factory keeps small runtime memory, while larger tenant-owned company memory can later live in Obsidian as a second-brain/record layer
+- bounded refinements of the same deliverable should usually stay in the same lane, while broader directional or phase-change requests should open a new lane or a fresh board cycle instead of overloading old lane context
 
 ## External References
 
