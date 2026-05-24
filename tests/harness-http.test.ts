@@ -498,7 +498,8 @@ describe("harness HTTP boundary", () => {
       method: "POST",
       path: "/api/harness/cards/card_new_2/advance",
       body: {
-        state: "working"
+        state: "working",
+        resumeSummary: "Keep the pricing review lane moving from the revised assumptions workbook."
       },
       headers: {
         origin: "https://portal.wealthfactory.test",
@@ -515,7 +516,8 @@ describe("harness HTTP boundary", () => {
       authorization: "Bearer valid",
       cookie: "wf_session=abc",
       cardId: "card_new_2",
-      state: "working"
+      state: "working",
+      resumeSummary: "Keep the pricing review lane moving from the revised assumptions workbook."
     });
     expect(response.body).toEqual({ cardId: "card_new_2", state: "working" });
   });

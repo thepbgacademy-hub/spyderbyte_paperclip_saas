@@ -1,7 +1,13 @@
 export type HarnessProposalStatus = "proposed" | "approved" | "deferred" | "denied";
 export type HarnessProposalResolution = "create_lane" | "update_existing_lane" | "handoff_existing_lane";
 
-import type { HarnessCardRecord, HarnessPersona, HarnessRunRecord, HarnessRuntimeContext } from "./types.js";
+import type {
+  HarnessCardContinuityRecord,
+  HarnessCardRecord,
+  HarnessPersona,
+  HarnessRunRecord,
+  HarnessRuntimeContext
+} from "./types.js";
 
 export type WealthFactoryResolvedRuntimeContext = HarnessRuntimeContext & Record<string, unknown>;
 
@@ -42,4 +48,5 @@ export interface HarnessPersistedState {
   run: HarnessRunRecord;
   cards: readonly HarnessCardRecord[];
   proposals?: readonly HarnessSubCardProposal[];
+  continuity?: readonly HarnessCardContinuityRecord[];
 }

@@ -106,6 +106,16 @@ describe("harness runtime", () => {
           deliverableType: "research_brief",
           status: "proposed"
         }
+      ],
+      continuity: [
+        {
+          cardId: "card_cfo",
+          runId: "run_123",
+          continuitySummary: "Resume the finance review lane from the open dependency list.",
+          latestResultSummary: null,
+          absorbedWorkItems: [],
+          updatedAt: "2026-05-21T10:03:00.000Z"
+        }
       ]
     });
 
@@ -113,6 +123,7 @@ describe("harness runtime", () => {
     expect(resumed.cards).toHaveLength(2);
     expect(resumed.cards[0]?.state).toBe("working");
     expect(resumed.proposals).toHaveLength(1);
+    expect(runtime.getResumeFocus("card_cfo")).toBe("Resume the finance review lane from the open dependency list.");
 
     const approved = runtime.approveSubCard("proposal_research");
 

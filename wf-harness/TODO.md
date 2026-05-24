@@ -51,6 +51,7 @@ This file tracks the new harness subproject only.
 - [x] Derive tenant-safe board follow-through history from the decision ledger so implemented governance actions are visible without replaying raw notes or card chatter.
 - [x] Promote absorbed-work and latest-outcome continuity from replayed card events into a policy-bounded first-class harness continuity snapshot per lane.
   - [x] Keep continuity merge semantics aligned across in-memory and Postgres repos so the latest six absorbed-work items stay ordered and handoff-aware instead of becoming an unbounded or ambiguously ordered history list.
+  - [x] Promote `continuitySummary` from optional board copy into the actual bounded per-lane resume directive that runtime resume can hydrate and progression mutations can refresh intentionally.
 - [x] Add harness-specific audit publishing beyond the persisted card-event trail.
 - [ ] Expand the dashboard visual system once the additional Hermes/Obsidian reference screenshots are reviewed.
 - [ ] Design the Obsidian long-memory integration so board records, decisions, and company history can live in tenant-owned knowledge space without becoming live runtime state.
@@ -78,3 +79,4 @@ This file tracks the new harness subproject only.
 - [x] Deepen the fresh-cycle policy so the CEO can choose between reopening only deferred follow-on work versus starting a completely clean board cycle when no follow-through should carry forward.
 - [ ] Define the split between small harness continuity memory and larger tenant-owned long memory in Obsidian, including what gets written there and what must remain Wealth Factory runtime truth.
   - [x] Keep live lane continuity inside Wealth Factory as bounded operational snapshot state instead of reconstructing it only from card-event replay.
+  - [ ] Decide whether the current continuity trio (`continuitySummary`, `latestResultSummary`, `absorbedWorkItems`) is the final bounded runtime-memory shape before any Obsidian export seam is added.

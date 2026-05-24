@@ -34,6 +34,7 @@ type HarnessApi = {
     cardId: string;
     state: HarnessCardRecord["state"];
     resultSummary?: string;
+    resumeSummary?: string;
   }): Promise<{ cardId: string; state: HarnessCardRecord["state"] }>;
   decideProposal(request: {
     authorization: string;
@@ -173,13 +174,15 @@ export function createHarnessHttpHandler(options: {
           return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
         }
         const resultSummary = readOptionalString(bodyInput?.resultSummary);
+        const resumeSummary = readOptionalString(bodyInput?.resumeSummary);
 
         const body = await options.advanceChildCard({
           authorization: request.headers.authorization ?? "",
           ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
           cardId: decodeURIComponent(advanceMatch[1] ?? ""),
           state,
-          ...(resultSummary ? { resultSummary } : {})
+          ...(resultSummary ? { resultSummary } : {}),
+          ...(resumeSummary ? { resumeSummary } : {})
         });
         assertWealthFactoryResponse(body);
         return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };

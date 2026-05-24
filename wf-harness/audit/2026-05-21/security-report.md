@@ -61,6 +61,8 @@ Scope: First custom harness slice under `src/harness`, `src/api/harness-http.ts`
 - Re-ran the scan after the reviewer-fix pass narrowed repeated-request matching to the same request title/persona/deliverable triple and changed the helper to look at the latest earlier unresolved request instead of the first one. The touched slice still introduced no live secret material and still keeps the repeated-request guard entirely inside bounded governance metadata.
 - Re-ran the scan after adding the bounded `harness_card_continuity` seam for live lane continuity snapshots. The touched slice still introduced no live secret material and still keeps continuity persistence limited to operational lane summaries, latest outcomes, and absorbed-work labels rather than any BYOK or runtime-secret state.
 - Re-ran the scan after the continuity reviewer fix pass tightened handoff attribution and deterministic absorbed-work merge behavior. The touched slice still introduced no live secret material, and the continuity seam still stores only policy-bounded operational board labels instead of any provider or tenant secret values.
+- Re-ran the scan after promoting `continuitySummary` into the real per-lane resume directive and threading continuity through runtime resume. The touched slice still introduced no live secret material and still keeps continuity limited to bounded operational board text rather than any provider credential, BYOK secret, or raw tenant note payload.
+- Re-ran the scan after hardening the done-lane seam so `resumeSummary` is rejected on terminal `done` transitions. The touched slice still introduced no live secret material and further reduced the risk of stale operational board text overriding a completed-lane snapshot.
 
 ## OWASP-Oriented Findings
 

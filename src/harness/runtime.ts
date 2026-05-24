@@ -8,7 +8,13 @@ import type {
   StartHarnessRunInput
 } from "./runtime-contract.js";
 import { transitionHarnessCard, transitionHarnessRun } from "./state-machine.js";
-import { createHarnessCardRecord, createHarnessRunRecord, type HarnessCardRecord, type HarnessRunRecord } from "./types.js";
+import {
+  createHarnessCardRecord,
+  createHarnessRunRecord,
+  type HarnessCardContinuityRecord,
+  type HarnessCardRecord,
+  type HarnessRunRecord
+} from "./types.js";
 
 type HarnessRuntimeOptions = {
   createId?: () => string;
@@ -21,6 +27,7 @@ export function createHarnessRuntime(options: HarnessRuntimeOptions = {}) {
   const cardIdsByRun = new Map<string, string[]>();
   const proposalsById = new Map<string, HarnessSubCardProposal>();
   const proposalIdsByRun = new Map<string, string[]>();
+  const continuityByCardId = new Map<string, HarnessCardContinuityRecord>();
   const ceoCardIdByRun = new Map<string, string>();
 
   function cloneRun(run: HarnessRunRecord): HarnessRunRecord {
@@ -36,6 +43,13 @@ export function createHarnessRuntime(options: HarnessRuntimeOptions = {}) {
 
   function cloneProposal(proposal: HarnessSubCardProposal): HarnessSubCardProposal {
     return { ...proposal };
+  }
+
+  function cloneContinuity(record: HarnessCardContinuityRecord): HarnessCardContinuityRecord {
+    return {
+      ...record,
+      absorbedWorkItems: [...record.absorbedWorkItems]
+    };
   }
 
   function appendRunItem(index: Map<string, string[]>, runId: string, id: string): void {
@@ -227,6 +241,9 @@ export function createHarnessRuntime(options: HarnessRuntimeOptions = {}) {
       for (const proposalId of existingProposalIds) {
         proposalsById.delete(proposalId);
       }
+      for (const cardId of existingCardIds) {
+        continuityByCardId.delete(cardId);
+      }
 
       cardIdsByRun.set(savedState.run.id, []);
       proposalIdsByRun.set(savedState.run.id, []);
@@ -239,6 +256,9 @@ export function createHarnessRuntime(options: HarnessRuntimeOptions = {}) {
 
       for (const proposal of savedState.proposals ?? []) {
         storeProposal(proposal);
+      }
+      for (const record of savedState.continuity ?? []) {
+        continuityByCardId.set(record.cardId, cloneContinuity(record));
       }
 
       return {
@@ -260,6 +280,10 @@ export function createHarnessRuntime(options: HarnessRuntimeOptions = {}) {
         .map((proposalId) => proposalsById.get(proposalId))
         .filter((proposal): proposal is HarnessSubCardProposal => proposal !== undefined)
         .map(cloneProposal);
+    },
+
+    getResumeFocus(cardId: string): string | null {
+      return continuityByCardId.get(cardId)?.continuitySummary ?? null;
     }
   };
 }

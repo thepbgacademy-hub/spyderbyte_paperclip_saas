@@ -226,6 +226,14 @@ describe("harness board service", () => {
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
     });
+    const createdContinuity = await repository.getCardContinuity(created.cardId);
+
+    expect(createdContinuity).toEqual(
+      expect.objectContaining({
+        cardId: created.cardId,
+        continuitySummary: 'CFO should begin this approved pricing review lane: Pressure-test the pricing lane.'
+      })
+    );
 
     await repository.insertProposal({
       id: "proposal_approval_1",
@@ -1188,7 +1196,7 @@ describe("harness board service", () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: "snapshot",
-          body: "RESEARCHER can resume this pricing review lane after a CEO handoff from CFO: Pressure-test the pricing lane."
+          body: "RESEARCHER should resume this handed-off pricing review lane from CFO: Pressure-test the pricing lane."
         }),
         expect.objectContaining({
           id: "absorbed-work",
@@ -2017,7 +2025,8 @@ describe("harness board service", () => {
       expect.objectContaining({
         cardId: existingLane.cardId,
         absorbedWorkItems: ["update_existing_lane|CFO: Refresh pricing anchors"],
-        continuitySummary: null
+        continuitySummary:
+          "RESEARCHER should fold the absorbed follow-on work from CFO: Refresh pricing anchors into this research brief lane."
       })
     );
     expect(laneCard?.activity.some((item) => item.label.includes('folded "Refresh pricing anchors"'))).toBe(true);
@@ -2026,7 +2035,7 @@ describe("harness board service", () => {
         expect.objectContaining({
           id: "snapshot",
           body:
-            "RESEARCHER can resume this research brief lane with absorbed follow-on work from CFO: Refresh pricing anchors."
+            "RESEARCHER should fold the absorbed follow-on work from CFO: Refresh pricing anchors into this research brief lane."
         }),
         expect.objectContaining({
           id: "absorbed-work",
@@ -2579,7 +2588,8 @@ describe("harness board service", () => {
       service.advanceChildCard({
         authorization: "Bearer valid",
         cardId: created.cardId,
-        state: "working"
+        state: "working",
+        resumeSummary: "Keep the pricing review lane moving from the revised assumptions workbook."
       })
     ).resolves.toEqual({ cardId: created.cardId, state: "working" });
 
@@ -2617,11 +2627,20 @@ describe("harness board service", () => {
     expect(persistedContinuity).toEqual(
       expect.objectContaining({
         cardId: created.cardId,
+        continuitySummary: null,
         latestResultSummary: "Pricing floor is stable enough for the first launch wave."
       })
     );
     expect(hydratedCard?.lane).toBe("done");
     expect(hydratedCard?.outcome).toBe("Pricing floor is stable enough for the first launch wave.");
+    expect(hydratedCard?.detailSections).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "snapshot",
+          body: "CFO completed this pricing review lane and preserved the latest outcome for later review."
+        })
+      ])
+    );
     expect(hydratedCard?.detailSections.some((section) => section.title === "Latest Outcome")).toBe(true);
     expect(hydratedCard?.activity.some((item) => item.label.includes("Pricing floor is stable enough"))).toBe(true);
     expect(audit).toHaveBeenCalledWith(
@@ -2646,6 +2665,102 @@ describe("harness board service", () => {
       })
     );
     expect(audit.mock.calls.some(([event]) => JSON.stringify(event).includes("Pricing floor is stable enough"))).toBe(false);
+  });
+
+  it("persists a bounded resume summary for in-flight child-card work", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+
+    await expect(
+      service.advanceChildCard({
+        authorization: "Bearer valid",
+        cardId: created.cardId,
+        state: "working",
+        resumeSummary: "Keep the pricing review lane moving from the revised assumptions workbook."
+      })
+    ).resolves.toEqual({ cardId: created.cardId, state: "working" });
+
+    const persistedContinuity = await repository.getCardContinuity(created.cardId);
+    const hydratedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const hydratedCard = hydratedBoard.cards.find((card) => card.id === created.cardId);
+
+    expect(persistedContinuity).toEqual(
+      expect.objectContaining({
+        cardId: created.cardId,
+        continuitySummary: "Keep the pricing review lane moving from the revised assumptions workbook."
+      })
+    );
+    expect(hydratedCard?.detailSections).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "snapshot",
+          body: "Keep the pricing review lane moving from the revised assumptions workbook."
+        })
+      ])
+    );
+  });
+
+  it("rejects resume summaries when a child card reaches done", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+
+    await expect(
+      service.advanceChildCard({
+        authorization: "Bearer valid",
+        cardId: created.cardId,
+        state: "done",
+        resultSummary: "Pricing floor is stable enough for the first launch wave.",
+        resumeSummary: "Resume this lane from the prior assumptions workbook."
+      })
+    ).rejects.toThrow("Resume summaries cannot be recorded when a card reaches done");
   });
 
   it("reconciles run state to waiting and then blocked as child cards lose active progress", async () => {

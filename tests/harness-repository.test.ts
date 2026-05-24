@@ -200,7 +200,7 @@ describe("harness persistence records", () => {
     const continuity = createHarnessCardContinuityRecord({
       cardId: card.id,
       runId: run.id,
-      continuitySummary: "CFO can resume this pricing review lane with absorbed follow-on work from CEO: Pressure-test the pricing lane.",
+      continuitySummary: 'CFO should begin this approved pricing review lane: Pressure-test the pricing lane.',
       latestResultSummary: "Validated the pricing assumptions against the current workload.",
       absorbedWorkItems: ["update_existing_lane|CEO: Pressure-test the pricing lane"]
     });
@@ -596,6 +596,7 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
           createHarnessCardContinuityRecord({
             cardId: childCard.id,
             runId: run.id,
+            continuitySummary: "RESEARCHER should continue this active research brief lane: Gather competitor price anchors.",
             latestResultSummary: "Collected the first pricing-anchor round.",
             absorbedWorkItems: [
               "update_existing_lane|CMO: Draft campaign outline",
@@ -607,6 +608,7 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
           createHarnessCardContinuityRecord({
             cardId: childCard.id,
             runId: run.id,
+            continuitySummary: "RESEARCHER should continue this active research brief lane: Gather competitor price anchors.",
             absorbedWorkItems: [
               "update_existing_lane|COO: Confirm fulfillment handoff",
               "update_existing_lane|CEO: Package tenant next steps",
@@ -622,6 +624,7 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
           expect.objectContaining({
             cardId: childCard.id,
             runId: run.id,
+            continuitySummary: "RESEARCHER should continue this active research brief lane: Gather competitor price anchors.",
             latestResultSummary: "Collected the first pricing-anchor round.",
             absorbedWorkItems: [
               "update_existing_lane|COO: Confirm fulfillment handoff",
@@ -637,6 +640,7 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
           expect.objectContaining({
             cardId: childCard.id,
             runId: run.id,
+            continuitySummary: "RESEARCHER should continue this active research brief lane: Gather competitor price anchors.",
             latestResultSummary: "Collected the first pricing-anchor round.",
             absorbedWorkItems: [
               "update_existing_lane|COO: Confirm fulfillment handoff",
