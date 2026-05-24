@@ -18,6 +18,12 @@ export type HarnessBoardPolicyReason =
   | "lane_cap"
   | "scope_guardrail"
   | "completed_lanes_only";
+export type HarnessCardContinuitySource =
+  | "state_transition"
+  | "resume_override"
+  | "proposal_absorbed"
+  | "lane_handoff"
+  | "result_recorded";
 export type ProviderKind = "openai" | "openai_api" | "openai_chatgpt_codex_subscription" | "anthropic_api" | "xai_grok_api" | "openrouter_api" | "generic_api";
 
 export type TenantRow = {
@@ -94,6 +100,7 @@ export type HarnessCardEventRow = {
 export type HarnessCardContinuityRow = {
   cardId: string;
   runId: string;
+  continuitySource: HarnessCardContinuitySource;
   continuitySummary: string | null;
   latestResultSummary: string | null;
   absorbedWorkItems: string[];

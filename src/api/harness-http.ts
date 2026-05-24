@@ -27,7 +27,7 @@ type HarnessApi = {
     persona: string;
     title: string;
     deliverableType: string;
-  }): Promise<{ cardId: string }>;
+  }): Promise<{ cardId: string } | { status: "deferred"; proposalId: string }>;
   advanceChildCard(request: {
     authorization: string;
     cookie?: string;

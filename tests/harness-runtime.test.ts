@@ -111,6 +111,7 @@ describe("harness runtime", () => {
         {
           cardId: "card_cfo",
           runId: "run_123",
+          continuitySource: "resume_override",
           continuitySummary: "Resume the finance review lane from the open dependency list.",
           latestResultSummary: null,
           absorbedWorkItems: [],

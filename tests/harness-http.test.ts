@@ -405,6 +405,91 @@ describe("harness HTTP boundary", () => {
     expect(response.body).toEqual({ cardId: "card_new_2" });
   });
 
+  it("passes deferred direct CEO lane-cap requests through the guarded mutation route", async () => {
+    const createTopLevelChildCard = vi.fn().mockResolvedValue({
+      status: "deferred",
+      proposalId: "proposal_lane_cap_1"
+    });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard,
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/cards",
+      body: {
+        persona: "cfo",
+        title: "Pressure-test the pricing lane",
+        deliverableType: "pricing_review"
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        cookie: "wf_session=abc",
+        "content-type": "application/json"
+      },
+      bodyByteLength: 89,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      status: "deferred",
+      proposalId: "proposal_lane_cap_1"
+    });
+  });
+
+  it("returns deferred governance payloads when direct child-card creation is lane-capped", async () => {
+    const createTopLevelChildCard = vi.fn().mockResolvedValue({
+      status: "deferred",
+      proposalId: "proposal_deferred_2"
+    });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard,
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/cards",
+      body: {
+        persona: "analyst",
+        title: "Review the offer language",
+        deliverableType: "legal_review"
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        "content-type": "application/json"
+      },
+      bodyByteLength: 87,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(createTopLevelChildCard).toHaveBeenCalledWith({
+      authorization: "Bearer valid",
+      persona: "analyst",
+      title: "Review the offer language",
+      deliverableType: "legal_review"
+    });
+    expect(response.body).toEqual({
+      status: "deferred",
+      proposalId: "proposal_deferred_2"
+    });
+  });
+
   it("rejects out-of-bound child-card personas and deliverables at the HTTP seam", async () => {
     const createTopLevelChildCard = vi.fn();
     const handler = createHarnessHttpHandler({

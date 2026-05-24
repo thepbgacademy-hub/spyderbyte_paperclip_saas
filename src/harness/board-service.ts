@@ -222,7 +222,7 @@ export function createHarnessBoardService(options: {
       persona: string;
       title: string;
       deliverableType: string;
-    }): Promise<{ cardId: string }> {
+    }): Promise<{ cardId: string } | { status: "deferred"; proposalId: string }> {
       const access = await authorizeHarnessRequest({
         authenticate: options.authenticate,
         requireTenantMember: options.requireTenantMember,
@@ -242,7 +242,11 @@ export function createHarnessBoardService(options: {
         throw new HarnessCardCreationConflictError("Harness child-card request is outside the approved workflow boundary");
       }
 
-      const result = await options.runAtomically(async (repository) => {
+      const result: { cardId: string; auditEvents?: Awaited<ReturnType<typeof createHarnessAuditEvent>>[] } | {
+        status: "deferred";
+        proposalId: string;
+        auditEvents?: Awaited<ReturnType<typeof createHarnessAuditEvent>>[];
+      } = await options.runAtomically(async (repository) => {
         const run = await getOrCreateCurrentRun({
           repository,
           runtime,
@@ -266,6 +270,7 @@ export function createHarnessBoardService(options: {
           repository.listProposalsForRun(run.id),
           repository.listCardContinuityForRun(run.id)
         ]);
+        runtime.resumeRun({ run, cards, proposals, continuity });
         const existingCard = findMatchingOpenChildCard(cards, {
           persona: normalizedPersona,
           title: request.title,
@@ -435,10 +440,102 @@ export function createHarnessBoardService(options: {
           throw new HarnessCardCreationConflictError("Harness direct child-card deliverable lane is already open");
         }
         if (countOpenChildCards(cards) >= MAX_OPEN_CHILD_CARDS) {
-          throw new HarnessCardCreationConflictError("Harness direct child-card limit reached for this run");
-        }
+          const ceoCard = cards.find((card) => card.persona === "ceo" && card.parentCardId === null);
+          if (!ceoCard) {
+            throw new Error("Harness CEO card missing for direct child-card defer");
+          }
 
-        runtime.resumeRun({ run, cards, proposals, continuity });
+          const proposal = runtime.proposeSubCard(ceoCard.id, {
+            persona: normalizedPersona,
+            title: request.title,
+            deliverableType: normalizedDeliverableType
+          });
+          const earlierUnresolvedSiblingProposal = findEarlierUnresolvedSiblingProposal([...proposals, proposal], proposal);
+          if (earlierUnresolvedSiblingProposal?.status === "deferred") {
+            return {
+              status: "deferred",
+              proposalId: earlierUnresolvedSiblingProposal.id
+            };
+          }
+
+          await repository.insertProposal(proposal);
+
+          const decisionNote = "CEO deferred this proposal because the current run is at its active lane cap.";
+          const decisionUpdate = await repository.markProposalStatus({
+            proposalId: proposal.id,
+            status: "deferred",
+            decisionNote
+          });
+          if (!decisionUpdate.updated) {
+            throw new Error("Harness direct child-card defer conflicted");
+          }
+          await repository.insertEvent(
+            createHarnessCardEventRecord({
+              cardId: proposal.parentCardId,
+              eventKind: "comment_added",
+              payload: {
+                message: createPublicProposalDecisionMessage({
+                  status: "deferred",
+                  deliverableType: proposal.deliverableType,
+                  policyReason: "lane_cap"
+                })
+              }
+            })
+          );
+          await repository.insertDecision(
+            createHarnessBoardDecisionRecord({
+              runId: run.id,
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              decisionKind: "proposal_deferred",
+              cardId: proposal.parentCardId,
+              proposalId: proposal.id,
+              persona: proposal.persona,
+              deliverableType: proposal.deliverableType,
+              policyReason: "lane_cap",
+              decisionNote,
+              recommendationSummary: createGovernanceRecommendationSummary({
+                deliverableType: proposal.deliverableType,
+                policyReason: "lane_cap",
+                status: "deferred"
+              }),
+              objectionSummary: createGovernanceObjectionSummary({
+                deliverableType: proposal.deliverableType,
+                policyReason: "lane_cap"
+              })
+            })
+          );
+          const reconciledRun = await reconcileHarnessRunState({ repository, run });
+
+          return {
+            status: "deferred",
+            proposalId: proposal.id,
+            auditEvents: [
+              createHarnessAuditEvent({
+                tenantId: access.session.tenantId,
+                actorUserId: access.session.userId,
+                eventType: "harness_proposal_decided",
+                entityId: proposal.id,
+                metadata: {
+                  runId: run.id,
+                  decision: "deferred",
+                  reason: "lane_cap",
+                  hasDecisionNote: true,
+                  requestedByPersona: proposal.requestedByPersona,
+                  targetPersona: proposal.persona,
+                  deliverableType: proposal.deliverableType
+                }
+              }),
+              ...toRunAuditEvents({
+                tenantId: access.session.tenantId,
+                actorUserId: access.session.userId,
+                runId: run.id,
+                previousState: run.state,
+                nextRun: reconciledRun
+              })
+            ]
+          };
+        }
         const card = runtime.createApprovedChildCard(run.id, {
           persona: normalizedPersona,
           title: request.title,
@@ -502,7 +599,10 @@ export function createHarnessBoardService(options: {
       });
 
       await publishHarnessAuditEvents(options.audit, result.auditEvents ?? []);
-      return { cardId: result.cardId };
+      if ("status" in result && result.status === "deferred") {
+        return { status: "deferred", proposalId: result.proposalId };
+      }
+      return { cardId: (result as { cardId: string }).cardId };
     },
 
     async decideProposal(request: {
@@ -2481,6 +2581,7 @@ async function recordAbsorbedLaneContinuity(input: {
     createHarnessCardContinuityRecord({
       cardId: input.card.id,
       runId: input.card.runId,
+      continuitySource: input.resolution === "handoff_existing_lane" ? "lane_handoff" : "proposal_absorbed",
       latestResultSummary: existing?.latestResultSummary ?? null,
       continuitySummary: createAbsorbedLaneResumeSummary({
         card: input.card,
@@ -2509,6 +2610,7 @@ async function recordDirectChildLaneReuseContinuity(input: {
     createHarnessCardContinuityRecord({
       cardId: input.card.id,
       runId: input.card.runId,
+      continuitySource: "proposal_absorbed",
       latestResultSummary: existing?.latestResultSummary ?? null,
       continuitySummary: createAbsorbedLaneResumeSummary({
         card: input.card,
@@ -2530,6 +2632,7 @@ async function recordCardStateContinuity(input: {
     createHarnessCardContinuityRecord({
       cardId: input.card.id,
       runId: input.card.runId,
+      continuitySource: input.resumeSummary ? "resume_override" : "state_transition",
       continuitySummary: input.resumeSummary ?? createDefaultResumeSummary(input.card),
       latestResultSummary: existing?.latestResultSummary ?? null,
       absorbedWorkItems: existing?.absorbedWorkItems ?? []
@@ -2548,6 +2651,7 @@ async function recordLatestResultContinuity(input: {
     createHarnessCardContinuityRecord({
       cardId: input.card.id,
       runId: input.card.runId,
+      continuitySource: "result_recorded",
       continuitySummary: input.resumeSummary ?? createDefaultResumeSummary(input.card),
       latestResultSummary: input.resultSummary,
       absorbedWorkItems: existing?.absorbedWorkItems ?? []
@@ -3005,6 +3109,11 @@ function describeContinuitySnapshot(
   if (continuity?.continuitySummary) {
     return continuity.continuitySummary;
   }
+  if (continuity?.continuitySource === "result_recorded") {
+    return `${card.persona.toUpperCase()} completed this ${humanizeDeliverableType(
+      card.deliverableType
+    ).toLowerCase()} lane and preserved the latest outcome for later review.`;
+  }
   const personaLabel = card.persona.toUpperCase();
   const deliverableLabel = humanizeDeliverableType(card.deliverableType).toLowerCase();
   if (card.state === "done") {
@@ -3016,7 +3125,7 @@ function describeContinuitySnapshot(
   const latestAbsorbedWorkItem = continuity?.absorbedWorkItems.at(-1);
   if (latestAbsorbedWorkItem) {
     const parsedItem = parseContinuityAbsorbedWorkItem(latestAbsorbedWorkItem);
-    if (parsedItem.resolution === "handoff_existing_lane") {
+    if (continuity?.continuitySource === "lane_handoff" || parsedItem.resolution === "handoff_existing_lane") {
       return `${personaLabel} can resume this ${deliverableLabel} lane after a CEO handoff from ${parsedItem.label}.`;
     }
     return `${personaLabel} can resume this ${deliverableLabel} lane with absorbed follow-on work from ${parsedItem.label}.`;

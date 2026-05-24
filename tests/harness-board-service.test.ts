@@ -14,6 +14,17 @@ import {
 import { createInMemoryHarnessRepository } from "../src/harness/repository.js";
 import { createHarnessWorkflowRegistry } from "../src/wealthfactory/workflow-registry.js";
 
+
+async function expectCreatedCard<T extends { createTopLevelChildCard(request: { authorization: string; cookie?: string; persona: string; title: string; deliverableType: string }): Promise<{ cardId: string } | { status: "deferred"; proposalId: string }> }>(
+  promise: ReturnType<T["createTopLevelChildCard"]>
+): Promise<{ cardId: string }> {
+  const result = await promise;
+  if ("status" in result && result.status === "deferred") {
+    throw new Error(`Expected created card but received deferred proposal ${result.proposalId}`);
+  }
+  return result as { cardId: string };
+}
+
 describe("harness board service", () => {
   it("bootstraps and persists a tenant-scoped harness board from guarded auth", async () => {
     const repository = createInMemoryHarnessRepository();
@@ -220,12 +231,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
     const createdContinuity = await repository.getCardContinuity(created.cardId);
 
     expect(createdContinuity).toEqual(
@@ -286,12 +297,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await repository.insertProposal({
       id: "proposal_repeat_1",
@@ -340,12 +351,12 @@ describe("harness board service", () => {
     });
 
     await service.listBoardState({ authorization: "Bearer valid" });
-    await service.createTopLevelChildCard({
+    await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
 
@@ -379,12 +390,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
     await repository.insertProposal({
       id: "proposal_followthrough_1",
       runId: board.runId,
@@ -448,12 +459,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const parentCard = await service.createTopLevelChildCard({
+    const parentCard = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await repository.insertProposal({
       id: "proposal_deferred_1",
@@ -517,12 +528,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const parentCard = await service.createTopLevelChildCard({
+    const parentCard = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await repository.insertProposal({
       id: "proposal_deferred_repeat_1",
@@ -590,12 +601,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const parentCard = await service.createTopLevelChildCard({
+    const parentCard = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await repository.insertProposal({
       id: "proposal_deferred_reason_change_1",
@@ -668,12 +679,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const parentCard = await service.createTopLevelChildCard({
+    const parentCard = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await repository.insertProposal({
       id: "proposal_deferred_then_approved_1",
@@ -765,12 +776,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const parentCard = await service.createTopLevelChildCard({
+    const parentCard = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await repository.insertProposal({
       id: "proposal_owner_conflict_1",
@@ -845,12 +856,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const parentCard = await service.createTopLevelChildCard({
+    const parentCard = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await repository.insertProposal({
       id: "proposal_pending_duplicate_original_1",
@@ -934,12 +945,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const parentCard = await service.createTopLevelChildCard({
+    const parentCard = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await repository.insertProposal({
       id: "proposal_deferred_duplicate_original_1",
@@ -1043,12 +1054,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const parentCard = await service.createTopLevelChildCard({
+    const parentCard = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await repository.insertProposal({
       id: "proposal_distinct_follow_on_original_1",
@@ -1110,12 +1121,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const parentCard = await service.createTopLevelChildCard({
+    const parentCard = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await repository.insertProposal({
       id: "proposal_owner_conflict_handoff_1",
@@ -1225,12 +1236,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const parentCard = await service.createTopLevelChildCard({
+    const parentCard = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await repository.insertProposal({
       id: "proposal_owner_conflict_stale_target_1",
@@ -1282,12 +1293,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const parentCard = await service.createTopLevelChildCard({
+    const parentCard = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await repository.insertProposal({
       id: "proposal_manual_owner_conflict_1",
@@ -1348,12 +1359,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await service.advanceChildCard({
       authorization: "Bearer valid",
@@ -1441,12 +1452,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await service.advanceChildCard({
       authorization: "Bearer valid",
@@ -1512,12 +1523,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
     await service.advanceChildCard({
       authorization: "Bearer valid",
       cardId: created.cardId,
@@ -1653,12 +1664,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
     await service.advanceChildCard({
       authorization: "Bearer valid",
       cardId: created.cardId,
@@ -1707,12 +1718,12 @@ describe("harness board service", () => {
     });
 
     const firstBoard = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
     await service.advanceChildCard({
       authorization: "Bearer valid",
       cardId: created.cardId,
@@ -1736,12 +1747,12 @@ describe("harness board service", () => {
     });
     const secondBoard = await service.listBoardState({ authorization: "Bearer valid" });
     expect(secondBoard.runId).toBe(secondCycle.runId);
-    const secondCreated = await service.createTopLevelChildCard({
+    const secondCreated = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane again",
       deliverableType: "pricing_review"
-    });
+    }));
     await service.advanceChildCard({
       authorization: "Bearer valid",
       cardId: secondCreated.cardId,
@@ -1789,12 +1800,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
     await service.advanceChildCard({
       authorization: "Bearer valid",
       cardId: created.cardId,
@@ -1875,12 +1886,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await repository.insertProposal({
       id: "proposal_private_note_1",
@@ -1925,12 +1936,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await repository.insertProposal({
       id: "proposal_private_deny_note_1",
@@ -1978,18 +1989,18 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
-    const existingLane = await service.createTopLevelChildCard({
+    }));
+    const existingLane = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "researcher",
       title: "Gather competitor price anchors",
       deliverableType: "research_brief"
-    });
+    }));
 
     await repository.insertProposal({
       id: "proposal_duplicate_lane_1",
@@ -2064,12 +2075,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const existingLane = await service.createTopLevelChildCard({
+    const existingLane = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "researcher",
       title: "Gather competitor price anchors",
       deliverableType: "research_brief"
-    });
+    }));
 
     await repository.insertProposal({
       id: "proposal_same_lane_1",
@@ -2115,12 +2126,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const existingLane = await service.createTopLevelChildCard({
+    const existingLane = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "researcher",
       title: "Gather competitor price anchors",
       deliverableType: "research_brief"
-    });
+    }));
 
     await repository.insertProposal({
       id: "proposal_idempotent_reuse_1",
@@ -2170,18 +2181,18 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const cfoLane = await service.createTopLevelChildCard({
+    const cfoLane = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
-    const researcherLane = await service.createTopLevelChildCard({
+    }));
+    const researcherLane = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "researcher",
       title: "Gather competitor price anchors",
       deliverableType: "research_brief"
-    });
+    }));
 
     await service.advanceChildCard({
       authorization: "Bearer valid",
@@ -2333,12 +2344,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const result = await service.createTopLevelChildCard({
+    const result = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
     const cards = await repository.listCardsForRun(board.runId);
     const createdCard = cards.find((card) => card.id === result.cardId);
     const events = await repository.listEventsForCard(result.cardId);
@@ -2377,18 +2388,18 @@ describe("harness board service", () => {
       })
     });
 
-    const first = await service.createTopLevelChildCard({
+    const first = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
-    const second = await service.createTopLevelChildCard({
+    }));
+    const second = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     const run = await repository.findLatestRunForTenantWorkflow({
       tenantId: "tenant_123",
@@ -2418,18 +2429,18 @@ describe("harness board service", () => {
       })
     });
 
-    const first = await service.createTopLevelChildCard({
+    const first = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "researcher",
       title: "Gather competitor price anchors",
       deliverableType: "research_brief"
-    });
-    const second = await service.createTopLevelChildCard({
+    }));
+    const second = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "researcher",
       title: "Gather competitor pricing anchors",
       deliverableType: "research_brief"
-    });
+    }));
 
     const run = await repository.findLatestRunForTenantWorkflow({
       tenantId: "tenant_123",
@@ -2459,18 +2470,18 @@ describe("harness board service", () => {
       })
     });
 
-    const first = await service.createTopLevelChildCard({
+    const first = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "researcher",
       title: "Gather competitor price anchors",
       deliverableType: "research_brief"
-    });
-    const second = await service.createTopLevelChildCard({
+    }));
+    const second = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "researcher",
       title: "Summarize price-anchor anomalies",
       deliverableType: "research_brief"
-    });
+    }));
 
     const run = await repository.findLatestRunForTenantWorkflow({
       tenantId: "tenant_123",
@@ -2523,18 +2534,18 @@ describe("harness board service", () => {
       })
     });
 
-    const cfoLane = await service.createTopLevelChildCard({
+    const cfoLane = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
-    const researcherLane = await service.createTopLevelChildCard({
+    }));
+    const researcherLane = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "researcher",
       title: "Gather competitor price anchors",
       deliverableType: "research_brief"
-    });
+    }));
 
     await service.advanceChildCard({
       authorization: "Bearer valid",
@@ -2559,12 +2570,12 @@ describe("harness board service", () => {
       resultSummary: "Initial competitor pricing anchors are recorded."
     });
 
-    const reopened = await service.createTopLevelChildCard({
+    const reopened = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "researcher",
       title: "Gather competitor price anchors",
       deliverableType: "research_brief"
-    });
+    }));
 
     const reopenedLane = await repository.getCard(researcherLane.cardId);
     const continuity = await repository.getCardContinuity(researcherLane.cardId);
@@ -2633,18 +2644,18 @@ describe("harness board service", () => {
       })
     });
 
-    const parentLane = await service.createTopLevelChildCard({
+    const parentLane = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
-    const researcherLane = await service.createTopLevelChildCard({
+    }));
+    const researcherLane = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "researcher",
       title: "Gather competitor price anchors",
       deliverableType: "research_brief"
-    });
+    }));
 
     await service.advanceChildCard({
       authorization: "Bearer valid",
@@ -2729,12 +2740,12 @@ describe("harness board service", () => {
       })
     });
 
-    await service.createTopLevelChildCard({
+    await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await expect(
       service.createTopLevelChildCard({
@@ -2773,7 +2784,92 @@ describe("harness board service", () => {
     ).rejects.toBeInstanceOf(HarnessCardCreationConflictError);
   });
 
-  it("fails closed when the direct child-card limit is reached", async () => {
+  it("preserves a direct CEO request as deferred governance when the child-card lane cap is reached", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const audit = vi.fn().mockResolvedValue(undefined);
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      audit,
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+    const initialBoard = await service.listBoardState({ authorization: "Bearer valid" });
+
+    for (const assignment of [
+      { persona: "cfo", title: "Pressure-test the pricing lane", deliverableType: "pricing_review" },
+      { persona: "coo", title: "Prepare the fulfillment handoff", deliverableType: "ops_handoff" },
+      { persona: "researcher", title: "Gather competitor anchors", deliverableType: "research_brief" },
+      { persona: "cto", title: "Review the automation seams", deliverableType: "technical_review" },
+      { persona: "cmo", title: "Draft the launch narrative", deliverableType: "launch_copy" },
+      { persona: "analyst", title: "Estimate the revenue delta", deliverableType: "forecast_model" }
+    ]) {
+      await expectCreatedCard(service.createTopLevelChildCard({
+        authorization: "Bearer valid",
+        persona: assignment.persona,
+        title: assignment.title,
+        deliverableType: assignment.deliverableType
+      }));
+    }
+
+    await expect(
+      service.createTopLevelChildCard({
+        authorization: "Bearer valid",
+        persona: "analyst",
+        title: "Review the offer language",
+        deliverableType: "legal_review"
+      })
+    ).resolves.toEqual({
+      status: "deferred",
+      proposalId: expect.stringMatching(/^[0-9a-f-]{36}$/i)
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(board.pendingApprovals).toEqual([
+      expect.objectContaining({
+        title: "Review the offer language",
+        requestedByPersona: "CEO",
+        targetPersona: "ANALYST",
+        deliverableLabel: "Legal Review",
+        statusLabel: "Deferred for later CEO review",
+        policyReasonLabel: "Lane cap protection",
+        nextReviewTrigger: "Review again when one of the active child lanes closes."
+      })
+    ]);
+
+    const deferredProposal = await repository.getProposal(board.pendingApprovals[0]?.id ?? "");
+    expect(deferredProposal).toEqual(
+      expect.objectContaining({
+        runId: initialBoard.runId,
+        requestedByPersona: "ceo",
+        persona: "analyst",
+        title: "Review the offer language",
+        deliverableType: "legal_review",
+        status: "deferred",
+        decisionNote: "CEO deferred this proposal because the current run is at its active lane cap."
+      })
+    );
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "harness_proposal_decided",
+        metadata: expect.objectContaining({
+          decision: "deferred",
+          reason: "lane_cap",
+          hasDecisionNote: true
+        })
+      })
+    );
+  });
+
+  it("reuses the same deferred direct CEO request when lane-cap retries repeat the same bounded assignment", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
       authenticate: vi.fn().mockResolvedValue({
@@ -2798,22 +2894,39 @@ describe("harness board service", () => {
       { persona: "cmo", title: "Draft the launch narrative", deliverableType: "launch_copy" },
       { persona: "analyst", title: "Estimate the revenue delta", deliverableType: "forecast_model" }
     ]) {
-      await service.createTopLevelChildCard({
+      await expectCreatedCard(service.createTopLevelChildCard({
         authorization: "Bearer valid",
         persona: assignment.persona,
         title: assignment.title,
         deliverableType: assignment.deliverableType
-      });
+      }));
     }
 
-    await expect(
-      service.createTopLevelChildCard({
-        authorization: "Bearer valid",
-        persona: "legal",
-        title: "Review the offer language",
-        deliverableType: "legal_review"
-      })
-    ).rejects.toBeInstanceOf(HarnessCardCreationConflictError);
+    const firstDeferred = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "analyst",
+      title: "Review the offer language",
+      deliverableType: "legal_review"
+    });
+    const secondDeferred = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "analyst",
+      title: "Reviewing the offer language",
+      deliverableType: "legal_review"
+    });
+
+    expect(firstDeferred).toEqual({
+      status: "deferred",
+      proposalId: expect.any(String)
+    });
+    expect(secondDeferred).toEqual(firstDeferred);
+
+    const run = await repository.findLatestRunForTenantWorkflow({
+      tenantId: "tenant_123",
+      workflowId: "wf_connect_first_workflow"
+    });
+    const proposals = await repository.listProposalsForRun(run!.id);
+    expect(proposals.filter((proposal) => proposal.status === "deferred")).toHaveLength(1);
   });
 
   it("fails closed when direct child-card creation targets an assembling run", async () => {
@@ -2834,12 +2947,12 @@ describe("harness board service", () => {
     });
 
     await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
     await service.advanceChildCard({
       authorization: "Bearer valid",
       cardId: created.cardId,
@@ -2886,12 +2999,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
     await service.advanceChildCard({
       authorization: "Bearer valid",
       cardId: created.cardId,
@@ -3011,12 +3124,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await expect(
       service.advanceChildCard({
@@ -3119,12 +3232,12 @@ describe("harness board service", () => {
     });
 
     await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await expect(
       service.advanceChildCard({
@@ -3173,12 +3286,12 @@ describe("harness board service", () => {
     });
 
     await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await service.advanceChildCard({
       authorization: "Bearer valid",
@@ -3215,12 +3328,12 @@ describe("harness board service", () => {
     });
 
     await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await service.advanceChildCard({
       authorization: "Bearer valid",
@@ -3270,12 +3383,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await service.advanceChildCard({
       authorization: "Bearer valid",
@@ -3325,12 +3438,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await service.advanceChildCard({
       authorization: "Bearer valid",
@@ -3370,18 +3483,18 @@ describe("harness board service", () => {
     });
 
     await service.listBoardState({ authorization: "Bearer valid" });
-    const workingCard = await service.createTopLevelChildCard({
+    const workingCard = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
-    const waitingCard = await service.createTopLevelChildCard({
+    }));
+    const waitingCard = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "coo",
       title: "Prepare the fulfillment handoff",
       deliverableType: "ops_handoff"
-    });
+    }));
 
     await service.advanceChildCard({
       authorization: "Bearer valid",
@@ -3426,12 +3539,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
     await service.advanceChildCard({
       authorization: "Bearer valid",
       cardId: created.cardId,
@@ -3521,12 +3634,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
     await service.advanceChildCard({
       authorization: "Bearer valid",
       cardId: created.cardId,
@@ -3590,12 +3703,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
     await service.advanceChildCard({
       authorization: "Bearer valid",
       cardId: created.cardId,
@@ -3738,12 +3851,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
     await service.advanceChildCard({
       authorization: "Bearer valid",
       cardId: created.cardId,
@@ -3827,12 +3940,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
     await service.advanceChildCard({
       authorization: "Bearer valid",
       cardId: created.cardId,
@@ -3944,12 +4057,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
     await service.advanceChildCard({
       authorization: "Bearer valid",
       cardId: created.cardId,
@@ -4001,12 +4114,12 @@ describe("harness board service", () => {
 
     try {
       const board = await service.listBoardState({ authorization: "Bearer valid" });
-      const created = await service.createTopLevelChildCard({
+      const created = await expectCreatedCard(service.createTopLevelChildCard({
         authorization: "Bearer valid",
         persona: "cfo",
         title: "Pressure-test the pricing lane",
         deliverableType: "pricing_review"
-      });
+      }));
       await service.advanceChildCard({
         authorization: "Bearer valid",
         cardId: created.cardId,
@@ -4069,12 +4182,12 @@ describe("harness board service", () => {
 
     try {
       await service.listBoardState({ authorization: "Bearer valid" });
-      const created = await service.createTopLevelChildCard({
+      const created = await expectCreatedCard(service.createTopLevelChildCard({
         authorization: "Bearer valid",
         persona: "cfo",
         title: "Pressure-test the pricing lane",
         deliverableType: "pricing_review"
-      });
+      }));
 
       await expect(
         service.advanceChildCard({
@@ -4122,12 +4235,12 @@ describe("harness board service", () => {
     });
 
     await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await expect(
       service.advanceChildCard({
@@ -4175,12 +4288,12 @@ describe("harness board service", () => {
     });
 
     await createService.listBoardState({ authorization: "Bearer valid" });
-    const created = await createService.createTopLevelChildCard({
+    const created = await expectCreatedCard(createService.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await expect(
       readOnlyService.advanceChildCard({
@@ -4209,12 +4322,12 @@ describe("harness board service", () => {
     });
 
     await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await expect(
       service.advanceChildCard({
@@ -4243,12 +4356,12 @@ describe("harness board service", () => {
     });
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
-    const created = await service.createTopLevelChildCard({
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
     await service.advanceChildCard({
       authorization: "Bearer valid",
       cardId: created.cardId,
@@ -4310,12 +4423,12 @@ describe("harness board service", () => {
     });
 
     const board = await tenantOneService.listBoardState({ authorization: "Bearer tenant-one" });
-    const created = await tenantOneService.createTopLevelChildCard({
+    const created = await expectCreatedCard(tenantOneService.createTopLevelChildCard({
       authorization: "Bearer tenant-one",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await repository.insertProposal({
       id: "proposal_cross_tenant_1",
@@ -4369,12 +4482,12 @@ describe("harness board service", () => {
     });
 
     const board = await tenantOneService.listBoardState({ authorization: "Bearer tenant-one" });
-    const created = await tenantOneService.createTopLevelChildCard({
+    const created = await expectCreatedCard(tenantOneService.createTopLevelChildCard({
       authorization: "Bearer tenant-one",
       persona: "cfo",
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
-    });
+    }));
 
     await repository.insertProposal({
       id: "proposal_cross_tenant_approved_1",

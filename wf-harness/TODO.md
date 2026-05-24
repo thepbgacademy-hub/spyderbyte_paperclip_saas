@@ -45,6 +45,7 @@ This file tracks the new harness subproject only.
 - [x] Expand beyond CEO direct-child creation into richer persisted card progression and result-recording mutation paths.
 - [ ] Add fuller CEO approval logic for sub-card requests and card-count discipline beyond the current duplicate-lane/open-cap guardrails.
   - [x] Make repeated unresolved requests reuse the latest earlier unresolved governance hold instead of opening fresh duplicate lanes when no active-lane reuse or valid handoff applies.
+  - [x] Preserve direct CEO lane-cap requests as deferred governance instead of dropping them as hard conflicts when the board is already full.
 - [x] Persist structured absorbed-work state when the CEO folds a proposal into an existing lane, so lane reuse becomes real engine state instead of comment-only history.
 - [x] Add first-class board decision memory so approvals, deferrals, denials, lane opens, and CEO completion become durable harness records instead of inferred chatter.
 - [x] Widen board decision memory with bounded policy reasons and recommendation/objection summaries instead of introducing a second generic notes store.
@@ -81,6 +82,7 @@ This file tracks the new harness subproject only.
 - [x] Deepen the fresh-cycle policy so the CEO can choose between reopening only deferred follow-on work versus starting a completely clean board cycle when no follow-through should carry forward.
 - [ ] Define the split between small harness continuity memory and larger tenant-owned long memory in Obsidian, including what gets written there and what must remain Wealth Factory runtime truth.
   - [x] Keep live lane continuity inside Wealth Factory as bounded operational snapshot state instead of reconstructing it only from card-event replay.
+  - [x] Add a bounded continuity-source discriminator so runtime memory stays self-describing before any later Obsidian export seam exists.
   - [ ] Decide whether the current continuity trio (`continuitySummary`, `latestResultSummary`, `absorbedWorkItems`) is the final bounded runtime-memory shape before any Obsidian export seam is added.
   - [x] Keep the refinement policy explicit in implementation: bounded changes to the same deliverable should stay in-lane, while broader directional changes should open a new lane or fresh cycle without losing institutional memory.
 - [ ] Deepen the worker-side harness execution seam beyond the current single-lane dispatch payload and into real orchestrator/child execution behavior without reopening the old Paperclip-style hotspot model.
@@ -89,3 +91,4 @@ This file tracks the new harness subproject only.
   - [x] Persist worker-start truth with the claim so the bounded start seam also records `state_changed`, refreshes active-lane continuity, and reconciles run state instead of leaving those facts behind in board-only logic.
   - [x] Add a worker-private lane outcome commit seam so a claimed `working` lane can write its bounded result back into durable harness state without going through the public board API.
   - [x] Let the worker-private seam advance beyond bounded lane outcomes into orchestrator-aware multi-step execution without reopening swarm-style ambiguity or bypassing CEO governance.
+  - [x] Add a private claimed-lane execution envelope carrying required capabilities and sanitized runtime context while keeping public dispatch telemetry metadata-only.

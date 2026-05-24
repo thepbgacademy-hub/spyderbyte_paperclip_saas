@@ -73,6 +73,7 @@ Scope: First custom harness slice under `src/harness`, `src/api/harness-http.ts`
 - Re-ran the scan after letting direct CEO follow-on requests fold into an already open same-persona/same-deliverable lane with bounded continuity updates. The touched slice still introduced no live secret material and only appends existing lane metadata plus bounded continuity text instead of widening any credential-bearing or BYOK surface.
 - Re-ran the scan after deriving worker-recorded workflow status from committed harness lane outcomes when no immediate follow-on dispatch exists. The touched slice still introduced no live secret material and only maps existing run-state metadata into queue-safe status values instead of widening any credential-bearing or BYOK surface.
 - Re-ran the scan after fixing the Postgres continuity upsert so omitted follow-up writes preserve the prior `latestResultSummary` instead of nulling it. The touched slice still introduced no live secret material and only tightened persistence parity between in-memory and real Postgres harness state.
+- Re-ran the scan after adding direct CEO lane-cap deferral, the bounded `continuitySource` discriminator, and the new private claimed-lane execution envelope. The touched slice still introduced no live secret material; runtime context remains sanitized, public dispatch telemetry still excludes provider context and required capabilities, and the new continuity metadata stores only bounded operational state.
 
 ## OWASP-Oriented Findings
 
@@ -174,6 +175,8 @@ No issues identified in the harness slice. The board HTTP boundary now distingui
   - `E:\REPOS\spyderbyte_paperclip_saas\tests\harness-http.test.ts`
 - Evidence: examples include masked/dummy values like `service-role-key`, `paperclip-service-token`, `Bearer valid`, and the clearly fake `postgresql://postgres.tenant:***@db.invalid:5432/postgres` test fixture.
 - Recommendation: keep using clearly fake placeholders and continue avoiding live provider-shaped values in tests.
+
+- Re-ran the scan after fixing three reviewer-found worker/governance seams: follow-on worker dispatches now also emit the private execution envelope, direct CEO lane-cap deferrals now audit `hasDecisionNote: true`, and already-`working` lane redispatches no longer fabricate `working -> working` history or flatten richer continuity sources. The touched slice still introduced no live secret exposure, and public lane-dispatch telemetry remains metadata-only without leaking required capabilities or runtime context.
 
 ## Remediation Priority
 

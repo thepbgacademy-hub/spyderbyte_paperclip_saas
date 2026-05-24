@@ -27,6 +27,12 @@ export type HarnessBoardPolicyReason =
   | "lane_cap"
   | "scope_guardrail"
   | "completed_lanes_only";
+export type HarnessCardContinuitySource =
+  | "state_transition"
+  | "resume_override"
+  | "proposal_absorbed"
+  | "lane_handoff"
+  | "result_recorded";
 
 export const HARNESS_CHILD_PERSONAS = ["cfo", "coo", "researcher", "cto", "cmo", "analyst"] as const;
 export const HARNESS_DELIVERABLE_TYPES = [
@@ -82,6 +88,7 @@ export interface HarnessCardEventRecord {
 export interface HarnessCardContinuityRecord {
   cardId: string;
   runId: string;
+  continuitySource: HarnessCardContinuitySource;
   continuitySummary: string | null;
   latestResultSummary: string | null;
   absorbedWorkItems: string[];
@@ -212,6 +219,7 @@ export function createHarnessCardEventRecord(input: {
 export function createHarnessCardContinuityRecord(input: {
   cardId: string;
   runId: string;
+  continuitySource?: HarnessCardContinuitySource;
   continuitySummary?: string | null;
   latestResultSummary?: string | null;
   absorbedWorkItems?: readonly string[];
@@ -219,6 +227,7 @@ export function createHarnessCardContinuityRecord(input: {
   return {
     cardId: input.cardId,
     runId: input.runId,
+    continuitySource: input.continuitySource ?? "state_transition",
     continuitySummary: input.continuitySummary ?? null,
     latestResultSummary: input.latestResultSummary ?? null,
     absorbedWorkItems: [...(input.absorbedWorkItems ?? [])],

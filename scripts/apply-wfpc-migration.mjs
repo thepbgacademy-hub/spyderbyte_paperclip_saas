@@ -460,6 +460,13 @@ try {
           from information_schema.columns
           where table_schema = 'wfpc'
             and table_name = 'harness_card_continuity'
+            and column_name = 'continuity_source'
+        ) as has_continuity_source,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'harness_card_continuity'
             and column_name = 'continuity_summary'
         ) as has_continuity_summary,
         exists (
@@ -480,6 +487,17 @@ try {
           select 1
           from pg_constraint
           where conrelid = to_regclass('wfpc.harness_card_continuity')
+            and conname = 'harness_card_continuity_source_check'
+            and pg_get_constraintdef(oid) like '%state_transition%'
+            and pg_get_constraintdef(oid) like '%resume_override%'
+            and pg_get_constraintdef(oid) like '%proposal_absorbed%'
+            and pg_get_constraintdef(oid) like '%lane_handoff%'
+            and pg_get_constraintdef(oid) like '%result_recorded%'
+        ) as has_continuity_source_check,
+        exists (
+          select 1
+          from pg_constraint
+          where conrelid = to_regclass('wfpc.harness_card_continuity')
             and pg_get_constraintdef(oid) like '%jsonb_typeof(absorbed_work_items)%'
         ) as has_absorbed_work_items_check,
         exists (
@@ -493,6 +511,7 @@ try {
   let harnessCardContinuityReady = Object.values(harnessCardContinuityExisting.rows[0] ?? {}).every(Boolean);
   if (!harnessCardContinuityReady) {
     await client.query(readFileSync("supabase/migrations/0019_wf_harness_card_continuity.sql", "utf8"));
+    await client.query(readFileSync("supabase/migrations/0020_wf_harness_card_continuity_source.sql", "utf8"));
     harnessCardContinuityExisting = await queryHarnessCardContinuityReady();
     harnessCardContinuityReady = Object.values(harnessCardContinuityExisting.rows[0] ?? {}).every(Boolean);
     if (!harnessCardContinuityReady) {

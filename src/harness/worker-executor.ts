@@ -7,8 +7,10 @@ import {
   type HarnessCardContinuityRecord,
   type HarnessCardRecord,
   type HarnessCardState,
-  type HarnessRunRecord
+  type HarnessRunRecord,
+  type HarnessRuntimeContext
 } from "./types.js";
+import type { ProviderCapability } from "../packages/package-types.js";
 
 export type HarnessWorkerLaneExecution = {
   cardId: string;
@@ -25,6 +27,15 @@ export type HarnessWorkerDispatch = {
   workflowId: string;
   status: "queued" | "running";
   laneExecution: HarnessWorkerLaneExecution | null;
+};
+
+export type HarnessWorkerExecutionEnvelope = {
+  tenantId: string;
+  runId: string;
+  workflowId: string;
+  requiredCapabilities: readonly ProviderCapability[];
+  runtimeContext: HarnessRuntimeContext;
+  laneExecution: HarnessWorkerLaneExecution;
 };
 
 export type HarnessWorkerLaneOutcome = {
@@ -294,6 +305,31 @@ export async function commitHarnessWorkerLaneOutcome(input: {
   });
 }
 
+export async function buildHarnessWorkerExecutionEnvelope(input: {
+  repository: Pick<HarnessRepository, "getRun">;
+  tenantId: string;
+  dispatch: HarnessWorkerDispatch;
+  requiredCapabilities: readonly ProviderCapability[];
+}): Promise<HarnessWorkerExecutionEnvelope | null> {
+  if (!input.dispatch.laneExecution) {
+    return null;
+  }
+
+  const run = await input.repository.getRun(input.dispatch.runId);
+  if (!run || run.tenantId !== input.tenantId || run.workflowId !== input.dispatch.workflowId) {
+    throw new Error(`Unknown harness run for worker execution envelope: ${input.dispatch.runId}`);
+  }
+
+  return {
+    tenantId: input.tenantId,
+    runId: run.id,
+    workflowId: run.workflowId,
+    requiredCapabilities: [...input.requiredCapabilities],
+    runtimeContext: run.runtimeContext,
+    laneExecution: input.dispatch.laneExecution
+  };
+}
+
 async function claimLaneForExecution(input: {
   repository: HarnessDispatchRepository;
   lane: HarnessCardRecord;
@@ -343,26 +379,42 @@ async function persistWorkerStartState(input: {
   claimedLane: HarnessCardRecord;
   previousLaneState: HarnessCardRecord["state"];
 }): Promise<HarnessCardContinuityRecord> {
-  await input.repository.insertEvent(
-    createHarnessCardEventRecord({
-      cardId: input.claimedLane.id,
-      eventKind: "state_changed",
-      payload: {
-        from: input.previousLaneState,
-        to: input.claimedLane.state
-      }
-    })
-  );
-
   const existingContinuity = input.continuity.find((record) => record.cardId === input.claimedLane.id) ?? null;
-  const updatedContinuity = createHarnessCardContinuityRecord({
-    cardId: input.claimedLane.id,
-    runId: input.run.id,
-    continuitySummary: createActiveResumeSummary(input.claimedLane),
-    latestResultSummary: existingContinuity?.latestResultSummary ?? null,
-    absorbedWorkItems: existingContinuity?.absorbedWorkItems ?? []
-  });
-  await input.repository.upsertCardContinuity(updatedContinuity);
+  const laneStateChanged = input.previousLaneState !== input.claimedLane.state;
+  if (laneStateChanged) {
+    await input.repository.insertEvent(
+      createHarnessCardEventRecord({
+        cardId: input.claimedLane.id,
+        eventKind: "state_changed",
+        payload: {
+          from: input.previousLaneState,
+          to: input.claimedLane.state
+        }
+      })
+    );
+  }
+
+  const updatedContinuity = laneStateChanged
+    ? createHarnessCardContinuityRecord({
+        cardId: input.claimedLane.id,
+        runId: input.run.id,
+        continuitySource: "state_transition",
+        continuitySummary: createActiveResumeSummary(input.claimedLane),
+        latestResultSummary: existingContinuity?.latestResultSummary ?? null,
+        absorbedWorkItems: existingContinuity?.absorbedWorkItems ?? []
+      })
+    : existingContinuity ??
+      createHarnessCardContinuityRecord({
+        cardId: input.claimedLane.id,
+        runId: input.run.id,
+        continuitySource: "state_transition",
+        continuitySummary: createActiveResumeSummary(input.claimedLane),
+        latestResultSummary: null,
+        absorbedWorkItems: []
+      });
+  if (laneStateChanged || !existingContinuity) {
+    await input.repository.upsertCardContinuity(updatedContinuity);
+  }
 
   const nextRunState = deriveHarnessRunState({
     run: input.run,
@@ -456,6 +508,7 @@ async function recordCardStateContinuity(input: {
   const record = createHarnessCardContinuityRecord({
     cardId: input.card.id,
     runId: input.card.runId,
+    continuitySource: input.resumeSummary ? "resume_override" : "state_transition",
     continuitySummary: input.resumeSummary ?? createDefaultResumeSummary(input.card),
     latestResultSummary: existing?.latestResultSummary ?? null,
     absorbedWorkItems: existing?.absorbedWorkItems ?? []
@@ -474,6 +527,7 @@ async function recordLatestResultContinuity(input: {
   const record = createHarnessCardContinuityRecord({
     cardId: input.card.id,
     runId: input.card.runId,
+    continuitySource: "result_recorded",
     continuitySummary: input.resumeSummary ?? createDefaultResumeSummary(input.card),
     latestResultSummary: input.resultSummary,
     absorbedWorkItems: existing?.absorbedWorkItems ?? []

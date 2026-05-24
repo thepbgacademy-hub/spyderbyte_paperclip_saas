@@ -9,6 +9,7 @@ import type { QueryClient } from "../db/supabase-repositories.js";
 import type { HarnessProposalResolution, HarnessProposalStatus, HarnessSubCardProposal } from "./runtime-contract.js";
 import type {
   HarnessBoardDecisionRecord,
+  HarnessCardContinuitySource,
   HarnessCardContinuityRecord,
   HarnessCardEventRecord,
   HarnessCardRecord,
@@ -223,6 +224,7 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
       continuity.set(record.cardId, {
         cardId: record.cardId,
         runId: record.runId,
+        continuitySource: record.continuitySource,
         continuitySummary: record.continuitySummary,
         latestResultSummary: record.latestResultSummary,
         absorbedWorkItems: mergeBoundedStrings(existing?.absorbedWorkItems ?? [], record.absorbedWorkItems),
@@ -486,10 +488,11 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
     async upsertCardContinuity(record) {
       await client.query(
         `insert into wfpc.harness_card_continuity
-          (card_id, run_id, continuity_summary, latest_result_summary, absorbed_work_items, updated_at)
-         values ($1, $2, $3, $4, $5::jsonb, $6::timestamptz)
+          (card_id, run_id, continuity_source, continuity_summary, latest_result_summary, absorbed_work_items, updated_at)
+         values ($1, $2, $3, $4, $5, $6::jsonb, $7::timestamptz)
          on conflict (card_id) do update
-           set continuity_summary = excluded.continuity_summary,
+           set continuity_source = excluded.continuity_source,
+               continuity_summary = excluded.continuity_summary,
                latest_result_summary = coalesce(
                  excluded.latest_result_summary,
                  wfpc.harness_card_continuity.latest_result_summary
@@ -515,6 +518,7 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
         [
           record.cardId,
           record.runId,
+          record.continuitySource,
           record.continuitySummary,
           record.latestResultSummary,
           JSON.stringify(record.absorbedWorkItems),
@@ -525,7 +529,7 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
 
     async getCardContinuity(cardId) {
       const result = await client.query(
-        `select card_id, run_id, continuity_summary, latest_result_summary, absorbed_work_items, updated_at
+        `select card_id, run_id, continuity_source, continuity_summary, latest_result_summary, absorbed_work_items, updated_at
          from wfpc.harness_card_continuity
          where card_id = $1
          limit 1`,
@@ -536,7 +540,7 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
 
     async listCardContinuityForRun(runId) {
       const result = await client.query(
-        `select card_id, run_id, continuity_summary, latest_result_summary, absorbed_work_items, updated_at
+        `select card_id, run_id, continuity_source, continuity_summary, latest_result_summary, absorbed_work_items, updated_at
          from wfpc.harness_card_continuity
          where run_id = $1
          order by updated_at desc, card_id asc`,
@@ -703,6 +707,7 @@ export function toHarnessCardContinuityRow(record: HarnessCardContinuityRecord):
   return {
     cardId: record.cardId,
     runId: record.runId,
+    continuitySource: record.continuitySource,
     continuitySummary: record.continuitySummary,
     latestResultSummary: record.latestResultSummary,
     absorbedWorkItems: [...record.absorbedWorkItems],
@@ -797,6 +802,10 @@ function mapHarnessCardContinuityRow(row: unknown): HarnessCardContinuityRecord 
   return {
     cardId: String(record.card_id),
     runId: String(record.run_id),
+    continuitySource:
+      typeof record.continuity_source === "string"
+        ? (record.continuity_source as HarnessCardContinuitySource)
+        : "state_transition",
     continuitySummary: typeof record.continuity_summary === "string" ? record.continuity_summary : null,
     latestResultSummary: typeof record.latest_result_summary === "string" ? record.latest_result_summary : null,
     absorbedWorkItems: Array.isArray(record.absorbed_work_items)

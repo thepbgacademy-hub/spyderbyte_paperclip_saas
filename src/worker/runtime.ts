@@ -5,9 +5,11 @@ import { createAcidGuardRepository } from "../db/acid-guard-repository.js";
 import { createPgPool, createPgPoolQueryClient, createPgTransactionRunner } from "../db/postgres-client.js";
 import { createSupabaseRepositories } from "../db/supabase-repositories.js";
 import {
+  buildHarnessWorkerExecutionEnvelope,
   buildHarnessWorkerDispatch,
   commitHarnessWorkerLaneOutcome,
   type HarnessWorkerDispatch,
+  type HarnessWorkerExecutionEnvelope,
   type HarnessWorkerLaneOutcome
 } from "../harness/worker-executor.js";
 import { createPostgresHarnessRepository } from "../harness/repository.js";
@@ -45,7 +47,11 @@ export function loadWorkerEnv(source: NodeJS.ProcessEnv = process.env) {
   };
 }
 
-export function createWorkerRuntime(options: { env: WorkerEnv; workerInstanceId?: string }) {
+export function createWorkerRuntime(options: {
+  env: WorkerEnv;
+  workerInstanceId?: string;
+  onHarnessLaneReady?: (envelope: HarnessWorkerExecutionEnvelope) => void | Promise<void>;
+}) {
   const pool = createPgPool({
     connectionString: options.env.supabaseDbUrl,
     ...(options.env.supabaseDbSsl ? { sslMode: options.env.supabaseDbSsl } : {})
@@ -340,6 +346,7 @@ export function createWorkerRuntime(options: { env: WorkerEnv; workerInstanceId?
                   transactionRunner.withTransaction((transaction) =>
                     work(createPostgresHarnessRepository(transaction))
                   ),
+                workflowRegistry: harnessWorkflowRegistry,
                 recordStatus: async (status) => {
                   await recordWorkflowStatus(status);
                 },
@@ -352,7 +359,14 @@ export function createWorkerRuntime(options: { env: WorkerEnv; workerInstanceId?
                       ...dispatch
                     })}\n`
                   );
-                }
+                },
+                ...(options.onHarnessLaneReady
+                  ? {
+                      onExecutionEnvelope: async (envelope: HarnessWorkerExecutionEnvelope) => {
+                        await options.onHarnessLaneReady?.(envelope);
+                      }
+                    }
+                  : {})
               })
             : processWorkflowJob({
                 payload: validatedPayload,
@@ -427,7 +441,7 @@ export function createWorkerRuntime(options: { env: WorkerEnv; workerInstanceId?
         recordStatus: async (status) => {
           await recordWorkflowStatus(status);
         },
-        onOutcome: (committedOutcome) => {
+        onOutcome: async (committedOutcome) => {
           process.stdout.write(
             `${JSON.stringify({
               type: "wealth_factory_harness_lane_outcome",
@@ -437,6 +451,25 @@ export function createWorkerRuntime(options: { env: WorkerEnv; workerInstanceId?
             })}\n`
           );
           if (committedOutcome.nextDispatch?.laneExecution) {
+            const executionEnvelope = await buildHarnessWorkerExecutionEnvelope({
+              repository: harnessRepository,
+              tenantId: input.tenantId,
+              dispatch: committedOutcome.nextDispatch,
+              requiredCapabilities: harnessWorkflowRegistry.getDefinition(committedOutcome.nextDispatch.workflowId)
+                .requiredCapabilities
+            });
+            if (executionEnvelope) {
+              try {
+                await options.onHarnessLaneReady?.(executionEnvelope);
+              } catch (error) {
+                console.warn("Harness lane-ready hook failed after durable follow-on dispatch", {
+                  runId: executionEnvelope.runId,
+                  workflowId: executionEnvelope.workflowId,
+                  cardId: executionEnvelope.laneExecution.cardId,
+                  error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+                });
+              }
+            }
             process.stdout.write(
               `${JSON.stringify({
                 type: "wealth_factory_harness_lane_dispatch",
@@ -514,8 +547,10 @@ async function processHarnessWorkflowJob(options: {
       >
     ) => Promise<T>
   ) => Promise<T>;
+  workflowRegistry: Pick<ReturnType<typeof createHarnessWorkflowRegistry>, "getDefinition">;
   recordStatus?: (status: { tenantId: string; runId: string; workflowId: string; status: "queued" | "running" | "failed" }) => void | Promise<void>;
   onDispatch?: (dispatch: HarnessWorkerDispatch) => void;
+  onExecutionEnvelope?: (envelope: HarnessWorkerExecutionEnvelope) => void | Promise<void>;
 }) {
   try {
     const dispatch = await buildHarnessWorkerDispatch({
@@ -526,6 +561,24 @@ async function processHarnessWorkflowJob(options: {
       ...(options.runAtomically ? { runAtomically: options.runAtomically } : {})
     });
     if (dispatch.laneExecution) {
+      const executionEnvelope = await buildHarnessWorkerExecutionEnvelope({
+        repository: options.repository,
+        tenantId: options.payload.tenantId,
+        dispatch,
+        requiredCapabilities: options.workflowRegistry.getDefinition(dispatch.workflowId).requiredCapabilities
+      });
+      if (executionEnvelope) {
+        try {
+          await options.onExecutionEnvelope?.(executionEnvelope);
+        } catch (error) {
+          console.warn("Harness lane-ready hook failed after durable lane claim", {
+            runId: executionEnvelope.runId,
+            workflowId: executionEnvelope.workflowId,
+            cardId: executionEnvelope.laneExecution.cardId,
+            error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+          });
+        }
+      }
       options.onDispatch?.(dispatch);
       await options.recordStatus?.({
         tenantId: options.payload.tenantId,
@@ -593,7 +646,7 @@ async function processHarnessLaneOutcome(options: {
     ) => Promise<T>
   ) => Promise<T>;
   recordStatus?: (status: { tenantId: string; runId: string; workflowId: string; status: PaperclipRunStatus }) => void | Promise<void>;
-  onOutcome?: (outcome: HarnessWorkerLaneOutcome) => void;
+  onOutcome?: (outcome: HarnessWorkerLaneOutcome) => void | Promise<void>;
 }) {
   const outcome = await commitHarnessWorkerLaneOutcome({
     repository: options.repository,
@@ -618,7 +671,7 @@ async function processHarnessLaneOutcome(options: {
     }
   }
   if (outcome.status === "committed") {
-    options.onOutcome?.(outcome);
+    await options.onOutcome?.(outcome);
   }
   return outcome;
 }

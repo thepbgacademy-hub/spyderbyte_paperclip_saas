@@ -22,6 +22,7 @@ const boardDecisionMigration = readFileSync("supabase/migrations/0016_wf_harness
 const boardMemoryMigration = readFileSync("supabase/migrations/0017_wf_harness_board_memory.sql", "utf8");
 const laneHandoffMigration = readFileSync("supabase/migrations/0018_wf_harness_lane_handoff.sql", "utf8");
 const cardContinuityMigration = readFileSync("supabase/migrations/0019_wf_harness_card_continuity.sql", "utf8");
+const cardContinuitySourceMigration = readFileSync("supabase/migrations/0020_wf_harness_card_continuity_source.sql", "utf8");
 const execFileAsync = promisify(execFile);
 
 const HARNESS_POSTGRES_IMAGE = "postgres:16-alpine";
@@ -1061,6 +1062,7 @@ async function resetHarnessProofDatabase(client: Client) {
   await client.query(boardMemoryMigration);
   await client.query(laneHandoffMigration);
   await client.query(cardContinuityMigration);
+  await client.query(cardContinuitySourceMigration);
 }
 
 async function seedHarnessProofPrerequisites(client: Client, tenantId: string) {
