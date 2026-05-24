@@ -38,6 +38,29 @@ export type HarnessWorkerExecutionEnvelope = {
   laneExecution: HarnessWorkerLaneExecution;
 };
 
+export type HarnessPostOutcomeAction =
+  | {
+      kind: "dispatch_next_lane";
+      runState: HarnessRunRecord["state"];
+      cardId: string;
+      persona: string;
+    }
+  | {
+      kind: "queue_ceo_review";
+      runState: HarnessRunRecord["state"];
+      reason: "final_assembly" | "governance_backlog" | "governance_hold";
+    }
+  | {
+      kind: "await_lane_resume";
+      runState: "waiting";
+      cardId: string;
+    }
+  | {
+      kind: "await_unblock";
+      runState: "blocked";
+      cardId: string;
+    };
+
 export type HarnessWorkerLaneOutcome = {
   runId: string;
   workflowId: string;
@@ -50,6 +73,7 @@ export type HarnessWorkerLaneOutcome = {
     resumeFocus?: string;
     latestResultSummary?: string;
   };
+  postOutcomeAction?: HarnessPostOutcomeAction;
   nextDispatch?: HarnessWorkerDispatch;
 };
 
@@ -289,6 +313,19 @@ export async function commitHarnessWorkerLaneOutcome(input: {
             runId: run.id,
             workflowId: run.workflowId
           });
+    const [latestRun, cardsAfterOutcome, proposalsAfterOutcome] = await Promise.all([
+      repository.getRun(run.id),
+      repository.listCardsForRun(run.id),
+      repository.listProposalsForRun(run.id)
+    ]);
+    const latestRunState = latestRun?.state ?? nextRun.state;
+    const postOutcomeAction = determinePostOutcomeAction({
+      runState: latestRunState,
+      cardId: updatedCard.id,
+      nextDispatch,
+      cards: cardsAfterOutcome,
+      proposals: proposalsAfterOutcome
+    });
     return {
       runId: run.id,
       workflowId: run.workflowId,
@@ -296,10 +333,11 @@ export async function commitHarnessWorkerLaneOutcome(input: {
       laneExecution: {
         cardId: updatedCard.id,
         state: updatedCard.state,
-        runState: nextRun.state,
+        runState: latestRunState,
         ...(continuity.continuitySummary ? { resumeFocus: continuity.continuitySummary } : {}),
         ...(continuity.latestResultSummary ? { latestResultSummary: continuity.latestResultSummary } : {})
       },
+      ...(postOutcomeAction ? { postOutcomeAction } : {}),
       ...(nextDispatch?.laneExecution ? { nextDispatch } : {})
     };
   });
@@ -451,6 +489,93 @@ async function reconcileHarnessRunState(input: {
     runId: input.run.id,
     state: nextState
   });
+}
+
+function determinePostOutcomeAction(input: {
+  runState: HarnessRunRecord["state"];
+  cardId: string;
+  nextDispatch: HarnessWorkerDispatch | null;
+  cards: readonly HarnessCardRecord[];
+  proposals: Awaited<ReturnType<HarnessOutcomeRepository["listProposalsForRun"]>>;
+}): HarnessPostOutcomeAction | null {
+  const dispatchedLane = input.nextDispatch?.laneExecution;
+  if (dispatchedLane) {
+    return {
+      kind: "dispatch_next_lane",
+      runState: input.runState,
+      cardId: dispatchedLane.cardId,
+      persona: dispatchedLane.persona
+    };
+  }
+
+  const hasOpenGovernance = input.proposals.some(
+    (proposal) => proposal.status === "proposed" || proposal.status === "deferred"
+  );
+  if (input.runState === "assembling") {
+    return {
+      kind: "queue_ceo_review",
+      runState: input.runState,
+      reason: hasOpenGovernance ? "governance_hold" : "final_assembly"
+    };
+  }
+
+  if (input.runState === "waiting") {
+    const waitingLane = selectObservedLaneForState(input.cards, "waiting", input.cardId);
+    return {
+      kind: "await_lane_resume",
+      runState: "waiting",
+      cardId: waitingLane?.id ?? input.cardId
+    };
+  }
+
+  if (input.runState === "blocked") {
+    if (hasOpenGovernance) {
+      return {
+        kind: "queue_ceo_review",
+        runState: input.runState,
+        reason: "governance_hold"
+      };
+    }
+    const blockedLane = selectObservedLaneForState(input.cards, "blocked", input.cardId);
+    return {
+      kind: "await_unblock",
+      runState: "blocked",
+      cardId: blockedLane?.id ?? input.cardId
+    };
+  }
+
+  if (input.runState === "active" && hasOpenGovernance) {
+    const hasActiveChildLane = input.cards.some(
+      (card) => card.persona !== "ceo" && (card.state === "working" || card.state === "approved")
+    );
+    if (!hasActiveChildLane) {
+      return {
+        kind: "queue_ceo_review",
+        runState: input.runState,
+        reason: "governance_backlog"
+      };
+    }
+  }
+
+  return null;
+}
+
+function selectObservedLaneForState(
+  cards: readonly HarnessCardRecord[],
+  state: Extract<HarnessCardState, "waiting" | "blocked">,
+  fallbackCardId: string
+): HarnessCardRecord | null {
+  const matchingLanes = cards
+    .filter((card) => card.persona !== "ceo" && card.state === state)
+    .sort(compareObservedLanes);
+  return matchingLanes.find((card) => card.id === fallbackCardId) ?? matchingLanes[0] ?? null;
+}
+
+function compareObservedLanes(left: HarnessCardRecord, right: HarnessCardRecord): number {
+  if (left.updatedAt !== right.updatedAt) {
+    return left.updatedAt.localeCompare(right.updatedAt);
+  }
+  return left.createdAt.localeCompare(right.createdAt);
 }
 
 function createActiveResumeSummary(card: HarnessCardRecord): string {

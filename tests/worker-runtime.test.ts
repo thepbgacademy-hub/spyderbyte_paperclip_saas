@@ -561,6 +561,35 @@ describe("worker runtime", () => {
 
     stdoutWrite.mockClear();
     const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.getRun
+      .mockResolvedValueOnce({
+        id: "run-1",
+        tenantId: "tenant-1",
+        workflowId: "wf_connect_first_workflow",
+        packageId: "pkg_bib_connect",
+        orchestratorPersona: "ceo",
+        state: "active",
+        runtimeContext: {
+          providerKind: "openai_api",
+          credentialLabel: "Primary OpenAI"
+        },
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      })
+      .mockResolvedValueOnce({
+        id: "run-1",
+        tenantId: "tenant-1",
+        workflowId: "wf_connect_first_workflow",
+        packageId: "pkg_bib_connect",
+        orchestratorPersona: "ceo",
+        state: "assembling",
+        runtimeContext: {
+          providerKind: "openai_api",
+          credentialLabel: "Primary OpenAI"
+        },
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:05:00.000Z"
+      });
     harnessRepository.listCardsForRun.mockResolvedValueOnce([
       {
         id: "card_ceo",
@@ -603,6 +632,11 @@ describe("worker runtime", () => {
         state: "done",
         runState: "assembling",
         latestResultSummary: "Validated the pricing model and preserved the final floor."
+      },
+      postOutcomeAction: {
+        kind: "queue_ceo_review",
+        runState: "assembling",
+        reason: "final_assembly"
       }
     });
 
@@ -625,6 +659,9 @@ describe("worker runtime", () => {
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"status\":\"committed\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"postOutcomeAction\":{\"kind\":\"queue_ceo_review\",\"runState\":\"assembling\",\"reason\":\"final_assembly\"}")
     );
     const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
     expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith({
@@ -727,6 +764,12 @@ describe("worker runtime", () => {
         runState: "active",
         latestResultSummary: "Pricing review is complete and ready for board packaging."
       },
+      postOutcomeAction: {
+        kind: "dispatch_next_lane",
+        runState: "active",
+        cardId: "card_cmo",
+        persona: "cmo"
+      },
       nextDispatch: {
         runId: "run-1",
         workflowId: "wf_connect_first_workflow",
@@ -748,6 +791,9 @@ describe("worker runtime", () => {
     });
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"postOutcomeAction\":{\"kind\":\"dispatch_next_lane\",\"runState\":\"active\",\"cardId\":\"card_cmo\",\"persona\":\"cmo\"}")
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"cardId\":\"card_cmo\"")

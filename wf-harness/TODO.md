@@ -92,3 +92,5 @@ This file tracks the new harness subproject only.
   - [x] Add a worker-private lane outcome commit seam so a claimed `working` lane can write its bounded result back into durable harness state without going through the public board API.
   - [x] Let the worker-private seam advance beyond bounded lane outcomes into orchestrator-aware multi-step execution without reopening swarm-style ambiguity or bypassing CEO governance.
   - [x] Add a private claimed-lane execution envelope carrying required capabilities and sanitized runtime context while keeping public dispatch telemetry metadata-only.
+  - [x] Return an explicit `postOutcomeAction` contract from worker lane outcomes so the engine can distinguish `dispatch_next_lane`, `queue_ceo_review`, `await_lane_resume`, and `await_unblock` without re-deriving follow-through from `nextDispatch` alone.
+  - [ ] Consume the new `postOutcomeAction` seam in the orchestrator/runtime handoff so review, wait, and unblock paths are driven by explicit worker outcome truth.
