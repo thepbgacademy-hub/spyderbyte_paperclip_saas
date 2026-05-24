@@ -274,6 +274,74 @@ export function createHarnessBoardService(options: {
         if (existingCard) {
           return { cardId: existingCard.id };
         }
+        const existingPersonaLane = findOpenChildCardByPersonaDeliverable(cards, {
+          persona: normalizedPersona,
+          deliverableType: normalizedDeliverableType
+        });
+        if (existingPersonaLane) {
+          await repository.insertEvent(
+            createHarnessCardEventRecord({
+              cardId: existingPersonaLane.id,
+              eventKind: "comment_added",
+              payload: {
+                message: `CEO folded this follow-on ${humanizeDeliverableType(
+                  normalizedDeliverableType
+                ).toLowerCase()} request into the existing ${normalizedPersona.toUpperCase()} lane.`
+              }
+            })
+          );
+          await recordDirectChildLaneReuseContinuity({
+            repository,
+            card: existingPersonaLane,
+            title: request.title
+          });
+          await repository.insertDecision(
+            createHarnessBoardDecisionRecord({
+              runId: run.id,
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              decisionKind: "lane_opened",
+              cardId: existingPersonaLane.id,
+              targetCardId: existingPersonaLane.id,
+              persona: existingPersonaLane.persona,
+              deliverableType: existingPersonaLane.deliverableType,
+              policyReason: "reused_existing_lane",
+              resolution: "update_existing_lane",
+              recommendationSummary: createLaneRecommendationSummary({
+                persona: existingPersonaLane.persona,
+                deliverableType: existingPersonaLane.deliverableType,
+                policyReason: "reused_existing_lane"
+              })
+            })
+          );
+
+          const reconciledRun = await reconcileHarnessRunState({ repository, run });
+
+          return {
+            cardId: existingPersonaLane.id,
+            auditEvents: [
+              createHarnessAuditEvent({
+                tenantId: access.session.tenantId,
+                actorUserId: access.session.userId,
+                eventType: "harness_card_reused",
+                entityId: existingPersonaLane.id,
+                metadata: {
+                  runId: run.id,
+                  parentCardId: existingPersonaLane.parentCardId,
+                  persona: existingPersonaLane.persona,
+                  deliverableType: existingPersonaLane.deliverableType
+                }
+              }),
+              ...toRunAuditEvents({
+                tenantId: access.session.tenantId,
+                actorUserId: access.session.userId,
+                runId: run.id,
+                previousState: run.state,
+                nextRun: reconciledRun
+              })
+            ]
+          };
+        }
         const latestDoneLane = findLatestDoneChildCardByPersonaDeliverable(cards, {
           persona: normalizedPersona,
           deliverableType: normalizedDeliverableType
@@ -2418,6 +2486,34 @@ async function recordAbsorbedLaneContinuity(input: {
         card: input.card,
         absorbedWorkItem,
         resolution: input.resolution
+      }),
+      absorbedWorkItems
+    })
+  );
+}
+
+async function recordDirectChildLaneReuseContinuity(input: {
+  repository: HarnessRepository;
+  card: HarnessCardRecord;
+  title: string;
+}): Promise<void> {
+  const existing = await input.repository.getCardContinuity(input.card.id);
+  const absorbedWorkItem = createContinuityAbsorbedWorkItem({
+    resolution: "update_existing_lane",
+    requestedByPersona: "ceo",
+    title: input.title
+  });
+  const absorbedWorkItems = mergeContinuityAbsorbedWorkItems(existing?.absorbedWorkItems ?? [], absorbedWorkItem);
+
+  await input.repository.upsertCardContinuity(
+    createHarnessCardContinuityRecord({
+      cardId: input.card.id,
+      runId: input.card.runId,
+      latestResultSummary: existing?.latestResultSummary ?? null,
+      continuitySummary: createAbsorbedLaneResumeSummary({
+        card: input.card,
+        absorbedWorkItem,
+        resolution: "update_existing_lane"
       }),
       absorbedWorkItems
     })

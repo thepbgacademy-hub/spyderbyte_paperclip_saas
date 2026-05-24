@@ -2442,6 +2442,70 @@ describe("harness board service", () => {
     expect(researcherCards).toHaveLength(1);
   });
 
+  it("folds a CEO follow-on request into the existing open lane for the same persona and deliverable", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const first = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief"
+    });
+    const second = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "researcher",
+      title: "Summarize price-anchor anomalies",
+      deliverableType: "research_brief"
+    });
+
+    const run = await repository.findLatestRunForTenantWorkflow({
+      tenantId: "tenant_123",
+      workflowId: "wf_connect_first_workflow"
+    });
+    const cards = await repository.listCardsForRun(run!.id);
+    const continuity = await repository.getCardContinuity(first.cardId);
+    const decisions = await repository.listDecisionsForRun(run!.id);
+    const hydratedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const lane = hydratedBoard.cards.find((card) => card.id === first.cardId);
+
+    expect(second.cardId).toBe(first.cardId);
+    expect(cards.filter((card) => card.persona === "researcher")).toHaveLength(1);
+    expect(continuity).toEqual(
+      expect.objectContaining({
+        absorbedWorkItems: ["update_existing_lane|CEO: Summarize price-anchor anomalies"],
+        continuitySummary:
+          "RESEARCHER should fold the absorbed follow-on work from CEO: Summarize price-anchor anomalies into this research brief lane."
+      })
+    );
+    expect(
+      decisions.some(
+        (decision) =>
+          decision.decisionKind === "lane_opened" &&
+          decision.policyReason === "reused_existing_lane" &&
+          decision.resolution === "update_existing_lane"
+      )
+    ).toBe(true);
+    expect(
+      lane?.activity.some((item) =>
+        item.label.includes("CEO folded this follow-on research brief request into the existing RESEARCHER lane")
+      )
+    ).toBe(true);
+  });
+
   it("reopens the latest completed direct child lane for a bounded same-lane refinement while the run is still live", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
