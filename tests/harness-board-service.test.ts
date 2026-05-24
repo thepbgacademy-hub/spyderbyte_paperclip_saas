@@ -819,6 +819,271 @@ describe("harness board service", () => {
     ).toBe(true);
   });
 
+  it("denies a repeated unresolved request when an earlier matching proposal is already pending CEO review", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const parentCard = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+
+    await repository.insertProposal({
+      id: "proposal_pending_duplicate_original_1",
+      runId: board.runId,
+      parentCardId: parentCard.cardId,
+      requestedByCardId: parentCard.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief",
+      status: "proposed"
+    });
+    await repository.insertProposal({
+      id: "proposal_pending_duplicate_follow_on_1",
+      runId: board.runId,
+      parentCardId: parentCard.cardId,
+      requestedByCardId: parentCard.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief",
+      status: "proposed"
+    });
+
+    await expect(
+      service.decideProposal({
+        authorization: "Bearer valid",
+        proposalId: "proposal_pending_duplicate_follow_on_1",
+        decision: "approve"
+      })
+    ).resolves.toEqual({ status: "denied" });
+
+    const originalProposal = await repository.getProposal("proposal_pending_duplicate_original_1");
+    const duplicateProposal = await repository.getProposal("proposal_pending_duplicate_follow_on_1");
+    expect(originalProposal).toEqual(
+      expect.objectContaining({
+        status: "proposed"
+      })
+    );
+    expect(duplicateProposal).toEqual(
+      expect.objectContaining({
+        status: "denied",
+        decisionNote: "CEO denied this proposal because an equivalent request is already pending CEO review."
+      })
+    );
+
+    const hydratedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(hydratedBoard.pendingApprovals).toEqual([
+      expect.objectContaining({
+        id: "proposal_pending_duplicate_original_1",
+        statusLabel: "Pending CEO approval"
+      })
+    ]);
+    expect(
+      hydratedBoard.recentDecisions.some(
+        (decision) =>
+          decision.label === "CEO denied a research brief request for RESEARCHER." &&
+          decision.policyReasonLabel === "Scope guardrail" &&
+          decision.recommendationSummary ===
+            "Keep this research brief work inside the current approved package boundary unless the CEO deliberately widens scope." &&
+          decision.objectionSummary === "Do not widen this run beyond the approved research brief workflow boundary."
+      )
+    ).toBe(true);
+  });
+
+  it("keeps a repeated request deferred when an earlier matching proposal is already paused for lane pressure", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const parentCard = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+
+    await repository.insertProposal({
+      id: "proposal_deferred_duplicate_original_1",
+      runId: board.runId,
+      parentCardId: parentCard.cardId,
+      requestedByCardId: parentCard.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief",
+      status: "deferred",
+      decisionNote: "Wait for a lane to clear first."
+    });
+    await repository.insertDecision({
+      id: "decision_deferred_duplicate_original_1",
+      runId: board.runId,
+      tenantId: "tenant_123",
+      actorUserId: "user_123",
+      decisionKind: "proposal_deferred",
+      cardId: parentCard.cardId,
+      proposalId: "proposal_deferred_duplicate_original_1",
+      targetCardId: null,
+      persona: "researcher",
+      deliverableType: "research_brief",
+      policyReason: "lane_cap",
+      resolution: null,
+      decisionNote: "Wait for a lane to clear first.",
+      recommendationSummary: "Finish or close one active lane before reopening this research brief request.",
+      objectionSummary: "Hold this research brief request until the active lane count drops.",
+      createdAt: new Date(Date.now() - 1000).toISOString()
+    });
+    await repository.insertProposal({
+      id: "proposal_deferred_duplicate_follow_on_1",
+      runId: board.runId,
+      parentCardId: parentCard.cardId,
+      requestedByCardId: parentCard.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief",
+      status: "proposed"
+    });
+
+    await expect(
+      service.decideProposal({
+        authorization: "Bearer valid",
+        proposalId: "proposal_deferred_duplicate_follow_on_1",
+        decision: "approve"
+      })
+    ).resolves.toEqual({ status: "deferred" });
+
+    const duplicateProposal = await repository.getProposal("proposal_deferred_duplicate_follow_on_1");
+    expect(duplicateProposal).toEqual(
+      expect.objectContaining({
+        status: "deferred",
+        decisionNote: "CEO deferred this proposal because an equivalent request is already waiting for lane capacity."
+      })
+    );
+
+    const hydratedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(hydratedBoard.pendingApprovals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "proposal_deferred_duplicate_original_1",
+          statusLabel: "Deferred for later CEO review",
+          policyReasonLabel: "Lane cap protection"
+        }),
+        expect.objectContaining({
+          id: "proposal_deferred_duplicate_follow_on_1",
+          statusLabel: "Deferred for later CEO review",
+          policyReasonLabel: "Lane cap protection"
+        })
+      ])
+    );
+    expect(
+      hydratedBoard.recentDecisions.some(
+        (decision) =>
+          decision.label === "CEO deferred a research brief request for RESEARCHER." &&
+          decision.policyReasonLabel === "Lane cap protection" &&
+          decision.recommendationSummary === "Finish or close one active lane before reopening this research brief request." &&
+          decision.objectionSummary === "Hold this research brief request until the active lane count drops."
+      )
+    ).toBe(true);
+  });
+
+  it("does not treat a distinct follow-on request title as a duplicate unresolved proposal", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const parentCard = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+
+    await repository.insertProposal({
+      id: "proposal_distinct_follow_on_original_1",
+      runId: board.runId,
+      parentCardId: parentCard.cardId,
+      requestedByCardId: parentCard.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief",
+      status: "proposed"
+    });
+    await repository.insertProposal({
+      id: "proposal_distinct_follow_on_second_1",
+      runId: board.runId,
+      parentCardId: parentCard.cardId,
+      requestedByCardId: parentCard.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Summarize price-anchor anomalies",
+      deliverableType: "research_brief",
+      status: "proposed"
+    });
+
+    await expect(
+      service.decideProposal({
+        authorization: "Bearer valid",
+        proposalId: "proposal_distinct_follow_on_second_1",
+        decision: "approve"
+      })
+    ).resolves.toEqual({
+      status: "approved",
+      cardId: expect.any(String)
+    });
+
+    const originalProposal = await repository.getProposal("proposal_distinct_follow_on_original_1");
+    expect(originalProposal).toEqual(
+      expect.objectContaining({
+        status: "proposed"
+      })
+    );
+  });
+
   it("approves an owner-conflict proposal by handing off the active lane to the requested persona", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({

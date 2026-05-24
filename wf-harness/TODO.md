@@ -44,6 +44,7 @@ This file tracks the new harness subproject only.
 - [x] Add transaction-client coverage proving the approval update and child-card insert share one leased transaction client and roll back together on failure.
 - [x] Expand beyond CEO direct-child creation into richer persisted card progression and result-recording mutation paths.
 - [ ] Add fuller CEO approval logic for sub-card requests and card-count discipline beyond the current duplicate-lane/open-cap guardrails.
+  - [x] Make repeated unresolved requests reuse the latest earlier unresolved governance hold instead of opening fresh duplicate lanes when no active-lane reuse or valid handoff applies.
 - [x] Persist structured absorbed-work state when the CEO folds a proposal into an existing lane, so lane reuse becomes real engine state instead of comment-only history.
 - [x] Add first-class board decision memory so approvals, deferrals, denials, lane opens, and CEO completion become durable harness records instead of inferred chatter.
 - [x] Widen board decision memory with bounded policy reasons and recommendation/objection summaries instead of introducing a second generic notes store.
@@ -62,7 +63,7 @@ This file tracks the new harness subproject only.
 - [x] Add an initial read-only packaging/result handoff seam on top of the explicit CEO completion command.
 - [x] Keep deferred proposals visible and re-approvable so CEO decisions can genuinely pause work instead of silently dropping it.
 - [x] Make the owner-conflict "clear or hand off that lane" promise real with a bounded CEO handoff path instead of leaving it as board text only.
-- [ ] Deepen CEO decision policy so repeated sub-card requests prefer lane updates, then defer, then deny in a more explicit workflow-aware order.
+- [x] Deepen CEO decision policy so repeated sub-card requests prefer lane updates, then defer, then deny in a more explicit workflow-aware order.
 - [x] Surface absorbed follow-on work back through bounded board activity/detail views when a proposal is folded into an existing lane.
 - [x] Keep raw CEO decision notes out of the tenant-facing activity feed while preserving bounded public governance status.
 - [x] Make repeated defer decisions idempotent when no new note or policy context is introduced.

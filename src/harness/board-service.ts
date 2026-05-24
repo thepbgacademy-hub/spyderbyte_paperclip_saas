@@ -387,13 +387,18 @@ export function createHarnessBoardService(options: {
         ]);
         const trimmedDecisionNote = request.decisionNote?.trim();
         const trimmedTargetCardId = request.targetCardId?.trim();
+        const latestDecisionByProposalId = new Map<string, HarnessBoardDecisionRecord>();
+        for (const decision of decisions) {
+          if (decision.proposalId && !latestDecisionByProposalId.has(decision.proposalId)) {
+            latestDecisionByProposalId.set(decision.proposalId, decision);
+          }
+        }
         const proposalPolicyReason = determineProposalPolicyReason({
           run,
           cards,
           proposal
         });
-        const latestDecisionForProposal =
-          decisions.find((decision) => decision.proposalId === proposal.id) ?? null;
+        const latestDecisionForProposal = latestDecisionByProposalId.get(proposal.id) ?? null;
         if (proposal.status === "deferred" && request.decision === "defer") {
           const unchangedDecisionNote =
             !trimmedDecisionNote ||
@@ -716,6 +721,102 @@ export function createHarnessBoardService(options: {
                   targetPersona: proposal.persona,
                   deliverableType: proposal.deliverableType,
                   hasDecisionNote: Boolean(trimmedDecisionNote)
+                }
+              }),
+              ...toRunAuditEvents({
+                tenantId: access.session.tenantId,
+                actorUserId: access.session.userId,
+                runId: run.id,
+                previousState: run.state,
+                nextRun: reconciledRun
+              })
+            ]
+          };
+        }
+
+        const earlierUnresolvedSiblingProposal = findEarlierUnresolvedSiblingProposal(proposals, proposal);
+        if (earlierUnresolvedSiblingProposal) {
+          const siblingDecision = latestDecisionByProposalId.get(earlierUnresolvedSiblingProposal.id) ?? null;
+          const repeatedRequestPolicyReason =
+            earlierUnresolvedSiblingProposal.status === "deferred" &&
+            (
+              siblingDecision?.policyReason === "deliverable_owner_conflict" ||
+              siblingDecision?.policyReason === "lane_cap" ||
+              siblingDecision?.policyReason === "completed_lanes_only"
+            )
+              ? siblingDecision.policyReason
+              : "scope_guardrail";
+          const repeatedRequestStatus: HarnessProposalStatus =
+            repeatedRequestPolicyReason === "scope_guardrail" ? "denied" : "deferred";
+          const repeatedRequestDecisionNote =
+            trimmedDecisionNote ??
+            createRepeatedRequestDecisionNote({
+              status: repeatedRequestStatus,
+              policyReason: repeatedRequestPolicyReason,
+              deliverableType: proposal.deliverableType
+            });
+          const decisionUpdate = await repository.markProposalStatus({
+            proposalId: proposal.id,
+            status: repeatedRequestStatus,
+            decisionNote: repeatedRequestDecisionNote
+          });
+          if (!decisionUpdate.updated) {
+            throw new Error("Harness proposal decision conflicted");
+          }
+          await repository.insertEvent(
+            createHarnessCardEventRecord({
+              cardId: proposal.parentCardId,
+              eventKind: "comment_added",
+              payload: {
+                message: createPublicProposalDecisionMessage({
+                  status: repeatedRequestStatus,
+                  deliverableType: proposal.deliverableType,
+                  policyReason: repeatedRequestPolicyReason
+                })
+              }
+            })
+          );
+          await repository.insertDecision(
+            createHarnessBoardDecisionRecord({
+              runId: run.id,
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              decisionKind: repeatedRequestStatus === "deferred" ? "proposal_deferred" : "proposal_denied",
+              cardId: proposal.parentCardId,
+              proposalId: proposal.id,
+              persona: proposal.persona,
+              deliverableType: proposal.deliverableType,
+              policyReason: repeatedRequestPolicyReason,
+              decisionNote: repeatedRequestDecisionNote,
+              recommendationSummary: createGovernanceRecommendationSummary({
+                deliverableType: proposal.deliverableType,
+                policyReason: repeatedRequestPolicyReason,
+                status: repeatedRequestStatus
+              }),
+              objectionSummary: createGovernanceObjectionSummary({
+                deliverableType: proposal.deliverableType,
+                policyReason: repeatedRequestPolicyReason
+              })
+            })
+          );
+          const reconciledRun = await reconcileHarnessRunState({ repository, run });
+
+          return {
+            status: repeatedRequestStatus,
+            auditEvents: [
+              createHarnessAuditEvent({
+                tenantId: access.session.tenantId,
+                actorUserId: access.session.userId,
+                eventType: "harness_proposal_decided",
+                entityId: proposal.id,
+                metadata: {
+                  runId: run.id,
+                  decision: repeatedRequestStatus,
+                  reason: repeatedRequestPolicyReason,
+                  hasDecisionNote: Boolean(trimmedDecisionNote),
+                  requestedByPersona: proposal.requestedByPersona,
+                  targetPersona: proposal.persona,
+                  deliverableType: proposal.deliverableType
                 }
               }),
               ...toRunAuditEvents({
@@ -1883,6 +1984,36 @@ function findOpenChildCardByPersonaDeliverable(
   );
 }
 
+function findEarlierUnresolvedSiblingProposal(
+  proposals: readonly HarnessSubCardProposal[],
+  currentProposal: HarnessSubCardProposal
+): HarnessSubCardProposal | null {
+  const currentIndex = proposals.findIndex((proposal) => proposal.id === currentProposal.id);
+  if (currentIndex <= 0) {
+    return null;
+  }
+
+  const earlierProposals = proposals.slice(0, currentIndex);
+  for (let index = earlierProposals.length - 1; index >= 0; index -= 1) {
+    const proposal = earlierProposals[index];
+    if (!proposal) {
+      continue;
+    }
+
+    if (
+      proposal.requestedByCardId === currentProposal.requestedByCardId &&
+      proposal.persona === currentProposal.persona &&
+      proposal.title === currentProposal.title &&
+      proposal.deliverableType === currentProposal.deliverableType &&
+      (proposal.status === "proposed" || proposal.status === "deferred")
+    ) {
+      return proposal;
+    }
+  }
+
+  return null;
+}
+
 function countOpenChildCards(cards: readonly HarnessCardRecord[]): number {
   return cards.filter((card) => card.persona !== "ceo" && isOpenCardState(card.state)).length;
 }
@@ -2497,6 +2628,27 @@ function createGovernanceRecommendationSummary(input: {
       return input.status === "denied"
         ? `Keep this ${deliverable} work inside the current approved package boundary unless the CEO deliberately widens scope.`
         : `Revisit this ${deliverable} request only if the CEO deliberately widens the approved workflow boundary.`;
+  }
+}
+
+function createRepeatedRequestDecisionNote(input: {
+  status: "deferred" | "denied";
+  policyReason: "deliverable_owner_conflict" | "lane_cap" | "scope_guardrail" | "completed_lanes_only";
+  deliverableType: string;
+}): string {
+  const deliverable = humanizeDeliverableType(input.deliverableType).toLowerCase();
+  switch (input.policyReason) {
+    case "deliverable_owner_conflict":
+      return `CEO deferred this proposal because an equivalent request is already waiting on the current ${deliverable} owner.`;
+    case "lane_cap":
+      return `CEO deferred this proposal because an equivalent request is already waiting for lane capacity.`;
+    case "completed_lanes_only":
+      return `CEO deferred this proposal because an equivalent request is already waiting for a fresh board cycle.`;
+    case "scope_guardrail":
+    default:
+      return input.status === "denied"
+        ? "CEO denied this proposal because an equivalent request is already pending CEO review."
+        : `CEO deferred this proposal because an equivalent ${deliverable} request is already pending CEO review.`;
   }
 }
 
