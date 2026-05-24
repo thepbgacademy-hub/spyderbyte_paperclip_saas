@@ -330,6 +330,10 @@ export function createWorkerRuntime(options: { env: WorkerEnv; workerInstanceId?
             ? processHarnessWorkflowJob({
                 payload: validatedPayload,
                 repository: harnessRepository,
+                runAtomically: (work) =>
+                  transactionRunner.withTransaction((transaction) =>
+                    work(createPostgresHarnessRepository(transaction))
+                  ),
                 recordStatus: async (status) => {
                   await recordWorkflowStatus(status);
                 },
@@ -427,8 +431,30 @@ async function processHarnessWorkflowJob(options: {
   };
   repository: Pick<
     ReturnType<typeof createPostgresHarnessRepository>,
-    "getRun" | "listCardsForRun" | "listProposalsForRun" | "listCardContinuityForRun" | "claimCardForExecution"
+    | "getRun"
+    | "listCardsForRun"
+    | "listProposalsForRun"
+    | "listCardContinuityForRun"
+    | "claimCardForExecution"
+    | "insertEvent"
+    | "upsertCardContinuity"
+    | "updateRunState"
   >;
+  runAtomically?: <T>(
+    work: (
+      repository: Pick<
+        ReturnType<typeof createPostgresHarnessRepository>,
+        | "getRun"
+        | "listCardsForRun"
+        | "listProposalsForRun"
+        | "listCardContinuityForRun"
+        | "claimCardForExecution"
+        | "insertEvent"
+        | "upsertCardContinuity"
+        | "updateRunState"
+      >
+    ) => Promise<T>
+  ) => Promise<T>;
   recordStatus?: (status: { tenantId: string; runId: string; workflowId: string; status: "queued" | "running" | "failed" }) => void | Promise<void>;
   onDispatch?: (dispatch: HarnessWorkerDispatch) => void;
 }) {
@@ -437,7 +463,8 @@ async function processHarnessWorkflowJob(options: {
       repository: options.repository,
       tenantId: options.payload.tenantId,
       runId: options.payload.runId,
-      workflowId: options.payload.workflowId
+      workflowId: options.payload.workflowId,
+      ...(options.runAtomically ? { runAtomically: options.runAtomically } : {})
     });
     if (dispatch.laneExecution) {
       options.onDispatch?.(dispatch);

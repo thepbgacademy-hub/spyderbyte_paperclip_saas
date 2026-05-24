@@ -125,6 +125,7 @@ The first harness implementation slice is now built and verified:
 - Kept that worker seam intentionally narrow: it does not widen BYOK, it does not reopen the board service, and it does not invent a new memory store. It only turns the existing continuity-backed lane truth into a live execution payload for later worker/orchestrator depth.
 - Deepened the worker seam into a durable single-lane claim/start boundary. The worker now atomically claims exactly one `approved` non-CEO lane into `working` before dispatch, returns `running` only after that compare-and-set succeeds, and stays quiet when the claim loses a race.
 - Deliberately fail-closed the queued-lane mismatch in the worker slice. Raw `queued` child lanes are now treated as non-executable until another bounded path promotes them, which preserves the CEO approval boundary and avoids fake progress under load.
+- Tightened the worker-start seam again so it now persists the worker-visible truth around that claim in the same bounded start path: a durable `state_changed` event, refreshed active-lane continuity summary, and reconciled run state now travel with the worker claim instead of lagging behind it.
 - Re-ran the tenant/secret scans and updated the harness security report at `wf-harness/audit/2026-05-21/security-report.md`.
 - Cleared the final repo-specific reviewer pass on code correctness after tightening the wording around what this test seam does and does not prove.
 

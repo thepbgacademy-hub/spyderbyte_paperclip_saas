@@ -1,6 +1,13 @@
 import type { HarnessRepository } from "./repository.js";
 import { createHarnessRuntime } from "./runtime.js";
-import type { HarnessCardRecord } from "./types.js";
+import { deriveHarnessRunState } from "./state-machine.js";
+import {
+  createHarnessCardContinuityRecord,
+  createHarnessCardEventRecord,
+  type HarnessCardContinuityRecord,
+  type HarnessCardRecord,
+  type HarnessRunRecord
+} from "./types.js";
 
 export type HarnessWorkerLaneExecution = {
   cardId: string;
@@ -21,7 +28,14 @@ export type HarnessWorkerDispatch = {
 
 type HarnessDispatchRepository = Pick<
   HarnessRepository,
-  "getRun" | "listCardsForRun" | "listProposalsForRun" | "listCardContinuityForRun" | "claimCardForExecution"
+  | "getRun"
+  | "listCardsForRun"
+  | "listProposalsForRun"
+  | "listCardContinuityForRun"
+  | "claimCardForExecution"
+  | "insertEvent"
+  | "upsertCardContinuity"
+  | "updateRunState"
 >;
 
 const ACTIONABLE_CARD_PRIORITIES: Readonly<Record<HarnessCardRecord["state"], number | null>> = {
@@ -42,69 +56,89 @@ export async function buildHarnessWorkerDispatch(input: {
   tenantId: string;
   runId: string;
   workflowId: string;
+  runAtomically?: <T>(work: (repository: HarnessDispatchRepository) => Promise<T>) => Promise<T>;
 }): Promise<HarnessWorkerDispatch> {
-  const run = await input.repository.getRun(input.runId);
-  if (!run || run.tenantId !== input.tenantId || run.workflowId !== input.workflowId) {
-    throw new Error(`Unknown harness run for worker dispatch: ${input.runId}`);
-  }
-  if (NON_EXECUTABLE_RUN_STATES.has(run.state)) {
-    return {
-      runId: run.id,
-      workflowId: run.workflowId,
-      status: "queued",
-      laneExecution: null
-    };
-  }
-
-  const [cards, proposals, continuity] = await Promise.all([
-    input.repository.listCardsForRun(run.id),
-    input.repository.listProposalsForRun(run.id),
-    input.repository.listCardContinuityForRun(run.id)
-  ]);
-
-  const runtime = createHarnessRuntime();
-  runtime.resumeRun({ run, cards, proposals, continuity });
-
-  const lane = selectNextActionableLane(cards);
-  if (!lane) {
-    return {
-      runId: run.id,
-      workflowId: run.workflowId,
-      status: "queued",
-      laneExecution: null
-    };
-  }
-
-  const claimedLane = await claimLaneForExecution({
-    repository: input.repository,
-    lane
-  });
-  if (!claimedLane || claimedLane.state !== "working") {
-    return {
-      runId: run.id,
-      workflowId: run.workflowId,
-      status: "queued",
-      laneExecution: null
-    };
-  }
-
-  const resumeFocus = runtime.getResumeFocus(claimedLane.id);
-  const laneContinuity = continuity.find((record) => record.cardId === claimedLane.id) ?? null;
-
-  return {
-    runId: run.id,
-    workflowId: run.workflowId,
-    status: "running",
-    laneExecution: {
-      cardId: claimedLane.id,
-      persona: claimedLane.persona,
-      title: claimedLane.title,
-      deliverableType: claimedLane.deliverableType,
-      state: claimedLane.state,
-      ...(resumeFocus ? { resumeFocus } : {}),
-      ...(laneContinuity?.latestResultSummary ? { latestResultSummary: laneContinuity.latestResultSummary } : {})
+  const runWork = input.runAtomically ?? (async <T>(work: (repository: HarnessDispatchRepository) => Promise<T>) => work(input.repository));
+  return runWork(async (repository) => {
+    const run = await repository.getRun(input.runId);
+    if (!run || run.tenantId !== input.tenantId || run.workflowId !== input.workflowId) {
+      throw new Error(`Unknown harness run for worker dispatch: ${input.runId}`);
     }
-  };
+    if (NON_EXECUTABLE_RUN_STATES.has(run.state)) {
+      return {
+        runId: run.id,
+        workflowId: run.workflowId,
+        status: "queued",
+        laneExecution: null
+      };
+    }
+
+    const [cards, proposals, continuity] = await Promise.all([
+      repository.listCardsForRun(run.id),
+      repository.listProposalsForRun(run.id),
+      repository.listCardContinuityForRun(run.id)
+    ]);
+
+    const runtime = createHarnessRuntime();
+    runtime.resumeRun({ run, cards, proposals, continuity });
+
+    const lane = selectNextActionableLane(cards);
+    if (!lane) {
+      return {
+        runId: run.id,
+        workflowId: run.workflowId,
+        status: "queued",
+        laneExecution: null
+      };
+    }
+
+    const claimedLane = await claimLaneForExecution({
+      repository,
+      lane
+    });
+    if (!claimedLane || claimedLane.state !== "working") {
+      return {
+        runId: run.id,
+        workflowId: run.workflowId,
+        status: "queued",
+        laneExecution: null
+      };
+    }
+
+    const updatedContinuity = await persistWorkerStartState({
+      repository,
+      run,
+      cards,
+      proposals,
+      continuity,
+      claimedLane,
+      previousLaneState: lane.state
+    });
+    const resumedRuntime = createHarnessRuntime();
+    resumedRuntime.resumeRun({
+      run,
+      cards: cards.map((card) => (card.id === claimedLane.id ? claimedLane : card)),
+      proposals,
+      continuity: mergeContinuityRecord(continuity, updatedContinuity)
+    });
+
+    const resumeFocus = resumedRuntime.getResumeFocus(claimedLane.id);
+
+    return {
+      runId: run.id,
+      workflowId: run.workflowId,
+      status: "running",
+      laneExecution: {
+        cardId: claimedLane.id,
+        persona: claimedLane.persona,
+        title: claimedLane.title,
+        deliverableType: claimedLane.deliverableType,
+        state: claimedLane.state,
+        ...(resumeFocus ? { resumeFocus } : {}),
+        ...(updatedContinuity.latestResultSummary ? { latestResultSummary: updatedContinuity.latestResultSummary } : {})
+      }
+    };
+  });
 }
 
 async function claimLaneForExecution(input: {
@@ -145,4 +179,71 @@ function compareActionableCards(left: HarnessCardRecord, right: HarnessCardRecor
     return left.updatedAt.localeCompare(right.updatedAt);
   }
   return left.createdAt.localeCompare(right.createdAt);
+}
+
+async function persistWorkerStartState(input: {
+  repository: HarnessDispatchRepository;
+  run: HarnessRunRecord;
+  cards: readonly HarnessCardRecord[];
+  proposals: Awaited<ReturnType<HarnessDispatchRepository["listProposalsForRun"]>>;
+  continuity: Awaited<ReturnType<HarnessDispatchRepository["listCardContinuityForRun"]>>;
+  claimedLane: HarnessCardRecord;
+  previousLaneState: HarnessCardRecord["state"];
+}): Promise<HarnessCardContinuityRecord> {
+  await input.repository.insertEvent(
+    createHarnessCardEventRecord({
+      cardId: input.claimedLane.id,
+      eventKind: "state_changed",
+      payload: {
+        from: input.previousLaneState,
+        to: input.claimedLane.state
+      }
+    })
+  );
+
+  const existingContinuity = input.continuity.find((record) => record.cardId === input.claimedLane.id) ?? null;
+  const updatedContinuity = createHarnessCardContinuityRecord({
+    cardId: input.claimedLane.id,
+    runId: input.run.id,
+    continuitySummary: createActiveResumeSummary(input.claimedLane),
+    latestResultSummary: existingContinuity?.latestResultSummary ?? null,
+    absorbedWorkItems: existingContinuity?.absorbedWorkItems ?? []
+  });
+  await input.repository.upsertCardContinuity(updatedContinuity);
+
+  const nextRunState = deriveHarnessRunState({
+    run: input.run,
+    cards: input.cards.map((card) => (card.id === input.claimedLane.id ? input.claimedLane : card)),
+    proposals: input.proposals
+  });
+  if (nextRunState !== input.run.state) {
+    await input.repository.updateRunState({
+      runId: input.run.id,
+      state: nextRunState
+    });
+  }
+
+  return updatedContinuity;
+}
+
+function createActiveResumeSummary(card: HarnessCardRecord): string {
+  return `${card.persona.toUpperCase()} should continue this active ${humanizeDeliverableType(card.deliverableType).toLowerCase()} lane: ${card.title}.`;
+}
+
+function humanizeDeliverableType(value: string): string {
+  return value
+    .split(/[\s_-]+/u)
+    .filter(Boolean)
+    .map((word) => `${word.slice(0, 1).toUpperCase()}${word.slice(1)}`)
+    .join(" ");
+}
+
+function mergeContinuityRecord(
+  existing: readonly HarnessCardContinuityRecord[],
+  record: HarnessCardContinuityRecord
+): HarnessCardContinuityRecord[] {
+  return [
+    ...existing.filter((candidate) => candidate.cardId !== record.cardId),
+    record
+  ];
 }

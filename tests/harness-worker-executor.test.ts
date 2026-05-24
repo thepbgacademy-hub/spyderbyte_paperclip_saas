@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createInMemoryHarnessRepository } from "../src/harness/repository.js";
 import { buildHarnessWorkerDispatch } from "../src/harness/worker-executor.js";
 import {
+  createHarnessCardEventRecord,
   createHarnessCardContinuityRecord,
   createHarnessCardRecord,
   createHarnessRunRecord
@@ -65,7 +66,7 @@ describe("harness worker executor", () => {
         title: "Pressure-test the pricing lane",
         deliverableType: "pricing_review",
         state: "working",
-        resumeFocus: "Resume the pricing lane from the revised assumptions workbook.",
+        resumeFocus: "CFO should continue this active pricing review lane: Pressure-test the pricing lane.",
         latestResultSummary: "Initial pricing floor is stable."
       }
     });
@@ -74,6 +75,30 @@ describe("harness worker executor", () => {
       expect.objectContaining({
         id: cfoCard.id,
         state: "working"
+      })
+    );
+    await expect(repository.getRun(run.id)).resolves.toEqual(
+      expect.objectContaining({
+        id: run.id,
+        state: "active"
+      })
+    );
+    await expect(repository.listEventsForCard(cfoCard.id)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventKind: "state_changed",
+          payload: {
+            from: "approved",
+            to: "working"
+          }
+        })
+      ])
+    );
+    await expect(repository.getCardContinuity(cfoCard.id)).resolves.toEqual(
+      expect.objectContaining({
+        cardId: cfoCard.id,
+        continuitySummary: "CFO should continue this active pricing review lane: Pressure-test the pricing lane.",
+        latestResultSummary: "Initial pricing floor is stable."
       })
     );
   });
@@ -310,5 +335,69 @@ describe("harness worker executor", () => {
       status: "queued",
       laneExecution: null
     });
+  });
+
+  it("reconciles a previously waiting run back to active when the worker starts the next approved lane", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    run.state = "waiting";
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Resume the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "approved";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+    await repository.insertEvent(
+      createHarnessCardEventRecord({
+        cardId: cfoCard.id,
+        eventKind: "state_changed",
+        payload: { from: "working", to: "waiting" }
+      })
+    );
+
+    await expect(
+      buildHarnessWorkerDispatch({
+        repository,
+        tenantId: "tenant-1",
+        runId: run.id,
+        workflowId: "wf_connect_first_workflow"
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        status: "running",
+        laneExecution: expect.objectContaining({
+          cardId: cfoCard.id,
+          state: "working"
+        })
+      })
+    );
+
+    await expect(repository.getRun(run.id)).resolves.toEqual(
+      expect.objectContaining({
+        id: run.id,
+        state: "active"
+      })
+    );
   });
 });

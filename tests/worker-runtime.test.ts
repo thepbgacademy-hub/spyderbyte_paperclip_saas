@@ -2,8 +2,8 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createWorkerRuntime, loadWorkerEnv } from "../src/worker/runtime.js";
 
-vi.mock("../src/harness/repository.js", () => ({
-  createPostgresHarnessRepository: vi.fn(() => ({
+const { makeHarnessRepository, harnessRepositoryRef } = vi.hoisted(() => {
+  const createHarnessRepositoryMock = () => ({
     getRun: vi.fn().mockResolvedValue({
       id: "run-1",
       tenantId: "tenant-1",
@@ -53,6 +53,22 @@ vi.mock("../src/harness/repository.js", () => ({
       createdAt: "2026-05-21T10:01:00.000Z",
       updatedAt: "2026-05-21T10:04:00.000Z"
     }),
+    updateRunState: vi.fn().mockImplementation(async ({ runId, state }) => ({
+      id: runId,
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      state,
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      },
+      createdAt: "2026-05-21T10:00:00.000Z",
+      updatedAt: "2026-05-21T10:05:00.000Z"
+    })),
+    insertEvent: vi.fn().mockResolvedValue(undefined),
+    upsertCardContinuity: vi.fn().mockResolvedValue(undefined),
     listProposalsForRun: vi.fn().mockResolvedValue([]),
     listCardContinuityForRun: vi.fn().mockResolvedValue([
       {
@@ -64,7 +80,16 @@ vi.mock("../src/harness/repository.js", () => ({
         updatedAt: "2026-05-21T10:03:00.000Z"
       }
     ])
-  }))
+  });
+
+  return {
+    makeHarnessRepository: createHarnessRepositoryMock,
+    harnessRepositoryRef: { current: createHarnessRepositoryMock() }
+  };
+});
+
+vi.mock("../src/harness/repository.js", () => ({
+  createPostgresHarnessRepository: vi.fn(() => harnessRepositoryRef.current)
 }));
 
 vi.mock("../src/db/postgres-client.js", () => ({
@@ -72,7 +97,9 @@ vi.mock("../src/db/postgres-client.js", () => ({
     end: vi.fn().mockResolvedValue(undefined)
   })),
   createPgPoolQueryClient: vi.fn(() => ({ query: vi.fn() })),
-  createPgTransactionRunner: vi.fn(() => ({ withTransaction: vi.fn() }))
+  createPgTransactionRunner: vi.fn(() => ({
+    withTransaction: vi.fn(async (callback) => callback({ query: vi.fn() }))
+  }))
 }));
 
 vi.mock("../src/db/supabase-repositories.js", () => ({
@@ -157,6 +184,7 @@ afterAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  harnessRepositoryRef.current = makeHarnessRepository();
 });
 
 describe("worker runtime", () => {
@@ -211,7 +239,6 @@ describe("worker runtime", () => {
 
   it("routes harness-enabled workflows through the bounded lane-dispatch path with continuity resume focus", async () => {
     const { createPaperclipClient } = await import("../src/paperclip/client.js");
-    const { createPostgresHarnessRepository } = await import("../src/harness/repository.js");
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
@@ -235,12 +262,30 @@ describe("worker runtime", () => {
       status: "running"
     });
 
-    const harnessRepository = vi.mocked(createPostgresHarnessRepository).mock.results[0]?.value;
+    const harnessRepository = harnessRepositoryRef.current;
     expect(harnessRepository.getRun).toHaveBeenCalledWith("run-1");
     expect(harnessRepository.claimCardForExecution).toHaveBeenCalledWith({
       cardId: "card_cfo",
       expectedState: "approved"
     });
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "state_changed",
+        payload: {
+          from: "approved",
+          to: "working"
+        }
+      })
+    );
+    expect(harnessRepository.upsertCardContinuity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        runId: "run-1",
+        continuitySummary: "CFO should continue this active pricing review lane: Pressure-test the pricing lane.",
+        latestResultSummary: "Initial pricing floor is stable."
+      })
+    );
     expect(vi.mocked(createPaperclipClient).mock.results.at(-1)?.value.createRun).not.toHaveBeenCalled();
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
@@ -249,14 +294,13 @@ describe("worker runtime", () => {
       expect.stringContaining("\"status\":\"running\"")
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
-      expect.stringContaining("\"resumeFocus\":\"Resume the pricing lane from the revised assumptions workbook.\"")
+      expect.stringContaining("\"resumeFocus\":\"CFO should continue this active pricing review lane: Pressure-test the pricing lane.\"")
     );
 
     await runtime.close();
   });
 
   it("fails closed for terminal harness runs without emitting a stale lane dispatch", async () => {
-    const { createPostgresHarnessRepository } = await import("../src/harness/repository.js");
     const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
@@ -266,7 +310,7 @@ describe("worker runtime", () => {
       workerInstanceId: "worker-test-harness-terminal"
     });
 
-    const harnessRepository = vi.mocked(createPostgresHarnessRepository).mock.results.at(-1)?.value;
+    const harnessRepository = harnessRepositoryRef.current;
     harnessRepository.getRun.mockResolvedValueOnce({
       id: "run-1",
       tenantId: "tenant-1",
@@ -303,12 +347,13 @@ describe("worker runtime", () => {
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
     );
     expect(acidRepository.transitionWorkflowRunStatus).not.toHaveBeenCalled();
+    expect(harnessRepository.insertEvent).not.toHaveBeenCalled();
+    expect(harnessRepository.upsertCardContinuity).not.toHaveBeenCalled();
 
     await runtime.close();
   });
 
   it("stays quiet when a harness run is active but has no actionable child lane", async () => {
-    const { createPostgresHarnessRepository } = await import("../src/harness/repository.js");
     const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
@@ -318,7 +363,7 @@ describe("worker runtime", () => {
       workerInstanceId: "worker-test-harness-idle"
     });
 
-    const harnessRepository = vi.mocked(createPostgresHarnessRepository).mock.results.at(-1)?.value;
+    const harnessRepository = harnessRepositoryRef.current;
     harnessRepository.listCardsForRun.mockResolvedValueOnce([
       {
         id: "card_ceo",
@@ -370,7 +415,6 @@ describe("worker runtime", () => {
   });
 
   it("stays quiet when the worker loses the approved-lane claim race", async () => {
-    const { createPostgresHarnessRepository } = await import("../src/harness/repository.js");
     const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
@@ -380,7 +424,7 @@ describe("worker runtime", () => {
       workerInstanceId: "worker-test-harness-raced"
     });
 
-    const harnessRepository = vi.mocked(createPostgresHarnessRepository).mock.results.at(-1)?.value;
+    const harnessRepository = harnessRepositoryRef.current;
     harnessRepository.claimCardForExecution.mockResolvedValueOnce(null);
 
     stdoutWrite.mockClear();

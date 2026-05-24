@@ -85,3 +85,5 @@ This file tracks the new harness subproject only.
 - [ ] Deepen the worker-side harness execution seam beyond the current single-lane dispatch payload and into real orchestrator/child execution behavior without reopening the old Paperclip-style hotspot model.
   - [x] Require a durable worker claim/start boundary so harness-enabled jobs now move exactly one `approved` lane to `working` before dispatch and stay quiet when the claim race is lost.
   - [x] Keep raw `queued` child lanes fail-closed in the worker slice so execution still respects the CEO approval boundary until a later bounded promotion path exists.
+  - [x] Persist worker-start truth with the claim so the bounded start seam also records `state_changed`, refreshes active-lane continuity, and reconciles run state instead of leaving those facts behind in board-only logic.
+  - [ ] Add a worker-private lane outcome commit seam so a claimed `working` lane can write its bounded result back into durable harness state without going through the public board API.
