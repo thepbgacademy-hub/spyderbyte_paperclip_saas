@@ -8,6 +8,7 @@ import {
   buildHarnessWorkerExecutionEnvelope,
   buildHarnessWorkerDispatch,
   commitHarnessWorkerLaneOutcome,
+  type HarnessPostOutcomeAction,
   type HarnessWorkerDispatch,
   type HarnessWorkerExecutionEnvelope,
   type HarnessWorkerLaneOutcome
@@ -51,6 +52,13 @@ export function createWorkerRuntime(options: {
   env: WorkerEnv;
   workerInstanceId?: string;
   onHarnessLaneReady?: (envelope: HarnessWorkerExecutionEnvelope) => void | Promise<void>;
+  onHarnessPostOutcomeAction?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
+    laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+  }) => void | Promise<void>;
 }) {
   const pool = createPgPool({
     connectionString: options.env.supabaseDbUrl,
@@ -450,6 +458,38 @@ export function createWorkerRuntime(options: {
               ...committedOutcome
             })}\n`
           );
+          if (
+            committedOutcome.postOutcomeAction
+            && committedOutcome.postOutcomeAction.kind !== "dispatch_next_lane"
+            && committedOutcome.laneExecution
+          ) {
+            const postOutcomeHandoff = {
+              tenantId: input.tenantId,
+              runId: committedOutcome.runId,
+              workflowId: committedOutcome.workflowId,
+              action: committedOutcome.postOutcomeAction,
+              laneExecution: committedOutcome.laneExecution
+            };
+            process.stdout.write(
+              `${JSON.stringify({
+                type: "wealth_factory_harness_post_outcome_action",
+                workerInstanceId: options.workerInstanceId ?? "worker",
+                observedAt: new Date().toISOString(),
+                ...postOutcomeHandoff
+              })}\n`
+            );
+            try {
+              await options.onHarnessPostOutcomeAction?.(postOutcomeHandoff);
+            } catch (error) {
+              console.warn("Harness post-outcome hook failed after durable worker outcome", {
+                runId: committedOutcome.runId,
+                workflowId: committedOutcome.workflowId,
+                cardId: committedOutcome.laneExecution.cardId,
+                actionKind: committedOutcome.postOutcomeAction.kind,
+                error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+              });
+            }
+          }
           if (committedOutcome.nextDispatch?.laneExecution) {
             const executionEnvelope = await buildHarnessWorkerExecutionEnvelope({
               repository: harnessRepository,

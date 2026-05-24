@@ -551,12 +551,14 @@ describe("worker runtime", () => {
 
   it("commits a private harness lane outcome and emits a bounded worker event", async () => {
     const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
+    const onHarnessPostOutcomeAction = vi.fn();
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
         WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
       }),
-      workerInstanceId: "worker-test-harness-outcome"
+      workerInstanceId: "worker-test-harness-outcome",
+      onHarnessPostOutcomeAction
     });
 
     stdoutWrite.mockClear();
@@ -663,6 +665,25 @@ describe("worker runtime", () => {
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"postOutcomeAction\":{\"kind\":\"queue_ceo_review\",\"runState\":\"assembling\",\"reason\":\"final_assembly\"}")
     );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_post_outcome_action\"")
+    );
+    expect(onHarnessPostOutcomeAction).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      action: {
+        kind: "queue_ceo_review",
+        runState: "assembling",
+        reason: "final_assembly"
+      },
+      laneExecution: {
+        cardId: "card_cfo",
+        state: "done",
+        runState: "assembling",
+        latestResultSummary: "Validated the pricing model and preserved the final floor."
+      }
+    });
     const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
     expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith({
       tenantId: "tenant-1",
@@ -822,6 +843,203 @@ describe("worker runtime", () => {
       runId: "run-1",
       from: ["queued", "running"],
       to: "running"
+    });
+    expect(onHarnessLaneReady).toHaveBeenCalledTimes(1);
+
+    await runtime.close();
+  });
+
+  it("emits an explicit post-outcome handoff when a worker outcome leaves the board waiting", async () => {
+    const onHarnessPostOutcomeAction = vi.fn();
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-waiting-handoff",
+      onHarnessPostOutcomeAction
+    });
+
+    stdoutWrite.mockClear();
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.getRun
+      .mockResolvedValueOnce({
+        id: "run-1",
+        tenantId: "tenant-1",
+        workflowId: "wf_connect_first_workflow",
+        packageId: "pkg_bib_connect",
+        orchestratorPersona: "ceo",
+        state: "active",
+        runtimeContext: {
+          providerKind: "openai_api",
+          credentialLabel: "Primary OpenAI"
+        },
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      })
+      .mockResolvedValueOnce({
+        id: "run-1",
+        tenantId: "tenant-1",
+        workflowId: "wf_connect_first_workflow",
+        packageId: "pkg_bib_connect",
+        orchestratorPersona: "ceo",
+        state: "waiting",
+        runtimeContext: {
+          providerKind: "openai_api",
+          credentialLabel: "Primary OpenAI"
+        },
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:06:00.000Z"
+      })
+      .mockResolvedValueOnce({
+        id: "run-1",
+        tenantId: "tenant-1",
+        workflowId: "wf_connect_first_workflow",
+        packageId: "pkg_bib_connect",
+        orchestratorPersona: "ceo",
+        state: "waiting",
+        runtimeContext: {
+          providerKind: "openai_api",
+          credentialLabel: "Primary OpenAI"
+        },
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:06:00.000Z"
+      });
+    harnessRepository.listCardsForRun
+      .mockResolvedValueOnce([
+        {
+          id: "card_ceo",
+          runId: "run-1",
+          parentCardId: null,
+          persona: "ceo",
+          title: "Plan run",
+          deliverableType: "plan",
+          state: "planning",
+          createdAt: "2026-05-21T10:00:00.000Z",
+          updatedAt: "2026-05-21T10:00:00.000Z"
+        },
+        {
+          id: "card_cfo",
+          runId: "run-1",
+          parentCardId: "card_ceo",
+          persona: "cfo",
+          title: "Wait for revenue assumptions",
+          deliverableType: "pricing_review",
+          state: "waiting",
+          createdAt: "2026-05-21T10:01:00.000Z",
+          updatedAt: "2026-05-21T10:05:00.000Z"
+        }
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "card_ceo",
+          runId: "run-1",
+          parentCardId: null,
+          persona: "ceo",
+          title: "Plan run",
+          deliverableType: "plan",
+          state: "planning",
+          createdAt: "2026-05-21T10:00:00.000Z",
+          updatedAt: "2026-05-21T10:00:00.000Z"
+        },
+        {
+          id: "card_cfo",
+          runId: "run-1",
+          parentCardId: "card_ceo",
+          persona: "cfo",
+          title: "Wait for revenue assumptions",
+          deliverableType: "pricing_review",
+          state: "waiting",
+          createdAt: "2026-05-21T10:01:00.000Z",
+          updatedAt: "2026-05-21T10:05:00.000Z"
+        }
+      ])
+      .mockResolvedValueOnce([
+      {
+        id: "card_ceo",
+        runId: "run-1",
+        parentCardId: null,
+        persona: "ceo",
+        title: "Plan run",
+        deliverableType: "plan",
+        state: "planning",
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      },
+      {
+        id: "card_cfo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Wait for revenue assumptions",
+        deliverableType: "pricing_review",
+        state: "waiting",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:05:00.000Z"
+      }
+    ]);
+    harnessRepository.listCardContinuityForRun.mockResolvedValueOnce([
+      {
+        cardId: "card_cfo",
+        runId: "run-1",
+        continuitySource: "resume_override",
+        continuitySummary: "CFO should resume this lane once the tenant confirms the latest revenue assumption.",
+        latestResultSummary: null,
+        absorbedWorkItems: [],
+        updatedAt: "2026-05-21T10:05:00.000Z"
+      }
+    ]);
+    harnessRepository.claimCardForExecution.mockResolvedValueOnce(null);
+
+    await expect(
+      runtime.commitHarnessLaneOutcome({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        state: "waiting",
+        resumeSummary: "CFO should resume this lane once the tenant confirms the latest revenue assumption."
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "committed",
+      laneExecution: {
+        cardId: "card_cfo",
+        state: "waiting",
+        runState: "waiting",
+        resumeFocus: "CFO should resume this lane once the tenant confirms the latest revenue assumption.",
+        latestResultSummary: "Initial pricing floor is stable."
+      },
+      postOutcomeAction: {
+        kind: "await_lane_resume",
+        runState: "waiting",
+        cardId: "card_cfo"
+      }
+    });
+
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_post_outcome_action\"")
+    );
+    expect(stdoutWrite).not.toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
+    );
+    expect(onHarnessPostOutcomeAction).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      action: {
+        kind: "await_lane_resume",
+        runState: "waiting",
+        cardId: "card_cfo"
+      },
+      laneExecution: {
+        cardId: "card_cfo",
+        state: "waiting",
+        runState: "waiting",
+        resumeFocus: "CFO should resume this lane once the tenant confirms the latest revenue assumption.",
+        latestResultSummary: "Initial pricing floor is stable."
+      }
     });
 
     await runtime.close();
