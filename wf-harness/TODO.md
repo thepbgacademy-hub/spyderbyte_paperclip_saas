@@ -87,4 +87,4 @@ This file tracks the new harness subproject only.
   - [x] Keep raw `queued` child lanes fail-closed in the worker slice so execution still respects the CEO approval boundary until a later bounded promotion path exists.
   - [x] Persist worker-start truth with the claim so the bounded start seam also records `state_changed`, refreshes active-lane continuity, and reconciles run state instead of leaving those facts behind in board-only logic.
   - [x] Add a worker-private lane outcome commit seam so a claimed `working` lane can write its bounded result back into durable harness state without going through the public board API.
-  - [ ] Let the worker-private seam advance beyond bounded lane outcomes into orchestrator-aware multi-step execution without reopening swarm-style ambiguity or bypassing CEO governance.
+  - [x] Let the worker-private seam advance beyond bounded lane outcomes into orchestrator-aware multi-step execution without reopening swarm-style ambiguity or bypassing CEO governance.

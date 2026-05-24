@@ -432,6 +432,16 @@ export function createWorkerRuntime(options: { env: WorkerEnv; workerInstanceId?
               ...committedOutcome
             })}\n`
           );
+          if (committedOutcome.nextDispatch?.laneExecution) {
+            process.stdout.write(
+              `${JSON.stringify({
+                type: "wealth_factory_harness_lane_dispatch",
+                workerInstanceId: options.workerInstanceId ?? "worker",
+                observedAt: new Date().toISOString(),
+                ...committedOutcome.nextDispatch
+              })}\n`
+            );
+          }
         }
       });
       return outcome;
@@ -553,6 +563,8 @@ async function processHarnessLaneOutcome(options: {
     | "getCardContinuity"
     | "listCardsForRun"
     | "listProposalsForRun"
+    | "listCardContinuityForRun"
+    | "claimCardForExecution"
     | "transitionCardState"
     | "insertEvent"
     | "upsertCardContinuity"
@@ -567,6 +579,8 @@ async function processHarnessLaneOutcome(options: {
         | "getCardContinuity"
         | "listCardsForRun"
         | "listProposalsForRun"
+        | "listCardContinuityForRun"
+        | "claimCardForExecution"
         | "transitionCardState"
         | "insertEvent"
         | "upsertCardContinuity"

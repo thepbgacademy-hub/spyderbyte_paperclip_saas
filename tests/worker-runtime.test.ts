@@ -492,6 +492,31 @@ describe("worker runtime", () => {
     });
 
     stdoutWrite.mockClear();
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.listCardsForRun.mockResolvedValueOnce([
+      {
+        id: "card_ceo",
+        runId: "run-1",
+        parentCardId: null,
+        persona: "ceo",
+        title: "Plan run",
+        deliverableType: "plan",
+        state: "planning",
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      },
+      {
+        id: "card_cfo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Pressure-test the pricing lane",
+        deliverableType: "pricing_review",
+        state: "done",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:05:00.000Z"
+      }
+    ]);
     await expect(
       runtime.commitHarnessLaneOutcome({
         tenantId: "tenant-1",
@@ -508,12 +533,11 @@ describe("worker runtime", () => {
       laneExecution: {
         cardId: "card_cfo",
         state: "done",
-        runState: "active",
+        runState: "assembling",
         latestResultSummary: "Validated the pricing model and preserved the final floor."
       }
     });
 
-    const harnessRepository = harnessRepositoryRef.current;
     expect(harnessRepository.transitionCardState).toHaveBeenCalledWith({
       cardId: "card_cfo",
       expectedState: "working",
@@ -533,6 +557,122 @@ describe("worker runtime", () => {
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"status\":\"committed\"")
+    );
+
+    await runtime.close();
+  });
+
+  it("emits a follow-on harness dispatch when a committed lane outcome frees the next approved lane", async () => {
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-follow-on"
+    });
+
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.listCardsForRun.mockResolvedValue([
+      {
+        id: "card_ceo",
+        runId: "run-1",
+        parentCardId: null,
+        persona: "ceo",
+        title: "Plan run",
+        deliverableType: "plan",
+        state: "planning",
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      },
+      {
+        id: "card_cfo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Finalize pricing review",
+        deliverableType: "pricing_review",
+        state: "done",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:06:00.000Z"
+      },
+      {
+        id: "card_cmo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cmo",
+        title: "Prepare launch messaging",
+        deliverableType: "marketing_plan",
+        state: "approved",
+        createdAt: "2026-05-21T10:02:00.000Z",
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      }
+    ]);
+    harnessRepository.listCardContinuityForRun.mockResolvedValue([
+      {
+        cardId: "card_cmo",
+        runId: "run-1",
+        continuitySummary: "Resume the launch messaging lane from the approved positioning draft.",
+        latestResultSummary: null,
+        absorbedWorkItems: [],
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      }
+    ]);
+    harnessRepository.claimCardForExecution.mockResolvedValueOnce({
+      id: "card_cmo",
+      runId: "run-1",
+      parentCardId: "card_ceo",
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "marketing_plan",
+      state: "working",
+      createdAt: "2026-05-21T10:02:00.000Z",
+      updatedAt: "2026-05-21T10:07:00.000Z"
+    });
+
+    stdoutWrite.mockClear();
+    await expect(
+      runtime.commitHarnessLaneOutcome({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        state: "done",
+        resultSummary: "Pricing review is complete and ready for board packaging."
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "committed",
+      laneExecution: {
+        cardId: "card_cfo",
+        state: "done",
+        runState: "active",
+        latestResultSummary: "Pricing review is complete and ready for board packaging."
+      },
+      nextDispatch: {
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        status: "running",
+        laneExecution: {
+          cardId: "card_cmo",
+          persona: "cmo",
+          title: "Prepare launch messaging",
+          deliverableType: "marketing_plan",
+          state: "working",
+          resumeFocus: "CMO should continue this active marketing plan lane: Prepare launch messaging."
+        }
+      }
+    });
+
+    expect(harnessRepository.claimCardForExecution).toHaveBeenCalledWith({
+      cardId: "card_cmo",
+      expectedState: "approved"
+    });
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"cardId\":\"card_cmo\"")
     );
 
     await runtime.close();

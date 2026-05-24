@@ -39,6 +39,7 @@ export type HarnessWorkerLaneOutcome = {
     resumeFocus?: string;
     latestResultSummary?: string;
   };
+  nextDispatch?: HarnessWorkerDispatch;
 };
 
 type HarnessDispatchRepository = Pick<
@@ -60,6 +61,8 @@ type HarnessOutcomeRepository = Pick<
   | "getCardContinuity"
   | "listCardsForRun"
   | "listProposalsForRun"
+  | "listCardContinuityForRun"
+  | "claimCardForExecution"
   | "transitionCardState"
   | "insertEvent"
   | "upsertCardContinuity"
@@ -266,6 +269,15 @@ export async function commitHarnessWorkerLaneOutcome(input: {
       run
     });
     const nextRun = reconciledRun ?? run;
+    const nextDispatch =
+      NON_EXECUTABLE_RUN_STATES.has(nextRun.state)
+        ? null
+        : await buildHarnessWorkerDispatch({
+            repository,
+            tenantId: input.tenantId,
+            runId: run.id,
+            workflowId: run.workflowId
+          });
     return {
       runId: run.id,
       workflowId: run.workflowId,
@@ -276,7 +288,8 @@ export async function commitHarnessWorkerLaneOutcome(input: {
         runState: nextRun.state,
         ...(continuity.continuitySummary ? { resumeFocus: continuity.continuitySummary } : {}),
         ...(continuity.latestResultSummary ? { latestResultSummary: continuity.latestResultSummary } : {})
-      }
+      },
+      ...(nextDispatch?.laneExecution ? { nextDispatch } : {})
     };
   });
 }
