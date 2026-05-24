@@ -59,6 +59,27 @@ export function createWorkerRuntime(options: {
     action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
     laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
   }) => void | Promise<void>;
+  onHarnessCeoReviewRequested?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    action: Extract<Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>, { kind: "queue_ceo_review" }>;
+    laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+  }) => void | Promise<void>;
+  onHarnessLaneResumeAwaited?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    action: Extract<Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>, { kind: "await_lane_resume" }>;
+    laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+  }) => void | Promise<void>;
+  onHarnessLaneUnblockAwaited?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    action: Extract<Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>, { kind: "await_unblock" }>;
+    laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+  }) => void | Promise<void>;
 }) {
   const pool = createPgPool({
     connectionString: options.env.supabaseDbUrl,
@@ -480,6 +501,10 @@ export function createWorkerRuntime(options: {
             );
             try {
               await options.onHarnessPostOutcomeAction?.(postOutcomeHandoff);
+              await runSpecificPostOutcomeHandler({
+                options,
+                handoff: postOutcomeHandoff
+              });
             } catch (error) {
               console.warn("Harness post-outcome hook failed after durable worker outcome", {
                 runId: committedOutcome.runId,
@@ -546,6 +571,75 @@ export function createWorkerRuntime(options: {
         execution: snapshot
       })}\n`
     );
+  }
+}
+
+async function runSpecificPostOutcomeHandler(input: {
+  options: {
+    onHarnessCeoReviewRequested?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      action: Extract<Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>, { kind: "queue_ceo_review" }>;
+      laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+    }) => void | Promise<void>;
+    onHarnessLaneResumeAwaited?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      action: Extract<Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>, { kind: "await_lane_resume" }>;
+      laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+    }) => void | Promise<void>;
+    onHarnessLaneUnblockAwaited?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      action: Extract<Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>, { kind: "await_unblock" }>;
+      laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+    }) => void | Promise<void>;
+  };
+  handoff: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
+    laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+  };
+}) {
+  switch (input.handoff.action.kind) {
+    case "queue_ceo_review": {
+      const ceoReviewHandoff = {
+        tenantId: input.handoff.tenantId,
+        runId: input.handoff.runId,
+        workflowId: input.handoff.workflowId,
+        action: input.handoff.action,
+        laneExecution: input.handoff.laneExecution
+      };
+      await input.options.onHarnessCeoReviewRequested?.(ceoReviewHandoff);
+      return;
+    }
+    case "await_lane_resume": {
+      const laneResumeHandoff = {
+        tenantId: input.handoff.tenantId,
+        runId: input.handoff.runId,
+        workflowId: input.handoff.workflowId,
+        action: input.handoff.action,
+        laneExecution: input.handoff.laneExecution
+      };
+      await input.options.onHarnessLaneResumeAwaited?.(laneResumeHandoff);
+      return;
+    }
+    case "await_unblock": {
+      const laneUnblockHandoff = {
+        tenantId: input.handoff.tenantId,
+        runId: input.handoff.runId,
+        workflowId: input.handoff.workflowId,
+        action: input.handoff.action,
+        laneExecution: input.handoff.laneExecution
+      };
+      await input.options.onHarnessLaneUnblockAwaited?.(laneUnblockHandoff);
+      return;
+    }
   }
 }
 

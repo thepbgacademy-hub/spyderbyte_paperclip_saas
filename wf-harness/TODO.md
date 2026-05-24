@@ -95,4 +95,5 @@ This file tracks the new harness subproject only.
   - [x] Return an explicit `postOutcomeAction` contract from worker lane outcomes so the engine can distinguish `dispatch_next_lane`, `queue_ceo_review`, `await_lane_resume`, and `await_unblock` without re-deriving follow-through from `nextDispatch` alone.
   - [x] Consume the new `postOutcomeAction` seam in the orchestrator/runtime handoff so review, wait, and unblock paths are driven by explicit worker outcome truth.
   - [x] Keep `dispatch_next_lane` on the existing lane-ready event/hook path while non-dispatch worker outcomes emit the dedicated `wealth_factory_harness_post_outcome_action` event plus bounded `onHarnessPostOutcomeAction` hook input.
-  - [ ] Decide which runtime-side handlers should consume `queue_ceo_review`, `await_lane_resume`, and `await_unblock` beyond the current bounded event/hook seam.
+  - [x] Decide which runtime-side handlers should consume `queue_ceo_review`, `await_lane_resume`, and `await_unblock` beyond the current bounded event/hook seam.
+  - [x] Add explicit runtime-side handlers for CEO review, lane resume, and unblock so non-dispatch worker outcomes do not collapse back into one generic branch.

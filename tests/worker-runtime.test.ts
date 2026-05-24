@@ -552,13 +552,19 @@ describe("worker runtime", () => {
   it("commits a private harness lane outcome and emits a bounded worker event", async () => {
     const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
     const onHarnessPostOutcomeAction = vi.fn();
+    const onHarnessCeoReviewRequested = vi.fn();
+    const onHarnessLaneResumeAwaited = vi.fn();
+    const onHarnessLaneUnblockAwaited = vi.fn();
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
         WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
       }),
       workerInstanceId: "worker-test-harness-outcome",
-      onHarnessPostOutcomeAction
+      onHarnessPostOutcomeAction,
+      onHarnessCeoReviewRequested,
+      onHarnessLaneResumeAwaited,
+      onHarnessLaneUnblockAwaited
     });
 
     stdoutWrite.mockClear();
@@ -684,6 +690,24 @@ describe("worker runtime", () => {
         latestResultSummary: "Validated the pricing model and preserved the final floor."
       }
     });
+    expect(onHarnessCeoReviewRequested).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      action: {
+        kind: "queue_ceo_review",
+        runState: "assembling",
+        reason: "final_assembly"
+      },
+      laneExecution: {
+        cardId: "card_cfo",
+        state: "done",
+        runState: "assembling",
+        latestResultSummary: "Validated the pricing model and preserved the final floor."
+      }
+    });
+    expect(onHarnessLaneResumeAwaited).not.toHaveBeenCalled();
+    expect(onHarnessLaneUnblockAwaited).not.toHaveBeenCalled();
     const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
     expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith({
       tenantId: "tenant-1",
@@ -851,13 +875,17 @@ describe("worker runtime", () => {
 
   it("emits an explicit post-outcome handoff when a worker outcome leaves the board waiting", async () => {
     const onHarnessPostOutcomeAction = vi.fn();
+    const onHarnessLaneResumeAwaited = vi.fn();
+    const onHarnessCeoReviewRequested = vi.fn();
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
         WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
       }),
       workerInstanceId: "worker-test-harness-waiting-handoff",
-      onHarnessPostOutcomeAction
+      onHarnessPostOutcomeAction,
+      onHarnessLaneResumeAwaited,
+      onHarnessCeoReviewRequested
     });
 
     stdoutWrite.mockClear();
@@ -1041,6 +1069,239 @@ describe("worker runtime", () => {
         latestResultSummary: "Initial pricing floor is stable."
       }
     });
+    expect(onHarnessLaneResumeAwaited).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      action: {
+        kind: "await_lane_resume",
+        runState: "waiting",
+        cardId: "card_cfo"
+      },
+      laneExecution: {
+        cardId: "card_cfo",
+        state: "waiting",
+        runState: "waiting",
+        resumeFocus: "CFO should resume this lane once the tenant confirms the latest revenue assumption.",
+        latestResultSummary: "Initial pricing floor is stable."
+      }
+    });
+    expect(onHarnessCeoReviewRequested).not.toHaveBeenCalled();
+
+    await runtime.close();
+  });
+
+  it("routes blocked post-outcome handoffs through the explicit unblock hook", async () => {
+    const onHarnessPostOutcomeAction = vi.fn();
+    const onHarnessLaneUnblockAwaited = vi.fn();
+    const onHarnessCeoReviewRequested = vi.fn();
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-blocked-handoff",
+      onHarnessPostOutcomeAction,
+      onHarnessLaneUnblockAwaited,
+      onHarnessCeoReviewRequested
+    });
+
+    stdoutWrite.mockClear();
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.getRun
+      .mockResolvedValueOnce({
+        id: "run-1",
+        tenantId: "tenant-1",
+        workflowId: "wf_connect_first_workflow",
+        packageId: "pkg_bib_connect",
+        orchestratorPersona: "ceo",
+        state: "active",
+        runtimeContext: {
+          providerKind: "openai_api",
+          credentialLabel: "Primary OpenAI"
+        },
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      })
+      .mockResolvedValueOnce({
+        id: "run-1",
+        tenantId: "tenant-1",
+        workflowId: "wf_connect_first_workflow",
+        packageId: "pkg_bib_connect",
+        orchestratorPersona: "ceo",
+        state: "blocked",
+        runtimeContext: {
+          providerKind: "openai_api",
+          credentialLabel: "Primary OpenAI"
+        },
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:06:00.000Z"
+      })
+      .mockResolvedValueOnce({
+        id: "run-1",
+        tenantId: "tenant-1",
+        workflowId: "wf_connect_first_workflow",
+        packageId: "pkg_bib_connect",
+        orchestratorPersona: "ceo",
+        state: "blocked",
+        runtimeContext: {
+          providerKind: "openai_api",
+          credentialLabel: "Primary OpenAI"
+        },
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:06:00.000Z"
+      });
+    harnessRepository.listCardsForRun
+      .mockResolvedValueOnce([
+        {
+          id: "card_ceo",
+          runId: "run-1",
+          parentCardId: null,
+          persona: "ceo",
+          title: "Plan run",
+          deliverableType: "plan",
+          state: "planning",
+          createdAt: "2026-05-21T10:00:00.000Z",
+          updatedAt: "2026-05-21T10:00:00.000Z"
+        },
+        {
+          id: "card_cfo",
+          runId: "run-1",
+          parentCardId: "card_ceo",
+          persona: "cfo",
+          title: "Resolve blocked pricing lane",
+          deliverableType: "pricing_review",
+          state: "blocked",
+          createdAt: "2026-05-21T10:01:00.000Z",
+          updatedAt: "2026-05-21T10:05:00.000Z"
+        }
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "card_ceo",
+          runId: "run-1",
+          parentCardId: null,
+          persona: "ceo",
+          title: "Plan run",
+          deliverableType: "plan",
+          state: "planning",
+          createdAt: "2026-05-21T10:00:00.000Z",
+          updatedAt: "2026-05-21T10:00:00.000Z"
+        },
+        {
+          id: "card_cfo",
+          runId: "run-1",
+          parentCardId: "card_ceo",
+          persona: "cfo",
+          title: "Resolve blocked pricing lane",
+          deliverableType: "pricing_review",
+          state: "blocked",
+          createdAt: "2026-05-21T10:01:00.000Z",
+          updatedAt: "2026-05-21T10:05:00.000Z"
+        }
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "card_ceo",
+          runId: "run-1",
+          parentCardId: null,
+          persona: "ceo",
+          title: "Plan run",
+          deliverableType: "plan",
+          state: "planning",
+          createdAt: "2026-05-21T10:00:00.000Z",
+          updatedAt: "2026-05-21T10:00:00.000Z"
+        },
+        {
+          id: "card_cfo",
+          runId: "run-1",
+          parentCardId: "card_ceo",
+          persona: "cfo",
+          title: "Resolve blocked pricing lane",
+          deliverableType: "pricing_review",
+          state: "blocked",
+          createdAt: "2026-05-21T10:01:00.000Z",
+          updatedAt: "2026-05-21T10:05:00.000Z"
+        }
+      ]);
+    harnessRepository.listCardContinuityForRun.mockResolvedValueOnce([
+      {
+        cardId: "card_cfo",
+        runId: "run-1",
+        continuitySource: "resume_override",
+        continuitySummary: "CFO is blocked until the tenant confirms the final margin constraint.",
+        latestResultSummary: null,
+        absorbedWorkItems: [],
+        updatedAt: "2026-05-21T10:05:00.000Z"
+      }
+    ]);
+    harnessRepository.claimCardForExecution.mockResolvedValueOnce(null);
+
+    await expect(
+      runtime.commitHarnessLaneOutcome({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        state: "blocked",
+        resumeSummary: "CFO is blocked until the tenant confirms the final margin constraint."
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "committed",
+      laneExecution: {
+        cardId: "card_cfo",
+        state: "blocked",
+        runState: "blocked",
+        resumeFocus: "CFO is blocked until the tenant confirms the final margin constraint.",
+        latestResultSummary: "Initial pricing floor is stable."
+      },
+      postOutcomeAction: {
+        kind: "await_unblock",
+        runState: "blocked",
+        cardId: "card_cfo"
+      }
+    });
+
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_post_outcome_action\"")
+    );
+    expect(onHarnessPostOutcomeAction).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      action: {
+        kind: "await_unblock",
+        runState: "blocked",
+        cardId: "card_cfo"
+      },
+      laneExecution: {
+        cardId: "card_cfo",
+        state: "blocked",
+        runState: "blocked",
+        resumeFocus: "CFO is blocked until the tenant confirms the final margin constraint.",
+        latestResultSummary: "Initial pricing floor is stable."
+      }
+    });
+    expect(onHarnessLaneUnblockAwaited).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      action: {
+        kind: "await_unblock",
+        runState: "blocked",
+        cardId: "card_cfo"
+      },
+      laneExecution: {
+        cardId: "card_cfo",
+        state: "blocked",
+        runState: "blocked",
+        resumeFocus: "CFO is blocked until the tenant confirms the final margin constraint.",
+        latestResultSummary: "Initial pricing floor is stable."
+      }
+    });
+    expect(onHarnessCeoReviewRequested).not.toHaveBeenCalled();
 
     await runtime.close();
   });
