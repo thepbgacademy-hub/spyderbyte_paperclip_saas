@@ -63,6 +63,7 @@ Scope: First custom harness slice under `src/harness`, `src/api/harness-http.ts`
 - Re-ran the scan after the continuity reviewer fix pass tightened handoff attribution and deterministic absorbed-work merge behavior. The touched slice still introduced no live secret material, and the continuity seam still stores only policy-bounded operational board labels instead of any provider or tenant secret values.
 - Re-ran the scan after promoting `continuitySummary` into the real per-lane resume directive and threading continuity through runtime resume. The touched slice still introduced no live secret material and still keeps continuity limited to bounded operational board text rather than any provider credential, BYOK secret, or raw tenant note payload.
 - Re-ran the scan after hardening the done-lane seam so `resumeSummary` is rejected on terminal `done` transitions. The touched slice still introduced no live secret material and further reduced the risk of stale operational board text overriding a completed-lane snapshot.
+- Re-ran the scan after adding the first worker-side harness lane-dispatch seam for `wf_harness_v1` workflows. The touched slice still introduced no live secret material and keeps the dispatch payload bounded to persisted lane metadata plus `resumeFocus` / latest outcome text, without widening BYOK, provider secrets, or tenant-authored internal notes.
 
 ## OWASP-Oriented Findings
 
@@ -137,6 +138,7 @@ No issues identified in the harness slice. The board HTTP boundary now distingui
 - The derived `completionPackage` board view is assembled from existing persisted CEO and child-card outcomes and does not persist raw provider secrets or expand the runtime-context trust boundary.
 - The new `harness_card_continuity` persistence path stores only policy-bounded operational board text (`continuitySummary`, `latestResultSummary`, `absorbedWorkItems`) and does not expand the runtime-context trust boundary or duplicate any provider credential state.
 - The new `governanceItems` completion-package view is derived from bounded ledger fields (`policyReason`, `recommendationSummary`, `objectionSummary`) and intentionally excludes raw `decisionNote` text, which keeps ad hoc CEO notes out of the public board handoff.
+- The worker-side harness lane-dispatch seam now emits only bounded lane metadata plus continuity-backed resume focus for the next actionable non-CEO lane, and terminal/no-actionable-lane cases stay quiet instead of widening execution noise or secret exposure.
 
 ### Additional Hygiene Observations
 

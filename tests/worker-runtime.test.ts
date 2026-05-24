@@ -2,6 +2,60 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createWorkerRuntime, loadWorkerEnv } from "../src/worker/runtime.js";
 
+vi.mock("../src/harness/repository.js", () => ({
+  createPostgresHarnessRepository: vi.fn(() => ({
+    getRun: vi.fn().mockResolvedValue({
+      id: "run-1",
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      state: "active",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      },
+      createdAt: "2026-05-21T10:00:00.000Z",
+      updatedAt: "2026-05-21T10:00:00.000Z"
+    }),
+    listCardsForRun: vi.fn().mockResolvedValue([
+      {
+        id: "card_ceo",
+        runId: "run-1",
+        parentCardId: null,
+        persona: "ceo",
+        title: "Plan run",
+        deliverableType: "plan",
+        state: "planning",
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      },
+      {
+        id: "card_cfo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Pressure-test the pricing lane",
+        deliverableType: "pricing_review",
+        state: "working",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:02:00.000Z"
+      }
+    ]),
+    listProposalsForRun: vi.fn().mockResolvedValue([]),
+    listCardContinuityForRun: vi.fn().mockResolvedValue([
+      {
+        cardId: "card_cfo",
+        runId: "run-1",
+        continuitySummary: "Resume the pricing lane from the revised assumptions workbook.",
+        latestResultSummary: "Initial pricing floor is stable.",
+        absorbedWorkItems: [],
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      }
+    ])
+  }))
+}));
+
 vi.mock("../src/db/postgres-client.js", () => ({
   createPgPool: vi.fn(() => ({
     end: vi.fn().mockResolvedValue(undefined)
@@ -114,6 +168,7 @@ describe("worker runtime", () => {
 
   it("processes queue payloads through the bound-provider worker path", async () => {
     const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
+    const { createPaperclipClient } = await import("../src/paperclip/client.js");
     const runtime = createWorkerRuntime({ env: loadWorkerEnv(validEnv), workerInstanceId: "worker-test-1" });
 
     await expect(
@@ -138,6 +193,160 @@ describe("worker runtime", () => {
       from: ["queued"],
       to: "queued"
     });
+    expect(createPaperclipClient).toHaveBeenCalled();
+
+    await runtime.close();
+  });
+
+  it("routes harness-enabled workflows through the bounded lane-dispatch path with continuity resume focus", async () => {
+    const { createPaperclipClient } = await import("../src/paperclip/client.js");
+    const { createPostgresHarnessRepository } = await import("../src/harness/repository.js");
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness"
+    });
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "queued"
+    });
+
+    const harnessRepository = vi.mocked(createPostgresHarnessRepository).mock.results[0]?.value;
+    expect(harnessRepository.getRun).toHaveBeenCalledWith("run-1");
+    expect(vi.mocked(createPaperclipClient).mock.results.at(-1)?.value.createRun).not.toHaveBeenCalled();
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"resumeFocus\":\"Resume the pricing lane from the revised assumptions workbook.\"")
+    );
+
+    await runtime.close();
+  });
+
+  it("fails closed for terminal harness runs without emitting a stale lane dispatch", async () => {
+    const { createPostgresHarnessRepository } = await import("../src/harness/repository.js");
+    const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-terminal"
+    });
+
+    const harnessRepository = vi.mocked(createPostgresHarnessRepository).mock.results.at(-1)?.value;
+    harnessRepository.getRun.mockResolvedValueOnce({
+      id: "run-1",
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      state: "done",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      },
+      createdAt: "2026-05-21T10:00:00.000Z",
+      updatedAt: "2026-05-21T10:00:00.000Z"
+    });
+
+    stdoutWrite.mockClear();
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "queued"
+    });
+
+    const acidRepository = vi.mocked(createAcidGuardRepository).mock.results[0]?.value;
+    expect(stdoutWrite).not.toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
+    );
+    expect(acidRepository.transitionWorkflowRunStatus).not.toHaveBeenCalled();
+
+    await runtime.close();
+  });
+
+  it("stays quiet when a harness run is active but has no actionable child lane", async () => {
+    const { createPostgresHarnessRepository } = await import("../src/harness/repository.js");
+    const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-idle"
+    });
+
+    const harnessRepository = vi.mocked(createPostgresHarnessRepository).mock.results.at(-1)?.value;
+    harnessRepository.listCardsForRun.mockResolvedValueOnce([
+      {
+        id: "card_ceo",
+        runId: "run-1",
+        parentCardId: null,
+        persona: "ceo",
+        title: "Plan run",
+        deliverableType: "plan",
+        state: "planning",
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      },
+      {
+        id: "card_cfo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Waiting on pricing review",
+        deliverableType: "pricing_review",
+        state: "done",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:02:00.000Z"
+      }
+    ]);
+
+    stdoutWrite.mockClear();
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "queued"
+    });
+
+    const acidRepository = vi.mocked(createAcidGuardRepository).mock.results[0]?.value;
+    expect(stdoutWrite).not.toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
+    );
+    expect(acidRepository.transitionWorkflowRunStatus).not.toHaveBeenCalled();
 
     await runtime.close();
   });

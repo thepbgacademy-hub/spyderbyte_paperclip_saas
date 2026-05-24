@@ -4,6 +4,8 @@ import { createDurableAuditSink } from "../audit/durable-audit.js";
 import { createAcidGuardRepository } from "../db/acid-guard-repository.js";
 import { createPgPool, createPgPoolQueryClient, createPgTransactionRunner } from "../db/postgres-client.js";
 import { createSupabaseRepositories } from "../db/supabase-repositories.js";
+import { buildHarnessWorkerDispatch, type HarnessWorkerDispatch } from "../harness/worker-executor.js";
+import { createPostgresHarnessRepository } from "../harness/repository.js";
 import { createPaperclipClient } from "../paperclip/client.js";
 import {
   createPaperclipSecretAdminHttpClient,
@@ -19,6 +21,7 @@ import type { RuntimeProviderBinding } from "../providers/runtime-provider-resol
 import { createEncryptedSecretVault } from "../secrets/encrypted-vault.js";
 import { createPostgresEncryptedVaultStore } from "../secrets/postgres-vault-store.js";
 import { createSecretService } from "../secrets/secret-service.js";
+import { createHarnessWorkflowRegistry } from "../wealthfactory/workflow-registry.js";
 import { processWorkflowJob } from "../workflows/worker.js";
 import { validateWorkflowQueuePayload } from "../workflows/queue.js";
 import { createAcidWorkflowStatusRecorder } from "../workflows/acid-status-recorder.js";
@@ -44,6 +47,10 @@ export function createWorkerRuntime(options: { env: WorkerEnv; workerInstanceId?
   const queryClient = createPgPoolQueryClient(pool);
   const transactionRunner = createPgTransactionRunner(pool);
   const repositories = createSupabaseRepositories(queryClient);
+  const harnessRepository = createPostgresHarnessRepository(queryClient);
+  const harnessWorkflowRegistry = createHarnessWorkflowRegistry({
+    harnessEnabledWorkflowIds: options.env.harnessEnabledWorkflowIds
+  });
   const paperclipSecretBindings = createPaperclipSecretBindingRepository(queryClient);
   const paperclipSecretSync =
     options.env.paperclipBoardSessionToken && options.env.paperclipLaunchMode === "issues"
@@ -319,49 +326,67 @@ export function createWorkerRuntime(options: { env: WorkerEnv; workerInstanceId?
         onStarted: (snapshot) => emitWorkerRunEvent("started", validatedPayload, snapshot),
         onReleased: (snapshot) => emitWorkerRunEvent("released", validatedPayload, snapshot),
         operation: async () =>
-          processWorkflowJob({
-            payload: validatedPayload,
-            paperclipClient,
-            tenantResolver: async (tenantId) => {
-              const mapping = await repositories.resolvePaperclipCompanyMapping({ tenantId });
-              companyIdToTenantId.set(mapping.paperclipCompanyId, tenantId);
-              if (mapping.paperclipIssueAgentId) {
-                companyIdToIssueAgentId.set(mapping.paperclipCompanyId, mapping.paperclipIssueAgentId);
-              } else {
-                companyIdToIssueAgentId.delete(mapping.paperclipCompanyId);
-              }
-              const mappedToken = options.env.paperclipServiceTokensByCompany[mapping.paperclipCompanyId];
-              if (mappedToken) {
-                companyIdToServiceToken.set(mapping.paperclipCompanyId, mappedToken);
-              } else {
-                companyIdToServiceToken.delete(mapping.paperclipCompanyId);
-              }
-              return {
-                paperclipCompanyId: mapping.paperclipCompanyId,
-                ...(mapping.paperclipIssueAgentId ? { paperclipIssueAgentId: mapping.paperclipIssueAgentId } : {})
-              };
-            },
-            authorizeRunStart: async () => true,
-            isPaperclipEnabled: async () => true,
-            checkEntitlement: async () => ({ allowed: true }),
-            providerExecutionMode: options.env.providerExecutionMode,
-            loadBoundProviderContext: async ({ tenantId, runId }) => {
-              const context = await acidRepository.getBoundProviderContext({ tenantId, runId });
-              return context as readonly RuntimeProviderBinding[] | null;
-            },
-            hydrateProviderContext: async ({ tenantId, runId, workflowId, providerBindings }) =>
-              providerExecutionResolver.resolveForRun({
-                tenantId,
-                runId,
-                workflowId,
-                providerBindings
-              }),
-            resolveDebugSharedProvider: async ({ requiredCapabilities = ["text_generation"] }) =>
-              debugFallbackResolver.resolveForRun({ requiredCapabilities }),
-            recordStatus: async (status) => {
-              await recordWorkflowStatus(status);
-            }
-          })
+          harnessWorkflowRegistry.isHarnessEligible(validatedPayload.workflowId)
+            ? processHarnessWorkflowJob({
+                payload: validatedPayload,
+                repository: harnessRepository,
+                recordStatus: async (status) => {
+                  await recordWorkflowStatus(status);
+                },
+                onDispatch: (dispatch) => {
+                  process.stdout.write(
+                    `${JSON.stringify({
+                      type: "wealth_factory_harness_lane_dispatch",
+                      workerInstanceId: options.workerInstanceId ?? "worker",
+                      observedAt: new Date().toISOString(),
+                      ...dispatch
+                    })}\n`
+                  );
+                }
+              })
+            : processWorkflowJob({
+                payload: validatedPayload,
+                paperclipClient,
+                tenantResolver: async (tenantId) => {
+                  const mapping = await repositories.resolvePaperclipCompanyMapping({ tenantId });
+                  companyIdToTenantId.set(mapping.paperclipCompanyId, tenantId);
+                  if (mapping.paperclipIssueAgentId) {
+                    companyIdToIssueAgentId.set(mapping.paperclipCompanyId, mapping.paperclipIssueAgentId);
+                  } else {
+                    companyIdToIssueAgentId.delete(mapping.paperclipCompanyId);
+                  }
+                  const mappedToken = options.env.paperclipServiceTokensByCompany[mapping.paperclipCompanyId];
+                  if (mappedToken) {
+                    companyIdToServiceToken.set(mapping.paperclipCompanyId, mappedToken);
+                  } else {
+                    companyIdToServiceToken.delete(mapping.paperclipCompanyId);
+                  }
+                  return {
+                    paperclipCompanyId: mapping.paperclipCompanyId,
+                    ...(mapping.paperclipIssueAgentId ? { paperclipIssueAgentId: mapping.paperclipIssueAgentId } : {})
+                  };
+                },
+                authorizeRunStart: async () => true,
+                isPaperclipEnabled: async () => true,
+                checkEntitlement: async () => ({ allowed: true }),
+                providerExecutionMode: options.env.providerExecutionMode,
+                loadBoundProviderContext: async ({ tenantId, runId }) => {
+                  const context = await acidRepository.getBoundProviderContext({ tenantId, runId });
+                  return context as readonly RuntimeProviderBinding[] | null;
+                },
+                hydrateProviderContext: async ({ tenantId, runId, workflowId, providerBindings }) =>
+                  providerExecutionResolver.resolveForRun({
+                    tenantId,
+                    runId,
+                    workflowId,
+                    providerBindings
+                  }),
+                resolveDebugSharedProvider: async ({ requiredCapabilities = ["text_generation"] }) =>
+                  debugFallbackResolver.resolveForRun({ requiredCapabilities }),
+                recordStatus: async (status) => {
+                  await recordWorkflowStatus(status);
+                }
+              })
       });
     },
 
@@ -391,5 +416,50 @@ export function createWorkerRuntime(options: { env: WorkerEnv; workerInstanceId?
         execution: snapshot
       })}\n`
     );
+  }
+}
+
+async function processHarnessWorkflowJob(options: {
+  payload: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+  };
+  repository: Pick<
+    ReturnType<typeof createPostgresHarnessRepository>,
+    "getRun" | "listCardsForRun" | "listProposalsForRun" | "listCardContinuityForRun"
+  >;
+  recordStatus?: (status: { tenantId: string; runId: string; workflowId: string; status: "queued" | "failed" }) => void | Promise<void>;
+  onDispatch?: (dispatch: HarnessWorkerDispatch) => void;
+}) {
+  try {
+    const dispatch = await buildHarnessWorkerDispatch({
+      repository: options.repository,
+      tenantId: options.payload.tenantId,
+      runId: options.payload.runId,
+      workflowId: options.payload.workflowId
+    });
+    if (dispatch.laneExecution) {
+      options.onDispatch?.(dispatch);
+      await options.recordStatus?.({
+        tenantId: options.payload.tenantId,
+        runId: dispatch.runId,
+        workflowId: dispatch.workflowId,
+        status: dispatch.status
+      });
+    }
+    return {
+      runId: dispatch.runId,
+      workflowId: dispatch.workflowId,
+      status: dispatch.status
+    };
+  } catch (error) {
+    await options.recordStatus?.({
+      tenantId: options.payload.tenantId,
+      runId: options.payload.runId,
+      workflowId: options.payload.workflowId,
+      status: "failed"
+    });
+    throw error;
   }
 }
