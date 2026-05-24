@@ -563,6 +563,7 @@ describe("worker runtime", () => {
   });
 
   it("emits a follow-on harness dispatch when a committed lane outcome frees the next approved lane", async () => {
+    const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
@@ -674,6 +675,13 @@ describe("worker runtime", () => {
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"cardId\":\"card_cmo\"")
     );
+    const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
+    expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      from: ["queued", "running"],
+      to: "running"
+    });
 
     await runtime.close();
   });

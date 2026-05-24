@@ -423,6 +423,9 @@ export function createWorkerRuntime(options: { env: WorkerEnv; workerInstanceId?
           transactionRunner.withTransaction((transaction) =>
             work(createPostgresHarnessRepository(transaction))
           ),
+        recordStatus: async (status) => {
+          await recordWorkflowStatus(status);
+        },
         onOutcome: (committedOutcome) => {
           process.stdout.write(
             `${JSON.stringify({
@@ -588,6 +591,7 @@ async function processHarnessLaneOutcome(options: {
       >
     ) => Promise<T>
   ) => Promise<T>;
+  recordStatus?: (status: { tenantId: string; runId: string; workflowId: string; status: "running" }) => void | Promise<void>;
   onOutcome?: (outcome: HarnessWorkerLaneOutcome) => void;
 }) {
   const outcome = await commitHarnessWorkerLaneOutcome({
@@ -601,6 +605,14 @@ async function processHarnessLaneOutcome(options: {
     ...(options.payload.resumeSummary ? { resumeSummary: options.payload.resumeSummary } : {}),
     ...(options.runAtomically ? { runAtomically: options.runAtomically } : {})
   });
+  if (outcome.status === "committed" && outcome.nextDispatch?.laneExecution) {
+    await options.recordStatus?.({
+      tenantId: options.payload.tenantId,
+      runId: outcome.nextDispatch.runId,
+      workflowId: outcome.nextDispatch.workflowId,
+      status: "running"
+    });
+  }
   if (outcome.status === "committed") {
     options.onOutcome?.(outcome);
   }
