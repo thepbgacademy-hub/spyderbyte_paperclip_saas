@@ -274,6 +274,95 @@ export function createHarnessBoardService(options: {
         if (existingCard) {
           return { cardId: existingCard.id };
         }
+        const latestDoneLane = findLatestDoneChildCardByPersonaDeliverable(cards, {
+          persona: normalizedPersona,
+          deliverableType: normalizedDeliverableType
+        });
+        if (
+          latestDoneLane &&
+          !findOpenChildCardByDeliverableType(cards, normalizedDeliverableType) &&
+          isBoundedCardRefinement({
+            title: request.title,
+            candidateCard: latestDoneLane
+          })
+        ) {
+          const reopenedCard = await repository.transitionCardState({
+            cardId: latestDoneLane.id,
+            expectedState: "done",
+            state: "approved"
+          });
+          if (!reopenedCard) {
+            throw new HarnessCardCreationConflictError("Harness completed lane reopen conflicted");
+          }
+          await repository.insertEvent(
+            createHarnessCardEventRecord({
+              cardId: reopenedCard.id,
+              eventKind: "state_changed",
+              payload: { from: "done", to: "approved" }
+            })
+          );
+          await repository.insertEvent(
+            createHarnessCardEventRecord({
+              cardId: reopenedCard.id,
+              eventKind: "comment_added",
+              payload: {
+                message: `CEO reopened this completed ${humanizeDeliverableType(
+                  normalizedDeliverableType
+                ).toLowerCase()} lane for a bounded refinement.`
+              }
+            })
+          );
+          await recordCardStateContinuity({
+            repository,
+            card: reopenedCard
+          });
+          await repository.insertDecision(
+            createHarnessBoardDecisionRecord({
+              runId: run.id,
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              decisionKind: "lane_opened",
+              cardId: reopenedCard.id,
+              targetCardId: reopenedCard.id,
+              persona: reopenedCard.persona,
+              deliverableType: reopenedCard.deliverableType,
+              policyReason: "reused_existing_lane",
+              resolution: "update_existing_lane",
+              recommendationSummary: createLaneRecommendationSummary({
+                persona: reopenedCard.persona,
+                deliverableType: reopenedCard.deliverableType,
+                policyReason: "reused_existing_lane"
+              })
+            })
+          );
+
+          const reconciledRun = await reconcileHarnessRunState({ repository, run });
+
+          return {
+            cardId: reopenedCard.id,
+            auditEvents: [
+              createHarnessAuditEvent({
+                tenantId: access.session.tenantId,
+                actorUserId: access.session.userId,
+                eventType: "harness_card_reopened",
+                entityId: reopenedCard.id,
+                metadata: {
+                  runId: run.id,
+                  parentCardId: reopenedCard.parentCardId,
+                  persona: reopenedCard.persona,
+                  deliverableType: reopenedCard.deliverableType
+                }
+              }),
+              ...toRunAuditEvents({
+                tenantId: access.session.tenantId,
+                actorUserId: access.session.userId,
+                runId: run.id,
+                previousState: run.state,
+                nextRun: reconciledRun
+              })
+            ]
+          };
+        }
         if (findOpenChildCardByDeliverableType(cards, normalizedDeliverableType)) {
           throw new HarnessCardCreationConflictError("Harness direct child-card deliverable lane is already open");
         }
@@ -2210,6 +2299,13 @@ function isBoundedLaneRefinement(input: {
     input.proposal.parentCardId === input.candidateCard.id ||
     input.proposal.requestedByCardId === input.candidateCard.id
   );
+}
+
+function isBoundedCardRefinement(input: {
+  title: string;
+  candidateCard: HarnessCardRecord;
+}): boolean {
+  return input.title === input.candidateCard.title;
 }
 
 function findEarlierUnresolvedSiblingProposal(

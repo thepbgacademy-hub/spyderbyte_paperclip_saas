@@ -2401,6 +2401,116 @@ describe("harness board service", () => {
     expect(cfoCards).toHaveLength(1);
   });
 
+  it("reopens the latest completed direct child lane for a bounded same-lane refinement while the run is still live", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const cfoLane = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    const researcherLane = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief"
+    });
+
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: cfoLane.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: cfoLane.cardId,
+      state: "waiting",
+      resumeSummary: "CFO is waiting for refreshed research before revising the pricing lane."
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: researcherLane.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: researcherLane.cardId,
+      state: "done",
+      resultSummary: "Initial competitor pricing anchors are recorded."
+    });
+
+    const reopened = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief"
+    });
+
+    const reopenedLane = await repository.getCard(researcherLane.cardId);
+    const continuity = await repository.getCardContinuity(researcherLane.cardId);
+    const events = await repository.listEventsForCard(researcherLane.cardId);
+    const decisions = await repository.listDecisionsForRun(reopenedLane!.runId);
+    const hydrated = await service.listBoardState({ authorization: "Bearer valid" });
+    const hydratedLane = hydrated.cards.find((card) => card.id === researcherLane.cardId);
+
+    expect(reopened.cardId).toBe(researcherLane.cardId);
+    expect(reopenedLane).toEqual(
+      expect.objectContaining({
+        id: researcherLane.cardId,
+        state: "approved"
+      })
+    );
+    expect(continuity).toEqual(
+      expect.objectContaining({
+        cardId: researcherLane.cardId,
+        continuitySummary: "RESEARCHER should begin this approved research brief lane: Gather competitor price anchors.",
+        latestResultSummary: "Initial competitor pricing anchors are recorded."
+      })
+    );
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventKind: "state_changed",
+          payload: expect.objectContaining({ from: "done", to: "approved" })
+        }),
+        expect.objectContaining({
+          eventKind: "comment_added",
+          payload: expect.objectContaining({
+            message: "CEO reopened this completed research brief lane for a bounded refinement."
+          })
+        })
+      ])
+    );
+    expect(
+      decisions.some(
+        (decision) =>
+          decision.decisionKind === "lane_opened" &&
+          decision.cardId === researcherLane.cardId &&
+          decision.policyReason === "reused_existing_lane" &&
+          decision.resolution === "update_existing_lane"
+      )
+    ).toBe(true);
+    expect(hydratedLane?.lane).toBe("planning");
+    expect(hydratedLane?.activity.some((item) => item.label.includes("CEO reopened this completed research brief lane"))).toBe(
+      true
+    );
+  });
+
   it("fails closed when another open card already owns the same deliverable lane", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
