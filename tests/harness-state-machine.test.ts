@@ -32,6 +32,7 @@ describe("harness state machine", () => {
     expect(assertValidRunTransition("blocked", "active")).toBe("active");
     expect(assertValidRunTransition("blocked", "assembling")).toBe("assembling");
     expect(assertValidCardTransition("queued", "planning")).toBe("planning");
+    expect(assertValidCardTransition("done", "approved")).toBe("approved");
     expect(transitionHarnessRun(run, "planning").state).toBe("planning");
     expect(transitionHarnessCard(card, "planning").state).toBe("planning");
   });

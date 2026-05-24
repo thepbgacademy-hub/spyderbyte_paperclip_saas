@@ -976,6 +976,141 @@ export function createHarnessBoardService(options: {
             ]
           };
         }
+        const latestDoneLane = findLatestDoneChildCardByPersonaDeliverable(cards, {
+          persona: proposal.persona,
+          deliverableType: proposal.deliverableType
+        });
+        if (
+          latestDoneLane &&
+          !findOpenChildCardByDeliverableType(cards, proposal.deliverableType) &&
+          run.state !== "assembling" &&
+          run.state !== "done" &&
+          isBoundedLaneRefinement({
+            proposal,
+            candidateCard: latestDoneLane
+          })
+        ) {
+          const reopenedCard = await repository.transitionCardState({
+            cardId: latestDoneLane.id,
+            expectedState: "done",
+            state: "approved"
+          });
+          if (!reopenedCard) {
+            throw new HarnessCardCreationConflictError("Harness completed lane refinement conflicted");
+          }
+          const approvalUpdate = await repository.markProposalApproved({
+            proposalId: proposal.id,
+            approvedCardId: reopenedCard.id,
+            resolution: "update_existing_lane",
+            ...(trimmedDecisionNote ? { decisionNote: trimmedDecisionNote } : {})
+          });
+          if (!approvalUpdate.updated) {
+            throw new Error("Harness proposal approval conflicted");
+          }
+          await repository.insertEvent(
+            createHarnessCardEventRecord({
+              cardId: reopenedCard.id,
+              eventKind: "state_changed",
+              payload: { from: "done", to: "approved" }
+            })
+          );
+          await repository.insertEvent(
+            createHarnessCardEventRecord({
+              cardId: reopenedCard.id,
+              eventKind: "proposal_absorbed",
+              payload: {
+                proposalId: proposal.id,
+                parentCardId: proposal.parentCardId,
+                requestedByPersona: proposal.requestedByPersona,
+                requestedTitle: proposal.title,
+                deliverableType: proposal.deliverableType,
+                resolution: "update_existing_lane"
+              }
+            })
+          );
+          await repository.insertEvent(
+            createHarnessCardEventRecord({
+              cardId: reopenedCard.id,
+              eventKind: "comment_added",
+              payload: {
+                message: `${proposal.requestedByPersona.toUpperCase()} reopened this completed ${humanizeDeliverableType(
+                  proposal.deliverableType
+                ).toLowerCase()} lane for a bounded refinement instead of starting a fresh card.`
+              }
+            })
+          );
+          if (proposal.parentCardId !== reopenedCard.id) {
+            await repository.insertEvent(
+              createHarnessCardEventRecord({
+                cardId: proposal.parentCardId,
+                eventKind: "comment_added",
+                payload: {
+                  message: `${proposal.requestedByPersona.toUpperCase()} approved this refinement and reopened the existing ${humanizeDeliverableType(
+                    proposal.deliverableType
+                  ).toLowerCase()} lane.`
+                }
+              })
+            );
+          }
+          await recordAbsorbedLaneContinuity({
+            repository,
+            card: reopenedCard,
+            proposal,
+            resolution: "update_existing_lane"
+          });
+          await repository.insertDecision(
+            createHarnessBoardDecisionRecord({
+              runId: run.id,
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              decisionKind: "proposal_approved",
+              cardId: proposal.parentCardId,
+              proposalId: proposal.id,
+              targetCardId: reopenedCard.id,
+              persona: proposal.persona,
+              deliverableType: proposal.deliverableType,
+              policyReason: "reused_existing_lane",
+              resolution: "update_existing_lane",
+              ...(trimmedDecisionNote ? { decisionNote: trimmedDecisionNote } : {}),
+              recommendationSummary: createLaneRecommendationSummary({
+                persona: proposal.persona,
+                deliverableType: proposal.deliverableType,
+                policyReason: "reused_existing_lane"
+              })
+            })
+          );
+          const reconciledRun = await reconcileHarnessRunState({ repository, run });
+
+          return {
+            status: "approved",
+            cardId: reopenedCard.id,
+            auditEvents: [
+              createHarnessAuditEvent({
+                tenantId: access.session.tenantId,
+                actorUserId: access.session.userId,
+                eventType: "harness_proposal_approved",
+                entityId: proposal.id,
+                metadata: {
+                  runId: run.id,
+                  approvedCardId: reopenedCard.id,
+                  resolution: "update_existing_lane",
+                  reopenedCompletedLane: true,
+                  requestedByPersona: proposal.requestedByPersona,
+                  targetPersona: proposal.persona,
+                  deliverableType: proposal.deliverableType,
+                  hasDecisionNote: Boolean(trimmedDecisionNote)
+                }
+              }),
+              ...toRunAuditEvents({
+                tenantId: access.session.tenantId,
+                actorUserId: access.session.userId,
+                runId: run.id,
+                previousState: run.state,
+                nextRun: reconciledRun
+              })
+            ]
+          };
+        }
         if (findOpenChildCardByDeliverableType(cards, proposal.deliverableType)) {
           const decisionNote =
             trimmedDecisionNote ??
@@ -2043,6 +2178,37 @@ function findOpenChildCardByPersonaDeliverable(
       isOpenCardState(card.state) &&
       card.persona === target.persona &&
       card.deliverableType === target.deliverableType
+  );
+}
+
+function findLatestDoneChildCardByPersonaDeliverable(
+  cards: readonly HarnessCardRecord[],
+  target: { persona: string; deliverableType: string }
+): HarnessCardRecord | undefined {
+  for (let index = cards.length - 1; index >= 0; index -= 1) {
+    const card = cards[index];
+    if (
+      card &&
+      card.persona !== "ceo" &&
+      card.state === "done" &&
+      card.persona === target.persona &&
+      card.deliverableType === target.deliverableType
+    ) {
+      return card;
+    }
+  }
+
+  return undefined;
+}
+
+function isBoundedLaneRefinement(input: {
+  proposal: HarnessSubCardProposal;
+  candidateCard: HarnessCardRecord;
+}): boolean {
+  return (
+    input.proposal.title === input.candidateCard.title ||
+    input.proposal.parentCardId === input.candidateCard.id ||
+    input.proposal.requestedByCardId === input.candidateCard.id
   );
 }
 

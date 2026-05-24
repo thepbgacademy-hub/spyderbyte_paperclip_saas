@@ -82,7 +82,7 @@ This file tracks the new harness subproject only.
 - [ ] Define the split between small harness continuity memory and larger tenant-owned long memory in Obsidian, including what gets written there and what must remain Wealth Factory runtime truth.
   - [x] Keep live lane continuity inside Wealth Factory as bounded operational snapshot state instead of reconstructing it only from card-event replay.
   - [ ] Decide whether the current continuity trio (`continuitySummary`, `latestResultSummary`, `absorbedWorkItems`) is the final bounded runtime-memory shape before any Obsidian export seam is added.
-  - [ ] Keep the refinement policy explicit in implementation: bounded changes to the same deliverable should stay in-lane, while broader directional changes should open a new lane or fresh cycle without losing institutional memory.
+  - [x] Keep the refinement policy explicit in implementation: bounded changes to the same deliverable should stay in-lane, while broader directional changes should open a new lane or fresh cycle without losing institutional memory.
 - [ ] Deepen the worker-side harness execution seam beyond the current single-lane dispatch payload and into real orchestrator/child execution behavior without reopening the old Paperclip-style hotspot model.
   - [x] Require a durable worker claim/start boundary so harness-enabled jobs now move exactly one `approved` lane to `working` before dispatch and stay quiet when the claim race is lost.
   - [x] Keep raw `queued` child lanes fail-closed in the worker slice so execution still respects the CEO approval boundary until a later bounded promotion path exists.

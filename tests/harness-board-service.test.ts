@@ -2152,6 +2152,129 @@ describe("harness board service", () => {
     expect(laneEvents.filter((event) => event.eventKind === "proposal_absorbed")).toHaveLength(1);
   });
 
+  it("reopens a completed same-lane card for a bounded refinement while the board cycle is still live", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const cfoLane = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    const researcherLane = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief"
+    });
+
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: cfoLane.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: cfoLane.cardId,
+      state: "waiting",
+      resumeSummary: "CFO is waiting for refreshed research before revising the pricing lane."
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: researcherLane.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: researcherLane.cardId,
+      state: "done",
+      resultSummary: "Initial competitor pricing anchors are recorded."
+    });
+
+    await repository.insertProposal({
+      id: "proposal_reopen_done_lane_1",
+      runId: board.runId,
+      parentCardId: researcherLane.cardId,
+      requestedByCardId: researcherLane.cardId,
+      requestedByPersona: "researcher",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief",
+      status: "proposed"
+    });
+
+    await expect(
+      service.approveProposal({
+        authorization: "Bearer valid",
+        proposalId: "proposal_reopen_done_lane_1"
+      })
+    ).resolves.toEqual({ cardId: researcherLane.cardId });
+
+    const reopenedLane = await repository.getCard(researcherLane.cardId);
+    const laneEvents = await repository.listEventsForCard(researcherLane.cardId);
+    const continuity = await repository.getCardContinuity(researcherLane.cardId);
+    const proposal = await repository.getProposal("proposal_reopen_done_lane_1");
+    const run = await repository.findLatestRunForTenantWorkflow({
+      tenantId: "tenant_123",
+      workflowId: "wf_connect_first_workflow"
+    });
+    const hydrated = await service.listBoardState({ authorization: "Bearer valid" });
+    const hydratedLane = hydrated.cards.find((card) => card.id === researcherLane.cardId);
+
+    expect(reopenedLane).toEqual(
+      expect.objectContaining({
+        id: researcherLane.cardId,
+        state: "approved"
+      })
+    );
+    expect(laneEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventKind: "state_changed",
+          payload: expect.objectContaining({ from: "done", to: "approved" })
+        }),
+        expect.objectContaining({
+          eventKind: "proposal_absorbed"
+        })
+      ])
+    );
+    expect(continuity).toEqual(
+      expect.objectContaining({
+        cardId: researcherLane.cardId,
+        latestResultSummary: "Initial competitor pricing anchors are recorded.",
+        continuitySummary:
+          "RESEARCHER should fold the absorbed follow-on work from RESEARCHER: Gather competitor price anchors into this research brief lane."
+      })
+    );
+    expect(proposal).toEqual(
+      expect.objectContaining({
+        status: "approved",
+        approvedCardId: researcherLane.cardId,
+        resolution: "update_existing_lane"
+      })
+    );
+    expect(run?.state).toBe("waiting");
+    expect(hydratedLane?.lane).toBe("planning");
+    expect(hydratedLane?.activity.some((item) => item.label.includes("reopened this completed research brief lane"))).toBe(
+      true
+    );
+  });
+
   it("fails closed when approval mutation is invoked without an atomic runner", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({

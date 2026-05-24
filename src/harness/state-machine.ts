@@ -20,7 +20,7 @@ const CARD_TRANSITIONS: Record<HarnessCardState, readonly HarnessCardState[]> = 
   working: ["waiting", "done", "blocked", "cancelled"],
   waiting: ["working", "blocked", "cancelled"],
   blocked: ["approved", "cancelled"],
-  done: [],
+  done: ["approved"],
   cancelled: []
 };
 
