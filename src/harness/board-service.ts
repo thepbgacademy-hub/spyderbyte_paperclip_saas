@@ -2240,7 +2240,7 @@ function findMatchingOpenChildCard(
       card.persona !== "ceo" &&
       isOpenCardState(card.state) &&
       card.persona === target.persona &&
-      card.title === target.title &&
+      titlesLikelySameAssignment(card.title, target.title) &&
       card.deliverableType === target.deliverableType
   );
 }
@@ -2295,7 +2295,7 @@ function isBoundedLaneRefinement(input: {
   candidateCard: HarnessCardRecord;
 }): boolean {
   return (
-    input.proposal.title === input.candidateCard.title ||
+    titlesLikelySameAssignment(input.proposal.title, input.candidateCard.title) ||
     input.proposal.parentCardId === input.candidateCard.id ||
     input.proposal.requestedByCardId === input.candidateCard.id
   );
@@ -2305,7 +2305,54 @@ function isBoundedCardRefinement(input: {
   title: string;
   candidateCard: HarnessCardRecord;
 }): boolean {
-  return input.title === input.candidateCard.title;
+  return titlesLikelySameAssignment(input.title, input.candidateCard.title);
+}
+
+function titlesLikelySameAssignment(left: string, right: string): boolean {
+  const leftTokens = tokenizeAssignmentTitle(left);
+  const rightTokens = tokenizeAssignmentTitle(right);
+
+  if (leftTokens.length === 0 || rightTokens.length === 0) {
+    return left.trim().toLowerCase() === right.trim().toLowerCase();
+  }
+
+  const leftCanonical = leftTokens.join(" ");
+  const rightCanonical = rightTokens.join(" ");
+  if (leftCanonical === rightCanonical) {
+    return true;
+  }
+
+  const leftSet = new Set(leftTokens);
+  const rightSet = new Set(rightTokens);
+  const overlapCount = [...leftSet].filter((token) => rightSet.has(token)).length;
+  const overlapRatio = overlapCount / Math.max(leftSet.size, rightSet.size);
+  const firstTokenMatches = leftTokens[0] === rightTokens[0];
+  const lastTokenMatches = leftTokens.at(-1) === rightTokens.at(-1);
+
+  return Math.min(leftSet.size, rightSet.size) >= 3 && overlapRatio >= 0.75 && (firstTokenMatches || lastTokenMatches);
+}
+
+function tokenizeAssignmentTitle(title: string): string[] {
+  return title
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(" ")
+    .map((token) => normalizeAssignmentToken(token))
+    .filter((token) => token.length > 0);
+}
+
+function normalizeAssignmentToken(token: string): string {
+  if (token.endsWith("ing") && token.length > 5) {
+    return token.slice(0, -3);
+  }
+  if (token.endsWith("es") && token.length > 4) {
+    return token.slice(0, -2);
+  }
+  if (token.endsWith("s") && token.length > 4) {
+    return token.slice(0, -1);
+  }
+  return token;
 }
 
 function findEarlierUnresolvedSiblingProposal(
@@ -2327,7 +2374,7 @@ function findEarlierUnresolvedSiblingProposal(
     if (
       proposal.requestedByCardId === currentProposal.requestedByCardId &&
       proposal.persona === currentProposal.persona &&
-      proposal.title === currentProposal.title &&
+      titlesLikelySameAssignment(proposal.title, currentProposal.title) &&
       proposal.deliverableType === currentProposal.deliverableType &&
       (proposal.status === "proposed" || proposal.status === "deferred")
     ) {
