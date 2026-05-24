@@ -65,6 +65,7 @@ Scope: First custom harness slice under `src/harness`, `src/api/harness-http.ts`
 - Re-ran the scan after hardening the done-lane seam so `resumeSummary` is rejected on terminal `done` transitions. The touched slice still introduced no live secret material and further reduced the risk of stale operational board text overriding a completed-lane snapshot.
 - Re-ran the scan after adding the first worker-side harness lane-dispatch seam for `wf_harness_v1` workflows. The touched slice still introduced no live secret material and keeps the dispatch payload bounded to persisted lane metadata plus `resumeFocus` / latest outcome text, without widening BYOK, provider secrets, or tenant-authored internal notes.
 - Re-ran the scan after adding the worker-private lane outcome commit seam plus compare-and-set child-lane transitions. The touched slice still introduced no live secret material and keeps worker-written outcomes bounded to lane state, continuity text, and optional result summaries rather than any BYOK, provider, or tenant-secret payload.
+- Re-ran the scan after fixing the Postgres continuity upsert so omitted follow-up writes preserve the prior `latestResultSummary` instead of nulling it. The touched slice still introduced no live secret material and only tightened persistence parity between in-memory and real Postgres harness state.
 
 ## OWASP-Oriented Findings
 

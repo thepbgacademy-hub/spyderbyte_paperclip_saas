@@ -490,7 +490,10 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
          values ($1, $2, $3, $4, $5::jsonb, $6::timestamptz)
          on conflict (card_id) do update
            set continuity_summary = excluded.continuity_summary,
-               latest_result_summary = excluded.latest_result_summary,
+               latest_result_summary = coalesce(
+                 excluded.latest_result_summary,
+                 wfpc.harness_card_continuity.latest_result_summary
+               ),
                absorbed_work_items = (
                  with merged as (
                    select value, max(ordinality) as latest_ordinality
