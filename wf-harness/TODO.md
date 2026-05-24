@@ -97,3 +97,4 @@ This file tracks the new harness subproject only.
   - [x] Keep `dispatch_next_lane` on the existing lane-ready event/hook path while non-dispatch worker outcomes emit the dedicated `wealth_factory_harness_post_outcome_action` event plus bounded `onHarnessPostOutcomeAction` hook input.
   - [x] Decide which runtime-side handlers should consume `queue_ceo_review`, `await_lane_resume`, and `await_unblock` beyond the current bounded event/hook seam.
   - [x] Add explicit runtime-side handlers for CEO review, lane resume, and unblock so non-dispatch worker outcomes do not collapse back into one generic branch.
+  - [x] Keep generic and specific post-outcome hooks failure-isolated so one rejected runtime consumer cannot suppress the rest of the durable handoff path.

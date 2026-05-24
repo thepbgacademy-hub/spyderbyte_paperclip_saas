@@ -501,12 +501,22 @@ export function createWorkerRuntime(options: {
             );
             try {
               await options.onHarnessPostOutcomeAction?.(postOutcomeHandoff);
+            } catch (error) {
+              console.warn("Harness post-outcome hook failed after durable worker outcome", {
+                runId: committedOutcome.runId,
+                workflowId: committedOutcome.workflowId,
+                cardId: committedOutcome.laneExecution.cardId,
+                actionKind: committedOutcome.postOutcomeAction.kind,
+                error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+              });
+            }
+            try {
               await runSpecificPostOutcomeHandler({
                 options,
                 handoff: postOutcomeHandoff
               });
             } catch (error) {
-              console.warn("Harness post-outcome hook failed after durable worker outcome", {
+              console.warn("Harness specific post-outcome handler failed after durable worker outcome", {
                 runId: committedOutcome.runId,
                 workflowId: committedOutcome.workflowId,
                 cardId: committedOutcome.laneExecution.cardId,
