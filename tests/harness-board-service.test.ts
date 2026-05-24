@@ -1184,6 +1184,18 @@ describe("harness board service", () => {
         })
       ])
     );
+    expect(handedOffCard?.detailSections).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "snapshot",
+          body: "RESEARCHER can resume this pricing review lane after a CEO handoff from CFO: Pressure-test the pricing lane."
+        }),
+        expect.objectContaining({
+          id: "absorbed-work",
+          body: expect.stringContaining("CFO: Pressure-test the pricing lane")
+        })
+      ])
+    );
     expect(hydratedBoard.pendingApprovals).toEqual([]);
   });
 
@@ -1996,13 +2008,26 @@ describe("harness board service", () => {
     );
     const laneCard = pricingReviewCards[0];
     const laneEvents = await repository.listEventsForCard(existingLane.cardId);
+    const laneContinuity = await repository.getCardContinuity(existingLane.cardId);
     const parentEvents = await repository.listEventsForCard(created.cardId);
     expect(pricingReviewCards).toHaveLength(1);
     expect(hydrated.pendingApprovals).toEqual([]);
     expect(laneEvents.some((event) => event.eventKind === "proposal_absorbed")).toBe(true);
+    expect(laneContinuity).toEqual(
+      expect.objectContaining({
+        cardId: existingLane.cardId,
+        absorbedWorkItems: ["update_existing_lane|CFO: Refresh pricing anchors"],
+        continuitySummary: null
+      })
+    );
     expect(laneCard?.activity.some((item) => item.label.includes('folded "Refresh pricing anchors"'))).toBe(true);
     expect(laneCard?.detailSections).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({
+          id: "snapshot",
+          body:
+            "RESEARCHER can resume this research brief lane with absorbed follow-on work from CFO: Refresh pricing anchors."
+        }),
         expect.objectContaining({
           id: "absorbed-work",
           body: expect.stringContaining("CFO: Refresh pricing anchors")
@@ -2569,6 +2594,7 @@ describe("harness board service", () => {
 
     const updatedCard = (await repository.listCardsForRun(board.runId)).find((card) => card.id === created.cardId);
     const persistedEvents = await repository.listEventsForCard(created.cardId);
+    const persistedContinuity = await repository.getCardContinuity(created.cardId);
     const hydratedBoard = await service.listBoardState({ authorization: "Bearer valid" });
     const hydratedCard = hydratedBoard.cards.find((card) => card.id === created.cardId);
     const run = await repository.findLatestRunForTenantWorkflow({
@@ -2588,6 +2614,12 @@ describe("harness board service", () => {
     expect(persistedEvents.find((event) => event.eventKind === "result_recorded")?.payload).toEqual({
       summary: "Pricing floor is stable enough for the first launch wave."
     });
+    expect(persistedContinuity).toEqual(
+      expect.objectContaining({
+        cardId: created.cardId,
+        latestResultSummary: "Pricing floor is stable enough for the first launch wave."
+      })
+    );
     expect(hydratedCard?.lane).toBe("done");
     expect(hydratedCard?.outcome).toBe("Pricing floor is stable enough for the first launch wave.");
     expect(hydratedCard?.detailSections.some((section) => section.title === "Latest Outcome")).toBe(true);

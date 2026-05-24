@@ -1,8 +1,14 @@
 import { ApiAuthError, type ApiSession } from "../api/dashboard-api.js";
 import { randomUUID } from "node:crypto";
 import type { DurableAuditEvent } from "../audit/durable-audit.js";
-import type { HarnessBoardDecisionRecord, HarnessCardEventRecord, HarnessCardRecord, HarnessRunRecord } from "./types.js";
-import { createHarnessBoardDecisionRecord, createHarnessCardEventRecord } from "./types.js";
+import type {
+  HarnessBoardDecisionRecord,
+  HarnessCardContinuityRecord,
+  HarnessCardEventRecord,
+  HarnessCardRecord,
+  HarnessRunRecord
+} from "./types.js";
+import { createHarnessBoardDecisionRecord, createHarnessCardContinuityRecord, createHarnessCardEventRecord } from "./types.js";
 import {
   isHarnessCardState,
   isHarnessChildPersona,
@@ -199,14 +205,15 @@ export function createHarnessBoardService(options: {
         ...(options.runAtomically ? { runAtomically: options.runAtomically } : {})
       });
 
-      const [cards, events, decisions] = await Promise.all([
+      const [cards, continuity, events, decisions] = await Promise.all([
         options.repository.listCardsForRun(run.id),
+        options.repository.listCardContinuityForRun(run.id),
         options.repository.listEventsForRun(run.id),
         options.repository.listDecisionsForRun(run.id)
       ]);
       const proposals = await options.repository.listProposalsForRun(run.id);
 
-      return buildHarnessBoardResponse({ run, cards, events, decisions, proposals });
+      return buildHarnessBoardResponse({ run, cards, continuity, events, decisions, proposals });
     },
 
     async createTopLevelChildCard(request: {
@@ -574,6 +581,14 @@ export function createHarnessBoardService(options: {
                 })
               );
             }
+            await recordAbsorbedLaneContinuity({
+              repository,
+              card: reassignedCard,
+              proposal,
+              resolution: "handoff_existing_lane",
+              continuitySourcePersona: previousPersona,
+              continuitySourceTitle: previousTitle
+            });
             await repository.insertDecision(
               createHarnessBoardDecisionRecord({
                 runId: run.id,
@@ -681,6 +696,12 @@ export function createHarnessBoardService(options: {
               })
             );
           }
+          await recordAbsorbedLaneContinuity({
+            repository,
+            card: exactExistingCard,
+            proposal,
+            resolution: "update_existing_lane"
+          });
           await repository.insertDecision(
             createHarnessBoardDecisionRecord({
               runId: run.id,
@@ -889,6 +910,12 @@ export function createHarnessBoardService(options: {
               })
             );
           }
+          await recordAbsorbedLaneContinuity({
+            repository,
+            card: existingCard,
+            proposal,
+            resolution: "update_existing_lane"
+          });
           await repository.insertDecision(
             createHarnessBoardDecisionRecord({
               runId: run.id,
@@ -1363,6 +1390,11 @@ export function createHarnessBoardService(options: {
               payload: { summary: trimmedSummary }
             })
           );
+          await recordLatestResultContinuity({
+            repository,
+            card: updatedCard,
+            resultSummary: trimmedSummary
+          });
         }
 
         const reconciledRun = await reconcileHarnessRunState({ repository, run });
@@ -1470,6 +1502,11 @@ export function createHarnessBoardService(options: {
             payload: { summary: trimmedCompletionSummary }
           })
         );
+        await recordLatestResultContinuity({
+          repository,
+          card: ceoCard,
+          resultSummary: trimmedCompletionSummary
+        });
         await repository.insertDecision(
           createHarnessBoardDecisionRecord({
             runId: run.id,
@@ -2022,9 +2059,54 @@ function isOpenCardState(state: HarnessCardRecord["state"]): boolean {
   return state !== "done" && state !== "cancelled";
 }
 
+async function recordAbsorbedLaneContinuity(input: {
+  repository: HarnessRepository;
+  card: HarnessCardRecord;
+  proposal: HarnessSubCardProposal;
+  resolution: "update_existing_lane" | "handoff_existing_lane";
+  continuitySourcePersona?: string;
+  continuitySourceTitle?: string;
+}): Promise<void> {
+  const existing = await input.repository.getCardContinuity(input.card.id);
+  const absorbedWorkItem = createContinuityAbsorbedWorkItem({
+    resolution: input.resolution,
+    requestedByPersona: input.continuitySourcePersona ?? input.proposal.requestedByPersona,
+    title: input.continuitySourceTitle ?? input.proposal.title
+  });
+  const absorbedWorkItems = mergeContinuityAbsorbedWorkItems(existing?.absorbedWorkItems ?? [], absorbedWorkItem);
+
+  await input.repository.upsertCardContinuity(
+    createHarnessCardContinuityRecord({
+      cardId: input.card.id,
+      runId: input.card.runId,
+      latestResultSummary: existing?.latestResultSummary ?? null,
+      continuitySummary: existing?.continuitySummary ?? null,
+      absorbedWorkItems
+    })
+  );
+}
+
+async function recordLatestResultContinuity(input: {
+  repository: HarnessRepository;
+  card: HarnessCardRecord;
+  resultSummary: string;
+}): Promise<void> {
+  const existing = await input.repository.getCardContinuity(input.card.id);
+  await input.repository.upsertCardContinuity(
+    createHarnessCardContinuityRecord({
+      cardId: input.card.id,
+      runId: input.card.runId,
+      continuitySummary: existing?.continuitySummary ?? null,
+      latestResultSummary: input.resultSummary,
+      absorbedWorkItems: existing?.absorbedWorkItems ?? []
+    })
+  );
+}
+
 function buildHarnessBoardResponse(input: {
   run: HarnessRunRecord;
   cards: readonly HarnessCardRecord[];
+  continuity: readonly HarnessCardContinuityRecord[];
   events: readonly HarnessCardEventRecord[];
   decisions: readonly HarnessBoardDecisionRecord[];
   proposals: readonly HarnessSubCardProposal[];
@@ -2044,12 +2126,20 @@ function buildHarnessBoardResponse(input: {
       }
     }
   }
+  const continuityByCardId = new Map<string, HarnessCardContinuityRecord>();
+  for (const record of input.continuity) {
+    continuityByCardId.set(record.cardId, record);
+    if (record.latestResultSummary) {
+      latestResultSummaryByCardId.set(record.cardId, record.latestResultSummary);
+    }
+  }
 
   const cards = input.cards.map((card) =>
     toBoardCardView({
       card,
       cardEvents: eventsByCardId.get(card.id) ?? [],
       activity: activityByCardId.get(card.id) ?? [],
+      continuity: continuityByCardId.get(card.id) ?? null,
       ...(latestResultSummaryByCardId.has(card.id)
         ? { resultSummary: latestResultSummaryByCardId.get(card.id)! }
         : {})
@@ -2141,18 +2231,21 @@ function toBoardCardView(input: {
   card: HarnessCardRecord;
   cardEvents: readonly HarnessCardEventRecord[];
   activity: readonly HarnessBoardActivityItem[];
+  continuity: HarnessCardContinuityRecord | null;
   resultSummary?: string;
 }): HarnessBoardCardView {
   const personaLabel = input.card.persona.toUpperCase();
   const lane = mapCardStateToLane(input.card.state);
   const deliverableLabel = humanizeDeliverableType(input.card.deliverableType);
   const activity = input.activity.length > 0 ? [...input.activity] : [defaultActivityForCard(input.card)];
-  const absorbedWorkItems = extractAbsorbedWorkItems(input.cardEvents);
+  const absorbedWorkItems = input.continuity?.absorbedWorkItems.length
+    ? input.continuity.absorbedWorkItems.map((item) => parseContinuityAbsorbedWorkItem(item).label)
+    : extractAbsorbedWorkItems(input.cardEvents);
   const detailSections: HarnessBoardDetailSection[] = [
     {
       id: "snapshot",
       title: "Snapshot",
-      body: `${personaLabel} owns a deliverable-focused card that can resume from persisted state after interruption.`
+      body: describeContinuitySnapshot(input.card, input.continuity)
     }
   ];
   if (input.resultSummary) {
@@ -2366,6 +2459,74 @@ function extractAbsorbedWorkItems(events: readonly HarnessCardEventRecord[]): st
       const requestedByPersona = readOptionalString(event.payload.requestedByPersona)?.toUpperCase() ?? "A BOARD PERSONA";
       return `${requestedByPersona}: ${requestedTitle}`;
     });
+}
+
+const CONTINUITY_HANDOFF_PREFIX = "handoff_existing_lane|";
+const CONTINUITY_UPDATE_PREFIX = "update_existing_lane|";
+
+function createContinuityAbsorbedWorkItem(input: {
+  resolution: "update_existing_lane" | "handoff_existing_lane";
+  requestedByPersona: string;
+  title: string;
+}): string {
+  const label = `${input.requestedByPersona.toUpperCase()}: ${input.title}`;
+  const prefix = input.resolution === "handoff_existing_lane" ? CONTINUITY_HANDOFF_PREFIX : CONTINUITY_UPDATE_PREFIX;
+  return `${prefix}${label}`;
+}
+
+function parseContinuityAbsorbedWorkItem(value: string): {
+  resolution: "update_existing_lane" | "handoff_existing_lane";
+  label: string;
+} {
+  if (value.startsWith(CONTINUITY_HANDOFF_PREFIX)) {
+    return {
+      resolution: "handoff_existing_lane",
+      label: value.slice(CONTINUITY_HANDOFF_PREFIX.length)
+    };
+  }
+  if (value.startsWith(CONTINUITY_UPDATE_PREFIX)) {
+    return {
+      resolution: "update_existing_lane",
+      label: value.slice(CONTINUITY_UPDATE_PREFIX.length)
+    };
+  }
+  return {
+    resolution: "update_existing_lane",
+    label: value
+  };
+}
+
+function mergeContinuityAbsorbedWorkItems(existing: readonly string[], nextValue: string): string[] {
+  const merged: string[] = [];
+  for (const value of [...existing, nextValue]) {
+    const priorIndex = merged.indexOf(value);
+    if (priorIndex >= 0) {
+      merged.splice(priorIndex, 1);
+    }
+    merged.push(value);
+  }
+  return merged.slice(-6);
+}
+
+function describeContinuitySnapshot(
+  card: HarnessCardRecord,
+  continuity: HarnessCardContinuityRecord | null
+): string {
+  const personaLabel = card.persona.toUpperCase();
+  const deliverableLabel = humanizeDeliverableType(card.deliverableType).toLowerCase();
+  const latestAbsorbedWorkItem = continuity?.absorbedWorkItems.at(-1);
+  if (latestAbsorbedWorkItem) {
+    const parsedItem = parseContinuityAbsorbedWorkItem(latestAbsorbedWorkItem);
+    if (parsedItem.resolution === "handoff_existing_lane") {
+      return `${personaLabel} can resume this ${deliverableLabel} lane after a CEO handoff from ${parsedItem.label}.`;
+    }
+    return `${personaLabel} can resume this ${deliverableLabel} lane with absorbed follow-on work from ${parsedItem.label}.`;
+  }
+  if (continuity?.continuitySummary) {
+    return continuity.continuitySummary;
+  }
+
+  return `${personaLabel} owns a deliverable-focused card that can resume from persisted state after interruption.`;
 }
 
 function humanizeDeliverableType(value: string): string {

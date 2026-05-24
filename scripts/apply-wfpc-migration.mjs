@@ -446,6 +446,59 @@ try {
   if (!harnessLaneHandoffReady) {
     await client.query(readFileSync("supabase/migrations/0018_wf_harness_lane_handoff.sql", "utf8"));
   }
+  const queryHarnessCardContinuityReady = async () =>
+    client.query(
+      `select
+        exists (
+          select 1
+          from information_schema.tables
+          where table_schema = 'wfpc'
+            and table_name = 'harness_card_continuity'
+        ) as has_table,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'harness_card_continuity'
+            and column_name = 'continuity_summary'
+        ) as has_continuity_summary,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'harness_card_continuity'
+            and column_name = 'latest_result_summary'
+        ) as has_latest_result_summary,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'harness_card_continuity'
+            and column_name = 'absorbed_work_items'
+        ) as has_absorbed_work_items,
+        exists (
+          select 1
+          from pg_constraint
+          where conrelid = to_regclass('wfpc.harness_card_continuity')
+            and pg_get_constraintdef(oid) like '%jsonb_typeof(absorbed_work_items)%'
+        ) as has_absorbed_work_items_check,
+        exists (
+          select 1
+          from pg_indexes
+          where schemaname = 'wfpc'
+            and indexname = 'harness_card_continuity_run_updated_at_idx'
+        ) as has_run_updated_index`
+    );
+  let harnessCardContinuityExisting = await queryHarnessCardContinuityReady();
+  let harnessCardContinuityReady = Object.values(harnessCardContinuityExisting.rows[0] ?? {}).every(Boolean);
+  if (!harnessCardContinuityReady) {
+    await client.query(readFileSync("supabase/migrations/0019_wf_harness_card_continuity.sql", "utf8"));
+    harnessCardContinuityExisting = await queryHarnessCardContinuityReady();
+    harnessCardContinuityReady = Object.values(harnessCardContinuityExisting.rows[0] ?? {}).every(Boolean);
+    if (!harnessCardContinuityReady) {
+      throw new Error("Harness card continuity migration did not produce the required schema shape");
+    }
+  }
   const { rows } = await client.query(
     "select table_schema, table_name from information_schema.tables where table_schema = 'wfpc' order by table_name"
   );
@@ -472,7 +525,9 @@ try {
           !harnessRunsReady ||
           !harnessProposalReady ||
           !harnessBoardDecisionReady ||
-          !harnessBoardMemoryReady,
+          !harnessBoardMemoryReady ||
+          !harnessLaneHandoffReady ||
+          !harnessCardContinuityReady,
         tableCount: rows.length,
         tables: rows.map((row) => row.table_name)
       },

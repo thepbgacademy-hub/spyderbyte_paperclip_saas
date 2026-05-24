@@ -79,6 +79,15 @@ export interface HarnessCardEventRecord {
   createdAt: string;
 }
 
+export interface HarnessCardContinuityRecord {
+  cardId: string;
+  runId: string;
+  continuitySummary: string | null;
+  latestResultSummary: string | null;
+  absorbedWorkItems: string[];
+  updatedAt: string;
+}
+
 export interface HarnessBoardDecisionRecord {
   id: string;
   runId: string;
@@ -197,6 +206,23 @@ export function createHarnessCardEventRecord(input: {
     eventKind: input.eventKind,
     payload: input.payload ?? {},
     createdAt: new Date().toISOString()
+  };
+}
+
+export function createHarnessCardContinuityRecord(input: {
+  cardId: string;
+  runId: string;
+  continuitySummary?: string | null;
+  latestResultSummary?: string | null;
+  absorbedWorkItems?: readonly string[];
+}): HarnessCardContinuityRecord {
+  return {
+    cardId: input.cardId,
+    runId: input.runId,
+    continuitySummary: input.continuitySummary ?? null,
+    latestResultSummary: input.latestResultSummary ?? null,
+    absorbedWorkItems: [...(input.absorbedWorkItems ?? [])],
+    updatedAt: new Date().toISOString()
   };
 }
 

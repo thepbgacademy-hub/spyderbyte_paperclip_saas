@@ -91,6 +91,15 @@ export type HarnessCardEventRow = {
   createdAt: string;
 };
 
+export type HarnessCardContinuityRow = {
+  cardId: string;
+  runId: string;
+  continuitySummary: string | null;
+  latestResultSummary: string | null;
+  absorbedWorkItems: string[];
+  updatedAt: string;
+};
+
 export type HarnessProposalStatus = "proposed" | "approved" | "deferred" | "denied";
 export type HarnessProposalResolution = "create_lane" | "update_existing_lane" | "handoff_existing_lane";
 

@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createPgTransactionRunner } from "../src/db/postgres-client.js";
 import { createInMemoryHarnessRepository, createPostgresHarnessRepository } from "../src/harness/repository.js";
 import {
+  createHarnessCardContinuityRecord,
   createHarnessCardEventRecord,
   createHarnessCardRecord,
   createHarnessRunRecord
@@ -19,6 +20,8 @@ const proposalMigration = readFileSync("supabase/migrations/0014_wf_harness_subc
 const proposalResolutionMigration = readFileSync("supabase/migrations/0015_wf_harness_proposal_resolutions.sql", "utf8");
 const boardDecisionMigration = readFileSync("supabase/migrations/0016_wf_harness_board_decisions.sql", "utf8");
 const boardMemoryMigration = readFileSync("supabase/migrations/0017_wf_harness_board_memory.sql", "utf8");
+const laneHandoffMigration = readFileSync("supabase/migrations/0018_wf_harness_lane_handoff.sql", "utf8");
+const cardContinuityMigration = readFileSync("supabase/migrations/0019_wf_harness_card_continuity.sql", "utf8");
 const execFileAsync = promisify(execFile);
 
 const HARNESS_POSTGRES_IMAGE = "postgres:16-alpine";
@@ -174,6 +177,40 @@ describe("harness persistence records", () => {
       status: "approved",
       approvedCardId: "approved_card_1"
     });
+  });
+
+  it("stores bounded card continuity snapshots in the minimal in-memory repository", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-123",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const card = createHarnessCardRecord({
+      runId: run.id,
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    const continuity = createHarnessCardContinuityRecord({
+      cardId: card.id,
+      runId: run.id,
+      continuitySummary: "CFO can resume this pricing review lane with absorbed follow-on work from CEO: Pressure-test the pricing lane.",
+      latestResultSummary: "Validated the pricing assumptions against the current workload.",
+      absorbedWorkItems: ["update_existing_lane|CEO: Pressure-test the pricing lane"]
+    });
+
+    await repository.insertRun(run);
+    await repository.insertCard(card);
+    await repository.upsertCardContinuity(continuity);
+
+    await expect(repository.getCardContinuity(card.id)).resolves.toEqual(continuity);
+    await expect(repository.listCardContinuityForRun(run.id)).resolves.toEqual([continuity]);
   });
 
   it("updates lane ownership in the in-memory repository without changing the card state", async () => {
@@ -519,6 +556,106 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
   );
 
   it(
+    "round-trips harness card continuity snapshots through the real Postgres repository mapping",
+    async () => {
+      const database = requireDisposableHarnessDatabase();
+      const client = new Client({ connectionString: database.connectionString });
+      await client.connect();
+
+      try {
+        const repository = createPostgresHarnessRepository({
+          query: async (sql: string, values: readonly unknown[]) => {
+            const result = await client.query(sql, [...values]);
+            return { rows: result.rows };
+          }
+        });
+        const tenantId = randomUUID();
+        const run = createHarnessRunRecord({
+          tenantId,
+          workflowId: "wf_connect_first_workflow",
+          packageId: "pkg_bib_connect",
+          orchestratorPersona: "ceo",
+          runtimeContext: {
+            providerKind: "openai_api",
+            credentialLabel: "Primary OpenAI"
+          }
+        });
+        const childCard = createHarnessCardRecord({
+          runId: run.id,
+          persona: "researcher",
+          title: "Gather competitor price anchors",
+          deliverableType: "research_brief"
+        });
+
+        await resetHarnessProofDatabase(client);
+        await seedHarnessProofPrerequisites(client, tenantId);
+        await repository.insertRun(run);
+        await repository.insertCard(childCard);
+
+        await repository.upsertCardContinuity(
+          createHarnessCardContinuityRecord({
+            cardId: childCard.id,
+            runId: run.id,
+            latestResultSummary: "Collected the first pricing-anchor round.",
+            absorbedWorkItems: [
+              "update_existing_lane|CMO: Draft campaign outline",
+              "update_existing_lane|CFO: Refresh competitor pricing anchors"
+            ]
+          })
+        );
+        await repository.upsertCardContinuity(
+          createHarnessCardContinuityRecord({
+            cardId: childCard.id,
+            runId: run.id,
+            absorbedWorkItems: [
+              "update_existing_lane|COO: Confirm fulfillment handoff",
+              "update_existing_lane|CEO: Package tenant next steps",
+              "update_existing_lane|CFO: Refresh competitor pricing anchors",
+              "handoff_existing_lane|CEO: Hand off the research lane",
+              "update_existing_lane|CMO: Validate offer headline",
+              "update_existing_lane|CFO: Re-check pricing anchors"
+            ]
+          })
+        );
+
+        await expect(repository.getCardContinuity(childCard.id)).resolves.toEqual(
+          expect.objectContaining({
+            cardId: childCard.id,
+            runId: run.id,
+            latestResultSummary: "Collected the first pricing-anchor round.",
+            absorbedWorkItems: [
+              "update_existing_lane|COO: Confirm fulfillment handoff",
+              "update_existing_lane|CEO: Package tenant next steps",
+              "update_existing_lane|CFO: Refresh competitor pricing anchors",
+              "handoff_existing_lane|CEO: Hand off the research lane",
+              "update_existing_lane|CMO: Validate offer headline",
+              "update_existing_lane|CFO: Re-check pricing anchors"
+            ]
+          })
+        );
+        await expect(repository.listCardContinuityForRun(run.id)).resolves.toEqual([
+          expect.objectContaining({
+            cardId: childCard.id,
+            runId: run.id,
+            latestResultSummary: "Collected the first pricing-anchor round.",
+            absorbedWorkItems: [
+              "update_existing_lane|COO: Confirm fulfillment handoff",
+              "update_existing_lane|CEO: Package tenant next steps",
+              "update_existing_lane|CFO: Refresh competitor pricing anchors",
+              "handoff_existing_lane|CEO: Hand off the research lane",
+              "update_existing_lane|CMO: Validate offer headline",
+              "update_existing_lane|CFO: Re-check pricing anchors"
+            ]
+          })
+        ]);
+      } finally {
+        await client.end();
+      }
+    },
+    120_000
+  );
+
+  it(
     "commits proposal approval before child-card insert when the deferred foreign key is satisfied by commit time",
     async () => {
       const database = requireDisposableHarnessDatabase();
@@ -806,6 +943,8 @@ async function resetHarnessProofDatabase(client: Client) {
   await client.query(proposalResolutionMigration);
   await client.query(boardDecisionMigration);
   await client.query(boardMemoryMigration);
+  await client.query(laneHandoffMigration);
+  await client.query(cardContinuityMigration);
 }
 
 async function seedHarnessProofPrerequisites(client: Client, tenantId: string) {

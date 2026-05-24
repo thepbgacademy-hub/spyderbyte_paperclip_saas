@@ -315,6 +315,14 @@ The harness must keep a small retained memory layer for live continuity:
 
 This memory stays inside Wealth Factory because it is part of the live execution contract.
 
+The live implementation should stay narrow and operational:
+
+- per-lane continuity snapshots such as latest bounded outcome text
+- absorbed follow-on work labels needed to resume the lane coherently
+- no free-form long notes and no duplicate governance ledger
+
+This is a policy boundary in the harness runtime and read model, not an excuse to let the storage layer become an open-ended notes system.
+
 ### Long Business Memory
 
 The larger historical memory of the company should be designed as a tenant-owned record layer, not as an ever-growing harness runtime store.

@@ -1,8 +1,15 @@
-import type { HarnessBoardDecisionRow, HarnessCardEventRow, HarnessCardRow, HarnessRunRow } from "../db/types.js";
+import type {
+  HarnessBoardDecisionRow,
+  HarnessCardContinuityRow,
+  HarnessCardEventRow,
+  HarnessCardRow,
+  HarnessRunRow
+} from "../db/types.js";
 import type { QueryClient } from "../db/supabase-repositories.js";
 import type { HarnessProposalResolution, HarnessProposalStatus, HarnessSubCardProposal } from "./runtime-contract.js";
 import type {
   HarnessBoardDecisionRecord,
+  HarnessCardContinuityRecord,
   HarnessCardEventRecord,
   HarnessCardRecord,
   HarnessCardState,
@@ -23,6 +30,9 @@ export interface HarnessRepository {
   insertEvent(event: HarnessCardEventRecord): Promise<void>;
   listEventsForCard(cardId: string): Promise<HarnessCardEventRecord[]>;
   listEventsForRun(runId: string): Promise<HarnessCardEventRecord[]>;
+  upsertCardContinuity(record: HarnessCardContinuityRecord): Promise<void>;
+  getCardContinuity(cardId: string): Promise<HarnessCardContinuityRecord | null>;
+  listCardContinuityForRun(runId: string): Promise<HarnessCardContinuityRecord[]>;
   insertDecision(decision: HarnessBoardDecisionRecord): Promise<void>;
   listDecisionsForRun(runId: string): Promise<HarnessBoardDecisionRecord[]>;
   insertProposal(proposal: HarnessSubCardProposal): Promise<void>;
@@ -45,6 +55,7 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
   const runs = new Map<string, HarnessRunRecord>();
   const cards = new Map<string, HarnessCardRecord[]>();
   const events = new Map<string, HarnessCardEventRecord[]>();
+  const continuity = new Map<string, HarnessCardContinuityRecord>();
   const decisions = new Map<string, HarnessBoardDecisionRecord[]>();
   const proposals = new Map<string, HarnessSubCardProposal>();
 
@@ -155,6 +166,37 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
     async listEventsForRun(runId) {
       const runCards = cards.get(runId) ?? [];
       return runCards.flatMap((card) => events.get(card.id) ?? []);
+    },
+
+    async upsertCardContinuity(record) {
+      const existing = continuity.get(record.cardId);
+      continuity.set(record.cardId, {
+        cardId: record.cardId,
+        runId: record.runId,
+        continuitySummary: record.continuitySummary ?? existing?.continuitySummary ?? null,
+        latestResultSummary: record.latestResultSummary ?? existing?.latestResultSummary ?? null,
+        absorbedWorkItems: mergeBoundedStrings(existing?.absorbedWorkItems ?? [], record.absorbedWorkItems),
+        updatedAt: record.updatedAt
+      });
+    },
+
+    async getCardContinuity(cardId) {
+      const record = continuity.get(cardId);
+      return record
+        ? {
+            ...record,
+            absorbedWorkItems: [...record.absorbedWorkItems]
+          }
+        : null;
+    },
+
+    async listCardContinuityForRun(runId) {
+      return [...continuity.values()]
+        .filter((record) => record.runId === runId)
+        .map((record) => ({
+          ...record,
+          absorbedWorkItems: [...record.absorbedWorkItems]
+        }));
     },
 
     async insertDecision(decision) {
@@ -365,6 +407,67 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
       return result.rows.map(mapHarnessCardEventRow).filter((event): event is HarnessCardEventRecord => event !== null);
     },
 
+    async upsertCardContinuity(record) {
+      await client.query(
+        `insert into wfpc.harness_card_continuity
+          (card_id, run_id, continuity_summary, latest_result_summary, absorbed_work_items, updated_at)
+         values ($1, $2, $3, $4, $5::jsonb, $6::timestamptz)
+         on conflict (card_id) do update
+           set continuity_summary = coalesce(excluded.continuity_summary, wfpc.harness_card_continuity.continuity_summary),
+               latest_result_summary = coalesce(excluded.latest_result_summary, wfpc.harness_card_continuity.latest_result_summary),
+               absorbed_work_items = (
+                 with merged as (
+                   select value, max(ordinality) as latest_ordinality
+                   from jsonb_array_elements_text(
+                     coalesce(wfpc.harness_card_continuity.absorbed_work_items, '[]'::jsonb) ||
+                     coalesce(excluded.absorbed_work_items, '[]'::jsonb)
+                   ) with ordinality as merged(value, ordinality)
+                   group by value
+                 ),
+                 bounded as (
+                   select value, latest_ordinality
+                   from merged
+                   order by latest_ordinality desc
+                   limit 6
+                 )
+                 select to_jsonb(coalesce(array(select value from bounded order by latest_ordinality asc), array[]::text[]))
+               ),
+               updated_at = excluded.updated_at`,
+        [
+          record.cardId,
+          record.runId,
+          record.continuitySummary,
+          record.latestResultSummary,
+          JSON.stringify(record.absorbedWorkItems),
+          record.updatedAt
+        ]
+      );
+    },
+
+    async getCardContinuity(cardId) {
+      const result = await client.query(
+        `select card_id, run_id, continuity_summary, latest_result_summary, absorbed_work_items, updated_at
+         from wfpc.harness_card_continuity
+         where card_id = $1
+         limit 1`,
+        [cardId]
+      );
+      return mapHarnessCardContinuityRow(result.rows[0]);
+    },
+
+    async listCardContinuityForRun(runId) {
+      const result = await client.query(
+        `select card_id, run_id, continuity_summary, latest_result_summary, absorbed_work_items, updated_at
+         from wfpc.harness_card_continuity
+         where run_id = $1
+         order by updated_at desc, card_id asc`,
+        [runId]
+      );
+      return result.rows
+        .map(mapHarnessCardContinuityRow)
+        .filter((record): record is HarnessCardContinuityRecord => record !== null);
+    },
+
     async insertDecision(decision) {
       await client.query(
         `insert into wfpc.harness_board_decisions
@@ -517,6 +620,17 @@ export function toHarnessCardEventRow(record: HarnessCardEventRecord): HarnessCa
   };
 }
 
+export function toHarnessCardContinuityRow(record: HarnessCardContinuityRecord): HarnessCardContinuityRow {
+  return {
+    cardId: record.cardId,
+    runId: record.runId,
+    continuitySummary: record.continuitySummary,
+    latestResultSummary: record.latestResultSummary,
+    absorbedWorkItems: [...record.absorbedWorkItems],
+    updatedAt: record.updatedAt
+  };
+}
+
 export function toHarnessBoardDecisionRow(record: HarnessBoardDecisionRecord): HarnessBoardDecisionRow {
   return {
     id: record.id,
@@ -595,6 +709,24 @@ function mapHarnessCardEventRow(row: unknown): HarnessCardEventRecord | null {
   };
 }
 
+function mapHarnessCardContinuityRow(row: unknown): HarnessCardContinuityRecord | null {
+  const record = asRecord(row);
+  if (!record.card_id || !record.run_id) {
+    return null;
+  }
+
+  return {
+    cardId: String(record.card_id),
+    runId: String(record.run_id),
+    continuitySummary: typeof record.continuity_summary === "string" ? record.continuity_summary : null,
+    latestResultSummary: typeof record.latest_result_summary === "string" ? record.latest_result_summary : null,
+    absorbedWorkItems: Array.isArray(record.absorbed_work_items)
+      ? record.absorbed_work_items.filter((item): item is string => typeof item === "string")
+      : [],
+    updatedAt: String(record.updated_at)
+  };
+}
+
 function mapHarnessProposalRow(row: unknown): HarnessSubCardProposal | null {
   const record = asRecord(row);
   if (
@@ -661,6 +793,18 @@ function mapHarnessBoardDecisionRow(row: unknown): HarnessBoardDecisionRecord | 
     objectionSummary: typeof record.objection_summary === "string" ? record.objection_summary : null,
     createdAt: String(record.created_at)
   };
+}
+
+function mergeBoundedStrings(existing: readonly string[], nextValues: readonly string[]): string[] {
+  const merged = [...existing];
+  for (const value of nextValues) {
+    const priorIndex = merged.indexOf(value);
+    if (priorIndex >= 0) {
+      merged.splice(priorIndex, 1);
+    }
+    merged.push(value);
+  }
+  return merged.slice(-6);
 }
 
 function normalizeRuntimeContext(value: unknown): HarnessRunRecord["runtimeContext"] {
