@@ -135,5 +135,7 @@ describe("harness board client", () => {
         ])
       })
     );
+    expect(fallback.completionPackage?.governanceItems).toHaveLength(1);
+    expect(fallback.completionPackage?.deliverables).toHaveLength(2);
   });
 });

@@ -346,6 +346,10 @@ function formatActionRoute(route: HarnessBoardResponse["pendingApprovals"][numbe
   return route.replace(/-/g, " ");
 }
 
+function humanizeValue(value: string) {
+  return value.replace(/_/g, " ");
+}
+
 function renderCompletionPackage(board: HarnessBoardResponse) {
   const completionPackage = board.completionPackage;
   if (!completionPackage) {
@@ -366,6 +370,10 @@ function renderCompletionPackage(board: HarnessBoardResponse) {
             <p style={styles.actionSummary}>{completionPackage.packageNote}</p>
           ) : null}
           <p style={styles.actionSummary}>{`Deferred approvals: ${completionPackage.deferredApprovalCount}`}</p>
+          <p style={styles.actionSummary}>{`Governance items: ${completionPackage.governanceItems.length}`}</p>
+          <p style={styles.actionSummary}>{`Deliverables: ${completionPackage.deliverables.length}`}</p>
+          <p style={styles.actionSummary}>{`Recommendations: ${completionPackage.recommendations.length}`}</p>
+          <p style={styles.actionSummary}>{`Objections: ${completionPackage.objections.length}`}</p>
           <p style={styles.actionSummary}>
             {completionPackage.hasOpenGovernanceItems
               ? "Open governance items still shape this package."
@@ -399,7 +407,9 @@ function renderCompletionPackage(board: HarnessBoardResponse) {
       </ul>
       {completionPackage.governanceItems.length > 0 ? (
         <>
-          <p style={{ ...styles.panelTitle, fontSize: "0.95rem", marginTop: "1rem" }}>Governance items</p>
+          <p style={{ ...styles.panelTitle, fontSize: "0.95rem", marginTop: "1rem" }}>
+            {`Governance items (${completionPackage.governanceItems.length})`}
+          </p>
           <ul style={styles.actionList}>
             {completionPackage.governanceItems.map((item) => (
               <li key={item.proposalId} style={styles.actionItem}>
@@ -420,7 +430,9 @@ function renderCompletionPackage(board: HarnessBoardResponse) {
       ) : null}
       {completionPackage.deliverables.length > 0 ? (
         <>
-          <p style={{ ...styles.panelTitle, fontSize: "0.95rem", marginTop: "1rem" }}>Deliverables</p>
+          <p style={{ ...styles.panelTitle, fontSize: "0.95rem", marginTop: "1rem" }}>
+            {`Deliverables (${completionPackage.deliverables.length})`}
+          </p>
           <ul style={styles.actionList}>
             {completionPackage.deliverables.map((deliverable) => (
               <li key={deliverable.cardId} style={styles.actionItem}>
@@ -494,6 +506,11 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
   const activeCard = cards.find((card) => card.id === openCardId) ?? null;
   const personaMetrics = useMemo(() => getPersonaMetrics(cards), [cards]);
   const currentFocus = activeCard?.title ?? cards[0]?.title ?? "Preparing the next move";
+  const recentDecisionCount = board?.recentDecisions.length ?? 0;
+  const followThroughCount = board?.followThroughItems.length ?? 0;
+  const completionPackage = board?.completionPackage;
+  const packageState = completionPackage?.status === "done" ? "Ready" : completionPackage ? "Assembling" : "Idle";
+  const packageDeliverableCount = completionPackage?.deliverables.length ?? 0;
 
   return (
     <main data-testid="page-board" style={styles.page}>
@@ -522,6 +539,19 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
           <article style={styles.metricCard}>
             <p style={styles.metricLabel}>CEO approvals</p>
             <p style={styles.metricValue}>{pendingApprovals.length}</p>
+          </article>
+          <article style={styles.metricCard}>
+            <p style={styles.metricLabel}>Recent decisions</p>
+            <p style={styles.metricValue}>{recentDecisionCount}</p>
+          </article>
+          <article style={styles.metricCard}>
+            <p style={styles.metricLabel}>Follow-through</p>
+            <p style={styles.metricValue}>{followThroughCount}</p>
+          </article>
+          <article style={styles.metricCard}>
+            <p style={styles.metricLabel}>Package state</p>
+            <p style={styles.metricValue}>{packageState}</p>
+            <p style={styles.metricLabel}>{`${packageDeliverableCount} deliverable${packageDeliverableCount === 1 ? "" : "s"}`}</p>
           </article>
         </div>
       </section>
@@ -648,13 +678,14 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
             <section style={styles.panel}>
               <h2 style={styles.panelTitle}>Recent decisions</h2>
               <p style={styles.panelBody}>Recent bounded governance decisions preserved from the board contract.</p>
+              <p style={styles.contractMeta}>{`${board.recentDecisions.length} preserved decision${board.recentDecisions.length === 1 ? "" : "s"}`}</p>
               <ul style={styles.actionList}>
                 {board.recentDecisions.map((decision) => (
                   <li key={decision.id} style={styles.actionItem}>
                     <p style={styles.actionMeta}>{decision.timestampLabel}</p>
                     <h3 style={styles.actionHeading}>{decision.label}</h3>
-                    <p style={styles.actionSummary}>{`Decision kind: ${decision.decisionKind}`}</p>
-                    {decision.resolution ? <p style={styles.actionSummary}>{`Resolution: ${decision.resolution}`}</p> : null}
+                    <p style={styles.actionSummary}>{`Decision kind: ${humanizeValue(decision.decisionKind)}`}</p>
+                    {decision.resolution ? <p style={styles.actionSummary}>{`Resolution: ${humanizeValue(decision.resolution)}`}</p> : null}
                     {decision.policyReasonLabel ? (
                       <p style={styles.actionSummary}>{`Policy reason: ${decision.policyReasonLabel}`}</p>
                     ) : null}
@@ -674,12 +705,13 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
             <section style={styles.panel}>
               <h2 style={styles.panelTitle}>Follow-through</h2>
               <p style={styles.panelBody}>Implemented board actions that already made it through the governance seam.</p>
+              <p style={styles.contractMeta}>{`${board.followThroughItems.length} implemented action${board.followThroughItems.length === 1 ? "" : "s"}`}</p>
               <ul style={styles.actionList}>
                 {board.followThroughItems.map((item) => (
                   <li key={item.id} style={styles.actionItem}>
                     <p style={styles.actionMeta}>{item.timestampLabel}</p>
                     <h3 style={styles.actionHeading}>{item.summary}</h3>
-                    <p style={styles.actionSummary}>{`Action: ${item.action.replace(/_/g, " ")}`}</p>
+                    <p style={styles.actionSummary}>{`Action: ${humanizeValue(item.action)}`}</p>
                     {item.persona ? <p style={styles.actionSummary}>{`Persona: ${item.persona}`}</p> : null}
                     {item.deliverableLabel ? (
                       <p style={styles.actionSummary}>{`Deliverable: ${item.deliverableLabel}`}</p>
