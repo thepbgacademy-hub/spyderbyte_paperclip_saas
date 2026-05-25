@@ -87,6 +87,9 @@ export type HarnessPendingAttentionView = {
   runState: HarnessRunRecord["state"];
   statusLabel: string;
   summary: string;
+  actionRoute: "review-attention" | "resolve-attention";
+  allowedDecisions?: HarnessAttentionReviewDecision[];
+  allowedCommands?: HarnessAttentionResolutionCommand[];
   requestedAtLabel?: string;
   reasonLabel?: string;
   targetCardId?: string;
@@ -149,6 +152,7 @@ export type HarnessCompletionPackageView = {
 
 export type HarnessFreshCycleMode = "reopen_deferred" | "clean";
 export type HarnessAttentionReviewDecision = "complete_run" | "start_fresh_cycle";
+export type HarnessAttentionResolutionCommand = "resume_lane" | "unblock_lane";
 
 export type HarnessRecentDecisionView = {
   id: string;
@@ -2065,6 +2069,209 @@ export function createHarnessBoardService(options: {
       };
     },
 
+    async resolvePendingAttention(request: {
+      authorization: string;
+      cookie?: string;
+      runId: string;
+      command: HarnessAttentionResolutionCommand;
+      resumeSummary?: string;
+    }): Promise<{ status: "resumed"; cardId: string; state: "working" } | { status: "unblocked"; cardId: string; state: "approved" }> {
+      const access = await authorizeHarnessRequest({
+        authenticate: options.authenticate,
+        requireTenantMember: options.requireTenantMember,
+        requireActivePackageInstall: options.requireActivePackageInstall,
+        workflowRegistry: options.workflowRegistry,
+        authorization: request.authorization,
+        ...(request.cookie ? { cookie: request.cookie } : {})
+      });
+
+      if (!options.runAtomically) {
+        throw new Error("Harness attention resolution mutations require atomic execution");
+      }
+
+      const result = await options.runAtomically(async (repository) => {
+        const run = await repository.getRun(request.runId);
+        if (!run || run.tenantId !== access.session.tenantId) {
+          throw new ApiAuthError();
+        }
+
+        const [cards, proposals, events] = await Promise.all([
+          repository.listCardsForRun(run.id),
+          repository.listProposalsForRun(run.id),
+          repository.listEventsForRun(run.id)
+        ]);
+        const pendingAttention = determineHarnessPostOutcomeAction({
+          runState: run.state,
+          cards,
+          proposals,
+          nextDispatchCard: null
+        });
+        const currentAttention = deriveCurrentHarnessAttentionState(events);
+        if (
+          !pendingAttention
+          || pendingAttention.kind === "dispatch_next_lane"
+          || (currentAttention && !isSameAttentionAction(currentAttention.action, pendingAttention))
+        ) {
+          throw new HarnessCardProgressionConflictError("Harness run has no active attention to resolve");
+        }
+
+        if (
+          (request.command === "resume_lane" && pendingAttention.kind !== "await_lane_resume")
+          || (request.command === "unblock_lane" && pendingAttention.kind !== "await_unblock")
+        ) {
+          throw new HarnessCardProgressionConflictError("Harness run is not waiting on that attention command");
+        }
+
+        const targetCardId = "cardId" in pendingAttention ? pendingAttention.cardId : null;
+        if (!targetCardId) {
+          throw new HarnessCardProgressionConflictError("Harness attention target is missing");
+        }
+        const targetCard = cards.find((card) => card.id === targetCardId);
+        if (!targetCard) {
+          throw new HarnessCardProgressionConflictError("Harness attention target lane was not found");
+        }
+
+        const nextState = request.command === "resume_lane" ? "working" : "approved";
+        const expectedState = request.command === "resume_lane" ? "waiting" : "blocked";
+        if (targetCard.state !== expectedState) {
+          throw new HarnessCardProgressionConflictError("Harness attention target is no longer waiting on that state");
+        }
+
+        const updatedCard = await repository.transitionCardState({
+          cardId: targetCard.id,
+          expectedState,
+          state: nextState
+        });
+        if (!updatedCard) {
+          throw new HarnessCardProgressionConflictError("Harness attention target progression conflicted");
+        }
+
+        await repository.insertEvent(
+          createHarnessCardEventRecord({
+            cardId: updatedCard.id,
+            eventKind: "state_changed",
+            payload: { from: targetCard.state, to: updatedCard.state }
+          })
+        );
+
+        const trimmedResumeSummary = request.resumeSummary?.trim();
+        await recordCardStateContinuity({
+          repository,
+          card: updatedCard,
+          ...(trimmedResumeSummary ? { resumeSummary: trimmedResumeSummary } : {})
+        });
+        const reconciledRun = await reconcileHarnessRunState({ repository, run });
+        const nextRun = reconciledRun ?? run;
+        const [cardsAfterResolution, proposalsAfterResolution, continuityAfterResolution] = await Promise.all([
+          repository.listCardsForRun(run.id),
+          repository.listProposalsForRun(run.id),
+          repository.listCardContinuityForRun(run.id)
+        ]);
+        const nextAttentionCandidate = determineHarnessPostOutcomeAction({
+          runState: nextRun.state,
+          fallbackCardId: updatedCard.id,
+          nextDispatchCard: null,
+          cards: cardsAfterResolution,
+          proposals: proposalsAfterResolution
+        });
+        const nextAttention =
+          nextAttentionCandidate && nextAttentionCandidate.kind !== "dispatch_next_lane"
+            ? nextAttentionCandidate
+            : null;
+
+        if (currentAttention && (!nextAttention || !isSameAttentionAction(currentAttention.action, nextAttention))) {
+          await repository.insertEvent(
+            createHarnessCardEventRecord({
+              cardId: "cardId" in currentAttention.action ? currentAttention.action.cardId : updatedCard.id,
+              eventKind: "attention_resolved",
+              payload: {
+                actionKind: currentAttention.action.kind,
+                runState: currentAttention.action.runState,
+                ...(currentAttention.action.kind === "queue_ceo_review"
+                  ? { reason: currentAttention.action.reason }
+                  : { targetCardId: currentAttention.action.cardId }),
+                ...currentAttention.snapshot
+              }
+            })
+          );
+        }
+
+        if (
+          nextAttention
+          && (!currentAttention || !isSameAttentionAction(currentAttention.action, nextAttention))
+        ) {
+          const describedAttention = describeHarnessPostOutcomeActionKind(nextAttention);
+          const nextAttentionTarget =
+            nextAttention.kind === "await_lane_resume" || nextAttention.kind === "await_unblock"
+              ? cardsAfterResolution.find((card) => card.id === nextAttention.cardId) ?? null
+              : null;
+          const nextAttentionContinuitySummary =
+            nextAttentionTarget
+              ? continuityAfterResolution.find((record) => record.cardId === nextAttentionTarget.id)?.continuitySummary
+              : null;
+          await repository.insertEvent(
+            createHarnessCardEventRecord({
+              cardId: "cardId" in nextAttention ? nextAttention.cardId : updatedCard.id,
+              eventKind: "attention_requested",
+              payload: {
+                actionKind: nextAttention.kind,
+                runState: nextAttention.runState,
+                ...(nextAttention.kind === "queue_ceo_review"
+                  ? { reason: nextAttention.reason, targetPersona: "ceo" }
+                  : { targetCardId: nextAttention.cardId }),
+                statusLabel: describedAttention.statusLabel,
+                summary: nextAttentionContinuitySummary ?? describedAttention.summary,
+                ...(describedAttention.reasonLabel ? { reasonLabel: describedAttention.reasonLabel } : {}),
+                ...(nextAttentionTarget
+                  ? {
+                      targetCardId: nextAttentionTarget.id,
+                      targetPersona: nextAttentionTarget.persona,
+                      targetTitle: nextAttentionTarget.title
+                    }
+                  : {})
+              }
+            })
+          );
+        }
+
+        const resolvedState = request.command === "resume_lane" ? "working" as const : "approved" as const;
+        return {
+          cardId: updatedCard.id,
+          state: resolvedState,
+          status: request.command === "resume_lane" ? "resumed" as const : "unblocked" as const,
+          auditEvents: [
+            createHarnessAuditEvent({
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              eventType: request.command === "resume_lane" ? "harness_lane_resumed" : "harness_lane_unblocked",
+              entityId: updatedCard.id,
+              metadata: {
+                runId: run.id,
+                persona: updatedCard.persona,
+                deliverableType: updatedCard.deliverableType,
+                fromState: targetCard.state,
+                toState: updatedCard.state,
+                hasResumeSummary: Boolean(trimmedResumeSummary)
+              }
+            }),
+            ...toRunAuditEvents({
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              runId: run.id,
+              previousState: run.state,
+              nextRun
+            })
+          ]
+        };
+      });
+
+      await publishHarnessAuditEvents(options.audit, result.auditEvents ?? []);
+      if (result.status === "resumed") {
+        return { status: "resumed", cardId: result.cardId, state: "working" };
+      }
+      return { status: "unblocked", cardId: result.cardId, state: "approved" };
+    },
+
     async startFreshCycle(request: {
       authorization: string;
       cookie?: string;
@@ -2949,6 +3156,15 @@ function buildPendingAttentionView(input: {
     runState: action.runState,
     statusLabel: persistedSnapshot?.statusLabel ?? described.statusLabel,
     summary: persistedSnapshot?.summary ?? continuitySummary ?? described.summary,
+    ...(action.kind === "queue_ceo_review"
+      ? {
+          actionRoute: "review-attention" as const,
+          allowedDecisions: ["complete_run", "start_fresh_cycle"] as HarnessAttentionReviewDecision[]
+        }
+      : {
+          actionRoute: "resolve-attention" as const,
+          allowedCommands: [action.kind === "await_lane_resume" ? "resume_lane" : "unblock_lane"] as HarnessAttentionResolutionCommand[]
+        }),
     ...(currentAttention && isSameAttentionAction(currentAttention.action, action)
       ? { requestedAtLabel: formatBoardTimestamp(currentAttention.requestedAt) }
       : {}),

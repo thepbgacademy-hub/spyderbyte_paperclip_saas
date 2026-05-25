@@ -416,6 +416,8 @@ describe("harness board service", () => {
       runState: "waiting",
       statusLabel: "Waiting on lane resume",
       summary: "CFO should resume this lane once the tenant confirms the latest revenue assumption.",
+      actionRoute: "resolve-attention",
+      allowedCommands: ["resume_lane"],
       targetCardId: created.cardId,
       targetPersona: "CFO",
       targetTitle: "Pressure-test the pricing lane"
@@ -496,6 +498,8 @@ describe("harness board service", () => {
         runState: "waiting",
         statusLabel: "Awaiting board packet",
         summary: "Use the persisted snapshot summary for tenant-safe pending attention.",
+        actionRoute: "resolve-attention",
+        allowedCommands: ["resume_lane"],
         targetCardId: created.cardId,
         targetPersona: "ANALYST",
         targetTitle: "Persisted handoff lane"
@@ -550,6 +554,8 @@ describe("harness board service", () => {
       runState: "assembling",
       statusLabel: "CEO review required",
       summary: "The board is ready for final assembly before the tenant-facing package is closed.",
+      actionRoute: "review-attention",
+      allowedDecisions: ["complete_run", "start_fresh_cycle"],
       reasonLabel: "Final assembly"
     });
   });
@@ -803,6 +809,160 @@ describe("harness board service", () => {
         completionSummary: "This should fail because the run is not awaiting CEO review."
       })
     ).rejects.toThrow(/not waiting on CEO review/i);
+  });
+
+  it("resolves pending lane-resume attention through the explicit attention seam", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "waiting",
+      resumeSummary: "Pause until the tenant confirms the revised revenue assumption."
+    });
+
+    const resolved = await service.resolvePendingAttention({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      command: "resume_lane",
+      resumeSummary: "Resume with the confirmed revenue assumption."
+    });
+
+    const persistedCard = await repository.getCard(created.cardId);
+    const hydrated = await service.listBoardState({ authorization: "Bearer valid" });
+
+    expect(resolved).toEqual({
+      status: "resumed",
+      cardId: created.cardId,
+      state: "working"
+    });
+    expect(persistedCard?.state).toBe("working");
+    expect(hydrated.pendingAttention).toBeUndefined();
+  });
+
+  it("resolves pending lane-unblock attention through the explicit attention seam", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "blocked"
+    });
+
+    const resolved = await service.resolvePendingAttention({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      command: "unblock_lane",
+      resumeSummary: "The blocker is cleared and the lane can re-enter the board queue."
+    });
+
+    const persistedCard = await repository.getCard(created.cardId);
+    const hydrated = await service.listBoardState({ authorization: "Bearer valid" });
+
+    expect(resolved).toEqual({
+      status: "unblocked",
+      cardId: created.cardId,
+      state: "approved"
+    });
+    expect(persistedCard?.state).toBe("approved");
+    expect(hydrated.pendingAttention).toBeUndefined();
+  });
+
+  it("fails closed when explicit attention resolution does not match the active attention kind", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "waiting",
+      resumeSummary: "Pause until the tenant confirms the revised revenue assumption."
+    });
+
+    await expect(
+      service.resolvePendingAttention({
+        authorization: "Bearer valid",
+        runId: board.runId,
+        command: "unblock_lane"
+      })
+    ).rejects.toThrow(/not waiting on that attention command/i);
   });
 
   it("prefers persisted attention-resolved snapshot metadata in historical activity", async () => {

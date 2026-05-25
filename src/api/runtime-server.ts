@@ -264,6 +264,7 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
     decideProposal: harnessBoardApi.decideProposal,
     completeRun: harnessBoardApi.completeRun,
     reviewPendingAttention: harnessBoardApi.reviewPendingAttention,
+    resolvePendingAttention: harnessBoardApi.resolvePendingAttention,
     startFreshCycle: harnessBoardApi.startFreshCycle,
     rateLimiter: createPostgresFixedWindowRateLimiter({ runner: transactionRunner, limit: 120, windowMs: 60_000 })
   });

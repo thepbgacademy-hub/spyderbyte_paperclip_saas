@@ -111,3 +111,5 @@ This file tracks the new harness subproject only.
 - [x] Persist bounded attention snapshot metadata with `attention_requested` / `attention_resolved` events so the board can reuse durable labels and target metadata later.
 - [x] Prefer persisted attention snapshots in `pendingAttention` and attention history reads instead of rebuilding those labels purely from mutable lane state.
 - [x] Add an explicit CEO review-action seam so `queue_ceo_review` attention can resolve through a bounded `complete_run` or `start_fresh_cycle` command instead of leaving completion behavior implicit in downstream callers.
+- [x] Add explicit board-side attention-resolution commands so `await_lane_resume` and `await_unblock` can resolve through bounded mutations instead of generic card editing or implicit state nudges.
+- [x] Surface bounded pending-attention action metadata so the board can tell the dashboard which explicit command family (`review-attention` vs `resolve-attention`) applies without inferring it from labels.

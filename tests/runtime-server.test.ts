@@ -110,6 +110,7 @@ vi.mock("../src/harness/board-service.js", () => ({
     advanceChildCard: vi.fn().mockResolvedValue({ cardId: "card_created_1", state: "working" }),
     completeRun: vi.fn().mockResolvedValue({ runId: "run_123", state: "done" }),
     reviewPendingAttention: vi.fn().mockResolvedValue({ status: "done", runId: "run_123" }),
+    resolvePendingAttention: vi.fn().mockResolvedValue({ status: "resumed", cardId: "card_created_1", state: "working" }),
     startFreshCycle: vi.fn().mockResolvedValue({ runId: "run_124", reopenedProposalCount: 1 })
   }))
 }));

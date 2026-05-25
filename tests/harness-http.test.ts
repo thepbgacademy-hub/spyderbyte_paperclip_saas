@@ -936,6 +936,174 @@ describe("harness HTTP boundary", () => {
     expect(serviceUnavailable.body).toEqual({ code: "service_unavailable" });
   });
 
+  it("resolves pending lane-resume attention through the guarded write route", async () => {
+    const resolvePendingAttention = vi
+      .fn()
+      .mockResolvedValue({ status: "resumed", cardId: "card_waiting_1", state: "working" });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      resolvePendingAttention,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/resolve-attention",
+      body: {
+        command: "resume_lane",
+        resumeSummary: "Resume the pricing review with the confirmed revenue assumption."
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        cookie: "wf_session=abc",
+        "content-type": "application/json"
+      },
+      bodyByteLength: JSON.stringify({
+        command: "resume_lane",
+        resumeSummary: "Resume the pricing review with the confirmed revenue assumption."
+      }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(resolvePendingAttention).toHaveBeenCalledWith({
+      authorization: "Bearer valid",
+      cookie: "wf_session=abc",
+      runId: "run_123",
+      command: "resume_lane",
+      resumeSummary: "Resume the pricing review with the confirmed revenue assumption."
+    });
+    expect(response.body).toEqual({ status: "resumed", cardId: "card_waiting_1", state: "working" });
+  });
+
+  it("resolves pending lane-unblock attention through the guarded write route", async () => {
+    const resolvePendingAttention = vi
+      .fn()
+      .mockResolvedValue({ status: "unblocked", cardId: "card_blocked_1", state: "approved" });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      resolvePendingAttention,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/resolve-attention",
+      body: {
+        command: "unblock_lane",
+        resumeSummary: "The blocker is cleared and this lane can return to the board queue."
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        cookie: "wf_session=abc",
+        "content-type": "application/json"
+      },
+      bodyByteLength: JSON.stringify({
+        command: "unblock_lane",
+        resumeSummary: "The blocker is cleared and this lane can return to the board queue."
+      }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(resolvePendingAttention).toHaveBeenCalledWith({
+      authorization: "Bearer valid",
+      cookie: "wf_session=abc",
+      runId: "run_123",
+      command: "unblock_lane",
+      resumeSummary: "The blocker is cleared and this lane can return to the board queue."
+    });
+    expect(response.body).toEqual({ status: "unblocked", cardId: "card_blocked_1", state: "approved" });
+  });
+
+  it("rejects invalid resolve-attention commands before calling the service", async () => {
+    const resolvePendingAttention = vi.fn();
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      resolvePendingAttention,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/resolve-attention",
+      body: {
+        command: "invented"
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        "content-type": "application/json"
+      },
+      bodyByteLength: JSON.stringify({ command: "invented" }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ code: "invalid_request" });
+    expect(resolvePendingAttention).not.toHaveBeenCalled();
+  });
+
+  it("maps resolve-attention conflicts without exposing backend details", async () => {
+    const resolvePendingAttention = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiAuthError())
+      .mockRejectedValueOnce(new HarnessCardProgressionConflictError("not waiting on a lane resume"))
+      .mockRejectedValueOnce(new Error("db_down"));
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      resolvePendingAttention,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const baseRequest = {
+      method: "POST" as const,
+      path: "/api/harness/runs/run_123/resolve-attention",
+      body: {
+        command: "resume_lane"
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        "content-type": "application/json"
+      },
+      bodyByteLength: JSON.stringify({ command: "resume_lane" }).length,
+      ip: "203.0.113.10"
+    };
+
+    const unauthorized = await handler(baseRequest);
+    const conflict = await handler(baseRequest);
+    const serviceUnavailable = await handler(baseRequest);
+
+    expect(unauthorized.status).toBe(401);
+    expect(conflict.status).toBe(409);
+    expect(conflict.body).toEqual({ code: "conflict" });
+    expect(serviceUnavailable.status).toBe(500);
+    expect(serviceUnavailable.body).toEqual({ code: "service_unavailable" });
+  });
+
   it("starts a fresh board cycle through the guarded write route", async () => {
     const startFreshCycle = vi.fn().mockResolvedValue({ runId: "run_124", reopenedProposalCount: 2 });
     const handler = createHarnessHttpHandler({

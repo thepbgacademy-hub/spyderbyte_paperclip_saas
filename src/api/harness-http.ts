@@ -2,6 +2,7 @@ import type { DashboardHttpRequest, DashboardHttpResponse } from "./dashboard-ht
 import { ApiAuthError } from "./dashboard-api.js";
 import { assertAllowedOrigin, createSecurityHeaders, validateRequestBodySize } from "../security/cors.js";
 import {
+  type HarnessAttentionResolutionCommand,
   type HarnessAttentionReviewDecision,
   HarnessCardCreationConflictError,
   HarnessCardProgressionConflictError,
@@ -62,6 +63,16 @@ type HarnessApi = {
     | { status: "done"; runId: string }
     | { status: "fresh_cycle_started"; runId: string; reopenedProposalCount: number }
   >;
+  resolvePendingAttention?(request: {
+    authorization: string;
+    cookie?: string;
+    runId: string;
+    command: HarnessAttentionResolutionCommand;
+    resumeSummary?: string;
+  }): Promise<
+    | { status: "resumed"; cardId: string; state: "working" }
+    | { status: "unblocked"; cardId: string; state: "approved" }
+  >;
   startFreshCycle?(request: {
     authorization: string;
     cookie?: string;
@@ -82,6 +93,7 @@ export function createHarnessHttpHandler(options: {
   decideProposal: HarnessApi["decideProposal"];
   completeRun: HarnessApi["completeRun"];
   reviewPendingAttention?: HarnessApi["reviewPendingAttention"];
+  resolvePendingAttention?: HarnessApi["resolvePendingAttention"];
   startFreshCycle?: HarnessApi["startFreshCycle"];
   rateLimiter: RateLimiter;
   maxBodyBytes?: number;
@@ -106,6 +118,7 @@ export function createHarnessHttpHandler(options: {
         /^\/api\/harness\/cards\/[^/]+\/advance$/u.test(request.path) ||
         /^\/api\/harness\/runs\/[^/]+\/complete$/u.test(request.path) ||
         /^\/api\/harness\/runs\/[^/]+\/review-attention$/u.test(request.path) ||
+        /^\/api\/harness\/runs\/[^/]+\/resolve-attention$/u.test(request.path) ||
         /^\/api\/harness\/runs\/[^/]+\/fresh-cycle$/u.test(request.path) ||
         /^\/api\/harness\/proposals\/[^/]+\/(approve|decision)$/u.test(request.path)
       )
@@ -133,6 +146,8 @@ export function createHarnessHttpHandler(options: {
         ? "harness-run-complete"
       : request.method === "POST" && /^\/api\/harness\/runs\/[^/]+\/review-attention$/u.test(request.path)
         ? "harness-run-review-attention"
+      : request.method === "POST" && /^\/api\/harness\/runs\/[^/]+\/resolve-attention$/u.test(request.path)
+        ? "harness-run-resolve-attention"
       : request.method === "POST" && /^\/api\/harness\/runs\/[^/]+\/fresh-cycle$/u.test(request.path)
         ? "harness-run-fresh-cycle"
       : request.method === "POST" && /^\/api\/harness\/proposals\/[^/]+\/(approve|decision)$/u.test(request.path)
@@ -249,6 +264,29 @@ export function createHarnessHttpHandler(options: {
           decision,
           ...(completionSummary ? { completionSummary } : {}),
           ...(freshCycleMode === "reopen_deferred" || freshCycleMode === "clean" ? { mode: freshCycleMode } : {})
+        });
+        assertWealthFactoryResponse(body);
+        return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
+      }
+
+      const resolveAttentionMatch = /^\/api\/harness\/runs\/([^/]+)\/resolve-attention$/u.exec(request.path);
+      if (resolveAttentionMatch) {
+        if (!options.resolvePendingAttention) {
+          return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
+        }
+        const bodyInput = readJsonObject(request.body);
+        const command = readOptionalString(bodyInput?.command);
+        if (command !== "resume_lane" && command !== "unblock_lane") {
+          return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
+        }
+        const resumeSummary = readOptionalString(bodyInput?.resumeSummary);
+
+        const body = await options.resolvePendingAttention({
+          authorization: request.headers.authorization ?? "",
+          ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
+          runId: decodeURIComponent(resolveAttentionMatch[1] ?? ""),
+          command,
+          ...(resumeSummary ? { resumeSummary } : {})
         });
         assertWealthFactoryResponse(body);
         return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
