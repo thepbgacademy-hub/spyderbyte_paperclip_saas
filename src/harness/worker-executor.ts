@@ -2,9 +2,11 @@ import type { HarnessRepository } from "./repository.js";
 import { createHarnessRuntime } from "./runtime.js";
 import { deriveHarnessRunState } from "./state-machine.js";
 import {
+  describeHarnessPostOutcomeActionKind,
   deriveCurrentHarnessAttentionState,
   determineHarnessPostOutcomeAction,
   isSameAttentionAction,
+  type HarnessAttentionSnapshot,
   type HarnessPostOutcomeAction
 } from "./post-outcome.js";
 import {
@@ -49,6 +51,7 @@ export type HarnessWorkerLaneOutcome = {
   workflowId: string;
   status: "committed" | "ignored";
   reason?: "terminal_run" | "lane_not_working";
+  attentionTransition?: HarnessWorkerLaneAttentionTransition;
   laneExecution?: {
     cardId: string;
     state: HarnessCardState;
@@ -59,6 +62,24 @@ export type HarnessWorkerLaneOutcome = {
   postOutcomeAction?: HarnessPostOutcomeAction;
   nextDispatch?: HarnessWorkerDispatch;
 };
+
+export type HarnessWorkerLaneAttentionTransition =
+  | {
+      kind: "none";
+    }
+  | {
+      kind: "requested";
+      requestedAction: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
+      resolvedAction?: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
+    }
+  | {
+      kind: "resolved";
+      resolvedAction: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
+    }
+  | {
+      kind: "unchanged";
+      action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
+    };
 
 type HarnessDispatchRepository = Pick<
   HarnessRepository,
@@ -297,11 +318,12 @@ export async function commitHarnessWorkerLaneOutcome(input: {
             runId: run.id,
             workflowId: run.workflowId
           });
-    const [latestRun, cardsAfterOutcome, proposalsAfterOutcome, eventsAfterOutcome] = await Promise.all([
+    const [latestRun, cardsAfterOutcome, proposalsAfterOutcome, eventsAfterOutcome, continuityAfterOutcome] = await Promise.all([
       repository.getRun(run.id),
       repository.listCardsForRun(run.id),
       repository.listProposalsForRun(run.id),
-      repository.listEventsForRun(run.id)
+      repository.listEventsForRun(run.id),
+      repository.listCardContinuityForRun(run.id)
     ]);
     const latestRunState = latestRun?.state ?? nextRun.state;
     const postOutcomeAction = determinePostOutcomeAction({
@@ -316,13 +338,20 @@ export async function commitHarnessWorkerLaneOutcome(input: {
       postOutcomeAction && postOutcomeAction.kind !== "dispatch_next_lane"
         ? postOutcomeAction
         : null;
+    const attentionTransition = deriveAttentionTransition({
+      currentAttention: currentAttention?.action ?? null,
+      nextAttention
+    });
 
     if (currentAttention && (!nextAttention || !isSameAttentionAction(currentAttention.action, nextAttention))) {
       await repository.insertEvent(
         createHarnessCardEventRecord({
           cardId: "cardId" in currentAttention.action ? currentAttention.action.cardId : updatedCard.id,
           eventKind: "attention_resolved",
-          payload: createAttentionResolvedPayload(currentAttention.action)
+          payload: createAttentionResolvedPayload({
+            action: currentAttention.action,
+            snapshot: currentAttention.snapshot
+          })
         })
       );
     }
@@ -335,7 +364,11 @@ export async function commitHarnessWorkerLaneOutcome(input: {
         createHarnessCardEventRecord({
           cardId: "cardId" in nextAttention ? nextAttention.cardId : updatedCard.id,
           eventKind: "attention_requested",
-          payload: createAttentionRequestedPayload(nextAttention)
+          payload: createAttentionRequestedPayload({
+            action: nextAttention,
+            cards: cardsAfterOutcome,
+            continuity: continuityAfterOutcome
+          })
         })
       );
     }
@@ -343,6 +376,7 @@ export async function commitHarnessWorkerLaneOutcome(input: {
       runId: run.id,
       workflowId: run.workflowId,
       status: "committed",
+      attentionTransition,
       laneExecution: {
         cardId: updatedCard.id,
         state: updatedCard.state,
@@ -525,30 +559,120 @@ function determinePostOutcomeAction(input: {
   });
 }
 
-function createAttentionRequestedPayload(
-  action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>
-): Record<string, unknown> {
-  switch (action.kind) {
+function createAttentionRequestedPayload(input: {
+  action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
+  cards: readonly HarnessCardRecord[];
+  continuity: readonly HarnessCardContinuityRecord[];
+}): Record<string, unknown> {
+  const snapshot = buildAttentionSnapshot({
+    action: input.action,
+    cards: input.cards,
+    continuity: input.continuity
+  });
+
+  switch (input.action.kind) {
     case "queue_ceo_review":
       return {
-        actionKind: action.kind,
-        runState: action.runState,
-        reason: action.reason
+        actionKind: input.action.kind,
+        runState: input.action.runState,
+        reason: input.action.reason,
+        ...snapshot
       };
     case "await_lane_resume":
     case "await_unblock":
       return {
-        actionKind: action.kind,
-        runState: action.runState,
-        targetCardId: action.cardId
+        actionKind: input.action.kind,
+        runState: input.action.runState,
+        targetCardId: input.action.cardId,
+        ...snapshot
       };
   }
 }
 
-function createAttentionResolvedPayload(
-  action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>
-): Record<string, unknown> {
-  return createAttentionRequestedPayload(action);
+function createAttentionResolvedPayload(input: {
+  action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
+  snapshot: HarnessAttentionSnapshot;
+}): Record<string, unknown> {
+  switch (input.action.kind) {
+    case "queue_ceo_review":
+      return {
+        actionKind: input.action.kind,
+        runState: input.action.runState,
+        reason: input.action.reason,
+        ...input.snapshot
+      };
+    case "await_lane_resume":
+    case "await_unblock":
+      return {
+        actionKind: input.action.kind,
+        runState: input.action.runState,
+        targetCardId: input.action.cardId,
+        ...input.snapshot
+      };
+  }
+}
+
+function buildAttentionSnapshot(input: {
+  action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
+  cards: readonly HarnessCardRecord[];
+  continuity: readonly HarnessCardContinuityRecord[];
+}): HarnessAttentionSnapshot {
+  const described = describeHarnessPostOutcomeActionKind(input.action);
+  let targetCard: HarnessCardRecord | null = null;
+  if (input.action.kind === "await_lane_resume" || input.action.kind === "await_unblock") {
+    const targetCardId = input.action.cardId;
+    targetCard = input.cards.find((card) => card.id === targetCardId) ?? null;
+  }
+  const continuitySummary =
+    targetCard ? input.continuity.find((record) => record.cardId === targetCard.id)?.continuitySummary ?? null : null;
+
+  return {
+    statusLabel: described.statusLabel,
+    summary: continuitySummary ?? described.summary,
+    ...(described.reasonLabel ? { reasonLabel: described.reasonLabel } : {}),
+    ...(input.action.kind === "queue_ceo_review" ? { targetPersona: "ceo" } : {}),
+    ...(targetCard
+      ? {
+          targetCardId: targetCard.id,
+          targetPersona: targetCard.persona,
+          targetTitle: targetCard.title
+        }
+      : {})
+  };
+}
+
+function deriveAttentionTransition(input: {
+  currentAttention: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }> | null;
+  nextAttention: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }> | null;
+}): HarnessWorkerLaneAttentionTransition {
+  const { currentAttention, nextAttention } = input;
+
+  if (!currentAttention && !nextAttention) {
+    return { kind: "none" };
+  }
+  if (!currentAttention && nextAttention) {
+    return {
+      kind: "requested",
+      requestedAction: nextAttention
+    };
+  }
+  if (currentAttention && !nextAttention) {
+    return {
+      kind: "resolved",
+      resolvedAction: currentAttention
+    };
+  }
+  if (currentAttention && nextAttention && isSameAttentionAction(currentAttention, nextAttention)) {
+    return {
+      kind: "unchanged",
+      action: nextAttention
+    };
+  }
+  return {
+    kind: "requested",
+    requestedAction: nextAttention!,
+    ...(currentAttention ? { resolvedAction: currentAttention } : {})
+  };
 }
 
 function createActiveResumeSummary(card: HarnessCardRecord): string {

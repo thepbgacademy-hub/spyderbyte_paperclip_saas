@@ -422,6 +422,90 @@ describe("harness board service", () => {
     });
   });
 
+  it("prefers persisted attention-requested snapshot metadata when hydrating pendingAttention", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "waiting",
+      resumeSummary: "Current continuity summary should not leak into pendingAttention."
+    });
+    await repository.insertEvent({
+      id: "event_attention_requested_snapshot",
+      cardId: created.cardId,
+      eventKind: "attention_requested",
+      payload: {
+        actionKind: "await_lane_resume",
+        runState: "waiting",
+        targetCardId: created.cardId,
+        statusLabel: "Awaiting board packet",
+        summary: "Use the persisted snapshot summary for tenant-safe pending attention.",
+        targetPersona: "ANALYST",
+        targetTitle: "Persisted handoff lane"
+      },
+      createdAt: "2026-05-24T20:10:00.000Z"
+    });
+    await repository.updateCardAssignment({
+      cardId: created.cardId,
+      persona: "researcher",
+      title: "Current lane title should not replace the snapshot"
+    });
+    await repository.upsertCardContinuity({
+      cardId: created.cardId,
+      runId: (await repository.getCard(created.cardId))!.runId,
+      continuitySource: "resume_override",
+      continuitySummary: "Current continuity summary should not leak into pendingAttention.",
+      latestResultSummary: null,
+      absorbedWorkItems: [],
+      updatedAt: "2026-05-24T20:11:00.000Z"
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+
+    expect(board.pendingAttention).toEqual(
+      expect.objectContaining({
+        kind: "await_lane_resume",
+        runState: "waiting",
+        statusLabel: "Awaiting board packet",
+        summary: "Use the persisted snapshot summary for tenant-safe pending attention.",
+        targetCardId: created.cardId,
+        targetPersona: "ANALYST",
+        targetTitle: "Persisted handoff lane"
+      })
+    );
+    expect(JSON.stringify(board.pendingAttention)).not.toContain(
+      "Current continuity summary should not leak into pendingAttention."
+    );
+  });
+
   it("surfaces a bounded CEO review attention view when completed work is ready for final assembly", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
@@ -536,6 +620,103 @@ describe("harness board service", () => {
           label: "Board attention no longer needs a lane resume decision."
         })
       ])
+    );
+  });
+
+  it("prefers persisted attention-resolved snapshot metadata in historical activity", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "waiting",
+      resumeSummary: "This newer resume summary should not replace the resolved snapshot in history."
+    });
+    await repository.insertEvent({
+      id: "event_attention_requested_snapshot_history",
+      cardId: created.cardId,
+      eventKind: "attention_requested",
+      payload: {
+        actionKind: "await_lane_resume",
+        runState: "waiting",
+        targetCardId: created.cardId,
+        statusLabel: "Awaiting board packet",
+        summary: "Persisted attention summary should stay attached to the historical resolution.",
+        targetPersona: "CFO",
+        targetTitle: "Original persisted lane"
+      },
+      createdAt: "2026-05-24T20:20:00.000Z"
+    });
+    await repository.insertEvent({
+      id: "event_attention_resolved_snapshot_history",
+      cardId: created.cardId,
+      eventKind: "attention_resolved",
+      payload: {
+        actionKind: "await_lane_resume",
+        runState: "waiting",
+        targetCardId: created.cardId,
+        statusLabel: "Awaiting board packet",
+        summary: "Persisted attention summary should stay attached to the historical resolution.",
+        targetPersona: "CFO",
+        targetTitle: "Original persisted lane"
+      },
+      createdAt: "2026-05-24T20:21:00.000Z"
+    });
+    await repository.updateRunState({
+      runId: board.runId,
+      state: "active"
+    });
+    await repository.updateCardAssignment({
+      cardId: created.cardId,
+      persona: "researcher",
+      title: "Current lane title should not replace historical attention labels"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Awaiting board packet resolved: Persisted attention summary should stay attached to the historical resolution."
+        })
+      ])
+    );
+    expect(JSON.stringify(hydratedCard?.activity)).not.toContain(
+      "Board attention no longer needs a lane resume decision."
     );
   });
 

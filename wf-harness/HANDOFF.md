@@ -222,6 +222,10 @@ The first harness implementation slice is now built and verified:
 - Re-dispatching an already `working` lane must not fabricate a `working -> working` transition or overwrite richer continuity metadata back to a generic state transition. Preserve the existing continuity source unless a real state change happened.
 - Worker outcome follow-through needs its own explicit contract, not just an optional next-lane payload. A `null` `nextDispatch` can still mean queue CEO review, wait for a lane resume, or stay blocked, so the orchestrator should consume the bounded `postOutcomeAction` seam instead of re-deriving intent from run-state heuristics.
 - GitNexus preflight still matters even when Windows tooling gets flaky. If `gitnexus analyze` times out or Ladybug/PowerShell gets unpredictable, fall back to `node E:\GitNexusHome\tools\gitnexus-fts-query.mjs ...` for seam orientation instead of skipping the map.
+- Attention transitions now have to stay explicit across the worker seam. A private lane outcome should say whether board attention was newly requested, resolved, unchanged, or absent instead of forcing runtime consumers to diff event history or guess from run state.
+- Once attention events carry bounded snapshots, board reads should prefer that persisted snapshot over rebuilding labels from later mutable lane state. Otherwise a valid historical CEO-review / resume / unblock need can silently rewrite itself after the lane has already moved on.
+- Unchanged unresolved attention must stay quiet in the runtime handoff. Re-emitting generic or specific post-outcome events for the same unresolved need recreates exactly the kind of board-noise heat we were trying to remove from Paperclip.
+- The repaired GitNexus helper is now trustworthy in fallback mode on this machine. Prefer `node E:\GitNexusHome\tools\gitnexus-fts-query.mjs --repo-path E:\REPOS\spyderbyte_paperclip_saas --query "<keywords>" --limit 8 --mode fallback` and use `E:\GitNexusHome\tools\gitnexus-helper-usage.md` as the current usage note.
 
 ## Next Step
 

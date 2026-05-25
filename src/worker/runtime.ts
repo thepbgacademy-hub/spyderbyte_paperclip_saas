@@ -9,6 +9,7 @@ import {
   buildHarnessWorkerDispatch,
   commitHarnessWorkerLaneOutcome,
   type HarnessWorkerDispatch,
+  type HarnessWorkerLaneAttentionTransition,
   type HarnessWorkerExecutionEnvelope,
   type HarnessWorkerLaneOutcome
 } from "../harness/worker-executor.js";
@@ -52,6 +53,13 @@ export function createWorkerRuntime(options: {
   env: WorkerEnv;
   workerInstanceId?: string;
   onHarnessLaneReady?: (envelope: HarnessWorkerExecutionEnvelope) => void | Promise<void>;
+  onHarnessAttentionResolved?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
+    laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+  }) => void | Promise<void>;
   onHarnessPostOutcomeAction?: (input: {
     tenantId: string;
     runId: string;
@@ -479,10 +487,40 @@ export function createWorkerRuntime(options: {
               ...committedOutcome
             })}\n`
           );
+          const resolvedAttentionAction = readResolvedAttentionAction(committedOutcome.attentionTransition);
+          if (resolvedAttentionAction && committedOutcome.laneExecution) {
+            const attentionResolvedHandoff = {
+              tenantId: input.tenantId,
+              runId: committedOutcome.runId,
+              workflowId: committedOutcome.workflowId,
+              action: resolvedAttentionAction,
+              laneExecution: committedOutcome.laneExecution
+            };
+            process.stdout.write(
+              `${JSON.stringify({
+                type: "wealth_factory_harness_attention_resolved",
+                workerInstanceId: options.workerInstanceId ?? "worker",
+                observedAt: new Date().toISOString(),
+                ...attentionResolvedHandoff
+              })}\n`
+            );
+            try {
+              await options.onHarnessAttentionResolved?.(attentionResolvedHandoff);
+            } catch (error) {
+              console.warn("Harness attention-resolved hook failed after durable worker outcome", {
+                runId: committedOutcome.runId,
+                workflowId: committedOutcome.workflowId,
+                cardId: committedOutcome.laneExecution.cardId,
+                actionKind: resolvedAttentionAction.kind,
+                error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+              });
+            }
+          }
           if (
             committedOutcome.postOutcomeAction
             && committedOutcome.postOutcomeAction.kind !== "dispatch_next_lane"
             && committedOutcome.laneExecution
+            && committedOutcome.attentionTransition?.kind !== "unchanged"
           ) {
             const postOutcomeHandoff = {
               tenantId: input.tenantId,
@@ -582,6 +620,12 @@ export function createWorkerRuntime(options: {
       })}\n`
     );
   }
+}
+
+function readResolvedAttentionAction(
+  transition: HarnessWorkerLaneAttentionTransition | undefined
+): Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }> | null {
+  return transition?.kind === "resolved" ? transition.resolvedAction : null;
 }
 
 async function runSpecificPostOutcomeHandler(input: {

@@ -24,6 +24,7 @@ import {
   describeHarnessPostOutcomeActionKind,
   determineHarnessPostOutcomeAction,
   isSameAttentionAction,
+  parseHarnessAttentionSnapshot,
   type HarnessPostOutcomeAction
 } from "./post-outcome.js";
 import type { WealthFactoryWorkflowDefinition } from "../wealthfactory/workflow-registry.js";
@@ -2788,6 +2789,7 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
   const payloadToPersona = readOptionalString(event.payload.toPersona);
   const payloadActionKind = readOptionalString(event.payload.actionKind);
   const payloadAttentionReason = readOptionalString(event.payload.reason);
+  const attentionSnapshot = parseHarnessAttentionSnapshot(event.payload);
   const labelByKind: Record<HarnessCardEventRecord["eventKind"], string> = {
     created: `${payloadTitle ?? "Card"} was opened for this persona lane.`,
     state_changed: `Lane status moved to ${humanizeLabel(payloadState ?? "updated")}.`,
@@ -2801,14 +2803,26 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
       payloadFromPersona && payloadToPersona
         ? `CEO handed this lane from ${payloadFromPersona.toUpperCase()} to ${payloadToPersona.toUpperCase()}.`
         : "CEO handed this active lane to a new persona owner.",
-    attention_requested: describeAttentionRequestedActivity({
-      actionKind: payloadActionKind,
-      reason: payloadAttentionReason
-    }),
-    attention_resolved: describeAttentionResolvedActivity({
-      actionKind: payloadActionKind,
-      reason: payloadAttentionReason
-    }),
+    attention_requested:
+      attentionSnapshot
+        ? formatAttentionActivityLabel({
+            kind: "attention_requested",
+            snapshot: attentionSnapshot
+          })
+        : describeAttentionRequestedActivity({
+            actionKind: payloadActionKind,
+            reason: payloadAttentionReason
+          }),
+    attention_resolved:
+      attentionSnapshot
+        ? formatAttentionActivityLabel({
+            kind: "attention_resolved",
+            snapshot: attentionSnapshot
+          })
+        : describeAttentionResolvedActivity({
+            actionKind: payloadActionKind,
+            reason: payloadAttentionReason
+          }),
     result_recorded: payloadSummary
       ? `A new outcome snapshot was recorded for this lane: ${payloadSummary}`
       : "A new outcome snapshot was recorded for this lane."
@@ -2840,29 +2854,60 @@ function buildPendingAttentionView(input: {
 
   const described = describeHarnessPostOutcomeActionKind(action);
   const currentAttention = deriveCurrentHarnessAttentionState(input.events);
+  const persistedSnapshot =
+    currentAttention && isSameAttentionAction(currentAttention.action, action)
+      ? currentAttention.snapshot
+      : null;
   const targetCard = "cardId" in action
     ? input.cards.find((card) => card.id === action.cardId) ?? null
     : null;
   const continuitySummary =
     targetCard ? input.continuityByCardId.get(targetCard.id)?.continuitySummary ?? null : null;
+  const attentionReasonLabel = persistedSnapshot?.reasonLabel ?? described.reasonLabel;
+  const attentionTargetCardId = persistedSnapshot?.targetCardId ?? targetCard?.id;
+  const attentionTargetPersona = persistedSnapshot?.targetPersona ?? (targetCard ? targetCard.persona.toUpperCase() : undefined);
+  const attentionTargetTitle = persistedSnapshot?.targetTitle ?? targetCard?.title;
 
   return {
     kind: action.kind,
     runState: action.runState,
-    statusLabel: described.statusLabel,
-    summary: continuitySummary ?? described.summary,
+    statusLabel: persistedSnapshot?.statusLabel ?? described.statusLabel,
+    summary: persistedSnapshot?.summary ?? continuitySummary ?? described.summary,
     ...(currentAttention && isSameAttentionAction(currentAttention.action, action)
       ? { requestedAtLabel: formatBoardTimestamp(currentAttention.requestedAt) }
       : {}),
-    ...(described.reasonLabel ? { reasonLabel: described.reasonLabel } : {}),
-    ...(targetCard
+    ...(attentionReasonLabel
+      ? { reasonLabel: attentionReasonLabel }
+      : {}),
+    ...(attentionTargetCardId
       ? {
-          targetCardId: targetCard.id,
-          targetPersona: targetCard.persona.toUpperCase(),
-          targetTitle: targetCard.title
+          targetCardId: attentionTargetCardId,
+          ...(attentionTargetPersona
+            ? { targetPersona: attentionTargetPersona }
+            : {}),
+          ...(attentionTargetTitle
+            ? { targetTitle: attentionTargetTitle }
+            : {})
         }
       : {})
   };
+}
+
+function formatAttentionActivityLabel(input: {
+  kind: "attention_requested" | "attention_resolved";
+  snapshot: {
+    statusLabel: string;
+    summary: string;
+    reasonLabel?: string;
+  };
+}): string {
+  const status = input.snapshot.reasonLabel
+    ? `${input.snapshot.statusLabel} (${input.snapshot.reasonLabel})`
+    : input.snapshot.statusLabel;
+  if (input.kind === "attention_requested") {
+    return `${status}: ${input.snapshot.summary}`;
+  }
+  return `${status} resolved: ${input.snapshot.summary}`;
 }
 
 function describeAttentionRequestedActivity(input: {

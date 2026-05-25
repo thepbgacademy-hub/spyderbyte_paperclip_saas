@@ -192,6 +192,7 @@ describe("harness worker executor", () => {
         credentialLabel: "Primary OpenAI"
       }
     });
+    run.state = "done";
     const ceoCard = createHarnessCardRecord({
       runId: run.id,
       persona: "ceo",
@@ -450,7 +451,7 @@ describe("harness worker executor", () => {
         credentialLabel: "Primary OpenAI"
       }
     });
-    run.state = "assembling";
+    run.state = "done";
     const ceoCard = createHarnessCardRecord({
       runId: run.id,
       persona: "ceo",
@@ -594,6 +595,14 @@ describe("harness worker executor", () => {
       runId: run.id,
       workflowId: "wf_connect_first_workflow",
       status: "committed",
+      attentionTransition: {
+        kind: "requested",
+        requestedAction: {
+          kind: "queue_ceo_review",
+          runState: "assembling",
+          reason: "final_assembly"
+        }
+      },
       laneExecution: {
         cardId: cfoCard.id,
         state: "done",
@@ -639,7 +648,11 @@ describe("harness worker executor", () => {
           payload: {
             actionKind: "queue_ceo_review",
             runState: "assembling",
-            reason: "final_assembly"
+            reason: "final_assembly",
+            statusLabel: "CEO review required",
+            summary: "The board is ready for final assembly before the tenant-facing package is closed.",
+            reasonLabel: "Final assembly",
+            targetPersona: "ceo"
           }
         })
       ])
@@ -700,6 +713,14 @@ describe("harness worker executor", () => {
       })
     ).resolves.toEqual(
       expect.objectContaining({
+        attentionTransition: {
+          kind: "requested",
+          requestedAction: {
+            kind: "queue_ceo_review",
+            runState: "assembling",
+            reason: "governance_hold"
+          }
+        },
         laneExecution: expect.objectContaining({
           cardId: cfoCard.id,
           runState: "assembling"
@@ -774,6 +795,9 @@ describe("harness worker executor", () => {
       runId: run.id,
       workflowId: "wf_connect_first_workflow",
       status: "committed",
+      attentionTransition: {
+        kind: "none"
+      },
       laneExecution: {
         cardId: cfoCard.id,
         state: "done",
@@ -874,6 +898,9 @@ describe("harness worker executor", () => {
       })
     ).resolves.toEqual(
       expect.objectContaining({
+        attentionTransition: {
+          kind: "none"
+        },
         laneExecution: expect.objectContaining({
           cardId: cfoCard.id,
           state: "done",
@@ -941,6 +968,14 @@ describe("harness worker executor", () => {
       runId: run.id,
       workflowId: "wf_connect_first_workflow",
       status: "committed",
+      attentionTransition: {
+        kind: "requested",
+        requestedAction: {
+          kind: "await_lane_resume",
+          runState: "waiting",
+          cardId: cfoCard.id
+        }
+      },
       laneExecution: {
         cardId: cfoCard.id,
         state: "waiting",
@@ -961,10 +996,69 @@ describe("harness worker executor", () => {
           payload: {
             actionKind: "await_lane_resume",
             runState: "waiting",
-            targetCardId: cfoCard.id
+            targetCardId: cfoCard.id,
+            statusLabel: "Waiting on lane resume",
+            summary: "CFO should resume this lane once the tenant confirms the latest revenue assumption.",
+            targetPersona: "cfo",
+            targetTitle: "Wait for revenue assumptions"
           }
         })
       ])
+    );
+  });
+
+  it("reports new attention requested in worker outcome metadata", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Wait for revenue assumptions",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "working";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+
+    await expect(
+      commitHarnessWorkerLaneOutcome({
+        repository,
+        tenantId: "tenant-1",
+        runId: run.id,
+        workflowId: "wf_connect_first_workflow",
+        cardId: cfoCard.id,
+        state: "waiting",
+        resumeSummary: "CFO should resume this lane once the tenant confirms the latest revenue assumption."
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        attentionTransition: {
+          kind: "requested",
+          requestedAction: {
+            kind: "await_lane_resume",
+            runState: "waiting",
+            cardId: cfoCard.id
+          }
+        }
+      })
     );
   });
 
@@ -1080,15 +1174,28 @@ describe("harness worker executor", () => {
       })
     );
 
-    await commitHarnessWorkerLaneOutcome({
-      repository,
-      tenantId: "tenant-1",
-      runId: run.id,
-      workflowId: "wf_connect_first_workflow",
-      cardId: cfoCard.id,
-      state: "done",
-      resultSummary: "Pricing review is complete and ready for board packaging."
-    });
+    await expect(
+      commitHarnessWorkerLaneOutcome({
+        repository,
+        tenantId: "tenant-1",
+        runId: run.id,
+        workflowId: "wf_connect_first_workflow",
+        cardId: cfoCard.id,
+        state: "done",
+        resultSummary: "Pricing review is complete and ready for board packaging."
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        attentionTransition: {
+          kind: "resolved",
+          resolvedAction: {
+            kind: "queue_ceo_review",
+            runState: "assembling",
+            reason: "final_assembly"
+          }
+        }
+      })
+    );
 
     await expect(repository.listEventsForCard(cfoCard.id)).resolves.toEqual(
       expect.arrayContaining([
@@ -1097,7 +1204,107 @@ describe("harness worker executor", () => {
           payload: {
             actionKind: "queue_ceo_review",
             runState: "assembling",
-            reason: "final_assembly"
+            reason: "final_assembly",
+            statusLabel: "CEO review required",
+            summary: "The board is ready for final assembly before the tenant-facing package is closed.",
+            reasonLabel: "Final assembly",
+            targetPersona: "ceo"
+          }
+        })
+      ])
+    );
+  });
+
+  it("reports prior attention resolved by follow-on dispatch in worker outcome metadata", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Finalize pricing review",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "working";
+    const cmoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cmo",
+      title: "Resume launch messaging",
+      deliverableType: "marketing_plan"
+    });
+    cmoCard.state = "approved";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+    await repository.insertCard(cmoCard);
+    await repository.insertEvent(
+      createHarnessCardEventRecord({
+        cardId: cmoCard.id,
+        eventKind: "attention_requested",
+        payload: {
+          actionKind: "await_lane_resume",
+          runState: "waiting",
+          targetCardId: cmoCard.id,
+          statusLabel: "Waiting on lane resume",
+          summary: "A child lane is paused and needs a bounded resume decision before work can continue.",
+          targetPersona: "cmo",
+          targetTitle: "Resume launch messaging"
+        }
+      })
+    );
+
+    await expect(
+      commitHarnessWorkerLaneOutcome({
+        repository,
+        tenantId: "tenant-1",
+        runId: run.id,
+        workflowId: "wf_connect_first_workflow",
+        cardId: cfoCard.id,
+        state: "done",
+        resultSummary: "Pricing review is complete and ready for board packaging."
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        attentionTransition: {
+          kind: "resolved",
+          resolvedAction: {
+            kind: "await_lane_resume",
+            runState: "waiting",
+            cardId: cmoCard.id
+          }
+        }
+      })
+    );
+
+    await expect(repository.listEventsForCard(cmoCard.id)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventKind: "attention_resolved",
+          payload: {
+            actionKind: "await_lane_resume",
+            runState: "waiting",
+            targetCardId: cmoCard.id,
+            statusLabel: "Waiting on lane resume",
+            summary: "A child lane is paused and needs a bounded resume decision before work can continue.",
+            targetPersona: "cmo",
+            targetTitle: "Resume launch messaging"
           }
         })
       ])
@@ -1116,7 +1323,160 @@ describe("harness worker executor", () => {
         credentialLabel: "Primary OpenAI"
       }
     });
-    run.state = "assembling";
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Finalize pricing review",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "working";
+    const cmoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cmo",
+      title: "Waiting on market brief",
+      deliverableType: "marketing_plan"
+    });
+    cmoCard.state = "waiting";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+    await repository.insertCard(cmoCard);
+    await repository.insertEvent(
+      createHarnessCardEventRecord({
+        cardId: cmoCard.id,
+        eventKind: "attention_requested",
+        payload: {
+          actionKind: "await_lane_resume",
+          runState: "waiting",
+          targetCardId: cmoCard.id
+        }
+      })
+    );
+
+    await expect(
+      commitHarnessWorkerLaneOutcome({
+        repository,
+        tenantId: "tenant-1",
+        runId: run.id,
+        workflowId: "wf_connect_first_workflow",
+        cardId: cfoCard.id,
+        state: "done",
+        resultSummary: "Pricing review is complete and ready for board packaging."
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        attentionTransition: {
+          kind: "unchanged",
+          action: {
+            kind: "await_lane_resume",
+            runState: "waiting",
+            cardId: cmoCard.id
+          }
+        }
+      })
+    );
+
+    const runEvents = await repository.listEventsForRun(run.id);
+    expect(runEvents.filter((event) => event.eventKind === "attention_requested")).toHaveLength(1);
+    expect(runEvents.filter((event) => event.eventKind === "attention_resolved")).toHaveLength(0);
+  });
+
+  it("reports repeated unresolved attention as unchanged in worker outcome metadata", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Finalize pricing review",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "working";
+    const cmoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cmo",
+      title: "Waiting on market brief",
+      deliverableType: "marketing_plan"
+    });
+    cmoCard.state = "waiting";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+    await repository.insertCard(cmoCard);
+    await repository.insertEvent(
+      createHarnessCardEventRecord({
+        cardId: cmoCard.id,
+        eventKind: "attention_requested",
+        payload: {
+          actionKind: "await_lane_resume",
+          runState: "waiting",
+          targetCardId: cmoCard.id
+        }
+      })
+    );
+
+    await expect(
+      commitHarnessWorkerLaneOutcome({
+        repository,
+        tenantId: "tenant-1",
+        runId: run.id,
+        workflowId: "wf_connect_first_workflow",
+        cardId: cfoCard.id,
+        state: "done",
+        resultSummary: "Pricing review is complete and ready for board packaging."
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        attentionTransition: {
+          kind: "unchanged",
+          action: {
+            kind: "await_lane_resume",
+            runState: "waiting",
+            cardId: cmoCard.id
+          }
+        }
+      })
+    );
+  });
+
+  it("reports repeated unresolved CEO review attention as unchanged in worker outcome metadata", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
     const ceoCard = createHarnessCardRecord({
       runId: run.id,
       persona: "ceo",
@@ -1147,19 +1507,28 @@ describe("harness worker executor", () => {
       })
     );
 
-    await commitHarnessWorkerLaneOutcome({
-      repository,
-      tenantId: "tenant-1",
-      runId: run.id,
-      workflowId: "wf_connect_first_workflow",
-      cardId: cfoCard.id,
-      state: "done",
-      resultSummary: "Pricing review is complete and ready for board packaging."
-    });
-
-    const runEvents = await repository.listEventsForRun(run.id);
-    expect(runEvents.filter((event) => event.eventKind === "attention_requested")).toHaveLength(1);
-    expect(runEvents.filter((event) => event.eventKind === "attention_resolved")).toHaveLength(0);
+    await expect(
+      commitHarnessWorkerLaneOutcome({
+        repository,
+        tenantId: "tenant-1",
+        runId: run.id,
+        workflowId: "wf_connect_first_workflow",
+        cardId: cfoCard.id,
+        state: "done",
+        resultSummary: "Pricing review is complete and ready for board packaging."
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        attentionTransition: {
+          kind: "unchanged",
+          action: {
+            kind: "queue_ceo_review",
+            runState: "assembling",
+            reason: "final_assembly"
+          }
+        }
+      })
+    );
   });
 
   it("ignores worker outcome commits for lanes that are no longer working", async () => {

@@ -27,6 +27,16 @@ export type HarnessPostOutcomeAction =
 export type HarnessAttentionState = {
   action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
   requestedAt: string;
+  snapshot: HarnessAttentionSnapshot;
+};
+
+export type HarnessAttentionSnapshot = {
+  statusLabel: string;
+  summary: string;
+  reasonLabel?: string;
+  targetCardId?: string;
+  targetPersona?: string;
+  targetTitle?: string;
 };
 
 export function determineHarnessPostOutcomeAction(input: {
@@ -149,6 +159,30 @@ export function humanizePostOutcomeReason(
   }
 }
 
+export function parseHarnessAttentionSnapshot(
+  payload: Record<string, unknown>
+): HarnessAttentionSnapshot | null {
+  const statusLabel = readOptionalString(payload.statusLabel);
+  const summary = readOptionalString(payload.summary);
+  if (!statusLabel || !summary) {
+    return null;
+  }
+
+  const reasonLabel = readOptionalString(payload.reasonLabel);
+  const targetCardId = readOptionalString(payload.targetCardId);
+  const targetPersona = readOptionalString(payload.targetPersona);
+  const targetTitle = readOptionalString(payload.targetTitle);
+
+  return {
+    statusLabel,
+    summary,
+    ...(reasonLabel ? { reasonLabel } : {}),
+    ...(targetCardId ? { targetCardId } : {}),
+    ...(targetPersona ? { targetPersona } : {}),
+    ...(targetTitle ? { targetTitle } : {})
+  };
+}
+
 export function deriveCurrentHarnessAttentionState(
   events: readonly HarnessCardEventRecord[]
 ): HarnessAttentionState | null {
@@ -160,7 +194,8 @@ export function deriveCurrentHarnessAttentionState(
       if (action) {
         current = {
           action,
-          requestedAt: event.createdAt
+          requestedAt: event.createdAt,
+          snapshot: parseHarnessAttentionSnapshot(event.payload) ?? buildFallbackAttentionSnapshot(action)
         };
       }
       continue;
@@ -285,6 +320,27 @@ function parseAttentionResolvedPayload(
   payload: Record<string, unknown>
 ): Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }> | null {
   return parseAttentionActionPayload(payload);
+}
+
+function buildFallbackAttentionSnapshot(
+  action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>
+): HarnessAttentionSnapshot {
+  const described = describeHarnessPostOutcomeActionKind(action);
+
+  if (action.kind === "queue_ceo_review") {
+    return {
+      statusLabel: described.statusLabel,
+      summary: described.summary,
+      ...(described.reasonLabel ? { reasonLabel: described.reasonLabel } : {}),
+      targetPersona: "ceo"
+    };
+  }
+
+  return {
+    statusLabel: described.statusLabel,
+    summary: described.summary,
+    targetCardId: action.cardId
+  };
 }
 
 function readOptionalString(value: unknown): string | undefined {
