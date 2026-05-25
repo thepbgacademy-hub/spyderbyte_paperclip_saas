@@ -115,3 +115,4 @@ This file tracks the new harness subproject only.
 - [x] Surface bounded pending-attention action metadata so the board can tell the dashboard which explicit command family (`review-attention` vs `resolve-attention`) applies without inferring it from labels.
 - [x] Re-enter the existing worker queue seam after explicit board-side `resume_lane` / `unblock_lane` resolution so resolved attention restores live execution truth instead of becoming a silent side path.
 - [x] Re-enter the existing worker queue seam after `start_fresh_cycle` so durable fresh-cycle runs restore live execution truth instead of becoming packaged-but-idle board state.
+- [x] Keep explicit CEO review resolution history durable so `complete_run` and `start_fresh_cycle` clear `queue_ceo_review` through a bounded `attention_resolved` event instead of only changing the resulting run state.

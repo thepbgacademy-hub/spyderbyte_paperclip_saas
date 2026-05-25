@@ -25,6 +25,7 @@ import {
   determineHarnessPostOutcomeAction,
   isSameAttentionAction,
   parseHarnessAttentionSnapshot,
+  type HarnessAttentionState,
   type HarnessPostOutcomeAction
 } from "./post-outcome.js";
 import type { WealthFactoryWorkflowDefinition } from "../wealthfactory/workflow-registry.js";
@@ -1899,6 +1900,7 @@ export function createHarnessBoardService(options: {
       cookie?: string;
       runId: string;
       completionSummary: string;
+      resolvedAttention?: HarnessAttentionState;
     }): Promise<{ runId: string; state: "done" }> {
       const access = await authorizeHarnessRequest({
         authenticate: options.authenticate,
@@ -1955,6 +1957,16 @@ export function createHarnessBoardService(options: {
         const ceoCard = cards.find((card) => card.persona === "ceo" && card.parentCardId === null);
         if (!ceoCard) {
           throw new HarnessRunCompletionConflictError("Harness run is missing the CEO assembly lane");
+        }
+
+        if (request.resolvedAttention?.action.kind === "queue_ceo_review") {
+          await repository.insertEvent(
+            createHarnessCardEventRecord({
+              cardId: ceoCard.id,
+              eventKind: "attention_resolved",
+              payload: buildResolvedAttentionPayload(request.resolvedAttention)
+            })
+          );
         }
 
         await repository.insertEvent(
@@ -2057,6 +2069,7 @@ export function createHarnessBoardService(options: {
       ) {
         throw new HarnessRunCompletionConflictError("Harness run is not waiting on CEO review");
       }
+      const resolvedAttention = currentAttention ?? buildDerivedAttentionState(pendingAttention);
 
       if (request.decision === "complete_run") {
         const completionSummary = request.completionSummary?.trim();
@@ -2067,7 +2080,8 @@ export function createHarnessBoardService(options: {
           authorization: request.authorization,
           ...(request.cookie ? { cookie: request.cookie } : {}),
           runId: request.runId,
-          completionSummary
+          completionSummary,
+          resolvedAttention
         });
         return {
           status: "done",
@@ -2079,6 +2093,7 @@ export function createHarnessBoardService(options: {
         authorization: request.authorization,
         ...(request.cookie ? { cookie: request.cookie } : {}),
         runId: request.runId,
+        resolvedAttention,
         ...(request.mode ? { mode: request.mode } : {})
       });
       return {
@@ -2320,6 +2335,7 @@ export function createHarnessBoardService(options: {
       cookie?: string;
       runId: string;
       mode?: HarnessFreshCycleMode;
+      resolvedAttention?: HarnessAttentionState;
     }): Promise<{ runId: string; reopenedProposalCount: number }> {
       const access = await authorizeHarnessRequest({
         authenticate: options.authenticate,
@@ -2360,6 +2376,16 @@ export function createHarnessBoardService(options: {
         const ceoCard = cards.find((card) => card.persona === "ceo" && card.parentCardId === null);
         if (!ceoCard) {
           throw new HarnessRunCycleConflictError("Harness packaged run is missing the CEO card");
+        }
+
+        if (request.resolvedAttention?.action.kind === "queue_ceo_review") {
+          await repository.insertEvent(
+            createHarnessCardEventRecord({
+              cardId: ceoCard.id,
+              eventKind: "attention_resolved",
+              payload: buildResolvedAttentionPayload(request.resolvedAttention)
+            })
+          );
         }
 
         const nextRun = await seedFreshHarnessRun({
@@ -3180,6 +3206,32 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
     id: event.id,
     label: labelByKind[event.eventKind],
     timestampLabel: formatBoardTimestamp(event.createdAt)
+  };
+}
+
+function buildResolvedAttentionPayload(attention: HarnessAttentionState): Record<string, unknown> {
+  return {
+    actionKind: attention.action.kind,
+    runState: attention.action.runState,
+    ...(attention.action.kind === "queue_ceo_review"
+      ? { reason: attention.action.reason }
+      : { targetCardId: attention.action.cardId }),
+    ...attention.snapshot
+  };
+}
+
+function buildDerivedAttentionState(
+  action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>
+): HarnessAttentionState {
+  const described = describeHarnessPostOutcomeActionKind(action);
+  return {
+    action,
+    requestedAt: new Date().toISOString(),
+    snapshot: {
+      statusLabel: described.statusLabel,
+      summary: described.summary,
+      ...(described.reasonLabel ? { reasonLabel: described.reasonLabel } : {})
+    }
   };
 }
 

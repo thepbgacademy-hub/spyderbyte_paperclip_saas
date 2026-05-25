@@ -676,12 +676,26 @@ describe("harness board service", () => {
       tenantId: "tenant_123",
       workflowId: "wf_connect_first_workflow"
     });
+    const ceoCard = (await repository.listCardsForRun(board.runId)).find((card) => card.persona === "ceo");
+    const ceoEvents = await repository.listEventsForCard(ceoCard!.id);
 
     expect(reviewed).toEqual({
       status: "done",
       runId: board.runId
     });
     expect(run?.state).toBe("done");
+    expect(ceoEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventKind: "attention_resolved",
+          payload: expect.objectContaining({
+            actionKind: "queue_ceo_review",
+            runState: "assembling",
+            reason: "final_assembly"
+          })
+        })
+      ])
+    );
   });
 
   it("resolves CEO review attention by starting a fresh cycle through the explicit review seam", async () => {
@@ -756,6 +770,8 @@ describe("harness board service", () => {
       decision: "start_fresh_cycle",
       mode: "reopen_deferred"
     });
+    const ceoCard = (await repository.listCardsForRun(board.runId)).find((card) => card.persona === "ceo");
+    const ceoEvents = await repository.listEventsForCard(ceoCard!.id);
 
     expect(reviewed).toEqual({
       status: "fresh_cycle_started",
@@ -763,6 +779,18 @@ describe("harness board service", () => {
       reopenedProposalCount: 1
     });
     expect(reviewed.runId).not.toBe(board.runId);
+    expect(ceoEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventKind: "attention_resolved",
+          payload: expect.objectContaining({
+            actionKind: "queue_ceo_review",
+            runState: "assembling",
+            reason: "governance_hold"
+          })
+        })
+      ])
+    );
   });
 
   it("fails closed when explicit review is attempted without pending CEO attention", async () => {
