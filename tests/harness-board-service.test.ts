@@ -289,17 +289,23 @@ describe("harness board service", () => {
           {
             value: "approve",
             label: "Approve proposal",
-            description: "Approve this work so it can move into the bounded execution flow."
+            description: "Approve this work so it can move into the bounded execution flow.",
+            emphasis: "primary",
+            exampleRequest: { decision: "approve" }
           },
           {
             value: "defer",
             label: "Defer proposal",
-            description: "Pause this follow-on work without dropping it so the CEO can revisit it later."
+            description: "Pause this follow-on work without dropping it so the CEO can revisit it later.",
+            emphasis: "secondary",
+            exampleRequest: { decision: "defer" }
           },
           {
             value: "deny",
             label: "Deny proposal",
-            description: "Reject this follow-on work when it should not expand the current board cycle."
+            description: "Reject this follow-on work when it should not expand the current board cycle.",
+            emphasis: "caution",
+            exampleRequest: { decision: "deny" }
           }
         ],
         allowedDecisions: ["approve", "defer", "deny"]
@@ -478,13 +484,16 @@ describe("harness board service", () => {
         {
           value: "resume_lane",
           label: "Resume lane",
-          description: "Return the lane to active execution with an optional bounded resume note."
+          description: "Return the lane to active execution with an optional bounded resume note.",
+          emphasis: "primary",
+          exampleRequest: { command: "resume_lane" }
         }
       ],
       allowedCommands: ["resume_lane"],
       targetCardId: created.cardId,
       targetPersona: "CFO",
-      targetTitle: "Pressure-test the pricing lane"
+      targetTitle: "Pressure-test the pricing lane",
+      targetSummary: "Resume CFO lane: Pressure-test the pricing lane"
     });
   });
 
@@ -586,13 +595,16 @@ describe("harness board service", () => {
           {
             value: "resume_lane",
             label: "Resume lane",
-            description: "Return the lane to active execution with an optional bounded resume note."
+            description: "Return the lane to active execution with an optional bounded resume note.",
+            emphasis: "primary",
+            exampleRequest: { command: "resume_lane" }
           }
         ],
         allowedCommands: ["resume_lane"],
         targetCardId: created.cardId,
         targetPersona: "ANALYST",
-        targetTitle: "Persisted handoff lane"
+        targetTitle: "Persisted handoff lane",
+        targetSummary: "Resume ANALYST lane: Persisted handoff lane"
       })
     );
     expect(JSON.stringify(board.pendingAttention)).not.toContain(
@@ -677,12 +689,16 @@ describe("harness board service", () => {
         {
           value: "complete_run",
           label: "Complete run",
-          description: "Close the current board cycle and package the current business outcome."
+          description: "Close the current board cycle and package the current business outcome.",
+          emphasis: "primary",
+          exampleRequest: { decision: "complete_run" }
         },
         {
           value: "start_fresh_cycle",
           label: "Start fresh cycle",
-          description: "Open the next board cycle from this run, with or without reopening deferred work."
+          description: "Open the next board cycle from this run, with or without reopening deferred work.",
+          emphasis: "secondary",
+          exampleRequest: { decision: "start_fresh_cycle", mode: "reopen_deferred" }
         }
       ],
       allowedDecisions: ["complete_run", "start_fresh_cycle"],
@@ -1801,22 +1817,29 @@ describe("harness board service", () => {
           {
             value: "approve",
             label: "Approve proposal",
-            description: "Approve this work and optionally fold it into CFO lane (Pressure-test the pricing lane)."
+            description: "Approve this work and optionally fold it into CFO lane (Pressure-test the pricing lane).",
+            emphasis: "primary",
+            exampleRequest: { decision: "approve", targetCardId: parentCard.cardId }
           },
           {
             value: "defer",
             label: "Defer proposal",
-            description: "Pause this follow-on work without dropping it so the CEO can revisit it later."
+            description: "Pause this follow-on work without dropping it so the CEO can revisit it later.",
+            emphasis: "secondary",
+            exampleRequest: { decision: "defer" }
           },
           {
             value: "deny",
             label: "Deny proposal",
-            description: "Reject this follow-on work when it should not expand the current board cycle."
+            description: "Reject this follow-on work when it should not expand the current board cycle.",
+            emphasis: "caution",
+            exampleRequest: { decision: "deny" }
           }
         ],
         handoffTargetCardId: parentCard.cardId,
         handoffTargetPersona: "CFO",
-        handoffTargetTitle: "Pressure-test the pricing lane"
+        handoffTargetTitle: "Pressure-test the pricing lane",
+        targetSummary: "Reuse CFO lane: Pressure-test the pricing lane"
       })
     ]);
 
@@ -1865,24 +1888,31 @@ describe("harness board service", () => {
           {
             value: "approve",
             label: "Approve proposal",
-            description: "Approve this work and optionally fold it into CFO lane (Pressure-test the pricing lane)."
+            description: "Approve this work and optionally fold it into CFO lane (Pressure-test the pricing lane).",
+            emphasis: "primary",
+            exampleRequest: { decision: "approve", targetCardId: parentCard.cardId }
           },
           {
             value: "defer",
             label: "Defer proposal",
-            description: "Pause this follow-on work without dropping it so the CEO can revisit it later."
+            description: "Pause this follow-on work without dropping it so the CEO can revisit it later.",
+            emphasis: "secondary",
+            exampleRequest: { decision: "defer" }
           },
           {
             value: "deny",
             label: "Deny proposal",
-            description: "Reject this follow-on work when it should not expand the current board cycle."
+            description: "Reject this follow-on work when it should not expand the current board cycle.",
+            emphasis: "caution",
+            exampleRequest: { decision: "deny" }
           }
         ],
         policyReasonLabel: "Waiting on current lane owner",
         nextReviewTrigger: "Review again when the current deliverable owner clears or hands off the lane.",
         handoffTargetCardId: parentCard.cardId,
         handoffTargetPersona: "CFO",
-        handoffTargetTitle: "Pressure-test the pricing lane"
+        handoffTargetTitle: "Pressure-test the pricing lane",
+        targetSummary: "Reuse CFO lane: Pressure-test the pricing lane"
       })
     ]);
     expect(
