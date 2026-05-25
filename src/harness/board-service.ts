@@ -88,7 +88,7 @@ export type HarnessPendingAttentionView = {
   runState: HarnessRunRecord["state"];
   statusLabel: string;
   summary: string;
-  actionRoute: "review-attention" | "resolve-attention";
+  actionRoute?: "review-attention" | "resolve-attention";
   allowedDecisions?: HarnessAttentionReviewDecision[];
   allowedCommands?: HarnessAttentionResolutionCommand[];
   requestedAtLabel?: string;
@@ -3274,10 +3274,12 @@ function buildPendingAttentionView(input: {
     statusLabel: persistedSnapshot?.statusLabel ?? described.statusLabel,
     summary: persistedSnapshot?.summary ?? continuitySummary ?? described.summary,
     ...(action.kind === "queue_ceo_review"
-      ? {
-          actionRoute: "review-attention" as const,
-          allowedDecisions: ["complete_run", "start_fresh_cycle"] as HarnessAttentionReviewDecision[]
-        }
+      ? (action.runState === "assembling"
+          ? {
+              actionRoute: "review-attention" as const,
+              allowedDecisions: ["complete_run", "start_fresh_cycle"] as HarnessAttentionReviewDecision[]
+            }
+          : {})
       : {
           actionRoute: "resolve-attention" as const,
           allowedCommands: [action.kind === "await_lane_resume" ? "resume_lane" : "unblock_lane"] as HarnessAttentionResolutionCommand[]

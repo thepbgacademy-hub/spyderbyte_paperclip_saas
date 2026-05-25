@@ -560,6 +560,107 @@ describe("harness board service", () => {
     });
   });
 
+  it("keeps governance-backlog CEO attention visible without advertising explicit review commands", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const cards = await repository.listCardsForRun(board.runId);
+    const ceoCard = cards.find((card) => card.persona === "ceo");
+    await repository.insertProposal({
+      id: "proposal_governance_backlog_1",
+      runId: board.runId,
+      parentCardId: ceoCard!.id,
+      requestedByCardId: ceoCard!.id,
+      requestedByPersona: "ceo",
+      persona: "researcher",
+      title: "Investigate market signals before another lane opens",
+      deliverableType: "research_brief",
+      status: "proposed"
+    });
+
+    const hydrated = await service.listBoardState({ authorization: "Bearer valid" });
+
+    expect(hydrated.pendingAttention).toEqual({
+      kind: "queue_ceo_review",
+      runState: "active",
+      statusLabel: "CEO review required",
+      summary: "The board needs CEO review because deferred governance is now the next bounded move.",
+      reasonLabel: "Governance backlog"
+    });
+  });
+
+  it("keeps blocked governance-hold attention visible without advertising explicit review commands", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "blocked"
+    });
+    await repository.insertProposal({
+      id: "proposal_governance_hold_1",
+      runId: board.runId,
+      parentCardId: created.cardId,
+      requestedByCardId: created.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Compare alternate pricing anchors",
+      deliverableType: "research_brief",
+      status: "deferred",
+      decisionNote: "Wait until lane pressure clears."
+    });
+
+    const hydrated = await service.listBoardState({ authorization: "Bearer valid" });
+
+    expect(hydrated.pendingAttention).toEqual({
+      kind: "queue_ceo_review",
+      runState: "blocked",
+      statusLabel: "CEO review required",
+      summary: "The board needs CEO review because governance work is still shaping what can move next.",
+      reasonLabel: "Governance hold"
+    });
+  });
+
   it("keeps historical attention activity but clears pendingAttention after an explicit resolution", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
