@@ -237,6 +237,7 @@ The first harness implementation slice is now built and verified:
 - A bounded request contract is still incomplete if the client has to invent the intent copy or choice semantics. Board action metadata should also expose the tenant-safe action label/description plus bounded option metadata for `approve` / `defer` / `deny`, review decisions, and resume/unblock commands so UX code does not reinterpret engine policy.
 - Once choice metadata exists, carry bounded example payloads and target summaries too. Proposal handoff rows and resume/unblock attention states should expose the intended target lane plus minimal example request bodies so consuming clients do not reconstruct payloads or target copy from several lower-level fields.
 - Once option metadata exists, the engine should also declare which choice is recommended and which ones need confirmation. Board action metadata should carry bounded recommendation and disruption semantics so consuming clients do not invent their own default buttons or confirmation rules for proposal denials, fresh-cycle starts, or lane recovery actions.
+- Once the board action contract is rich enough to drive UI decisions, the localhost fallback and board page should consume that same bounded contract directly. Do not let fallback data or page-side helper copy drift into a second unofficial action model.
 
 ## Next Step
 

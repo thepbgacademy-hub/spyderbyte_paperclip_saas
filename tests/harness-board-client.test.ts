@@ -30,4 +30,54 @@ describe("harness board client", () => {
     expect(fetchImpl).toHaveBeenCalledWith("/api/harness/board", { credentials: "include" });
     expect(client.isBrowserFallbackEnabled()).toBe(false);
   });
+
+  it("keeps the localhost fallback aligned with the bounded board action contract", () => {
+    const client = createHarnessBoardClient(
+      fetch,
+      { location: { hostname: "127.0.0.1" } as Window["location"] }
+    );
+
+    const fallback = client.getFallback();
+
+    expect(fallback.pendingAttention).toEqual(
+      expect.objectContaining({
+        actionRoute: "review-attention",
+        actionPath: expect.stringContaining("/review-attention"),
+        actionMethod: "POST",
+        actionLabel: "Review final assembly",
+        recommendedOptionValue: "complete_run",
+        actionOptions: expect.arrayContaining([
+          expect.objectContaining({
+            value: "complete_run",
+            nextEffectSummary: expect.any(String)
+          }),
+          expect.objectContaining({
+            value: "start_fresh_cycle",
+            requiresConfirmation: true
+          })
+        ])
+      })
+    );
+
+    expect(fallback.pendingApprovals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          actionRoute: "proposal-decision",
+          actionMethod: "POST",
+          actionLabel: "Review proposal decision",
+          recommendedOptionValue: "approve",
+          actionOptions: expect.arrayContaining([
+            expect.objectContaining({
+              value: "approve",
+              nextEffectSummary: expect.any(String)
+            }),
+            expect.objectContaining({
+              value: "deny",
+              requiresConfirmation: true
+            })
+          ])
+        })
+      ])
+    );
+  });
 });

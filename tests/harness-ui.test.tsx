@@ -8,6 +8,7 @@ import {
 } from "../apps/web/src/components/HarnessBoard.js";
 import { HarnessCardDrawer } from "../apps/web/src/components/HarnessCardDrawer.js";
 import { HarnessBoardPage } from "../apps/web/src/pages/HarnessBoardPage.js";
+import type { HarnessBoardResponse } from "../src/harness/board-service.js";
 
 const cards: HarnessBoardCard[] = [
   {
@@ -71,6 +72,89 @@ const columns: HarnessBoardColumn[] = [
   { id: "working", title: "Working", description: "Cards currently advancing", cardIds: ["card-cfo-forecast"] }
 ];
 
+const boardResponse: HarnessBoardResponse = {
+  runId: "run_ui_test_1",
+  workflowId: "wf_connect_first_workflow",
+  packageId: "pkg_bib_connect",
+  columns,
+  cards,
+  pendingApprovals: [
+    {
+      id: "proposal_ui_test_1",
+      title: "Gather competitor price anchors",
+      requestedByPersona: "CFO",
+      targetPersona: "RESEARCHER",
+      deliverableLabel: "Research Brief",
+      statusLabel: "Pending CEO approval",
+      actionRoute: "proposal-decision",
+      actionPath: "/api/harness/proposals/proposal_ui_test_1/decision",
+      actionMethod: "POST",
+      actionLabel: "Review proposal decision",
+      actionDescription: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
+      requestFields: [],
+      actionOptions: [
+        {
+          value: "approve",
+          label: "Approve proposal",
+          description: "Approve this work so it can move into the bounded execution flow.",
+          emphasis: "primary",
+          nextEffectSummary: "This proposal can move into the bounded execution flow and open or advance the intended lane.",
+          exampleRequest: { decision: "approve" }
+        },
+        {
+          value: "deny",
+          label: "Deny proposal",
+          description: "Reject this follow-on work when it should not expand the current board cycle.",
+          emphasis: "caution",
+          nextEffectSummary: "This proposal closes without opening or advancing any new work lane.",
+          requiresConfirmation: true,
+          confirmationLabel: "Deny this proposal and close the follow-on request?",
+          exampleRequest: { decision: "deny" }
+        }
+      ],
+      recommendedOptionValue: "approve",
+      allowedDecisions: ["approve", "defer", "deny"]
+    }
+  ],
+  pendingAttention: {
+    kind: "queue_ceo_review",
+    runState: "assembling",
+    statusLabel: "CEO review required",
+    summary: "The board is ready for final assembly before the tenant-facing package is closed.",
+    actionRoute: "review-attention",
+    actionPath: "/api/harness/runs/run_ui_test_1/review-attention",
+    actionMethod: "POST",
+    actionLabel: "Review final assembly",
+    actionDescription: "Finish the current board cycle or intentionally start the next one.",
+    requestFields: [],
+    actionOptions: [
+      {
+        value: "complete_run",
+        label: "Complete run",
+        description: "Close the current board cycle and package the current business outcome.",
+        emphasis: "primary",
+        nextEffectSummary: "The current run closes as done and the tenant-facing package stays on this board cycle.",
+        exampleRequest: { decision: "complete_run" }
+      },
+      {
+        value: "start_fresh_cycle",
+        label: "Start fresh cycle",
+        description: "Open the next board cycle from this run, with or without reopening deferred work.",
+        emphasis: "secondary",
+        nextEffectSummary: "A new run starts from this board, optionally carrying deferred follow-on work into the next cycle.",
+        requiresConfirmation: true,
+        confirmationLabel: "Start a new board cycle from this run?",
+        exampleRequest: { decision: "start_fresh_cycle", mode: "reopen_deferred" }
+      }
+    ],
+    recommendedOptionValue: "complete_run",
+    allowedDecisions: ["complete_run", "start_fresh_cycle"],
+    reasonLabel: "Final assembly"
+  },
+  recentDecisions: [],
+  followThroughItems: []
+};
+
 describe("harness board UI", () => {
   it("renders clean persona cards without backend execution noise", () => {
     const markup = renderToStaticMarkup(
@@ -109,5 +193,19 @@ describe("harness board UI", () => {
     expect(markup).toContain("CEO approvals");
     expect(markup).not.toContain("raw execution log");
     expect(markup).not.toContain("harness-browser-fallback");
+  });
+
+  it("renders bounded attention and approval action guidance from the board contract", () => {
+    const markup = renderToStaticMarkup(<HarnessBoardPage initialBoard={boardResponse} />);
+
+    expect(markup).toContain("Review final assembly");
+    expect(markup).toContain("Complete run");
+    expect(markup).toContain("Start a new board cycle from this run?");
+    expect(markup).toContain("Review proposal decision");
+    expect(markup).toContain("Approve proposal");
+    expect(markup).toContain("Deny this proposal and close the follow-on request?");
+    expect(markup).toContain("Recommended next action");
+    expect(markup).not.toContain("raw execution log");
+    expect(markup).not.toContain("tool");
   });
 });

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
-import { createHarnessBoardClient } from "../harness-board-client.js";
+import { createHarnessBoardClient, type HarnessBoardResponse } from "../harness-board-client.js";
 import {
   HarnessBoard,
   type HarnessBoardCard,
@@ -119,6 +119,64 @@ const styles = {
   personaDetail: {
     color: "#94a3b8",
     fontSize: "0.82rem"
+  } satisfies CSSProperties,
+  actionList: {
+    display: "grid",
+    gap: "0.85rem",
+    margin: "0.8rem 0 0",
+    padding: 0
+  } satisfies CSSProperties,
+  actionItem: {
+    background: "rgba(15, 23, 42, 0.58)",
+    border: "1px solid rgba(148, 163, 184, 0.14)",
+    borderRadius: "18px",
+    display: "grid",
+    gap: "0.45rem",
+    listStyle: "none",
+    padding: "0.9rem"
+  } satisfies CSSProperties,
+  actionHeading: {
+    color: "#f8fafc",
+    fontSize: "0.92rem",
+    fontWeight: 700,
+    margin: 0
+  } satisfies CSSProperties,
+  actionSummary: {
+    color: "#cbd5e1",
+    fontSize: "0.84rem",
+    lineHeight: 1.5,
+    margin: 0
+  } satisfies CSSProperties,
+  actionMeta: {
+    color: "#7dd3fc",
+    fontSize: "0.76rem",
+    fontWeight: 700,
+    letterSpacing: "0.06em",
+    margin: 0,
+    textTransform: "uppercase"
+  } satisfies CSSProperties,
+  optionList: {
+    display: "grid",
+    gap: "0.45rem",
+    margin: 0,
+    padding: 0
+  } satisfies CSSProperties,
+  optionItem: {
+    display: "grid",
+    gap: "0.18rem",
+    listStyle: "none"
+  } satisfies CSSProperties,
+  optionTitle: {
+    color: "#e2e8f0",
+    fontSize: "0.82rem",
+    fontWeight: 600,
+    margin: 0
+  } satisfies CSSProperties,
+  optionBody: {
+    color: "#94a3b8",
+    fontSize: "0.78rem",
+    lineHeight: 1.45,
+    margin: 0
   } satisfies CSSProperties
 };
 
@@ -135,26 +193,67 @@ function getPersonaMetrics(cards: HarnessBoardCard[]) {
   }));
 }
 
-export function HarnessBoardPage() {
+function renderActionOptions(
+  options:
+    | NonNullable<NonNullable<HarnessBoardResponse["pendingAttention"]>["actionOptions"]>
+    | HarnessBoardResponse["pendingApprovals"][number]["actionOptions"]
+    | undefined,
+  recommendedOptionValue?: string
+) {
+  if (!options || options.length === 0) {
+    return null;
+  }
+
+  return (
+    <ul style={styles.optionList}>
+      {options.map((option) => {
+        const badges: string[] = [];
+        if (option.value === recommendedOptionValue) {
+          badges.push("Recommended next action");
+        }
+        if (option.requiresConfirmation) {
+          badges.push(option.confirmationLabel ?? "Confirmation required");
+        }
+
+        return (
+          <li key={option.value} style={styles.optionItem}>
+            <p style={styles.optionTitle}>
+              {option.label}
+              {badges.length > 0 ? ` · ${badges.join(" · ")}` : ""}
+            </p>
+            <p style={styles.optionBody}>{option.description}</p>
+            {option.nextEffectSummary ? <p style={styles.optionBody}>{option.nextEffectSummary}</p> : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | null } = {}) {
   const browserFallbackEnabled = harnessBoardClient.isBrowserFallbackEnabled();
-  const [board, setBoard] = useState(() => (browserFallbackEnabled ? harnessBoardClient.getFallback() : null));
+  const [board, setBoard] = useState(() => props.initialBoard ?? (browserFallbackEnabled ? harnessBoardClient.getFallback() : null));
   const [openCardId, setOpenCardId] = useState<string>(() =>
-    browserFallbackEnabled ? harnessBoardClient.getFallback().cards[0]?.id ?? "" : ""
+    (props.initialBoard ?? (browserFallbackEnabled ? harnessBoardClient.getFallback() : null))?.cards[0]?.id ?? ""
   );
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (props.initialBoard) {
+      return;
+    }
+
     let cancelled = false;
 
     harnessBoardClient
       .fetchBoard()
-      .then((nextBoard) => {
+      .then((nextBoard: HarnessBoardResponse) => {
         if (cancelled) {
           return;
         }
         setLoadError(null);
         setBoard(nextBoard);
-        setOpenCardId((current) =>
+        setOpenCardId((current: string) =>
           nextBoard.cards.some((card) => card.id === current) ? current : nextBoard.cards[0]?.id || ""
         );
       })
@@ -166,7 +265,7 @@ export function HarnessBoardPage() {
           const fallbackBoard = harnessBoardClient.getFallback();
           setLoadError(null);
           setBoard(fallbackBoard);
-          setOpenCardId((current) =>
+          setOpenCardId((current: string) =>
             fallbackBoard.cards.some((card) => card.id === current) ? current : fallbackBoard.cards[0]?.id || ""
           );
           return;
@@ -180,11 +279,12 @@ export function HarnessBoardPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [props.initialBoard]);
 
   const cards = board?.cards ?? [];
   const columns = board?.columns ?? [];
   const pendingApprovals = board?.pendingApprovals ?? [];
+  const pendingAttention = board?.pendingAttention ?? null;
   const activeCard = cards.find((card) => card.id === openCardId) ?? null;
   const personaMetrics = useMemo(() => getPersonaMetrics(cards), [cards]);
   const currentFocus = activeCard?.title ?? cards[0]?.title ?? "Preparing the next move";
@@ -262,6 +362,44 @@ export function HarnessBoardPage() {
               )}
             </ul>
           </section>
+
+          {pendingAttention ? (
+            <section style={styles.panel}>
+              <h2 style={styles.panelTitle}>Board action</h2>
+              <p style={styles.panelBody}>{pendingAttention.summary}</p>
+              <ul style={styles.actionList}>
+                <li style={styles.actionItem}>
+                  <p style={styles.actionMeta}>{pendingAttention.statusLabel}</p>
+                  <h3 style={styles.actionHeading}>{pendingAttention.actionLabel ?? "Board action"}</h3>
+                  {pendingAttention.actionDescription ? (
+                    <p style={styles.actionSummary}>{pendingAttention.actionDescription}</p>
+                  ) : null}
+                  {pendingAttention.targetSummary ? (
+                    <p style={styles.actionSummary}>{pendingAttention.targetSummary}</p>
+                  ) : null}
+                  {renderActionOptions(pendingAttention.actionOptions, pendingAttention.recommendedOptionValue)}
+                </li>
+              </ul>
+            </section>
+          ) : null}
+
+          {pendingApprovals.length > 0 ? (
+            <section style={styles.panel}>
+              <h2 style={styles.panelTitle}>Approval actions</h2>
+              <p style={styles.panelBody}>Bounded decision options coming directly from the harness action contract.</p>
+              <ul style={styles.actionList}>
+                {pendingApprovals.map((approval: HarnessBoardResponse["pendingApprovals"][number]) => (
+                  <li key={approval.id} style={styles.actionItem}>
+                    <p style={styles.actionMeta}>{approval.statusLabel}</p>
+                    <h3 style={styles.actionHeading}>{approval.actionLabel}</h3>
+                    <p style={styles.actionSummary}>{approval.actionDescription}</p>
+                    {approval.targetSummary ? <p style={styles.actionSummary}>{approval.targetSummary}</p> : null}
+                    {renderActionOptions(approval.actionOptions, approval.recommendedOptionValue)}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           <HarnessCardDrawer card={activeCard} onClose={() => setOpenCardId("")} open={Boolean(activeCard)} />
         </aside>

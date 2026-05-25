@@ -124,3 +124,4 @@ This file tracks the new harness subproject only.
 - [x] Expose bounded action labels, descriptions, and option metadata alongside board command metadata so proposal rows and actionable attention states stop relying on client-side choice-semantics reconstruction.
 - [x] Expose bounded option examples and target summaries alongside board action metadata so proposal rows and actionable attention states stop relying on client-side payload and target-copy reconstruction.
 - [x] Expose bounded recommended-option and confirmation metadata alongside board action metadata so proposal rows and actionable attention states stop relying on client-side default-choice and disruption-guard reconstruction.
+- [x] Teach the localhost fallback and board page to consume the bounded harness action contract directly so contract-rich control semantics stop being backend-only metadata.

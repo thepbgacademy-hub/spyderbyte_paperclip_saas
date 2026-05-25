@@ -1,4 +1,5 @@
 import type { HarnessBoardResponse } from "../../../src/harness/board-service.js";
+export type { HarnessBoardResponse } from "../../../src/harness/board-service.js";
 
 const defaultBoardResponse: HarnessBoardResponse = {
   runId: "harness-browser-fallback",
@@ -119,7 +120,95 @@ const defaultBoardResponse: HarnessBoardResponse = {
       ]
     }
   ],
-  pendingApprovals: [],
+  pendingApprovals: [
+    {
+      id: "proposal-fallback-1",
+      title: "Gather competitor price anchors",
+      requestedByPersona: "CFO",
+      targetPersona: "RESEARCHER",
+      deliverableLabel: "Research Brief",
+      statusLabel: "Pending CEO approval",
+      actionRoute: "proposal-decision",
+      actionPath: "/api/harness/proposals/proposal-fallback-1/decision",
+      actionMethod: "POST",
+      actionLabel: "Review proposal decision",
+      actionDescription: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
+      requestFields: [
+        {
+          name: "decision",
+          label: "Proposal decision",
+          description: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
+          required: true,
+          allowedValues: ["approve", "defer", "deny"]
+        }
+      ],
+      actionOptions: [
+        {
+          value: "approve",
+          label: "Approve proposal",
+          description: "Approve this work so it can move into the bounded execution flow.",
+          emphasis: "primary",
+          nextEffectSummary: "This proposal can move into the bounded execution flow and open or advance the intended lane.",
+          exampleRequest: { decision: "approve" }
+        },
+        {
+          value: "deny",
+          label: "Deny proposal",
+          description: "Reject this follow-on work when it should not expand the current board cycle.",
+          emphasis: "caution",
+          nextEffectSummary: "This proposal closes without opening or advancing any new work lane.",
+          requiresConfirmation: true,
+          confirmationLabel: "Deny this proposal and close the follow-on request?",
+          exampleRequest: { decision: "deny" }
+        }
+      ],
+      recommendedOptionValue: "approve",
+      allowedDecisions: ["approve", "defer", "deny"]
+    }
+  ],
+  pendingAttention: {
+    kind: "queue_ceo_review",
+    runState: "assembling",
+    statusLabel: "CEO review required",
+    summary: "The board is ready for final assembly before the tenant-facing package is closed.",
+    actionRoute: "review-attention",
+    actionPath: "/api/harness/runs/harness-browser-fallback/review-attention",
+    actionMethod: "POST",
+    actionLabel: "Review final assembly",
+    actionDescription: "Finish the current board cycle or intentionally start the next one.",
+    requestFields: [
+      {
+        name: "decision",
+        label: "Review decision",
+        description: "Choose whether to close the current board cycle or start the next one.",
+        required: true,
+        allowedValues: ["complete_run", "start_fresh_cycle"]
+      }
+    ],
+    actionOptions: [
+      {
+        value: "complete_run",
+        label: "Complete run",
+        description: "Close the current board cycle and package the current business outcome.",
+        emphasis: "primary",
+        nextEffectSummary: "The current run closes as done and the tenant-facing package stays on this board cycle.",
+        exampleRequest: { decision: "complete_run" }
+      },
+      {
+        value: "start_fresh_cycle",
+        label: "Start fresh cycle",
+        description: "Open the next board cycle from this run, with or without reopening deferred work.",
+        emphasis: "secondary",
+        nextEffectSummary: "A new run starts from this board, optionally carrying deferred follow-on work into the next cycle.",
+        requiresConfirmation: true,
+        confirmationLabel: "Start a new board cycle from this run?",
+        exampleRequest: { decision: "start_fresh_cycle", mode: "reopen_deferred" }
+      }
+    ],
+    recommendedOptionValue: "complete_run",
+    allowedDecisions: ["complete_run", "start_fresh_cycle"],
+    reasonLabel: "Final assembly"
+  },
   followThroughItems: [
     {
       id: "follow-through-fallback-1",
