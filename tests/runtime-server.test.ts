@@ -559,6 +559,45 @@ describe("runtime server", () => {
     expect(pump.stop).toHaveBeenCalledOnce();
   });
 
+  it("requeues resolved harness attention through the existing workflow queue seam when an enqueuer is available", async () => {
+    const enqueueOnce = vi.fn().mockResolvedValue("enqueued");
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() },
+      workflowQueueEnqueuer: { enqueueOnce }
+    });
+
+    const boardServiceOptions = vi.mocked(createHarnessBoardService).mock.calls.at(-1)?.[0];
+    expect(boardServiceOptions?.onResolvedAttentionDispatch).toEqual(expect.any(Function));
+
+    await boardServiceOptions?.onResolvedAttentionDispatch?.({
+      tenantId: "tenant_123",
+      userId: "user_123",
+      runId: "run_123",
+      workflowId: "wf_connect_first_workflow",
+      cardId: "card_123",
+      command: "resume_lane",
+      state: "working"
+    });
+
+    expect(enqueueOnce).toHaveBeenCalledWith({
+      tenantId: "tenant_123",
+      workflowTemplateId: "wf_connect_first_workflow",
+      runId: "run_123",
+      userId: "user_123",
+      idempotencyKey: "tenant_123:wf_connect_first_workflow:run_123"
+    });
+
+    await runtime.close();
+  });
+
   it("wires provider credential registration to the runtime vault path", async () => {
     const { createProviderCredentialService } = await import("../src/secrets/provider-credential-service.js");
     const { createSecretService } = await import("../src/secrets/secret-service.js");

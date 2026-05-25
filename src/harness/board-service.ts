@@ -153,6 +153,15 @@ export type HarnessCompletionPackageView = {
 export type HarnessFreshCycleMode = "reopen_deferred" | "clean";
 export type HarnessAttentionReviewDecision = "complete_run" | "start_fresh_cycle";
 export type HarnessAttentionResolutionCommand = "resume_lane" | "unblock_lane";
+export type HarnessResolvedAttentionDispatch = {
+  tenantId: string;
+  userId: string;
+  runId: string;
+  workflowId: string;
+  cardId: string;
+  command: HarnessAttentionResolutionCommand;
+  state: "working" | "approved";
+};
 
 export type HarnessRecentDecisionView = {
   id: string;
@@ -210,6 +219,7 @@ export function createHarnessBoardService(options: {
   workflowRegistry: HarnessWorkflowRegistry;
   runAtomically?<T>(work: (repository: HarnessRepository) => Promise<T>): Promise<T>;
   audit?: HarnessAudit;
+  onResolvedAttentionDispatch?: (dispatch: HarnessResolvedAttentionDispatch) => Promise<void> | void;
 }) {
   const runtime = createHarnessRuntime();
 
@@ -2236,7 +2246,12 @@ export function createHarnessBoardService(options: {
 
         const resolvedState = request.command === "resume_lane" ? "working" as const : "approved" as const;
         return {
+          tenantId: access.session.tenantId,
+          userId: access.session.userId,
+          runId: run.id,
+          workflowId: run.workflowId,
           cardId: updatedCard.id,
+          command: request.command,
           state: resolvedState,
           status: request.command === "resume_lane" ? "resumed" as const : "unblocked" as const,
           auditEvents: [
@@ -2266,6 +2281,25 @@ export function createHarnessBoardService(options: {
       });
 
       await publishHarnessAuditEvents(options.audit, result.auditEvents ?? []);
+      try {
+        await options.onResolvedAttentionDispatch?.({
+          tenantId: result.tenantId,
+          userId: result.userId,
+          runId: result.runId,
+          workflowId: result.workflowId,
+          cardId: result.cardId,
+          command: result.command,
+          state: result.state
+        });
+      } catch (error) {
+        console.warn("Resolved harness attention dispatch hook failed after durable board mutation", {
+          runId: result.runId,
+          workflowId: result.workflowId,
+          cardId: result.cardId,
+          command: result.command,
+          error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+        });
+      }
       if (result.status === "resumed") {
         return { status: "resumed", cardId: result.cardId, state: "working" };
       }

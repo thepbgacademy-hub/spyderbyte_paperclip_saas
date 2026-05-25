@@ -246,6 +246,27 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
     repository: harnessRepository,
     workflowRegistry: harnessWorkflowRegistry,
     audit,
+    ...(options.workflowQueueEnqueuer
+      ? {
+          onResolvedAttentionDispatch: async (dispatch: {
+            tenantId: string;
+            userId: string;
+            runId: string;
+            workflowId: string;
+            cardId: string;
+            command: "resume_lane" | "unblock_lane";
+            state: "working" | "approved";
+          }) => {
+            await options.workflowQueueEnqueuer?.enqueueOnce({
+              tenantId: dispatch.tenantId,
+              workflowTemplateId: dispatch.workflowId,
+              runId: dispatch.runId,
+              userId: dispatch.userId,
+              idempotencyKey: `${dispatch.tenantId}:${dispatch.workflowId}:${dispatch.runId}`
+            });
+          }
+        }
+      : {}),
     runAtomically: async (work) =>
       transactionRunner.withTransaction(async (transaction) =>
         work(createPostgresHarnessRepository(transaction))

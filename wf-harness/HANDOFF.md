@@ -226,6 +226,7 @@ The first harness implementation slice is now built and verified:
 - Once attention events carry bounded snapshots, board reads should prefer that persisted snapshot over rebuilding labels from later mutable lane state. Otherwise a valid historical CEO-review / resume / unblock need can silently rewrite itself after the lane has already moved on.
 - Unchanged unresolved attention must stay quiet in the runtime handoff. Re-emitting generic or specific post-outcome events for the same unresolved need recreates exactly the kind of board-noise heat we were trying to remove from Paperclip.
 - The repaired GitNexus helper is now trustworthy in fallback mode on this machine. Prefer `node E:\GitNexusHome\tools\gitnexus-fts-query.mjs --repo-path E:\REPOS\spyderbyte_paperclip_saas --query "<keywords>" --limit 8 --mode fallback` and use `E:\GitNexusHome\tools\gitnexus-helper-usage.md` as the current usage note.
+- Board-side attention recovery should re-enter the same worker queue seam we already trust. When the CEO resolves `resume_lane` or `unblock_lane`, best-effort requeue the existing workflow run instead of leaving the lane in `working` / `approved` without a live worker handoff.
 
 ## Next Step
 

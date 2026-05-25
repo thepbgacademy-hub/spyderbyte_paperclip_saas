@@ -813,6 +813,7 @@ describe("harness board service", () => {
 
   it("resolves pending lane-resume attention through the explicit attention seam", async () => {
     const repository = createInMemoryHarnessRepository();
+    const onResolvedAttentionDispatch = vi.fn().mockResolvedValue(undefined);
     const service = createHarnessBoardService({
       authenticate: vi.fn().mockResolvedValue({
         tenantId: "tenant_123",
@@ -822,6 +823,7 @@ describe("harness board service", () => {
       requireTenantMember: vi.fn().mockResolvedValue(undefined),
       requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
       repository,
+      onResolvedAttentionDispatch,
       runAtomically: async (work) => work(repository),
       workflowRegistry: createHarnessWorkflowRegistry({
         harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
@@ -860,6 +862,15 @@ describe("harness board service", () => {
     expect(resolved).toEqual({
       status: "resumed",
       cardId: created.cardId,
+      state: "working"
+    });
+    expect(onResolvedAttentionDispatch).toHaveBeenCalledWith({
+      tenantId: "tenant_123",
+      userId: "user_123",
+      runId: board.runId,
+      workflowId: "wf_connect_first_workflow",
+      cardId: created.cardId,
+      command: "resume_lane",
       state: "working"
     });
     expect(persistedCard?.state).toBe("working");

@@ -113,3 +113,4 @@ This file tracks the new harness subproject only.
 - [x] Add an explicit CEO review-action seam so `queue_ceo_review` attention can resolve through a bounded `complete_run` or `start_fresh_cycle` command instead of leaving completion behavior implicit in downstream callers.
 - [x] Add explicit board-side attention-resolution commands so `await_lane_resume` and `await_unblock` can resolve through bounded mutations instead of generic card editing or implicit state nudges.
 - [x] Surface bounded pending-attention action metadata so the board can tell the dashboard which explicit command family (`review-attention` vs `resolve-attention`) applies without inferring it from labels.
+- [x] Re-enter the existing worker queue seam after explicit board-side `resume_lane` / `unblock_lane` resolution so resolved attention restores live execution truth instead of becoming a silent side path.
