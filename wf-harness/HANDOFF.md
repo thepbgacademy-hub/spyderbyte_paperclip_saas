@@ -233,6 +233,7 @@ The first harness implementation slice is now built and verified:
 - Governance-only CEO attention still needs a bounded next step, not just a warning. When `queue_ceo_review` is driven by governance backlog/hold instead of final assembly, route the board toward the proposal review queue with a bounded `pending-approvals` action surface and approval count rather than leaving the UI to guess where the CEO should act next.
 - Once governance-only CEO attention routes to the proposal queue, each individual pending-approval row still needs its own bounded action contract. Expose proposal-decision metadata on the row itself so the dashboard does not have to infer `approve` / `defer` / `deny` behavior from labels or separate route heuristics.
 - Once the board exposes a bounded command family, it should also expose the bounded action path for that family. Carry the exact review / resolve / proposal-decision endpoint path in board metadata so clients stop reconstructing control routes outside the harness seam.
+- A bounded action path is still incomplete if the client has to guess the HTTP method or request body contract. Board action metadata should expose the minimal request shape (`decision`, `command`, optional summaries, optional handoff target) so clients follow the harness seam instead of rebuilding mutation semantics from separate docs or heuristics.
 
 ## Next Step
 

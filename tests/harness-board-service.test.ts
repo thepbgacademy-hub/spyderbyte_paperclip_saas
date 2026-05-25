@@ -267,6 +267,11 @@ describe("harness board service", () => {
         statusLabel: "Pending CEO approval",
         actionRoute: "proposal-decision",
         actionPath: "/api/harness/proposals/proposal_approval_1/decision",
+        actionMethod: "POST",
+        requestFields: [
+          { name: "decision", required: true, allowedValues: ["approve", "defer", "deny"] },
+          { name: "decisionNote", required: false }
+        ],
         allowedDecisions: ["approve", "defer", "deny"]
       })
     ]);
@@ -421,6 +426,11 @@ describe("harness board service", () => {
       summary: "CFO should resume this lane once the tenant confirms the latest revenue assumption.",
       actionRoute: "resolve-attention",
       actionPath: `/api/harness/runs/${board.runId}/resolve-attention`,
+      actionMethod: "POST",
+      requestFields: [
+        { name: "command", required: true, allowedValues: ["resume_lane"] },
+        { name: "resumeSummary", required: false }
+      ],
       allowedCommands: ["resume_lane"],
       targetCardId: created.cardId,
       targetPersona: "CFO",
@@ -504,6 +514,11 @@ describe("harness board service", () => {
         summary: "Use the persisted snapshot summary for tenant-safe pending attention.",
         actionRoute: "resolve-attention",
         actionPath: `/api/harness/runs/${board.runId}/resolve-attention`,
+        actionMethod: "POST",
+        requestFields: [
+          { name: "command", required: true, allowedValues: ["resume_lane"] },
+          { name: "resumeSummary", required: false }
+        ],
         allowedCommands: ["resume_lane"],
         targetCardId: created.cardId,
         targetPersona: "ANALYST",
@@ -561,6 +576,12 @@ describe("harness board service", () => {
       summary: "The board is ready for final assembly before the tenant-facing package is closed.",
       actionRoute: "review-attention",
       actionPath: `/api/harness/runs/${board.runId}/review-attention`,
+      actionMethod: "POST",
+      requestFields: [
+        { name: "decision", required: true, allowedValues: ["complete_run", "start_fresh_cycle"] },
+        { name: "completionSummary", required: false, requiredWhenValue: "complete_run" },
+        { name: "mode", required: false, supportedWhenValue: "start_fresh_cycle", allowedValues: ["reopen_deferred", "clean"] }
+      ],
       allowedDecisions: ["complete_run", "start_fresh_cycle"],
       reasonLabel: "Final assembly"
     });
@@ -1643,6 +1664,17 @@ describe("harness board service", () => {
       expect.objectContaining({
         id: "proposal_owner_conflict_1",
         statusLabel: "Pending CEO approval",
+        actionMethod: "POST",
+        requestFields: [
+          { name: "decision", required: true, allowedValues: ["approve", "defer", "deny"] },
+          { name: "decisionNote", required: false },
+          {
+            name: "targetCardId",
+            required: false,
+            supportedWhenValue: "approve",
+            suggestedValue: parentCard.cardId
+          }
+        ],
         handoffTargetCardId: parentCard.cardId,
         handoffTargetPersona: "CFO",
         handoffTargetTitle: "Pressure-test the pricing lane"
@@ -1664,6 +1696,17 @@ describe("harness board service", () => {
       expect.objectContaining({
         id: "proposal_owner_conflict_1",
         statusLabel: "Deferred for later CEO review",
+        actionMethod: "POST",
+        requestFields: [
+          { name: "decision", required: true, allowedValues: ["approve", "defer", "deny"] },
+          { name: "decisionNote", required: false },
+          {
+            name: "targetCardId",
+            required: false,
+            supportedWhenValue: "approve",
+            suggestedValue: parentCard.cardId
+          }
+        ],
         policyReasonLabel: "Waiting on current lane owner",
         nextReviewTrigger: "Review again when the current deliverable owner clears or hands off the lane.",
         handoffTargetCardId: parentCard.cardId,

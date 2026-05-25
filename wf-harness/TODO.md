@@ -120,3 +120,4 @@ This file tracks the new harness subproject only.
 - [x] Route governance-only CEO attention toward the bounded pending-approvals queue so active/blocked backlog states point at the real proposal review surface instead of leaving the UI to guess the next move.
 - [x] Expose bounded proposal-decision action metadata on each `pendingApprovals` row so the board can act on individual approvals without inferring command families from labels or surrounding attention routes.
 - [x] Expose bounded action paths alongside board command metadata so proposal rows and actionable attention states stop relying on client-side route reconstruction.
+- [x] Expose bounded action methods plus minimal request-field metadata alongside board command metadata so proposal rows and actionable attention states stop relying on client-side request-body reconstruction.

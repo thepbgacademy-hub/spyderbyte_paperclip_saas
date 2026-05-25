@@ -83,6 +83,15 @@ export type HarnessBoardResponse = {
   completionPackage?: HarnessCompletionPackageView;
 };
 
+export type HarnessActionRequestFieldView = {
+  name: "decision" | "decisionNote" | "targetCardId" | "command" | "resumeSummary" | "completionSummary" | "mode";
+  required: boolean;
+  allowedValues?: string[];
+  requiredWhenValue?: string;
+  supportedWhenValue?: string;
+  suggestedValue?: string;
+};
+
 export type HarnessPendingAttentionView = {
   kind: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>["kind"];
   runState: HarnessRunRecord["state"];
@@ -90,6 +99,8 @@ export type HarnessPendingAttentionView = {
   summary: string;
   actionRoute?: "review-attention" | "resolve-attention" | "pending-approvals";
   actionPath?: string;
+  actionMethod?: "POST";
+  requestFields?: HarnessActionRequestFieldView[];
   allowedDecisions?: HarnessAttentionReviewDecision[];
   allowedCommands?: HarnessAttentionResolutionCommand[];
   pendingApprovalCount?: number;
@@ -120,6 +131,8 @@ export type HarnessPendingApprovalView = {
   statusLabel: string;
   actionRoute: "proposal-decision";
   actionPath: string;
+  actionMethod: "POST";
+  requestFields: HarnessActionRequestFieldView[];
   allowedDecisions: Array<"approve" | "defer" | "deny">;
   policyReasonLabel?: string;
   nextReviewTrigger?: string;
@@ -3137,22 +3150,28 @@ function buildHarnessBoardResponse(input: {
     cards,
     pendingApprovals: input.proposals
       .filter((proposal) => proposal.status === "proposed" || proposal.status === "deferred")
-      .map((proposal) => ({
-        id: proposal.id,
-        title: proposal.title,
-        requestedByPersona: proposal.requestedByPersona.toUpperCase(),
-        targetPersona: proposal.persona.toUpperCase(),
-        deliverableLabel: humanizeDeliverableType(proposal.deliverableType),
-        statusLabel: proposal.status === "deferred" ? "Deferred for later CEO review" : "Pending CEO approval",
-        actionRoute: "proposal-decision",
-        actionPath: `/api/harness/proposals/${encodeURIComponent(proposal.id)}/decision`,
-        allowedDecisions: ["approve", "defer", "deny"],
-        ...(toPendingApprovalPolicyView({
+      .map((proposal) => {
+        const policyView = toPendingApprovalPolicyView({
           cards: input.cards,
           proposal,
           latestDecision: latestDecisionByProposalId.get(proposal.id) ?? null
-        }))
-      })),
+        });
+
+        return {
+          id: proposal.id,
+          title: proposal.title,
+          requestedByPersona: proposal.requestedByPersona.toUpperCase(),
+          targetPersona: proposal.persona.toUpperCase(),
+          deliverableLabel: humanizeDeliverableType(proposal.deliverableType),
+          statusLabel: proposal.status === "deferred" ? "Deferred for later CEO review" : "Pending CEO approval",
+          actionRoute: "proposal-decision",
+          actionPath: `/api/harness/proposals/${encodeURIComponent(proposal.id)}/decision`,
+          actionMethod: "POST" as const,
+          requestFields: buildPendingApprovalRequestFields(policyView.handoffTargetCardId),
+          allowedDecisions: ["approve", "defer", "deny"],
+          ...policyView
+        };
+      }),
     ...(pendingAttention ? { pendingAttention } : {}),
     recentDecisions,
     followThroughItems,
@@ -3289,6 +3308,12 @@ function buildPendingAttentionView(input: {
           ? {
               actionRoute: "review-attention" as const,
               actionPath: `/api/harness/runs/${encodeURIComponent(input.run.id)}/review-attention`,
+              actionMethod: "POST" as const,
+              requestFields: [
+                { name: "decision", required: true, allowedValues: ["complete_run", "start_fresh_cycle"] },
+                { name: "completionSummary", required: false, requiredWhenValue: "complete_run" },
+                { name: "mode", required: false, supportedWhenValue: "start_fresh_cycle", allowedValues: ["reopen_deferred", "clean"] }
+              ] satisfies HarnessActionRequestFieldView[],
               allowedDecisions: ["complete_run", "start_fresh_cycle"] as HarnessAttentionReviewDecision[]
             }
           : {
@@ -3298,6 +3323,15 @@ function buildPendingAttentionView(input: {
       : {
           actionRoute: "resolve-attention" as const,
           actionPath: `/api/harness/runs/${encodeURIComponent(input.run.id)}/resolve-attention`,
+          actionMethod: "POST" as const,
+          requestFields: [
+            {
+              name: "command",
+              required: true,
+              allowedValues: [action.kind === "await_lane_resume" ? "resume_lane" : "unblock_lane"]
+            },
+            { name: "resumeSummary", required: false }
+          ] satisfies HarnessActionRequestFieldView[],
           allowedCommands: [action.kind === "await_lane_resume" ? "resume_lane" : "unblock_lane"] as HarnessAttentionResolutionCommand[]
         }),
     ...(currentAttention && isSameAttentionAction(currentAttention.action, action)
@@ -3318,6 +3352,24 @@ function buildPendingAttentionView(input: {
         }
       : {})
   };
+}
+
+function buildPendingApprovalRequestFields(handoffTargetCardId?: string): HarnessActionRequestFieldView[] {
+  const fields: HarnessActionRequestFieldView[] = [
+    { name: "decision", required: true, allowedValues: ["approve", "defer", "deny"] },
+    { name: "decisionNote", required: false }
+  ];
+
+  if (handoffTargetCardId) {
+    fields.push({
+      name: "targetCardId",
+      required: false,
+      supportedWhenValue: "approve",
+      suggestedValue: handoffTargetCardId
+    });
+  }
+
+  return fields;
 }
 
 function formatAttentionActivityLabel(input: {
