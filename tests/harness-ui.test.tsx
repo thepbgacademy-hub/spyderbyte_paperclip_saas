@@ -91,7 +91,15 @@ const boardResponse: HarnessBoardResponse = {
       actionMethod: "POST",
       actionLabel: "Review proposal decision",
       actionDescription: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
-      requestFields: [],
+      requestFields: [
+        {
+          name: "decision",
+          label: "Proposal decision",
+          description: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
+          required: true,
+          allowedValues: ["approve", "defer", "deny"]
+        }
+      ],
       actionOptions: [
         {
           value: "approve",
@@ -126,7 +134,23 @@ const boardResponse: HarnessBoardResponse = {
     actionMethod: "POST",
     actionLabel: "Review final assembly",
     actionDescription: "Finish the current board cycle or intentionally start the next one.",
-    requestFields: [],
+    requestFields: [
+      {
+        name: "decision",
+        label: "Review decision",
+        description: "Choose whether to close the current board cycle or start the next one.",
+        required: true,
+        allowedValues: ["complete_run", "start_fresh_cycle"]
+      },
+      {
+        name: "mode",
+        label: "Fresh-cycle mode",
+        description: "Choose whether the next cycle should reopen deferred work or start clean.",
+        required: false,
+        supportedWhenValue: "start_fresh_cycle",
+        allowedValues: ["reopen_deferred", "clean"]
+      }
+    ],
     actionOptions: [
       {
         value: "complete_run",
@@ -205,6 +229,13 @@ describe("harness board UI", () => {
     expect(markup).toContain("Approve proposal");
     expect(markup).toContain("Deny this proposal and close the follow-on request?");
     expect(markup).toContain("Recommended next action");
+    expect(markup).toContain("POST /api/harness/runs/run_ui_test_1/review-attention");
+    expect(markup).toContain("POST /api/harness/proposals/proposal_ui_test_1/decision");
+    expect(markup).toContain("Review decision");
+    expect(markup).toContain("Fresh-cycle mode");
+    expect(markup).toContain("Proposal decision");
+    expect(markup).toContain("&quot;decision&quot;:&quot;complete_run&quot;");
+    expect(markup).toContain("&quot;decision&quot;:&quot;approve&quot;");
     expect(markup).not.toContain("raw execution log");
     expect(markup).not.toContain("tool");
   });

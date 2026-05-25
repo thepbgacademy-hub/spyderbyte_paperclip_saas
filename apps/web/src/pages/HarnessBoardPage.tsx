@@ -177,6 +177,42 @@ const styles = {
     fontSize: "0.78rem",
     lineHeight: 1.45,
     margin: 0
+  } satisfies CSSProperties,
+  contractMeta: {
+    color: "#7dd3fc",
+    fontSize: "0.75rem",
+    fontWeight: 700,
+    letterSpacing: "0.05em",
+    margin: 0
+  } satisfies CSSProperties,
+  fieldList: {
+    display: "grid",
+    gap: "0.35rem",
+    margin: 0,
+    padding: 0
+  } satisfies CSSProperties,
+  fieldItem: {
+    display: "grid",
+    gap: "0.12rem",
+    listStyle: "none"
+  } satisfies CSSProperties,
+  fieldTitle: {
+    color: "#e2e8f0",
+    fontSize: "0.78rem",
+    fontWeight: 600,
+    margin: 0
+  } satisfies CSSProperties,
+  codeBlock: {
+    background: "rgba(2, 6, 23, 0.72)",
+    border: "1px solid rgba(148, 163, 184, 0.16)",
+    borderRadius: "14px",
+    color: "#cbd5e1",
+    fontFamily: "'IBM Plex Mono', 'Courier New', monospace",
+    fontSize: "0.74rem",
+    margin: 0,
+    overflowX: "auto",
+    padding: "0.7rem 0.8rem",
+    whiteSpace: "pre-wrap"
   } satisfies CSSProperties
 };
 
@@ -228,6 +264,43 @@ function renderActionOptions(
       })}
     </ul>
   );
+}
+
+function renderRequestFields(
+  fields:
+    | HarnessBoardResponse["pendingApprovals"][number]["requestFields"]
+    | NonNullable<NonNullable<HarnessBoardResponse["pendingAttention"]>["requestFields"]>
+    | undefined
+) {
+  if (!fields || fields.length === 0) {
+    return null;
+  }
+
+  return (
+    <ul style={styles.fieldList}>
+      {fields.map((field) => (
+        <li key={field.name} style={styles.fieldItem}>
+          <p style={styles.fieldTitle}>{field.label}</p>
+          {field.description ? <p style={styles.optionBody}>{field.description}</p> : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function renderExampleRequest(
+  options:
+    | HarnessBoardResponse["pendingApprovals"][number]["actionOptions"]
+    | NonNullable<NonNullable<HarnessBoardResponse["pendingAttention"]>["actionOptions"]>
+    | undefined,
+  recommendedOptionValue?: string
+) {
+  const recommendedOption = options?.find((option) => option.value === recommendedOptionValue && option.exampleRequest);
+  if (!recommendedOption?.exampleRequest) {
+    return null;
+  }
+
+  return <pre style={styles.codeBlock}>{JSON.stringify(recommendedOption.exampleRequest)}</pre>;
 }
 
 export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | null } = {}) {
@@ -377,6 +450,11 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                   {pendingAttention.targetSummary ? (
                     <p style={styles.actionSummary}>{pendingAttention.targetSummary}</p>
                   ) : null}
+                  {pendingAttention.actionMethod && pendingAttention.actionPath ? (
+                    <p style={styles.contractMeta}>{`${pendingAttention.actionMethod} ${pendingAttention.actionPath}`}</p>
+                  ) : null}
+                  {renderRequestFields(pendingAttention.requestFields)}
+                  {renderExampleRequest(pendingAttention.actionOptions, pendingAttention.recommendedOptionValue)}
                   {renderActionOptions(pendingAttention.actionOptions, pendingAttention.recommendedOptionValue)}
                 </li>
               </ul>
@@ -394,6 +472,9 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                     <h3 style={styles.actionHeading}>{approval.actionLabel}</h3>
                     <p style={styles.actionSummary}>{approval.actionDescription}</p>
                     {approval.targetSummary ? <p style={styles.actionSummary}>{approval.targetSummary}</p> : null}
+                    <p style={styles.contractMeta}>{`${approval.actionMethod} ${approval.actionPath}`}</p>
+                    {renderRequestFields(approval.requestFields)}
+                    {renderExampleRequest(approval.actionOptions, approval.recommendedOptionValue)}
                     {renderActionOptions(approval.actionOptions, approval.recommendedOptionValue)}
                   </li>
                 ))}
