@@ -106,7 +106,8 @@ This file tracks the new harness subproject only.
   - [x] Persist a bounded `attention_resolved` event when a previously requested CEO review / resume / unblock state is cleared by later durable lane progress.
   - [x] Keep the board attention read model current by clearing stale `pendingAttention` after durable resolution while preserving bounded historical activity for the resolved attention path.
   - [x] Return explicit attention-transition metadata from worker lane outcomes so runtime consumers can distinguish newly requested, resolved, unchanged, and absent attention without diffing event history.
-  - [x] Suppress duplicate runtime post-outcome events and hooks when the same unresolved attention need remains active after a later durable lane outcome.
-  - [x] Emit a dedicated bounded runtime `attention_resolved` handoff/event when later durable lane progress clears an earlier CEO-review / resume / unblock need.
-  - [x] Persist bounded attention snapshot metadata with `attention_requested` / `attention_resolved` events so the board can reuse durable labels and target metadata later.
-  - [x] Prefer persisted attention snapshots in `pendingAttention` and attention history reads instead of rebuilding those labels purely from mutable lane state.
+- [x] Suppress duplicate runtime post-outcome events and hooks when the same unresolved attention need remains active after a later durable lane outcome.
+- [x] Emit a dedicated bounded runtime `attention_resolved` handoff/event when later durable lane progress clears an earlier CEO-review / resume / unblock need.
+- [x] Persist bounded attention snapshot metadata with `attention_requested` / `attention_resolved` events so the board can reuse durable labels and target metadata later.
+- [x] Prefer persisted attention snapshots in `pendingAttention` and attention history reads instead of rebuilding those labels purely from mutable lane state.
+- [x] Add an explicit CEO review-action seam so `queue_ceo_review` attention can resolve through a bounded `complete_run` or `start_fresh_cycle` command instead of leaving completion behavior implicit in downstream callers.

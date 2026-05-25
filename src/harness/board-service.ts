@@ -148,6 +148,7 @@ export type HarnessCompletionPackageView = {
 };
 
 export type HarnessFreshCycleMode = "reopen_deferred" | "clean";
+export type HarnessAttentionReviewDecision = "complete_run" | "start_fresh_cycle";
 
 export type HarnessRecentDecisionView = {
   id: string;
@@ -1987,6 +1988,81 @@ export function createHarnessBoardService(options: {
 
       await publishHarnessAuditEvents(options.audit, result.auditEvents ?? []);
       return { runId: result.runId, state: result.state };
+    },
+
+    async reviewPendingAttention(request: {
+      authorization: string;
+      cookie?: string;
+      runId: string;
+      decision: HarnessAttentionReviewDecision;
+      completionSummary?: string;
+      mode?: HarnessFreshCycleMode;
+    }): Promise<
+      | { status: "done"; runId: string }
+      | { status: "fresh_cycle_started"; runId: string; reopenedProposalCount: number }
+    > {
+      const access = await authorizeHarnessRequest({
+        authenticate: options.authenticate,
+        requireTenantMember: options.requireTenantMember,
+        requireActivePackageInstall: options.requireActivePackageInstall,
+        workflowRegistry: options.workflowRegistry,
+        authorization: request.authorization,
+        ...(request.cookie ? { cookie: request.cookie } : {})
+      });
+
+      const run = await options.repository.getRun(request.runId);
+      if (!run || run.tenantId !== access.session.tenantId) {
+        throw new ApiAuthError();
+      }
+
+      const [cards, proposals, events] = await Promise.all([
+        options.repository.listCardsForRun(run.id),
+        options.repository.listProposalsForRun(run.id),
+        options.repository.listEventsForRun(run.id)
+      ]);
+      const pendingAttention = determineHarnessPostOutcomeAction({
+        runState: run.state,
+        cards,
+        proposals,
+        nextDispatchCard: null
+      });
+      const currentAttention = deriveCurrentHarnessAttentionState(events);
+      if (
+        !pendingAttention
+        || pendingAttention.kind !== "queue_ceo_review"
+        || (currentAttention && !isSameAttentionAction(currentAttention.action, pendingAttention))
+      ) {
+        throw new HarnessRunCompletionConflictError("Harness run is not waiting on CEO review");
+      }
+
+      if (request.decision === "complete_run") {
+        const completionSummary = request.completionSummary?.trim();
+        if (!completionSummary) {
+          throw new HarnessRunCompletionConflictError("Harness run completion summary is required");
+        }
+        const completed = await this.completeRun({
+          authorization: request.authorization,
+          ...(request.cookie ? { cookie: request.cookie } : {}),
+          runId: request.runId,
+          completionSummary
+        });
+        return {
+          status: "done",
+          runId: completed.runId
+        };
+      }
+
+      const reopened = await this.startFreshCycle({
+        authorization: request.authorization,
+        ...(request.cookie ? { cookie: request.cookie } : {}),
+        runId: request.runId,
+        ...(request.mode ? { mode: request.mode } : {})
+      });
+      return {
+        status: "fresh_cycle_started",
+        runId: reopened.runId,
+        reopenedProposalCount: reopened.reopenedProposalCount
+      };
     },
 
     async startFreshCycle(request: {

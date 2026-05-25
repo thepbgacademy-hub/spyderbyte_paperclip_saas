@@ -2,6 +2,7 @@ import type { DashboardHttpRequest, DashboardHttpResponse } from "./dashboard-ht
 import { ApiAuthError } from "./dashboard-api.js";
 import { assertAllowedOrigin, createSecurityHeaders, validateRequestBodySize } from "../security/cors.js";
 import {
+  type HarnessAttentionReviewDecision,
   HarnessCardCreationConflictError,
   HarnessCardProgressionConflictError,
   HarnessRunCompletionConflictError,
@@ -50,6 +51,17 @@ type HarnessApi = {
     runId: string;
     completionSummary: string;
   }): Promise<{ runId: string; state: "done" }>;
+  reviewPendingAttention?(request: {
+    authorization: string;
+    cookie?: string;
+    runId: string;
+    decision: HarnessAttentionReviewDecision;
+    completionSummary?: string;
+    mode?: HarnessFreshCycleMode;
+  }): Promise<
+    | { status: "done"; runId: string }
+    | { status: "fresh_cycle_started"; runId: string; reopenedProposalCount: number }
+  >;
   startFreshCycle?(request: {
     authorization: string;
     cookie?: string;
@@ -69,6 +81,7 @@ export function createHarnessHttpHandler(options: {
   advanceChildCard: HarnessApi["advanceChildCard"];
   decideProposal: HarnessApi["decideProposal"];
   completeRun: HarnessApi["completeRun"];
+  reviewPendingAttention?: HarnessApi["reviewPendingAttention"];
   startFreshCycle?: HarnessApi["startFreshCycle"];
   rateLimiter: RateLimiter;
   maxBodyBytes?: number;
@@ -92,6 +105,7 @@ export function createHarnessHttpHandler(options: {
         request.path === "/api/harness/cards" ||
         /^\/api\/harness\/cards\/[^/]+\/advance$/u.test(request.path) ||
         /^\/api\/harness\/runs\/[^/]+\/complete$/u.test(request.path) ||
+        /^\/api\/harness\/runs\/[^/]+\/review-attention$/u.test(request.path) ||
         /^\/api\/harness\/runs\/[^/]+\/fresh-cycle$/u.test(request.path) ||
         /^\/api\/harness\/proposals\/[^/]+\/(approve|decision)$/u.test(request.path)
       )
@@ -117,6 +131,8 @@ export function createHarnessHttpHandler(options: {
         ? "harness-card-advance"
       : request.method === "POST" && /^\/api\/harness\/runs\/[^/]+\/complete$/u.test(request.path)
         ? "harness-run-complete"
+      : request.method === "POST" && /^\/api\/harness\/runs\/[^/]+\/review-attention$/u.test(request.path)
+        ? "harness-run-review-attention"
       : request.method === "POST" && /^\/api\/harness\/runs\/[^/]+\/fresh-cycle$/u.test(request.path)
         ? "harness-run-fresh-cycle"
       : request.method === "POST" && /^\/api\/harness\/proposals\/[^/]+\/(approve|decision)$/u.test(request.path)
@@ -201,6 +217,38 @@ export function createHarnessHttpHandler(options: {
           ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
           runId: decodeURIComponent(completeMatch[1] ?? ""),
           completionSummary
+        });
+        assertWealthFactoryResponse(body);
+        return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
+      }
+
+      const reviewAttentionMatch = /^\/api\/harness\/runs\/([^/]+)\/review-attention$/u.exec(request.path);
+      if (reviewAttentionMatch) {
+        if (!options.reviewPendingAttention) {
+          return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
+        }
+        const bodyInput = readJsonObject(request.body);
+        const decision = readOptionalString(bodyInput?.decision);
+        if (decision !== "complete_run" && decision !== "start_fresh_cycle") {
+          return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
+        }
+
+        const completionSummary = readOptionalString(bodyInput?.completionSummary);
+        const freshCycleMode = readOptionalString(bodyInput?.mode);
+        if (freshCycleMode && freshCycleMode !== "reopen_deferred" && freshCycleMode !== "clean") {
+          return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
+        }
+        if (decision === "complete_run" && !completionSummary) {
+          return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
+        }
+
+        const body = await options.reviewPendingAttention({
+          authorization: request.headers.authorization ?? "",
+          ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
+          runId: decodeURIComponent(reviewAttentionMatch[1] ?? ""),
+          decision,
+          ...(completionSummary ? { completionSummary } : {}),
+          ...(freshCycleMode === "reopen_deferred" || freshCycleMode === "clean" ? { mode: freshCycleMode } : {})
         });
         assertWealthFactoryResponse(body);
         return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };

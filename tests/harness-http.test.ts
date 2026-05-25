@@ -735,6 +735,207 @@ describe("harness HTTP boundary", () => {
     expect(response.body).toEqual({ runId: "run_123", state: "done" });
   });
 
+  it("reviews pending CEO attention by completing the run through the guarded write route", async () => {
+    const reviewPendingAttention = vi.fn().mockResolvedValue({ status: "done", runId: "run_123" });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      reviewPendingAttention,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/review-attention",
+      body: {
+        decision: "complete_run",
+        completionSummary: "The CEO accepted the board output and packaged the business-facing result."
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        cookie: "wf_session=abc",
+        "content-type": "application/json"
+      },
+      bodyByteLength: JSON.stringify({
+        decision: "complete_run",
+        completionSummary: "The CEO accepted the board output and packaged the business-facing result."
+      }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(reviewPendingAttention).toHaveBeenCalledWith({
+      authorization: "Bearer valid",
+      cookie: "wf_session=abc",
+      runId: "run_123",
+      decision: "complete_run",
+      completionSummary: "The CEO accepted the board output and packaged the business-facing result."
+    });
+    expect(response.body).toEqual({ status: "done", runId: "run_123" });
+  });
+
+  it("reviews pending CEO attention by starting a fresh cycle through the guarded write route", async () => {
+    const reviewPendingAttention = vi
+      .fn()
+      .mockResolvedValue({ status: "fresh_cycle_started", runId: "run_124", reopenedProposalCount: 2 });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      reviewPendingAttention,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/review-attention",
+      body: {
+        decision: "start_fresh_cycle",
+        mode: "clean"
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        cookie: "wf_session=abc",
+        "content-type": "application/json"
+      },
+      bodyByteLength: JSON.stringify({
+        decision: "start_fresh_cycle",
+        mode: "clean"
+      }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(reviewPendingAttention).toHaveBeenCalledWith({
+      authorization: "Bearer valid",
+      cookie: "wf_session=abc",
+      runId: "run_123",
+      decision: "start_fresh_cycle",
+      mode: "clean"
+    });
+    expect(response.body).toEqual({ status: "fresh_cycle_started", runId: "run_124", reopenedProposalCount: 2 });
+  });
+
+  it("rejects invalid review-attention decisions before calling the service", async () => {
+    const reviewPendingAttention = vi.fn();
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      reviewPendingAttention,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const invalidDecision = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/review-attention",
+      body: {
+        decision: "invented"
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        "content-type": "application/json"
+      },
+      bodyByteLength: JSON.stringify({ decision: "invented" }).length,
+      ip: "203.0.113.10"
+    });
+
+    const missingSummary = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/review-attention",
+      body: {
+        decision: "complete_run"
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        "content-type": "application/json"
+      },
+      bodyByteLength: JSON.stringify({ decision: "complete_run" }).length,
+      ip: "203.0.113.10"
+    });
+
+    const invalidMode = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/review-attention",
+      body: {
+        decision: "start_fresh_cycle",
+        mode: "reopen_everything"
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        "content-type": "application/json"
+      },
+      bodyByteLength: JSON.stringify({
+        decision: "start_fresh_cycle",
+        mode: "reopen_everything"
+      }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(invalidDecision.status).toBe(400);
+    expect(missingSummary.status).toBe(400);
+    expect(invalidMode.status).toBe(400);
+    expect(reviewPendingAttention).not.toHaveBeenCalled();
+  });
+
+  it("maps review-attention conflicts without exposing backend details", async () => {
+    const reviewPendingAttention = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiAuthError())
+      .mockRejectedValueOnce(new HarnessRunCycleConflictError("not waiting on CEO review"))
+      .mockRejectedValueOnce(new Error("db_down"));
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      reviewPendingAttention,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const baseRequest = {
+      method: "POST" as const,
+      path: "/api/harness/runs/run_123/review-attention",
+      body: {
+        decision: "start_fresh_cycle"
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        "content-type": "application/json"
+      },
+      bodyByteLength: JSON.stringify({ decision: "start_fresh_cycle" }).length,
+      ip: "203.0.113.10"
+    };
+
+    const unauthorized = await handler(baseRequest);
+    const conflict = await handler(baseRequest);
+    const serviceUnavailable = await handler(baseRequest);
+
+    expect(unauthorized.status).toBe(401);
+    expect(conflict.status).toBe(409);
+    expect(conflict.body).toEqual({ code: "conflict" });
+    expect(serviceUnavailable.status).toBe(500);
+    expect(serviceUnavailable.body).toEqual({ code: "service_unavailable" });
+  });
+
   it("starts a fresh board cycle through the guarded write route", async () => {
     const startFreshCycle = vi.fn().mockResolvedValue({ runId: "run_124", reopenedProposalCount: 2 });
     const handler = createHarnessHttpHandler({

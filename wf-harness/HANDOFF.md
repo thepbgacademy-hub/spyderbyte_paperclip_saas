@@ -250,3 +250,4 @@ Continue the harness build by replacing more of the live execution slice behind 
 - later, design the Obsidian integration as tenant-owned long memory and records, not as the live source of truth for harness execution state
 - keep the Playwright harness honest by starting Vite from `apps/web`; `vite apps/web ...` from the repo root can boot successfully while still returning `404` at `/`
 - keep E2E isolated from unrelated local Vite apps by using the dedicated harness port instead of reusing whichever dev server already owns the default Vite port
+- keep CEO review as an explicit bounded mutation seam. A run that is waiting on `queue_ceo_review` should only resolve through a structured review action like `complete_run` or `start_fresh_cycle`, not by letting downstream code guess from `pendingAttention` and call deeper completion helpers ad hoc.
