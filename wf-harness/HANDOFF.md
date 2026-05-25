@@ -30,6 +30,7 @@ The first harness implementation slice is now built and verified:
 - the first harness slice is a slice replacement, not a long-lived same-slice dual-engine setup
 - Wealth Factory keeps small runtime memory, while larger tenant-owned company memory can later live in Obsidian as a second-brain/record layer
 - bounded refinements of the same deliverable should usually stay in the same lane, while broader directional or phase-change requests should open a new lane or a fresh board cycle instead of overloading old lane context
+- future disk-backed artifact retrieval must reject unsafe artifact ids before any file lookup; raw `artifactId` values should never become trusted path input without strict validation and root-bound path checks
 
 ## External References
 
@@ -238,6 +239,8 @@ The first harness implementation slice is now built and verified:
 - Once choice metadata exists, carry bounded example payloads and target summaries too. Proposal handoff rows and resume/unblock attention states should expose the intended target lane plus minimal example request bodies so consuming clients do not reconstruct payloads or target copy from several lower-level fields.
 - Once option metadata exists, the engine should also declare which choice is recommended and which ones need confirmation. Board action metadata should carry bounded recommendation and disruption semantics so consuming clients do not invent their own default buttons or confirmation rules for proposal denials, fresh-cycle starts, or lane recovery actions.
 - Once the board action contract is rich enough to drive UI decisions, the localhost fallback and board page should consume that same bounded contract directly. Do not let fallback data or page-side helper copy drift into a second unofficial action model.
+- Once the page consumes bounded action routes and examples, it should also consume bounded field constraints and attention context from the same contract. Required/optional semantics, allowed values, supported/suggested values, and attention reason/timing should come from engine metadata instead of UI guesswork.
+- The current artifact seam is still in-memory and tenant-scoped, so `artifactId` is not yet a filesystem risk surface. If artifact blobs later move to disk-backed retrieval or local staging, add a fail-closed artifact-id guard before any file lookup: strict id allowlist, reject separators and traversal encodings, and verify the resolved path stays under the configured artifact root.
 
 ## Next Step
 

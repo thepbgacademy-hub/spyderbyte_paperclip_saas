@@ -172,6 +172,23 @@ const styles = {
     fontWeight: 600,
     margin: 0
   } satisfies CSSProperties,
+  badgeList: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "0.35rem",
+    margin: "0.1rem 0 0"
+  } satisfies CSSProperties,
+  badge: {
+    background: "rgba(14, 165, 233, 0.14)",
+    border: "1px solid rgba(125, 211, 252, 0.16)",
+    borderRadius: "999px",
+    color: "#bae6fd",
+    fontSize: "0.7rem",
+    fontWeight: 700,
+    letterSpacing: "0.04em",
+    padding: "0.18rem 0.45rem",
+    textTransform: "uppercase"
+  } satisfies CSSProperties,
   optionBody: {
     color: "#94a3b8",
     fontSize: "0.78rem",
@@ -282,6 +299,17 @@ function renderRequestFields(
         <li key={field.name} style={styles.fieldItem}>
           <p style={styles.fieldTitle}>{field.label}</p>
           {field.description ? <p style={styles.optionBody}>{field.description}</p> : null}
+          <p style={styles.optionBody}>{field.required ? "Required field" : "Optional field"}</p>
+          {field.allowedValues?.length ? (
+            <p style={styles.optionBody}>{`Allowed values: ${field.allowedValues.join(", ")}`}</p>
+          ) : null}
+          {field.supportedWhenValue ? (
+            <p style={styles.optionBody}>{`Supported when decision is ${field.supportedWhenValue}.`}</p>
+          ) : null}
+          {field.requiredWhenValue ? (
+            <p style={styles.optionBody}>{`Required when decision is ${field.requiredWhenValue}.`}</p>
+          ) : null}
+          {field.suggestedValue ? <p style={styles.optionBody}>{`Suggested value: ${field.suggestedValue}`}</p> : null}
         </li>
       ))}
     </ul>
@@ -446,6 +474,15 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                   <h3 style={styles.actionHeading}>{pendingAttention.actionLabel ?? "Board action"}</h3>
                   {pendingAttention.actionDescription ? (
                     <p style={styles.actionSummary}>{pendingAttention.actionDescription}</p>
+                  ) : null}
+                  {pendingAttention.reasonLabel ? (
+                    <p style={styles.actionSummary}>{`Reason: ${pendingAttention.reasonLabel}`}</p>
+                  ) : null}
+                  {pendingAttention.requestedAtLabel ? (
+                    <p style={styles.actionSummary}>{`Requested: ${pendingAttention.requestedAtLabel}`}</p>
+                  ) : null}
+                  {typeof pendingAttention.pendingApprovalCount === "number" ? (
+                    <p style={styles.actionSummary}>{`Pending approvals in queue: ${pendingAttention.pendingApprovalCount}`}</p>
                   ) : null}
                   {pendingAttention.targetSummary ? (
                     <p style={styles.actionSummary}>{pendingAttention.targetSummary}</p>

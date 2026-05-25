@@ -45,7 +45,14 @@ describe("harness board client", () => {
         actionPath: expect.stringContaining("/review-attention"),
         actionMethod: "POST",
         actionLabel: "Review final assembly",
+        requestedAtLabel: "recently",
         recommendedOptionValue: "complete_run",
+        requestFields: expect.arrayContaining([
+          expect.objectContaining({
+            name: "mode",
+            suggestedValue: "reopen_deferred"
+          })
+        ]),
         actionOptions: expect.arrayContaining([
           expect.objectContaining({
             value: "complete_run",
@@ -66,6 +73,12 @@ describe("harness board client", () => {
           actionMethod: "POST",
           actionLabel: "Review proposal decision",
           recommendedOptionValue: "approve",
+          requestFields: expect.arrayContaining([
+            expect.objectContaining({
+              name: "decisionNote",
+              supportedWhenValue: "defer"
+            })
+          ]),
           actionOptions: expect.arrayContaining([
             expect.objectContaining({
               value: "approve",

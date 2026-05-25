@@ -58,6 +58,9 @@ This file tracks the new harness subproject only.
 - [x] Add harness-specific audit publishing beyond the persisted card-event trail.
 - [ ] Expand the dashboard visual system once the additional Hermes/Obsidian reference screenshots are reviewed.
 - [ ] Design the Obsidian long-memory integration so board records, decisions, and company history can live in tenant-owned knowledge space without becoming live runtime state.
+- [ ] Add an explicit unsafe-artifact-id guard before any future disk-backed artifact retrieval or local blob-staging seam is introduced.
+  - [x] Confirm the current artifact seam is still in-memory and tenant-scoped, so `artifactId` does not yet resolve into filesystem paths or direct disk reads.
+  - [ ] Require future artifact retrieval to validate artifact ids against a strict allowlist format, reject separators and traversal encodings, and verify the resolved path stays under the intended artifact root before touching disk.
 
 ## Current Next Slice
 
@@ -125,3 +128,4 @@ This file tracks the new harness subproject only.
 - [x] Expose bounded option examples and target summaries alongside board action metadata so proposal rows and actionable attention states stop relying on client-side payload and target-copy reconstruction.
 - [x] Expose bounded recommended-option and confirmation metadata alongside board action metadata so proposal rows and actionable attention states stop relying on client-side default-choice and disruption-guard reconstruction.
 - [x] Teach the localhost fallback and board page to consume the bounded harness action contract directly so contract-rich control semantics stop being backend-only metadata.
+- [x] Teach the board page and localhost fallback to render bounded field constraints and attention context from the harness contract so request semantics stay engine-owned instead of UI-inferred.

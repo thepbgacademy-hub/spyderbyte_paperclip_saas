@@ -98,6 +98,13 @@ const boardResponse: HarnessBoardResponse = {
           description: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
           required: true,
           allowedValues: ["approve", "defer", "deny"]
+        },
+        {
+          name: "decisionNote",
+          label: "Decision note",
+          description: "Add a short note when the CEO wants the review trail to capture why this proposal changed direction.",
+          required: false,
+          supportedWhenValue: "defer"
         }
       ],
       actionOptions: [
@@ -148,7 +155,8 @@ const boardResponse: HarnessBoardResponse = {
         description: "Choose whether the next cycle should reopen deferred work or start clean.",
         required: false,
         supportedWhenValue: "start_fresh_cycle",
-        allowedValues: ["reopen_deferred", "clean"]
+        allowedValues: ["reopen_deferred", "clean"],
+        suggestedValue: "reopen_deferred"
       }
     ],
     actionOptions: [
@@ -173,6 +181,7 @@ const boardResponse: HarnessBoardResponse = {
     ],
     recommendedOptionValue: "complete_run",
     allowedDecisions: ["complete_run", "start_fresh_cycle"],
+    requestedAtLabel: "11:24 AM",
     reasonLabel: "Final assembly"
   },
   recentDecisions: [],
@@ -234,6 +243,15 @@ describe("harness board UI", () => {
     expect(markup).toContain("Review decision");
     expect(markup).toContain("Fresh-cycle mode");
     expect(markup).toContain("Proposal decision");
+    expect(markup).toContain("Reason: Final assembly");
+    expect(markup).toContain("Requested: 11:24 AM");
+    expect(markup).toContain("Required field");
+    expect(markup).toContain("Optional field");
+    expect(markup).toContain("Allowed values: complete_run, start_fresh_cycle");
+    expect(markup).toContain("Allowed values: reopen_deferred, clean");
+    expect(markup).toContain("Supported when decision is start_fresh_cycle.");
+    expect(markup).toContain("Suggested value: reopen_deferred");
+    expect(markup).toContain("Supported when decision is defer.");
     expect(markup).toContain("&quot;decision&quot;:&quot;complete_run&quot;");
     expect(markup).toContain("&quot;decision&quot;:&quot;approve&quot;");
     expect(markup).not.toContain("raw execution log");

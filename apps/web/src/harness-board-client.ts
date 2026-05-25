@@ -140,6 +140,13 @@ const defaultBoardResponse: HarnessBoardResponse = {
           description: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
           required: true,
           allowedValues: ["approve", "defer", "deny"]
+        },
+        {
+          name: "decisionNote",
+          label: "Decision note",
+          description: "Add a short note when the CEO wants the review trail to capture why this proposal changed direction.",
+          required: false,
+          supportedWhenValue: "defer"
         }
       ],
       actionOptions: [
@@ -183,6 +190,15 @@ const defaultBoardResponse: HarnessBoardResponse = {
         description: "Choose whether to close the current board cycle or start the next one.",
         required: true,
         allowedValues: ["complete_run", "start_fresh_cycle"]
+      },
+      {
+        name: "mode",
+        label: "Fresh-cycle mode",
+        description: "Choose whether the next cycle should reopen deferred work or start clean.",
+        required: false,
+        supportedWhenValue: "start_fresh_cycle",
+        allowedValues: ["reopen_deferred", "clean"],
+        suggestedValue: "reopen_deferred"
       }
     ],
     actionOptions: [
@@ -207,6 +223,7 @@ const defaultBoardResponse: HarnessBoardResponse = {
     ],
     recommendedOptionValue: "complete_run",
     allowedDecisions: ["complete_run", "start_fresh_cycle"],
+    requestedAtLabel: "recently",
     reasonLabel: "Final assembly"
   },
   followThroughItems: [
