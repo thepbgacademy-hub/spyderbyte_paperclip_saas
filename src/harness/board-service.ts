@@ -162,6 +162,14 @@ export type HarnessResolvedAttentionDispatch = {
   command: HarnessAttentionResolutionCommand;
   state: "working" | "approved";
 };
+export type HarnessFreshCycleDispatch = {
+  tenantId: string;
+  userId: string;
+  runId: string;
+  workflowId: string;
+  mode: HarnessFreshCycleMode;
+  reopenedProposalCount: number;
+};
 
 export type HarnessRecentDecisionView = {
   id: string;
@@ -220,6 +228,7 @@ export function createHarnessBoardService(options: {
   runAtomically?<T>(work: (repository: HarnessRepository) => Promise<T>): Promise<T>;
   audit?: HarnessAudit;
   onResolvedAttentionDispatch?: (dispatch: HarnessResolvedAttentionDispatch) => Promise<void> | void;
+  onFreshCycleDispatch?: (dispatch: HarnessFreshCycleDispatch) => Promise<void> | void;
 }) {
   const runtime = createHarnessRuntime();
 
@@ -2425,7 +2434,11 @@ export function createHarnessBoardService(options: {
         );
 
         return {
+          tenantId: access.session.tenantId,
+          userId: access.session.userId,
           runId: nextRun.id,
+          workflowId: nextRun.workflowId,
+          mode: freshCycleMode,
           reopenedProposalCount: carryForwardProposals.length,
           auditEvents: [
             createHarnessAuditEvent({
@@ -2445,6 +2458,24 @@ export function createHarnessBoardService(options: {
       });
 
       await publishHarnessAuditEvents(options.audit, result.auditEvents ?? []);
+      try {
+        await options.onFreshCycleDispatch?.({
+          tenantId: result.tenantId,
+          userId: result.userId,
+          runId: result.runId,
+          workflowId: result.workflowId,
+          mode: result.mode,
+          reopenedProposalCount: result.reopenedProposalCount
+        });
+      } catch (error) {
+        console.warn("Fresh harness cycle dispatch hook failed after durable board mutation", {
+          runId: result.runId,
+          workflowId: result.workflowId,
+          mode: result.mode,
+          reopenedProposalCount: result.reopenedProposalCount,
+          error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+        });
+      }
       return {
         runId: result.runId,
         reopenedProposalCount: result.reopenedProposalCount

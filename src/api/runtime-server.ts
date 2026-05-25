@@ -264,6 +264,22 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
               userId: dispatch.userId,
               idempotencyKey: `${dispatch.tenantId}:${dispatch.workflowId}:${dispatch.runId}`
             });
+          },
+          onFreshCycleDispatch: async (dispatch: {
+            tenantId: string;
+            userId: string;
+            runId: string;
+            workflowId: string;
+            mode: "reopen_deferred" | "clean";
+            reopenedProposalCount: number;
+          }) => {
+            await options.workflowQueueEnqueuer?.enqueueOnce({
+              tenantId: dispatch.tenantId,
+              workflowTemplateId: dispatch.workflowId,
+              runId: dispatch.runId,
+              userId: dispatch.userId,
+              idempotencyKey: `${dispatch.tenantId}:${dispatch.workflowId}:${dispatch.runId}`
+            });
           }
         }
       : {}),

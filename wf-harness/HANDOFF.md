@@ -227,6 +227,7 @@ The first harness implementation slice is now built and verified:
 - Unchanged unresolved attention must stay quiet in the runtime handoff. Re-emitting generic or specific post-outcome events for the same unresolved need recreates exactly the kind of board-noise heat we were trying to remove from Paperclip.
 - The repaired GitNexus helper is now trustworthy in fallback mode on this machine. Prefer `node E:\GitNexusHome\tools\gitnexus-fts-query.mjs --repo-path E:\REPOS\spyderbyte_paperclip_saas --query "<keywords>" --limit 8 --mode fallback` and use `E:\GitNexusHome\tools\gitnexus-helper-usage.md` as the current usage note.
 - Board-side attention recovery should re-enter the same worker queue seam we already trust. When the CEO resolves `resume_lane` or `unblock_lane`, best-effort requeue the existing workflow run instead of leaving the lane in `working` / `approved` without a live worker handoff.
+- Fresh-cycle reopening should follow the same rule as resumed attention: once the CEO starts a new board cycle, best-effort requeue that new run through the existing workflow queue seam so a durable fresh cycle does not sit idle waiting for some separate execution nudge.
 
 ## Next Step
 

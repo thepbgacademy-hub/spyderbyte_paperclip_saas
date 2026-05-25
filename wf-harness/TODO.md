@@ -114,3 +114,4 @@ This file tracks the new harness subproject only.
 - [x] Add explicit board-side attention-resolution commands so `await_lane_resume` and `await_unblock` can resolve through bounded mutations instead of generic card editing or implicit state nudges.
 - [x] Surface bounded pending-attention action metadata so the board can tell the dashboard which explicit command family (`review-attention` vs `resolve-attention`) applies without inferring it from labels.
 - [x] Re-enter the existing worker queue seam after explicit board-side `resume_lane` / `unblock_lane` resolution so resolved attention restores live execution truth instead of becoming a silent side path.
+- [x] Re-enter the existing worker queue seam after `start_fresh_cycle` so durable fresh-cycle runs restore live execution truth instead of becoming packaged-but-idle board state.

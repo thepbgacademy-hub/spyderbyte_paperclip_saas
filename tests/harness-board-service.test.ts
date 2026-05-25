@@ -2294,16 +2294,41 @@ describe("harness board service", () => {
       createdAt: new Date().toISOString()
     });
 
-    const reopened = await service.startFreshCycle({
+    const onFreshCycleDispatch = vi.fn().mockResolvedValue(undefined);
+    const serviceWithDispatch = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      onFreshCycleDispatch,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const reopened = await serviceWithDispatch.startFreshCycle({
       authorization: "Bearer valid",
       runId: board.runId
     });
 
-    const latestBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const latestBoard = await serviceWithDispatch.listBoardState({ authorization: "Bearer valid" });
     const oldRun = await repository.getRun(board.runId);
 
     expect(reopened).toEqual({
       runId: expect.stringMatching(/^[0-9a-f-]{36}$/i),
+      reopenedProposalCount: 1
+    });
+    expect(onFreshCycleDispatch).toHaveBeenCalledWith({
+      tenantId: "tenant_123",
+      userId: "user_123",
+      runId: reopened.runId,
+      workflowId: "wf_connect_first_workflow",
+      mode: "reopen_deferred",
       reopenedProposalCount: 1
     });
     expect(reopened.runId).not.toBe(board.runId);

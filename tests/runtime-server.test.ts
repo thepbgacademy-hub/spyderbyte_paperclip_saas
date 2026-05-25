@@ -598,6 +598,44 @@ describe("runtime server", () => {
     await runtime.close();
   });
 
+  it("requeues fresh harness cycles through the existing workflow queue seam when an enqueuer is available", async () => {
+    const enqueueOnce = vi.fn().mockResolvedValue("enqueued");
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() },
+      workflowQueueEnqueuer: { enqueueOnce }
+    });
+
+    const boardServiceOptions = vi.mocked(createHarnessBoardService).mock.calls.at(-1)?.[0];
+    expect(boardServiceOptions?.onFreshCycleDispatch).toEqual(expect.any(Function));
+
+    await boardServiceOptions?.onFreshCycleDispatch?.({
+      tenantId: "tenant_123",
+      userId: "user_123",
+      runId: "run_124",
+      workflowId: "wf_connect_first_workflow",
+      mode: "reopen_deferred",
+      reopenedProposalCount: 1
+    });
+
+    expect(enqueueOnce).toHaveBeenCalledWith({
+      tenantId: "tenant_123",
+      workflowTemplateId: "wf_connect_first_workflow",
+      runId: "run_124",
+      userId: "user_123",
+      idempotencyKey: "tenant_123:wf_connect_first_workflow:run_124"
+    });
+
+    await runtime.close();
+  });
+
   it("wires provider credential registration to the runtime vault path", async () => {
     const { createProviderCredentialService } = await import("../src/secrets/provider-credential-service.js");
     const { createSecretService } = await import("../src/secrets/secret-service.js");
