@@ -88,9 +88,10 @@ export type HarnessPendingAttentionView = {
   runState: HarnessRunRecord["state"];
   statusLabel: string;
   summary: string;
-  actionRoute?: "review-attention" | "resolve-attention";
+  actionRoute?: "review-attention" | "resolve-attention" | "pending-approvals";
   allowedDecisions?: HarnessAttentionReviewDecision[];
   allowedCommands?: HarnessAttentionResolutionCommand[];
+  pendingApprovalCount?: number;
   requestedAtLabel?: string;
   reasonLabel?: string;
   targetCardId?: string;
@@ -3267,6 +3268,9 @@ function buildPendingAttentionView(input: {
   const attentionTargetCardId = persistedSnapshot?.targetCardId ?? targetCard?.id;
   const attentionTargetPersona = persistedSnapshot?.targetPersona ?? (targetCard ? targetCard.persona.toUpperCase() : undefined);
   const attentionTargetTitle = persistedSnapshot?.targetTitle ?? targetCard?.title;
+  const pendingApprovalCount = input.proposals.filter(
+    (proposal) => proposal.status === "proposed" || proposal.status === "deferred"
+  ).length;
 
   return {
     kind: action.kind,
@@ -3279,7 +3283,10 @@ function buildPendingAttentionView(input: {
               actionRoute: "review-attention" as const,
               allowedDecisions: ["complete_run", "start_fresh_cycle"] as HarnessAttentionReviewDecision[]
             }
-          : {})
+          : {
+              actionRoute: "pending-approvals" as const,
+              pendingApprovalCount
+            })
       : {
           actionRoute: "resolve-attention" as const,
           allowedCommands: [action.kind === "await_lane_resume" ? "resume_lane" : "unblock_lane"] as HarnessAttentionResolutionCommand[]

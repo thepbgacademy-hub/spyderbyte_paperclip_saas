@@ -117,3 +117,4 @@ This file tracks the new harness subproject only.
 - [x] Re-enter the existing worker queue seam after `start_fresh_cycle` so durable fresh-cycle runs restore live execution truth instead of becoming packaged-but-idle board state.
 - [x] Keep explicit CEO review resolution history durable so `complete_run` and `start_fresh_cycle` clear `queue_ceo_review` through a bounded `attention_resolved` event instead of only changing the resulting run state.
 - [x] Keep governance-only CEO attention visible without advertising impossible explicit review commands when the run is not actually in the final-assembly review seam.
+- [x] Route governance-only CEO attention toward the bounded pending-approvals queue so active/blocked backlog states point at the real proposal review surface instead of leaving the UI to guess the next move.

@@ -230,6 +230,7 @@ The first harness implementation slice is now built and verified:
 - Fresh-cycle reopening should follow the same rule as resumed attention: once the CEO starts a new board cycle, best-effort requeue that new run through the existing workflow queue seam so a durable fresh cycle does not sit idle waiting for some separate execution nudge.
 - Explicit CEO review resolution needs the same durable history guarantees as lane resume and unblock. When `queue_ceo_review` is cleared through `complete_run` or `start_fresh_cycle`, write a bounded `attention_resolved` event even if the review was only derived at runtime and never previously persisted as `attention_requested`.
 - `queue_ceo_review` is not one universal action surface. Only `assembling` runs should advertise explicit review commands like `complete_run` or `start_fresh_cycle`; active/blocked governance backlog states still need visible CEO attention, but they should not promise review actions that can only fail closed.
+- Governance-only CEO attention still needs a bounded next step, not just a warning. When `queue_ceo_review` is driven by governance backlog/hold instead of final assembly, route the board toward the proposal review queue with a bounded `pending-approvals` action surface and approval count rather than leaving the UI to guess where the CEO should act next.
 
 ## Next Step
 

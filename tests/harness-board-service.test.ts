@@ -599,6 +599,8 @@ describe("harness board service", () => {
       runState: "active",
       statusLabel: "CEO review required",
       summary: "The board needs CEO review because deferred governance is now the next bounded move.",
+      actionRoute: "pending-approvals",
+      pendingApprovalCount: 1,
       reasonLabel: "Governance backlog"
     });
   });
@@ -657,6 +659,8 @@ describe("harness board service", () => {
       runState: "blocked",
       statusLabel: "CEO review required",
       summary: "The board needs CEO review because governance work is still shaping what can move next.",
+      actionRoute: "pending-approvals",
+      pendingApprovalCount: 1,
       reasonLabel: "Governance hold"
     });
   });
