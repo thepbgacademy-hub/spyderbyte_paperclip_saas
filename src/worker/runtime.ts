@@ -586,6 +586,7 @@ export function createWorkerRuntime(options: {
 
 async function runSpecificPostOutcomeHandler(input: {
   options: {
+    workerInstanceId?: string;
     onHarnessCeoReviewRequested?: (input: {
       tenantId: string;
       runId: string;
@@ -625,6 +626,11 @@ async function runSpecificPostOutcomeHandler(input: {
         action: input.handoff.action,
         laneExecution: input.handoff.laneExecution
       };
+      emitHarnessSpecificPostOutcomeEvent(
+        "wealth_factory_harness_ceo_review_requested",
+        input.options.workerInstanceId,
+        ceoReviewHandoff
+      );
       await input.options.onHarnessCeoReviewRequested?.(ceoReviewHandoff);
       return;
     }
@@ -636,6 +642,11 @@ async function runSpecificPostOutcomeHandler(input: {
         action: input.handoff.action,
         laneExecution: input.handoff.laneExecution
       };
+      emitHarnessSpecificPostOutcomeEvent(
+        "wealth_factory_harness_lane_resume_awaited",
+        input.options.workerInstanceId,
+        laneResumeHandoff
+      );
       await input.options.onHarnessLaneResumeAwaited?.(laneResumeHandoff);
       return;
     }
@@ -647,10 +658,39 @@ async function runSpecificPostOutcomeHandler(input: {
         action: input.handoff.action,
         laneExecution: input.handoff.laneExecution
       };
+      emitHarnessSpecificPostOutcomeEvent(
+        "wealth_factory_harness_lane_unblock_awaited",
+        input.options.workerInstanceId,
+        laneUnblockHandoff
+      );
       await input.options.onHarnessLaneUnblockAwaited?.(laneUnblockHandoff);
       return;
     }
   }
+}
+
+function emitHarnessSpecificPostOutcomeEvent(
+  type:
+    | "wealth_factory_harness_ceo_review_requested"
+    | "wealth_factory_harness_lane_resume_awaited"
+    | "wealth_factory_harness_lane_unblock_awaited",
+  workerInstanceId: string | undefined,
+  payload: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
+    laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+  }
+) {
+  process.stdout.write(
+    `${JSON.stringify({
+      type,
+      workerInstanceId: workerInstanceId ?? "worker",
+      observedAt: new Date().toISOString(),
+      ...payload
+    })}\n`
+  );
 }
 
 async function processHarnessWorkflowJob(options: {

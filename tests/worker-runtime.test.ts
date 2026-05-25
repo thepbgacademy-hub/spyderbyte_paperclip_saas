@@ -674,6 +674,9 @@ describe("worker runtime", () => {
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_post_outcome_action\"")
     );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_ceo_review_requested\"")
+    );
     expect(onHarnessPostOutcomeAction).toHaveBeenCalledWith({
       tenantId: "tenant-1",
       runId: "run-1",
@@ -1175,6 +1178,9 @@ describe("worker runtime", () => {
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_post_outcome_action\"")
     );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_resume_awaited\"")
+    );
     expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
     );
@@ -1392,6 +1398,9 @@ describe("worker runtime", () => {
 
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_post_outcome_action\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_unblock_awaited\"")
     );
     expect(onHarnessPostOutcomeAction).toHaveBeenCalledWith({
       tenantId: "tenant-1",

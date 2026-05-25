@@ -98,3 +98,4 @@ This file tracks the new harness subproject only.
   - [x] Decide which runtime-side handlers should consume `queue_ceo_review`, `await_lane_resume`, and `await_unblock` beyond the current bounded event/hook seam.
   - [x] Add explicit runtime-side handlers for CEO review, lane resume, and unblock so non-dispatch worker outcomes do not collapse back into one generic branch.
   - [x] Keep generic and specific post-outcome hooks failure-isolated so one rejected runtime consumer cannot suppress the rest of the durable handoff path.
+  - [x] Emit dedicated bounded worker events for CEO review, lane resume, and lane unblock so future consumers do not have to recover those paths by parsing a generic post-outcome event.
