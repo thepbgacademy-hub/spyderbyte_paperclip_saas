@@ -233,6 +233,9 @@ describe("harness board UI", () => {
 
     expect(markup).toContain("Review final assembly");
     expect(markup).toContain("Complete run");
+    expect(markup).toContain("Primary");
+    expect(markup).toContain("Secondary");
+    expect(markup).toContain("Caution");
     expect(markup).toContain("Start a new board cycle from this run?");
     expect(markup).toContain("Review proposal decision");
     expect(markup).toContain("Approve proposal");
@@ -240,6 +243,8 @@ describe("harness board UI", () => {
     expect(markup).toContain("Recommended next action");
     expect(markup).toContain("POST /api/harness/runs/run_ui_test_1/review-attention");
     expect(markup).toContain("POST /api/harness/proposals/proposal_ui_test_1/decision");
+    expect(markup).toContain("Allowed decisions: complete_run, start_fresh_cycle");
+    expect(markup).toContain("Allowed decisions: approve, defer, deny");
     expect(markup).toContain("Review decision");
     expect(markup).toContain("Fresh-cycle mode");
     expect(markup).toContain("Proposal decision");
@@ -254,6 +259,8 @@ describe("harness board UI", () => {
     expect(markup).toContain("Supported when decision is defer.");
     expect(markup).toContain("&quot;decision&quot;:&quot;complete_run&quot;");
     expect(markup).toContain("&quot;decision&quot;:&quot;approve&quot;");
+    expect(markup).toContain("&quot;decision&quot;:&quot;deny&quot;");
+    expect(markup).toContain("&quot;decision&quot;:&quot;start_fresh_cycle&quot;,&quot;mode&quot;:&quot;reopen_deferred&quot;");
     expect(markup).not.toContain("raw execution log");
     expect(markup).not.toContain("tool");
   });

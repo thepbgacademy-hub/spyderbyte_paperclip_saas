@@ -261,6 +261,13 @@ function renderActionOptions(
     <ul style={styles.optionList}>
       {options.map((option) => {
         const badges: string[] = [];
+        if (option.emphasis === "primary") {
+          badges.push("Primary");
+        } else if (option.emphasis === "secondary") {
+          badges.push("Secondary");
+        } else if (option.emphasis === "caution") {
+          badges.push("Caution");
+        }
         if (option.value === recommendedOptionValue) {
           badges.push("Recommended next action");
         }
@@ -270,12 +277,19 @@ function renderActionOptions(
 
         return (
           <li key={option.value} style={styles.optionItem}>
-            <p style={styles.optionTitle}>
-              {option.label}
-              {badges.length > 0 ? ` · ${badges.join(" · ")}` : ""}
-            </p>
+            <p style={styles.optionTitle}>{option.label}</p>
+            {badges.length > 0 ? (
+              <div style={styles.badgeList}>
+                {badges.map((badge) => (
+                  <span key={badge} style={styles.badge}>
+                    {badge}
+                  </span>
+                ))}
+              </div>
+            ) : null}
             <p style={styles.optionBody}>{option.description}</p>
             {option.nextEffectSummary ? <p style={styles.optionBody}>{option.nextEffectSummary}</p> : null}
+            {option.exampleRequest ? <pre style={styles.codeBlock}>{JSON.stringify(option.exampleRequest)}</pre> : null}
           </li>
         );
       })}
@@ -316,19 +330,12 @@ function renderRequestFields(
   );
 }
 
-function renderExampleRequest(
-  options:
-    | HarnessBoardResponse["pendingApprovals"][number]["actionOptions"]
-    | NonNullable<NonNullable<HarnessBoardResponse["pendingAttention"]>["actionOptions"]>
-    | undefined,
-  recommendedOptionValue?: string
-) {
-  const recommendedOption = options?.find((option) => option.value === recommendedOptionValue && option.exampleRequest);
-  if (!recommendedOption?.exampleRequest) {
+function renderActionConstraintSummary(input: { allowedValues: readonly string[] | undefined; label: string }) {
+  if (!input.allowedValues || input.allowedValues.length === 0) {
     return null;
   }
 
-  return <pre style={styles.codeBlock}>{JSON.stringify(recommendedOption.exampleRequest)}</pre>;
+  return <p style={styles.contractMeta}>{`${input.label}: ${input.allowedValues.join(", ")}`}</p>;
 }
 
 export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | null } = {}) {
@@ -490,8 +497,11 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                   {pendingAttention.actionMethod && pendingAttention.actionPath ? (
                     <p style={styles.contractMeta}>{`${pendingAttention.actionMethod} ${pendingAttention.actionPath}`}</p>
                   ) : null}
+                  {renderActionConstraintSummary({
+                    allowedValues: pendingAttention.allowedDecisions ?? pendingAttention.allowedCommands,
+                    label: pendingAttention.allowedDecisions ? "Allowed decisions" : "Allowed commands"
+                  })}
                   {renderRequestFields(pendingAttention.requestFields)}
-                  {renderExampleRequest(pendingAttention.actionOptions, pendingAttention.recommendedOptionValue)}
                   {renderActionOptions(pendingAttention.actionOptions, pendingAttention.recommendedOptionValue)}
                 </li>
               </ul>
@@ -510,8 +520,11 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                     <p style={styles.actionSummary}>{approval.actionDescription}</p>
                     {approval.targetSummary ? <p style={styles.actionSummary}>{approval.targetSummary}</p> : null}
                     <p style={styles.contractMeta}>{`${approval.actionMethod} ${approval.actionPath}`}</p>
+                    {renderActionConstraintSummary({
+                      allowedValues: approval.allowedDecisions,
+                      label: "Allowed decisions"
+                    })}
                     {renderRequestFields(approval.requestFields)}
-                    {renderExampleRequest(approval.actionOptions, approval.recommendedOptionValue)}
                     {renderActionOptions(approval.actionOptions, approval.recommendedOptionValue)}
                   </li>
                 ))}

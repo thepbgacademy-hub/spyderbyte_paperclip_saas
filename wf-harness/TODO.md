@@ -129,3 +129,4 @@ This file tracks the new harness subproject only.
 - [x] Expose bounded recommended-option and confirmation metadata alongside board action metadata so proposal rows and actionable attention states stop relying on client-side default-choice and disruption-guard reconstruction.
 - [x] Teach the localhost fallback and board page to consume the bounded harness action contract directly so contract-rich control semantics stop being backend-only metadata.
 - [x] Teach the board page and localhost fallback to render bounded field constraints and attention context from the harness contract so request semantics stay engine-owned instead of UI-inferred.
+- [x] Teach the board page to render option emphasis, per-option example payloads, and allowed decision/command families from the harness contract so action semantics stay engine-owned instead of UI-inferred.
