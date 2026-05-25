@@ -95,5 +95,45 @@ describe("harness board client", () => {
         })
       ])
     );
+
+    expect(fallback.recentDecisions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          decisionKind: "lane_opened",
+          recommendationSummary: expect.any(String)
+        })
+      ])
+    );
+
+    expect(fallback.followThroughItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "opened_lane",
+          persona: "CFO"
+        })
+      ])
+    );
+
+    expect(fallback.completionPackage).toEqual(
+      expect.objectContaining({
+        status: "assembling",
+        deferredApprovalCount: 1,
+        hasOpenGovernanceItems: true,
+        recommendations: expect.arrayContaining([expect.any(String)]),
+        objections: expect.arrayContaining([expect.any(String)]),
+        governanceItems: expect.arrayContaining([
+          expect.objectContaining({
+            persona: "RESEARCHER",
+            deliverableLabel: "Research Brief"
+          })
+        ]),
+        deliverables: expect.arrayContaining([
+          expect.objectContaining({
+            persona: "CFO",
+            deliverableLabel: "Pricing Review"
+          })
+        ])
+      })
+    );
   });
 });

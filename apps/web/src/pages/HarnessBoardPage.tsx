@@ -346,6 +346,96 @@ function formatActionRoute(route: HarnessBoardResponse["pendingApprovals"][numbe
   return route.replace(/-/g, " ");
 }
 
+function renderCompletionPackage(board: HarnessBoardResponse) {
+  const completionPackage = board.completionPackage;
+  if (!completionPackage) {
+    return null;
+  }
+
+  return (
+    <section style={styles.panel}>
+      <h2 style={styles.panelTitle}>Completion package</h2>
+      <p style={styles.panelBody}>
+        {completionPackage.summary ?? "The board is shaping a bounded tenant-facing outcome package."}
+      </p>
+      <ul style={styles.actionList}>
+        <li style={styles.actionItem}>
+          <p style={styles.actionMeta}>{completionPackage.status === "done" ? "Package ready" : "Package assembling"}</p>
+          <h3 style={styles.actionHeading}>Tenant-facing package state</h3>
+          {completionPackage.packageNote ? (
+            <p style={styles.actionSummary}>{completionPackage.packageNote}</p>
+          ) : null}
+          <p style={styles.actionSummary}>{`Deferred approvals: ${completionPackage.deferredApprovalCount}`}</p>
+          <p style={styles.actionSummary}>
+            {completionPackage.hasOpenGovernanceItems
+              ? "Open governance items still shape this package."
+              : "No open governance items are shaping this package."}
+          </p>
+          {completionPackage.recommendations.length > 0 ? (
+            <>
+              <p style={styles.contractMeta}>Recommendations</p>
+              <ul style={styles.fieldList}>
+                {completionPackage.recommendations.map((recommendation) => (
+                  <li key={recommendation} style={styles.fieldItem}>
+                    <p style={styles.optionBody}>{recommendation}</p>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {completionPackage.objections.length > 0 ? (
+            <>
+              <p style={styles.contractMeta}>Objections</p>
+              <ul style={styles.fieldList}>
+                {completionPackage.objections.map((objection) => (
+                  <li key={objection} style={styles.fieldItem}>
+                    <p style={styles.optionBody}>{objection}</p>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+        </li>
+      </ul>
+      {completionPackage.governanceItems.length > 0 ? (
+        <>
+          <p style={{ ...styles.panelTitle, fontSize: "0.95rem", marginTop: "1rem" }}>Governance items</p>
+          <ul style={styles.actionList}>
+            {completionPackage.governanceItems.map((item) => (
+              <li key={item.proposalId} style={styles.actionItem}>
+                <p style={styles.actionMeta}>{item.statusLabel}</p>
+                <h3 style={styles.actionHeading}>{`${item.persona} · ${item.deliverableLabel}`}</h3>
+                {item.policyReasonLabel ? <p style={styles.actionSummary}>{`Policy reason: ${item.policyReasonLabel}`}</p> : null}
+                {item.recommendationSummary ? (
+                  <p style={styles.actionSummary}>{`Recommendation: ${item.recommendationSummary}`}</p>
+                ) : null}
+                {item.objectionSummary ? <p style={styles.actionSummary}>{`Objection: ${item.objectionSummary}`}</p> : null}
+                {item.nextReviewTrigger ? (
+                  <p style={styles.actionSummary}>{`Next review trigger: ${item.nextReviewTrigger}`}</p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      {completionPackage.deliverables.length > 0 ? (
+        <>
+          <p style={{ ...styles.panelTitle, fontSize: "0.95rem", marginTop: "1rem" }}>Deliverables</p>
+          <ul style={styles.actionList}>
+            {completionPackage.deliverables.map((deliverable) => (
+              <li key={deliverable.cardId} style={styles.actionItem}>
+                <p style={styles.actionMeta}>{deliverable.deliverableLabel}</p>
+                <h3 style={styles.actionHeading}>{`${deliverable.persona} · ${deliverable.title}`}</h3>
+                <p style={styles.actionSummary}>{deliverable.outcome}</p>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
 export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | null } = {}) {
   const browserFallbackEnabled = harnessBoardClient.isBrowserFallbackEnabled();
   const [board, setBoard] = useState(() => props.initialBoard ?? (browserFallbackEnabled ? harnessBoardClient.getFallback() : null));
@@ -553,6 +643,54 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
               </ul>
             </section>
           ) : null}
+
+          {board?.recentDecisions.length ? (
+            <section style={styles.panel}>
+              <h2 style={styles.panelTitle}>Recent decisions</h2>
+              <p style={styles.panelBody}>Recent bounded governance decisions preserved from the board contract.</p>
+              <ul style={styles.actionList}>
+                {board.recentDecisions.map((decision) => (
+                  <li key={decision.id} style={styles.actionItem}>
+                    <p style={styles.actionMeta}>{decision.timestampLabel}</p>
+                    <h3 style={styles.actionHeading}>{decision.label}</h3>
+                    <p style={styles.actionSummary}>{`Decision kind: ${decision.decisionKind}`}</p>
+                    {decision.resolution ? <p style={styles.actionSummary}>{`Resolution: ${decision.resolution}`}</p> : null}
+                    {decision.policyReasonLabel ? (
+                      <p style={styles.actionSummary}>{`Policy reason: ${decision.policyReasonLabel}`}</p>
+                    ) : null}
+                    {decision.recommendationSummary ? (
+                      <p style={styles.actionSummary}>{`Recommendation: ${decision.recommendationSummary}`}</p>
+                    ) : null}
+                    {decision.objectionSummary ? (
+                      <p style={styles.actionSummary}>{`Objection: ${decision.objectionSummary}`}</p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {board?.followThroughItems.length ? (
+            <section style={styles.panel}>
+              <h2 style={styles.panelTitle}>Follow-through</h2>
+              <p style={styles.panelBody}>Implemented board actions that already made it through the governance seam.</p>
+              <ul style={styles.actionList}>
+                {board.followThroughItems.map((item) => (
+                  <li key={item.id} style={styles.actionItem}>
+                    <p style={styles.actionMeta}>{item.timestampLabel}</p>
+                    <h3 style={styles.actionHeading}>{item.summary}</h3>
+                    <p style={styles.actionSummary}>{`Action: ${item.action.replace(/_/g, " ")}`}</p>
+                    {item.persona ? <p style={styles.actionSummary}>{`Persona: ${item.persona}`}</p> : null}
+                    {item.deliverableLabel ? (
+                      <p style={styles.actionSummary}>{`Deliverable: ${item.deliverableLabel}`}</p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {board ? renderCompletionPackage(board) : null}
 
           <HarnessCardDrawer card={activeCard} onClose={() => setOpenCardId("")} open={Boolean(activeCard)} />
         </aside>

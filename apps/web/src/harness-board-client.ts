@@ -249,7 +249,46 @@ const defaultBoardResponse: HarnessBoardResponse = {
       recommendationSummary: "Open a dedicated pricing review lane for CFO.",
       timestampLabel: "recently"
     }
-  ]
+  ],
+  completionPackage: {
+    status: "assembling",
+    summary: "The current board package is almost ready, with one bounded governance question still shaping the handoff.",
+    deferredApprovalCount: 1,
+    hasOpenGovernanceItems: true,
+    packageNote: "Keep the pricing handoff readable while the research expansion stays under review.",
+    recommendations: [
+      "Carry the current pricing review into the tenant-facing handoff.",
+      "Revisit research expansion only after the CEO closes the current package."
+    ],
+    objections: ["Do not widen the board cycle until the current pricing decision is packaged cleanly."],
+    governanceItems: [
+      {
+        proposalId: "proposal-fallback-1",
+        statusLabel: "Pending CEO approval",
+        persona: "RESEARCHER",
+        deliverableLabel: "Research Brief",
+        policyReasonLabel: "Review for expansion",
+        recommendationSummary: "Approve only when the current pricing board package is stable.",
+        nextReviewTrigger: "Revisit when the CEO is ready to widen the pricing work."
+      }
+    ],
+    deliverables: [
+      {
+        cardId: "card-cfo-forecast",
+        persona: "CFO",
+        title: "Pressure-test the pricing lane",
+        deliverableLabel: "Pricing Review",
+        outcome: "Margin assumptions are holding with one discount edge case still waiting on approval."
+      },
+      {
+        cardId: "card-coo-handoff",
+        persona: "COO",
+        title: "Prepare the fulfillment handoff",
+        deliverableLabel: "Ops Handoff",
+        outcome: "Fulfillment steps are packaged into a clean operational checklist for the first client wave."
+      }
+    ]
+  }
 };
 
 function isLoopbackHost(hostname: string): boolean {

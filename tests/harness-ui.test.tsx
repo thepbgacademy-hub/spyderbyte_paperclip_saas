@@ -187,8 +187,61 @@ const boardResponse: HarnessBoardResponse = {
     requestedAtLabel: "11:24 AM",
     reasonLabel: "Final assembly"
   },
-  recentDecisions: [],
-  followThroughItems: []
+  recentDecisions: [
+    {
+      id: "decision_ui_test_1",
+      decisionKind: "proposal_deferred",
+      label: "CEO kept the research expansion under bounded review.",
+      resolution: "defer",
+      policyReasonLabel: "Review for expansion",
+      recommendationSummary: "Hold the research expansion until the pricing package is stable.",
+      objectionSummary: "Do not widen the current board cycle yet.",
+      timestampLabel: "11:18 AM"
+    }
+  ],
+  followThroughItems: [
+    {
+      id: "follow_through_ui_test_1",
+      action: "packaged_outcome",
+      summary: "CEO packaged the current pricing outcome for tenant-facing review.",
+      timestampLabel: "11:19 AM",
+      persona: "CFO",
+      deliverableLabel: "Margin review"
+    }
+  ],
+  completionPackage: {
+    status: "assembling",
+    summary: "The current package is nearly ready with one bounded governance item still shaping the handoff.",
+    deferredApprovalCount: 1,
+    hasOpenGovernanceItems: true,
+    packageNote: "Keep the pricing package readable while the research expansion stays under review.",
+    recommendations: [
+      "Carry the current pricing readout into the tenant-facing package.",
+      "Revisit the research expansion after the CEO closes the current cycle."
+    ],
+    objections: ["Do not widen the board cycle until the pricing package is finalized."],
+    governanceItems: [
+      {
+        proposalId: "proposal_ui_test_1",
+        statusLabel: "Pending CEO approval",
+        persona: "RESEARCHER",
+        deliverableLabel: "Research Brief",
+        policyReasonLabel: "Review for expansion",
+        recommendationSummary: "Approve only after the pricing package is stable.",
+        objectionSummary: "Avoid expanding the current board cycle too early.",
+        nextReviewTrigger: "Revisit after the current pricing package is completed."
+      }
+    ],
+    deliverables: [
+      {
+        cardId: "card-cfo-forecast",
+        persona: "CFO",
+        title: "Pressure-test the pricing lane",
+        deliverableLabel: "Margin review",
+        outcome: "Margin ranges are stable with one pricing decision still pending."
+      }
+    ]
+  }
 };
 
 describe("harness board UI", () => {
@@ -266,6 +319,29 @@ describe("harness board UI", () => {
     expect(markup).toContain("Policy reason: Review for expansion");
     expect(markup).toContain("Next review trigger: Revisit after the CEO closes the current pricing board decisions.");
     expect(markup).toContain("Last decision: 11:11 AM");
+    expect(markup).toContain("Recent decisions");
+    expect(markup).toContain("CEO kept the research expansion under bounded review.");
+    expect(markup).toContain("Decision kind: proposal_deferred");
+    expect(markup).toContain("Resolution: defer");
+    expect(markup).toContain("Recommendation: Hold the research expansion until the pricing package is stable.");
+    expect(markup).toContain("Objection: Do not widen the current board cycle yet.");
+    expect(markup).toContain("Follow-through");
+    expect(markup).toContain("CEO packaged the current pricing outcome for tenant-facing review.");
+    expect(markup).toContain("Action: packaged outcome");
+    expect(markup).toContain("Persona: CFO");
+    expect(markup).toContain("Deliverable: Margin review");
+    expect(markup).toContain("Completion package");
+    expect(markup).toContain("Tenant-facing package state");
+    expect(markup).toContain("Keep the pricing package readable while the research expansion stays under review.");
+    expect(markup).toContain("Deferred approvals: 1");
+    expect(markup).toContain("Open governance items still shape this package.");
+    expect(markup).toContain("Recommendations");
+    expect(markup).toContain("Objections");
+    expect(markup).toContain("Governance items");
+    expect(markup).toContain("Deliverables");
+    expect(markup).toContain("Approve only after the pricing package is stable.");
+    expect(markup).toContain("Revisit after the current pricing package is completed.");
+    expect(markup).toContain("CFO · Pressure-test the pricing lane");
     expect(markup).toContain("&quot;decision&quot;:&quot;complete_run&quot;");
     expect(markup).toContain("&quot;decision&quot;:&quot;approve&quot;");
     expect(markup).toContain("&quot;decision&quot;:&quot;deny&quot;");

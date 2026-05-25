@@ -131,3 +131,4 @@ This file tracks the new harness subproject only.
 - [x] Teach the board page and localhost fallback to render bounded field constraints and attention context from the harness contract so request semantics stay engine-owned instead of UI-inferred.
 - [x] Teach the board page to render option emphasis, per-option example payloads, and allowed decision/command families from the harness contract so action semantics stay engine-owned instead of UI-inferred.
 - [x] Teach the board page and fallback to render bounded approval governance metadata from the harness contract so requested-by context, policy reasons, and next-review timing stay engine-owned instead of UI-inferred.
+- [x] Teach the board page and fallback to render bounded governance history and package read models (`recentDecisions`, `followThroughItems`, `completionPackage`) so tenant-facing board truth does not stop at action metadata.
