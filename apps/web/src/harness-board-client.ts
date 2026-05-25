@@ -170,7 +170,10 @@ const defaultBoardResponse: HarnessBoardResponse = {
         }
       ],
       recommendedOptionValue: "approve",
-      allowedDecisions: ["approve", "defer", "deny"]
+      allowedDecisions: ["approve", "defer", "deny"],
+      policyReasonLabel: "Review for expansion",
+      nextReviewTrigger: "Revisit when the CEO is ready to widen the pricing work.",
+      lastDecisionAtLabel: "recently"
     }
   ],
   pendingAttention: {

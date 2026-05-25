@@ -128,7 +128,10 @@ const boardResponse: HarnessBoardResponse = {
         }
       ],
       recommendedOptionValue: "approve",
-      allowedDecisions: ["approve", "defer", "deny"]
+      allowedDecisions: ["approve", "defer", "deny"],
+      policyReasonLabel: "Review for expansion",
+      nextReviewTrigger: "Revisit after the CEO closes the current pricing board decisions.",
+      lastDecisionAtLabel: "11:11 AM"
     }
   ],
   pendingAttention: {
@@ -243,6 +246,8 @@ describe("harness board UI", () => {
     expect(markup).toContain("Recommended next action");
     expect(markup).toContain("POST /api/harness/runs/run_ui_test_1/review-attention");
     expect(markup).toContain("POST /api/harness/proposals/proposal_ui_test_1/decision");
+    expect(markup).toContain("Action family: review attention");
+    expect(markup).toContain("Action family: proposal decision");
     expect(markup).toContain("Allowed decisions: complete_run, start_fresh_cycle");
     expect(markup).toContain("Allowed decisions: approve, defer, deny");
     expect(markup).toContain("Review decision");
@@ -257,6 +262,10 @@ describe("harness board UI", () => {
     expect(markup).toContain("Supported when decision is start_fresh_cycle.");
     expect(markup).toContain("Suggested value: reopen_deferred");
     expect(markup).toContain("Supported when decision is defer.");
+    expect(markup).toContain("Requested by CFO for RESEARCHER");
+    expect(markup).toContain("Policy reason: Review for expansion");
+    expect(markup).toContain("Next review trigger: Revisit after the CEO closes the current pricing board decisions.");
+    expect(markup).toContain("Last decision: 11:11 AM");
     expect(markup).toContain("&quot;decision&quot;:&quot;complete_run&quot;");
     expect(markup).toContain("&quot;decision&quot;:&quot;approve&quot;");
     expect(markup).toContain("&quot;decision&quot;:&quot;deny&quot;");

@@ -73,6 +73,9 @@ describe("harness board client", () => {
           actionMethod: "POST",
           actionLabel: "Review proposal decision",
           recommendedOptionValue: "approve",
+          policyReasonLabel: "Review for expansion",
+          nextReviewTrigger: expect.any(String),
+          lastDecisionAtLabel: "recently",
           requestFields: expect.arrayContaining([
             expect.objectContaining({
               name: "decisionNote",

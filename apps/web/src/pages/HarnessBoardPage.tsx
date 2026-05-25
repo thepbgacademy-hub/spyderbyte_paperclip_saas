@@ -338,6 +338,14 @@ function renderActionConstraintSummary(input: { allowedValues: readonly string[]
   return <p style={styles.contractMeta}>{`${input.label}: ${input.allowedValues.join(", ")}`}</p>;
 }
 
+function formatActionRoute(route: HarnessBoardResponse["pendingApprovals"][number]["actionRoute"] | NonNullable<NonNullable<HarnessBoardResponse["pendingAttention"]>["actionRoute"]> | undefined) {
+  if (!route) {
+    return null;
+  }
+
+  return route.replace(/-/g, " ");
+}
+
 export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | null } = {}) {
   const browserFallbackEnabled = harnessBoardClient.isBrowserFallbackEnabled();
   const [board, setBoard] = useState(() => props.initialBoard ?? (browserFallbackEnabled ? harnessBoardClient.getFallback() : null));
@@ -497,6 +505,9 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                   {pendingAttention.actionMethod && pendingAttention.actionPath ? (
                     <p style={styles.contractMeta}>{`${pendingAttention.actionMethod} ${pendingAttention.actionPath}`}</p>
                   ) : null}
+                  {pendingAttention.actionRoute ? (
+                    <p style={styles.contractMeta}>{`Action family: ${formatActionRoute(pendingAttention.actionRoute)}`}</p>
+                  ) : null}
                   {renderActionConstraintSummary({
                     allowedValues: pendingAttention.allowedDecisions ?? pendingAttention.allowedCommands,
                     label: pendingAttention.allowedDecisions ? "Allowed decisions" : "Allowed commands"
@@ -518,8 +529,19 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                     <p style={styles.actionMeta}>{approval.statusLabel}</p>
                     <h3 style={styles.actionHeading}>{approval.actionLabel}</h3>
                     <p style={styles.actionSummary}>{approval.actionDescription}</p>
+                    <p style={styles.actionSummary}>{`Requested by ${approval.requestedByPersona} for ${approval.targetPersona}`}</p>
+                    {approval.policyReasonLabel ? (
+                      <p style={styles.actionSummary}>{`Policy reason: ${approval.policyReasonLabel}`}</p>
+                    ) : null}
+                    {approval.nextReviewTrigger ? (
+                      <p style={styles.actionSummary}>{`Next review trigger: ${approval.nextReviewTrigger}`}</p>
+                    ) : null}
+                    {approval.lastDecisionAtLabel ? (
+                      <p style={styles.actionSummary}>{`Last decision: ${approval.lastDecisionAtLabel}`}</p>
+                    ) : null}
                     {approval.targetSummary ? <p style={styles.actionSummary}>{approval.targetSummary}</p> : null}
                     <p style={styles.contractMeta}>{`${approval.actionMethod} ${approval.actionPath}`}</p>
+                    <p style={styles.contractMeta}>{`Action family: ${formatActionRoute(approval.actionRoute)}`}</p>
                     {renderActionConstraintSummary({
                       allowedValues: approval.allowedDecisions,
                       label: "Allowed decisions"
