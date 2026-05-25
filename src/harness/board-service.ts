@@ -117,6 +117,8 @@ export type HarnessPendingApprovalView = {
   targetPersona: string;
   deliverableLabel: string;
   statusLabel: string;
+  actionRoute: "proposal-decision";
+  allowedDecisions: Array<"approve" | "defer" | "deny">;
   policyReasonLabel?: string;
   nextReviewTrigger?: string;
   lastDecisionAtLabel?: string;
@@ -3140,6 +3142,8 @@ function buildHarnessBoardResponse(input: {
         targetPersona: proposal.persona.toUpperCase(),
         deliverableLabel: humanizeDeliverableType(proposal.deliverableType),
         statusLabel: proposal.status === "deferred" ? "Deferred for later CEO review" : "Pending CEO approval",
+        actionRoute: "proposal-decision",
+        allowedDecisions: ["approve", "defer", "deny"],
         ...(toPendingApprovalPolicyView({
           cards: input.cards,
           proposal,

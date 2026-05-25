@@ -264,7 +264,9 @@ describe("harness board service", () => {
         id: "proposal_approval_1",
         requestedByPersona: "CFO",
         targetPersona: "RESEARCHER",
-        statusLabel: "Pending CEO approval"
+        statusLabel: "Pending CEO approval",
+        actionRoute: "proposal-decision",
+        allowedDecisions: ["approve", "defer", "deny"]
       })
     ]);
 
@@ -1326,6 +1328,8 @@ describe("harness board service", () => {
       expect.objectContaining({
         id: "proposal_deferred_1",
         statusLabel: "Deferred for later CEO review",
+        actionRoute: "proposal-decision",
+        allowedDecisions: ["approve", "defer", "deny"],
         policyReasonLabel: "Scope guardrail",
         nextReviewTrigger: "Review again only if the CEO widens the approved workflow boundary."
       })
