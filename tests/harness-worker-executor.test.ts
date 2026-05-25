@@ -633,6 +633,14 @@ describe("harness worker executor", () => {
           payload: {
             summary: "Validated the pricing model and preserved the final floor."
           }
+        }),
+        expect.objectContaining({
+          eventKind: "attention_requested",
+          payload: {
+            actionKind: "queue_ceo_review",
+            runState: "assembling",
+            reason: "final_assembly"
+          }
         })
       ])
     );
@@ -945,6 +953,19 @@ describe("harness worker executor", () => {
         cardId: cfoCard.id
       }
     });
+
+    await expect(repository.listEventsForCard(cfoCard.id)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventKind: "attention_requested",
+          payload: {
+            actionKind: "await_lane_resume",
+            runState: "waiting",
+            targetCardId: cfoCard.id
+          }
+        })
+      ])
+    );
   });
 
   it("points await_lane_resume at the actual waiting lane when another child lane is paused", async () => {

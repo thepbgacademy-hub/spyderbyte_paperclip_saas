@@ -19,6 +19,7 @@ import {
 import { deriveHarnessRunState, transitionHarnessCard, transitionHarnessRun } from "./state-machine.js";
 import { createHarnessRuntime } from "./runtime.js";
 import type { HarnessRepository } from "./repository.js";
+import { describeHarnessPostOutcomeActionKind, determineHarnessPostOutcomeAction, type HarnessPostOutcomeAction } from "./post-outcome.js";
 import type { WealthFactoryWorkflowDefinition } from "../wealthfactory/workflow-registry.js";
 import {
   ActivePackageInstallRequiredError,
@@ -68,9 +69,21 @@ export type HarnessBoardResponse = {
   columns: HarnessBoardColumnView[];
   cards: HarnessBoardCardView[];
   pendingApprovals: HarnessPendingApprovalView[];
+  pendingAttention?: HarnessPendingAttentionView;
   recentDecisions: HarnessRecentDecisionView[];
   followThroughItems: HarnessFollowThroughView[];
   completionPackage?: HarnessCompletionPackageView;
+};
+
+export type HarnessPendingAttentionView = {
+  kind: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>["kind"];
+  runState: HarnessRunRecord["state"];
+  statusLabel: string;
+  summary: string;
+  reasonLabel?: string;
+  targetCardId?: string;
+  targetPersona?: string;
+  targetTitle?: string;
 };
 
 export type HarnessFollowThroughView = {
@@ -2715,6 +2728,12 @@ function buildHarnessBoardResponse(input: {
     .filter(isFollowThroughDecision)
     .slice(0, 8)
     .map(toFollowThroughView);
+  const pendingAttention = buildPendingAttentionView({
+    run: input.run,
+    cards: input.cards,
+    continuityByCardId,
+    proposals: input.proposals
+  });
   const latestDecisionByProposalId = new Map<string, HarnessBoardDecisionRecord>();
   for (const decision of input.decisions) {
     if (decision.proposalId && !latestDecisionByProposalId.has(decision.proposalId)) {
@@ -2743,6 +2762,7 @@ function buildHarnessBoardResponse(input: {
           latestDecision: latestDecisionByProposalId.get(proposal.id) ?? null
         }))
       })),
+    ...(pendingAttention ? { pendingAttention } : {}),
     recentDecisions,
     followThroughItems,
     ...(completionPackage ? { completionPackage } : {})
@@ -2758,6 +2778,8 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
   const payloadRequestedByPersona = readOptionalString(event.payload.requestedByPersona);
   const payloadFromPersona = readOptionalString(event.payload.fromPersona);
   const payloadToPersona = readOptionalString(event.payload.toPersona);
+  const payloadActionKind = readOptionalString(event.payload.actionKind);
+  const payloadAttentionReason = readOptionalString(event.payload.reason);
   const labelByKind: Record<HarnessCardEventRecord["eventKind"], string> = {
     created: `${payloadTitle ?? "Card"} was opened for this persona lane.`,
     state_changed: `Lane status moved to ${humanizeLabel(payloadState ?? "updated")}.`,
@@ -2771,6 +2793,10 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
       payloadFromPersona && payloadToPersona
         ? `CEO handed this lane from ${payloadFromPersona.toUpperCase()} to ${payloadToPersona.toUpperCase()}.`
         : "CEO handed this active lane to a new persona owner.",
+    attention_requested: describeAttentionRequestedActivity({
+      actionKind: payloadActionKind,
+      reason: payloadAttentionReason
+    }),
     result_recorded: payloadSummary
       ? `A new outcome snapshot was recorded for this lane: ${payloadSummary}`
       : "A new outcome snapshot was recorded for this lane."
@@ -2781,6 +2807,70 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
     label: labelByKind[event.eventKind],
     timestampLabel: formatBoardTimestamp(event.createdAt)
   };
+}
+
+function buildPendingAttentionView(input: {
+  run: HarnessRunRecord;
+  cards: readonly HarnessCardRecord[];
+  continuityByCardId: ReadonlyMap<string, HarnessCardContinuityRecord>;
+  proposals: readonly HarnessSubCardProposal[];
+}): HarnessPendingAttentionView | null {
+  const action = determineHarnessPostOutcomeAction({
+    runState: input.run.state,
+    cards: input.cards,
+    proposals: input.proposals,
+    nextDispatchCard: null
+  });
+  if (!action || action.kind === "dispatch_next_lane") {
+    return null;
+  }
+
+  const described = describeHarnessPostOutcomeActionKind(action);
+  const targetCard = "cardId" in action
+    ? input.cards.find((card) => card.id === action.cardId) ?? null
+    : null;
+  const continuitySummary =
+    targetCard ? input.continuityByCardId.get(targetCard.id)?.continuitySummary ?? null : null;
+
+  return {
+    kind: action.kind,
+    runState: action.runState,
+    statusLabel: described.statusLabel,
+    summary: continuitySummary ?? described.summary,
+    ...(described.reasonLabel ? { reasonLabel: described.reasonLabel } : {}),
+    ...(targetCard
+      ? {
+          targetCardId: targetCard.id,
+          targetPersona: targetCard.persona.toUpperCase(),
+          targetTitle: targetCard.title
+        }
+      : {})
+  };
+}
+
+function describeAttentionRequestedActivity(input: {
+  actionKind: string | undefined;
+  reason: string | undefined;
+}): string {
+  switch (input.actionKind) {
+    case "queue_ceo_review":
+      if (input.reason === "final_assembly") {
+        return "Board attention is now waiting on CEO final assembly review.";
+      }
+      if (input.reason === "governance_backlog") {
+        return "Board attention is now waiting on CEO governance backlog review.";
+      }
+      if (input.reason === "governance_hold") {
+        return "Board attention is now waiting on CEO governance-hold review.";
+      }
+      return "Board attention is now waiting on CEO review.";
+    case "await_lane_resume":
+      return "Board attention is now waiting on a lane resume decision.";
+    case "await_unblock":
+      return "Board attention is now waiting on a lane unblock decision.";
+    default:
+      return "Board attention is waiting on the next bounded orchestration step.";
+  }
 }
 
 function toBoardCardView(input: {

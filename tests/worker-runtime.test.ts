@@ -662,6 +662,17 @@ describe("worker runtime", () => {
         }
       })
     );
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "attention_requested",
+        payload: {
+          actionKind: "queue_ceo_review",
+          runState: "assembling",
+          reason: "final_assembly"
+        }
+      })
+    );
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome\"")
     );
@@ -1218,6 +1229,17 @@ describe("worker runtime", () => {
         latestResultSummary: "Initial pricing floor is stable."
       }
     });
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "attention_requested",
+        payload: {
+          actionKind: "await_lane_resume",
+          runState: "waiting",
+          targetCardId: "card_cfo"
+        }
+      })
+    );
     expect(onHarnessCeoReviewRequested).not.toHaveBeenCalled();
 
     await runtime.close();
@@ -1436,6 +1458,17 @@ describe("worker runtime", () => {
         latestResultSummary: "Initial pricing floor is stable."
       }
     });
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "attention_requested",
+        payload: {
+          actionKind: "await_unblock",
+          runState: "blocked",
+          targetCardId: "card_cfo"
+        }
+      })
+    );
     expect(onHarnessCeoReviewRequested).not.toHaveBeenCalled();
 
     await runtime.close();

@@ -372,6 +372,104 @@ describe("harness board service", () => {
     expect(JSON.stringify(board.recentDecisions)).not.toMatch(/tool|prompt|internal|secret/i);
   });
 
+  it("surfaces a bounded pending-attention view when the board is waiting on a lane resume", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "waiting",
+      resumeSummary: "CFO should resume this lane once the tenant confirms the latest revenue assumption."
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+
+    expect(board.pendingAttention).toEqual({
+      kind: "await_lane_resume",
+      runState: "waiting",
+      statusLabel: "Waiting on lane resume",
+      summary: "CFO should resume this lane once the tenant confirms the latest revenue assumption.",
+      targetCardId: created.cardId,
+      targetPersona: "CFO",
+      targetTitle: "Pressure-test the pricing lane"
+    });
+  });
+
+  it("surfaces a bounded CEO review attention view when completed work is ready for final assembly", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "done",
+      resultSummary: "Pricing floor is stable enough for launch."
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+
+    expect(board.pendingAttention).toEqual({
+      kind: "queue_ceo_review",
+      runState: "assembling",
+      statusLabel: "CEO review required",
+      summary: "The board is ready for final assembly before the tenant-facing package is closed.",
+      reasonLabel: "Final assembly"
+    });
+  });
+
   it("derives tenant-safe board follow-through items from implemented governance decisions", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({

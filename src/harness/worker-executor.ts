@@ -1,6 +1,7 @@
 import type { HarnessRepository } from "./repository.js";
 import { createHarnessRuntime } from "./runtime.js";
 import { deriveHarnessRunState } from "./state-machine.js";
+import { determineHarnessPostOutcomeAction, type HarnessPostOutcomeAction } from "./post-outcome.js";
 import {
   createHarnessCardContinuityRecord,
   createHarnessCardEventRecord,
@@ -37,29 +38,6 @@ export type HarnessWorkerExecutionEnvelope = {
   runtimeContext: HarnessRuntimeContext;
   laneExecution: HarnessWorkerLaneExecution;
 };
-
-export type HarnessPostOutcomeAction =
-  | {
-      kind: "dispatch_next_lane";
-      runState: HarnessRunRecord["state"];
-      cardId: string;
-      persona: string;
-    }
-  | {
-      kind: "queue_ceo_review";
-      runState: HarnessRunRecord["state"];
-      reason: "final_assembly" | "governance_backlog" | "governance_hold";
-    }
-  | {
-      kind: "await_lane_resume";
-      runState: "waiting";
-      cardId: string;
-    }
-  | {
-      kind: "await_unblock";
-      runState: "blocked";
-      cardId: string;
-    };
 
 export type HarnessWorkerLaneOutcome = {
   runId: string;
@@ -321,11 +299,20 @@ export async function commitHarnessWorkerLaneOutcome(input: {
     const latestRunState = latestRun?.state ?? nextRun.state;
     const postOutcomeAction = determinePostOutcomeAction({
       runState: latestRunState,
-      cardId: updatedCard.id,
+      fallbackCardId: updatedCard.id,
       nextDispatch,
       cards: cardsAfterOutcome,
       proposals: proposalsAfterOutcome
     });
+    if (postOutcomeAction && postOutcomeAction.kind !== "dispatch_next_lane") {
+      await repository.insertEvent(
+        createHarnessCardEventRecord({
+          cardId: "cardId" in postOutcomeAction ? postOutcomeAction.cardId : updatedCard.id,
+          eventKind: "attention_requested",
+          payload: createAttentionRequestedPayload(postOutcomeAction)
+        })
+      );
+    }
     return {
       runId: run.id,
       workflowId: run.workflowId,
@@ -493,89 +480,43 @@ async function reconcileHarnessRunState(input: {
 
 function determinePostOutcomeAction(input: {
   runState: HarnessRunRecord["state"];
-  cardId: string;
+  fallbackCardId?: string;
   nextDispatch: HarnessWorkerDispatch | null;
   cards: readonly HarnessCardRecord[];
   proposals: Awaited<ReturnType<HarnessOutcomeRepository["listProposalsForRun"]>>;
 }): HarnessPostOutcomeAction | null {
-  const dispatchedLane = input.nextDispatch?.laneExecution;
-  if (dispatchedLane) {
-    return {
-      kind: "dispatch_next_lane",
-      runState: input.runState,
-      cardId: dispatchedLane.cardId,
-      persona: dispatchedLane.persona
-    };
-  }
-
-  const hasOpenGovernance = input.proposals.some(
-    (proposal) => proposal.status === "proposed" || proposal.status === "deferred"
-  );
-  if (input.runState === "assembling") {
-    return {
-      kind: "queue_ceo_review",
-      runState: input.runState,
-      reason: hasOpenGovernance ? "governance_hold" : "final_assembly"
-    };
-  }
-
-  if (input.runState === "waiting") {
-    const waitingLane = selectObservedLaneForState(input.cards, "waiting", input.cardId);
-    return {
-      kind: "await_lane_resume",
-      runState: "waiting",
-      cardId: waitingLane?.id ?? input.cardId
-    };
-  }
-
-  if (input.runState === "blocked") {
-    if (hasOpenGovernance) {
-      return {
-        kind: "queue_ceo_review",
-        runState: input.runState,
-        reason: "governance_hold"
-      };
-    }
-    const blockedLane = selectObservedLaneForState(input.cards, "blocked", input.cardId);
-    return {
-      kind: "await_unblock",
-      runState: "blocked",
-      cardId: blockedLane?.id ?? input.cardId
-    };
-  }
-
-  if (input.runState === "active" && hasOpenGovernance) {
-    const hasActiveChildLane = input.cards.some(
-      (card) => card.persona !== "ceo" && (card.state === "working" || card.state === "approved")
-    );
-    if (!hasActiveChildLane) {
-      return {
-        kind: "queue_ceo_review",
-        runState: input.runState,
-        reason: "governance_backlog"
-      };
-    }
-  }
-
-  return null;
+  return determineHarnessPostOutcomeAction({
+    runState: input.runState,
+    ...(input.fallbackCardId ? { fallbackCardId: input.fallbackCardId } : {}),
+    nextDispatchCard: input.nextDispatch?.laneExecution
+      ? {
+          cardId: input.nextDispatch.laneExecution.cardId,
+          persona: input.nextDispatch.laneExecution.persona
+        }
+      : null,
+    cards: input.cards,
+    proposals: input.proposals
+  });
 }
 
-function selectObservedLaneForState(
-  cards: readonly HarnessCardRecord[],
-  state: Extract<HarnessCardState, "waiting" | "blocked">,
-  fallbackCardId: string
-): HarnessCardRecord | null {
-  const matchingLanes = cards
-    .filter((card) => card.persona !== "ceo" && card.state === state)
-    .sort(compareObservedLanes);
-  return matchingLanes.find((card) => card.id === fallbackCardId) ?? matchingLanes[0] ?? null;
-}
-
-function compareObservedLanes(left: HarnessCardRecord, right: HarnessCardRecord): number {
-  if (left.updatedAt !== right.updatedAt) {
-    return left.updatedAt.localeCompare(right.updatedAt);
+function createAttentionRequestedPayload(
+  action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>
+): Record<string, unknown> {
+  switch (action.kind) {
+    case "queue_ceo_review":
+      return {
+        actionKind: action.kind,
+        runState: action.runState,
+        reason: action.reason
+      };
+    case "await_lane_resume":
+    case "await_unblock":
+      return {
+        actionKind: action.kind,
+        runState: action.runState,
+        targetCardId: action.cardId
+      };
   }
-  return left.createdAt.localeCompare(right.createdAt);
 }
 
 function createActiveResumeSummary(card: HarnessCardRecord): string {

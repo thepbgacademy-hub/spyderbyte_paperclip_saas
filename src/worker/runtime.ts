@@ -8,11 +8,11 @@ import {
   buildHarnessWorkerExecutionEnvelope,
   buildHarnessWorkerDispatch,
   commitHarnessWorkerLaneOutcome,
-  type HarnessPostOutcomeAction,
   type HarnessWorkerDispatch,
   type HarnessWorkerExecutionEnvelope,
   type HarnessWorkerLaneOutcome
 } from "../harness/worker-executor.js";
+import { type HarnessPostOutcomeAction } from "../harness/post-outcome.js";
 import { createPostgresHarnessRepository } from "../harness/repository.js";
 import { createPaperclipClient } from "../paperclip/client.js";
 import type { PaperclipRunStatus } from "../paperclip/types.js";
