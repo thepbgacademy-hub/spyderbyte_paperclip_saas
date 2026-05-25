@@ -85,11 +85,19 @@ export type HarnessBoardResponse = {
 
 export type HarnessActionRequestFieldView = {
   name: "decision" | "decisionNote" | "targetCardId" | "command" | "resumeSummary" | "completionSummary" | "mode";
+  label: string;
+  description?: string;
   required: boolean;
   allowedValues?: string[];
   requiredWhenValue?: string;
   supportedWhenValue?: string;
   suggestedValue?: string;
+};
+
+export type HarnessActionOptionView = {
+  value: string;
+  label: string;
+  description: string;
 };
 
 export type HarnessPendingAttentionView = {
@@ -100,7 +108,10 @@ export type HarnessPendingAttentionView = {
   actionRoute?: "review-attention" | "resolve-attention" | "pending-approvals";
   actionPath?: string;
   actionMethod?: "POST";
+  actionLabel?: string;
+  actionDescription?: string;
   requestFields?: HarnessActionRequestFieldView[];
+  actionOptions?: HarnessActionOptionView[];
   allowedDecisions?: HarnessAttentionReviewDecision[];
   allowedCommands?: HarnessAttentionResolutionCommand[];
   pendingApprovalCount?: number;
@@ -132,7 +143,10 @@ export type HarnessPendingApprovalView = {
   actionRoute: "proposal-decision";
   actionPath: string;
   actionMethod: "POST";
+  actionLabel: string;
+  actionDescription: string;
   requestFields: HarnessActionRequestFieldView[];
+  actionOptions: HarnessActionOptionView[];
   allowedDecisions: Array<"approve" | "defer" | "deny">;
   policyReasonLabel?: string;
   nextReviewTrigger?: string;
@@ -3167,7 +3181,10 @@ function buildHarnessBoardResponse(input: {
           actionRoute: "proposal-decision",
           actionPath: `/api/harness/proposals/${encodeURIComponent(proposal.id)}/decision`,
           actionMethod: "POST" as const,
+          actionLabel: "Review proposal decision",
+          actionDescription: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
           requestFields: buildPendingApprovalRequestFields(policyView.handoffTargetCardId),
+          actionOptions: buildPendingApprovalActionOptions(policyView),
           allowedDecisions: ["approve", "defer", "deny"],
           ...policyView
         };
@@ -3309,29 +3326,86 @@ function buildPendingAttentionView(input: {
               actionRoute: "review-attention" as const,
               actionPath: `/api/harness/runs/${encodeURIComponent(input.run.id)}/review-attention`,
               actionMethod: "POST" as const,
+              actionLabel: "Review final assembly",
+              actionDescription: "Finish the current board cycle or intentionally start the next one.",
               requestFields: [
-                { name: "decision", required: true, allowedValues: ["complete_run", "start_fresh_cycle"] },
-                { name: "completionSummary", required: false, requiredWhenValue: "complete_run" },
-                { name: "mode", required: false, supportedWhenValue: "start_fresh_cycle", allowedValues: ["reopen_deferred", "clean"] }
+                {
+                  name: "decision",
+                  label: "Review decision",
+                  description: "Choose whether to close the current board cycle or start the next one.",
+                  required: true,
+                  allowedValues: ["complete_run", "start_fresh_cycle"]
+                },
+                {
+                  name: "completionSummary",
+                  label: "Completion summary",
+                  description: "Optional tenant-facing summary to package with the completed run.",
+                  required: false,
+                  requiredWhenValue: "complete_run"
+                },
+                {
+                  name: "mode",
+                  label: "Fresh-cycle mode",
+                  description: "Choose whether the next cycle should reopen deferred work or start clean.",
+                  required: false,
+                  supportedWhenValue: "start_fresh_cycle",
+                  allowedValues: ["reopen_deferred", "clean"]
+                }
               ] satisfies HarnessActionRequestFieldView[],
+              actionOptions: [
+                {
+                  value: "complete_run",
+                  label: "Complete run",
+                  description: "Close the current board cycle and package the current business outcome."
+                },
+                {
+                  value: "start_fresh_cycle",
+                  label: "Start fresh cycle",
+                  description: "Open the next board cycle from this run, with or without reopening deferred work."
+                }
+              ] satisfies HarnessActionOptionView[],
               allowedDecisions: ["complete_run", "start_fresh_cycle"] as HarnessAttentionReviewDecision[]
             }
           : {
               actionRoute: "pending-approvals" as const,
+              actionLabel: "Review pending approvals",
+              actionDescription: "Open the proposal review queue to clear governance backlog before more work starts.",
               pendingApprovalCount
             })
       : {
           actionRoute: "resolve-attention" as const,
           actionPath: `/api/harness/runs/${encodeURIComponent(input.run.id)}/resolve-attention`,
           actionMethod: "POST" as const,
+          actionLabel: action.kind === "await_lane_resume" ? "Resume lane" : "Unblock lane",
+          actionDescription:
+            action.kind === "await_lane_resume"
+              ? "Resume the waiting lane when the required board input is ready."
+              : "Clear the blocked lane when the missing dependency has been resolved.",
           requestFields: [
             {
               name: "command",
+              label: "Resolution command",
+              description: "Choose the single bounded command that resolves this attention state.",
               required: true,
               allowedValues: [action.kind === "await_lane_resume" ? "resume_lane" : "unblock_lane"]
             },
-            { name: "resumeSummary", required: false }
+            {
+              name: "resumeSummary",
+              label: action.kind === "await_lane_resume" ? "Resume summary" : "Unblock summary",
+              description: "Optional tenant-safe note describing what changed before execution resumes.",
+              required: false
+            }
           ] satisfies HarnessActionRequestFieldView[],
+          actionOptions: [
+            {
+              value: action.kind === "await_lane_resume" ? "resume_lane" : "unblock_lane",
+              label: action.kind === "await_lane_resume" ? "Resume lane" : "Unblock lane",
+              description:
+                action.kind === "await_lane_resume"
+                  ? "Return the lane to active execution with an optional bounded resume note."
+                  : "Move the lane out of its blocked state so execution can continue."
+            }
+          ] satisfies HarnessActionOptionView[],
           allowedCommands: [action.kind === "await_lane_resume" ? "resume_lane" : "unblock_lane"] as HarnessAttentionResolutionCommand[]
         }),
     ...(currentAttention && isSameAttentionAction(currentAttention.action, action)
@@ -3356,13 +3430,26 @@ function buildPendingAttentionView(input: {
 
 function buildPendingApprovalRequestFields(handoffTargetCardId?: string): HarnessActionRequestFieldView[] {
   const fields: HarnessActionRequestFieldView[] = [
-    { name: "decision", required: true, allowedValues: ["approve", "defer", "deny"] },
-    { name: "decisionNote", required: false }
+    {
+      name: "decision",
+      label: "Proposal decision",
+      description: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
+      required: true,
+      allowedValues: ["approve", "defer", "deny"]
+    },
+    {
+      name: "decisionNote",
+      label: "Decision note",
+      description: "Optional bounded note explaining the decision or what should change before review resumes.",
+      required: false
+    }
   ];
 
   if (handoffTargetCardId) {
     fields.push({
       name: "targetCardId",
+      label: "Handoff target lane",
+      description: "Optional existing lane to reuse when approval should fold this work into an active owner-conflict handoff.",
       required: false,
       supportedWhenValue: "approve",
       suggestedValue: handoffTargetCardId
@@ -3370,6 +3457,32 @@ function buildPendingApprovalRequestFields(handoffTargetCardId?: string): Harnes
   }
 
   return fields;
+}
+
+function buildPendingApprovalActionOptions(input: {
+  handoffTargetCardId?: string;
+  handoffTargetPersona?: string;
+  handoffTargetTitle?: string;
+}): HarnessActionOptionView[] {
+  return [
+    {
+      value: "approve",
+      label: "Approve proposal",
+      description: input.handoffTargetCardId
+        ? `Approve this work and optionally fold it into ${input.handoffTargetPersona ?? "the existing"} lane${input.handoffTargetTitle ? ` (${input.handoffTargetTitle})` : ""}.`
+        : "Approve this work so it can move into the bounded execution flow."
+    },
+    {
+      value: "defer",
+      label: "Defer proposal",
+      description: "Pause this follow-on work without dropping it so the CEO can revisit it later."
+    },
+    {
+      value: "deny",
+      label: "Deny proposal",
+      description: "Reject this follow-on work when it should not expand the current board cycle."
+    }
+  ];
 }
 
 function formatAttentionActivityLabel(input: {

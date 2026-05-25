@@ -268,9 +268,39 @@ describe("harness board service", () => {
         actionRoute: "proposal-decision",
         actionPath: "/api/harness/proposals/proposal_approval_1/decision",
         actionMethod: "POST",
+        actionLabel: "Review proposal decision",
+        actionDescription: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
         requestFields: [
-          { name: "decision", required: true, allowedValues: ["approve", "defer", "deny"] },
-          { name: "decisionNote", required: false }
+          {
+            name: "decision",
+            label: "Proposal decision",
+            description: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
+            required: true,
+            allowedValues: ["approve", "defer", "deny"]
+          },
+          {
+            name: "decisionNote",
+            label: "Decision note",
+            description: "Optional bounded note explaining the decision or what should change before review resumes.",
+            required: false
+          }
+        ],
+        actionOptions: [
+          {
+            value: "approve",
+            label: "Approve proposal",
+            description: "Approve this work so it can move into the bounded execution flow."
+          },
+          {
+            value: "defer",
+            label: "Defer proposal",
+            description: "Pause this follow-on work without dropping it so the CEO can revisit it later."
+          },
+          {
+            value: "deny",
+            label: "Deny proposal",
+            description: "Reject this follow-on work when it should not expand the current board cycle."
+          }
         ],
         allowedDecisions: ["approve", "defer", "deny"]
       })
@@ -427,9 +457,29 @@ describe("harness board service", () => {
       actionRoute: "resolve-attention",
       actionPath: `/api/harness/runs/${board.runId}/resolve-attention`,
       actionMethod: "POST",
+      actionLabel: "Resume lane",
+      actionDescription: "Resume the waiting lane when the required board input is ready.",
       requestFields: [
-        { name: "command", required: true, allowedValues: ["resume_lane"] },
-        { name: "resumeSummary", required: false }
+        {
+          name: "command",
+          label: "Resolution command",
+          description: "Choose the single bounded command that resolves this attention state.",
+          required: true,
+          allowedValues: ["resume_lane"]
+        },
+        {
+          name: "resumeSummary",
+          label: "Resume summary",
+          description: "Optional tenant-safe note describing what changed before execution resumes.",
+          required: false
+        }
+      ],
+      actionOptions: [
+        {
+          value: "resume_lane",
+          label: "Resume lane",
+          description: "Return the lane to active execution with an optional bounded resume note."
+        }
       ],
       allowedCommands: ["resume_lane"],
       targetCardId: created.cardId,
@@ -515,9 +565,29 @@ describe("harness board service", () => {
         actionRoute: "resolve-attention",
         actionPath: `/api/harness/runs/${board.runId}/resolve-attention`,
         actionMethod: "POST",
+        actionLabel: "Resume lane",
+        actionDescription: "Resume the waiting lane when the required board input is ready.",
         requestFields: [
-          { name: "command", required: true, allowedValues: ["resume_lane"] },
-          { name: "resumeSummary", required: false }
+          {
+            name: "command",
+            label: "Resolution command",
+            description: "Choose the single bounded command that resolves this attention state.",
+            required: true,
+            allowedValues: ["resume_lane"]
+          },
+          {
+            name: "resumeSummary",
+            label: "Resume summary",
+            description: "Optional tenant-safe note describing what changed before execution resumes.",
+            required: false
+          }
+        ],
+        actionOptions: [
+          {
+            value: "resume_lane",
+            label: "Resume lane",
+            description: "Return the lane to active execution with an optional bounded resume note."
+          }
         ],
         allowedCommands: ["resume_lane"],
         targetCardId: created.cardId,
@@ -577,10 +647,43 @@ describe("harness board service", () => {
       actionRoute: "review-attention",
       actionPath: `/api/harness/runs/${board.runId}/review-attention`,
       actionMethod: "POST",
+      actionLabel: "Review final assembly",
+      actionDescription: "Finish the current board cycle or intentionally start the next one.",
       requestFields: [
-        { name: "decision", required: true, allowedValues: ["complete_run", "start_fresh_cycle"] },
-        { name: "completionSummary", required: false, requiredWhenValue: "complete_run" },
-        { name: "mode", required: false, supportedWhenValue: "start_fresh_cycle", allowedValues: ["reopen_deferred", "clean"] }
+        {
+          name: "decision",
+          label: "Review decision",
+          description: "Choose whether to close the current board cycle or start the next one.",
+          required: true,
+          allowedValues: ["complete_run", "start_fresh_cycle"]
+        },
+        {
+          name: "completionSummary",
+          label: "Completion summary",
+          description: "Optional tenant-facing summary to package with the completed run.",
+          required: false,
+          requiredWhenValue: "complete_run"
+        },
+        {
+          name: "mode",
+          label: "Fresh-cycle mode",
+          description: "Choose whether the next cycle should reopen deferred work or start clean.",
+          required: false,
+          supportedWhenValue: "start_fresh_cycle",
+          allowedValues: ["reopen_deferred", "clean"]
+        }
+      ],
+      actionOptions: [
+        {
+          value: "complete_run",
+          label: "Complete run",
+          description: "Close the current board cycle and package the current business outcome."
+        },
+        {
+          value: "start_fresh_cycle",
+          label: "Start fresh cycle",
+          description: "Open the next board cycle from this run, with or without reopening deferred work."
+        }
       ],
       allowedDecisions: ["complete_run", "start_fresh_cycle"],
       reasonLabel: "Final assembly"
@@ -627,6 +730,8 @@ describe("harness board service", () => {
       statusLabel: "CEO review required",
       summary: "The board needs CEO review because deferred governance is now the next bounded move.",
       actionRoute: "pending-approvals",
+      actionLabel: "Review pending approvals",
+      actionDescription: "Open the proposal review queue to clear governance backlog before more work starts.",
       pendingApprovalCount: 1,
       reasonLabel: "Governance backlog"
     });
@@ -687,6 +792,8 @@ describe("harness board service", () => {
       statusLabel: "CEO review required",
       summary: "The board needs CEO review because governance work is still shaping what can move next.",
       actionRoute: "pending-approvals",
+      actionLabel: "Review pending approvals",
+      actionDescription: "Open the proposal review queue to clear governance backlog before more work starts.",
       pendingApprovalCount: 1,
       reasonLabel: "Governance hold"
     });
@@ -1665,14 +1772,46 @@ describe("harness board service", () => {
         id: "proposal_owner_conflict_1",
         statusLabel: "Pending CEO approval",
         actionMethod: "POST",
+        actionLabel: "Review proposal decision",
+        actionDescription: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
         requestFields: [
-          { name: "decision", required: true, allowedValues: ["approve", "defer", "deny"] },
-          { name: "decisionNote", required: false },
+          {
+            name: "decision",
+            label: "Proposal decision",
+            description: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
+            required: true,
+            allowedValues: ["approve", "defer", "deny"]
+          },
+          {
+            name: "decisionNote",
+            label: "Decision note",
+            description: "Optional bounded note explaining the decision or what should change before review resumes.",
+            required: false
+          },
           {
             name: "targetCardId",
+            label: "Handoff target lane",
+            description: "Optional existing lane to reuse when approval should fold this work into an active owner-conflict handoff.",
             required: false,
             supportedWhenValue: "approve",
             suggestedValue: parentCard.cardId
+          }
+        ],
+        actionOptions: [
+          {
+            value: "approve",
+            label: "Approve proposal",
+            description: "Approve this work and optionally fold it into CFO lane (Pressure-test the pricing lane)."
+          },
+          {
+            value: "defer",
+            label: "Defer proposal",
+            description: "Pause this follow-on work without dropping it so the CEO can revisit it later."
+          },
+          {
+            value: "deny",
+            label: "Deny proposal",
+            description: "Reject this follow-on work when it should not expand the current board cycle."
           }
         ],
         handoffTargetCardId: parentCard.cardId,
@@ -1697,14 +1836,46 @@ describe("harness board service", () => {
         id: "proposal_owner_conflict_1",
         statusLabel: "Deferred for later CEO review",
         actionMethod: "POST",
+        actionLabel: "Review proposal decision",
+        actionDescription: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
         requestFields: [
-          { name: "decision", required: true, allowedValues: ["approve", "defer", "deny"] },
-          { name: "decisionNote", required: false },
+          {
+            name: "decision",
+            label: "Proposal decision",
+            description: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
+            required: true,
+            allowedValues: ["approve", "defer", "deny"]
+          },
+          {
+            name: "decisionNote",
+            label: "Decision note",
+            description: "Optional bounded note explaining the decision or what should change before review resumes.",
+            required: false
+          },
           {
             name: "targetCardId",
+            label: "Handoff target lane",
+            description: "Optional existing lane to reuse when approval should fold this work into an active owner-conflict handoff.",
             required: false,
             supportedWhenValue: "approve",
             suggestedValue: parentCard.cardId
+          }
+        ],
+        actionOptions: [
+          {
+            value: "approve",
+            label: "Approve proposal",
+            description: "Approve this work and optionally fold it into CFO lane (Pressure-test the pricing lane)."
+          },
+          {
+            value: "defer",
+            label: "Defer proposal",
+            description: "Pause this follow-on work without dropping it so the CEO can revisit it later."
+          },
+          {
+            value: "deny",
+            label: "Deny proposal",
+            description: "Reject this follow-on work when it should not expand the current board cycle."
           }
         ],
         policyReasonLabel: "Waiting on current lane owner",

@@ -234,6 +234,7 @@ The first harness implementation slice is now built and verified:
 - Once governance-only CEO attention routes to the proposal queue, each individual pending-approval row still needs its own bounded action contract. Expose proposal-decision metadata on the row itself so the dashboard does not have to infer `approve` / `defer` / `deny` behavior from labels or separate route heuristics.
 - Once the board exposes a bounded command family, it should also expose the bounded action path for that family. Carry the exact review / resolve / proposal-decision endpoint path in board metadata so clients stop reconstructing control routes outside the harness seam.
 - A bounded action path is still incomplete if the client has to guess the HTTP method or request body contract. Board action metadata should expose the minimal request shape (`decision`, `command`, optional summaries, optional handoff target) so clients follow the harness seam instead of rebuilding mutation semantics from separate docs or heuristics.
+- A bounded request contract is still incomplete if the client has to invent the intent copy or choice semantics. Board action metadata should also expose the tenant-safe action label/description plus bounded option metadata for `approve` / `defer` / `deny`, review decisions, and resume/unblock commands so UX code does not reinterpret engine policy.
 
 ## Next Step
 
