@@ -266,6 +266,7 @@ describe("harness board service", () => {
         targetPersona: "RESEARCHER",
         statusLabel: "Pending CEO approval",
         actionRoute: "proposal-decision",
+        actionPath: "/api/harness/proposals/proposal_approval_1/decision",
         allowedDecisions: ["approve", "defer", "deny"]
       })
     ]);
@@ -419,6 +420,7 @@ describe("harness board service", () => {
       statusLabel: "Waiting on lane resume",
       summary: "CFO should resume this lane once the tenant confirms the latest revenue assumption.",
       actionRoute: "resolve-attention",
+      actionPath: `/api/harness/runs/${board.runId}/resolve-attention`,
       allowedCommands: ["resume_lane"],
       targetCardId: created.cardId,
       targetPersona: "CFO",
@@ -501,6 +503,7 @@ describe("harness board service", () => {
         statusLabel: "Awaiting board packet",
         summary: "Use the persisted snapshot summary for tenant-safe pending attention.",
         actionRoute: "resolve-attention",
+        actionPath: `/api/harness/runs/${board.runId}/resolve-attention`,
         allowedCommands: ["resume_lane"],
         targetCardId: created.cardId,
         targetPersona: "ANALYST",
@@ -557,6 +560,7 @@ describe("harness board service", () => {
       statusLabel: "CEO review required",
       summary: "The board is ready for final assembly before the tenant-facing package is closed.",
       actionRoute: "review-attention",
+      actionPath: `/api/harness/runs/${board.runId}/review-attention`,
       allowedDecisions: ["complete_run", "start_fresh_cycle"],
       reasonLabel: "Final assembly"
     });
@@ -1329,6 +1333,7 @@ describe("harness board service", () => {
         id: "proposal_deferred_1",
         statusLabel: "Deferred for later CEO review",
         actionRoute: "proposal-decision",
+        actionPath: "/api/harness/proposals/proposal_deferred_1/decision",
         allowedDecisions: ["approve", "defer", "deny"],
         policyReasonLabel: "Scope guardrail",
         nextReviewTrigger: "Review again only if the CEO widens the approved workflow boundary."

@@ -89,6 +89,7 @@ export type HarnessPendingAttentionView = {
   statusLabel: string;
   summary: string;
   actionRoute?: "review-attention" | "resolve-attention" | "pending-approvals";
+  actionPath?: string;
   allowedDecisions?: HarnessAttentionReviewDecision[];
   allowedCommands?: HarnessAttentionResolutionCommand[];
   pendingApprovalCount?: number;
@@ -118,6 +119,7 @@ export type HarnessPendingApprovalView = {
   deliverableLabel: string;
   statusLabel: string;
   actionRoute: "proposal-decision";
+  actionPath: string;
   allowedDecisions: Array<"approve" | "defer" | "deny">;
   policyReasonLabel?: string;
   nextReviewTrigger?: string;
@@ -3143,6 +3145,7 @@ function buildHarnessBoardResponse(input: {
         deliverableLabel: humanizeDeliverableType(proposal.deliverableType),
         statusLabel: proposal.status === "deferred" ? "Deferred for later CEO review" : "Pending CEO approval",
         actionRoute: "proposal-decision",
+        actionPath: `/api/harness/proposals/${encodeURIComponent(proposal.id)}/decision`,
         allowedDecisions: ["approve", "defer", "deny"],
         ...(toPendingApprovalPolicyView({
           cards: input.cards,
@@ -3285,6 +3288,7 @@ function buildPendingAttentionView(input: {
       ? (action.runState === "assembling"
           ? {
               actionRoute: "review-attention" as const,
+              actionPath: `/api/harness/runs/${encodeURIComponent(input.run.id)}/review-attention`,
               allowedDecisions: ["complete_run", "start_fresh_cycle"] as HarnessAttentionReviewDecision[]
             }
           : {
@@ -3293,6 +3297,7 @@ function buildPendingAttentionView(input: {
             })
       : {
           actionRoute: "resolve-attention" as const,
+          actionPath: `/api/harness/runs/${encodeURIComponent(input.run.id)}/resolve-attention`,
           allowedCommands: [action.kind === "await_lane_resume" ? "resume_lane" : "unblock_lane"] as HarnessAttentionResolutionCommand[]
         }),
     ...(currentAttention && isSameAttentionAction(currentAttention.action, action)

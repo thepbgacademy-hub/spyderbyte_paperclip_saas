@@ -196,6 +196,7 @@ No issues identified in the harness slice. The board HTTP boundary now distingui
 - Re-ran the scan after making `pendingAttention` reason-aware for `queue_ceo_review`. The touched slice still introduced no live secret exposure; the board now withholds explicit review commands outside the real final-assembly seam, and the change only narrows control metadata without widening provider context, required capabilities, or BYOK-bearing runtime state.
 - Re-ran the scan after routing governance-only CEO attention toward a bounded `pending-approvals` surface. The touched slice still introduced no live secret exposure; the new action route and approval count expose only existing tenant-safe proposal-queue metadata and do not widen provider context, required capabilities, or BYOK-bearing runtime state.
 - Re-ran the scan after exposing bounded `proposal-decision` action metadata on each `pendingApprovals` row. The touched slice still introduced no live secret exposure; the new row-level action contract carries only finite control metadata (`approve`, `defer`, `deny`) and does not widen provider context, required capabilities, or BYOK-bearing runtime state.
+- Re-ran the scan after exposing bounded `actionPath` metadata for proposal decisions and actionable attention states. The touched slice still introduced no live secret exposure; the new paths point only at existing guarded harness endpoints and do not carry provider context, required capabilities, BYOK material, or tenant-authored business content.
 
 ## Remediation Priority
 
