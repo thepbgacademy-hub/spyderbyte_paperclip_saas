@@ -19,7 +19,13 @@ import {
 import { deriveHarnessRunState, transitionHarnessCard, transitionHarnessRun } from "./state-machine.js";
 import { createHarnessRuntime } from "./runtime.js";
 import type { HarnessRepository } from "./repository.js";
-import { describeHarnessPostOutcomeActionKind, determineHarnessPostOutcomeAction, type HarnessPostOutcomeAction } from "./post-outcome.js";
+import {
+  deriveCurrentHarnessAttentionState,
+  describeHarnessPostOutcomeActionKind,
+  determineHarnessPostOutcomeAction,
+  isSameAttentionAction,
+  type HarnessPostOutcomeAction
+} from "./post-outcome.js";
 import type { WealthFactoryWorkflowDefinition } from "../wealthfactory/workflow-registry.js";
 import {
   ActivePackageInstallRequiredError,
@@ -80,6 +86,7 @@ export type HarnessPendingAttentionView = {
   runState: HarnessRunRecord["state"];
   statusLabel: string;
   summary: string;
+  requestedAtLabel?: string;
   reasonLabel?: string;
   targetCardId?: string;
   targetPersona?: string;
@@ -2732,7 +2739,8 @@ function buildHarnessBoardResponse(input: {
     run: input.run,
     cards: input.cards,
     continuityByCardId,
-    proposals: input.proposals
+    proposals: input.proposals,
+    events: input.events
   });
   const latestDecisionByProposalId = new Map<string, HarnessBoardDecisionRecord>();
   for (const decision of input.decisions) {
@@ -2797,6 +2805,10 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
       actionKind: payloadActionKind,
       reason: payloadAttentionReason
     }),
+    attention_resolved: describeAttentionResolvedActivity({
+      actionKind: payloadActionKind,
+      reason: payloadAttentionReason
+    }),
     result_recorded: payloadSummary
       ? `A new outcome snapshot was recorded for this lane: ${payloadSummary}`
       : "A new outcome snapshot was recorded for this lane."
@@ -2814,6 +2826,7 @@ function buildPendingAttentionView(input: {
   cards: readonly HarnessCardRecord[];
   continuityByCardId: ReadonlyMap<string, HarnessCardContinuityRecord>;
   proposals: readonly HarnessSubCardProposal[];
+  events: readonly HarnessCardEventRecord[];
 }): HarnessPendingAttentionView | null {
   const action = determineHarnessPostOutcomeAction({
     runState: input.run.state,
@@ -2826,6 +2839,7 @@ function buildPendingAttentionView(input: {
   }
 
   const described = describeHarnessPostOutcomeActionKind(action);
+  const currentAttention = deriveCurrentHarnessAttentionState(input.events);
   const targetCard = "cardId" in action
     ? input.cards.find((card) => card.id === action.cardId) ?? null
     : null;
@@ -2837,6 +2851,9 @@ function buildPendingAttentionView(input: {
     runState: action.runState,
     statusLabel: described.statusLabel,
     summary: continuitySummary ?? described.summary,
+    ...(currentAttention && isSameAttentionAction(currentAttention.action, action)
+      ? { requestedAtLabel: formatBoardTimestamp(currentAttention.requestedAt) }
+      : {}),
     ...(described.reasonLabel ? { reasonLabel: described.reasonLabel } : {}),
     ...(targetCard
       ? {
@@ -2870,6 +2887,31 @@ function describeAttentionRequestedActivity(input: {
       return "Board attention is now waiting on a lane unblock decision.";
     default:
       return "Board attention is waiting on the next bounded orchestration step.";
+  }
+}
+
+function describeAttentionResolvedActivity(input: {
+  actionKind: string | undefined;
+  reason: string | undefined;
+}): string {
+  switch (input.actionKind) {
+    case "queue_ceo_review":
+      if (input.reason === "final_assembly") {
+        return "Board attention no longer needs CEO final assembly review.";
+      }
+      if (input.reason === "governance_backlog") {
+        return "Board attention no longer needs CEO governance backlog review.";
+      }
+      if (input.reason === "governance_hold") {
+        return "Board attention no longer needs CEO governance-hold review.";
+      }
+      return "Board attention no longer needs CEO review.";
+    case "await_lane_resume":
+      return "Board attention no longer needs a lane resume decision.";
+    case "await_unblock":
+      return "Board attention no longer needs a lane unblock decision.";
+    default:
+      return "Board attention has moved past the prior orchestration hold.";
   }
 }
 

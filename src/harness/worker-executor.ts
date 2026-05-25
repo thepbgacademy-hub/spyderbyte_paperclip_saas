@@ -1,7 +1,12 @@
 import type { HarnessRepository } from "./repository.js";
 import { createHarnessRuntime } from "./runtime.js";
 import { deriveHarnessRunState } from "./state-machine.js";
-import { determineHarnessPostOutcomeAction, type HarnessPostOutcomeAction } from "./post-outcome.js";
+import {
+  deriveCurrentHarnessAttentionState,
+  determineHarnessPostOutcomeAction,
+  isSameAttentionAction,
+  type HarnessPostOutcomeAction
+} from "./post-outcome.js";
 import {
   createHarnessCardContinuityRecord,
   createHarnessCardEventRecord,
@@ -73,6 +78,7 @@ type HarnessOutcomeRepository = Pick<
   | "getCard"
   | "getCardContinuity"
   | "listCardsForRun"
+  | "listEventsForRun"
   | "listProposalsForRun"
   | "listCardContinuityForRun"
   | "claimCardForExecution"
@@ -291,10 +297,11 @@ export async function commitHarnessWorkerLaneOutcome(input: {
             runId: run.id,
             workflowId: run.workflowId
           });
-    const [latestRun, cardsAfterOutcome, proposalsAfterOutcome] = await Promise.all([
+    const [latestRun, cardsAfterOutcome, proposalsAfterOutcome, eventsAfterOutcome] = await Promise.all([
       repository.getRun(run.id),
       repository.listCardsForRun(run.id),
-      repository.listProposalsForRun(run.id)
+      repository.listProposalsForRun(run.id),
+      repository.listEventsForRun(run.id)
     ]);
     const latestRunState = latestRun?.state ?? nextRun.state;
     const postOutcomeAction = determinePostOutcomeAction({
@@ -304,12 +311,31 @@ export async function commitHarnessWorkerLaneOutcome(input: {
       cards: cardsAfterOutcome,
       proposals: proposalsAfterOutcome
     });
-    if (postOutcomeAction && postOutcomeAction.kind !== "dispatch_next_lane") {
+    const currentAttention = deriveCurrentHarnessAttentionState(eventsAfterOutcome);
+    const nextAttention =
+      postOutcomeAction && postOutcomeAction.kind !== "dispatch_next_lane"
+        ? postOutcomeAction
+        : null;
+
+    if (currentAttention && (!nextAttention || !isSameAttentionAction(currentAttention.action, nextAttention))) {
       await repository.insertEvent(
         createHarnessCardEventRecord({
-          cardId: "cardId" in postOutcomeAction ? postOutcomeAction.cardId : updatedCard.id,
+          cardId: "cardId" in currentAttention.action ? currentAttention.action.cardId : updatedCard.id,
+          eventKind: "attention_resolved",
+          payload: createAttentionResolvedPayload(currentAttention.action)
+        })
+      );
+    }
+
+    if (
+      nextAttention
+      && (!currentAttention || !isSameAttentionAction(currentAttention.action, nextAttention))
+    ) {
+      await repository.insertEvent(
+        createHarnessCardEventRecord({
+          cardId: "cardId" in nextAttention ? nextAttention.cardId : updatedCard.id,
           eventKind: "attention_requested",
-          payload: createAttentionRequestedPayload(postOutcomeAction)
+          payload: createAttentionRequestedPayload(nextAttention)
         })
       );
     }
@@ -517,6 +543,12 @@ function createAttentionRequestedPayload(
         targetCardId: action.cardId
       };
   }
+}
+
+function createAttentionResolvedPayload(
+  action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>
+): Record<string, unknown> {
+  return createAttentionRequestedPayload(action);
 }
 
 function createActiveResumeSummary(card: HarnessCardRecord): string {

@@ -102,3 +102,6 @@ This file tracks the new harness subproject only.
   - [x] Share post-outcome action classification between the worker seam and the board-facing read model so CEO-facing follow-through does not drift onto a second set of heuristics.
   - [x] Persist a bounded `attention_requested` event when a worker outcome leaves the board waiting on CEO review, lane resume, or unblock.
   - [x] Surface a bounded `pendingAttention` board view so the CEO side can see the next required orchestration step without inferring it from raw lane state.
+  - [x] Keep repeated unresolved attention idempotent so the worker seam does not append duplicate `attention_requested` noise for the same active post-outcome need.
+  - [x] Persist a bounded `attention_resolved` event when a previously requested CEO review / resume / unblock state is cleared by later durable lane progress.
+  - [x] Keep the board attention read model current by clearing stale `pendingAttention` after durable resolution while preserving bounded historical activity for the resolved attention path.

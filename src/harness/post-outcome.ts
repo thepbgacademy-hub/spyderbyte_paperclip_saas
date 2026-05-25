@@ -1,4 +1,4 @@
-import type { HarnessCardRecord, HarnessCardState, HarnessRunRecord } from "./types.js";
+import type { HarnessCardEventRecord, HarnessCardRecord, HarnessCardState, HarnessRunRecord } from "./types.js";
 import type { HarnessSubCardProposal } from "./runtime-contract.js";
 
 export type HarnessPostOutcomeAction =
@@ -23,6 +23,11 @@ export type HarnessPostOutcomeAction =
       runState: "blocked";
       cardId: string;
     };
+
+export type HarnessAttentionState = {
+  action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
+  requestedAt: string;
+};
 
 export function determineHarnessPostOutcomeAction(input: {
   runState: HarnessRunRecord["state"];
@@ -144,6 +149,53 @@ export function humanizePostOutcomeReason(
   }
 }
 
+export function deriveCurrentHarnessAttentionState(
+  events: readonly HarnessCardEventRecord[]
+): HarnessAttentionState | null {
+  let current: HarnessAttentionState | null = null;
+
+  for (const event of events) {
+    if (event.eventKind === "attention_requested") {
+      const action = parseAttentionActionPayload(event.payload);
+      if (action) {
+        current = {
+          action,
+          requestedAt: event.createdAt
+        };
+      }
+      continue;
+    }
+
+    if (event.eventKind === "attention_resolved" && current) {
+      const resolvedAction = parseAttentionResolvedPayload(event.payload);
+      if (!resolvedAction || isSameAttentionAction(current.action, resolvedAction)) {
+        current = null;
+      }
+    }
+  }
+
+  return current;
+}
+
+export function isSameAttentionAction(
+  left: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>,
+  right: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>
+): boolean {
+  if (left.kind !== right.kind || left.runState !== right.runState) {
+    return false;
+  }
+
+  if (left.kind === "queue_ceo_review" && right.kind === "queue_ceo_review") {
+    return left.reason === right.reason;
+  }
+
+  if ("cardId" in left && "cardId" in right) {
+    return left.cardId === right.cardId;
+  }
+
+  return false;
+}
+
 function describeCeoReviewSummary(
   reason: Extract<HarnessPostOutcomeAction, { kind: "queue_ceo_review" }>["reason"]
 ): string {
@@ -178,4 +230,63 @@ function compareObservedLanes(left: HarnessCardRecord, right: HarnessCardRecord)
     return left.updatedAt.localeCompare(right.updatedAt);
   }
   return left.createdAt.localeCompare(right.createdAt);
+}
+
+function parseAttentionActionPayload(
+  payload: Record<string, unknown>
+): Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }> | null {
+  const actionKind = readOptionalString(payload.actionKind);
+  const runState = readOptionalString(payload.runState) as HarnessRunRecord["state"] | undefined;
+
+  if (!actionKind || !runState) {
+    return null;
+  }
+
+  if (actionKind === "queue_ceo_review") {
+    const reason = readOptionalString(payload.reason);
+    if (reason === "final_assembly" || reason === "governance_backlog" || reason === "governance_hold") {
+      return {
+        kind: "queue_ceo_review",
+        runState,
+        reason
+      };
+    }
+    return null;
+  }
+
+  if (actionKind === "await_lane_resume") {
+    const targetCardId = readOptionalString(payload.targetCardId);
+    if (!targetCardId) {
+      return null;
+    }
+    return {
+      kind: "await_lane_resume",
+      runState: "waiting",
+      cardId: targetCardId
+    };
+  }
+
+  if (actionKind === "await_unblock") {
+    const targetCardId = readOptionalString(payload.targetCardId);
+    if (!targetCardId) {
+      return null;
+    }
+    return {
+      kind: "await_unblock",
+      runState: "blocked",
+      cardId: targetCardId
+    };
+  }
+
+  return null;
+}
+
+function parseAttentionResolvedPayload(
+  payload: Record<string, unknown>
+): Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }> | null {
+  return parseAttentionActionPayload(payload);
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }

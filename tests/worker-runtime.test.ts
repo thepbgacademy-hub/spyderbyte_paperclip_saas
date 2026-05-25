@@ -101,6 +101,7 @@ const { makeHarnessRepository, harnessRepositoryRef } = vi.hoisted(() => {
       updatedAt: "2026-05-21T10:03:00.000Z"
     }),
     listProposalsForRun: vi.fn().mockResolvedValue([]),
+    listEventsForRun: vi.fn().mockResolvedValue([]),
     listCardContinuityForRun: vi.fn().mockResolvedValue([
       {
         cardId: "card_cfo",
@@ -917,6 +918,19 @@ describe("worker runtime", () => {
         updatedAt: "2026-05-21T10:03:00.000Z"
       }
     ]);
+    harnessRepository.listEventsForRun.mockResolvedValueOnce([
+      {
+        id: "event_attention_requested",
+        cardId: "card_cfo",
+        eventKind: "attention_requested",
+        payload: {
+          actionKind: "queue_ceo_review",
+          runState: "assembling",
+          reason: "final_assembly"
+        },
+        createdAt: "2026-05-21T10:05:00.000Z"
+      }
+    ]);
     harnessRepository.claimCardForExecution.mockResolvedValueOnce({
       id: "card_cmo",
       runId: "run-1",
@@ -974,6 +988,17 @@ describe("worker runtime", () => {
       cardId: "card_cmo",
       expectedState: "approved"
     });
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "attention_resolved",
+        payload: {
+          actionKind: "queue_ceo_review",
+          runState: "assembling",
+          reason: "final_assembly"
+        }
+      })
+    );
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
     );

@@ -10,6 +10,7 @@ export type HarnessCardEventKind =
   | "proposal_absorbed"
   | "lane_handed_off"
   | "attention_requested"
+  | "attention_resolved"
   | "result_recorded";
 export type HarnessBoardDecisionKind = "lane_opened" | "proposal_approved" | "proposal_deferred" | "proposal_denied" | "run_completed";
 export type HarnessBoardPolicyReason =

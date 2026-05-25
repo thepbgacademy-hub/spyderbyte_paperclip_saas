@@ -1029,6 +1029,139 @@ describe("harness worker executor", () => {
     );
   });
 
+  it("resolves prior CEO review attention when follow-on lane dispatch resumes active work", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Finalize pricing review",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "working";
+    const cmoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "marketing_plan"
+    });
+    cmoCard.state = "approved";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+    await repository.insertCard(cmoCard);
+    await repository.insertEvent(
+      createHarnessCardEventRecord({
+        cardId: cfoCard.id,
+        eventKind: "attention_requested",
+        payload: {
+          actionKind: "queue_ceo_review",
+          runState: "assembling",
+          reason: "final_assembly"
+        }
+      })
+    );
+
+    await commitHarnessWorkerLaneOutcome({
+      repository,
+      tenantId: "tenant-1",
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow",
+      cardId: cfoCard.id,
+      state: "done",
+      resultSummary: "Pricing review is complete and ready for board packaging."
+    });
+
+    await expect(repository.listEventsForCard(cfoCard.id)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventKind: "attention_resolved",
+          payload: {
+            actionKind: "queue_ceo_review",
+            runState: "assembling",
+            reason: "final_assembly"
+          }
+        })
+      ])
+    );
+  });
+
+  it("does not duplicate CEO review attention when the same unresolved review is already active", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    run.state = "assembling";
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Finalize pricing review",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "working";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+    await repository.insertEvent(
+      createHarnessCardEventRecord({
+        cardId: cfoCard.id,
+        eventKind: "attention_requested",
+        payload: {
+          actionKind: "queue_ceo_review",
+          runState: "assembling",
+          reason: "final_assembly"
+        }
+      })
+    );
+
+    await commitHarnessWorkerLaneOutcome({
+      repository,
+      tenantId: "tenant-1",
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow",
+      cardId: cfoCard.id,
+      state: "done",
+      resultSummary: "Pricing review is complete and ready for board packaging."
+    });
+
+    const runEvents = await repository.listEventsForRun(run.id);
+    expect(runEvents.filter((event) => event.eventKind === "attention_requested")).toHaveLength(1);
+    expect(runEvents.filter((event) => event.eventKind === "attention_resolved")).toHaveLength(0);
+  });
+
   it("ignores worker outcome commits for lanes that are no longer working", async () => {
     const repository = createInMemoryHarnessRepository();
     const run = createHarnessRunRecord({
