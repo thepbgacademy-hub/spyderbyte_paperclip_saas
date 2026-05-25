@@ -103,6 +103,9 @@ export type HarnessActionOptionView = {
   label: string;
   description: string;
   emphasis?: "primary" | "secondary" | "caution";
+  nextEffectSummary?: string;
+  requiresConfirmation?: boolean;
+  confirmationLabel?: string;
   exampleRequest?: HarnessActionRequestExampleView;
 };
 
@@ -118,6 +121,7 @@ export type HarnessPendingAttentionView = {
   actionDescription?: string;
   requestFields?: HarnessActionRequestFieldView[];
   actionOptions?: HarnessActionOptionView[];
+  recommendedOptionValue?: string;
   allowedDecisions?: HarnessAttentionReviewDecision[];
   allowedCommands?: HarnessAttentionResolutionCommand[];
   pendingApprovalCount?: number;
@@ -154,6 +158,7 @@ export type HarnessPendingApprovalView = {
   actionDescription: string;
   requestFields: HarnessActionRequestFieldView[];
   actionOptions: HarnessActionOptionView[];
+  recommendedOptionValue?: "approve";
   allowedDecisions: Array<"approve" | "defer" | "deny">;
   policyReasonLabel?: string;
   nextReviewTrigger?: string;
@@ -3193,6 +3198,7 @@ function buildHarnessBoardResponse(input: {
           actionDescription: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
           requestFields: buildPendingApprovalRequestFields(policyView.handoffTargetCardId),
           actionOptions: buildPendingApprovalActionOptions(policyView),
+          ...(proposal.status === "proposed" ? { recommendedOptionValue: "approve" as const } : {}),
           allowedDecisions: ["approve", "defer", "deny"],
           ...(policyView.handoffTargetPersona && policyView.handoffTargetTitle
             ? {
@@ -3371,6 +3377,7 @@ function buildPendingAttentionView(input: {
                   label: "Complete run",
                   description: "Close the current board cycle and package the current business outcome.",
                   emphasis: "primary",
+                  nextEffectSummary: "The current run closes as done and the tenant-facing package stays on this board cycle.",
                   exampleRequest: {
                     decision: "complete_run"
                   }
@@ -3380,12 +3387,16 @@ function buildPendingAttentionView(input: {
                   label: "Start fresh cycle",
                   description: "Open the next board cycle from this run, with or without reopening deferred work.",
                   emphasis: "secondary",
+                  nextEffectSummary: "A new run starts from this board, optionally carrying deferred follow-on work into the next cycle.",
+                  requiresConfirmation: true,
+                  confirmationLabel: "Start a new board cycle from this run?",
                   exampleRequest: {
                     decision: "start_fresh_cycle",
                     mode: "reopen_deferred"
                   }
                 }
               ] satisfies HarnessActionOptionView[],
+              recommendedOptionValue: "complete_run" as const,
               allowedDecisions: ["complete_run", "start_fresh_cycle"] as HarnessAttentionReviewDecision[]
             }
           : {
@@ -3427,12 +3438,17 @@ function buildPendingAttentionView(input: {
                   ? "Return the lane to active execution with an optional bounded resume note."
                   : "Move the lane out of its blocked state so execution can continue.",
               emphasis: "primary",
+              nextEffectSummary:
+                action.kind === "await_lane_resume"
+                  ? "The lane returns to active execution and re-enters the worker queue through the existing harness path."
+                  : "The lane leaves its blocked state and re-enters the worker queue through the existing harness path.",
               exampleRequest:
                 action.kind === "await_lane_resume"
                   ? { command: "resume_lane" }
                   : { command: "unblock_lane" }
             }
           ] satisfies HarnessActionOptionView[],
+          recommendedOptionValue: action.kind === "await_lane_resume" ? "resume_lane" : "unblock_lane",
           allowedCommands: [action.kind === "await_lane_resume" ? "resume_lane" : "unblock_lane"] as HarnessAttentionResolutionCommand[]
         }),
     ...(currentAttention && isSameAttentionAction(currentAttention.action, action)
@@ -3507,6 +3523,9 @@ function buildPendingApprovalActionOptions(input: {
         ? `Approve this work and optionally fold it into ${input.handoffTargetPersona ?? "the existing"} lane${input.handoffTargetTitle ? ` (${input.handoffTargetTitle})` : ""}.`
         : "Approve this work so it can move into the bounded execution flow.",
       emphasis: "primary",
+      nextEffectSummary: input.handoffTargetCardId
+        ? `This proposal can move forward by reusing the existing lane instead of opening a duplicate card.`
+        : "This proposal can move into the bounded execution flow and open or advance the intended lane.",
       exampleRequest: input.handoffTargetCardId
         ? {
             decision: "approve",
@@ -3521,6 +3540,7 @@ function buildPendingApprovalActionOptions(input: {
       label: "Defer proposal",
       description: "Pause this follow-on work without dropping it so the CEO can revisit it later.",
       emphasis: "secondary",
+      nextEffectSummary: "This proposal stays visible in the pending-approval queue for later CEO review.",
       exampleRequest: {
         decision: "defer"
       }
@@ -3530,6 +3550,9 @@ function buildPendingApprovalActionOptions(input: {
       label: "Deny proposal",
       description: "Reject this follow-on work when it should not expand the current board cycle.",
       emphasis: "caution",
+      nextEffectSummary: "This proposal closes without opening or advancing any new work lane.",
+      requiresConfirmation: true,
+      confirmationLabel: "Deny this proposal and close the follow-on request?",
       exampleRequest: {
         decision: "deny"
       }

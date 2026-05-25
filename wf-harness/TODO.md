@@ -123,3 +123,4 @@ This file tracks the new harness subproject only.
 - [x] Expose bounded action methods plus minimal request-field metadata alongside board command metadata so proposal rows and actionable attention states stop relying on client-side request-body reconstruction.
 - [x] Expose bounded action labels, descriptions, and option metadata alongside board command metadata so proposal rows and actionable attention states stop relying on client-side choice-semantics reconstruction.
 - [x] Expose bounded option examples and target summaries alongside board action metadata so proposal rows and actionable attention states stop relying on client-side payload and target-copy reconstruction.
+- [x] Expose bounded recommended-option and confirmation metadata alongside board action metadata so proposal rows and actionable attention states stop relying on client-side default-choice and disruption-guard reconstruction.
