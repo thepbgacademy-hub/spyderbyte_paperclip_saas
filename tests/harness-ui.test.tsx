@@ -665,6 +665,12 @@ describe("harness board UI", () => {
         removedFieldOverrides: 1,
         closedComposers: 1
       },
+      recoveryTitle: "Next safe step",
+      recoverySteps: [
+        "Review the current live board actions before reopening any removed composer or retrying an older action path.",
+        "Reset the affected action composer to the current contract defaults before trying to submit that action again.",
+        "Reopen only the still-needed composers from the current live board instead of assuming the earlier draft is still valid."
+      ],
       details: [
         "Removed stale drafts for: Approve proposal.",
         "Pruned removed fields from: Start fresh cycle (Fresh-cycle mode).",
@@ -907,7 +913,11 @@ describe("harness board UI", () => {
             removedActionDrafts: 1,
             removedFieldOverrides: 0,
             closedComposers: 0
-          }
+          },
+          recoveryTitle: "Next safe step",
+          recoverySteps: [
+            "Review the current live board actions before reopening any removed composer or retrying an older action path."
+          ]
         }}
       />
     );
@@ -917,6 +927,8 @@ describe("harness board UI", () => {
     expect(markup).toContain("Removed stale drafts for: Approve proposal.");
     expect(markup).toContain("Affected actions: Approve proposal");
     expect(markup).toContain("Impact counts: drafts 1, fields 0, composers 0");
+    expect(markup).toContain("Next safe step");
+    expect(markup).toContain("Review the current live board actions before reopening any removed composer or retrying an older action path.");
     expect(markup).toContain("Dismiss contract refresh note");
     expect(markup).toContain("Contract refresh - Active");
   });
@@ -935,7 +947,11 @@ describe("harness board UI", () => {
             removedActionDrafts: 1,
             removedFieldOverrides: 0,
             closedComposers: 0
-          }
+          },
+          recoveryTitle: "Next safe step",
+          recoverySteps: [
+            "Review the current live board actions before reopening any removed composer or retrying an older action path."
+          ]
         }}
       />
     );
@@ -943,6 +959,7 @@ describe("harness board UI", () => {
     expect(markup).toContain("Contract refresh - Active");
     expect(markup).toContain("Live board contract refreshed: 1 stale action draft removed.");
     expect(markup).toContain("Affected actions: Approve proposal.");
+    expect(markup).toContain("Next safe step: Review the current live board actions before reopening any removed composer or retrying an older action path.");
   });
 
   it("keeps a prop-seeded preview board read-only when the control mode says preview", () => {

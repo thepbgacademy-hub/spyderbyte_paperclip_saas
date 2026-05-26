@@ -350,6 +350,8 @@ export type HarnessBoardContractRefreshFeedback = {
     removedFieldOverrides: number;
     closedComposers: number;
   };
+  recoveryTitle: string;
+  recoverySteps: string[];
 };
 
 function isSameContractRefreshFeedback(
@@ -367,7 +369,10 @@ function isSameContractRefreshFeedback(
   return left.title === right.title
     && left.message === right.message
     && left.details.length === right.details.length
-    && left.details.every((detail, index) => detail === right.details[index]);
+    && left.details.every((detail, index) => detail === right.details[index])
+    && left.recoveryTitle === right.recoveryTitle
+    && left.recoverySteps.length === right.recoverySteps.length
+    && left.recoverySteps.every((step, index) => step === right.recoverySteps[index]);
 }
 
 export type HarnessBoardActionAttempt = {
@@ -1060,6 +1065,19 @@ export function describeBoardContractRefreshImpact(
     ])
   );
 
+  const recoverySteps: string[] = [];
+  if (impact.removedActionDrafts.length > 0) {
+    recoverySteps.push("Review the current live board actions before reopening any removed composer or retrying an older action path.");
+  }
+  if (impact.removedFieldOverrideCount > 0) {
+    recoverySteps.push("Reset the affected action composer to the current contract defaults before trying to submit that action again.");
+  }
+  if (impact.closedComposerActions.length > 0) {
+    recoverySteps.push("Reopen only the still-needed composers from the current live board instead of assuming the earlier draft is still valid.");
+  }
+
+  const dedupedRecoverySteps = Array.from(new Set(recoverySteps));
+
   return {
     title: "Contract refresh",
     message: `Live board contract refreshed: ${parts.join(", ")}.`,
@@ -1069,7 +1087,9 @@ export function describeBoardContractRefreshImpact(
       removedActionDrafts: impact.removedActionDrafts.length,
       removedFieldOverrides: impact.removedFieldOverrideCount,
       closedComposers: impact.closedComposerActions.length
-    }
+    },
+    recoveryTitle: "Next safe step",
+    recoverySteps: dedupedRecoverySteps
   };
 }
 
@@ -2062,8 +2082,8 @@ export function HarnessBoardPage(props: {
             key: "contract-refresh",
             heading: joinHeadingParts("Contract refresh", "Active"),
             summary: contractRefreshNotice.affectedActions.length > 0
-              ? `${contractRefreshNotice.message} Affected actions: ${contractRefreshNotice.affectedActions.join(", ")}.`
-              : contractRefreshNotice.message
+              ? `${contractRefreshNotice.message} Affected actions: ${contractRefreshNotice.affectedActions.join(", ")}. ${contractRefreshNotice.recoveryTitle}: ${contractRefreshNotice.recoverySteps[0] ?? "Review the current live board contract."}`
+              : `${contractRefreshNotice.message} ${contractRefreshNotice.recoveryTitle}: ${contractRefreshNotice.recoverySteps[0] ?? "Review the current live board contract."}`
           }
         ]
       : [])
@@ -2704,6 +2724,18 @@ export function HarnessBoardPage(props: {
               <p style={styles.contractMeta}>
                 {`Impact counts: drafts ${contractRefreshNotice.impactCounts.removedActionDrafts}, fields ${contractRefreshNotice.impactCounts.removedFieldOverrides}, composers ${contractRefreshNotice.impactCounts.closedComposers}`}
               </p>
+              {contractRefreshNotice.recoverySteps.length > 0 ? (
+                <>
+                  <p style={styles.actionMeta}>{contractRefreshNotice.recoveryTitle}</p>
+                  <ul style={styles.feedbackList}>
+                    {contractRefreshNotice.recoverySteps.map((step) => (
+                      <li key={step} style={{ ...styles.feedbackItem, color: "#fef3c7" }}>
+                        {step}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
               {contractRefreshNotice.details.length > 0 ? (
                 <ul style={styles.feedbackList}>
                   {contractRefreshNotice.details.map((detail) => (
