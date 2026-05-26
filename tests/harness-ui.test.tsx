@@ -9,10 +9,14 @@ import {
 import { HarnessCardDrawer } from "../apps/web/src/components/HarnessCardDrawer.js";
 import {
   buildContractActionPayload,
+  describeBoardActionFeedback,
+  describeBoardLoadFeedback,
   getContractActionState,
+  resolveBoardLoadFailure,
   summarizeContractActionState,
   HarnessBoardPage
 } from "../apps/web/src/pages/HarnessBoardPage.js";
+import { HarnessBoardClientError } from "../apps/web/src/harness-board-client.js";
 import type { HarnessBoardResponse } from "../src/harness/board-service.js";
 
 const cards: HarnessBoardCard[] = [
@@ -555,5 +559,140 @@ describe("harness board UI", () => {
     expect(markup).toContain("live mutations remain disabled");
     expect(markup).toContain("Live board actions are unavailable in localhost fallback mode.");
     expect(markup).toContain("Controls - Preview");
+  });
+
+  it("describes proposal-decision conflicts with contract-aware recovery guidance", () => {
+    const feedback = describeBoardActionFeedback(
+      new HarnessBoardClientError({
+        code: "conflict",
+        message: "Unable to update harness board",
+        status: 409
+      }),
+      {
+        actionRoute: "proposal-decision",
+        actionLabel: "Approve proposal"
+      }
+    );
+
+    expect(feedback.message).toContain("changed before this action could be applied");
+    expect(feedback.recoveryTitle).toBe("Next safe step");
+    expect(feedback.recoverySteps).toEqual([
+      "Refresh the board and confirm the proposal is still pending CEO review.",
+      "Check the latest approval queue before trying to widen or defer the lane again."
+    ]);
+  });
+
+  it("describes invalid resolve-attention payloads with composer reset guidance", () => {
+    const feedback = describeBoardActionFeedback(
+      new HarnessBoardClientError({
+        code: "invalid_request",
+        message: "Unable to update harness board",
+        status: 400
+      }),
+      {
+        actionRoute: "resolve-attention",
+        actionLabel: "Resume lane"
+      }
+    );
+
+    expect(feedback.message).toContain("no longer matches the live board contract");
+    expect(feedback.recoverySteps).toEqual([
+      "Reset this action composer to the contract defaults.",
+      "Review the required fields again before retrying the lane recovery command."
+    ]);
+  });
+
+  it("describes throttled board loads with bounded retry guidance", () => {
+    const feedback = describeBoardLoadFeedback(
+      new HarnessBoardClientError({
+        code: "rate_limited",
+        message: "Unable to load harness board",
+        status: 429,
+        retryAfterSeconds: 12
+      })
+    );
+
+    expect(feedback.message).toContain("12 more seconds");
+    expect(feedback.recoveryTitle).toBe("Safe retry");
+    expect(feedback.recoverySteps).toEqual([
+      "Wait for the bounded retry window to clear.",
+      "Reload the live harness board after the throttle window expires."
+    ]);
+  });
+
+  it("renders initial action feedback guidance when the page is seeded with a live-action failure", () => {
+    const feedback = describeBoardActionFeedback(
+      new HarnessBoardClientError({
+        code: "conflict",
+        message: "Unable to update harness board",
+        status: 409
+      }),
+      {
+        actionRoute: "proposal-decision",
+        actionLabel: "Approve proposal"
+      }
+    );
+    const markup = renderToStaticMarkup(
+      <HarnessBoardPage
+        initialBoard={boardResponse}
+        initialControlMode="live"
+        initialActionFeedback={feedback}
+      />
+    );
+
+    expect(markup).toContain("Latest board action issue");
+    expect(markup).toContain("Next safe step");
+    expect(markup).toContain("Refresh the board and confirm the proposal is still pending CEO review.");
+  });
+
+  it("keeps preview board content visible while surfacing bounded live-load recovery guidance", () => {
+    const feedback = describeBoardLoadFeedback(
+      new HarnessBoardClientError({
+        code: "service_unavailable",
+        message: "Unable to load harness board",
+        status: 503
+      })
+    );
+    const markup = renderToStaticMarkup(
+      <HarnessBoardPage
+        initialBoard={boardResponse}
+        initialControlMode="preview"
+        initialLoadFeedback={feedback}
+      />
+    );
+
+    expect(markup).toContain("Board load issue");
+    expect(markup).toContain("The live harness board is temporarily unavailable right now.");
+    expect(markup).toContain("Retry the live board load after the current service interruption clears.");
+    expect(markup).toContain("Preview");
+    expect(markup).toContain("Pressure-test the pricing lane");
+  });
+
+  it("keeps localhost fallback usable while preserving bounded live-load feedback", () => {
+    const feedback = describeBoardLoadFeedback(
+      new HarnessBoardClientError({
+        code: "service_unavailable",
+        message: "Unable to load harness board",
+        status: 503
+      })
+    );
+    const resolution = resolveBoardLoadFailure({
+      error: new HarnessBoardClientError({
+        code: "service_unavailable",
+        message: "Unable to load harness board",
+        status: 503
+      }),
+      browserFallbackEnabled: true,
+      fallbackState: {
+        board: boardResponse,
+        controlMode: "preview"
+      }
+    });
+
+    expect(resolution).toEqual({
+      board: boardResponse,
+      controlMode: "preview",
+      feedback
+    });
   });
 });

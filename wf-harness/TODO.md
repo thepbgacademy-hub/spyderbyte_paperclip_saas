@@ -64,7 +64,7 @@ This file tracks the new harness subproject only.
   - [ ] Require future artifact retrieval to validate artifact ids against a strict allowlist format, reject separators and traversal encodings, and verify the resolved path stays under the intended artifact root before touching disk.
 - [ ] Keep live board failure handling contract-driven as the board becomes more interactive.
   - [x] Preserve bounded harness HTTP failure codes in the browser client instead of flattening them into one generic board error.
-  - [ ] Extend the live page to surface more action-specific recovery guidance once richer tenant-facing mutation affordances are introduced.
+  - [x] Extend the live page to surface action-family-aware recovery guidance for proposal review, CEO review, lane resume/unblock, and throttled live-board loads instead of flattening everything into one generic failure string.
 
 ## Current Next Slice
 

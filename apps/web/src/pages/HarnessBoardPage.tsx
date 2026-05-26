@@ -303,7 +303,30 @@ const styles = {
     fontSize: "0.78rem",
     lineHeight: 1.45,
     margin: 0
+  } satisfies CSSProperties,
+  feedbackList: {
+    display: "grid",
+    gap: "0.25rem",
+    margin: "0.35rem 0 0",
+    paddingLeft: "1rem"
+  } satisfies CSSProperties,
+  feedbackItem: {
+    color: "#fca5a5",
+    fontSize: "0.76rem",
+    lineHeight: 1.45
   } satisfies CSSProperties
+};
+
+export type HarnessBoardFeedback = {
+  message: string;
+  recoveryTitle: string;
+  recoverySteps: string[];
+};
+
+export type HarnessBoardLoadResolution = {
+  board: HarnessBoardResponse | null;
+  controlMode: HarnessBoardControlMode | null;
+  feedback: HarnessBoardFeedback;
 };
 
 function getPersonaMetrics(cards: HarnessBoardCard[]) {
@@ -634,6 +657,89 @@ function describeBoardLoadError(error: unknown) {
   }
 }
 
+export function describeBoardLoadFeedback(error: unknown): HarnessBoardFeedback {
+  if (!(error instanceof HarnessBoardClientError)) {
+    return {
+      message: "Unable to load the harness board right now.",
+      recoveryTitle: "Next safe step",
+      recoverySteps: [
+        "Retry the board load after a brief pause.",
+        "Stay on the bounded board route instead of falling back to a manual refresh loop."
+      ]
+    };
+  }
+
+  switch (error.code) {
+    case "unauthorized":
+      return {
+        message: describeBoardLoadError(error),
+        recoveryTitle: "Next safe step",
+        recoverySteps: [
+          "Re-authenticate your tenant session.",
+          "Reload the live harness board after access is restored."
+        ]
+      };
+    case "rate_limited":
+      return {
+        message: describeBoardLoadError(error),
+        recoveryTitle: "Safe retry",
+        recoverySteps: [
+          "Wait for the bounded retry window to clear.",
+          "Reload the live harness board after the throttle window expires."
+        ]
+      };
+    case "not_found":
+      return {
+        message: describeBoardLoadError(error),
+        recoveryTitle: "Next safe step",
+        recoverySteps: [
+          "Confirm the live board route is still enabled for this tenant workflow.",
+          "Retry only after the bounded harness board route is available again."
+        ]
+      };
+    case "request_rejected":
+    case "service_unavailable":
+      return {
+        message: describeBoardLoadError(error),
+        recoveryTitle: "Safe retry",
+        recoverySteps: [
+          "Retry the live board load after the current service interruption clears.",
+          "Avoid switching to a shadow control path while the harness boundary is unavailable."
+        ]
+      };
+    default:
+      return {
+        message: describeBoardLoadError(error),
+        recoveryTitle: "Next safe step",
+        recoverySteps: [
+          "Reload the live harness board to recover the bounded board contract.",
+          "If the same load failure repeats, pause before retrying again."
+        ]
+      };
+  }
+}
+
+export function resolveBoardLoadFailure(input: {
+  error: unknown;
+  browserFallbackEnabled: boolean;
+  fallbackState: { board: HarnessBoardResponse; controlMode: HarnessBoardControlMode } | null;
+}): HarnessBoardLoadResolution {
+  const feedback = describeBoardLoadFeedback(input.error);
+  if (input.browserFallbackEnabled && input.fallbackState) {
+    return {
+      board: input.fallbackState.board,
+      controlMode: input.fallbackState.controlMode,
+      feedback
+    };
+  }
+
+  return {
+    board: null,
+    controlMode: null,
+    feedback
+  };
+}
+
 function describeBoardActionError(error: unknown, fallbackLabel: string) {
   if (!(error instanceof HarnessBoardClientError)) {
     return `Unable to ${fallbackLabel.toLowerCase()} right now.`;
@@ -659,6 +765,120 @@ function describeBoardActionError(error: unknown, fallbackLabel: string) {
     default:
       return `Unable to ${fallbackLabel.toLowerCase()} right now.`;
   }
+}
+
+export function describeBoardActionFeedback(
+  error: unknown,
+  context: {
+    actionRoute?: HarnessBoardResponse["pendingApprovals"][number]["actionRoute"] | NonNullable<HarnessBoardResponse["pendingAttention"]>["actionRoute"];
+    actionLabel: string;
+  }
+): HarnessBoardFeedback {
+  const fallbackMessage = describeBoardActionError(error, context.actionLabel);
+  if (!(error instanceof HarnessBoardClientError)) {
+    return {
+      message: fallbackMessage,
+      recoveryTitle: "Next safe step",
+      recoverySteps: [
+        "Refresh the board before retrying this bounded action.",
+        "Stay on the engine-owned action path instead of improvising a manual workaround."
+      ]
+    };
+  }
+
+  if (error.code === "invalid_request") {
+    return {
+      message: fallbackMessage,
+      recoveryTitle: "Contract recovery",
+      recoverySteps: [
+        "Reset this action composer to the contract defaults.",
+        context.actionRoute === "resolve-attention"
+          ? "Review the required fields again before retrying the lane recovery command."
+          : "Review the required fields again before retrying this bounded board action."
+      ]
+    };
+  }
+
+  if (error.code === "rate_limited") {
+    return {
+      message: fallbackMessage,
+      recoveryTitle: "Safe retry",
+      recoverySteps: [
+        "Wait for the bounded retry window to clear.",
+        "Retry the same board action after the throttle window expires."
+      ]
+    };
+  }
+
+  if (error.code === "unauthorized") {
+    return {
+      message: fallbackMessage,
+      recoveryTitle: "Next safe step",
+      recoverySteps: [
+        "Re-authenticate your tenant session.",
+        "Reload the board before retrying this live action."
+      ]
+    };
+  }
+
+  if (error.code === "conflict") {
+    const recoverySteps =
+      context.actionRoute === "proposal-decision"
+        ? [
+            "Refresh the board and confirm the proposal is still pending CEO review.",
+            "Check the latest approval queue before trying to widen or defer the lane again."
+          ]
+        : context.actionRoute === "resolve-attention"
+          ? [
+              "Refresh the board and confirm the lane still needs resume or unblock attention.",
+              "Retry the lane recovery command only if the same bounded attention is still active."
+            ]
+          : context.actionRoute === "review-attention"
+            ? [
+                "Refresh the board and confirm final assembly is still waiting on CEO review.",
+                "Retry completion or fresh-cycle review only if the same bounded review gate is still active."
+              ]
+            : [
+                "Refresh the board before retrying this bounded action.",
+                "Confirm the current board state still needs the same control decision."
+              ];
+
+    return {
+      message: fallbackMessage,
+      recoveryTitle: "Next safe step",
+      recoverySteps
+    };
+  }
+
+  return {
+    message: fallbackMessage,
+    recoveryTitle: "Safe retry",
+    recoverySteps: [
+      "Retry this bounded board action after the current interruption clears.",
+      "Avoid switching to an unbounded manual workaround while the harness boundary is unstable."
+    ]
+  };
+}
+
+function renderBoardFeedback(title: string, feedback: HarnessBoardFeedback | null) {
+  if (!feedback) {
+    return null;
+  }
+
+  return (
+    <section style={styles.panel}>
+      <h2 style={styles.panelTitle}>{title}</h2>
+      <p style={styles.statusError}>{feedback.message}</p>
+      <p style={styles.contractMeta}>{feedback.recoveryTitle}</p>
+      <ul style={styles.feedbackList}>
+        {feedback.recoverySteps.map((step) => (
+          <li key={step} style={styles.feedbackItem}>
+            {step}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }
 
 function renderCompletionPackage(board: HarnessBoardResponse) {
@@ -767,6 +987,8 @@ function renderCompletionPackage(board: HarnessBoardResponse) {
 export function HarnessBoardPage(props: {
   initialBoard?: HarnessBoardResponse | null;
   initialControlMode?: HarnessBoardControlMode;
+  initialLoadFeedback?: HarnessBoardFeedback | null;
+  initialActionFeedback?: HarnessBoardFeedback | null;
 } = {}) {
   const browserFallbackEnabled = harnessBoardClient.isBrowserFallbackEnabled();
   const fallbackState = browserFallbackEnabled ? harnessBoardClient.getFallbackState() : null;
@@ -778,8 +1000,8 @@ export function HarnessBoardPage(props: {
   const [openCardId, setOpenCardId] = useState<string>(() =>
     (props.initialBoard ?? fallbackState?.board ?? null)?.cards[0]?.id ?? ""
   );
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<HarnessBoardFeedback | null>(props.initialLoadFeedback ?? null);
+  const [actionError, setActionError] = useState<HarnessBoardFeedback | null>(props.initialActionFeedback ?? null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [lastActionResult, setLastActionResult] = useState<HarnessBoardActionResult | null>(null);
   const [lastActionLabel, setLastActionLabel] = useState<string | null>(null);
@@ -823,13 +1045,19 @@ export function HarnessBoardPage(props: {
         if (cancelled) {
           return;
         }
-        if (browserFallbackEnabled) {
-          const nextFallbackState = harnessBoardClient.getFallbackState();
-          applyBoardState(nextFallbackState.board, null, nextFallbackState.controlMode);
+        const resolution = resolveBoardLoadFailure({
+          error,
+          browserFallbackEnabled,
+          fallbackState: browserFallbackEnabled ? harnessBoardClient.getFallbackState() : null
+        });
+
+        if (resolution.board && resolution.controlMode) {
+          applyBoardState(resolution.board, null, resolution.controlMode);
+          setLoadError(resolution.feedback);
           return;
         }
 
-        setLoadError(describeBoardLoadError(error));
+        setLoadError(resolution.feedback);
         setBoard(null);
         setOpenCardId("");
       });
@@ -938,6 +1166,7 @@ export function HarnessBoardPage(props: {
   async function handleContractAction(input: {
     actionKey: string;
     actionPath: string;
+    actionRoute?: HarnessBoardResponse["pendingApprovals"][number]["actionRoute"] | NonNullable<HarnessBoardResponse["pendingAttention"]>["actionRoute"];
     actionMethod: "POST" | undefined;
     exampleRequest: Record<string, unknown> | undefined;
     confirmationLabel: string | undefined;
@@ -974,7 +1203,12 @@ export function HarnessBoardPage(props: {
       setLastActionLabel(input.noticeLabel);
       setActionNotice(describeSubmittedActionResult(actionResult, input.noticeLabel));
     } catch (error) {
-      setActionError(describeBoardActionError(error, input.noticeLabel));
+      setActionError(
+        describeBoardActionFeedback(error, {
+          actionRoute: input.actionRoute,
+          actionLabel: input.noticeLabel
+        })
+      );
     } finally {
       setSubmittingActionKey(null);
     }
@@ -1180,8 +1414,10 @@ export function HarnessBoardPage(props: {
                 </li>
               ))}
             </ul>
-            {!board && loadError ? <p style={{ ...styles.panelBody, marginTop: "0.8rem" }}>{loadError}</p> : null}
+            {!board && loadError ? <p style={{ ...styles.panelBody, marginTop: "0.8rem" }}>{loadError.message}</p> : null}
           </section>
+
+          {loadError ? renderBoardFeedback("Board load issue", loadError) : null}
 
           <section style={styles.panel}>
             <h2 style={styles.panelTitle}>CEO approvals</h2>
@@ -1267,6 +1503,7 @@ export function HarnessBoardPage(props: {
                                 handleContractAction({
                                   actionKey,
                                   actionPath: pendingAttention.actionPath!,
+                                  actionRoute: pendingAttention.actionRoute,
                                   actionMethod: pendingAttention.actionMethod,
                                   exampleRequest: actionState.payload,
                                   confirmationLabel: option.requiresConfirmation ? option.confirmationLabel : undefined,
@@ -1365,6 +1602,7 @@ export function HarnessBoardPage(props: {
                                   handleContractAction({
                                     actionKey,
                                     actionPath: approval.actionPath,
+                                    actionRoute: approval.actionRoute,
                                     actionMethod: approval.actionMethod,
                                     exampleRequest: actionState.payload,
                                     confirmationLabel: option.requiresConfirmation ? option.confirmationLabel : undefined,
@@ -1407,7 +1645,7 @@ export function HarnessBoardPage(props: {
           ) : null}
 
           {actionNotice ? <p style={styles.statusSuccess}>{actionNotice}</p> : null}
-          {actionError ? <p style={styles.statusError}>{actionError}</p> : null}
+          {actionError ? renderBoardFeedback("Latest board action issue", actionError) : null}
 
           {lastActionResult && lastActionLabel ? (
             <section style={styles.panel}>
