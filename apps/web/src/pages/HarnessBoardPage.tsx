@@ -396,6 +396,48 @@ function joinHeadingParts(left: string, right: string) {
   return `${left} - ${right}`;
 }
 
+function describeSubmittedActionResult(
+  result: unknown,
+  fallbackLabel: string
+) {
+  if (!result || typeof result !== "object") {
+    return `${fallbackLabel} submitted.`;
+  }
+
+  const actionResult = result as {
+    status?: string;
+    cardId?: string;
+    runId?: string;
+    reopenedProposalCount?: number;
+    state?: string;
+  };
+
+  switch (actionResult.status) {
+    case "approved":
+      return actionResult.cardId
+        ? `Proposal approved and lane ${actionResult.cardId} is now part of the live board.`
+        : "Proposal approved and routed back into the live board.";
+    case "deferred":
+      return "Proposal deferred and preserved for bounded later review.";
+    case "denied":
+      return "Proposal denied and closed without widening the current board cycle.";
+    case "done":
+      return "CEO review completed and the current board cycle closed cleanly.";
+    case "fresh_cycle_started":
+      return `Fresh cycle started${typeof actionResult.reopenedProposalCount === "number" ? ` with ${actionResult.reopenedProposalCount} deferred item${actionResult.reopenedProposalCount === 1 ? "" : "s"} reopened.` : "."}`;
+    case "resumed":
+      return actionResult.cardId
+        ? `Lane ${actionResult.cardId} resumed and re-entered live execution.`
+        : "Lane resumed and re-entered live execution.";
+    case "unblocked":
+      return actionResult.cardId
+        ? `Lane ${actionResult.cardId} was unblocked and returned to the board queue.`
+        : "Lane was unblocked and returned to the board queue.";
+    default:
+      return `${fallbackLabel} submitted.`;
+  }
+}
+
 function renderCompletionPackage(board: HarnessBoardResponse) {
   const completionPackage = board.completionPackage;
   if (!completionPackage) {
@@ -510,11 +552,15 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [submittingActionKey, setSubmittingActionKey] = useState<string | null>(null);
 
-  function applyBoardState(nextBoard: HarnessBoardResponse) {
+  function applyBoardState(nextBoard: HarnessBoardResponse, preferredCardId?: string | null) {
     setLoadError(null);
     setBoard(nextBoard);
     setOpenCardId((current: string) =>
-      nextBoard.cards.some((card) => card.id === current) ? current : nextBoard.cards[0]?.id || ""
+      preferredCardId && nextBoard.cards.some((card) => card.id === preferredCardId)
+        ? preferredCardId
+        : nextBoard.cards.some((card) => card.id === current)
+          ? current
+          : nextBoard.cards[0]?.id || ""
     );
   }
 
@@ -571,6 +617,13 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
   const liveActionsEnabled = Boolean(board && board.runId !== "harness-browser-fallback");
   const boardPulseItems = [
     {
+      key: "controls",
+      heading: joinHeadingParts("Controls", liveActionsEnabled ? "Live" : "Preview"),
+      summary: liveActionsEnabled
+        ? "Board actions are bound to live harness mutations through the engine contract."
+        : "Board actions stay read-only in localhost fallback mode."
+    },
+    {
       key: "attention",
       heading: joinHeadingParts("Attention", pendingAttention?.statusLabel ?? "Clear"),
       summary: pendingAttention?.summary ?? "No active board attention is currently waiting on the CEO."
@@ -618,10 +671,18 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
     setActionNotice(null);
 
     try {
-      await harnessBoardClient.submitAction(input.actionPath, input.exampleRequest, input.actionMethod ?? "POST");
+      const actionResult = await harnessBoardClient.submitAction(
+        input.actionPath,
+        input.exampleRequest,
+        input.actionMethod ?? "POST"
+      );
       const nextBoard = await harnessBoardClient.fetchBoard();
-      applyBoardState(nextBoard);
-      setActionNotice(`${input.noticeLabel} submitted.`);
+      const preferredCardId =
+        actionResult && typeof actionResult === "object" && "cardId" in actionResult && typeof actionResult.cardId === "string"
+          ? actionResult.cardId
+          : null;
+      applyBoardState(nextBoard, preferredCardId);
+      setActionNotice(describeSubmittedActionResult(actionResult, input.noticeLabel));
     } catch {
       setActionError("Unable to update the live harness board right now.");
     } finally {

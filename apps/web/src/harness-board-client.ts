@@ -159,6 +159,14 @@ const defaultBoardResponse: HarnessBoardResponse = {
           exampleRequest: { decision: "approve" }
         },
         {
+          value: "defer",
+          label: "Defer proposal",
+          description: "Pause this follow-on work until the current board cycle is ready to widen safely.",
+          emphasis: "secondary",
+          nextEffectSummary: "This proposal stays visible for later CEO review without opening or advancing a new lane yet.",
+          exampleRequest: { decision: "defer" }
+        },
+        {
           value: "deny",
           label: "Deny proposal",
           description: "Reject this follow-on work when it should not expand the current board cycle.",

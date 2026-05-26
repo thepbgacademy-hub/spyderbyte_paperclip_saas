@@ -126,6 +126,10 @@ describe("harness board client", () => {
               nextEffectSummary: expect.any(String)
             }),
             expect.objectContaining({
+              value: "defer",
+              emphasis: "secondary"
+            }),
+            expect.objectContaining({
               value: "deny",
               requiresConfirmation: true
             })

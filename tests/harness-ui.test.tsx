@@ -117,6 +117,14 @@ const boardResponse: HarnessBoardResponse = {
           exampleRequest: { decision: "approve" }
         },
         {
+          value: "defer",
+          label: "Defer proposal",
+          description: "Pause this follow-on work until the current board cycle is ready to widen safely.",
+          emphasis: "secondary",
+          nextEffectSummary: "This proposal stays visible for later CEO review without opening or advancing a new lane yet.",
+          exampleRequest: { decision: "defer" }
+        },
+        {
           value: "deny",
           label: "Deny proposal",
           description: "Reject this follow-on work when it should not expand the current board cycle.",
@@ -292,9 +300,12 @@ describe("harness board UI", () => {
     expect(markup).toContain("Primary");
     expect(markup).toContain("Secondary");
     expect(markup).toContain("Caution");
+    expect(markup).toContain("Controls - Live");
+    expect(markup).toContain("Board actions are bound to live harness mutations through the engine contract.");
     expect(markup).toContain("Start a new board cycle from this run?");
     expect(markup).toContain("Review proposal decision");
     expect(markup).toContain("Approve proposal");
+    expect(markup).toContain("Defer proposal");
     expect(markup).toContain("Deny this proposal and close the follow-on request?");
     expect(markup).toContain("Approve proposal (recommended)");
     expect(markup).toContain("Complete run (recommended)");
@@ -360,6 +371,7 @@ describe("harness board UI", () => {
     expect(markup).toContain("CFO · Pressure-test the pricing lane");
     expect(markup).toContain("&quot;decision&quot;:&quot;complete_run&quot;");
     expect(markup).toContain("&quot;decision&quot;:&quot;approve&quot;");
+    expect(markup).toContain("&quot;decision&quot;:&quot;defer&quot;");
     expect(markup).toContain("&quot;decision&quot;:&quot;deny&quot;");
     expect(markup).toContain("&quot;decision&quot;:&quot;start_fresh_cycle&quot;,&quot;mode&quot;:&quot;reopen_deferred&quot;");
     expect(markup).not.toContain("raw execution log");
