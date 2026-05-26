@@ -288,6 +288,8 @@ describe("harness board UI", () => {
     expect(markup).toContain("Harness board");
     expect(markup).toContain("Persona workload");
     expect(markup).toContain("CEO approvals");
+    expect(markup).toContain("Control mode");
+    expect(markup).toContain("Preview");
     expect(markup).not.toContain("raw execution log");
     expect(markup).not.toContain("harness-browser-fallback");
   });
@@ -301,6 +303,8 @@ describe("harness board UI", () => {
     expect(markup).toContain("Secondary");
     expect(markup).toContain("Caution");
     expect(markup).toContain("Controls - Live");
+    expect(markup).toContain("Control mode");
+    expect(markup).toContain("Live");
     expect(markup).toContain("Board actions are bound to live harness mutations through the engine contract.");
     expect(markup).toContain("Start a new board cycle from this run?");
     expect(markup).toContain("Review proposal decision");

@@ -136,3 +136,4 @@ This file tracks the new harness subproject only.
 - [x] Teach the board page to group contract-driven board posture into a bounded pulse summary for attention, approvals, and package state instead of scattering those summaries into page-local heuristics.
 - [x] Teach the live board page to submit bounded proposal and attention actions through engine-supplied action paths and example payloads instead of inventing a second request model in UI code.
 - [x] Teach the board page to reflect bounded live-action outcomes and live-vs-preview control posture directly from the harness seam instead of leaving action results as generic client copy.
+- [x] Teach the board page to carry a typed bounded live-action result seam so latest action feedback, lane focus, and run/fresh-cycle effects stay contract-driven instead of being re-derived from untyped client responses.

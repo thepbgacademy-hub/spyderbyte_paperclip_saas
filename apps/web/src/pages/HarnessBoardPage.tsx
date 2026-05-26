@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
-import { createHarnessBoardClient, type HarnessBoardResponse } from "../harness-board-client.js";
+import {
+  createHarnessBoardClient,
+  type HarnessBoardActionResult,
+  type HarnessBoardResponse
+} from "../harness-board-client.js";
 import {
   HarnessBoard,
   type HarnessBoardCard,
@@ -257,6 +261,12 @@ const styles = {
     lineHeight: 1.45,
     margin: 0
   } satisfies CSSProperties,
+  statusSuccess: {
+    color: "#86efac",
+    fontSize: "0.78rem",
+    lineHeight: 1.45,
+    margin: 0
+  } satisfies CSSProperties,
   statusError: {
     color: "#fca5a5",
     fontSize: "0.78rem",
@@ -396,26 +406,11 @@ function joinHeadingParts(left: string, right: string) {
   return `${left} - ${right}`;
 }
 
-function describeSubmittedActionResult(
-  result: unknown,
-  fallbackLabel: string
-) {
-  if (!result || typeof result !== "object") {
-    return `${fallbackLabel} submitted.`;
-  }
-
-  const actionResult = result as {
-    status?: string;
-    cardId?: string;
-    runId?: string;
-    reopenedProposalCount?: number;
-    state?: string;
-  };
-
-  switch (actionResult.status) {
+function describeSubmittedActionResult(result: HarnessBoardActionResult, fallbackLabel: string) {
+  switch (result.status) {
     case "approved":
-      return actionResult.cardId
-        ? `Proposal approved and lane ${actionResult.cardId} is now part of the live board.`
+      return result.cardId
+        ? `Proposal approved and lane ${result.cardId} is now part of the live board.`
         : "Proposal approved and routed back into the live board.";
     case "deferred":
       return "Proposal deferred and preserved for bounded later review.";
@@ -424,17 +419,38 @@ function describeSubmittedActionResult(
     case "done":
       return "CEO review completed and the current board cycle closed cleanly.";
     case "fresh_cycle_started":
-      return `Fresh cycle started${typeof actionResult.reopenedProposalCount === "number" ? ` with ${actionResult.reopenedProposalCount} deferred item${actionResult.reopenedProposalCount === 1 ? "" : "s"} reopened.` : "."}`;
+      return `Fresh cycle started with ${result.reopenedProposalCount} deferred item${result.reopenedProposalCount === 1 ? "" : "s"} reopened.`;
     case "resumed":
-      return actionResult.cardId
-        ? `Lane ${actionResult.cardId} resumed and re-entered live execution.`
+      return result.cardId
+        ? `Lane ${result.cardId} resumed and re-entered live execution.`
         : "Lane resumed and re-entered live execution.";
     case "unblocked":
-      return actionResult.cardId
-        ? `Lane ${actionResult.cardId} was unblocked and returned to the board queue.`
+      return result.cardId
+        ? `Lane ${result.cardId} was unblocked and returned to the board queue.`
         : "Lane was unblocked and returned to the board queue.";
     default:
       return `${fallbackLabel} submitted.`;
+  }
+}
+
+function describeActionResultEffect(result: HarnessBoardActionResult) {
+  switch (result.status) {
+    case "approved":
+      return "Effect: the approved lane is now eligible to continue through the bounded board workflow.";
+    case "deferred":
+      return "Effect: the request stays visible for later CEO review without widening the current board cycle yet.";
+    case "denied":
+      return "Effect: the request is closed without opening a new lane.";
+    case "done":
+      return `Effect: run ${result.runId} is now the closed tenant-facing package.`;
+    case "fresh_cycle_started":
+      return `Effect: run ${result.runId} is now the active board cycle.`;
+    case "resumed":
+      return `Effect: lane ${result.cardId} is back in live execution with state ${result.state}.`;
+    case "unblocked":
+      return `Effect: lane ${result.cardId} returned to state ${result.state} and can re-enter the bounded queue.`;
+    default:
+      return null;
   }
 }
 
@@ -550,6 +566,8 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [lastActionResult, setLastActionResult] = useState<HarnessBoardActionResult | null>(null);
+  const [lastActionLabel, setLastActionLabel] = useState<string | null>(null);
   const [submittingActionKey, setSubmittingActionKey] = useState<string | null>(null);
 
   function applyBoardState(nextBoard: HarnessBoardResponse, preferredCardId?: string | null) {
@@ -615,6 +633,7 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
   const packageRecommendationCount = completionPackage?.recommendations.length ?? 0;
   const packageObjectionCount = completionPackage?.objections.length ?? 0;
   const liveActionsEnabled = Boolean(board && board.runId !== "harness-browser-fallback");
+  const lastActionEffect = lastActionResult ? describeActionResultEffect(lastActionResult) : null;
   const boardPulseItems = [
     {
       key: "controls",
@@ -677,11 +696,10 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
         input.actionMethod ?? "POST"
       );
       const nextBoard = await harnessBoardClient.fetchBoard();
-      const preferredCardId =
-        actionResult && typeof actionResult === "object" && "cardId" in actionResult && typeof actionResult.cardId === "string"
-          ? actionResult.cardId
-          : null;
+      const preferredCardId = "cardId" in actionResult ? actionResult.cardId : null;
       applyBoardState(nextBoard, preferredCardId);
+      setLastActionResult(actionResult);
+      setLastActionLabel(input.noticeLabel);
       setActionNotice(describeSubmittedActionResult(actionResult, input.noticeLabel));
     } catch {
       setActionError("Unable to update the live harness board right now.");
@@ -717,6 +735,10 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
           <article style={styles.metricCard}>
             <p style={styles.metricLabel}>CEO approvals</p>
             <p style={styles.metricValue}>{pendingApprovals.length}</p>
+          </article>
+          <article style={styles.metricCard}>
+            <p style={styles.metricLabel}>Control mode</p>
+            <p style={styles.metricValue}>{liveActionsEnabled ? "Live" : "Preview"}</p>
           </article>
           <article style={styles.metricCard}>
             <p style={styles.metricLabel}>Recent decisions</p>
@@ -945,8 +967,32 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
             </section>
           ) : null}
 
-          {actionNotice ? <p style={styles.statusNotice}>{actionNotice}</p> : null}
+          {actionNotice ? <p style={styles.statusSuccess}>{actionNotice}</p> : null}
           {actionError ? <p style={styles.statusError}>{actionError}</p> : null}
+
+          {lastActionResult && lastActionLabel ? (
+            <section style={styles.panel}>
+              <h2 style={styles.panelTitle}>Latest board action</h2>
+              <p style={styles.panelBody}>The most recent live harness action and its bounded engine outcome.</p>
+              <ul style={styles.actionList}>
+                <li style={styles.actionItem}>
+                  <p style={styles.actionMeta}>{humanizeValue(lastActionResult.status)}</p>
+                  <h3 style={styles.actionHeading}>{lastActionLabel}</h3>
+                  <p style={styles.actionSummary}>{describeSubmittedActionResult(lastActionResult, lastActionLabel)}</p>
+                  {lastActionEffect ? <p style={styles.actionSummary}>{lastActionEffect}</p> : null}
+                  {"cardId" in lastActionResult ? (
+                    <p style={styles.contractMeta}>{`Affected lane: ${lastActionResult.cardId}`}</p>
+                  ) : null}
+                  {"runId" in lastActionResult ? (
+                    <p style={styles.contractMeta}>{`Affected run: ${lastActionResult.runId}`}</p>
+                  ) : null}
+                  {"reopenedProposalCount" in lastActionResult ? (
+                    <p style={styles.contractMeta}>{`Deferred items reopened: ${lastActionResult.reopenedProposalCount}`}</p>
+                  ) : null}
+                </li>
+              </ul>
+            </section>
+          ) : null}
 
           {board?.recentDecisions.length ? (
             <section style={styles.panel}>

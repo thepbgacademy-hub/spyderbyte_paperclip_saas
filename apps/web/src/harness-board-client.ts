@@ -1,6 +1,15 @@
 import type { HarnessBoardResponse } from "../../../src/harness/board-service.js";
 export type { HarnessBoardResponse } from "../../../src/harness/board-service.js";
 
+export type HarnessBoardActionResult =
+  | { status: "approved"; cardId: string }
+  | { status: "deferred" }
+  | { status: "denied" }
+  | { status: "done"; runId: string }
+  | { status: "fresh_cycle_started"; runId: string; reopenedProposalCount: number }
+  | { status: "resumed"; cardId: string; state: "working" }
+  | { status: "unblocked"; cardId: string; state: "approved" };
+
 const defaultBoardResponse: HarnessBoardResponse = {
   runId: "harness-browser-fallback",
   workflowId: "wf_connect_first_workflow",
@@ -311,7 +320,7 @@ export function createHarnessBoardClient(
     actionPath: string,
     body: Record<string, unknown>,
     actionMethod: "POST" = "POST"
-  ): Promise<unknown> {
+  ): Promise<HarnessBoardActionResult> {
     const response = await fetchImpl(actionPath, {
       method: actionMethod,
       credentials: "include",
@@ -324,7 +333,7 @@ export function createHarnessBoardClient(
       throw new Error("Unable to update harness board");
     }
 
-    return (await response.json()) as unknown;
+    return (await response.json()) as HarnessBoardActionResult;
   }
 
   function isBrowserFallbackEnabled(): boolean {
