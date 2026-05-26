@@ -12,10 +12,14 @@ import {
   canSubmitContractActionState,
   canResetBoardActionComposerAfterError,
   canRetryBoardActionAfterError,
+  describeContractActionIssue,
   describeActionAttemptSupport,
   describeBoardActionFeedback,
   describeBoardLoadFeedback,
   getContractActionState,
+  getBoardContractActionFieldMap,
+  pruneActionDraftsForBoard,
+  pruneOpenActionComposerKeysForBoard,
   resolveBoardLoadFailure,
   shouldResyncBoardAfterActionError,
   summarizeContractActionState,
@@ -374,6 +378,7 @@ describe("harness board UI", () => {
           }
         ],
         missingRequiredFields: [],
+        driftedFields: [],
         driftedFieldLabels: [],
         activeDraftCount: 0
       })
@@ -386,6 +391,7 @@ describe("harness board UI", () => {
       summarizeContractActionState({
         visibleFields: [],
         missingRequiredFields: ["Decision note"],
+        driftedFields: [],
         driftedFieldLabels: [],
         activeDraftCount: 0
       })
@@ -412,6 +418,13 @@ describe("harness board UI", () => {
       mode: "reopen_deferred"
     });
     expect(actionState.driftedFieldLabels).toEqual(["Fresh-cycle mode"]);
+    expect(actionState.driftedFields).toEqual([
+      {
+        fieldName: "mode",
+        fieldLabel: "Fresh-cycle mode",
+        reason: "invalid_allowed_value"
+      }
+    ]);
     expect(summarizeContractActionState(actionState)).toEqual({
       tone: "drifted",
       summary: "Reset required: Fresh-cycle mode no longer fits the current contract."
@@ -431,6 +444,13 @@ describe("harness board UI", () => {
           }
         ],
         missingRequiredFields: ["Completion summary"],
+        driftedFields: [
+          {
+            fieldName: "mode",
+            fieldLabel: "Fresh-cycle mode",
+            reason: "invalid_allowed_value"
+          }
+        ],
         driftedFieldLabels: ["Fresh-cycle mode"],
         activeDraftCount: 0
       })
@@ -455,6 +475,13 @@ describe("harness board UI", () => {
       tone: "drifted",
       summary: "Reset required: Decision note no longer fits the current contract."
     });
+    expect(actionState.driftedFields).toEqual([
+      {
+        fieldName: "decisionNote",
+        fieldLabel: "Decision note",
+        reason: "hidden_for_option"
+      }
+    ]);
     expect(canSubmitContractActionState(actionState)).toBe(false);
   });
 
@@ -476,6 +503,85 @@ describe("harness board UI", () => {
       summary: "Ready with 1 field override."
     });
     expect(canSubmitContractActionState(actionState)).toBe(true);
+  });
+
+  it("describes drifted composer fields by bounded contract reason", () => {
+    expect(
+      describeContractActionIssue({
+        fieldName: "mode",
+        fieldLabel: "Fresh-cycle mode",
+        reason: "invalid_allowed_value"
+      })
+    ).toBe("Fresh-cycle mode: the current draft is no longer in the allowed values for this contract field.");
+    expect(
+      describeContractActionIssue({
+        fieldName: "decisionNote",
+        fieldLabel: "Decision note",
+        reason: "hidden_for_option"
+      })
+    ).toBe("Decision note: the current draft only applies to a different action option and must be reset before submit.");
+    expect(
+      describeContractActionIssue({
+        fieldName: "legacyField",
+        fieldLabel: "Legacy field",
+        reason: "removed_from_contract"
+      })
+    ).toBe("Legacy field: the current draft refers to a field that no longer exists in the live contract.");
+  });
+
+  it("maps the current board contract to bounded action keys and request fields", () => {
+    const fieldMap = getBoardContractActionFieldMap(boardResponse);
+
+    expect(Array.from(fieldMap.keys())).toEqual([
+      "attention:complete_run",
+      "attention:start_fresh_cycle",
+      "approval:proposal_ui_test_1:approve",
+      "approval:proposal_ui_test_1:defer",
+      "approval:proposal_ui_test_1:deny"
+    ]);
+    expect(Array.from(fieldMap.get("attention:start_fresh_cycle") ?? [])).toEqual(["decision", "mode"]);
+    expect(Array.from(fieldMap.get("approval:proposal_ui_test_1:defer") ?? [])).toEqual(["decision", "decisionNote"]);
+  });
+
+  it("prunes stale action drafts when the refreshed board contract removes an action or field entirely", () => {
+    const prunedDrafts = pruneActionDraftsForBoard(boardResponse, {
+      "attention:start_fresh_cycle": {
+        decision: "start_fresh_cycle",
+        mode: "clean",
+        legacyField: "remove me"
+      },
+      "approval:proposal_ui_test_1:approve": {
+        decision: "approve",
+        decisionNote: "keep as drift until reset"
+      },
+      "approval:proposal_old:approve": {
+        decision: "approve"
+      }
+    });
+
+    expect(prunedDrafts).toEqual({
+      "attention:start_fresh_cycle": {
+        decision: "start_fresh_cycle",
+        mode: "clean"
+      },
+      "approval:proposal_ui_test_1:approve": {
+        decision: "approve",
+        decisionNote: "keep as drift until reset"
+      }
+    });
+  });
+
+  it("prunes stale open composers when the refreshed board contract removes an action", () => {
+    const nextOpenKeys = pruneOpenActionComposerKeysForBoard(boardResponse, {
+      "attention:start_fresh_cycle": true,
+      "approval:proposal_ui_test_1:approve": true,
+      "approval:proposal_old:approve": true
+    });
+
+    expect(nextOpenKeys).toEqual({
+      "attention:start_fresh_cycle": true,
+      "approval:proposal_ui_test_1:approve": true
+    });
   });
 
   it("describes bounded action support states without collapsing drift, stale, and unavailable paths", () => {
@@ -654,6 +760,29 @@ describe("harness board UI", () => {
     expect(markup).toContain("Hide composer for Resume lane");
     expect(markup).toContain("Live request fields for Resume lane");
     expect(markup).toContain("&quot;command&quot;:&quot;resume_lane&quot;");
+  });
+
+  it("renders bounded composer drift diagnostics when seeded drafts no longer fit the live contract", () => {
+    const markup = renderToStaticMarkup(
+      <HarnessBoardPage
+        initialBoard={boardResponse}
+        initialControlMode="live"
+        initialActionDrafts={{
+          "attention:start_fresh_cycle": {
+            mode: "invalid_mode"
+          },
+          "approval:proposal_ui_test_1:approve": {
+            decisionNote: "Hold for later"
+          }
+        }}
+      />
+    );
+
+    expect(markup).toContain("Reset required: Fresh-cycle mode no longer fits the current contract.");
+    expect(markup).toContain("Fresh-cycle mode: the current draft is no longer in the allowed values for this contract field.");
+    expect(markup).toContain("Open composer for Start fresh cycle");
+    expect(markup).toContain("Reset required: Decision note no longer fits the current contract.");
+    expect(markup).toContain("Decision note: the current draft only applies to a different action option and must be reset before submit.");
   });
 
   it("keeps a prop-seeded preview board read-only when the control mode says preview", () => {

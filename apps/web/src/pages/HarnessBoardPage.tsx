@@ -304,6 +304,17 @@ const styles = {
     lineHeight: 1.45,
     margin: 0
   } satisfies CSSProperties,
+  issueList: {
+    display: "grid",
+    gap: "0.3rem",
+    margin: 0,
+    paddingLeft: "1rem"
+  } satisfies CSSProperties,
+  issueItem: {
+    color: "#fca5a5",
+    fontSize: "0.76rem",
+    lineHeight: 1.45
+  } satisfies CSSProperties,
   feedbackList: {
     display: "grid",
     gap: "0.25rem",
@@ -453,6 +464,17 @@ type HarnessActionOptionView =
   | NonNullable<HarnessBoardResponse["pendingApprovals"][number]["actionOptions"]>[number]
   | NonNullable<NonNullable<HarnessBoardResponse["pendingAttention"]>["actionOptions"]>[number];
 
+type HarnessContractActionIssueReason =
+  | "invalid_allowed_value"
+  | "hidden_for_option"
+  | "removed_from_contract";
+
+type HarnessContractActionIssue = {
+  fieldName: string;
+  fieldLabel: string;
+  reason: HarnessContractActionIssueReason;
+};
+
 function getContractFieldSeed(
   field: HarnessActionFieldView,
   option?: HarnessActionOptionView
@@ -551,7 +573,7 @@ export function getContractActionState(input: {
     ["decision", "command"].filter((fieldName) => typeof payload[fieldName] === "string")
   );
   const missingRequiredFields: string[] = [];
-  const driftedFieldLabels: string[] = [];
+  const driftedFields: HarnessContractActionIssue[] = [];
   let activeDraftCount = 0;
 
   for (const field of visibleFields) {
@@ -560,7 +582,11 @@ export function getContractActionState(input: {
     const nextValue = assessment.nextValue;
 
     if (assessment.drifted) {
-      driftedFieldLabels.push(field.label);
+      driftedFields.push({
+        fieldName: field.name,
+        fieldLabel: field.label,
+        reason: "invalid_allowed_value"
+      });
     }
 
     if (typeof rawDraftValue === "string" && rawDraftValue.trim().length > 0 && !assessment.drifted) {
@@ -586,14 +612,20 @@ export function getContractActionState(input: {
       continue;
     }
 
-    driftedFieldLabels.push(contractFieldMap.get(fieldName)?.label ?? humanizeValue(fieldName));
+    const contractField = contractFieldMap.get(fieldName);
+    driftedFields.push({
+      fieldName,
+      fieldLabel: contractField?.label ?? humanizeValue(fieldName),
+      reason: contractField ? "hidden_for_option" : "removed_from_contract"
+    });
   }
 
   return {
     payload,
     visibleFields,
     missingRequiredFields,
-    driftedFieldLabels,
+    driftedFields,
+    driftedFieldLabels: driftedFields.map((issue) => issue.fieldLabel),
     activeDraftCount
   };
 }
@@ -601,6 +633,7 @@ export function getContractActionState(input: {
 export function summarizeContractActionState(actionState: {
   visibleFields: HarnessActionFieldView[];
   missingRequiredFields: string[];
+  driftedFields: HarnessContractActionIssue[];
   driftedFieldLabels: string[];
   activeDraftCount: number;
 }) {
@@ -640,9 +673,130 @@ export function summarizeContractActionState(actionState: {
 
 export function canSubmitContractActionState(actionState: {
   missingRequiredFields: string[];
-  driftedFieldLabels: string[];
+  driftedFields: HarnessContractActionIssue[];
 }) {
-  return actionState.missingRequiredFields.length === 0 && actionState.driftedFieldLabels.length === 0;
+  return actionState.missingRequiredFields.length === 0 && actionState.driftedFields.length === 0;
+}
+
+export function describeContractActionIssue(issue: HarnessContractActionIssue) {
+  switch (issue.reason) {
+    case "invalid_allowed_value":
+      return `${issue.fieldLabel}: the current draft is no longer in the allowed values for this contract field.`;
+    case "hidden_for_option":
+      return `${issue.fieldLabel}: the current draft only applies to a different action option and must be reset before submit.`;
+    case "removed_from_contract":
+      return `${issue.fieldLabel}: the current draft refers to a field that no longer exists in the live contract.`;
+    default:
+      return `${issue.fieldLabel}: the current draft no longer fits the live contract.`;
+  }
+}
+
+function getOptionControlFieldName(option: HarnessActionOptionView) {
+  if (typeof option.exampleRequest?.decision === "string") {
+    return "decision";
+  }
+
+  if (typeof option.exampleRequest?.command === "string") {
+    return "command";
+  }
+
+  return null;
+}
+
+export function getBoardContractActionFieldMap(board: HarnessBoardResponse | null) {
+  const fieldMap = new Map<string, Set<string>>();
+
+  if (!board) {
+    return fieldMap;
+  }
+
+  if (board.pendingAttention?.actionOptions?.length) {
+    for (const option of board.pendingAttention.actionOptions) {
+      const actionKey = `attention:${option.value}`;
+      const fieldNames = new Set<string>((board.pendingAttention.requestFields ?? []).map((field) => field.name));
+      const controlFieldName = getOptionControlFieldName(option);
+      if (controlFieldName) {
+        fieldNames.add(controlFieldName);
+      }
+      fieldMap.set(actionKey, fieldNames);
+    }
+  }
+
+  for (const approval of board.pendingApprovals) {
+    if (!approval.actionOptions?.length) {
+      continue;
+    }
+
+    for (const option of approval.actionOptions) {
+      const actionKey = `approval:${approval.id}:${option.value}`;
+      const fieldNames = new Set<string>((approval.requestFields ?? []).map((field) => field.name));
+      const controlFieldName = getOptionControlFieldName(option);
+      if (controlFieldName) {
+        fieldNames.add(controlFieldName);
+      }
+      fieldMap.set(actionKey, fieldNames);
+    }
+  }
+
+  return fieldMap;
+}
+
+export function pruneActionDraftsForBoard(
+  board: HarnessBoardResponse | null,
+  actionDrafts: Record<string, Record<string, string>>
+) {
+  const contractFieldMap = getBoardContractActionFieldMap(board);
+
+  if (contractFieldMap.size === 0) {
+    return actionDrafts;
+  }
+
+  let changed = false;
+  const nextDrafts = Object.fromEntries(
+    Object.entries(actionDrafts).flatMap(([actionKey, draftValues]) => {
+      const allowedFields = contractFieldMap.get(actionKey);
+      if (!allowedFields) {
+        changed = true;
+        return [];
+      }
+
+      const nextDraftValues = Object.fromEntries(
+        Object.entries(draftValues).filter(([fieldName]) => allowedFields.has(fieldName))
+      );
+
+      if (Object.keys(nextDraftValues).length !== Object.keys(draftValues).length) {
+        changed = true;
+      }
+
+      return [[actionKey, nextDraftValues]];
+    })
+  );
+
+  return changed ? nextDrafts : actionDrafts;
+}
+
+export function pruneOpenActionComposerKeysForBoard(
+  board: HarnessBoardResponse | null,
+  openActionComposerKeys: Record<string, boolean>
+) {
+  const contractFieldMap = getBoardContractActionFieldMap(board);
+
+  if (contractFieldMap.size === 0) {
+    return openActionComposerKeys;
+  }
+
+  let changed = false;
+  const nextComposerKeys = Object.fromEntries(
+    Object.entries(openActionComposerKeys).filter(([actionKey]) => {
+      const keep = contractFieldMap.has(actionKey);
+      if (!keep) {
+        changed = true;
+      }
+      return keep;
+    })
+  );
+
+  return changed ? nextComposerKeys : openActionComposerKeys;
 }
 
 export function buildContractActionPayload(input: {
@@ -1367,6 +1521,7 @@ export function HarnessBoardPage(props: {
   initialActionFeedback?: HarnessBoardFeedback | null;
   initialActionAttempt?: HarnessBoardActionAttempt | null;
   initialActionFailureCause?: unknown;
+  initialActionDrafts?: Record<string, Record<string, string>>;
 } = {}) {
   const browserFallbackEnabled = harnessBoardClient.isBrowserFallbackEnabled();
   const fallbackState = browserFallbackEnabled ? harnessBoardClient.getFallbackState() : null;
@@ -1384,7 +1539,7 @@ export function HarnessBoardPage(props: {
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [lastActionResult, setLastActionResult] = useState<HarnessBoardActionResult | null>(null);
   const [lastActionLabel, setLastActionLabel] = useState<string | null>(null);
-  const [actionDrafts, setActionDrafts] = useState<Record<string, Record<string, string>>>({});
+  const [actionDrafts, setActionDrafts] = useState<Record<string, Record<string, string>>>(props.initialActionDrafts ?? {});
   const [openActionComposerKeys, setOpenActionComposerKeys] = useState<Record<string, boolean>>({});
   const [submittingActionKey, setSubmittingActionKey] = useState<string | null>(null);
   const [reloadingBoard, setReloadingBoard] = useState(false);
@@ -1400,6 +1555,8 @@ export function HarnessBoardPage(props: {
     setLoadError(null);
     setBoard(nextBoard);
     setControlMode(nextControlMode);
+    setActionDrafts((current) => pruneActionDraftsForBoard(nextBoard, current));
+    setOpenActionComposerKeys((current) => pruneOpenActionComposerKeysForBoard(nextBoard, current));
     setOpenCardId((current: string) =>
       preferredCardId && nextBoard.cards.some((card) => card.id === preferredCardId)
         ? preferredCardId
@@ -1806,22 +1963,29 @@ export function HarnessBoardPage(props: {
               <p style={styles.fieldTitle}>{field.label}</p>
               {field.description ? <p style={styles.optionBody}>{field.description}</p> : null}
               {field.allowedValues?.length ? (
-                <select
-                  style={styles.formField}
-                  value={value}
-                  onChange={(event) => setDraftValue(input.actionKey, field.name, event.target.value)}
-                >
-                  {value === STALE_SELECT_VALUE ? (
-                    <option value={STALE_SELECT_VALUE}>
-                      Current draft no longer allowed. Reset recommended.
-                    </option>
+                <>
+                  <select
+                    style={styles.formField}
+                    value={value}
+                    onChange={(event) => setDraftValue(input.actionKey, field.name, event.target.value)}
+                  >
+                    {value === STALE_SELECT_VALUE ? (
+                      <option value={STALE_SELECT_VALUE}>
+                        Current draft no longer allowed. Reset recommended.
+                      </option>
+                    ) : null}
+                    {field.allowedValues.map((allowedValue) => (
+                      <option key={allowedValue} value={allowedValue}>
+                        {allowedValue}
+                      </option>
+                    ))}
+                  </select>
+                  {assessment.drifted ? (
+                    <p style={styles.statusError}>
+                      {`${field.label} no longer matches the allowed values for this live contract field.`}
+                    </p>
                   ) : null}
-                  {field.allowedValues.map((allowedValue) => (
-                    <option key={allowedValue} value={allowedValue}>
-                      {allowedValue}
-                    </option>
-                  ))}
-                </select>
+                </>
               ) : (
                 <input
                   style={styles.formField}
@@ -1879,6 +2043,15 @@ export function HarnessBoardPage(props: {
         ) : (
           <p style={styles.statusSuccess}>{actionSummary.summary}</p>
         )}
+        {actionState.driftedFields.length > 0 ? (
+          <ul style={styles.issueList}>
+            {actionState.driftedFields.map((issue) => (
+              <li key={`${issue.fieldName}:${issue.reason}`} style={styles.issueItem}>
+                {describeContractActionIssue(issue)}
+              </li>
+            ))}
+          </ul>
+        ) : null}
         {composerOpen ? (
           <>
             <p style={styles.contractMeta}>{`Live request fields for ${input.option.label}`}</p>
