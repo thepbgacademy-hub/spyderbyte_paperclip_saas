@@ -73,6 +73,7 @@ This file tracks the new harness subproject only.
 - [x] Add richer CEO approval policy beyond exact-match idempotency and the current open-card cap.
 - [x] Widen run-level progression from the current derived `assembling` ceiling into explicit final assembly/completion logic.
 - [x] Add deny/defer semantics and stronger "update existing lane vs create new lane" CEO policy beyond the current duplicate-lane guards.
+- [x] Preserve direct CEO owner-conflict and completed-cycle requests as deferred governance instead of hard conflicts, so bounded follow-on intent survives through the same proposal seam the board already uses for lane-cap pressure.
 - [x] Add an initial read-only packaging/result handoff seam on top of the explicit CEO completion command.
 - [x] Keep deferred proposals visible and re-approvable so CEO decisions can genuinely pause work instead of silently dropping it.
 - [x] Make the owner-conflict "clear or hand off that lane" promise real with a bounded CEO handoff path instead of leaving it as board text only.

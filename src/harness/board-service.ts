@@ -347,12 +347,7 @@ export function createHarnessBoardService(options: {
         if (run.tenantId !== access.session.tenantId) {
           throw new ApiAuthError();
         }
-        if (run.state === "assembling" || run.state === "done") {
-          throw new HarnessCardCreationConflictError(
-            "Harness direct child-card creation is closed while the current board cycle is packaging completed work"
-          );
-        }
-        if (isTerminalHarnessRunState(run.state)) {
+        if (run.state === "failed" || run.state === "cancelled") {
           throw new HarnessCardCreationConflictError("Harness direct child-card creation is closed for terminal runs");
         }
 
@@ -362,6 +357,118 @@ export function createHarnessBoardService(options: {
           repository.listCardContinuityForRun(run.id)
         ]);
         runtime.resumeRun({ run, cards, proposals, continuity });
+        const ceoCard = cards.find((card) => card.persona === "ceo" && card.parentCardId === null);
+
+        async function deferDirectChildRequest(input: {
+          policyReason: "deliverable_owner_conflict" | "lane_cap" | "completed_lanes_only";
+          decisionNote: string;
+        }): Promise<{
+          status: "deferred";
+          proposalId: string;
+          auditEvents: Awaited<ReturnType<typeof createHarnessAuditEvent>>[];
+        }> {
+          if (!ceoCard) {
+            throw new Error("Harness CEO card missing for direct child-card defer");
+          }
+
+          const proposal = runtime.proposeSubCard(ceoCard.id, {
+            persona: normalizedPersona,
+            title: request.title,
+            deliverableType: normalizedDeliverableType
+          });
+          const earlierUnresolvedSiblingProposal = findEarlierUnresolvedSiblingProposal([...proposals, proposal], proposal);
+          if (earlierUnresolvedSiblingProposal) {
+            return {
+              status: "deferred",
+              proposalId: earlierUnresolvedSiblingProposal.id,
+              auditEvents: []
+            };
+          }
+
+          await repository.insertProposal(proposal);
+          const decisionUpdate = await repository.markProposalStatus({
+            proposalId: proposal.id,
+            status: "deferred",
+            decisionNote: input.decisionNote
+          });
+          if (!decisionUpdate.updated) {
+            throw new Error("Harness direct child-card defer conflicted");
+          }
+          await repository.insertEvent(
+            createHarnessCardEventRecord({
+              cardId: proposal.parentCardId,
+              eventKind: "comment_added",
+              payload: {
+                message: createPublicProposalDecisionMessage({
+                  status: "deferred",
+                  deliverableType: proposal.deliverableType,
+                  policyReason: input.policyReason
+                })
+              }
+            })
+          );
+          await repository.insertDecision(
+            createHarnessBoardDecisionRecord({
+              runId: run.id,
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              decisionKind: "proposal_deferred",
+              cardId: proposal.parentCardId,
+              proposalId: proposal.id,
+              persona: proposal.persona,
+              deliverableType: proposal.deliverableType,
+              policyReason: input.policyReason,
+              decisionNote: input.decisionNote,
+              recommendationSummary: createGovernanceRecommendationSummary({
+                deliverableType: proposal.deliverableType,
+                policyReason: input.policyReason,
+                status: "deferred"
+              }),
+              objectionSummary: createGovernanceObjectionSummary({
+                deliverableType: proposal.deliverableType,
+                policyReason: input.policyReason
+              })
+            })
+          );
+          const reconciledRun = await reconcileHarnessRunState({ repository, run });
+
+          return {
+            status: "deferred",
+            proposalId: proposal.id,
+            auditEvents: [
+              createHarnessAuditEvent({
+                tenantId: access.session.tenantId,
+                actorUserId: access.session.userId,
+                eventType: "harness_proposal_decided",
+                entityId: proposal.id,
+                metadata: {
+                  runId: run.id,
+                  decision: "deferred",
+                  reason: input.policyReason,
+                  hasDecisionNote: true,
+                  requestedByPersona: proposal.requestedByPersona,
+                  targetPersona: proposal.persona,
+                  deliverableType: proposal.deliverableType
+                }
+              }),
+              ...toRunAuditEvents({
+                tenantId: access.session.tenantId,
+                actorUserId: access.session.userId,
+                runId: run.id,
+                previousState: run.state,
+                nextRun: reconciledRun
+              })
+            ]
+          };
+        }
+
+        if (run.state === "assembling" || run.state === "done") {
+          return deferDirectChildRequest({
+            policyReason: "completed_lanes_only",
+            decisionNote: "CEO deferred this proposal because the board is already packaging completed work for this run."
+          });
+        }
+
         const existingCard = findMatchingOpenChildCard(cards, {
           persona: normalizedPersona,
           title: request.title,
@@ -528,104 +635,16 @@ export function createHarnessBoardService(options: {
           };
         }
         if (findOpenChildCardByDeliverableType(cards, normalizedDeliverableType)) {
-          throw new HarnessCardCreationConflictError("Harness direct child-card deliverable lane is already open");
+          return deferDirectChildRequest({
+            policyReason: "deliverable_owner_conflict",
+            decisionNote: "CEO deferred this proposal because another active persona already owns that deliverable lane."
+          });
         }
         if (countOpenChildCards(cards) >= MAX_OPEN_CHILD_CARDS) {
-          const ceoCard = cards.find((card) => card.persona === "ceo" && card.parentCardId === null);
-          if (!ceoCard) {
-            throw new Error("Harness CEO card missing for direct child-card defer");
-          }
-
-          const proposal = runtime.proposeSubCard(ceoCard.id, {
-            persona: normalizedPersona,
-            title: request.title,
-            deliverableType: normalizedDeliverableType
+          return deferDirectChildRequest({
+            policyReason: "lane_cap",
+            decisionNote: "CEO deferred this proposal because the current run is at its active lane cap."
           });
-          const earlierUnresolvedSiblingProposal = findEarlierUnresolvedSiblingProposal([...proposals, proposal], proposal);
-          if (earlierUnresolvedSiblingProposal?.status === "deferred") {
-            return {
-              status: "deferred",
-              proposalId: earlierUnresolvedSiblingProposal.id
-            };
-          }
-
-          await repository.insertProposal(proposal);
-
-          const decisionNote = "CEO deferred this proposal because the current run is at its active lane cap.";
-          const decisionUpdate = await repository.markProposalStatus({
-            proposalId: proposal.id,
-            status: "deferred",
-            decisionNote
-          });
-          if (!decisionUpdate.updated) {
-            throw new Error("Harness direct child-card defer conflicted");
-          }
-          await repository.insertEvent(
-            createHarnessCardEventRecord({
-              cardId: proposal.parentCardId,
-              eventKind: "comment_added",
-              payload: {
-                message: createPublicProposalDecisionMessage({
-                  status: "deferred",
-                  deliverableType: proposal.deliverableType,
-                  policyReason: "lane_cap"
-                })
-              }
-            })
-          );
-          await repository.insertDecision(
-            createHarnessBoardDecisionRecord({
-              runId: run.id,
-              tenantId: access.session.tenantId,
-              actorUserId: access.session.userId,
-              decisionKind: "proposal_deferred",
-              cardId: proposal.parentCardId,
-              proposalId: proposal.id,
-              persona: proposal.persona,
-              deliverableType: proposal.deliverableType,
-              policyReason: "lane_cap",
-              decisionNote,
-              recommendationSummary: createGovernanceRecommendationSummary({
-                deliverableType: proposal.deliverableType,
-                policyReason: "lane_cap",
-                status: "deferred"
-              }),
-              objectionSummary: createGovernanceObjectionSummary({
-                deliverableType: proposal.deliverableType,
-                policyReason: "lane_cap"
-              })
-            })
-          );
-          const reconciledRun = await reconcileHarnessRunState({ repository, run });
-
-          return {
-            status: "deferred",
-            proposalId: proposal.id,
-            auditEvents: [
-              createHarnessAuditEvent({
-                tenantId: access.session.tenantId,
-                actorUserId: access.session.userId,
-                eventType: "harness_proposal_decided",
-                entityId: proposal.id,
-                metadata: {
-                  runId: run.id,
-                  decision: "deferred",
-                  reason: "lane_cap",
-                  hasDecisionNote: true,
-                  requestedByPersona: proposal.requestedByPersona,
-                  targetPersona: proposal.persona,
-                  deliverableType: proposal.deliverableType
-                }
-              }),
-              ...toRunAuditEvents({
-                tenantId: access.session.tenantId,
-                actorUserId: access.session.userId,
-                runId: run.id,
-                previousState: run.state,
-                nextRun: reconciledRun
-              })
-            ]
-          };
         }
         const card = runtime.createApprovedChildCard(run.id, {
           persona: normalizedPersona,

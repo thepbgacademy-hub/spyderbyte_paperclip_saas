@@ -490,6 +490,45 @@ describe("harness HTTP boundary", () => {
     });
   });
 
+  it("returns deferred governance payloads when direct child-card creation hits an owner-conflict boundary", async () => {
+    const createTopLevelChildCard = vi.fn().mockResolvedValue({
+      status: "deferred",
+      proposalId: "proposal_owner_conflict_1"
+    });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard,
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/cards",
+      body: {
+        persona: "analyst",
+        title: "Model the renewal downside",
+        deliverableType: "pricing_review"
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        "content-type": "application/json"
+      },
+      bodyByteLength: 90,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      status: "deferred",
+      proposalId: "proposal_owner_conflict_1"
+    });
+  });
+
   it("rejects out-of-bound child-card personas and deliverables at the HTTP seam", async () => {
     const createTopLevelChildCard = vi.fn();
     const handler = createHarnessHttpHandler({
