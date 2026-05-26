@@ -15,9 +15,11 @@ import {
   describeContractActionIssue,
   describeActionAttemptSupport,
   describeBoardActionFeedback,
+  describeBoardContractRefreshImpact,
   describeBoardLoadFeedback,
   getContractActionState,
   getBoardContractActionFieldMap,
+  inspectBoardContractRefreshImpact,
   pruneActionDraftsForBoard,
   pruneOpenActionComposerKeysForBoard,
   resolveBoardLoadFailure,
@@ -584,6 +586,54 @@ describe("harness board UI", () => {
     });
   });
 
+  it("inspects bounded contract refresh impact before pruning local composer state", () => {
+    const impact = inspectBoardContractRefreshImpact(
+      boardResponse,
+      {
+        "attention:start_fresh_cycle": {
+          decision: "start_fresh_cycle",
+          mode: "clean",
+          legacyField: "remove me"
+        },
+        "approval:proposal_old:approve": {
+          decision: "approve"
+        }
+      },
+      {
+        "attention:start_fresh_cycle": true,
+        "approval:proposal_old:approve": true
+      }
+    );
+
+    expect(impact).toEqual({
+      removedActionDraftKeys: ["approval:proposal_old:approve"],
+      removedFieldOverrideCount: 1,
+      closedComposerActionKeys: ["approval:proposal_old:approve"]
+    });
+    expect(describeBoardContractRefreshImpact(impact)).toBe(
+      "Live board contract refreshed: 1 stale action draft removed, 1 field override pruned, 1 stale composer closed."
+    );
+  });
+
+  it("returns no refresh notice when a bounded contract reload leaves local composer state intact", () => {
+    expect(
+      describeBoardContractRefreshImpact(
+        inspectBoardContractRefreshImpact(
+          boardResponse,
+          {
+            "attention:start_fresh_cycle": {
+              decision: "start_fresh_cycle",
+              mode: "clean"
+            }
+          },
+          {
+            "attention:start_fresh_cycle": true
+          }
+        )
+      )
+    ).toBeNull();
+  });
+
   it("describes bounded action support states without collapsing drift, stale, and unavailable paths", () => {
     expect(describeActionAttemptSupport("replay_safe", "Approve proposal")).toEqual({
       label: "Replay-safe action",
@@ -783,6 +833,19 @@ describe("harness board UI", () => {
     expect(markup).toContain("Open composer for Start fresh cycle");
     expect(markup).toContain("Reset required: Decision note no longer fits the current contract.");
     expect(markup).toContain("Decision note: the current draft only applies to a different action option and must be reset before submit.");
+  });
+
+  it("renders a dismissible contract refresh note when the page is seeded with bounded prune guidance", () => {
+    const markup = renderToStaticMarkup(
+      <HarnessBoardPage
+        initialBoard={boardResponse}
+        initialControlMode="live"
+        initialContractRefreshNotice="Live board contract refreshed: 1 stale action draft removed."
+      />
+    );
+
+    expect(markup).toContain("Live board contract refreshed: 1 stale action draft removed.");
+    expect(markup).toContain("Dismiss contract refresh note");
   });
 
   it("keeps a prop-seeded preview board read-only when the control mode says preview", () => {

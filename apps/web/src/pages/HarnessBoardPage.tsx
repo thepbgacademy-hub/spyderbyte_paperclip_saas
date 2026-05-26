@@ -741,6 +741,55 @@ export function getBoardContractActionFieldMap(board: HarnessBoardResponse | nul
   return fieldMap;
 }
 
+export type HarnessBoardContractRefreshImpact = {
+  removedActionDraftKeys: string[];
+  removedFieldOverrideCount: number;
+  closedComposerActionKeys: string[];
+};
+
+export function inspectBoardContractRefreshImpact(
+  board: HarnessBoardResponse | null,
+  actionDrafts: Record<string, Record<string, string>>,
+  openActionComposerKeys: Record<string, boolean>
+): HarnessBoardContractRefreshImpact {
+  const contractFieldMap = getBoardContractActionFieldMap(board);
+
+  if (contractFieldMap.size === 0) {
+    return {
+      removedActionDraftKeys: [],
+      removedFieldOverrideCount: 0,
+      closedComposerActionKeys: []
+    };
+  }
+
+  const removedActionDraftKeys: string[] = [];
+  let removedFieldOverrideCount = 0;
+
+  for (const [actionKey, draftValues] of Object.entries(actionDrafts)) {
+    const allowedFields = contractFieldMap.get(actionKey);
+    if (!allowedFields) {
+      removedActionDraftKeys.push(actionKey);
+      continue;
+    }
+
+    for (const fieldName of Object.keys(draftValues)) {
+      if (!allowedFields.has(fieldName)) {
+        removedFieldOverrideCount += 1;
+      }
+    }
+  }
+
+  const closedComposerActionKeys = Object.entries(openActionComposerKeys)
+    .filter(([actionKey, isOpen]) => Boolean(isOpen) && !contractFieldMap.has(actionKey))
+    .map(([actionKey]) => actionKey);
+
+  return {
+    removedActionDraftKeys,
+    removedFieldOverrideCount,
+    closedComposerActionKeys
+  };
+}
+
 export function pruneActionDraftsForBoard(
   board: HarnessBoardResponse | null,
   actionDrafts: Record<string, Record<string, string>>
@@ -797,6 +846,34 @@ export function pruneOpenActionComposerKeysForBoard(
   );
 
   return changed ? nextComposerKeys : openActionComposerKeys;
+}
+
+export function describeBoardContractRefreshImpact(impact: HarnessBoardContractRefreshImpact) {
+  const parts: string[] = [];
+
+  if (impact.removedActionDraftKeys.length > 0) {
+    parts.push(
+      `${impact.removedActionDraftKeys.length} stale action draft${impact.removedActionDraftKeys.length === 1 ? "" : "s"} removed`
+    );
+  }
+
+  if (impact.removedFieldOverrideCount > 0) {
+    parts.push(
+      `${impact.removedFieldOverrideCount} field override${impact.removedFieldOverrideCount === 1 ? "" : "s"} pruned`
+    );
+  }
+
+  if (impact.closedComposerActionKeys.length > 0) {
+    parts.push(
+      `${impact.closedComposerActionKeys.length} stale composer${impact.closedComposerActionKeys.length === 1 ? "" : "s"} closed`
+    );
+  }
+
+  if (parts.length === 0) {
+    return null;
+  }
+
+  return `Live board contract refreshed: ${parts.join(", ")}.`;
 }
 
 export function buildContractActionPayload(input: {
@@ -1522,6 +1599,7 @@ export function HarnessBoardPage(props: {
   initialActionAttempt?: HarnessBoardActionAttempt | null;
   initialActionFailureCause?: unknown;
   initialActionDrafts?: Record<string, Record<string, string>>;
+  initialContractRefreshNotice?: string | null;
 } = {}) {
   const browserFallbackEnabled = harnessBoardClient.isBrowserFallbackEnabled();
   const fallbackState = browserFallbackEnabled ? harnessBoardClient.getFallbackState() : null;
@@ -1537,6 +1615,9 @@ export function HarnessBoardPage(props: {
   const [actionError, setActionError] = useState<HarnessBoardFeedback | null>(props.initialActionFeedback ?? null);
   const [actionFailureCause, setActionFailureCause] = useState<unknown>(props.initialActionFailureCause ?? null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [contractRefreshNotice, setContractRefreshNotice] = useState<string | null>(
+    props.initialContractRefreshNotice ?? null
+  );
   const [lastActionResult, setLastActionResult] = useState<HarnessBoardActionResult | null>(null);
   const [lastActionLabel, setLastActionLabel] = useState<string | null>(null);
   const [actionDrafts, setActionDrafts] = useState<Record<string, Record<string, string>>>(props.initialActionDrafts ?? {});
@@ -1575,6 +1656,11 @@ export function HarnessBoardPage(props: {
 
     try {
       const nextBoard = await harnessBoardClient.fetchBoard();
+      const refreshImpact = inspectBoardContractRefreshImpact(
+        nextBoard,
+        actionDrafts,
+        openActionComposerKeys
+      );
       applyBoardState(nextBoard, null, "live");
       if (!input.preserveActionError) {
         setActionError(null);
@@ -1586,6 +1672,8 @@ export function HarnessBoardPage(props: {
             getBoardActionAttemptSupport(nextBoard, "live", input.actionAttempt)
           )
         : null;
+      const contractNotice = describeBoardContractRefreshImpact(refreshImpact);
+      setContractRefreshNotice(contractNotice);
       if (input.successNotice || derivedNotice) {
         setActionNotice(input.successNotice ?? derivedNotice);
       }
@@ -1639,6 +1727,7 @@ export function HarnessBoardPage(props: {
       setLastActionResult(actionResult);
       setLastActionLabel(attempt.noticeLabel);
       setActionNotice(describeSubmittedActionResult(actionResult, attempt.noticeLabel));
+      setContractRefreshNotice(null);
       setActionFailureCause(null);
       return true;
     } catch (error) {
@@ -2390,6 +2479,20 @@ export function HarnessBoardPage(props: {
           ) : null}
 
           {actionNotice ? <p style={styles.statusSuccess}>{actionNotice}</p> : null}
+          {contractRefreshNotice ? (
+            <div style={{ display: "grid", gap: "0.45rem" }}>
+              <p style={styles.statusNotice}>{contractRefreshNotice}</p>
+              <div style={styles.actionButtonRow}>
+                <button
+                  type="button"
+                  style={styles.secondaryButton}
+                  onClick={() => setContractRefreshNotice(null)}
+                >
+                  Dismiss contract refresh note
+                </button>
+              </div>
+            </div>
+          ) : null}
           {actionError ? renderBoardFeedback("Latest board action issue", actionFeedback, actionFeedbackDetail, actionFeedbackActions) : null}
 
           {lastActionResult && lastActionLabel ? (
