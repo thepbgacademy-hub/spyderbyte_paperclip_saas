@@ -11,6 +11,7 @@ import {
   buildContractActionPayload,
   canResetBoardActionComposerAfterError,
   canRetryBoardActionAfterError,
+  describeActionAttemptSupport,
   describeBoardActionFeedback,
   describeBoardLoadFeedback,
   getContractActionState,
@@ -394,6 +395,25 @@ describe("harness board UI", () => {
     });
   });
 
+  it("describes bounded action support states without collapsing drift, stale, and unavailable paths", () => {
+    expect(describeActionAttemptSupport("replay_safe", "Approve proposal")).toEqual({
+      label: "Replay-safe action",
+      summary: "Approve proposal is still exposed by the current board contract, and the last payload still fits that bounded request shape."
+    });
+    expect(describeActionAttemptSupport("reset_only", "Start fresh cycle")).toEqual({
+      label: "Payload drifted",
+      summary: "Start fresh cycle is still exposed by the current board contract, but the last payload for start fresh cycle no longer fits the current request rules."
+    });
+    expect(describeActionAttemptSupport("missing", "Approve proposal")).toEqual({
+      label: "Action removed",
+      summary: "Approve proposal is no longer exposed by the current board contract, so replay would push stale operator intent."
+    });
+    expect(describeActionAttemptSupport("unavailable", "Approve proposal")).toEqual({
+      label: "Board unavailable",
+      summary: "The live board contract is not currently available, so approve proposal cannot be classified as replay-safe or stale yet."
+    });
+  });
+
   it("renders clean persona cards without backend execution noise", () => {
     const markup = renderToStaticMarkup(
       <HarnessBoard
@@ -746,7 +766,7 @@ describe("harness board UI", () => {
     );
   });
 
-  it("renders composer reset controls for invalid live action payload failures when the failed attempt is known", () => {
+  it("keeps invalid-request recovery on reload-only when the payload still fits the live contract", () => {
     const feedback = describeBoardActionFeedback(
       new HarnessBoardClientError({
         code: "invalid_request",
@@ -781,8 +801,9 @@ describe("harness board UI", () => {
       />
     );
 
-    expect(markup).toContain("Reset composer defaults");
+    expect(markup).not.toContain("Reset to current contract defaults");
     expect(markup).not.toContain("Retry Resume lane");
+    expect(markup).toContain("Replay-safe action");
   });
 
   it("keeps reset controls but suppresses replay when the action still exists and only the payload drifted away from the current contract", () => {
@@ -820,8 +841,9 @@ describe("harness board UI", () => {
       />
     );
 
-    expect(markup).toContain("Reset composer defaults");
+    expect(markup).toContain("Reset to current contract defaults");
     expect(markup).not.toContain("Retry Start fresh cycle");
+    expect(markup).toContain("Payload drifted");
     expect(markup).toContain(
       "The current board still supports start fresh cycle, but the last payload no longer fits the bounded contract. Reset the composer to the current defaults before trying again."
     );
@@ -862,7 +884,7 @@ describe("harness board UI", () => {
       />
     );
 
-    expect(markup).not.toContain("Reset composer defaults");
+    expect(markup).not.toContain("Reset to current contract defaults");
     expect(markup).not.toContain("Retry Unblock lane");
     expect(markup).toContain("Dismiss stale action issue");
   });

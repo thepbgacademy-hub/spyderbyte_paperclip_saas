@@ -909,6 +909,11 @@ export function canResetBoardActionComposerAfterError(error: unknown) {
 
 type HarnessBoardActionAttemptSupport = "unavailable" | "missing" | "reset_only" | "replay_safe";
 
+type HarnessBoardActionAttemptSupportDescription = {
+  label: string;
+  summary: string;
+};
+
 function getActionAttemptControlValue(requestBody: Record<string, unknown>) {
   if (typeof requestBody.decision === "string") {
     return requestBody.decision;
@@ -919,6 +924,36 @@ function getActionAttemptControlValue(requestBody: Record<string, unknown>) {
   }
 
   return null;
+}
+
+export function describeActionAttemptSupport(
+  support: HarnessBoardActionAttemptSupport,
+  noticeLabel: string
+): HarnessBoardActionAttemptSupportDescription {
+  const normalizedLabel = noticeLabel.toLowerCase();
+
+  switch (support) {
+    case "replay_safe":
+      return {
+        label: "Replay-safe action",
+        summary: `${noticeLabel} is still exposed by the current board contract, and the last payload still fits that bounded request shape.`
+      };
+    case "reset_only":
+      return {
+        label: "Payload drifted",
+        summary: `${noticeLabel} is still exposed by the current board contract, but the last payload for ${normalizedLabel} no longer fits the current request rules.`
+      };
+    case "missing":
+      return {
+        label: "Action removed",
+        summary: `${noticeLabel} is no longer exposed by the current board contract, so replay would push stale operator intent.`
+      };
+    case "unavailable":
+      return {
+        label: "Board unavailable",
+        summary: `The live board contract is not currently available, so ${normalizedLabel} cannot be classified as replay-safe or stale yet.`
+      };
+  }
 }
 
 function actionPayloadMatchesCurrentContract(input: {
@@ -1074,7 +1109,12 @@ function decorateActionFeedbackForCurrentContract(
   };
 }
 
-function renderBoardFeedback(title: string, feedback: HarnessBoardFeedback | null, actions?: ReactNode) {
+function renderBoardFeedback(
+  title: string,
+  feedback: HarnessBoardFeedback | null,
+  detail?: ReactNode,
+  actions?: ReactNode
+) {
   if (!feedback) {
     return null;
   }
@@ -1091,9 +1131,47 @@ function renderBoardFeedback(title: string, feedback: HarnessBoardFeedback | nul
           </li>
         ))}
       </ul>
+      {detail ? <div style={{ display: "grid", gap: "0.45rem" }}>{detail}</div> : null}
       {actions ? <div style={styles.actionButtonRow}>{actions}</div> : null}
     </section>
   );
+}
+
+function renderActionAttemptSupportDetail(
+  attempt: HarnessBoardActionAttempt | null,
+  support: HarnessBoardActionAttemptSupport
+) {
+  if (!attempt) {
+    return null;
+  }
+
+  const description = describeActionAttemptSupport(support, attempt.noticeLabel);
+  const actionFamily = formatActionRoute(attempt.actionRoute);
+
+  return (
+    <div style={{ display: "grid", gap: "0.35rem" }}>
+      <p style={styles.contractMeta}>{description.label}</p>
+      <p style={styles.actionSummary}>{description.summary}</p>
+      {actionFamily ? <p style={styles.actionSummary}>{`Action family: ${actionFamily}`}</p> : null}
+      <p style={styles.actionSummary}>{`${attempt.actionMethod} ${attempt.actionPath}`}</p>
+    </div>
+  );
+}
+
+function describeActionReloadNotice(
+  attempt: HarnessBoardActionAttempt,
+  support: HarnessBoardActionAttemptSupport
+) {
+  switch (support) {
+    case "replay_safe":
+      return `Live board re-synced and ${attempt.noticeLabel.toLowerCase()} can be retried safely from the current contract.`;
+    case "reset_only":
+      return `Live board re-synced and ${attempt.noticeLabel.toLowerCase()} now needs the current contract defaults before trying again.`;
+    case "missing":
+      return `Live board re-synced and ${attempt.noticeLabel.toLowerCase()} is no longer available on the current contract.`;
+    case "unavailable":
+      return "Live board reload did not restore the current harness contract.";
+  }
 }
 
 function renderCompletionPackage(board: HarnessBoardResponse) {
@@ -1249,6 +1327,7 @@ export function HarnessBoardPage(props: {
   }
 
   async function reloadBoard(input: {
+    actionAttempt?: HarnessBoardActionAttempt | null;
     successNotice?: string | null;
     preserveActionError?: boolean;
   } = {}) {
@@ -1261,8 +1340,11 @@ export function HarnessBoardPage(props: {
         setActionError(null);
         setActionFailureCause(null);
       }
-      if (input.successNotice) {
-        setActionNotice(input.successNotice);
+      const derivedNotice = input.actionAttempt
+        ? describeActionReloadNotice(input.actionAttempt, getBoardActionAttemptSupport(nextBoard, input.actionAttempt))
+        : null;
+      if (input.successNotice || derivedNotice) {
+        setActionNotice(input.successNotice ?? derivedNotice);
       }
       return true;
     } catch (error) {
@@ -1327,7 +1409,8 @@ export function HarnessBoardPage(props: {
       );
       if (shouldResyncBoardAfterActionError(error)) {
         await reloadBoard({
-          successNotice: `Live board re-synced after ${attempt.noticeLabel.toLowerCase()} failed.`,
+          actionAttempt: attempt,
+          successNotice: null,
           preserveActionError: true
         });
       }
@@ -1397,12 +1480,15 @@ export function HarnessBoardPage(props: {
   const liveActionsEnabled = Boolean(board && controlMode === "live");
   const pendingActionAttemptSupport = getBoardActionAttemptSupport(board, pendingActionAttempt);
   const canReplayPendingActionAttempt = liveActionsEnabled && pendingActionAttemptSupport === "replay_safe";
-  const canResetPendingActionAttempt = liveActionsEnabled && pendingActionAttemptSupport !== "missing";
+  const canResetPendingActionAttempt = liveActionsEnabled && pendingActionAttemptSupport === "reset_only";
   const actionFeedback = decorateActionFeedbackForCurrentContract(
     actionError,
     pendingActionAttemptSupport,
     pendingActionAttempt?.noticeLabel ?? null
   );
+  const actionFeedbackDetail = actionError
+    ? renderActionAttemptSupportDetail(pendingActionAttempt, pendingActionAttemptSupport)
+    : null;
   const lastActionEffect = lastActionResult ? describeActionResultEffect(lastActionResult) : null;
   const boardPulseItems = [
     {
@@ -1465,7 +1551,10 @@ export function HarnessBoardPage(props: {
           disabled={reloadingBoard}
           onClick={() => {
             void reloadBoard({
-              successNotice: "Live board reloaded from the current harness contract."
+              actionAttempt: pendingActionAttempt,
+              successNotice: pendingActionAttempt
+                ? null
+                : "Live board reloaded from the current harness contract."
             });
           }}
         >
@@ -1500,10 +1589,10 @@ export function HarnessBoardPage(props: {
             setPendingActionAttempt(null);
             setActionError(null);
             setActionFailureCause(null);
-            setActionNotice(`Reset ${pendingActionAttempt.noticeLabel.toLowerCase()} to the contract defaults.`);
+            setActionNotice(`Reset ${pendingActionAttempt.noticeLabel.toLowerCase()} to the current contract defaults.`);
           }}
         >
-          Reset composer defaults
+          Reset to current contract defaults
         </button>
       ) : null}
       {pendingActionAttempt
@@ -1810,7 +1899,7 @@ export function HarnessBoardPage(props: {
             {!board && loadError ? <p style={{ ...styles.panelBody, marginTop: "0.8rem" }}>{loadError.message}</p> : null}
           </section>
 
-          {loadError ? renderBoardFeedback("Board load issue", loadError, loadFeedbackActions) : null}
+          {loadError ? renderBoardFeedback("Board load issue", loadError, undefined, loadFeedbackActions) : null}
 
           <section style={styles.panel}>
             <h2 style={styles.panelTitle}>CEO approvals</h2>
@@ -2038,7 +2127,7 @@ export function HarnessBoardPage(props: {
           ) : null}
 
           {actionNotice ? <p style={styles.statusSuccess}>{actionNotice}</p> : null}
-          {actionError ? renderBoardFeedback("Latest board action issue", actionFeedback, actionFeedbackActions) : null}
+          {actionError ? renderBoardFeedback("Latest board action issue", actionFeedback, actionFeedbackDetail, actionFeedbackActions) : null}
 
           {lastActionResult && lastActionLabel ? (
             <section style={styles.panel}>

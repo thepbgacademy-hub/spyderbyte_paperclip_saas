@@ -152,3 +152,4 @@ This file tracks the new harness subproject only.
 - [x] Keep prop-seeded preview boards explicitly read-only, so preloaded board data cannot silently bypass the preview/live mutability seam.
 - [x] Keep retry/reset recovery controls bounded to the current board contract, so stale live-action failures cannot replay or reset actions that the refreshed board no longer exposes.
 - [x] Distinguish stale action disappearance from stale payload drift, so replay stays suppressed when the old payload no longer matches current request-field rules while composer reset remains available for contract-compatible recovery.
+- [x] Keep `invalid_request` recovery honest by showing reset only for payload drift, not for replay-safe payloads that still fit the current live contract.
