@@ -1019,13 +1019,14 @@ function actionPayloadMatchesCurrentContract(input: {
 
 function getBoardActionAttemptSupport(
   board: HarnessBoardResponse | null,
+  controlMode: HarnessBoardControlMode,
   attempt: HarnessBoardActionAttempt | null
 ) : HarnessBoardActionAttemptSupport {
   if (!attempt) {
     return "missing";
   }
 
-  if (!board) {
+  if (!board || controlMode !== "live") {
     return "unavailable";
   }
 
@@ -1290,7 +1291,7 @@ export function HarnessBoardPage(props: {
   const [board, setBoard] = useState(() => props.initialBoard ?? fallbackState?.board ?? null);
   const [controlMode, setControlMode] = useState<HarnessBoardControlMode>(() =>
     props.initialControlMode
-      ?? (props.initialBoard ? "live" : fallbackState?.controlMode ?? "live")
+      ?? (props.initialBoard ? "preview" : fallbackState?.controlMode ?? "live")
   );
   const [openCardId, setOpenCardId] = useState<string>(() =>
     (props.initialBoard ?? fallbackState?.board ?? null)?.cards[0]?.id ?? ""
@@ -1341,7 +1342,10 @@ export function HarnessBoardPage(props: {
         setActionFailureCause(null);
       }
       const derivedNotice = input.actionAttempt
-        ? describeActionReloadNotice(input.actionAttempt, getBoardActionAttemptSupport(nextBoard, input.actionAttempt))
+        ? describeActionReloadNotice(
+            input.actionAttempt,
+            getBoardActionAttemptSupport(nextBoard, "live", input.actionAttempt)
+          )
         : null;
       if (input.successNotice || derivedNotice) {
         setActionNotice(input.successNotice ?? derivedNotice);
@@ -1478,7 +1482,7 @@ export function HarnessBoardPage(props: {
   const packageObjectionCount = completionPackage?.objections.length ?? 0;
   const isPreviewMode = controlMode === "preview";
   const liveActionsEnabled = Boolean(board && controlMode === "live");
-  const pendingActionAttemptSupport = getBoardActionAttemptSupport(board, pendingActionAttempt);
+  const pendingActionAttemptSupport = getBoardActionAttemptSupport(board, controlMode, pendingActionAttempt);
   const canReplayPendingActionAttempt = liveActionsEnabled && pendingActionAttemptSupport === "replay_safe";
   const canResetPendingActionAttempt = liveActionsEnabled && pendingActionAttemptSupport === "reset_only";
   const actionFeedback = decorateActionFeedbackForCurrentContract(

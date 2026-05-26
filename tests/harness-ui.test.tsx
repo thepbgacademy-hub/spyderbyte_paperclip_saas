@@ -458,7 +458,9 @@ describe("harness board UI", () => {
   });
 
   it("renders bounded attention and approval action guidance from the board contract", () => {
-    const markup = renderToStaticMarkup(<HarnessBoardPage initialBoard={boardResponse} />);
+    const markup = renderToStaticMarkup(
+      <HarnessBoardPage initialBoard={boardResponse} initialControlMode="live" />
+    );
 
     expect(markup).toContain("Review final assembly");
     expect(markup).toContain("Complete run");
@@ -582,6 +584,15 @@ describe("harness board UI", () => {
     expect(markup).toContain("live mutations remain disabled");
     expect(markup).toContain("Live board actions are unavailable in localhost fallback mode.");
     expect(markup).toContain("Controls - Preview");
+  });
+
+  it("defaults prop-seeded board props to preview mode when no explicit control mode is provided", () => {
+    const markup = renderToStaticMarkup(<HarnessBoardPage initialBoard={boardResponse} />);
+
+    expect(markup).toContain("Control mode");
+    expect(markup).toContain("Preview");
+    expect(markup).toContain("Controls - Preview");
+    expect(markup).toContain("Live board actions are unavailable in localhost fallback mode.");
   });
 
   it("describes proposal-decision conflicts with contract-aware recovery guidance", () => {
@@ -928,6 +939,47 @@ describe("harness board UI", () => {
     expect(markup).not.toContain(
       "The current board no longer exposes approve proposal. Reload or choose a fresh bounded action from the current contract instead of replaying the stale request."
     );
+  });
+
+  it("treats preview fallback board data as unavailable for live action recovery classification", () => {
+    const feedback = describeBoardActionFeedback(
+      new HarnessBoardClientError({
+        code: "conflict",
+        message: "Unable to update harness board",
+        status: 409
+      }),
+      {
+        actionRoute: "proposal-decision",
+        actionLabel: "Approve proposal"
+      }
+    );
+    const markup = renderToStaticMarkup(
+      <HarnessBoardPage
+        initialBoard={boardResponse}
+        initialControlMode="preview"
+        initialActionFeedback={feedback}
+        initialActionFailureCause={
+          new HarnessBoardClientError({
+            code: "conflict",
+            message: "Unable to update harness board",
+            status: 409
+          })
+        }
+        initialActionAttempt={{
+          actionKey: "approval:proposal_ui_test_1:approve",
+          actionPath: "/api/harness/proposals/proposal_ui_test_1/decision",
+          actionRoute: "proposal-decision",
+          actionMethod: "POST",
+          requestBody: { decision: "approve" },
+          noticeLabel: "Approve proposal"
+        }}
+      />
+    );
+
+    expect(markup).toContain("Dismiss action issue");
+    expect(markup).not.toContain("Dismiss stale action issue");
+    expect(markup).not.toContain("Replay-safe action");
+    expect(markup).not.toContain("Action removed");
   });
 
   it("keeps preview board content visible while surfacing bounded live-load recovery guidance", () => {
