@@ -9,6 +9,7 @@ import {
 import { HarnessCardDrawer } from "../apps/web/src/components/HarnessCardDrawer.js";
 import {
   buildContractActionPayload,
+  canSubmitContractActionState,
   canResetBoardActionComposerAfterError,
   canRetryBoardActionAfterError,
   describeActionAttemptSupport,
@@ -358,41 +359,123 @@ describe("harness board UI", () => {
       decision: "complete_run"
     });
     expect(actionState.missingRequiredFields).toEqual(["Completion summary"]);
+    expect(actionState.driftedFieldLabels).toEqual([]);
   });
 
   it("summarizes whether a live action is using defaults or needs input", () => {
     expect(
-      summarizeContractActionState(
-        {
-          visibleFields: [
-            {
-              name: "mode",
-              label: "Fresh-cycle mode",
-              description: "Choose the next cycle mode.",
-              required: false
-            }
-          ],
-          missingRequiredFields: []
-        },
-        {}
-      )
+      summarizeContractActionState({
+        visibleFields: [
+          {
+            name: "mode",
+            label: "Fresh-cycle mode",
+            description: "Choose the next cycle mode.",
+            required: false
+          }
+        ],
+        missingRequiredFields: [],
+        driftedFieldLabels: [],
+        activeDraftCount: 0
+      })
     ).toEqual({
       tone: "defaults",
       summary: "Ready with contract defaults."
     });
 
     expect(
-      summarizeContractActionState(
-        {
-          visibleFields: [],
-          missingRequiredFields: ["Decision note"]
-        },
-        {}
-      )
+      summarizeContractActionState({
+        visibleFields: [],
+        missingRequiredFields: ["Decision note"],
+        driftedFieldLabels: [],
+        activeDraftCount: 0
+      })
     ).toEqual({
       tone: "needs_input",
       summary: "Needs input: Decision note"
     });
+  });
+
+  it("falls back to current contract defaults and blocks submit when a stored draft value no longer fits allowed values", () => {
+    const attentionOption = boardResponse.pendingAttention?.actionOptions?.find((option) => option.value === "start_fresh_cycle");
+    expect(attentionOption).toBeTruthy();
+
+    const actionState = getContractActionState({
+      fields: boardResponse.pendingAttention?.requestFields,
+      option: attentionOption!,
+      draftValues: {
+        mode: "invalid_mode"
+      }
+    });
+
+    expect(actionState.payload).toEqual({
+      decision: "start_fresh_cycle",
+      mode: "reopen_deferred"
+    });
+    expect(actionState.driftedFieldLabels).toEqual(["Fresh-cycle mode"]);
+    expect(summarizeContractActionState(actionState)).toEqual({
+      tone: "drifted",
+      summary: "Reset required: Fresh-cycle mode no longer fits the current contract."
+    });
+    expect(canSubmitContractActionState(actionState)).toBe(false);
+  });
+
+  it("prioritizes reset-required drift messaging over missing-input messaging when both are present", () => {
+    expect(
+      summarizeContractActionState({
+        visibleFields: [
+          {
+            name: "completionSummary",
+            label: "Completion summary",
+            description: "Explain the finished board outcome.",
+            required: true
+          }
+        ],
+        missingRequiredFields: ["Completion summary"],
+        driftedFieldLabels: ["Fresh-cycle mode"],
+        activeDraftCount: 0
+      })
+    ).toEqual({
+      tone: "drifted",
+      summary: "Reset required: Fresh-cycle mode no longer fits the current contract."
+    });
+  });
+
+  it("treats hidden stale draft fields as drift that must be reset before submit", () => {
+    const approvalOption = boardResponse.pendingApprovals[0]?.actionOptions?.find((option) => option.value === "approve");
+    expect(approvalOption).toBeTruthy();
+    const actionState = getContractActionState({
+      fields: boardResponse.pendingApprovals[0]?.requestFields,
+      option: approvalOption!,
+      draftValues: {
+        decisionNote: "Hold for later"
+      }
+    });
+
+    expect(summarizeContractActionState(actionState)).toEqual({
+      tone: "drifted",
+      summary: "Reset required: Decision note no longer fits the current contract."
+    });
+    expect(canSubmitContractActionState(actionState)).toBe(false);
+  });
+
+  it("counts only current visible field overrides when summarizing a bounded live action", () => {
+    const attentionOption = boardResponse.pendingAttention?.actionOptions?.find((option) => option.value === "start_fresh_cycle");
+    expect(attentionOption).toBeTruthy();
+
+    const actionState = getContractActionState({
+      fields: boardResponse.pendingAttention?.requestFields,
+      option: attentionOption!,
+      draftValues: {
+        mode: "clean",
+        ignoredBlank: "   "
+      }
+    });
+
+    expect(summarizeContractActionState(actionState)).toEqual({
+      tone: "ready",
+      summary: "Ready with 1 field override."
+    });
+    expect(canSubmitContractActionState(actionState)).toBe(true);
   });
 
   it("describes bounded action support states without collapsing drift, stale, and unavailable paths", () => {

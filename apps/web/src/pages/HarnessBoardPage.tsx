@@ -498,20 +498,74 @@ function fieldIsRequiredForOption(field: HarnessActionFieldView, option?: Harnes
   return field.required || Boolean(field.requiredWhenValue);
 }
 
+type HarnessContractFieldAssessment = {
+  displayValue: string;
+  nextValue: string;
+  drifted: boolean;
+};
+
+const STALE_SELECT_VALUE = "__wf_stale_select_value__";
+
+function assessContractFieldValue(
+  field: HarnessActionFieldView,
+  option: HarnessActionOptionView | undefined,
+  draftValue: string | undefined
+): HarnessContractFieldAssessment {
+  const draftText = typeof draftValue === "string" ? draftValue.trim() : "";
+  const seedText = getContractFieldSeed(field, option).trim();
+
+  if (!draftText) {
+    return {
+      displayValue: seedText,
+      nextValue: seedText,
+      drifted: false
+    };
+  }
+
+  if (field.allowedValues?.length && !field.allowedValues.includes(draftText)) {
+    return {
+      displayValue: STALE_SELECT_VALUE,
+      nextValue: seedText,
+      drifted: true
+    };
+  }
+
+  return {
+    displayValue: draftText,
+    nextValue: draftText,
+    drifted: false
+  };
+}
+
 export function getContractActionState(input: {
   fields: HarnessActionFieldView[] | undefined;
   option: HarnessActionOptionView;
   draftValues: Record<string, string>;
 }) {
   const payload: Record<string, unknown> = { ...(input.option.exampleRequest ?? {}) };
-  const visibleFields = (input.fields ?? []).filter((field) => fieldAppliesToOption(field, input.option));
+  const allFields = input.fields ?? [];
+  const visibleFields = allFields.filter((field) => fieldAppliesToOption(field, input.option));
+  const visibleFieldNames = new Set<string>(visibleFields.map((field) => field.name));
+  const contractFieldMap = new Map<string, HarnessActionFieldView>(allFields.map((field) => [field.name, field]));
+  const controlFieldNames = new Set<string>(
+    ["decision", "command"].filter((fieldName) => typeof payload[fieldName] === "string")
+  );
   const missingRequiredFields: string[] = [];
+  const driftedFieldLabels: string[] = [];
+  let activeDraftCount = 0;
 
   for (const field of visibleFields) {
-    const draftValue = input.draftValues[field.name];
-    const draftText = typeof draftValue === "string" ? draftValue.trim() : "";
-    const seedText = getContractFieldSeed(field, input.option).trim();
-    const nextValue = draftText || seedText;
+    const rawDraftValue = input.draftValues[field.name];
+    const assessment = assessContractFieldValue(field, input.option, rawDraftValue);
+    const nextValue = assessment.nextValue;
+
+    if (assessment.drifted) {
+      driftedFieldLabels.push(field.label);
+    }
+
+    if (typeof rawDraftValue === "string" && rawDraftValue.trim().length > 0 && !assessment.drifted) {
+      activeDraftCount += 1;
+    }
 
     if (!nextValue) {
       if (fieldIsRequiredForOption(field, input.option)) {
@@ -523,18 +577,39 @@ export function getContractActionState(input: {
     payload[field.name] = nextValue;
   }
 
+  for (const [fieldName, draftValue] of Object.entries(input.draftValues)) {
+    if (typeof draftValue !== "string" || draftValue.trim().length === 0) {
+      continue;
+    }
+
+    if (visibleFieldNames.has(fieldName) || controlFieldNames.has(fieldName)) {
+      continue;
+    }
+
+    driftedFieldLabels.push(contractFieldMap.get(fieldName)?.label ?? humanizeValue(fieldName));
+  }
+
   return {
     payload,
     visibleFields,
-    missingRequiredFields
+    missingRequiredFields,
+    driftedFieldLabels,
+    activeDraftCount
   };
 }
 
 export function summarizeContractActionState(actionState: {
   visibleFields: HarnessActionFieldView[];
   missingRequiredFields: string[];
-}, draftValues: Record<string, string>) {
-  const activeDraftCount = Object.values(draftValues).filter((value) => typeof value === "string" && value.trim().length > 0).length;
+  driftedFieldLabels: string[];
+  activeDraftCount: number;
+}) {
+  if (actionState.driftedFieldLabels.length > 0) {
+    return {
+      tone: "drifted" as const,
+      summary: `Reset required: ${actionState.driftedFieldLabels.join(", ")} no longer fits the current contract.`
+    };
+  }
 
   if (actionState.missingRequiredFields.length > 0) {
     return {
@@ -550,7 +625,7 @@ export function summarizeContractActionState(actionState: {
     };
   }
 
-  if (activeDraftCount === 0) {
+  if (actionState.activeDraftCount === 0) {
     return {
       tone: "defaults" as const,
       summary: "Ready with contract defaults."
@@ -559,8 +634,15 @@ export function summarizeContractActionState(actionState: {
 
   return {
     tone: "ready" as const,
-    summary: `Ready with ${activeDraftCount} field override${activeDraftCount === 1 ? "" : "s"}.`
+    summary: `Ready with ${actionState.activeDraftCount} field override${actionState.activeDraftCount === 1 ? "" : "s"}.`
   };
+}
+
+export function canSubmitContractActionState(actionState: {
+  missingRequiredFields: string[];
+  driftedFieldLabels: string[];
+}) {
+  return actionState.missingRequiredFields.length === 0 && actionState.driftedFieldLabels.length === 0;
 }
 
 export function buildContractActionPayload(input: {
@@ -1622,14 +1704,6 @@ export function HarnessBoardPage(props: {
     </>
   ) : null;
 
-  function getDraftValue(
-    actionKey: string,
-    field: HarnessActionFieldView,
-    option?: HarnessActionOptionView
-  ) {
-    return actionDrafts[actionKey]?.[field.name] ?? getContractFieldSeed(field, option);
-  }
-
   function setDraftValue(actionKey: string, fieldName: string, value: string) {
     setActionDrafts((current) => ({
       ...current,
@@ -1720,7 +1794,12 @@ export function HarnessBoardPage(props: {
     return (
       <ul style={styles.fieldList}>
         {visibleFields.map((field) => {
-          const value = getDraftValue(input.actionKey, field, input.option);
+          const assessment = assessContractFieldValue(
+            field,
+            input.option,
+            actionDrafts[input.actionKey]?.[field.name]
+          );
+          const value = assessment.displayValue;
 
           return (
             <li key={field.name} style={styles.fieldItem}>
@@ -1732,6 +1811,11 @@ export function HarnessBoardPage(props: {
                   value={value}
                   onChange={(event) => setDraftValue(input.actionKey, field.name, event.target.value)}
                 >
+                  {value === STALE_SELECT_VALUE ? (
+                    <option value={STALE_SELECT_VALUE}>
+                      Current draft no longer allowed. Reset recommended.
+                    </option>
+                  ) : null}
                   {field.allowedValues.map((allowedValue) => (
                     <option key={allowedValue} value={allowedValue}>
                       {allowedValue}
@@ -1765,7 +1849,7 @@ export function HarnessBoardPage(props: {
       option: input.option,
       draftValues: actionDrafts[input.actionKey] ?? {}
     });
-    const actionSummary = summarizeContractActionState(actionState, actionDrafts[input.actionKey] ?? {});
+    const actionSummary = summarizeContractActionState(actionState);
     const composerOpen = isActionComposerOpen(input.actionKey, input.option.value === input.recommendedOptionValue);
 
     return (
@@ -1787,6 +1871,8 @@ export function HarnessBoardPage(props: {
           </button>
         </div>
         {actionSummary.tone === "needs_input" ? (
+          <p style={styles.statusError}>{actionSummary.summary}</p>
+        ) : actionSummary.tone === "drifted" ? (
           <p style={styles.statusError}>{actionSummary.summary}</p>
         ) : actionSummary.tone === "defaults" ? (
           <p style={styles.statusNotice}>{actionSummary.summary}</p>
@@ -1973,7 +2059,7 @@ export function HarnessBoardPage(props: {
                           const disabled =
                             !liveActionsEnabled
                             || !pendingAttention.actionPath
-                            || actionState.missingRequiredFields.length > 0
+                            || !canSubmitContractActionState(actionState)
                             || submittingActionKey !== null;
 
                           return (
@@ -2072,7 +2158,7 @@ export function HarnessBoardPage(props: {
                             const disabled =
                               !liveActionsEnabled
                               || !approval.actionPath
-                              || actionState.missingRequiredFields.length > 0
+                              || !canSubmitContractActionState(actionState)
                               || submittingActionKey !== null;
 
                             return (
