@@ -329,6 +329,15 @@ export type HarnessBoardLoadResolution = {
   feedback: HarnessBoardFeedback;
 };
 
+export type HarnessBoardActionAttempt = {
+  actionKey: string;
+  actionPath: string;
+  actionRoute?: HarnessBoardResponse["pendingApprovals"][number]["actionRoute"] | NonNullable<HarnessBoardResponse["pendingAttention"]>["actionRoute"];
+  actionMethod: "POST";
+  requestBody: Record<string, unknown>;
+  noticeLabel: string;
+};
+
 function getPersonaMetrics(cards: HarnessBoardCard[]) {
   const personaCounts = new Map<string, number>();
 
@@ -865,6 +874,15 @@ export function shouldResyncBoardAfterActionError(error: unknown) {
     && (error.code === "conflict" || error.code === "invalid_request" || error.code === "not_found");
 }
 
+export function canRetryBoardActionAfterError(error: unknown) {
+  return error instanceof HarnessBoardClientError
+    && (error.code === "rate_limited" || error.code === "service_unavailable" || error.code === "request_rejected");
+}
+
+export function canResetBoardActionComposerAfterError(error: unknown) {
+  return error instanceof HarnessBoardClientError && error.code === "invalid_request";
+}
+
 function renderBoardFeedback(title: string, feedback: HarnessBoardFeedback | null, actions?: ReactNode) {
   if (!feedback) {
     return null;
@@ -995,6 +1013,8 @@ export function HarnessBoardPage(props: {
   initialControlMode?: HarnessBoardControlMode;
   initialLoadFeedback?: HarnessBoardFeedback | null;
   initialActionFeedback?: HarnessBoardFeedback | null;
+  initialActionAttempt?: HarnessBoardActionAttempt | null;
+  initialActionFailureCause?: unknown;
 } = {}) {
   const browserFallbackEnabled = harnessBoardClient.isBrowserFallbackEnabled();
   const fallbackState = browserFallbackEnabled ? harnessBoardClient.getFallbackState() : null;
@@ -1008,6 +1028,7 @@ export function HarnessBoardPage(props: {
   );
   const [loadError, setLoadError] = useState<HarnessBoardFeedback | null>(props.initialLoadFeedback ?? null);
   const [actionError, setActionError] = useState<HarnessBoardFeedback | null>(props.initialActionFeedback ?? null);
+  const [actionFailureCause, setActionFailureCause] = useState<unknown>(props.initialActionFailureCause ?? null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [lastActionResult, setLastActionResult] = useState<HarnessBoardActionResult | null>(null);
   const [lastActionLabel, setLastActionLabel] = useState<string | null>(null);
@@ -1015,6 +1036,9 @@ export function HarnessBoardPage(props: {
   const [openActionComposerKeys, setOpenActionComposerKeys] = useState<Record<string, boolean>>({});
   const [submittingActionKey, setSubmittingActionKey] = useState<string | null>(null);
   const [reloadingBoard, setReloadingBoard] = useState(false);
+  const [pendingActionAttempt, setPendingActionAttempt] = useState<HarnessBoardActionAttempt | null>(
+    props.initialActionAttempt ?? null
+  );
 
   function applyBoardState(
     nextBoard: HarnessBoardResponse,
@@ -1044,6 +1068,7 @@ export function HarnessBoardPage(props: {
       applyBoardState(nextBoard, null, "live");
       if (!input.preserveActionError) {
         setActionError(null);
+        setActionFailureCause(null);
       }
       if (input.successNotice) {
         setActionNotice(input.successNotice);
@@ -1068,6 +1093,56 @@ export function HarnessBoardPage(props: {
       return false;
     } finally {
       setReloadingBoard(false);
+    }
+  }
+
+  async function performBoardActionAttempt(
+    attempt: HarnessBoardActionAttempt,
+    input: {
+      preserveDraftOnSuccess?: boolean;
+    } = {}
+  ) {
+    setSubmittingActionKey(attempt.actionKey);
+    setActionError(null);
+    setActionFailureCause(null);
+    setActionNotice(null);
+
+    try {
+      const actionResult = await harnessBoardClient.submitAction(
+        attempt.actionPath,
+        attempt.requestBody,
+        attempt.actionMethod
+      );
+      const nextBoard = await harnessBoardClient.fetchBoard();
+      const preferredCardId = "cardId" in actionResult ? actionResult.cardId : null;
+      applyBoardState(nextBoard, preferredCardId);
+      if (!input.preserveDraftOnSuccess) {
+        resetDraftValues(attempt.actionKey);
+      }
+      setPendingActionAttempt(null);
+      setLastActionResult(actionResult);
+      setLastActionLabel(attempt.noticeLabel);
+      setActionNotice(describeSubmittedActionResult(actionResult, attempt.noticeLabel));
+      setActionFailureCause(null);
+      return true;
+    } catch (error) {
+      setPendingActionAttempt(attempt);
+      setActionFailureCause(error);
+      setActionError(
+        describeBoardActionFeedback(error, {
+          actionRoute: attempt.actionRoute,
+          actionLabel: attempt.noticeLabel
+        })
+      );
+      if (shouldResyncBoardAfterActionError(error)) {
+        await reloadBoard({
+          successNotice: `Live board re-synced after ${attempt.noticeLabel.toLowerCase()} failed.`,
+          preserveActionError: true
+        });
+      }
+      return false;
+    } finally {
+      setSubmittingActionKey(null);
     }
   }
 
@@ -1180,21 +1255,57 @@ export function HarnessBoardPage(props: {
     </button>
   ) : null;
   const actionFeedbackActions = liveActionsEnabled ? (
-    <button
-      type="button"
-      style={{
-        ...styles.secondaryButton,
-        ...(reloadingBoard ? styles.actionButtonDisabled : {})
-      }}
-      disabled={reloadingBoard}
-      onClick={() => {
-        void reloadBoard({
-          successNotice: "Live board reloaded from the current harness contract."
-        });
-      }}
-    >
-      {reloadingBoard ? "Reloading live board..." : "Reload live board"}
-    </button>
+    <>
+      <button
+        type="button"
+        style={{
+          ...styles.secondaryButton,
+          ...(reloadingBoard ? styles.actionButtonDisabled : {})
+        }}
+        disabled={reloadingBoard}
+        onClick={() => {
+          void reloadBoard({
+            successNotice: "Live board reloaded from the current harness contract."
+          });
+        }}
+      >
+        {reloadingBoard ? "Reloading live board..." : "Reload live board"}
+      </button>
+      {pendingActionAttempt && actionError && canRetryBoardActionAfterError(actionFailureCause) ? (
+        <button
+          type="button"
+          style={{
+            ...styles.secondaryButton,
+            ...(submittingActionKey !== null ? styles.actionButtonDisabled : {})
+          }}
+          disabled={submittingActionKey !== null}
+          onClick={() => {
+            void performBoardActionAttempt(pendingActionAttempt, {
+              preserveDraftOnSuccess: true
+            });
+          }}
+        >
+          {submittingActionKey === pendingActionAttempt.actionKey
+            ? "Retrying action..."
+            : `Retry ${pendingActionAttempt.noticeLabel}`}
+        </button>
+      ) : null}
+      {pendingActionAttempt && actionError && canResetBoardActionComposerAfterError(actionFailureCause) ? (
+        <button
+          type="button"
+          style={styles.secondaryButton}
+          onClick={() => {
+            resetDraftValues(pendingActionAttempt.actionKey);
+            setPendingActionAttempt(null);
+            setActionError(null);
+            setActionFailureCause(null);
+            setActionNotice(`Reset ${pendingActionAttempt.noticeLabel.toLowerCase()} to the contract defaults.`);
+          }}
+        >
+          Reset composer defaults
+        </button>
+      ) : null}
+    </>
   ) : null;
 
   function getDraftValue(
@@ -1265,39 +1376,14 @@ export function HarnessBoardPage(props: {
       return;
     }
 
-    setSubmittingActionKey(input.actionKey);
-    setActionError(null);
-    setActionNotice(null);
-
-    try {
-      const actionResult = await harnessBoardClient.submitAction(
-        input.actionPath,
-        input.exampleRequest,
-        input.actionMethod ?? "POST"
-      );
-      const nextBoard = await harnessBoardClient.fetchBoard();
-      const preferredCardId = "cardId" in actionResult ? actionResult.cardId : null;
-      applyBoardState(nextBoard, preferredCardId);
-      resetDraftValues(input.actionKey);
-      setLastActionResult(actionResult);
-      setLastActionLabel(input.noticeLabel);
-      setActionNotice(describeSubmittedActionResult(actionResult, input.noticeLabel));
-    } catch (error) {
-      setActionError(
-        describeBoardActionFeedback(error, {
-          actionRoute: input.actionRoute,
-          actionLabel: input.noticeLabel
-        })
-      );
-      if (shouldResyncBoardAfterActionError(error)) {
-        await reloadBoard({
-          successNotice: `Live board re-synced after ${input.noticeLabel.toLowerCase()} failed.`,
-          preserveActionError: true
-        });
-      }
-    } finally {
-      setSubmittingActionKey(null);
-    }
+    await performBoardActionAttempt({
+      actionKey: input.actionKey,
+      actionPath: input.actionPath,
+      actionRoute: input.actionRoute,
+      actionMethod: input.actionMethod ?? "POST",
+      requestBody: input.exampleRequest,
+      noticeLabel: input.noticeLabel
+    });
   }
 
   function renderLiveRequestFields(input: {
