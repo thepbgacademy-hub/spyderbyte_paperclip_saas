@@ -341,9 +341,28 @@ export type HarnessBoardLoadResolution = {
 };
 
 export type HarnessBoardContractRefreshFeedback = {
+  title: string;
   message: string;
   details: string[];
 };
+
+function isSameContractRefreshFeedback(
+  left: HarnessBoardContractRefreshFeedback | null,
+  right: HarnessBoardContractRefreshFeedback | null
+) {
+  if (left === right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return false;
+  }
+
+  return left.title === right.title
+    && left.message === right.message
+    && left.details.length === right.details.length
+    && left.details.every((detail, index) => detail === right.details[index]);
+}
 
 export type HarnessBoardActionAttempt = {
   actionKey: string;
@@ -746,7 +765,58 @@ export function getBoardContractActionFieldMap(board: HarnessBoardResponse | nul
   return fieldMap;
 }
 
-function describeActionKey(actionKey: string) {
+type HarnessBoardContractActionDescriptor = {
+  label: string;
+  fieldLabels: Map<string, string>;
+};
+
+export function getBoardContractActionDescriptorMap(board: HarnessBoardResponse | null) {
+  const descriptorMap = new Map<string, HarnessBoardContractActionDescriptor>();
+
+  if (!board) {
+    return descriptorMap;
+  }
+
+  if (board.pendingAttention?.actionOptions?.length) {
+    const fieldLabels = new Map<string, string>(
+      (board.pendingAttention.requestFields ?? []).map((field) => [field.name, field.label])
+    );
+    for (const option of board.pendingAttention.actionOptions) {
+      descriptorMap.set(`attention:${option.value}`, {
+        label: option.label,
+        fieldLabels
+      });
+    }
+  }
+
+  for (const approval of board.pendingApprovals) {
+    if (!approval.actionOptions?.length) {
+      continue;
+    }
+
+    const fieldLabels = new Map<string, string>(
+      (approval.requestFields ?? []).map((field) => [field.name, field.label])
+    );
+    for (const option of approval.actionOptions) {
+      descriptorMap.set(`approval:${approval.id}:${option.value}`, {
+        label: option.label,
+        fieldLabels
+      });
+    }
+  }
+
+  return descriptorMap;
+}
+
+function describeActionKey(
+  actionKey: string,
+  descriptors?: Map<string, HarnessBoardContractActionDescriptor>
+) {
+  const descriptor = descriptors?.get(actionKey);
+  if (descriptor) {
+    return descriptor.label;
+  }
+
   const [family, identifier, optionValue] = actionKey.split(":");
   if (family === "attention" && identifier) {
     return humanizeValue(identifier);
@@ -760,9 +830,20 @@ function describeActionKey(actionKey: string) {
 }
 
 export type HarnessBoardContractRefreshImpact = {
-  removedActionDraftKeys: string[];
+  removedActionDrafts: Array<{
+    actionKey: string;
+    actionLabel: string;
+  }>;
+  removedFieldOverrideDetails: Array<{
+    actionKey: string;
+    actionLabel: string;
+    fieldLabels: string[];
+  }>;
   removedFieldOverrideCount: number;
-  closedComposerActionKeys: string[];
+  closedComposerActions: Array<{
+    actionKey: string;
+    actionLabel: string;
+  }>;
 };
 
 export function inspectBoardContractRefreshImpact(
@@ -771,40 +852,69 @@ export function inspectBoardContractRefreshImpact(
   openActionComposerKeys: Record<string, boolean>
 ): HarnessBoardContractRefreshImpact {
   const contractFieldMap = getBoardContractActionFieldMap(board);
+  const descriptorMap = getBoardContractActionDescriptorMap(board);
 
   if (contractFieldMap.size === 0) {
     return {
-      removedActionDraftKeys: [],
+      removedActionDrafts: [],
+      removedFieldOverrideDetails: [],
       removedFieldOverrideCount: 0,
-      closedComposerActionKeys: []
+      closedComposerActions: []
     };
   }
 
-  const removedActionDraftKeys: string[] = [];
+  const removedActionDrafts: Array<{
+    actionKey: string;
+    actionLabel: string;
+  }> = [];
+  const removedFieldOverrideDetails: Array<{
+    actionKey: string;
+    actionLabel: string;
+    fieldLabels: string[];
+  }> = [];
   let removedFieldOverrideCount = 0;
 
   for (const [actionKey, draftValues] of Object.entries(actionDrafts)) {
     const allowedFields = contractFieldMap.get(actionKey);
     if (!allowedFields) {
-      removedActionDraftKeys.push(actionKey);
+      removedActionDrafts.push({
+        actionKey,
+        actionLabel: describeActionKey(actionKey, descriptorMap)
+      });
       continue;
     }
 
+    const removedFieldLabels: string[] = [];
     for (const fieldName of Object.keys(draftValues)) {
       if (!allowedFields.has(fieldName)) {
         removedFieldOverrideCount += 1;
+        removedFieldLabels.push(
+          descriptorMap.get(actionKey)?.fieldLabels.get(fieldName) ?? humanizeValue(fieldName)
+        );
       }
+    }
+
+    if (removedFieldLabels.length > 0) {
+      removedFieldOverrideDetails.push({
+        actionKey,
+        actionLabel: describeActionKey(actionKey, descriptorMap),
+        fieldLabels: removedFieldLabels
+      });
     }
   }
 
-  const closedComposerActionKeys = Object.entries(openActionComposerKeys)
+  const closedComposerActions = Object.entries(openActionComposerKeys)
     .filter(([actionKey, isOpen]) => Boolean(isOpen) && !contractFieldMap.has(actionKey))
-    .map(([actionKey]) => actionKey);
+    .map(([actionKey]) => ({
+      actionKey,
+      actionLabel: describeActionKey(actionKey, descriptorMap)
+    }));
 
   return {
-    removedActionDraftKeys,
+    removedActionDrafts,
+    removedFieldOverrideDetails,
     removedFieldOverrideCount,
-    closedComposerActionKeys
+    closedComposerActions
   };
 }
 
@@ -872,12 +982,12 @@ export function describeBoardContractRefreshImpact(
   const parts: string[] = [];
   const details: string[] = [];
 
-  if (impact.removedActionDraftKeys.length > 0) {
+  if (impact.removedActionDrafts.length > 0) {
     parts.push(
-      `${impact.removedActionDraftKeys.length} stale action draft${impact.removedActionDraftKeys.length === 1 ? "" : "s"} removed`
+      `${impact.removedActionDrafts.length} stale action draft${impact.removedActionDrafts.length === 1 ? "" : "s"} removed`
     );
     details.push(
-      `Removed stale drafts for: ${impact.removedActionDraftKeys.map((actionKey) => describeActionKey(actionKey)).join(", ")}.`
+      `Removed stale drafts for: ${impact.removedActionDrafts.map((item) => item.actionLabel).join(", ")}.`
     );
   }
 
@@ -885,14 +995,19 @@ export function describeBoardContractRefreshImpact(
     parts.push(
       `${impact.removedFieldOverrideCount} field override${impact.removedFieldOverrideCount === 1 ? "" : "s"} pruned`
     );
+    details.push(
+      `Pruned removed fields from: ${impact.removedFieldOverrideDetails
+        .map((detail) => `${detail.actionLabel} (${detail.fieldLabels.join(", ")})`)
+        .join("; ")}.`
+    );
   }
 
-  if (impact.closedComposerActionKeys.length > 0) {
+  if (impact.closedComposerActions.length > 0) {
     parts.push(
-      `${impact.closedComposerActionKeys.length} stale composer${impact.closedComposerActionKeys.length === 1 ? "" : "s"} closed`
+      `${impact.closedComposerActions.length} stale composer${impact.closedComposerActions.length === 1 ? "" : "s"} closed`
     );
     details.push(
-      `Closed stale composers for: ${impact.closedComposerActionKeys.map((actionKey) => describeActionKey(actionKey)).join(", ")}.`
+      `Closed stale composers for: ${impact.closedComposerActions.map((item) => item.actionLabel).join(", ")}.`
     );
   }
 
@@ -901,6 +1016,7 @@ export function describeBoardContractRefreshImpact(
   }
 
   return {
+    title: "Contract refresh",
     message: `Live board contract refreshed: ${parts.join(", ")}.`,
     details
   };
@@ -1703,7 +1819,13 @@ export function HarnessBoardPage(props: {
           )
         : null;
       const contractNotice = describeBoardContractRefreshImpact(refreshImpact);
-      setContractRefreshNotice(contractNotice);
+      setContractRefreshNotice((current) => {
+        if (contractNotice) {
+          return isSameContractRefreshFeedback(current, contractNotice) ? current : contractNotice;
+        }
+
+        return current;
+      });
       if (input.successNotice || derivedNotice) {
         setActionNotice(input.successNotice ?? derivedNotice);
       }
@@ -1881,7 +2003,16 @@ export function HarnessBoardPage(props: {
       summary: completionPackage
         ? `${packageDeliverableCount} deliverable${packageDeliverableCount === 1 ? "" : "s"}, ${packageGovernanceCount} governance item${packageGovernanceCount === 1 ? "" : "s"}, ${packageRecommendationCount} recommendation${packageRecommendationCount === 1 ? "" : "s"}, ${packageObjectionCount} objection${packageObjectionCount === 1 ? "" : "s"}.`
         : "No tenant-facing package is currently being assembled."
-    }
+    },
+    ...(contractRefreshNotice
+      ? [
+          {
+            key: "contract-refresh",
+            heading: joinHeadingParts("Contract refresh", "Active"),
+            summary: contractRefreshNotice.message
+          }
+        ]
+      : [])
   ];
   const canReloadLiveBoard = Boolean(board || browserFallbackEnabled);
   const loadFeedbackActions = canReloadLiveBoard ? (
@@ -2511,6 +2642,7 @@ export function HarnessBoardPage(props: {
           {actionNotice ? <p style={styles.statusSuccess}>{actionNotice}</p> : null}
           {contractRefreshNotice ? (
             <div style={{ display: "grid", gap: "0.45rem" }}>
+              <p style={styles.actionMeta}>{contractRefreshNotice.title}</p>
               <p style={styles.statusNotice}>{contractRefreshNotice.message}</p>
               {contractRefreshNotice.details.length > 0 ? (
                 <ul style={styles.feedbackList}>

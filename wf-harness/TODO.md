@@ -157,3 +157,4 @@ This file tracks the new harness subproject only.
 - [x] Keep stale draft cleanup bounded when the live board contract refreshes, so removed actions/fields are pruned from local composer state but same-action drift still surfaces with explicit field-level reset reasons.
 - [x] Surface bounded contract-refresh guidance when a live reload prunes stale action drafts, removed request fields, or stale open composers, so concurrency-driven cleanup is visible instead of silent.
 - [x] Keep contract-refresh guidance action-specific enough to name the bounded actions/composers that were pruned, so concurrent board changes do not collapse into a vague “state changed” notice.
+- [x] Keep active contract-refresh guidance visible until dismissal or superseding refresh, and surface that active refresh state in the board pulse so cleanup remains operator-visible instead of quietly expiring.
