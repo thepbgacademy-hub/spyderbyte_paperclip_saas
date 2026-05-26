@@ -223,6 +223,15 @@ const styles = {
     fontWeight: 600,
     margin: 0
   } satisfies CSSProperties,
+  formField: {
+    background: "rgba(2, 6, 23, 0.72)",
+    border: "1px solid rgba(148, 163, 184, 0.16)",
+    borderRadius: "12px",
+    color: "#e2e8f0",
+    fontSize: "0.78rem",
+    padding: "0.55rem 0.7rem",
+    width: "100%"
+  } satisfies CSSProperties,
   codeBlock: {
     background: "rgba(2, 6, 23, 0.72)",
     border: "1px solid rgba(148, 163, 184, 0.16)",
@@ -380,6 +389,76 @@ function renderRequestFields(
       ))}
     </ul>
   );
+}
+
+type HarnessActionFieldView =
+  | NonNullable<HarnessBoardResponse["pendingApprovals"][number]["requestFields"]>[number]
+  | NonNullable<NonNullable<HarnessBoardResponse["pendingAttention"]>["requestFields"]>[number];
+
+type HarnessActionOptionView =
+  | NonNullable<HarnessBoardResponse["pendingApprovals"][number]["actionOptions"]>[number]
+  | NonNullable<NonNullable<HarnessBoardResponse["pendingAttention"]>["actionOptions"]>[number];
+
+function getContractFieldSeed(
+  field: HarnessActionFieldView,
+  option?: HarnessActionOptionView
+) {
+  if (!option?.exampleRequest) {
+    return field.suggestedValue ?? "";
+  }
+
+  const seededValue = option.exampleRequest[field.name];
+  return typeof seededValue === "string" ? seededValue : field.suggestedValue ?? "";
+}
+
+function fieldAppliesToOption(field: HarnessActionFieldView, option?: HarnessActionOptionView) {
+  if (!option?.exampleRequest) {
+    return !field.supportedWhenValue && !field.requiredWhenValue;
+  }
+
+  const optionValue =
+    typeof option.exampleRequest.decision === "string"
+      ? option.exampleRequest.decision
+      : typeof option.exampleRequest.command === "string"
+        ? option.exampleRequest.command
+        : null;
+
+  if (field.requiredWhenValue) {
+    return optionValue === field.requiredWhenValue;
+  }
+
+  if (field.supportedWhenValue) {
+    return optionValue === field.supportedWhenValue;
+  }
+
+  return true;
+}
+
+export function buildContractActionPayload(input: {
+  fields: HarnessActionFieldView[] | undefined;
+  option: HarnessActionOptionView;
+  draftValues: Record<string, string>;
+}) {
+  const payload: Record<string, unknown> = { ...(input.option.exampleRequest ?? {}) };
+
+  if (!input.fields || input.fields.length === 0) {
+    return payload;
+  }
+
+  for (const field of input.fields) {
+    if (!fieldAppliesToOption(field, input.option)) {
+      continue;
+    }
+
+    const draftValue = input.draftValues[field.name];
+    if (typeof draftValue !== "string" || draftValue.trim().length === 0) {
+      continue;
+    }
+
+    payload[field.name] = draftValue.trim();
+  }
+
+  return payload;
 }
 
 function renderActionConstraintSummary(input: { allowedValues: readonly string[] | undefined; label: string }) {
@@ -568,6 +647,7 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [lastActionResult, setLastActionResult] = useState<HarnessBoardActionResult | null>(null);
   const [lastActionLabel, setLastActionLabel] = useState<string | null>(null);
+  const [actionDrafts, setActionDrafts] = useState<Record<string, Record<string, string>>>({});
   const [submittingActionKey, setSubmittingActionKey] = useState<string | null>(null);
 
   function applyBoardState(nextBoard: HarnessBoardResponse, preferredCardId?: string | null) {
@@ -664,6 +744,24 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
     }
   ];
 
+  function getDraftValue(
+    actionKey: string,
+    field: HarnessActionFieldView,
+    option?: HarnessActionOptionView
+  ) {
+    return actionDrafts[actionKey]?.[field.name] ?? getContractFieldSeed(field, option);
+  }
+
+  function setDraftValue(actionKey: string, fieldName: string, value: string) {
+    setActionDrafts((current) => ({
+      ...current,
+      [actionKey]: {
+        ...(current[actionKey] ?? {}),
+        [fieldName]: value
+      }
+    }));
+  }
+
   async function handleContractAction(input: {
     actionKey: string;
     actionPath: string;
@@ -706,6 +804,60 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
     } finally {
       setSubmittingActionKey(null);
     }
+  }
+
+  function renderLiveRequestFields(input: {
+    actionKey: string;
+    fields: HarnessActionFieldView[] | undefined;
+    option?: HarnessActionOptionView;
+  }) {
+    if (!input.fields || input.fields.length === 0) {
+      return null;
+    }
+
+    const visibleFields = input.option
+      ? input.fields.filter((field) => fieldAppliesToOption(field, input.option))
+      : input.fields;
+
+    if (visibleFields.length === 0) {
+      return null;
+    }
+
+    return (
+      <ul style={styles.fieldList}>
+        {visibleFields.map((field) => {
+          const value = getDraftValue(input.actionKey, field, input.option);
+
+          return (
+            <li key={field.name} style={styles.fieldItem}>
+              <p style={styles.fieldTitle}>{field.label}</p>
+              {field.description ? <p style={styles.optionBody}>{field.description}</p> : null}
+              {field.allowedValues?.length ? (
+                <select
+                  style={styles.formField}
+                  value={value}
+                  onChange={(event) => setDraftValue(input.actionKey, field.name, event.target.value)}
+                >
+                  {field.allowedValues.map((allowedValue) => (
+                    <option key={allowedValue} value={allowedValue}>
+                      {allowedValue}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  style={styles.formField}
+                  type="text"
+                  value={value}
+                  placeholder={field.suggestedValue ?? field.label}
+                  onChange={(event) => setDraftValue(input.actionKey, field.name, event.target.value)}
+                />
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    );
   }
 
   return (
@@ -852,10 +1004,14 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                       <div style={styles.actionButtonRow}>
                         {pendingAttention.actionOptions.map((option) => {
                           const actionKey = `attention:${option.value}`;
+                          const exampleRequest = buildContractActionPayload({
+                            fields: pendingAttention.requestFields,
+                            option,
+                            draftValues: actionDrafts[actionKey] ?? {}
+                          });
                           const disabled =
                             !liveActionsEnabled
                             || !pendingAttention.actionPath
-                            || !option.exampleRequest
                             || submittingActionKey !== null;
 
                           return (
@@ -872,7 +1028,7 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                                   actionKey,
                                   actionPath: pendingAttention.actionPath!,
                                   actionMethod: pendingAttention.actionMethod,
-                                  exampleRequest: option.exampleRequest,
+                                  exampleRequest,
                                   confirmationLabel: option.requiresConfirmation ? option.confirmationLabel : undefined,
                                   noticeLabel: option.label
                                 })}
@@ -882,6 +1038,19 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                           );
                         })}
                       </div>
+                      {pendingAttention.actionOptions.map((option) => {
+                        const actionKey = `attention:${option.value}`;
+                        return (
+                          <div key={`${option.value}-fields`} style={{ display: "grid", gap: "0.45rem" }}>
+                            <p style={styles.contractMeta}>{`Live request fields for ${option.label}`}</p>
+                            {renderLiveRequestFields({
+                              actionKey,
+                              fields: pendingAttention.requestFields,
+                              option
+                            })}
+                          </div>
+                        );
+                      })}
                       {!liveActionsEnabled ? (
                         <p style={styles.statusNotice}>Live board actions are unavailable in localhost fallback mode.</p>
                       ) : null}
@@ -926,10 +1095,14 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                         <div style={styles.actionButtonRow}>
                           {approval.actionOptions.map((option) => {
                             const actionKey = `approval:${approval.id}:${option.value}`;
+                            const exampleRequest = buildContractActionPayload({
+                              fields: approval.requestFields,
+                              option,
+                              draftValues: actionDrafts[actionKey] ?? {}
+                            });
                             const disabled =
                               !liveActionsEnabled
                               || !approval.actionPath
-                              || !option.exampleRequest
                               || submittingActionKey !== null;
 
                             return (
@@ -946,7 +1119,7 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                                     actionKey,
                                     actionPath: approval.actionPath,
                                     actionMethod: approval.actionMethod,
-                                    exampleRequest: option.exampleRequest,
+                                    exampleRequest,
                                     confirmationLabel: option.requiresConfirmation ? option.confirmationLabel : undefined,
                                     noticeLabel: option.label
                                   })}
@@ -956,6 +1129,19 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                             );
                           })}
                         </div>
+                        {approval.actionOptions.map((option) => {
+                          const actionKey = `approval:${approval.id}:${option.value}`;
+                          return (
+                            <div key={`${option.value}-fields`} style={{ display: "grid", gap: "0.45rem" }}>
+                              <p style={styles.contractMeta}>{`Live request fields for ${option.label}`}</p>
+                              {renderLiveRequestFields({
+                                actionKey,
+                                fields: approval.requestFields,
+                                option
+                              })}
+                            </div>
+                          );
+                        })}
                         {!liveActionsEnabled ? (
                           <p style={styles.statusNotice}>Live board actions are unavailable in localhost fallback mode.</p>
                         ) : null}

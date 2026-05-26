@@ -7,7 +7,7 @@ import {
   type HarnessBoardColumn
 } from "../apps/web/src/components/HarnessBoard.js";
 import { HarnessCardDrawer } from "../apps/web/src/components/HarnessCardDrawer.js";
-import { HarnessBoardPage } from "../apps/web/src/pages/HarnessBoardPage.js";
+import { buildContractActionPayload, HarnessBoardPage } from "../apps/web/src/pages/HarnessBoardPage.js";
 import type { HarnessBoardResponse } from "../src/harness/board-service.js";
 
 const cards: HarnessBoardCard[] = [
@@ -253,6 +253,24 @@ const boardResponse: HarnessBoardResponse = {
 };
 
 describe("harness board UI", () => {
+  it("builds bounded live action payloads from contract fields plus user drafts", () => {
+    const attentionOption = boardResponse.pendingAttention?.actionOptions?.find((option) => option.value === "start_fresh_cycle");
+    expect(attentionOption).toBeTruthy();
+
+    const payload = buildContractActionPayload({
+      fields: boardResponse.pendingAttention?.requestFields,
+      option: attentionOption!,
+      draftValues: {
+        mode: "clean"
+      }
+    });
+
+    expect(payload).toEqual({
+      decision: "start_fresh_cycle",
+      mode: "clean"
+    });
+  });
+
   it("renders clean persona cards without backend execution noise", () => {
     const markup = renderToStaticMarkup(
       <HarnessBoard
@@ -323,6 +341,11 @@ describe("harness board UI", () => {
     expect(markup).toContain("Review decision");
     expect(markup).toContain("Fresh-cycle mode");
     expect(markup).toContain("Proposal decision");
+    expect(markup).toContain("Live request fields for Complete run");
+    expect(markup).toContain("Live request fields for Start fresh cycle");
+    expect(markup).toContain("Live request fields for Approve proposal");
+    expect(markup).toContain("Live request fields for Defer proposal");
+    expect(markup).toContain("Live request fields for Deny proposal");
     expect(markup).toContain("Reason: Final assembly");
     expect(markup).toContain("Requested: 11:24 AM");
     expect(markup).toContain("Required field");
