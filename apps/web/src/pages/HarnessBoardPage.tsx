@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 
 import {
   createHarnessBoardClient,
@@ -860,7 +860,12 @@ export function describeBoardActionFeedback(
   };
 }
 
-function renderBoardFeedback(title: string, feedback: HarnessBoardFeedback | null) {
+export function shouldResyncBoardAfterActionError(error: unknown) {
+  return error instanceof HarnessBoardClientError
+    && (error.code === "conflict" || error.code === "invalid_request" || error.code === "not_found");
+}
+
+function renderBoardFeedback(title: string, feedback: HarnessBoardFeedback | null, actions?: ReactNode) {
   if (!feedback) {
     return null;
   }
@@ -877,6 +882,7 @@ function renderBoardFeedback(title: string, feedback: HarnessBoardFeedback | nul
           </li>
         ))}
       </ul>
+      {actions ? <div style={styles.actionButtonRow}>{actions}</div> : null}
     </section>
   );
 }
@@ -1008,6 +1014,7 @@ export function HarnessBoardPage(props: {
   const [actionDrafts, setActionDrafts] = useState<Record<string, Record<string, string>>>({});
   const [openActionComposerKeys, setOpenActionComposerKeys] = useState<Record<string, boolean>>({});
   const [submittingActionKey, setSubmittingActionKey] = useState<string | null>(null);
+  const [reloadingBoard, setReloadingBoard] = useState(false);
 
   function applyBoardState(
     nextBoard: HarnessBoardResponse,
@@ -1024,6 +1031,44 @@ export function HarnessBoardPage(props: {
           ? current
           : nextBoard.cards[0]?.id || ""
     );
+  }
+
+  async function reloadBoard(input: {
+    successNotice?: string | null;
+    preserveActionError?: boolean;
+  } = {}) {
+    setReloadingBoard(true);
+
+    try {
+      const nextBoard = await harnessBoardClient.fetchBoard();
+      applyBoardState(nextBoard, null, "live");
+      if (!input.preserveActionError) {
+        setActionError(null);
+      }
+      if (input.successNotice) {
+        setActionNotice(input.successNotice);
+      }
+      return true;
+    } catch (error) {
+      const resolution = resolveBoardLoadFailure({
+        error,
+        browserFallbackEnabled,
+        fallbackState: browserFallbackEnabled ? harnessBoardClient.getFallbackState() : null
+      });
+
+      if (resolution.board && resolution.controlMode) {
+        applyBoardState(resolution.board, null, resolution.controlMode);
+        setLoadError(resolution.feedback);
+      } else {
+        setLoadError(resolution.feedback);
+        setBoard(null);
+        setOpenCardId("");
+      }
+
+      return false;
+    } finally {
+      setReloadingBoard(false);
+    }
   }
 
   useEffect(() => {
@@ -1116,6 +1161,41 @@ export function HarnessBoardPage(props: {
         : "No tenant-facing package is currently being assembled."
     }
   ];
+  const canReloadLiveBoard = Boolean(board || browserFallbackEnabled);
+  const loadFeedbackActions = canReloadLiveBoard ? (
+    <button
+      type="button"
+      style={{
+        ...styles.secondaryButton,
+        ...(reloadingBoard ? styles.actionButtonDisabled : {})
+      }}
+      disabled={reloadingBoard}
+      onClick={() => {
+        void reloadBoard({
+          successNotice: "Live board reloaded from the current harness contract."
+        });
+      }}
+    >
+      {reloadingBoard ? "Reloading live board..." : "Retry live board load"}
+    </button>
+  ) : null;
+  const actionFeedbackActions = liveActionsEnabled ? (
+    <button
+      type="button"
+      style={{
+        ...styles.secondaryButton,
+        ...(reloadingBoard ? styles.actionButtonDisabled : {})
+      }}
+      disabled={reloadingBoard}
+      onClick={() => {
+        void reloadBoard({
+          successNotice: "Live board reloaded from the current harness contract."
+        });
+      }}
+    >
+      {reloadingBoard ? "Reloading live board..." : "Reload live board"}
+    </button>
+  ) : null;
 
   function getDraftValue(
     actionKey: string,
@@ -1209,6 +1289,12 @@ export function HarnessBoardPage(props: {
           actionLabel: input.noticeLabel
         })
       );
+      if (shouldResyncBoardAfterActionError(error)) {
+        await reloadBoard({
+          successNotice: `Live board re-synced after ${input.noticeLabel.toLowerCase()} failed.`,
+          preserveActionError: true
+        });
+      }
     } finally {
       setSubmittingActionKey(null);
     }
@@ -1417,7 +1503,7 @@ export function HarnessBoardPage(props: {
             {!board && loadError ? <p style={{ ...styles.panelBody, marginTop: "0.8rem" }}>{loadError.message}</p> : null}
           </section>
 
-          {loadError ? renderBoardFeedback("Board load issue", loadError) : null}
+          {loadError ? renderBoardFeedback("Board load issue", loadError, loadFeedbackActions) : null}
 
           <section style={styles.panel}>
             <h2 style={styles.panelTitle}>CEO approvals</h2>
@@ -1645,7 +1731,7 @@ export function HarnessBoardPage(props: {
           ) : null}
 
           {actionNotice ? <p style={styles.statusSuccess}>{actionNotice}</p> : null}
-          {actionError ? renderBoardFeedback("Latest board action issue", actionError) : null}
+          {actionError ? renderBoardFeedback("Latest board action issue", actionError, actionFeedbackActions) : null}
 
           {lastActionResult && lastActionLabel ? (
             <section style={styles.panel}>

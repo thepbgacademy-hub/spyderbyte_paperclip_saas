@@ -65,6 +65,7 @@ This file tracks the new harness subproject only.
 - [ ] Keep live board failure handling contract-driven as the board becomes more interactive.
   - [x] Preserve bounded harness HTTP failure codes in the browser client instead of flattening them into one generic board error.
   - [x] Extend the live page to surface action-family-aware recovery guidance for proposal review, CEO review, lane resume/unblock, and throttled live-board loads instead of flattening everything into one generic failure string.
+  - [x] Resync the live board automatically after stale/conflict contract failures and expose explicit bounded reload controls instead of leaving board recovery as a purely manual mental step.
 
 ## Current Next Slice
 

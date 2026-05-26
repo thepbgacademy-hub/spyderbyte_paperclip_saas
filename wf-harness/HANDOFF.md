@@ -36,6 +36,7 @@ The first harness implementation slice is now built and verified:
 - preview/live mutability should stay explicit too: the board page should track control mode directly and only use preview fallback state when the client says it is in preview, rather than inferring mutability from fixture ids or other incidental board fields
 - seeded board props should carry the same explicit control-mode truth: if a preloaded board is preview-only, the page must receive and preserve that preview mode instead of assuming every non-null initial board is live
 - live board failures should stay contract-aware too: the browser client should preserve bounded HTTP error codes like `conflict`, `rate_limited`, and `invalid_request`, and the page should turn those into engine-truthful operator copy instead of flattening everything into one generic failure string
+- stale board-action failures should resync the live board through the same bounded fetch seam instead of only telling the operator to reload mentally; conflict/invalid-request/not-found paths are exactly where status truth and control truth can drift apart under pressure
 - board-contract coverage should include the non-final-assembly attention seam too: `resolve-attention` preview/live rendering should be exercised directly so resume/unblock controls do not quietly drift behind the richer CEO-review branch
 
 ## External References

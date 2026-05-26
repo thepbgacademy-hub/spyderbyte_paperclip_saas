@@ -13,6 +13,7 @@ import {
   describeBoardLoadFeedback,
   getContractActionState,
   resolveBoardLoadFailure,
+  shouldResyncBoardAfterActionError,
   summarizeContractActionState,
   HarnessBoardPage
 } from "../apps/web/src/pages/HarnessBoardPage.js";
@@ -643,6 +644,7 @@ describe("harness board UI", () => {
     expect(markup).toContain("Latest board action issue");
     expect(markup).toContain("Next safe step");
     expect(markup).toContain("Refresh the board and confirm the proposal is still pending CEO review.");
+    expect(markup).toContain("Reload live board");
   });
 
   it("keeps preview board content visible while surfacing bounded live-load recovery guidance", () => {
@@ -664,8 +666,39 @@ describe("harness board UI", () => {
     expect(markup).toContain("Board load issue");
     expect(markup).toContain("The live harness board is temporarily unavailable right now.");
     expect(markup).toContain("Retry the live board load after the current service interruption clears.");
+    expect(markup).toContain("Retry live board load");
     expect(markup).toContain("Preview");
     expect(markup).toContain("Pressure-test the pricing lane");
+  });
+
+  it("marks stale bounded action errors for board resync", () => {
+    expect(
+      shouldResyncBoardAfterActionError(
+        new HarnessBoardClientError({
+          code: "conflict",
+          message: "Unable to update harness board",
+          status: 409
+        })
+      )
+    ).toBe(true);
+    expect(
+      shouldResyncBoardAfterActionError(
+        new HarnessBoardClientError({
+          code: "invalid_request",
+          message: "Unable to update harness board",
+          status: 400
+        })
+      )
+    ).toBe(true);
+    expect(
+      shouldResyncBoardAfterActionError(
+        new HarnessBoardClientError({
+          code: "rate_limited",
+          message: "Unable to update harness board",
+          status: 429
+        })
+      )
+    ).toBe(false);
   });
 
   it("keeps localhost fallback usable while preserving bounded live-load feedback", () => {
