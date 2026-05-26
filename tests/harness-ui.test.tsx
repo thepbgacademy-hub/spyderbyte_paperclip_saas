@@ -7,7 +7,11 @@ import {
   type HarnessBoardColumn
 } from "../apps/web/src/components/HarnessBoard.js";
 import { HarnessCardDrawer } from "../apps/web/src/components/HarnessCardDrawer.js";
-import { buildContractActionPayload, HarnessBoardPage } from "../apps/web/src/pages/HarnessBoardPage.js";
+import {
+  buildContractActionPayload,
+  getContractActionState,
+  HarnessBoardPage
+} from "../apps/web/src/pages/HarnessBoardPage.js";
 import type { HarnessBoardResponse } from "../src/harness/board-service.js";
 
 const cards: HarnessBoardCard[] = [
@@ -271,6 +275,33 @@ describe("harness board UI", () => {
     });
   });
 
+  it("tracks missing required live fields from the contract instead of guessing", () => {
+    const actionState = getContractActionState({
+      fields: [
+        {
+          name: "completionSummary",
+          label: "Completion summary",
+          description: "Explain the finished board outcome.",
+          required: true
+        }
+      ],
+      option: {
+        value: "complete_run",
+        label: "Complete run",
+        description: "Close the current run.",
+        exampleRequest: {
+          decision: "complete_run"
+        }
+      },
+      draftValues: {}
+    });
+
+    expect(actionState.payload).toEqual({
+      decision: "complete_run"
+    });
+    expect(actionState.missingRequiredFields).toEqual(["Completion summary"]);
+  });
+
   it("renders clean persona cards without backend execution noise", () => {
     const markup = renderToStaticMarkup(
       <HarnessBoard
@@ -346,6 +377,9 @@ describe("harness board UI", () => {
     expect(markup).toContain("Live request fields for Approve proposal");
     expect(markup).toContain("Live request fields for Defer proposal");
     expect(markup).toContain("Live request fields for Deny proposal");
+    expect(markup).toContain("Live payload preview");
+    expect(markup).toContain("Live payload is ready.");
+    expect(markup).toContain("Reset to contract defaults");
     expect(markup).toContain("Reason: Final assembly");
     expect(markup).toContain("Requested: 11:24 AM");
     expect(markup).toContain("Required field");

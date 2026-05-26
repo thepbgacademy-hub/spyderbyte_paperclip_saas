@@ -32,6 +32,7 @@ The first harness implementation slice is now built and verified:
 - bounded refinements of the same deliverable should usually stay in the same lane, while broader directional or phase-change requests should open a new lane or a fresh board cycle instead of overloading old lane context
 - future disk-backed artifact retrieval must reject unsafe artifact ids before any file lookup; raw `artifactId` values should never become trusted path input without strict validation and root-bound path checks
 - live board mutation input must stay contract-owned: if an action needs tenant-entered values, the page should collect them only from bounded `requestFields` metadata and build the payload from the harness contract instead of growing a second UI-defined request schema
+- interactive board controls should stay contract-owned too: field defaults, required-field checks, reset behavior, and payload previews should all derive from the bounded harness action contract instead of becoming page-local request logic
 
 ## External References
 

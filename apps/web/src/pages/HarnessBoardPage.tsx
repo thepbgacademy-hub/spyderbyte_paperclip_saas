@@ -264,6 +264,16 @@ const styles = {
     cursor: "not-allowed",
     opacity: 0.55
   } satisfies CSSProperties,
+  secondaryButton: {
+    background: "transparent",
+    border: "1px solid rgba(148, 163, 184, 0.2)",
+    borderRadius: "999px",
+    color: "#cbd5e1",
+    cursor: "pointer",
+    fontSize: "0.74rem",
+    fontWeight: 600,
+    padding: "0.48rem 0.74rem"
+  } satisfies CSSProperties,
   statusNotice: {
     color: "#bae6fd",
     fontSize: "0.78rem",
@@ -404,11 +414,13 @@ function getContractFieldSeed(
   option?: HarnessActionOptionView
 ) {
   if (!option?.exampleRequest) {
-    return field.suggestedValue ?? "";
+    return field.suggestedValue ?? field.allowedValues?.[0] ?? "";
   }
 
   const seededValue = option.exampleRequest[field.name];
-  return typeof seededValue === "string" ? seededValue : field.suggestedValue ?? "";
+  return typeof seededValue === "string"
+    ? seededValue
+    : field.suggestedValue ?? field.allowedValues?.[0] ?? "";
 }
 
 function fieldAppliesToOption(field: HarnessActionFieldView, option?: HarnessActionOptionView) {
@@ -434,31 +446,52 @@ function fieldAppliesToOption(field: HarnessActionFieldView, option?: HarnessAct
   return true;
 }
 
-export function buildContractActionPayload(input: {
+function fieldIsRequiredForOption(field: HarnessActionFieldView, option?: HarnessActionOptionView) {
+  if (!fieldAppliesToOption(field, option)) {
+    return false;
+  }
+
+  return field.required || Boolean(field.requiredWhenValue);
+}
+
+export function getContractActionState(input: {
   fields: HarnessActionFieldView[] | undefined;
   option: HarnessActionOptionView;
   draftValues: Record<string, string>;
 }) {
   const payload: Record<string, unknown> = { ...(input.option.exampleRequest ?? {}) };
+  const visibleFields = (input.fields ?? []).filter((field) => fieldAppliesToOption(field, input.option));
+  const missingRequiredFields: string[] = [];
 
-  if (!input.fields || input.fields.length === 0) {
-    return payload;
-  }
-
-  for (const field of input.fields) {
-    if (!fieldAppliesToOption(field, input.option)) {
-      continue;
-    }
-
+  for (const field of visibleFields) {
     const draftValue = input.draftValues[field.name];
-    if (typeof draftValue !== "string" || draftValue.trim().length === 0) {
+    const draftText = typeof draftValue === "string" ? draftValue.trim() : "";
+    const seedText = getContractFieldSeed(field, input.option).trim();
+    const nextValue = draftText || seedText;
+
+    if (!nextValue) {
+      if (fieldIsRequiredForOption(field, input.option)) {
+        missingRequiredFields.push(field.label);
+      }
       continue;
     }
 
-    payload[field.name] = draftValue.trim();
+    payload[field.name] = nextValue;
   }
 
-  return payload;
+  return {
+    payload,
+    visibleFields,
+    missingRequiredFields
+  };
+}
+
+export function buildContractActionPayload(input: {
+  fields: HarnessActionFieldView[] | undefined;
+  option: HarnessActionOptionView;
+  draftValues: Record<string, string>;
+}) {
+  return getContractActionState(input).payload;
 }
 
 function renderActionConstraintSummary(input: { allowedValues: readonly string[] | undefined; label: string }) {
@@ -762,6 +795,18 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
     }));
   }
 
+  function resetDraftValues(actionKey: string) {
+    setActionDrafts((current) => {
+      if (!current[actionKey]) {
+        return current;
+      }
+
+      const nextDrafts = { ...current };
+      delete nextDrafts[actionKey];
+      return nextDrafts;
+    });
+  }
+
   async function handleContractAction(input: {
     actionKey: string;
     actionPath: string;
@@ -796,6 +841,7 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
       const nextBoard = await harnessBoardClient.fetchBoard();
       const preferredCardId = "cardId" in actionResult ? actionResult.cardId : null;
       applyBoardState(nextBoard, preferredCardId);
+      resetDraftValues(input.actionKey);
       setLastActionResult(actionResult);
       setLastActionLabel(input.noticeLabel);
       setActionNotice(describeSubmittedActionResult(actionResult, input.noticeLabel));
@@ -857,6 +903,47 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
           );
         })}
       </ul>
+    );
+  }
+
+  function renderLiveActionComposer(input: {
+    actionKey: string;
+    fields: HarnessActionFieldView[] | undefined;
+    option: HarnessActionOptionView;
+  }) {
+    const actionState = getContractActionState({
+      fields: input.fields,
+      option: input.option,
+      draftValues: actionDrafts[input.actionKey] ?? {}
+    });
+
+    return (
+      <div style={{ display: "grid", gap: "0.45rem" }}>
+        <p style={styles.contractMeta}>{`Live request fields for ${input.option.label}`}</p>
+        {renderLiveRequestFields({
+          actionKey: input.actionKey,
+          fields: actionState.visibleFields,
+          option: input.option
+        })}
+        {actionState.missingRequiredFields.length > 0 ? (
+          <p style={styles.statusError}>
+            {`Missing required live fields: ${actionState.missingRequiredFields.join(", ")}`}
+          </p>
+        ) : (
+          <p style={styles.statusSuccess}>Live payload is ready.</p>
+        )}
+        <div style={styles.actionButtonRow}>
+          <button
+            type="button"
+            style={styles.secondaryButton}
+            onClick={() => resetDraftValues(input.actionKey)}
+          >
+            Reset to contract defaults
+          </button>
+        </div>
+        <p style={styles.contractMeta}>Live payload preview</p>
+        <pre style={styles.codeBlock}>{JSON.stringify(actionState.payload, null, 2)}</pre>
+      </div>
     );
   }
 
@@ -1004,7 +1091,7 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                       <div style={styles.actionButtonRow}>
                         {pendingAttention.actionOptions.map((option) => {
                           const actionKey = `attention:${option.value}`;
-                          const exampleRequest = buildContractActionPayload({
+                          const actionState = getContractActionState({
                             fields: pendingAttention.requestFields,
                             option,
                             draftValues: actionDrafts[actionKey] ?? {}
@@ -1012,6 +1099,7 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                           const disabled =
                             !liveActionsEnabled
                             || !pendingAttention.actionPath
+                            || actionState.missingRequiredFields.length > 0
                             || submittingActionKey !== null;
 
                           return (
@@ -1028,7 +1116,7 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                                   actionKey,
                                   actionPath: pendingAttention.actionPath!,
                                   actionMethod: pendingAttention.actionMethod,
-                                  exampleRequest,
+                                  exampleRequest: actionState.payload,
                                   confirmationLabel: option.requiresConfirmation ? option.confirmationLabel : undefined,
                                   noticeLabel: option.label
                                 })}
@@ -1042,8 +1130,7 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                         const actionKey = `attention:${option.value}`;
                         return (
                           <div key={`${option.value}-fields`} style={{ display: "grid", gap: "0.45rem" }}>
-                            <p style={styles.contractMeta}>{`Live request fields for ${option.label}`}</p>
-                            {renderLiveRequestFields({
+                            {renderLiveActionComposer({
                               actionKey,
                               fields: pendingAttention.requestFields,
                               option
@@ -1095,7 +1182,7 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                         <div style={styles.actionButtonRow}>
                           {approval.actionOptions.map((option) => {
                             const actionKey = `approval:${approval.id}:${option.value}`;
-                            const exampleRequest = buildContractActionPayload({
+                            const actionState = getContractActionState({
                               fields: approval.requestFields,
                               option,
                               draftValues: actionDrafts[actionKey] ?? {}
@@ -1103,6 +1190,7 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                             const disabled =
                               !liveActionsEnabled
                               || !approval.actionPath
+                              || actionState.missingRequiredFields.length > 0
                               || submittingActionKey !== null;
 
                             return (
@@ -1119,7 +1207,7 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                                     actionKey,
                                     actionPath: approval.actionPath,
                                     actionMethod: approval.actionMethod,
-                                    exampleRequest,
+                                    exampleRequest: actionState.payload,
                                     confirmationLabel: option.requiresConfirmation ? option.confirmationLabel : undefined,
                                     noticeLabel: option.label
                                   })}
@@ -1133,8 +1221,7 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                           const actionKey = `approval:${approval.id}:${option.value}`;
                           return (
                             <div key={`${option.value}-fields`} style={{ display: "grid", gap: "0.45rem" }}>
-                              <p style={styles.contractMeta}>{`Live request fields for ${option.label}`}</p>
-                              {renderLiveRequestFields({
+                              {renderLiveActionComposer({
                                 actionKey,
                                 fields: approval.requestFields,
                                 option
