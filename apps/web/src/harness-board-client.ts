@@ -299,6 +299,26 @@ export function createHarnessBoardClient(
   fetchImpl: typeof fetch = fetch,
   browserWindow: Pick<Window, "location"> | undefined = typeof window === "undefined" ? undefined : window
 ) {
+  async function submitAction(
+    actionPath: string,
+    body: Record<string, unknown>,
+    actionMethod: "POST" = "POST"
+  ): Promise<unknown> {
+    const response = await fetchImpl(actionPath, {
+      method: actionMethod,
+      credentials: "include",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+    if (!response.ok) {
+      throw new Error("Unable to update harness board");
+    }
+
+    return (await response.json()) as unknown;
+  }
+
   function isBrowserFallbackEnabled(): boolean {
     return Boolean(browserWindow && isLoopbackHost(browserWindow.location.hostname));
   }
@@ -319,6 +339,8 @@ export function createHarnessBoardClient(
       }
 
       return (await response.json()) as HarnessBoardResponse;
-    }
+    },
+
+    submitAction
   };
 }

@@ -31,6 +31,44 @@ describe("harness board client", () => {
     expect(client.isBrowserFallbackEnabled()).toBe(false);
   });
 
+  it("submits bounded board actions through the live contract path", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: "approved" })
+    });
+    const client = createHarnessBoardClient(
+      fetchImpl as unknown as typeof fetch,
+      { location: { hostname: "app.spyderbyte.cloud" } as Window["location"] }
+    );
+
+    await expect(
+      client.submitAction("/api/harness/proposals/proposal_1/decision", { decision: "approve" })
+    ).resolves.toEqual({ status: "approved" });
+
+    expect(fetchImpl).toHaveBeenCalledWith("/api/harness/proposals/proposal_1/decision", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ decision: "approve" })
+    });
+  });
+
+  it("fails closed when a bounded board action request is rejected", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false
+    });
+    const client = createHarnessBoardClient(
+      fetchImpl as unknown as typeof fetch,
+      { location: { hostname: "app.spyderbyte.cloud" } as Window["location"] }
+    );
+
+    await expect(
+      client.submitAction("/api/harness/runs/run_1/review-attention", { decision: "complete_run" })
+    ).rejects.toThrow("Unable to update harness board");
+  });
+
   it("keeps the localhost fallback aligned with the bounded board action contract", () => {
     const client = createHarnessBoardClient(
       fetch,

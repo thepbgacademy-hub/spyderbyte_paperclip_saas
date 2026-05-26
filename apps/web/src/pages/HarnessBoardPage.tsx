@@ -230,6 +230,38 @@ const styles = {
     overflowX: "auto",
     padding: "0.7rem 0.8rem",
     whiteSpace: "pre-wrap"
+  } satisfies CSSProperties,
+  actionButtonRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "0.55rem",
+    marginTop: "0.35rem"
+  } satisfies CSSProperties,
+  actionButton: {
+    background: "linear-gradient(135deg, rgba(14, 165, 233, 0.22), rgba(8, 47, 73, 0.82))",
+    border: "1px solid rgba(125, 211, 252, 0.2)",
+    borderRadius: "999px",
+    color: "#e0f2fe",
+    cursor: "pointer",
+    fontSize: "0.78rem",
+    fontWeight: 700,
+    padding: "0.52rem 0.8rem"
+  } satisfies CSSProperties,
+  actionButtonDisabled: {
+    cursor: "not-allowed",
+    opacity: 0.55
+  } satisfies CSSProperties,
+  statusNotice: {
+    color: "#bae6fd",
+    fontSize: "0.78rem",
+    lineHeight: 1.45,
+    margin: 0
+  } satisfies CSSProperties,
+  statusError: {
+    color: "#fca5a5",
+    fontSize: "0.78rem",
+    lineHeight: 1.45,
+    margin: 0
   } satisfies CSSProperties
 };
 
@@ -295,6 +327,16 @@ function renderActionOptions(
       })}
     </ul>
   );
+}
+
+function getOptionButtonLabel(
+  option: {
+    label: string;
+    value: string;
+  },
+  recommendedOptionValue?: string
+) {
+  return option.value === recommendedOptionValue ? `${option.label} (recommended)` : option.label;
 }
 
 function renderRequestFields(
@@ -464,6 +506,17 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
     (props.initialBoard ?? (browserFallbackEnabled ? harnessBoardClient.getFallback() : null))?.cards[0]?.id ?? ""
   );
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [submittingActionKey, setSubmittingActionKey] = useState<string | null>(null);
+
+  function applyBoardState(nextBoard: HarnessBoardResponse) {
+    setLoadError(null);
+    setBoard(nextBoard);
+    setOpenCardId((current: string) =>
+      nextBoard.cards.some((card) => card.id === current) ? current : nextBoard.cards[0]?.id || ""
+    );
+  }
 
   useEffect(() => {
     if (props.initialBoard) {
@@ -478,11 +531,7 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
         if (cancelled) {
           return;
         }
-        setLoadError(null);
-        setBoard(nextBoard);
-        setOpenCardId((current: string) =>
-          nextBoard.cards.some((card) => card.id === current) ? current : nextBoard.cards[0]?.id || ""
-        );
+        applyBoardState(nextBoard);
       })
       .catch(() => {
         if (cancelled) {
@@ -490,11 +539,7 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
         }
         if (browserFallbackEnabled) {
           const fallbackBoard = harnessBoardClient.getFallback();
-          setLoadError(null);
-          setBoard(fallbackBoard);
-          setOpenCardId((current: string) =>
-            fallbackBoard.cards.some((card) => card.id === current) ? current : fallbackBoard.cards[0]?.id || ""
-          );
+          applyBoardState(fallbackBoard);
           return;
         }
 
@@ -523,6 +568,7 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
   const packageGovernanceCount = completionPackage?.governanceItems.length ?? 0;
   const packageRecommendationCount = completionPackage?.recommendations.length ?? 0;
   const packageObjectionCount = completionPackage?.objections.length ?? 0;
+  const liveActionsEnabled = Boolean(board && board.runId !== "harness-browser-fallback");
   const boardPulseItems = [
     {
       key: "attention",
@@ -545,6 +591,43 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
         : "No tenant-facing package is currently being assembled."
     }
   ];
+
+  async function handleContractAction(input: {
+    actionKey: string;
+    actionPath: string;
+    actionMethod: "POST" | undefined;
+    exampleRequest: Record<string, unknown> | undefined;
+    confirmationLabel: string | undefined;
+    noticeLabel: string;
+  }) {
+    if (!liveActionsEnabled || !input.exampleRequest) {
+      return;
+    }
+
+    if (
+      input.confirmationLabel
+      && typeof window !== "undefined"
+      && typeof window.confirm === "function"
+      && !window.confirm(input.confirmationLabel)
+    ) {
+      return;
+    }
+
+    setSubmittingActionKey(input.actionKey);
+    setActionError(null);
+    setActionNotice(null);
+
+    try {
+      await harnessBoardClient.submitAction(input.actionPath, input.exampleRequest, input.actionMethod ?? "POST");
+      const nextBoard = await harnessBoardClient.fetchBoard();
+      applyBoardState(nextBoard);
+      setActionNotice(`${input.noticeLabel} submitted.`);
+    } catch {
+      setActionError("Unable to update the live harness board right now.");
+    } finally {
+      setSubmittingActionKey(null);
+    }
+  }
 
   return (
     <main data-testid="page-board" style={styles.page}>
@@ -681,6 +764,46 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                   })}
                   {renderRequestFields(pendingAttention.requestFields)}
                   {renderActionOptions(pendingAttention.actionOptions, pendingAttention.recommendedOptionValue)}
+                  {pendingAttention.actionOptions?.length ? (
+                    <>
+                      <div style={styles.actionButtonRow}>
+                        {pendingAttention.actionOptions.map((option) => {
+                          const actionKey = `attention:${option.value}`;
+                          const disabled =
+                            !liveActionsEnabled
+                            || !pendingAttention.actionPath
+                            || !option.exampleRequest
+                            || submittingActionKey !== null;
+
+                          return (
+                            <button
+                              key={option.value}
+                              style={{
+                                ...styles.actionButton,
+                                ...(disabled ? styles.actionButtonDisabled : {})
+                              }}
+                              type="button"
+                              disabled={disabled}
+                              onClick={() =>
+                                handleContractAction({
+                                  actionKey,
+                                  actionPath: pendingAttention.actionPath!,
+                                  actionMethod: pendingAttention.actionMethod,
+                                  exampleRequest: option.exampleRequest,
+                                  confirmationLabel: option.requiresConfirmation ? option.confirmationLabel : undefined,
+                                  noticeLabel: option.label
+                                })}
+                            >
+                              {submittingActionKey === actionKey ? "Submitting..." : getOptionButtonLabel(option, pendingAttention.recommendedOptionValue)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {!liveActionsEnabled ? (
+                        <p style={styles.statusNotice}>Live board actions are unavailable in localhost fallback mode.</p>
+                      ) : null}
+                    </>
+                  ) : null}
                 </li>
               </ul>
             </section>
@@ -715,11 +838,54 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                     })}
                     {renderRequestFields(approval.requestFields)}
                     {renderActionOptions(approval.actionOptions, approval.recommendedOptionValue)}
+                    {approval.actionOptions?.length ? (
+                      <>
+                        <div style={styles.actionButtonRow}>
+                          {approval.actionOptions.map((option) => {
+                            const actionKey = `approval:${approval.id}:${option.value}`;
+                            const disabled =
+                              !liveActionsEnabled
+                              || !approval.actionPath
+                              || !option.exampleRequest
+                              || submittingActionKey !== null;
+
+                            return (
+                              <button
+                                key={option.value}
+                                style={{
+                                  ...styles.actionButton,
+                                  ...(disabled ? styles.actionButtonDisabled : {})
+                                }}
+                                type="button"
+                                disabled={disabled}
+                                onClick={() =>
+                                  handleContractAction({
+                                    actionKey,
+                                    actionPath: approval.actionPath,
+                                    actionMethod: approval.actionMethod,
+                                    exampleRequest: option.exampleRequest,
+                                    confirmationLabel: option.requiresConfirmation ? option.confirmationLabel : undefined,
+                                    noticeLabel: option.label
+                                  })}
+                              >
+                                {submittingActionKey === actionKey ? "Submitting..." : getOptionButtonLabel(option, approval.recommendedOptionValue)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {!liveActionsEnabled ? (
+                          <p style={styles.statusNotice}>Live board actions are unavailable in localhost fallback mode.</p>
+                        ) : null}
+                      </>
+                    ) : null}
                   </li>
                 ))}
               </ul>
             </section>
           ) : null}
+
+          {actionNotice ? <p style={styles.statusNotice}>{actionNotice}</p> : null}
+          {actionError ? <p style={styles.statusError}>{actionError}</p> : null}
 
           {board?.recentDecisions.length ? (
             <section style={styles.panel}>

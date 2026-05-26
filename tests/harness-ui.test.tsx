@@ -296,6 +296,8 @@ describe("harness board UI", () => {
     expect(markup).toContain("Review proposal decision");
     expect(markup).toContain("Approve proposal");
     expect(markup).toContain("Deny this proposal and close the follow-on request?");
+    expect(markup).toContain("Approve proposal (recommended)");
+    expect(markup).toContain("Complete run (recommended)");
     expect(markup).toContain("Recommended next action");
     expect(markup).toContain("POST /api/harness/runs/run_ui_test_1/review-attention");
     expect(markup).toContain("POST /api/harness/proposals/proposal_ui_test_1/decision");
