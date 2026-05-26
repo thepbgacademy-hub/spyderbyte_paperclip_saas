@@ -340,6 +340,11 @@ export type HarnessBoardLoadResolution = {
   feedback: HarnessBoardFeedback;
 };
 
+export type HarnessBoardContractRefreshFeedback = {
+  message: string;
+  details: string[];
+};
+
 export type HarnessBoardActionAttempt = {
   actionKey: string;
   actionPath: string;
@@ -741,6 +746,19 @@ export function getBoardContractActionFieldMap(board: HarnessBoardResponse | nul
   return fieldMap;
 }
 
+function describeActionKey(actionKey: string) {
+  const [family, identifier, optionValue] = actionKey.split(":");
+  if (family === "attention" && identifier) {
+    return humanizeValue(identifier);
+  }
+
+  if (family === "approval" && optionValue) {
+    return humanizeValue(optionValue);
+  }
+
+  return humanizeValue(actionKey.replace(/:/g, " "));
+}
+
 export type HarnessBoardContractRefreshImpact = {
   removedActionDraftKeys: string[];
   removedFieldOverrideCount: number;
@@ -848,12 +866,18 @@ export function pruneOpenActionComposerKeysForBoard(
   return changed ? nextComposerKeys : openActionComposerKeys;
 }
 
-export function describeBoardContractRefreshImpact(impact: HarnessBoardContractRefreshImpact) {
+export function describeBoardContractRefreshImpact(
+  impact: HarnessBoardContractRefreshImpact
+): HarnessBoardContractRefreshFeedback | null {
   const parts: string[] = [];
+  const details: string[] = [];
 
   if (impact.removedActionDraftKeys.length > 0) {
     parts.push(
       `${impact.removedActionDraftKeys.length} stale action draft${impact.removedActionDraftKeys.length === 1 ? "" : "s"} removed`
+    );
+    details.push(
+      `Removed stale drafts for: ${impact.removedActionDraftKeys.map((actionKey) => describeActionKey(actionKey)).join(", ")}.`
     );
   }
 
@@ -867,13 +891,19 @@ export function describeBoardContractRefreshImpact(impact: HarnessBoardContractR
     parts.push(
       `${impact.closedComposerActionKeys.length} stale composer${impact.closedComposerActionKeys.length === 1 ? "" : "s"} closed`
     );
+    details.push(
+      `Closed stale composers for: ${impact.closedComposerActionKeys.map((actionKey) => describeActionKey(actionKey)).join(", ")}.`
+    );
   }
 
   if (parts.length === 0) {
     return null;
   }
 
-  return `Live board contract refreshed: ${parts.join(", ")}.`;
+  return {
+    message: `Live board contract refreshed: ${parts.join(", ")}.`,
+    details
+  };
 }
 
 export function buildContractActionPayload(input: {
@@ -1599,7 +1629,7 @@ export function HarnessBoardPage(props: {
   initialActionAttempt?: HarnessBoardActionAttempt | null;
   initialActionFailureCause?: unknown;
   initialActionDrafts?: Record<string, Record<string, string>>;
-  initialContractRefreshNotice?: string | null;
+  initialContractRefreshNotice?: HarnessBoardContractRefreshFeedback | null;
 } = {}) {
   const browserFallbackEnabled = harnessBoardClient.isBrowserFallbackEnabled();
   const fallbackState = browserFallbackEnabled ? harnessBoardClient.getFallbackState() : null;
@@ -1615,7 +1645,7 @@ export function HarnessBoardPage(props: {
   const [actionError, setActionError] = useState<HarnessBoardFeedback | null>(props.initialActionFeedback ?? null);
   const [actionFailureCause, setActionFailureCause] = useState<unknown>(props.initialActionFailureCause ?? null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
-  const [contractRefreshNotice, setContractRefreshNotice] = useState<string | null>(
+  const [contractRefreshNotice, setContractRefreshNotice] = useState<HarnessBoardContractRefreshFeedback | null>(
     props.initialContractRefreshNotice ?? null
   );
   const [lastActionResult, setLastActionResult] = useState<HarnessBoardActionResult | null>(null);
@@ -2481,7 +2511,16 @@ export function HarnessBoardPage(props: {
           {actionNotice ? <p style={styles.statusSuccess}>{actionNotice}</p> : null}
           {contractRefreshNotice ? (
             <div style={{ display: "grid", gap: "0.45rem" }}>
-              <p style={styles.statusNotice}>{contractRefreshNotice}</p>
+              <p style={styles.statusNotice}>{contractRefreshNotice.message}</p>
+              {contractRefreshNotice.details.length > 0 ? (
+                <ul style={styles.feedbackList}>
+                  {contractRefreshNotice.details.map((detail) => (
+                    <li key={detail} style={{ ...styles.feedbackItem, color: "#bae6fd" }}>
+                      {detail}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               <div style={styles.actionButtonRow}>
                 <button
                   type="button"

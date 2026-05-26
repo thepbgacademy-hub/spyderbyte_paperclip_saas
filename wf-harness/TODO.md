@@ -156,3 +156,4 @@ This file tracks the new harness subproject only.
 - [x] Catch stale draft drift before submit when the live board already has the current request-field contract, so invalid allowed values or hidden stale fields disable submit and require reset instead of depending on a later server rejection.
 - [x] Keep stale draft cleanup bounded when the live board contract refreshes, so removed actions/fields are pruned from local composer state but same-action drift still surfaces with explicit field-level reset reasons.
 - [x] Surface bounded contract-refresh guidance when a live reload prunes stale action drafts, removed request fields, or stale open composers, so concurrency-driven cleanup is visible instead of silent.
+- [x] Keep contract-refresh guidance action-specific enough to name the bounded actions/composers that were pruned, so concurrent board changes do not collapse into a vague “state changed” notice.

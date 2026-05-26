@@ -610,9 +610,13 @@ describe("harness board UI", () => {
       removedFieldOverrideCount: 1,
       closedComposerActionKeys: ["approval:proposal_old:approve"]
     });
-    expect(describeBoardContractRefreshImpact(impact)).toBe(
-      "Live board contract refreshed: 1 stale action draft removed, 1 field override pruned, 1 stale composer closed."
-    );
+    expect(describeBoardContractRefreshImpact(impact)).toEqual({
+      message: "Live board contract refreshed: 1 stale action draft removed, 1 field override pruned, 1 stale composer closed.",
+      details: [
+        "Removed stale drafts for: approve.",
+        "Closed stale composers for: approve."
+      ]
+    });
   });
 
   it("returns no refresh notice when a bounded contract reload leaves local composer state intact", () => {
@@ -840,11 +844,15 @@ describe("harness board UI", () => {
       <HarnessBoardPage
         initialBoard={boardResponse}
         initialControlMode="live"
-        initialContractRefreshNotice="Live board contract refreshed: 1 stale action draft removed."
+        initialContractRefreshNotice={{
+          message: "Live board contract refreshed: 1 stale action draft removed.",
+          details: ["Removed stale drafts for: approve."]
+        }}
       />
     );
 
     expect(markup).toContain("Live board contract refreshed: 1 stale action draft removed.");
+    expect(markup).toContain("Removed stale drafts for: approve.");
     expect(markup).toContain("Dismiss contract refresh note");
   });
 
