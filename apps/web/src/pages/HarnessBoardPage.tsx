@@ -907,6 +907,8 @@ export function canResetBoardActionComposerAfterError(error: unknown) {
   return error instanceof HarnessBoardClientError && error.code === "invalid_request";
 }
 
+type HarnessBoardActionAttemptSupport = "unavailable" | "missing" | "reset_only" | "replay_safe";
+
 function getActionAttemptControlValue(requestBody: Record<string, unknown>) {
   if (typeof requestBody.decision === "string") {
     return requestBody.decision;
@@ -919,35 +921,157 @@ function getActionAttemptControlValue(requestBody: Record<string, unknown>) {
   return null;
 }
 
-function boardStillSupportsActionAttempt(
+function actionPayloadMatchesCurrentContract(input: {
+  fields:
+    | HarnessBoardResponse["pendingApprovals"][number]["requestFields"]
+    | NonNullable<NonNullable<HarnessBoardResponse["pendingAttention"]>["requestFields"]>
+    | undefined;
+  option: HarnessActionOptionView;
+  requestBody: Record<string, unknown>;
+}) {
+  const visibleFields = (input.fields ?? []).filter((field) => fieldAppliesToOption(field, input.option));
+  const visibleFieldNames = new Set<string>(visibleFields.map((field) => field.name));
+  const optionExampleRequest = (input.option.exampleRequest ?? {}) as Record<string, unknown>;
+  const controlFieldNames = new Set<string>(
+    ["decision", "command"].filter((fieldName) => typeof optionExampleRequest[fieldName] === "string")
+  );
+
+  for (const [fieldName, fieldValue] of Object.entries(input.requestBody)) {
+    if (controlFieldNames.has(fieldName)) {
+      if (fieldValue !== optionExampleRequest[fieldName]) {
+        return false;
+      }
+      continue;
+    }
+
+    const field = visibleFields.find((candidate) => candidate.name === fieldName);
+    if (!field || typeof fieldValue !== "string") {
+      return false;
+    }
+
+    const trimmedValue = fieldValue.trim();
+    if (!trimmedValue) {
+      if (fieldIsRequiredForOption(field, input.option)) {
+        return false;
+      }
+      continue;
+    }
+
+    if (field.allowedValues?.length && !field.allowedValues.some((allowedValue) => allowedValue === trimmedValue)) {
+      return false;
+    }
+  }
+
+  for (const field of visibleFields) {
+    if (!fieldIsRequiredForOption(field, input.option)) {
+      continue;
+    }
+
+    const requestValue = input.requestBody[field.name];
+    if (typeof requestValue !== "string" || requestValue.trim().length === 0) {
+      return false;
+    }
+  }
+
+  for (const fieldName of Object.keys(optionExampleRequest)) {
+    if (!controlFieldNames.has(fieldName) && !visibleFieldNames.has(fieldName)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function getBoardActionAttemptSupport(
   board: HarnessBoardResponse | null,
   attempt: HarnessBoardActionAttempt | null
-) {
-  if (!board || !attempt) {
-    return false;
+) : HarnessBoardActionAttemptSupport {
+  if (!attempt) {
+    return "missing";
+  }
+
+  if (!board) {
+    return "unavailable";
   }
 
   const attemptControlValue = getActionAttemptControlValue(attempt.requestBody);
   if (!attemptControlValue) {
-    return false;
+    return "missing";
   }
 
-  const attentionMatches =
+  const matchingAttentionOption =
     board.pendingAttention?.actionPath === attempt.actionPath
     && board.pendingAttention.actionMethod === attempt.actionMethod
     && board.pendingAttention.actionRoute === attempt.actionRoute
-    && board.pendingAttention.actionOptions?.some((option) => option.value === attemptControlValue);
+      ? board.pendingAttention.actionOptions?.find((option) => option.value === attemptControlValue)
+      : undefined;
 
-  if (attentionMatches) {
-    return true;
+  if (matchingAttentionOption) {
+    return actionPayloadMatchesCurrentContract({
+      fields: board.pendingAttention?.requestFields,
+      option: matchingAttentionOption,
+      requestBody: attempt.requestBody
+    })
+      ? "replay_safe"
+      : "reset_only";
   }
 
-  return board.pendingApprovals.some((approval) =>
-    approval.actionPath === attempt.actionPath
-    && approval.actionMethod === attempt.actionMethod
-    && approval.actionRoute === attempt.actionRoute
-    && approval.actionOptions?.some((option) => option.value === attemptControlValue)
-  );
+  for (const approval of board.pendingApprovals) {
+    if (
+      approval.actionPath !== attempt.actionPath
+      || approval.actionMethod !== attempt.actionMethod
+      || approval.actionRoute !== attempt.actionRoute
+    ) {
+      continue;
+    }
+
+    const matchingOption = approval.actionOptions?.find((option) => option.value === attemptControlValue);
+    if (!matchingOption) {
+      continue;
+    }
+
+    return actionPayloadMatchesCurrentContract({
+      fields: approval.requestFields,
+      option: matchingOption,
+      requestBody: attempt.requestBody
+    })
+      ? "replay_safe"
+      : "reset_only";
+  }
+
+  return "missing";
+}
+
+function decorateActionFeedbackForCurrentContract(
+  feedback: HarnessBoardFeedback | null,
+  support: HarnessBoardActionAttemptSupport,
+  noticeLabel: string | null
+) {
+  if (!feedback || !noticeLabel) {
+    return feedback;
+  }
+
+  if (support === "replay_safe" || support === "unavailable") {
+    return feedback;
+  }
+
+  if (support === "reset_only") {
+    return {
+      ...feedback,
+      recoverySteps: [
+        ...feedback.recoverySteps,
+        `The current board still supports ${noticeLabel.toLowerCase()}, but the last payload no longer fits the bounded contract. Reset the composer to the current defaults before trying again.`
+      ]
+    };
+  }
+
+  return {
+    ...feedback,
+    recoverySteps: [
+      ...feedback.recoverySteps,
+      `The current board no longer exposes ${noticeLabel.toLowerCase()}. Reload or choose a fresh bounded action from the current contract instead of replaying the stale request.`
+    ]
+  };
 }
 
 function renderBoardFeedback(title: string, feedback: HarnessBoardFeedback | null, actions?: ReactNode) {
@@ -1271,7 +1395,14 @@ export function HarnessBoardPage(props: {
   const packageObjectionCount = completionPackage?.objections.length ?? 0;
   const isPreviewMode = controlMode === "preview";
   const liveActionsEnabled = Boolean(board && controlMode === "live");
-  const canReplayPendingActionAttempt = liveActionsEnabled && boardStillSupportsActionAttempt(board, pendingActionAttempt);
+  const pendingActionAttemptSupport = getBoardActionAttemptSupport(board, pendingActionAttempt);
+  const canReplayPendingActionAttempt = liveActionsEnabled && pendingActionAttemptSupport === "replay_safe";
+  const canResetPendingActionAttempt = liveActionsEnabled && pendingActionAttemptSupport !== "missing";
+  const actionFeedback = decorateActionFeedbackForCurrentContract(
+    actionError,
+    pendingActionAttemptSupport,
+    pendingActionAttempt?.noticeLabel ?? null
+  );
   const lastActionEffect = lastActionResult ? describeActionResultEffect(lastActionResult) : null;
   const boardPulseItems = [
     {
@@ -1322,23 +1453,25 @@ export function HarnessBoardPage(props: {
       {reloadingBoard ? "Reloading live board..." : "Retry live board load"}
     </button>
   ) : null;
-  const actionFeedbackActions = liveActionsEnabled ? (
+  const actionFeedbackActions = canReloadLiveBoard || (pendingActionAttempt && actionError) ? (
     <>
-      <button
-        type="button"
-        style={{
-          ...styles.secondaryButton,
-          ...(reloadingBoard ? styles.actionButtonDisabled : {})
-        }}
-        disabled={reloadingBoard}
-        onClick={() => {
-          void reloadBoard({
-            successNotice: "Live board reloaded from the current harness contract."
-          });
-        }}
-      >
-        {reloadingBoard ? "Reloading live board..." : "Reload live board"}
-      </button>
+      {canReloadLiveBoard ? (
+        <button
+          type="button"
+          style={{
+            ...styles.secondaryButton,
+            ...(reloadingBoard ? styles.actionButtonDisabled : {})
+          }}
+          disabled={reloadingBoard}
+          onClick={() => {
+            void reloadBoard({
+              successNotice: "Live board reloaded from the current harness contract."
+            });
+          }}
+        >
+          {reloadingBoard ? "Reloading live board..." : "Reload live board"}
+        </button>
+      ) : null}
       {pendingActionAttempt && actionError && canReplayPendingActionAttempt && canRetryBoardActionAfterError(actionFailureCause) ? (
         <button
           type="button"
@@ -1358,7 +1491,7 @@ export function HarnessBoardPage(props: {
             : `Retry ${pendingActionAttempt.noticeLabel}`}
         </button>
       ) : null}
-      {pendingActionAttempt && actionError && canReplayPendingActionAttempt && canResetBoardActionComposerAfterError(actionFailureCause) ? (
+      {pendingActionAttempt && actionError && canResetPendingActionAttempt && canResetBoardActionComposerAfterError(actionFailureCause) ? (
         <button
           type="button"
           style={styles.secondaryButton}
@@ -1371,6 +1504,26 @@ export function HarnessBoardPage(props: {
           }}
         >
           Reset composer defaults
+        </button>
+      ) : null}
+      {pendingActionAttempt
+      && actionError
+      && (pendingActionAttemptSupport === "missing" || pendingActionAttemptSupport === "unavailable") ? (
+        <button
+          type="button"
+          style={styles.secondaryButton}
+          onClick={() => {
+            setPendingActionAttempt(null);
+            setActionError(null);
+            setActionFailureCause(null);
+            setActionNotice(
+              pendingActionAttemptSupport === "missing"
+                ? `Dismissed stale recovery guidance for ${pendingActionAttempt.noticeLabel.toLowerCase()}.`
+                : `Dismissed recovery guidance for ${pendingActionAttempt.noticeLabel.toLowerCase()}.`
+            );
+          }}
+        >
+          {pendingActionAttemptSupport === "missing" ? "Dismiss stale action issue" : "Dismiss action issue"}
         </button>
       ) : null}
     </>
@@ -1885,7 +2038,7 @@ export function HarnessBoardPage(props: {
           ) : null}
 
           {actionNotice ? <p style={styles.statusSuccess}>{actionNotice}</p> : null}
-          {actionError ? renderBoardFeedback("Latest board action issue", actionError, actionFeedbackActions) : null}
+          {actionError ? renderBoardFeedback("Latest board action issue", actionFeedback, actionFeedbackActions) : null}
 
           {lastActionResult && lastActionLabel ? (
             <section style={styles.panel}>

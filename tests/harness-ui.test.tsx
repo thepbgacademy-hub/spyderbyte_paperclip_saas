@@ -740,6 +740,10 @@ describe("harness board UI", () => {
     );
 
     expect(markup).not.toContain("Retry Approve proposal");
+    expect(markup).toContain("Dismiss stale action issue");
+    expect(markup).toContain(
+      "The current board no longer exposes approve proposal. Reload or choose a fresh bounded action from the current contract instead of replaying the stale request."
+    );
   });
 
   it("renders composer reset controls for invalid live action payload failures when the failed attempt is known", () => {
@@ -781,6 +785,48 @@ describe("harness board UI", () => {
     expect(markup).not.toContain("Retry Resume lane");
   });
 
+  it("keeps reset controls but suppresses replay when the action still exists and only the payload drifted away from the current contract", () => {
+    const feedback = describeBoardActionFeedback(
+      new HarnessBoardClientError({
+        code: "invalid_request",
+        message: "Unable to update harness board",
+        status: 400
+      }),
+      {
+        actionRoute: "review-attention",
+        actionLabel: "Start fresh cycle"
+      }
+    );
+    const markup = renderToStaticMarkup(
+      <HarnessBoardPage
+        initialBoard={boardResponse}
+        initialControlMode="live"
+        initialActionFeedback={feedback}
+        initialActionFailureCause={
+          new HarnessBoardClientError({
+            code: "invalid_request",
+            message: "Unable to update harness board",
+            status: 400
+          })
+        }
+        initialActionAttempt={{
+          actionKey: "attention:start_fresh_cycle",
+          actionPath: "/api/harness/runs/run_ui_test_1/review-attention",
+          actionRoute: "review-attention",
+          actionMethod: "POST",
+          requestBody: { decision: "start_fresh_cycle", mode: "invalid_mode" },
+          noticeLabel: "Start fresh cycle"
+        }}
+      />
+    );
+
+    expect(markup).toContain("Reset composer defaults");
+    expect(markup).not.toContain("Retry Start fresh cycle");
+    expect(markup).toContain(
+      "The current board still supports start fresh cycle, but the last payload no longer fits the bounded contract. Reset the composer to the current defaults before trying again."
+    );
+  });
+
   it("hides composer reset controls when the failed request is no longer supported by the current attention contract", () => {
     const feedback = describeBoardActionFeedback(
       new HarnessBoardClientError({
@@ -818,6 +864,48 @@ describe("harness board UI", () => {
 
     expect(markup).not.toContain("Reset composer defaults");
     expect(markup).not.toContain("Retry Unblock lane");
+    expect(markup).toContain("Dismiss stale action issue");
+  });
+
+  it("does not mislabel a missing live board as a stale action and still allows dismissing the failed attempt", () => {
+    const feedback = describeBoardActionFeedback(
+      new HarnessBoardClientError({
+        code: "conflict",
+        message: "Unable to update harness board",
+        status: 409
+      }),
+      {
+        actionRoute: "proposal-decision",
+        actionLabel: "Approve proposal"
+      }
+    );
+    const markup = renderToStaticMarkup(
+      <HarnessBoardPage
+        initialBoard={null}
+        initialControlMode="preview"
+        initialActionFeedback={feedback}
+        initialActionFailureCause={
+          new HarnessBoardClientError({
+            code: "conflict",
+            message: "Unable to update harness board",
+            status: 409
+          })
+        }
+        initialActionAttempt={{
+          actionKey: "approval:proposal_ui_test_1:approve",
+          actionPath: "/api/harness/proposals/proposal_ui_test_1/decision",
+          actionRoute: "proposal-decision",
+          actionMethod: "POST",
+          requestBody: { decision: "approve" },
+          noticeLabel: "Approve proposal"
+        }}
+      />
+    );
+
+    expect(markup).toContain("Dismiss action issue");
+    expect(markup).not.toContain(
+      "The current board no longer exposes approve proposal. Reload or choose a fresh bounded action from the current contract instead of replaying the stale request."
+    );
   });
 
   it("keeps preview board content visible while surfacing bounded live-load recovery guidance", () => {
