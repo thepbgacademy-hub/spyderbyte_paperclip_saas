@@ -12,6 +12,35 @@ export type HarnessBoardActionResult =
 
 export type HarnessBoardControlMode = "live" | "preview";
 
+export type HarnessBoardClientErrorCode =
+  | "conflict"
+  | "invalid_request"
+  | "not_found"
+  | "rate_limited"
+  | "request_rejected"
+  | "service_unavailable"
+  | "unauthorized"
+  | "unknown";
+
+export class HarnessBoardClientError extends Error {
+  readonly code: HarnessBoardClientErrorCode;
+  readonly status: number;
+  readonly retryAfterSeconds: number | null;
+
+  constructor(input: {
+    code: HarnessBoardClientErrorCode;
+    message: string;
+    status: number;
+    retryAfterSeconds?: number | null;
+  }) {
+    super(input.message);
+    this.name = "HarnessBoardClientError";
+    this.code = input.code;
+    this.status = input.status;
+    this.retryAfterSeconds = input.retryAfterSeconds ?? null;
+  }
+}
+
 const defaultBoardResponse: HarnessBoardResponse = {
   runId: "harness-browser-fallback",
   workflowId: "wf_connect_first_workflow",
@@ -314,6 +343,45 @@ function isLoopbackHost(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
 }
 
+function isHarnessBoardErrorCode(value: unknown): value is HarnessBoardClientErrorCode {
+  return [
+    "conflict",
+    "invalid_request",
+    "not_found",
+    "rate_limited",
+    "request_rejected",
+    "service_unavailable",
+    "unauthorized",
+    "unknown"
+  ].includes(String(value));
+}
+
+async function readHarnessError(response: Response, fallbackMessage: string) {
+  let parsedCode: HarnessBoardClientErrorCode = "unknown";
+
+  try {
+    const errorBody = (await response.json()) as { code?: unknown };
+    if (isHarnessBoardErrorCode(errorBody?.code)) {
+      parsedCode = errorBody.code;
+    }
+  } catch {
+    parsedCode = "unknown";
+  }
+
+  const retryAfterValue = response.headers.get("retry-after");
+  const retryAfterSeconds =
+    typeof retryAfterValue === "string" && retryAfterValue.trim().length > 0
+      ? Number.parseInt(retryAfterValue, 10)
+      : Number.NaN;
+
+  throw new HarnessBoardClientError({
+    code: parsedCode,
+    message: fallbackMessage,
+    status: response.status,
+    retryAfterSeconds: Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : null
+  });
+}
+
 export function createHarnessBoardClient(
   fetchImpl: typeof fetch = fetch,
   browserWindow: Pick<Window, "location"> | undefined = typeof window === "undefined" ? undefined : window
@@ -332,7 +400,7 @@ export function createHarnessBoardClient(
       body: JSON.stringify(body)
     });
     if (!response.ok) {
-      throw new Error("Unable to update harness board");
+      await readHarnessError(response, "Unable to update harness board");
     }
 
     return (await response.json()) as HarnessBoardActionResult;
@@ -361,7 +429,7 @@ export function createHarnessBoardClient(
         credentials: "include"
       });
       if (!response.ok) {
-        throw new Error("Unable to load harness board");
+        await readHarnessError(response, "Unable to load harness board");
       }
 
       return (await response.json()) as HarnessBoardResponse;

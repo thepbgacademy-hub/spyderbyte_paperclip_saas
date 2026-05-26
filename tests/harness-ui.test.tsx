@@ -257,6 +257,55 @@ const boardResponse: HarnessBoardResponse = {
   }
 };
 
+const resolveAttentionBoardResponse: HarnessBoardResponse = {
+  ...boardResponse,
+  runId: "run_ui_test_2",
+  pendingAttention: {
+    kind: "await_lane_resume",
+    runState: "waiting",
+    statusLabel: "Waiting on lane resume",
+    summary: "Resume the pricing lane once the tenant confirms the updated revenue assumption.",
+    actionRoute: "resolve-attention",
+    actionPath: "/api/harness/runs/run_ui_test_2/resolve-attention",
+    actionMethod: "POST",
+    actionLabel: "Resume lane",
+    actionDescription: "Resume the waiting lane when the required board input is ready.",
+    requestFields: [
+      {
+        name: "command",
+        label: "Resolution command",
+        description: "Choose the single bounded command that resolves this attention state.",
+        required: true,
+        allowedValues: ["resume_lane"]
+      },
+      {
+        name: "resumeSummary",
+        label: "Resume summary",
+        description: "Optional tenant-safe note describing what changed before execution resumes.",
+        required: false
+      }
+    ],
+    actionOptions: [
+      {
+        value: "resume_lane",
+        label: "Resume lane",
+        description: "Return the lane to active execution with an optional bounded resume note.",
+        emphasis: "primary",
+        nextEffectSummary: "The lane returns to active execution and re-enters the worker queue through the existing harness path.",
+        exampleRequest: { command: "resume_lane" }
+      }
+    ],
+    recommendedOptionValue: "resume_lane",
+    allowedCommands: ["resume_lane"],
+    requestedAtLabel: "11:41 AM",
+    reasonLabel: "Awaiting tenant confirmation",
+    targetCardId: "card-cfo-forecast",
+    targetPersona: "CFO",
+    targetTitle: "Pressure-test the pricing lane",
+    targetSummary: "Resume CFO lane: Pressure-test the pricing lane"
+  }
+};
+
 describe("harness board UI", () => {
   it("builds bounded live action payloads from contract fields plus user drafts", () => {
     const attentionOption = boardResponse.pendingAttention?.actionOptions?.find((option) => option.value === "start_fresh_cycle");
@@ -476,6 +525,23 @@ describe("harness board UI", () => {
     expect(markup).toContain("&quot;decision&quot;:&quot;start_fresh_cycle&quot;,&quot;mode&quot;:&quot;reopen_deferred&quot;");
     expect(markup).not.toContain("raw execution log");
     expect(markup).not.toContain("tool");
+  });
+
+  it("renders bounded resolve-attention guidance directly from the harness contract", () => {
+    const markup = renderToStaticMarkup(<HarnessBoardPage initialBoard={resolveAttentionBoardResponse} />);
+
+    expect(markup).toContain("Resume lane");
+    expect(markup).toContain("Waiting on lane resume");
+    expect(markup).toContain("Resume the pricing lane once the tenant confirms the updated revenue assumption.");
+    expect(markup).toContain("POST /api/harness/runs/run_ui_test_2/resolve-attention");
+    expect(markup).toContain("Action family: resolve attention");
+    expect(markup).toContain("Allowed commands: resume_lane");
+    expect(markup).toContain("Resolution command");
+    expect(markup).toContain("Resume summary");
+    expect(markup).toContain("Resume CFO lane: Pressure-test the pricing lane");
+    expect(markup).toContain("Hide composer for Resume lane");
+    expect(markup).toContain("Live request fields for Resume lane");
+    expect(markup).toContain("&quot;command&quot;:&quot;resume_lane&quot;");
   });
 
   it("keeps a prop-seeded preview board read-only when the control mode says preview", () => {

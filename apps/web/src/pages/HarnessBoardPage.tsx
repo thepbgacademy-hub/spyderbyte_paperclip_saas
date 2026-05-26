@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 
 import {
   createHarnessBoardClient,
+  HarnessBoardClientError,
   type HarnessBoardActionResult,
   type HarnessBoardControlMode,
   type HarnessBoardResponse
@@ -610,6 +611,56 @@ function describeActionResultEffect(result: HarnessBoardActionResult) {
   }
 }
 
+function describeBoardLoadError(error: unknown) {
+  if (!(error instanceof HarnessBoardClientError)) {
+    return "Unable to load the harness board right now.";
+  }
+
+  switch (error.code) {
+    case "unauthorized":
+      return "Your session can’t access the live harness board right now.";
+    case "rate_limited":
+      return error.retryAfterSeconds && error.retryAfterSeconds > 0
+        ? `Live harness board traffic is throttled for ${error.retryAfterSeconds} more second${error.retryAfterSeconds === 1 ? "" : "s"}.`
+        : "Live harness board traffic is throttled for a moment. Try again shortly.";
+    case "service_unavailable":
+      return "The live harness board is temporarily unavailable right now.";
+    case "request_rejected":
+      return "This browser request was rejected before the live harness board could respond.";
+    case "not_found":
+      return "The live harness board route is unavailable right now.";
+    default:
+      return "Unable to load the harness board right now.";
+  }
+}
+
+function describeBoardActionError(error: unknown, fallbackLabel: string) {
+  if (!(error instanceof HarnessBoardClientError)) {
+    return `Unable to ${fallbackLabel.toLowerCase()} right now.`;
+  }
+
+  switch (error.code) {
+    case "unauthorized":
+      return "Your session can’t submit this live board action right now.";
+    case "conflict":
+      return "The live harness board changed before this action could be applied. Refresh the board and try again.";
+    case "invalid_request":
+      return "This action payload no longer matches the live board contract.";
+    case "rate_limited":
+      return error.retryAfterSeconds && error.retryAfterSeconds > 0
+        ? `Live board actions are throttled for ${error.retryAfterSeconds} more second${error.retryAfterSeconds === 1 ? "" : "s"}.`
+        : "Live board actions are throttled for a moment. Try again shortly.";
+    case "request_rejected":
+      return "This live board action was rejected before it reached the harness boundary.";
+    case "service_unavailable":
+      return "The live harness board can’t accept this action right now.";
+    case "not_found":
+      return "This live board action route is no longer available.";
+    default:
+      return `Unable to ${fallbackLabel.toLowerCase()} right now.`;
+  }
+}
+
 function renderCompletionPackage(board: HarnessBoardResponse) {
   const completionPackage = board.completionPackage;
   if (!completionPackage) {
@@ -768,7 +819,7 @@ export function HarnessBoardPage(props: {
         }
         applyBoardState(nextBoard, null, "live");
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (cancelled) {
           return;
         }
@@ -778,7 +829,7 @@ export function HarnessBoardPage(props: {
           return;
         }
 
-        setLoadError("Unable to load the harness board right now.");
+        setLoadError(describeBoardLoadError(error));
         setBoard(null);
         setOpenCardId("");
       });
@@ -922,8 +973,8 @@ export function HarnessBoardPage(props: {
       setLastActionResult(actionResult);
       setLastActionLabel(input.noticeLabel);
       setActionNotice(describeSubmittedActionResult(actionResult, input.noticeLabel));
-    } catch {
-      setActionError("Unable to update the live harness board right now.");
+    } catch (error) {
+      setActionError(describeBoardActionError(error, input.noticeLabel));
     } finally {
       setSubmittingActionKey(null);
     }

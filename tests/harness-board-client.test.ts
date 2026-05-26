@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createHarnessBoardClient } from "../apps/web/src/harness-board-client.js";
+import {
+  createHarnessBoardClient,
+  HarnessBoardClientError
+} from "../apps/web/src/harness-board-client.js";
 
 describe("harness board client", () => {
   it("enables browser fallback only on loopback hosts", () => {
@@ -19,7 +22,12 @@ describe("harness board client", () => {
 
   it("does not silently fall back on non-loopback hosts when the live request fails", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
-      ok: false
+      ok: false,
+      status: 500,
+      headers: {
+        get: vi.fn().mockReturnValue(null)
+      },
+      json: async () => ({ code: "service_unavailable" })
     });
     const client = createHarnessBoardClient(
       fetchImpl as unknown as typeof fetch,
@@ -57,7 +65,12 @@ describe("harness board client", () => {
 
   it("fails closed when a bounded board action request is rejected", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
-      ok: false
+      ok: false,
+      status: 409,
+      headers: {
+        get: vi.fn().mockReturnValue(null)
+      },
+      json: async () => ({ code: "conflict" })
     });
     const client = createHarnessBoardClient(
       fetchImpl as unknown as typeof fetch,
@@ -66,7 +79,35 @@ describe("harness board client", () => {
 
     await expect(
       client.submitAction("/api/harness/runs/run_1/review-attention", { decision: "complete_run" })
-    ).rejects.toThrow("Unable to update harness board");
+    ).rejects.toMatchObject({
+      name: "HarnessBoardClientError",
+      code: "conflict",
+      status: 409
+    } satisfies Partial<HarnessBoardClientError>);
+  });
+
+  it("preserves structured rate-limit details from the live action seam", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      headers: {
+        get: vi.fn().mockImplementation((name: string) => (name === "retry-after" ? "7" : null))
+      },
+      json: async () => ({ code: "rate_limited" })
+    });
+    const client = createHarnessBoardClient(
+      fetchImpl as unknown as typeof fetch,
+      { location: { hostname: "app.spyderbyte.cloud" } as Window["location"] }
+    );
+
+    await expect(
+      client.submitAction("/api/harness/proposals/proposal_1/decision", { decision: "approve" })
+    ).rejects.toMatchObject({
+      name: "HarnessBoardClientError",
+      code: "rate_limited",
+      status: 429,
+      retryAfterSeconds: 7
+    } satisfies Partial<HarnessBoardClientError>);
   });
 
   it("keeps the localhost fallback aligned with the bounded board action contract", () => {

@@ -61,6 +61,9 @@ This file tracks the new harness subproject only.
 - [ ] Add an explicit unsafe-artifact-id guard before any future disk-backed artifact retrieval or local blob-staging seam is introduced.
   - [x] Confirm the current artifact seam is still in-memory and tenant-scoped, so `artifactId` does not yet resolve into filesystem paths or direct disk reads.
   - [ ] Require future artifact retrieval to validate artifact ids against a strict allowlist format, reject separators and traversal encodings, and verify the resolved path stays under the intended artifact root before touching disk.
+- [ ] Keep live board failure handling contract-driven as the board becomes more interactive.
+  - [x] Preserve bounded harness HTTP failure codes in the browser client instead of flattening them into one generic board error.
+  - [ ] Extend the live page to surface more action-specific recovery guidance once richer tenant-facing mutation affordances are introduced.
 
 ## Current Next Slice
 
@@ -78,6 +81,7 @@ This file tracks the new harness subproject only.
 - [x] Make repeated defer decisions idempotent when no new note or policy context is introduced.
 - [ ] Decide which board-memory records should stay purely operational in Wealth Factory versus which ones should later export into tenant-owned Obsidian as long-memory business records.
 - [ ] Decide whether the widened derived `completionPackage` should stay a read model or graduate into a persisted packaged-output artifact in a later slice.
+- [ ] Keep `resolve-attention` and later action-family branches covered wherever the board contract is consumed, so `review-attention` does not become the only richly rendered control path.
 - [x] Add explicit packaging policy for how recommendations, objections, and deferred governance items should shape the tenant-facing final handoff.
 - [ ] Decide whether denied governance items should remain derived read-model packaging only or become exportable board-memory artifacts later.
 - [x] Decide whether completed-lane runs should reject or boundedly reopen new follow-on proposals instead of falling back to generic lane-creation rules.
