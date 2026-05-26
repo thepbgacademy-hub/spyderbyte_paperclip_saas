@@ -623,6 +623,22 @@ describe("harness board UI", () => {
     ]);
   });
 
+  it("describes timed-out board loads with bounded reload guidance", () => {
+    const feedback = describeBoardLoadFeedback(
+      new HarnessBoardClientError({
+        code: "timed_out",
+        message: "Harness board request timed out",
+        status: 408
+      })
+    );
+
+    expect(feedback.message).toContain("took too long to respond");
+    expect(feedback.recoverySteps).toEqual([
+      "Retry the live board load through the bounded reload control.",
+      "If the timeout repeats, pause before retrying again so the board does not slip into a manual refresh loop."
+    ]);
+  });
+
   it("renders initial action feedback guidance when the page is seeded with a live-action failure", () => {
     const feedback = describeBoardActionFeedback(
       new HarnessBoardClientError({
@@ -803,12 +819,41 @@ describe("harness board UI", () => {
     expect(
       canRetryBoardActionAfterError(
         new HarnessBoardClientError({
+          code: "timed_out",
+          message: "Harness board request timed out",
+          status: 408
+        })
+      )
+    ).toBe(true);
+    expect(
+      canRetryBoardActionAfterError(
+        new HarnessBoardClientError({
           code: "conflict",
           message: "Unable to update harness board",
           status: 409
         })
       )
     ).toBe(false);
+  });
+
+  it("describes timed-out board actions with bounded replay guidance", () => {
+    const feedback = describeBoardActionFeedback(
+      new HarnessBoardClientError({
+        code: "timed_out",
+        message: "Harness board request timed out",
+        status: 408
+      }),
+      {
+        actionRoute: "proposal-decision",
+        actionLabel: "Approve proposal"
+      }
+    );
+
+    expect(feedback.message).toContain("took too long to respond");
+    expect(feedback.recoverySteps).toEqual([
+      "Retry the same bounded board action through the explicit replay control.",
+      "If the timeout repeats, reload the board before trying again so the control surface stays current."
+    ]);
   });
 
   it("marks invalid-request failures for composer reset instead of replay", () => {

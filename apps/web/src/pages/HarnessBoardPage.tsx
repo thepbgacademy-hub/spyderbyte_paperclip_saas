@@ -655,6 +655,8 @@ function describeBoardLoadError(error: unknown) {
       return error.retryAfterSeconds && error.retryAfterSeconds > 0
         ? `Live harness board traffic is throttled for ${error.retryAfterSeconds} more second${error.retryAfterSeconds === 1 ? "" : "s"}.`
         : "Live harness board traffic is throttled for a moment. Try again shortly.";
+    case "timed_out":
+      return "The live harness board took too long to respond.";
     case "service_unavailable":
       return "The live harness board is temporarily unavailable right now.";
     case "request_rejected":
@@ -695,6 +697,15 @@ export function describeBoardLoadFeedback(error: unknown): HarnessBoardFeedback 
         recoverySteps: [
           "Wait for the bounded retry window to clear.",
           "Reload the live harness board after the throttle window expires."
+        ]
+      };
+    case "timed_out":
+      return {
+        message: describeBoardLoadError(error),
+        recoveryTitle: "Safe retry",
+        recoverySteps: [
+          "Retry the live board load through the bounded reload control.",
+          "If the timeout repeats, pause before retrying again so the board does not slip into a manual refresh loop."
         ]
       };
     case "not_found":
@@ -765,6 +776,8 @@ function describeBoardActionError(error: unknown, fallbackLabel: string) {
       return error.retryAfterSeconds && error.retryAfterSeconds > 0
         ? `Live board actions are throttled for ${error.retryAfterSeconds} more second${error.retryAfterSeconds === 1 ? "" : "s"}.`
         : "Live board actions are throttled for a moment. Try again shortly.";
+    case "timed_out":
+      return "The live harness board took too long to respond to this action.";
     case "request_rejected":
       return "This live board action was rejected before it reached the harness boundary.";
     case "service_unavailable":
@@ -815,6 +828,17 @@ export function describeBoardActionFeedback(
       recoverySteps: [
         "Wait for the bounded retry window to clear.",
         "Retry the same board action after the throttle window expires."
+      ]
+    };
+  }
+
+  if (error.code === "timed_out") {
+    return {
+      message: fallbackMessage,
+      recoveryTitle: "Safe retry",
+      recoverySteps: [
+        "Retry the same bounded board action through the explicit replay control.",
+        "If the timeout repeats, reload the board before trying again so the control surface stays current."
       ]
     };
   }
@@ -876,7 +900,7 @@ export function shouldResyncBoardAfterActionError(error: unknown) {
 
 export function canRetryBoardActionAfterError(error: unknown) {
   return error instanceof HarnessBoardClientError
-    && (error.code === "rate_limited" || error.code === "service_unavailable" || error.code === "request_rejected");
+    && (error.code === "rate_limited" || error.code === "service_unavailable" || error.code === "request_rejected" || error.code === "timed_out");
 }
 
 export function canResetBoardActionComposerAfterError(error: unknown) {

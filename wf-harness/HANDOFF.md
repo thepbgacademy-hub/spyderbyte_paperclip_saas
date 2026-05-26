@@ -38,6 +38,7 @@ The first harness implementation slice is now built and verified:
 - live board failures should stay contract-aware too: the browser client should preserve bounded HTTP error codes like `conflict`, `rate_limited`, and `invalid_request`, and the page should turn those into engine-truthful operator copy instead of flattening everything into one generic failure string
 - stale board-action failures should resync the live board through the same bounded fetch seam instead of only telling the operator to reload mentally; conflict/invalid-request/not-found paths are exactly where status truth and control truth can drift apart under pressure
 - contract-aware action recovery should stay explicit too: when the live board knows the failed bounded action, retryable failures should offer a safe replay path, invalid-request failures should offer a composer reset path, and neither should rely on the operator to remember the last payload by hand
+- browser-side harness requests should stay bounded in time too: live board loads and actions should fail with an explicit timeout class instead of hanging indefinitely, and that timeout should feed the same contract-owned recovery seam as other retryable failures
 - board-contract coverage should include the non-final-assembly attention seam too: `resolve-attention` preview/live rendering should be exercised directly so resume/unblock controls do not quietly drift behind the richer CEO-review branch
 
 ## External References

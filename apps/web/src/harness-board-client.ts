@@ -19,6 +19,7 @@ export type HarnessBoardClientErrorCode =
   | "rate_limited"
   | "request_rejected"
   | "service_unavailable"
+  | "timed_out"
   | "unauthorized"
   | "unknown";
 
@@ -339,6 +340,8 @@ const defaultBoardResponse: HarnessBoardResponse = {
   }
 };
 
+const DEFAULT_HARNESS_BOARD_REQUEST_TIMEOUT_MS = 8_000;
+
 function isLoopbackHost(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
 }
@@ -384,14 +387,46 @@ async function readHarnessError(response: Response, fallbackMessage: string) {
 
 export function createHarnessBoardClient(
   fetchImpl: typeof fetch = fetch,
-  browserWindow: Pick<Window, "location"> | undefined = typeof window === "undefined" ? undefined : window
+  browserWindow: Pick<Window, "location"> | undefined = typeof window === "undefined" ? undefined : window,
+  options: { requestTimeoutMs?: number } = {}
 ) {
+  const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_HARNESS_BOARD_REQUEST_TIMEOUT_MS;
+
+  async function fetchWithTimeout(input: string, init: RequestInit): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), requestTimeoutMs);
+
+    try {
+      return await fetchImpl(input, {
+        ...init,
+        signal: controller.signal
+      });
+    } catch (error) {
+      if (
+        typeof error === "object"
+        && error !== null
+        && "name" in error
+        && error.name === "AbortError"
+      ) {
+        throw new HarnessBoardClientError({
+          code: "timed_out",
+          message: "Harness board request timed out",
+          status: 408
+        });
+      }
+
+      throw error;
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
+  }
+
   async function submitAction(
     actionPath: string,
     body: Record<string, unknown>,
     actionMethod: "POST" = "POST"
   ): Promise<HarnessBoardActionResult> {
-    const response = await fetchImpl(actionPath, {
+    const response = await fetchWithTimeout(actionPath, {
       method: actionMethod,
       credentials: "include",
       headers: {
@@ -425,7 +460,7 @@ export function createHarnessBoardClient(
     },
 
     async fetchBoard(): Promise<HarnessBoardResponse> {
-      const response = await fetchImpl("/api/harness/board", {
+      const response = await fetchWithTimeout("/api/harness/board", {
         credentials: "include"
       });
       if (!response.ok) {

@@ -67,6 +67,7 @@ This file tracks the new harness subproject only.
   - [x] Extend the live page to surface action-family-aware recovery guidance for proposal review, CEO review, lane resume/unblock, and throttled live-board loads instead of flattening everything into one generic failure string.
   - [x] Resync the live board automatically after stale/conflict contract failures and expose explicit bounded reload controls instead of leaving board recovery as a purely manual mental step.
   - [x] Keep retryable live-action recovery contract-owned too, with safe replay and composer-reset paths driven by bounded failure classes instead of manual operator memory.
+  - [x] Bound live board requests with an explicit timeout class so browser-side hangs fail into the same recovery seam instead of waiting indefinitely under pressure.
 
 ## Current Next Slice
 

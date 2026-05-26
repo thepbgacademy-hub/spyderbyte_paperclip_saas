@@ -35,7 +35,10 @@ describe("harness board client", () => {
     );
 
     await expect(client.fetchBoard()).rejects.toThrow("Unable to load harness board");
-    expect(fetchImpl).toHaveBeenCalledWith("/api/harness/board", { credentials: "include" });
+    expect(fetchImpl).toHaveBeenCalledWith("/api/harness/board", expect.objectContaining({
+      credentials: "include",
+      signal: expect.any(AbortSignal)
+    }));
     expect(client.isBrowserFallbackEnabled()).toBe(false);
   });
 
@@ -53,14 +56,15 @@ describe("harness board client", () => {
       client.submitAction("/api/harness/proposals/proposal_1/decision", { decision: "approve" })
     ).resolves.toEqual({ status: "approved" });
 
-    expect(fetchImpl).toHaveBeenCalledWith("/api/harness/proposals/proposal_1/decision", {
+    expect(fetchImpl).toHaveBeenCalledWith("/api/harness/proposals/proposal_1/decision", expect.objectContaining({
       method: "POST",
       credentials: "include",
       headers: {
         "content-type": "application/json"
       },
-      body: JSON.stringify({ decision: "approve" })
-    });
+      body: JSON.stringify({ decision: "approve" }),
+      signal: expect.any(AbortSignal)
+    }));
   });
 
   it("fails closed when a bounded board action request is rejected", async () => {
@@ -107,6 +111,50 @@ describe("harness board client", () => {
       code: "rate_limited",
       status: 429,
       retryAfterSeconds: 7
+    } satisfies Partial<HarnessBoardClientError>);
+  });
+
+  it("fails with a bounded timed_out error when the live board load exceeds the request timeout", async () => {
+    const fetchImpl = vi.fn().mockImplementation((_input: string, init?: RequestInit) => {
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(Object.assign(new Error("Aborted"), { name: "AbortError" }));
+        });
+      });
+    });
+    const client = createHarnessBoardClient(
+      fetchImpl as unknown as typeof fetch,
+      { location: { hostname: "app.spyderbyte.cloud" } as Window["location"] },
+      { requestTimeoutMs: 5 }
+    );
+
+    await expect(client.fetchBoard()).rejects.toMatchObject({
+      name: "HarnessBoardClientError",
+      code: "timed_out",
+      status: 408
+    } satisfies Partial<HarnessBoardClientError>);
+  });
+
+  it("fails with a bounded timed_out error when a live board action exceeds the request timeout", async () => {
+    const fetchImpl = vi.fn().mockImplementation((_input: string, init?: RequestInit) => {
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(Object.assign(new Error("Aborted"), { name: "AbortError" }));
+        });
+      });
+    });
+    const client = createHarnessBoardClient(
+      fetchImpl as unknown as typeof fetch,
+      { location: { hostname: "app.spyderbyte.cloud" } as Window["location"] },
+      { requestTimeoutMs: 5 }
+    );
+
+    await expect(
+      client.submitAction("/api/harness/proposals/proposal_1/decision", { decision: "approve" })
+    ).rejects.toMatchObject({
+      name: "HarnessBoardClientError",
+      code: "timed_out",
+      status: 408
     } satisfies Partial<HarnessBoardClientError>);
   });
 
