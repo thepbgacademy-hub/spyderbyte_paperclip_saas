@@ -350,11 +350,19 @@ function humanizeValue(value: string) {
   return value.replace(/_/g, " ");
 }
 
+function joinHeadingParts(left: string, right: string) {
+  return `${left} - ${right}`;
+}
+
 function renderCompletionPackage(board: HarnessBoardResponse) {
   const completionPackage = board.completionPackage;
   if (!completionPackage) {
     return null;
   }
+
+  const packagePosture = completionPackage.hasOpenGovernanceItems
+    ? "Governance is still shaping the current tenant-facing handoff."
+    : "The tenant-facing handoff is clear of open governance items.";
 
   return (
     <section style={styles.panel}>
@@ -374,6 +382,7 @@ function renderCompletionPackage(board: HarnessBoardResponse) {
           <p style={styles.actionSummary}>{`Deliverables: ${completionPackage.deliverables.length}`}</p>
           <p style={styles.actionSummary}>{`Recommendations: ${completionPackage.recommendations.length}`}</p>
           <p style={styles.actionSummary}>{`Objections: ${completionPackage.objections.length}`}</p>
+          <p style={styles.actionSummary}>{packagePosture}</p>
           <p style={styles.actionSummary}>
             {completionPackage.hasOpenGovernanceItems
               ? "Open governance items still shape this package."
@@ -511,6 +520,31 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
   const completionPackage = board?.completionPackage;
   const packageState = completionPackage?.status === "done" ? "Ready" : completionPackage ? "Assembling" : "Idle";
   const packageDeliverableCount = completionPackage?.deliverables.length ?? 0;
+  const packageGovernanceCount = completionPackage?.governanceItems.length ?? 0;
+  const packageRecommendationCount = completionPackage?.recommendations.length ?? 0;
+  const packageObjectionCount = completionPackage?.objections.length ?? 0;
+  const boardPulseItems = [
+    {
+      key: "attention",
+      heading: joinHeadingParts("Attention", pendingAttention?.statusLabel ?? "Clear"),
+      summary: pendingAttention?.summary ?? "No active board attention is currently waiting on the CEO."
+    },
+    {
+      key: "approvals",
+      heading: joinHeadingParts("Approvals", String(pendingApprovals.length)),
+      summary:
+        pendingApprovals.length > 0
+          ? `${pendingApprovals.length} bounded approval request${pendingApprovals.length === 1 ? "" : "s"} still need CEO review.`
+          : "No pending approval requests are widening the board."
+    },
+    {
+      key: "package",
+      heading: joinHeadingParts("Package", packageState),
+      summary: completionPackage
+        ? `${packageDeliverableCount} deliverable${packageDeliverableCount === 1 ? "" : "s"}, ${packageGovernanceCount} governance item${packageGovernanceCount === 1 ? "" : "s"}, ${packageRecommendationCount} recommendation${packageRecommendationCount === 1 ? "" : "s"}, ${packageObjectionCount} objection${packageObjectionCount === 1 ? "" : "s"}.`
+        : "No tenant-facing package is currently being assembled."
+    }
+  ];
 
   return (
     <main data-testid="page-board" style={styles.page}>
@@ -565,6 +599,19 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
         />
 
         <aside style={styles.rail}>
+          <section style={styles.panel}>
+            <h2 style={styles.panelTitle}>Board pulse</h2>
+            <p style={styles.panelBody}>A bounded summary of what the board is waiting on, packaging, and carrying forward.</p>
+            <ul style={styles.actionList}>
+              {boardPulseItems.map((item) => (
+                <li key={item.key} style={styles.actionItem}>
+                  <h3 style={styles.actionHeading}>{item.heading}</h3>
+                  <p style={styles.actionSummary}>{item.summary}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
+
           <section style={styles.panel}>
             <h2 style={styles.panelTitle}>Persona workload</h2>
             <p style={styles.panelBody}>A quick view of which business personas are currently carrying visible work.</p>

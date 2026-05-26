@@ -133,3 +133,4 @@ This file tracks the new harness subproject only.
 - [x] Teach the board page and fallback to render bounded approval governance metadata from the harness contract so requested-by context, policy reasons, and next-review timing stay engine-owned instead of UI-inferred.
 - [x] Teach the board page and fallback to render bounded governance history and package read models (`recentDecisions`, `followThroughItems`, `completionPackage`) so tenant-facing board truth does not stop at action metadata.
 - [x] Teach the board page to surface bounded governance/package counts and labels from the contract so hero metrics and package sections do not fall back to page-local heuristics.
+- [x] Teach the board page to group contract-driven board posture into a bounded pulse summary for attention, approvals, and package state instead of scattering those summaries into page-local heuristics.

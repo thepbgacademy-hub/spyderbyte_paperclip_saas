@@ -319,6 +319,11 @@ describe("harness board UI", () => {
     expect(markup).toContain("Policy reason: Review for expansion");
     expect(markup).toContain("Next review trigger: Revisit after the CEO closes the current pricing board decisions.");
     expect(markup).toContain("Last decision: 11:11 AM");
+    expect(markup).toContain("Board pulse");
+    expect(markup).toContain("Attention - CEO review required");
+    expect(markup).toContain("Approvals - 1");
+    expect(markup).toContain("Package - Assembling");
+    expect(markup).toContain("1 deliverable, 1 governance item, 2 recommendations, 1 objection.");
     expect(markup).toContain("Recent decisions");
     expect(markup).toContain("CEO kept the research expansion under bounded review.");
     expect(markup).toContain("1 preserved decision");
