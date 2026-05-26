@@ -150,3 +150,4 @@ This file tracks the new harness subproject only.
 - [x] Teach the live board page to keep field defaults, required-field validation, reset behavior, and payload previews contract-driven instead of letting interactive controls invent their own request rules.
 - [x] Teach the board page to track live-vs-preview control mode explicitly and keep option composers contract-driven, so action mutability no longer depends on fallback `runId` sentinels or fully expanded per-option UI clutter.
 - [x] Keep prop-seeded preview boards explicitly read-only, so preloaded board data cannot silently bypass the preview/live mutability seam.
+- [x] Keep retry/reset recovery controls bounded to the current board contract, so stale live-action failures cannot replay or reset actions that the refreshed board no longer exposes.

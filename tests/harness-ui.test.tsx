@@ -690,8 +690,8 @@ describe("harness board UI", () => {
           })
         }
         initialActionAttempt={{
-          actionKey: "approval:proposal_1:approve",
-          actionPath: "/api/harness/proposals/proposal_1/decision",
+          actionKey: "approval:proposal_ui_test_1:approve",
+          actionPath: "/api/harness/proposals/proposal_ui_test_1/decision",
           actionRoute: "proposal-decision",
           actionMethod: "POST",
           requestBody: { decision: "approve" },
@@ -702,6 +702,44 @@ describe("harness board UI", () => {
 
     expect(markup).toContain("Retry Approve proposal");
     expect(markup).not.toContain("Reset composer defaults");
+  });
+
+  it("hides retry controls when the failed attempt is no longer part of the current live board contract", () => {
+    const feedback = describeBoardActionFeedback(
+      new HarnessBoardClientError({
+        code: "service_unavailable",
+        message: "Unable to update harness board",
+        status: 503
+      }),
+      {
+        actionRoute: "proposal-decision",
+        actionLabel: "Approve proposal"
+      }
+    );
+    const markup = renderToStaticMarkup(
+      <HarnessBoardPage
+        initialBoard={boardResponse}
+        initialControlMode="live"
+        initialActionFeedback={feedback}
+        initialActionFailureCause={
+          new HarnessBoardClientError({
+            code: "service_unavailable",
+            message: "Unable to update harness board",
+            status: 503
+          })
+        }
+        initialActionAttempt={{
+          actionKey: "approval:proposal_old:approve",
+          actionPath: "/api/harness/proposals/proposal_old/decision",
+          actionRoute: "proposal-decision",
+          actionMethod: "POST",
+          requestBody: { decision: "approve" },
+          noticeLabel: "Approve proposal"
+        }}
+      />
+    );
+
+    expect(markup).not.toContain("Retry Approve proposal");
   });
 
   it("renders composer reset controls for invalid live action payload failures when the failed attempt is known", () => {
@@ -741,6 +779,45 @@ describe("harness board UI", () => {
 
     expect(markup).toContain("Reset composer defaults");
     expect(markup).not.toContain("Retry Resume lane");
+  });
+
+  it("hides composer reset controls when the failed request is no longer supported by the current attention contract", () => {
+    const feedback = describeBoardActionFeedback(
+      new HarnessBoardClientError({
+        code: "invalid_request",
+        message: "Unable to update harness board",
+        status: 400
+      }),
+      {
+        actionRoute: "resolve-attention",
+        actionLabel: "Unblock lane"
+      }
+    );
+    const markup = renderToStaticMarkup(
+      <HarnessBoardPage
+        initialBoard={resolveAttentionBoardResponse}
+        initialControlMode="live"
+        initialActionFeedback={feedback}
+        initialActionFailureCause={
+          new HarnessBoardClientError({
+            code: "invalid_request",
+            message: "Unable to update harness board",
+            status: 400
+          })
+        }
+        initialActionAttempt={{
+          actionKey: "attention:unblock_lane",
+          actionPath: "/api/harness/runs/run_ui_test_2/resolve-attention",
+          actionRoute: "resolve-attention",
+          actionMethod: "POST",
+          requestBody: { command: "unblock_lane" },
+          noticeLabel: "Unblock lane"
+        }}
+      />
+    );
+
+    expect(markup).not.toContain("Reset composer defaults");
+    expect(markup).not.toContain("Retry Unblock lane");
   });
 
   it("keeps preview board content visible while surfacing bounded live-load recovery guidance", () => {

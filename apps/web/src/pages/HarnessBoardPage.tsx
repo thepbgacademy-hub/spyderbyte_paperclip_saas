@@ -907,6 +907,49 @@ export function canResetBoardActionComposerAfterError(error: unknown) {
   return error instanceof HarnessBoardClientError && error.code === "invalid_request";
 }
 
+function getActionAttemptControlValue(requestBody: Record<string, unknown>) {
+  if (typeof requestBody.decision === "string") {
+    return requestBody.decision;
+  }
+
+  if (typeof requestBody.command === "string") {
+    return requestBody.command;
+  }
+
+  return null;
+}
+
+function boardStillSupportsActionAttempt(
+  board: HarnessBoardResponse | null,
+  attempt: HarnessBoardActionAttempt | null
+) {
+  if (!board || !attempt) {
+    return false;
+  }
+
+  const attemptControlValue = getActionAttemptControlValue(attempt.requestBody);
+  if (!attemptControlValue) {
+    return false;
+  }
+
+  const attentionMatches =
+    board.pendingAttention?.actionPath === attempt.actionPath
+    && board.pendingAttention.actionMethod === attempt.actionMethod
+    && board.pendingAttention.actionRoute === attempt.actionRoute
+    && board.pendingAttention.actionOptions?.some((option) => option.value === attemptControlValue);
+
+  if (attentionMatches) {
+    return true;
+  }
+
+  return board.pendingApprovals.some((approval) =>
+    approval.actionPath === attempt.actionPath
+    && approval.actionMethod === attempt.actionMethod
+    && approval.actionRoute === attempt.actionRoute
+    && approval.actionOptions?.some((option) => option.value === attemptControlValue)
+  );
+}
+
 function renderBoardFeedback(title: string, feedback: HarnessBoardFeedback | null, actions?: ReactNode) {
   if (!feedback) {
     return null;
@@ -1228,6 +1271,7 @@ export function HarnessBoardPage(props: {
   const packageObjectionCount = completionPackage?.objections.length ?? 0;
   const isPreviewMode = controlMode === "preview";
   const liveActionsEnabled = Boolean(board && controlMode === "live");
+  const canReplayPendingActionAttempt = liveActionsEnabled && boardStillSupportsActionAttempt(board, pendingActionAttempt);
   const lastActionEffect = lastActionResult ? describeActionResultEffect(lastActionResult) : null;
   const boardPulseItems = [
     {
@@ -1295,7 +1339,7 @@ export function HarnessBoardPage(props: {
       >
         {reloadingBoard ? "Reloading live board..." : "Reload live board"}
       </button>
-      {pendingActionAttempt && actionError && canRetryBoardActionAfterError(actionFailureCause) ? (
+      {pendingActionAttempt && actionError && canReplayPendingActionAttempt && canRetryBoardActionAfterError(actionFailureCause) ? (
         <button
           type="button"
           style={{
@@ -1314,7 +1358,7 @@ export function HarnessBoardPage(props: {
             : `Retry ${pendingActionAttempt.noticeLabel}`}
         </button>
       ) : null}
-      {pendingActionAttempt && actionError && canResetBoardActionComposerAfterError(actionFailureCause) ? (
+      {pendingActionAttempt && actionError && canReplayPendingActionAttempt && canResetBoardActionComposerAfterError(actionFailureCause) ? (
         <button
           type="button"
           style={styles.secondaryButton}
