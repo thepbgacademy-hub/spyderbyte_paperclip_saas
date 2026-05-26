@@ -358,6 +358,213 @@ export function createHarnessBoardService(options: {
         ]);
         runtime.resumeRun({ run, cards, proposals, continuity });
         const ceoCard = cards.find((card) => card.persona === "ceo" && card.parentCardId === null);
+        const earlierUnresolvedDirectRequest = ceoCard
+          ? findLatestUnresolvedTopLevelProposalForAssignment(proposals, {
+              ceoCardId: ceoCard.id,
+              persona: normalizedPersona,
+              title: request.title,
+              deliverableType: normalizedDeliverableType
+            })
+          : null;
+
+        async function approveEarlierDirectRequestIntoExistingLane(input: {
+          proposal: HarnessSubCardProposal;
+          card: HarnessCardRecord;
+          resolution: "update_existing_lane";
+          reopenedCompletedLane?: boolean;
+          reuseMessage: string;
+          parentMessage: string;
+        }): Promise<{
+          cardId: string;
+          auditEvents: Awaited<ReturnType<typeof createHarnessAuditEvent>>[];
+        }> {
+          const approvalUpdate = await repository.markProposalApproved({
+            proposalId: input.proposal.id,
+            approvedCardId: input.card.id,
+            resolution: input.resolution
+          });
+          if (!approvalUpdate.updated) {
+            throw new Error("Harness direct child-card approval conflicted");
+          }
+          await repository.insertEvent(
+            createHarnessCardEventRecord({
+              cardId: input.card.id,
+              eventKind: "proposal_absorbed",
+              payload: {
+                proposalId: input.proposal.id,
+                parentCardId: input.proposal.parentCardId,
+                requestedByPersona: input.proposal.requestedByPersona,
+                requestedTitle: input.proposal.title,
+                deliverableType: input.proposal.deliverableType,
+                resolution: input.resolution
+              }
+            })
+          );
+          await repository.insertEvent(
+            createHarnessCardEventRecord({
+              cardId: input.card.id,
+              eventKind: "comment_added",
+              payload: {
+                message: input.reuseMessage
+              }
+            })
+          );
+          if (input.proposal.parentCardId !== input.card.id) {
+            await repository.insertEvent(
+              createHarnessCardEventRecord({
+                cardId: input.proposal.parentCardId,
+                eventKind: "comment_added",
+                payload: {
+                  message: input.parentMessage
+                }
+              })
+            );
+          }
+          await recordAbsorbedLaneContinuity({
+            repository,
+            card: input.card,
+            proposal: input.proposal,
+            resolution: input.resolution
+          });
+          await repository.insertDecision(
+            createHarnessBoardDecisionRecord({
+              runId: run.id,
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              decisionKind: "proposal_approved",
+              cardId: input.proposal.parentCardId,
+              proposalId: input.proposal.id,
+              targetCardId: input.card.id,
+              persona: input.proposal.persona,
+              deliverableType: input.proposal.deliverableType,
+              policyReason: "reused_existing_lane",
+              resolution: input.resolution,
+              recommendationSummary: createLaneRecommendationSummary({
+                persona: input.proposal.persona,
+                deliverableType: input.proposal.deliverableType,
+                policyReason: "reused_existing_lane"
+              })
+            })
+          );
+
+          const reconciledRun = await reconcileHarnessRunState({ repository, run });
+
+          return {
+            cardId: input.card.id,
+            auditEvents: [
+              createHarnessAuditEvent({
+                tenantId: access.session.tenantId,
+                actorUserId: access.session.userId,
+                eventType: "harness_proposal_approved",
+                entityId: input.proposal.id,
+                metadata: {
+                  runId: run.id,
+                  approvedCardId: input.card.id,
+                  resolution: input.resolution,
+                  reopenedCompletedLane: Boolean(input.reopenedCompletedLane),
+                  requestedByPersona: input.proposal.requestedByPersona,
+                  targetPersona: input.proposal.persona,
+                  deliverableType: input.proposal.deliverableType,
+                  hasDecisionNote: false
+                }
+              }),
+              ...toRunAuditEvents({
+                tenantId: access.session.tenantId,
+                actorUserId: access.session.userId,
+                runId: run.id,
+                previousState: run.state,
+                nextRun: reconciledRun
+              })
+            ]
+          };
+        }
+
+        async function approveEarlierDirectRequestIntoNewLane(input: {
+          proposal: HarnessSubCardProposal;
+          card: HarnessCardRecord;
+        }): Promise<{
+          cardId: string;
+          auditEvents: Awaited<ReturnType<typeof createHarnessAuditEvent>>[];
+        }> {
+          const approvalUpdate = await repository.markProposalApproved({
+            proposalId: input.proposal.id,
+            approvedCardId: input.card.id,
+            resolution: "create_lane"
+          });
+          if (!approvalUpdate.updated) {
+            throw new Error("Harness direct child-card approval conflicted");
+          }
+
+          await repository.insertCard(input.card);
+          for (const event of createBootstrapEvents(input.card)) {
+            await repository.insertEvent(event);
+          }
+          await recordCardStateContinuity({
+            repository,
+            card: input.card
+          });
+          await repository.insertEvent(
+            createHarnessCardEventRecord({
+              cardId: input.proposal.parentCardId,
+              eventKind: "result_recorded",
+              payload: {
+                title: input.proposal.title,
+                targetPersona: input.proposal.persona,
+                approvedCardId: input.card.id
+              }
+            })
+          );
+          await repository.insertDecision(
+            createHarnessBoardDecisionRecord({
+              runId: run.id,
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              decisionKind: "proposal_approved",
+              cardId: input.proposal.parentCardId,
+              proposalId: input.proposal.id,
+              targetCardId: input.card.id,
+              persona: input.proposal.persona,
+              deliverableType: input.proposal.deliverableType,
+              policyReason: "created_new_lane",
+              resolution: "create_lane",
+              recommendationSummary: createLaneRecommendationSummary({
+                persona: input.proposal.persona,
+                deliverableType: input.proposal.deliverableType,
+                policyReason: "created_new_lane"
+              })
+            })
+          );
+
+          const reconciledRun = await reconcileHarnessRunState({ repository, run });
+
+          return {
+            cardId: input.card.id,
+            auditEvents: [
+              createHarnessAuditEvent({
+                tenantId: access.session.tenantId,
+                actorUserId: access.session.userId,
+                eventType: "harness_proposal_approved",
+                entityId: input.proposal.id,
+                metadata: {
+                  runId: run.id,
+                  approvedCardId: input.card.id,
+                  resolution: "create_lane",
+                  requestedByPersona: input.proposal.requestedByPersona,
+                  targetPersona: input.proposal.persona,
+                  deliverableType: input.proposal.deliverableType,
+                  hasDecisionNote: false
+                }
+              }),
+              ...toRunAuditEvents({
+                tenantId: access.session.tenantId,
+                actorUserId: access.session.userId,
+                runId: run.id,
+                previousState: run.state,
+                nextRun: reconciledRun
+              })
+            ]
+          };
+        }
 
         async function deferDirectChildRequest(input: {
           policyReason: "deliverable_owner_conflict" | "lane_cap" | "completed_lanes_only";
@@ -371,20 +578,19 @@ export function createHarnessBoardService(options: {
             throw new Error("Harness CEO card missing for direct child-card defer");
           }
 
+          if (earlierUnresolvedDirectRequest) {
+            return {
+              status: "deferred",
+              proposalId: earlierUnresolvedDirectRequest.id,
+              auditEvents: []
+            };
+          }
+
           const proposal = runtime.proposeSubCard(ceoCard.id, {
             persona: normalizedPersona,
             title: request.title,
             deliverableType: normalizedDeliverableType
           });
-          const earlierUnresolvedSiblingProposal = findEarlierUnresolvedSiblingProposal([...proposals, proposal], proposal);
-          if (earlierUnresolvedSiblingProposal) {
-            return {
-              status: "deferred",
-              proposalId: earlierUnresolvedSiblingProposal.id,
-              auditEvents: []
-            };
-          }
-
           await repository.insertProposal(proposal);
           const decisionUpdate = await repository.markProposalStatus({
             proposalId: proposal.id,
@@ -475,6 +681,19 @@ export function createHarnessBoardService(options: {
           deliverableType: normalizedDeliverableType
         });
         if (existingCard) {
+          if (earlierUnresolvedDirectRequest) {
+            return approveEarlierDirectRequestIntoExistingLane({
+              proposal: earlierUnresolvedDirectRequest,
+              card: existingCard,
+              resolution: "update_existing_lane",
+              reuseMessage: `CEO resolved the earlier ${humanizeDeliverableType(
+                normalizedDeliverableType
+              ).toLowerCase()} request by folding it into this active ${normalizedPersona.toUpperCase()} lane.`,
+              parentMessage: `CEO approved the earlier ${humanizeDeliverableType(
+                normalizedDeliverableType
+              ).toLowerCase()} request by folding it into the active ${normalizedPersona.toUpperCase()} lane.`
+            });
+          }
           return { cardId: existingCard.id };
         }
         const existingPersonaLane = findOpenChildCardByPersonaDeliverable(cards, {
@@ -482,6 +701,19 @@ export function createHarnessBoardService(options: {
           deliverableType: normalizedDeliverableType
         });
         if (existingPersonaLane) {
+          if (earlierUnresolvedDirectRequest) {
+            return approveEarlierDirectRequestIntoExistingLane({
+              proposal: earlierUnresolvedDirectRequest,
+              card: existingPersonaLane,
+              resolution: "update_existing_lane",
+              reuseMessage: `CEO resolved the earlier ${humanizeDeliverableType(
+                normalizedDeliverableType
+              ).toLowerCase()} request by adding it to the existing ${normalizedPersona.toUpperCase()} lane.`,
+              parentMessage: `CEO approved the earlier ${humanizeDeliverableType(
+                normalizedDeliverableType
+              ).toLowerCase()} request and attached it to the existing ${normalizedPersona.toUpperCase()} lane.`
+            });
+          }
           await repository.insertEvent(
             createHarnessCardEventRecord({
               cardId: existingPersonaLane.id,
@@ -564,6 +796,42 @@ export function createHarnessBoardService(options: {
           });
           if (!reopenedCard) {
             throw new HarnessCardCreationConflictError("Harness completed lane reopen conflicted");
+          }
+          if (earlierUnresolvedDirectRequest) {
+            await repository.insertEvent(
+              createHarnessCardEventRecord({
+                cardId: reopenedCard.id,
+                eventKind: "state_changed",
+                payload: { from: "done", to: "approved" }
+              })
+            );
+            await repository.insertEvent(
+              createHarnessCardEventRecord({
+                cardId: reopenedCard.id,
+                eventKind: "comment_added",
+                payload: {
+                  message: `CEO reopened this completed ${humanizeDeliverableType(
+                    normalizedDeliverableType
+                  ).toLowerCase()} lane and resolved the earlier bounded follow-on request into it.`
+                }
+              })
+            );
+            await recordCardStateContinuity({
+              repository,
+              card: reopenedCard
+            });
+            return approveEarlierDirectRequestIntoExistingLane({
+              proposal: earlierUnresolvedDirectRequest,
+              card: reopenedCard,
+              resolution: "update_existing_lane",
+              reopenedCompletedLane: true,
+              reuseMessage: `CEO resolved the earlier ${humanizeDeliverableType(
+                normalizedDeliverableType
+              ).toLowerCase()} request by reopening this completed ${normalizedPersona.toUpperCase()} lane.`,
+              parentMessage: `CEO approved the earlier ${humanizeDeliverableType(
+                normalizedDeliverableType
+              ).toLowerCase()} request by reopening the existing ${normalizedPersona.toUpperCase()} lane.`
+            });
           }
           await repository.insertEvent(
             createHarnessCardEventRecord({
@@ -651,6 +919,12 @@ export function createHarnessBoardService(options: {
           title: request.title,
           deliverableType: normalizedDeliverableType
         });
+        if (earlierUnresolvedDirectRequest) {
+          return approveEarlierDirectRequestIntoNewLane({
+            proposal: earlierUnresolvedDirectRequest,
+            card
+          });
+        }
 
         await repository.insertCard(card);
         for (const event of createBootstrapEvents(card)) {
@@ -3003,6 +3277,31 @@ function findEarlierUnresolvedSiblingProposal(
       proposal.persona === currentProposal.persona &&
       titlesLikelySameAssignment(proposal.title, currentProposal.title) &&
       proposal.deliverableType === currentProposal.deliverableType &&
+      (proposal.status === "proposed" || proposal.status === "deferred")
+    ) {
+      return proposal;
+    }
+  }
+
+  return null;
+}
+
+function findLatestUnresolvedTopLevelProposalForAssignment(
+  proposals: readonly HarnessSubCardProposal[],
+  target: { ceoCardId: string; persona: string; title: string; deliverableType: string }
+): HarnessSubCardProposal | null {
+  for (let index = proposals.length - 1; index >= 0; index -= 1) {
+    const proposal = proposals[index];
+    if (!proposal) {
+      continue;
+    }
+
+    if (
+      proposal.parentCardId === target.ceoCardId &&
+      proposal.requestedByCardId === target.ceoCardId &&
+      proposal.persona === target.persona &&
+      proposal.deliverableType === target.deliverableType &&
+      titlesLikelySameAssignment(proposal.title, target.title) &&
       (proposal.status === "proposed" || proposal.status === "deferred")
     ) {
       return proposal;
