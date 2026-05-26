@@ -344,6 +344,12 @@ export type HarnessBoardContractRefreshFeedback = {
   title: string;
   message: string;
   details: string[];
+  affectedActions: string[];
+  impactCounts: {
+    removedActionDrafts: number;
+    removedFieldOverrides: number;
+    closedComposers: number;
+  };
 };
 
 function isSameContractRefreshFeedback(
@@ -770,6 +776,33 @@ type HarnessBoardContractActionDescriptor = {
   fieldLabels: Map<string, string>;
 };
 
+function mergeBoardContractActionDescriptorMaps(
+  liveDescriptors: Map<string, HarnessBoardContractActionDescriptor>,
+  referenceDescriptors?: Map<string, HarnessBoardContractActionDescriptor>
+) {
+  const merged = new Map<string, HarnessBoardContractActionDescriptor>();
+
+  for (const [actionKey, descriptor] of referenceDescriptors ?? []) {
+    merged.set(actionKey, {
+      label: descriptor.label,
+      fieldLabels: new Map(descriptor.fieldLabels)
+    });
+  }
+
+  for (const [actionKey, descriptor] of liveDescriptors) {
+    const existing = merged.get(actionKey);
+    merged.set(actionKey, {
+      label: descriptor.label,
+      fieldLabels: new Map([
+        ...(existing?.fieldLabels.entries() ?? []),
+        ...descriptor.fieldLabels.entries()
+      ])
+    });
+  }
+
+  return merged;
+}
+
 export function getBoardContractActionDescriptorMap(board: HarnessBoardResponse | null) {
   const descriptorMap = new Map<string, HarnessBoardContractActionDescriptor>();
 
@@ -849,10 +882,14 @@ export type HarnessBoardContractRefreshImpact = {
 export function inspectBoardContractRefreshImpact(
   board: HarnessBoardResponse | null,
   actionDrafts: Record<string, Record<string, string>>,
-  openActionComposerKeys: Record<string, boolean>
+  openActionComposerKeys: Record<string, boolean>,
+  referenceBoard?: HarnessBoardResponse | null
 ): HarnessBoardContractRefreshImpact {
   const contractFieldMap = getBoardContractActionFieldMap(board);
-  const descriptorMap = getBoardContractActionDescriptorMap(board);
+  const descriptorMap = mergeBoardContractActionDescriptorMaps(
+    getBoardContractActionDescriptorMap(board),
+    getBoardContractActionDescriptorMap(referenceBoard ?? null)
+  );
 
   if (contractFieldMap.size === 0) {
     return {
@@ -1015,10 +1052,24 @@ export function describeBoardContractRefreshImpact(
     return null;
   }
 
+  const affectedActions = Array.from(
+    new Set([
+      ...impact.removedActionDrafts.map((item) => item.actionLabel),
+      ...impact.removedFieldOverrideDetails.map((detail) => detail.actionLabel),
+      ...impact.closedComposerActions.map((item) => item.actionLabel)
+    ])
+  );
+
   return {
     title: "Contract refresh",
     message: `Live board contract refreshed: ${parts.join(", ")}.`,
-    details
+    details,
+    affectedActions,
+    impactCounts: {
+      removedActionDrafts: impact.removedActionDrafts.length,
+      removedFieldOverrides: impact.removedFieldOverrideCount,
+      closedComposers: impact.closedComposerActions.length
+    }
   };
 }
 
@@ -1805,7 +1856,8 @@ export function HarnessBoardPage(props: {
       const refreshImpact = inspectBoardContractRefreshImpact(
         nextBoard,
         actionDrafts,
-        openActionComposerKeys
+        openActionComposerKeys,
+        board
       );
       applyBoardState(nextBoard, null, "live");
       if (!input.preserveActionError) {
@@ -2009,7 +2061,9 @@ export function HarnessBoardPage(props: {
           {
             key: "contract-refresh",
             heading: joinHeadingParts("Contract refresh", "Active"),
-            summary: contractRefreshNotice.message
+            summary: contractRefreshNotice.affectedActions.length > 0
+              ? `${contractRefreshNotice.message} Affected actions: ${contractRefreshNotice.affectedActions.join(", ")}.`
+              : contractRefreshNotice.message
           }
         ]
       : [])
@@ -2644,6 +2698,12 @@ export function HarnessBoardPage(props: {
             <div style={{ display: "grid", gap: "0.45rem" }}>
               <p style={styles.actionMeta}>{contractRefreshNotice.title}</p>
               <p style={styles.statusNotice}>{contractRefreshNotice.message}</p>
+              {contractRefreshNotice.affectedActions.length > 0 ? (
+                <p style={styles.contractMeta}>{`Affected actions: ${contractRefreshNotice.affectedActions.join(", ")}`}</p>
+              ) : null}
+              <p style={styles.contractMeta}>
+                {`Impact counts: drafts ${contractRefreshNotice.impactCounts.removedActionDrafts}, fields ${contractRefreshNotice.impactCounts.removedFieldOverrides}, composers ${contractRefreshNotice.impactCounts.closedComposers}`}
+              </p>
               {contractRefreshNotice.details.length > 0 ? (
                 <ul style={styles.feedbackList}>
                   {contractRefreshNotice.details.map((detail) => (

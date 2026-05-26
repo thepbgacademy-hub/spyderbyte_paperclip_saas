@@ -158,3 +158,5 @@ This file tracks the new harness subproject only.
 - [x] Surface bounded contract-refresh guidance when a live reload prunes stale action drafts, removed request fields, or stale open composers, so concurrency-driven cleanup is visible instead of silent.
 - [x] Keep contract-refresh guidance action-specific enough to name the bounded actions/composers that were pruned, so concurrent board changes do not collapse into a vague “state changed” notice.
 - [x] Keep active contract-refresh guidance visible until dismissal or superseding refresh, and surface that active refresh state in the board pulse so cleanup remains operator-visible instead of quietly expiring.
+- [x] Preserve the last known bounded contract labels and field labels when a live refresh removes an action or field, so concurrency cleanup guidance stays human-readable instead of falling back to raw option values or field keys.
+- [x] Keep contract-refresh guidance structured with bounded affected-action and impact-count metadata so the board page and pulse can summarize concurrency cleanup without inventing page-local status heuristics.

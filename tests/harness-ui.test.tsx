@@ -607,53 +607,68 @@ describe("harness board UI", () => {
   });
 
   it("inspects bounded contract refresh impact before pruning local composer state", () => {
+    const refreshedBoard: HarnessBoardResponse = {
+      ...boardResponse,
+      pendingApprovals: [],
+      pendingAttention: {
+        ...boardResponse.pendingAttention!,
+        requestFields: (boardResponse.pendingAttention?.requestFields ?? []).filter((field) => field.name !== "mode")
+      }
+    };
+
     const impact = inspectBoardContractRefreshImpact(
-      boardResponse,
+      refreshedBoard,
       {
         "attention:start_fresh_cycle": {
           decision: "start_fresh_cycle",
-          mode: "clean",
-          legacyField: "remove me"
+          mode: "clean"
         },
-        "approval:proposal_old:approve": {
+        "approval:proposal_ui_test_1:approve": {
           decision: "approve"
         }
       },
       {
         "attention:start_fresh_cycle": true,
-        "approval:proposal_old:approve": true
-      }
+        "approval:proposal_ui_test_1:approve": true
+      },
+      boardResponse
     );
 
     expect(impact).toEqual({
       removedActionDrafts: [
         {
-          actionKey: "approval:proposal_old:approve",
-          actionLabel: "approve"
+          actionKey: "approval:proposal_ui_test_1:approve",
+          actionLabel: "Approve proposal"
         }
       ],
       removedFieldOverrideDetails: [
         {
           actionKey: "attention:start_fresh_cycle",
           actionLabel: "Start fresh cycle",
-          fieldLabels: ["legacyField"]
+          fieldLabels: ["Fresh-cycle mode"]
         }
       ],
       removedFieldOverrideCount: 1,
       closedComposerActions: [
         {
-          actionKey: "approval:proposal_old:approve",
-          actionLabel: "approve"
+          actionKey: "approval:proposal_ui_test_1:approve",
+          actionLabel: "Approve proposal"
         }
       ]
     });
     expect(describeBoardContractRefreshImpact(impact)).toEqual({
       title: "Contract refresh",
       message: "Live board contract refreshed: 1 stale action draft removed, 1 field override pruned, 1 stale composer closed.",
+      affectedActions: ["Approve proposal", "Start fresh cycle"],
+      impactCounts: {
+        removedActionDrafts: 1,
+        removedFieldOverrides: 1,
+        closedComposers: 1
+      },
       details: [
-        "Removed stale drafts for: approve.",
-        "Pruned removed fields from: Start fresh cycle (legacyField).",
-        "Closed stale composers for: approve."
+        "Removed stale drafts for: Approve proposal.",
+        "Pruned removed fields from: Start fresh cycle (Fresh-cycle mode).",
+        "Closed stale composers for: Approve proposal."
       ]
     });
   });
@@ -886,14 +901,22 @@ describe("harness board UI", () => {
         initialContractRefreshNotice={{
           title: "Contract refresh",
           message: "Live board contract refreshed: 1 stale action draft removed.",
-          details: ["Removed stale drafts for: approve."]
+          details: ["Removed stale drafts for: Approve proposal."],
+          affectedActions: ["Approve proposal"],
+          impactCounts: {
+            removedActionDrafts: 1,
+            removedFieldOverrides: 0,
+            closedComposers: 0
+          }
         }}
       />
     );
 
     expect(markup).toContain("Contract refresh");
     expect(markup).toContain("Live board contract refreshed: 1 stale action draft removed.");
-    expect(markup).toContain("Removed stale drafts for: approve.");
+    expect(markup).toContain("Removed stale drafts for: Approve proposal.");
+    expect(markup).toContain("Affected actions: Approve proposal");
+    expect(markup).toContain("Impact counts: drafts 1, fields 0, composers 0");
     expect(markup).toContain("Dismiss contract refresh note");
     expect(markup).toContain("Contract refresh - Active");
   });
@@ -906,13 +929,20 @@ describe("harness board UI", () => {
         initialContractRefreshNotice={{
           title: "Contract refresh",
           message: "Live board contract refreshed: 1 stale action draft removed.",
-          details: ["Removed stale drafts for: approve."]
+          details: ["Removed stale drafts for: Approve proposal."],
+          affectedActions: ["Approve proposal"],
+          impactCounts: {
+            removedActionDrafts: 1,
+            removedFieldOverrides: 0,
+            closedComposers: 0
+          }
         }}
       />
     );
 
     expect(markup).toContain("Contract refresh - Active");
     expect(markup).toContain("Live board contract refreshed: 1 stale action draft removed.");
+    expect(markup).toContain("Affected actions: Approve proposal.");
   });
 
   it("keeps a prop-seeded preview board read-only when the control mode says preview", () => {
