@@ -10,6 +10,7 @@ import { HarnessCardDrawer } from "../apps/web/src/components/HarnessCardDrawer.
 import {
   buildContractActionPayload,
   getContractActionState,
+  summarizeContractActionState,
   HarnessBoardPage
 } from "../apps/web/src/pages/HarnessBoardPage.js";
 import type { HarnessBoardResponse } from "../src/harness/board-service.js";
@@ -302,6 +303,41 @@ describe("harness board UI", () => {
     expect(actionState.missingRequiredFields).toEqual(["Completion summary"]);
   });
 
+  it("summarizes whether a live action is using defaults or needs input", () => {
+    expect(
+      summarizeContractActionState(
+        {
+          visibleFields: [
+            {
+              name: "mode",
+              label: "Fresh-cycle mode",
+              description: "Choose the next cycle mode.",
+              required: false
+            }
+          ],
+          missingRequiredFields: []
+        },
+        {}
+      )
+    ).toEqual({
+      tone: "defaults",
+      summary: "Ready with contract defaults."
+    });
+
+    expect(
+      summarizeContractActionState(
+        {
+          visibleFields: [],
+          missingRequiredFields: ["Decision note"]
+        },
+        {}
+      )
+    ).toEqual({
+      tone: "needs_input",
+      summary: "Needs input: Decision note"
+    });
+  });
+
   it("renders clean persona cards without backend execution noise", () => {
     const markup = renderToStaticMarkup(
       <HarnessBoard
@@ -338,7 +374,9 @@ describe("harness board UI", () => {
     expect(markup).toContain("Persona workload");
     expect(markup).toContain("CEO approvals");
     expect(markup).toContain("Control mode");
-    expect(markup).toContain("Preview");
+    expect(markup).toContain("Live");
+    expect(markup).not.toContain("Preview mode");
+    expect(markup).not.toContain("localhost fallback data");
     expect(markup).not.toContain("raw execution log");
     expect(markup).not.toContain("harness-browser-fallback");
   });
@@ -373,12 +411,13 @@ describe("harness board UI", () => {
     expect(markup).toContain("Fresh-cycle mode");
     expect(markup).toContain("Proposal decision");
     expect(markup).toContain("Live request fields for Complete run");
-    expect(markup).toContain("Live request fields for Start fresh cycle");
+    expect(markup).toContain("Open composer for Start fresh cycle");
+    expect(markup).toContain("Composer hidden until needed.");
     expect(markup).toContain("Live request fields for Approve proposal");
-    expect(markup).toContain("Live request fields for Defer proposal");
-    expect(markup).toContain("Live request fields for Deny proposal");
+    expect(markup).toContain("Open composer for Defer proposal");
+    expect(markup).toContain("Open composer for Deny proposal");
     expect(markup).toContain("Live payload preview");
-    expect(markup).toContain("Live payload is ready.");
+    expect(markup).toContain("Ready with contract defaults.");
     expect(markup).toContain("Reset to contract defaults");
     expect(markup).toContain("Reason: Final assembly");
     expect(markup).toContain("Requested: 11:24 AM");
@@ -437,5 +476,18 @@ describe("harness board UI", () => {
     expect(markup).toContain("&quot;decision&quot;:&quot;start_fresh_cycle&quot;,&quot;mode&quot;:&quot;reopen_deferred&quot;");
     expect(markup).not.toContain("raw execution log");
     expect(markup).not.toContain("tool");
+  });
+
+  it("keeps a prop-seeded preview board read-only when the control mode says preview", () => {
+    const markup = renderToStaticMarkup(
+      <HarnessBoardPage initialBoard={boardResponse} initialControlMode="preview" />
+    );
+
+    expect(markup).toContain("Control mode");
+    expect(markup).toContain("Preview");
+    expect(markup).toContain("Preview mode");
+    expect(markup).toContain("live mutations remain disabled");
+    expect(markup).toContain("Live board actions are unavailable in localhost fallback mode.");
+    expect(markup).toContain("Controls - Preview");
   });
 });

@@ -10,6 +10,8 @@ export type HarnessBoardActionResult =
   | { status: "resumed"; cardId: string; state: "working" }
   | { status: "unblocked"; cardId: string; state: "approved" };
 
+export type HarnessBoardControlMode = "live" | "preview";
+
 const defaultBoardResponse: HarnessBoardResponse = {
   runId: "harness-browser-fallback",
   workflowId: "wf_connect_first_workflow",
@@ -345,6 +347,13 @@ export function createHarnessBoardClient(
 
     getFallback(): HarnessBoardResponse {
       return defaultBoardResponse;
+    },
+
+    getFallbackState(): { board: HarnessBoardResponse; controlMode: HarnessBoardControlMode } {
+      return {
+        board: defaultBoardResponse,
+        controlMode: "preview"
+      };
     },
 
     async fetchBoard(): Promise<HarnessBoardResponse> {

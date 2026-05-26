@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
   createHarnessBoardClient,
   type HarnessBoardActionResult,
+  type HarnessBoardControlMode,
   type HarnessBoardResponse
 } from "../harness-board-client.js";
 import {
@@ -250,6 +251,16 @@ const styles = {
     gap: "0.55rem",
     marginTop: "0.35rem"
   } satisfies CSSProperties,
+  tertiaryButton: {
+    background: "rgba(15, 23, 42, 0.58)",
+    border: "1px dashed rgba(125, 211, 252, 0.22)",
+    borderRadius: "999px",
+    color: "#bae6fd",
+    cursor: "pointer",
+    fontSize: "0.74rem",
+    fontWeight: 600,
+    padding: "0.46rem 0.72rem"
+  } satisfies CSSProperties,
   actionButton: {
     background: "linear-gradient(135deg, rgba(14, 165, 233, 0.22), rgba(8, 47, 73, 0.82))",
     border: "1px solid rgba(125, 211, 252, 0.2)",
@@ -486,6 +497,39 @@ export function getContractActionState(input: {
   };
 }
 
+export function summarizeContractActionState(actionState: {
+  visibleFields: HarnessActionFieldView[];
+  missingRequiredFields: string[];
+}, draftValues: Record<string, string>) {
+  const activeDraftCount = Object.values(draftValues).filter((value) => typeof value === "string" && value.trim().length > 0).length;
+
+  if (actionState.missingRequiredFields.length > 0) {
+    return {
+      tone: "needs_input" as const,
+      summary: `Needs input: ${actionState.missingRequiredFields.join(", ")}`
+    };
+  }
+
+  if (actionState.visibleFields.length === 0) {
+    return {
+      tone: "ready" as const,
+      summary: "Ready with contract payload."
+    };
+  }
+
+  if (activeDraftCount === 0) {
+    return {
+      tone: "defaults" as const,
+      summary: "Ready with contract defaults."
+    };
+  }
+
+  return {
+    tone: "ready" as const,
+    summary: `Ready with ${activeDraftCount} field override${activeDraftCount === 1 ? "" : "s"}.`
+  };
+}
+
 export function buildContractActionPayload(input: {
   fields: HarnessActionFieldView[] | undefined;
   option: HarnessActionOptionView;
@@ -669,11 +713,19 @@ function renderCompletionPackage(board: HarnessBoardResponse) {
   );
 }
 
-export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | null } = {}) {
+export function HarnessBoardPage(props: {
+  initialBoard?: HarnessBoardResponse | null;
+  initialControlMode?: HarnessBoardControlMode;
+} = {}) {
   const browserFallbackEnabled = harnessBoardClient.isBrowserFallbackEnabled();
-  const [board, setBoard] = useState(() => props.initialBoard ?? (browserFallbackEnabled ? harnessBoardClient.getFallback() : null));
+  const fallbackState = browserFallbackEnabled ? harnessBoardClient.getFallbackState() : null;
+  const [board, setBoard] = useState(() => props.initialBoard ?? fallbackState?.board ?? null);
+  const [controlMode, setControlMode] = useState<HarnessBoardControlMode>(() =>
+    props.initialControlMode
+      ?? (props.initialBoard ? "live" : fallbackState?.controlMode ?? "live")
+  );
   const [openCardId, setOpenCardId] = useState<string>(() =>
-    (props.initialBoard ?? (browserFallbackEnabled ? harnessBoardClient.getFallback() : null))?.cards[0]?.id ?? ""
+    (props.initialBoard ?? fallbackState?.board ?? null)?.cards[0]?.id ?? ""
   );
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -681,11 +733,17 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
   const [lastActionResult, setLastActionResult] = useState<HarnessBoardActionResult | null>(null);
   const [lastActionLabel, setLastActionLabel] = useState<string | null>(null);
   const [actionDrafts, setActionDrafts] = useState<Record<string, Record<string, string>>>({});
+  const [openActionComposerKeys, setOpenActionComposerKeys] = useState<Record<string, boolean>>({});
   const [submittingActionKey, setSubmittingActionKey] = useState<string | null>(null);
 
-  function applyBoardState(nextBoard: HarnessBoardResponse, preferredCardId?: string | null) {
+  function applyBoardState(
+    nextBoard: HarnessBoardResponse,
+    preferredCardId?: string | null,
+    nextControlMode: HarnessBoardControlMode = "live"
+  ) {
     setLoadError(null);
     setBoard(nextBoard);
+    setControlMode(nextControlMode);
     setOpenCardId((current: string) =>
       preferredCardId && nextBoard.cards.some((card) => card.id === preferredCardId)
         ? preferredCardId
@@ -708,15 +766,15 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
         if (cancelled) {
           return;
         }
-        applyBoardState(nextBoard);
+        applyBoardState(nextBoard, null, "live");
       })
       .catch(() => {
         if (cancelled) {
           return;
         }
         if (browserFallbackEnabled) {
-          const fallbackBoard = harnessBoardClient.getFallback();
-          applyBoardState(fallbackBoard);
+          const nextFallbackState = harnessBoardClient.getFallbackState();
+          applyBoardState(nextFallbackState.board, null, nextFallbackState.controlMode);
           return;
         }
 
@@ -745,15 +803,18 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
   const packageGovernanceCount = completionPackage?.governanceItems.length ?? 0;
   const packageRecommendationCount = completionPackage?.recommendations.length ?? 0;
   const packageObjectionCount = completionPackage?.objections.length ?? 0;
-  const liveActionsEnabled = Boolean(board && board.runId !== "harness-browser-fallback");
+  const isPreviewMode = controlMode === "preview";
+  const liveActionsEnabled = Boolean(board && controlMode === "live");
   const lastActionEffect = lastActionResult ? describeActionResultEffect(lastActionResult) : null;
   const boardPulseItems = [
     {
       key: "controls",
-      heading: joinHeadingParts("Controls", liveActionsEnabled ? "Live" : "Preview"),
-      summary: liveActionsEnabled
+      heading: joinHeadingParts("Controls", isPreviewMode ? "Preview" : "Live"),
+      summary: isPreviewMode
+        ? "Board actions stay read-only in localhost fallback mode."
+        : board
         ? "Board actions are bound to live harness mutations through the engine contract."
-        : "Board actions stay read-only in localhost fallback mode."
+        : "Board actions will bind to the live harness contract once the board is loaded."
     },
     {
       key: "attention",
@@ -805,6 +866,22 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
       delete nextDrafts[actionKey];
       return nextDrafts;
     });
+  }
+
+  function toggleActionComposer(actionKey: string) {
+    setOpenActionComposerKeys((current) => ({
+      ...current,
+      [actionKey]: !current[actionKey]
+    }));
+  }
+
+  function isActionComposerOpen(actionKey: string, isRecommended: boolean) {
+    const explicit = openActionComposerKeys[actionKey];
+    if (typeof explicit === "boolean") {
+      return explicit;
+    }
+
+    return isRecommended;
   }
 
   async function handleContractAction(input: {
@@ -910,29 +987,26 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
     actionKey: string;
     fields: HarnessActionFieldView[] | undefined;
     option: HarnessActionOptionView;
+    recommendedOptionValue?: string;
   }) {
     const actionState = getContractActionState({
       fields: input.fields,
       option: input.option,
       draftValues: actionDrafts[input.actionKey] ?? {}
     });
+    const actionSummary = summarizeContractActionState(actionState, actionDrafts[input.actionKey] ?? {});
+    const composerOpen = isActionComposerOpen(input.actionKey, input.option.value === input.recommendedOptionValue);
 
     return (
       <div style={{ display: "grid", gap: "0.45rem" }}>
-        <p style={styles.contractMeta}>{`Live request fields for ${input.option.label}`}</p>
-        {renderLiveRequestFields({
-          actionKey: input.actionKey,
-          fields: actionState.visibleFields,
-          option: input.option
-        })}
-        {actionState.missingRequiredFields.length > 0 ? (
-          <p style={styles.statusError}>
-            {`Missing required live fields: ${actionState.missingRequiredFields.join(", ")}`}
-          </p>
-        ) : (
-          <p style={styles.statusSuccess}>Live payload is ready.</p>
-        )}
         <div style={styles.actionButtonRow}>
+          <button
+            type="button"
+            style={styles.tertiaryButton}
+            onClick={() => toggleActionComposer(input.actionKey)}
+          >
+            {composerOpen ? `Hide composer for ${input.option.label}` : `Open composer for ${input.option.label}`}
+          </button>
           <button
             type="button"
             style={styles.secondaryButton}
@@ -941,8 +1015,27 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
             Reset to contract defaults
           </button>
         </div>
-        <p style={styles.contractMeta}>Live payload preview</p>
-        <pre style={styles.codeBlock}>{JSON.stringify(actionState.payload, null, 2)}</pre>
+        {actionSummary.tone === "needs_input" ? (
+          <p style={styles.statusError}>{actionSummary.summary}</p>
+        ) : actionSummary.tone === "defaults" ? (
+          <p style={styles.statusNotice}>{actionSummary.summary}</p>
+        ) : (
+          <p style={styles.statusSuccess}>{actionSummary.summary}</p>
+        )}
+        {composerOpen ? (
+          <>
+            <p style={styles.contractMeta}>{`Live request fields for ${input.option.label}`}</p>
+            {renderLiveRequestFields({
+              actionKey: input.actionKey,
+              fields: actionState.visibleFields,
+              option: input.option
+            })}
+            <p style={styles.contractMeta}>Live payload preview</p>
+            <pre style={styles.codeBlock}>{JSON.stringify(actionState.payload, null, 2)}</pre>
+          </>
+        ) : (
+          <p style={styles.contractMeta}>Composer hidden until needed.</p>
+        )}
       </div>
     );
   }
@@ -977,7 +1070,7 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
           </article>
           <article style={styles.metricCard}>
             <p style={styles.metricLabel}>Control mode</p>
-            <p style={styles.metricValue}>{liveActionsEnabled ? "Live" : "Preview"}</p>
+            <p style={styles.metricValue}>{controlMode === "live" ? "Live" : "Preview"}</p>
           </article>
           <article style={styles.metricCard}>
             <p style={styles.metricLabel}>Recent decisions</p>
@@ -1004,6 +1097,14 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
         />
 
         <aside style={styles.rail}>
+          {isPreviewMode ? (
+            <section style={styles.panel}>
+              <h2 style={styles.panelTitle}>Preview mode</h2>
+              <p style={styles.panelBody}>
+                This board is using localhost fallback data, so action guidance stays visible but live mutations remain disabled.
+              </p>
+            </section>
+          ) : null}
           <section style={styles.panel}>
             <h2 style={styles.panelTitle}>Board pulse</h2>
             <p style={styles.panelBody}>A bounded summary of what the board is waiting on, packaging, and carrying forward.</p>
@@ -1128,13 +1229,20 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                       </div>
                       {pendingAttention.actionOptions.map((option) => {
                         const actionKey = `attention:${option.value}`;
+                        const composerInput = {
+                          actionKey,
+                          fields: pendingAttention.requestFields,
+                          option
+                        } as const;
+                        const recommendedOptionValue = pendingAttention.recommendedOptionValue;
                         return (
                           <div key={`${option.value}-fields`} style={{ display: "grid", gap: "0.45rem" }}>
-                            {renderLiveActionComposer({
-                              actionKey,
-                              fields: pendingAttention.requestFields,
-                              option
-                            })}
+                            {typeof recommendedOptionValue === "string"
+                              ? renderLiveActionComposer({
+                                ...composerInput,
+                                recommendedOptionValue
+                              })
+                              : renderLiveActionComposer(composerInput)}
                           </div>
                         );
                       })}
@@ -1219,13 +1327,20 @@ export function HarnessBoardPage(props: { initialBoard?: HarnessBoardResponse | 
                         </div>
                         {approval.actionOptions.map((option) => {
                           const actionKey = `approval:${approval.id}:${option.value}`;
+                          const composerInput = {
+                            actionKey,
+                            fields: approval.requestFields,
+                            option
+                          } as const;
+                          const recommendedOptionValue = approval.recommendedOptionValue;
                           return (
                             <div key={`${option.value}-fields`} style={{ display: "grid", gap: "0.45rem" }}>
-                              {renderLiveActionComposer({
-                                actionKey,
-                                fields: approval.requestFields,
-                                option
-                              })}
+                              {typeof recommendedOptionValue === "string"
+                                ? renderLiveActionComposer({
+                                  ...composerInput,
+                                  recommendedOptionValue
+                                })
+                                : renderLiveActionComposer(composerInput)}
                             </div>
                           );
                         })}

@@ -76,6 +76,10 @@ describe("harness board client", () => {
     );
 
     const fallback = client.getFallback();
+    const fallbackState = client.getFallbackState();
+
+    expect(fallbackState.controlMode).toBe("preview");
+    expect(fallbackState.board).toEqual(fallback);
 
     expect(fallback.pendingAttention).toEqual(
       expect.objectContaining({
