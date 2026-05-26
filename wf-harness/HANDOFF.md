@@ -50,6 +50,7 @@ The first harness implementation slice is now built and verified:
 ## Source of Truth
 
 - `wf-harness/docs/2026-05-21-wf-harness-v1-design.md`
+- `wf-harness/docs/paperclip-pressure-lessons-and-wealth-factory-guardrails.md`
 
 ## Plan Of Record
 

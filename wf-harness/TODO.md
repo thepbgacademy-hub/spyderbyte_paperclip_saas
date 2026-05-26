@@ -7,6 +7,7 @@ This file tracks the new harness subproject only.
 - [x] Approve first harness direction.
 - [x] Write v1 design spec.
 - [x] Review and refine the v1 design spec.
+- [x] Consolidate the Paperclip pressure lessons and Wealth Factory guardrails into one dedicated reference doc.
 - [x] Write the implementation plan for the first harness slice.
 - [x] Choose execution mode for implementing the first harness slice.
 - [x] Implement the first harness slice with subagent-driven execution.
