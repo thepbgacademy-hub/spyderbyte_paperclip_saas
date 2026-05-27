@@ -457,6 +457,16 @@ const fallbackBoardBase: HarnessBoardResponse = {
       "2 runtime buckets stay runtime internal only, 2 export candidate buckets use governance-safe redaction, and 2 buckets still require package-safe redaction.",
     sourceDisclosureSummary:
       "2 runtime buckets are runtime only, 2 export candidate buckets disclose decision summaries only, and 2 buckets still disclose closure-snapshot summaries only.",
+    placementSummary:
+      "2 runtime buckets have no tenant memory placement, 2 export candidate buckets land as governance history notes, and 2 buckets still land in package record folders.",
+    syncStrategySummary:
+      "2 runtime buckets have no tenant sync strategy, 2 export candidate buckets append history entries, and 2 buckets still replace package snapshots after board closure.",
+    requestShapeSummary:
+      "2 runtime buckets have no export request shape, 2 export candidate buckets use single-record export requests, and 2 buckets still use package-bundle export requests.",
+    confirmationSummary:
+      "2 runtime buckets have no export confirmation, 2 export candidate buckets require tenant export confirmation, and 2 buckets still require board closure before tenant export confirmation.",
+    recoveryPathSummary:
+      "2 runtime buckets are runtime only, 2 export candidate buckets retry the latest record export, and 2 buckets still rerun after the board-closure snapshot.",
     noExportSensitivityCount: 2,
     tenantBusinessContextCount: 2,
     tenantDeliverableContextCount: 2,
@@ -472,6 +482,21 @@ const fallbackBoardBase: HarnessBoardResponse = {
     runtimeOnlySourceDisclosureCount: 2,
     decisionSummaryOnlyCount: 2,
     closureSnapshotSummaryOnlyCount: 2,
+    noMemoryPlacementCount: 2,
+    governanceHistoryNoteCount: 2,
+    packageRecordFolderCount: 2,
+    noSyncStrategyCount: 2,
+    appendHistoryEntryCount: 2,
+    replacePackageSnapshotAfterClosureCount: 2,
+    noExportRequestShapeCount: 2,
+    singleRecordExportRequestCount: 2,
+    packageBundleExportRequestCount: 2,
+    noExportConfirmationRequirementCount: 2,
+    tenantExportConfirmationCount: 2,
+    boardClosureThenTenantExportConfirmationCount: 2,
+    runtimeOnlyRecoveryPathCount: 2,
+    retryLatestRecordExportCount: 2,
+    rerunAfterBoardClosureSnapshotCount: 2,
     partitions: {
       runtime: {
         itemCount: 2,
@@ -501,6 +526,16 @@ const fallbackBoardBase: HarnessBoardResponse = {
         eligibilityRuleLabel: "Runtime only",
         sourceSurface: "continuity_snapshots",
         sourceSurfaceLabel: "Continuity snapshots",
+        memoryPlacement: "none_runtime_only",
+        memoryPlacementLabel: "No tenant memory placement",
+        syncStrategy: "none_runtime_only",
+        syncStrategyLabel: "No tenant sync strategy",
+        exportRequestShape: "none_runtime_only",
+        exportRequestShapeLabel: "No export request shape",
+        exportConfirmationRequirement: "none_runtime_only",
+        exportConfirmationRequirementLabel: "No export confirmation",
+        exportRecoveryPath: "runtime_only",
+        exportRecoveryPathLabel: "Runtime only",
         candidateClass: "runtime_operational",
         candidateClassLabel: "Runtime operational",
         durabilityCondition: "runtime_ephemeral",
@@ -583,6 +618,16 @@ const fallbackBoardBase: HarnessBoardResponse = {
         eligibilityRuleLabel: "Runtime only",
         sourceSurface: "pending_attention",
         sourceSurfaceLabel: "Pending attention",
+        memoryPlacement: "none_runtime_only",
+        memoryPlacementLabel: "No tenant memory placement",
+        syncStrategy: "none_runtime_only",
+        syncStrategyLabel: "No tenant sync strategy",
+        exportRequestShape: "none_runtime_only",
+        exportRequestShapeLabel: "No export request shape",
+        exportConfirmationRequirement: "none_runtime_only",
+        exportConfirmationRequirementLabel: "No export confirmation",
+        exportRecoveryPath: "runtime_only",
+        exportRecoveryPathLabel: "Runtime only",
         candidateClass: "runtime_operational",
         candidateClassLabel: "Runtime operational",
         durabilityCondition: "runtime_ephemeral",
@@ -667,6 +712,16 @@ const fallbackBoardBase: HarnessBoardResponse = {
         eligibilityRuleLabel: "Explicit export later",
         sourceSurface: "recent_decisions",
         sourceSurfaceLabel: "Recent decisions",
+        memoryPlacement: "governance_history_note",
+        memoryPlacementLabel: "Governance history note",
+        syncStrategy: "append_history_entry",
+        syncStrategyLabel: "Append history entry",
+        exportRequestShape: "single_record_export_request",
+        exportRequestShapeLabel: "Single-record export request",
+        exportConfirmationRequirement: "tenant_export_confirmation",
+        exportConfirmationRequirementLabel: "Tenant export confirmation",
+        exportRecoveryPath: "retry_latest_record_export",
+        exportRecoveryPathLabel: "Retry latest record export",
         candidateClass: "governance_history",
         candidateClassLabel: "Governance history",
         durabilityCondition: "stable_when_recorded",
@@ -749,6 +804,16 @@ const fallbackBoardBase: HarnessBoardResponse = {
         eligibilityRuleLabel: "Explicit export later",
         sourceSurface: "follow_through",
         sourceSurfaceLabel: "Follow-through history",
+        memoryPlacement: "governance_history_note",
+        memoryPlacementLabel: "Governance history note",
+        syncStrategy: "append_history_entry",
+        syncStrategyLabel: "Append history entry",
+        exportRequestShape: "single_record_export_request",
+        exportRequestShapeLabel: "Single-record export request",
+        exportConfirmationRequirement: "tenant_export_confirmation",
+        exportConfirmationRequirementLabel: "Tenant export confirmation",
+        exportRecoveryPath: "retry_latest_record_export",
+        exportRecoveryPathLabel: "Retry latest record export",
         candidateClass: "governance_history",
         candidateClassLabel: "Governance history",
         durabilityCondition: "stable_when_recorded",
@@ -832,6 +897,16 @@ const fallbackBoardBase: HarnessBoardResponse = {
         eligibilityRuleLabel: "After board closes, then export",
         sourceSurface: "completion_package_governance",
         sourceSurfaceLabel: "Completion package governance",
+        memoryPlacement: "package_record_folder",
+        memoryPlacementLabel: "Package record folder",
+        syncStrategy: "replace_package_snapshot_after_board_closure",
+        syncStrategyLabel: "Replace package snapshot after board closure",
+        exportRequestShape: "package_bundle_export_request",
+        exportRequestShapeLabel: "Package-bundle export request",
+        exportConfirmationRequirement: "board_closure_then_tenant_export_confirmation",
+        exportConfirmationRequirementLabel: "Board closure, then tenant export confirmation",
+        exportRecoveryPath: "rerun_after_board_closure_snapshot",
+        exportRecoveryPathLabel: "Rerun after board-closure snapshot",
         candidateClass: "packaged_output",
         candidateClassLabel: "Packaged output",
         durabilityCondition: "stable_after_board_closure",
@@ -917,6 +992,16 @@ const fallbackBoardBase: HarnessBoardResponse = {
         eligibilityRuleLabel: "After board closes, then export",
         sourceSurface: "completion_package_deliverables",
         sourceSurfaceLabel: "Completion package deliverables",
+        memoryPlacement: "package_record_folder",
+        memoryPlacementLabel: "Package record folder",
+        syncStrategy: "replace_package_snapshot_after_board_closure",
+        syncStrategyLabel: "Replace package snapshot after board closure",
+        exportRequestShape: "package_bundle_export_request",
+        exportRequestShapeLabel: "Package-bundle export request",
+        exportConfirmationRequirement: "board_closure_then_tenant_export_confirmation",
+        exportConfirmationRequirementLabel: "Board closure, then tenant export confirmation",
+        exportRecoveryPath: "rerun_after_board_closure_snapshot",
+        exportRecoveryPathLabel: "Rerun after board-closure snapshot",
         candidateClass: "packaged_output",
         candidateClassLabel: "Packaged output",
         durabilityCondition: "stable_after_board_closure",
@@ -1689,6 +1774,81 @@ function humanizeMemoryBoundaryExportSourceDisclosurePolicy(
   }
 }
 
+function humanizeMemoryBoundaryMemoryPlacement(
+  placement: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["memoryPlacement"]>
+) {
+  switch (placement) {
+    case "none_runtime_only":
+      return "No tenant memory placement";
+    case "governance_history_note":
+      return "Governance history note";
+    case "package_record_folder":
+      return "Package record folder";
+    default:
+      return placement;
+  }
+}
+
+function humanizeMemoryBoundarySyncStrategy(
+  strategy: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["syncStrategy"]>
+) {
+  switch (strategy) {
+    case "none_runtime_only":
+      return "No tenant sync strategy";
+    case "append_history_entry":
+      return "Append history entry";
+    case "replace_package_snapshot_after_board_closure":
+      return "Replace package snapshot after board closure";
+    default:
+      return strategy;
+  }
+}
+
+function humanizeMemoryBoundaryExportRequestShape(
+  shape: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["exportRequestShape"]>
+) {
+  switch (shape) {
+    case "none_runtime_only":
+      return "No export request shape";
+    case "single_record_export_request":
+      return "Single-record export request";
+    case "package_bundle_export_request":
+      return "Package-bundle export request";
+    default:
+      return shape;
+  }
+}
+
+function humanizeMemoryBoundaryExportConfirmationRequirement(
+  requirement: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["exportConfirmationRequirement"]>
+) {
+  switch (requirement) {
+    case "none_runtime_only":
+      return "No export confirmation";
+    case "tenant_export_confirmation":
+      return "Tenant export confirmation";
+    case "board_closure_then_tenant_export_confirmation":
+      return "Board closure, then tenant export confirmation";
+    default:
+      return requirement;
+  }
+}
+
+function humanizeMemoryBoundaryExportRecoveryPath(
+  path: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["exportRecoveryPath"]>
+) {
+  switch (path) {
+    case "runtime_only":
+      return "Runtime only";
+    case "retry_latest_record_export":
+      return "Retry latest record export";
+    case "rerun_after_board_closure_snapshot":
+      return "Rerun after board-closure snapshot";
+    default:
+      return path;
+  }
+}
+
 function inferMemoryBoundaryReadiness(
   itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"],
   board: Pick<HarnessBoardResponse, "completionPackage">
@@ -2353,6 +2513,91 @@ function inferMemoryBoundaryExportSourceDisclosurePolicy(
   }
 }
 
+function inferMemoryBoundaryMemoryPlacement(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"]
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["memoryPlacement"] {
+  switch (itemId) {
+    case "lane_continuity":
+    case "attention_state":
+      return "none_runtime_only";
+    case "governance_decisions":
+    case "implemented_actions":
+      return "governance_history_note";
+    case "package_governance":
+    case "package_deliverables":
+    default:
+      return "package_record_folder";
+  }
+}
+
+function inferMemoryBoundarySyncStrategy(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"]
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["syncStrategy"] {
+  switch (itemId) {
+    case "lane_continuity":
+    case "attention_state":
+      return "none_runtime_only";
+    case "governance_decisions":
+    case "implemented_actions":
+      return "append_history_entry";
+    case "package_governance":
+    case "package_deliverables":
+    default:
+      return "replace_package_snapshot_after_board_closure";
+  }
+}
+
+function inferMemoryBoundaryExportRequestShape(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"]
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["exportRequestShape"] {
+  switch (itemId) {
+    case "lane_continuity":
+    case "attention_state":
+      return "none_runtime_only";
+    case "governance_decisions":
+    case "implemented_actions":
+      return "single_record_export_request";
+    case "package_governance":
+    case "package_deliverables":
+    default:
+      return "package_bundle_export_request";
+  }
+}
+
+function inferMemoryBoundaryExportConfirmationRequirement(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"]
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["exportConfirmationRequirement"] {
+  switch (itemId) {
+    case "lane_continuity":
+    case "attention_state":
+      return "none_runtime_only";
+    case "governance_decisions":
+    case "implemented_actions":
+      return "tenant_export_confirmation";
+    case "package_governance":
+    case "package_deliverables":
+    default:
+      return "board_closure_then_tenant_export_confirmation";
+  }
+}
+
+function inferMemoryBoundaryExportRecoveryPath(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"]
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["exportRecoveryPath"] {
+  switch (itemId) {
+    case "lane_continuity":
+    case "attention_state":
+      return "runtime_only";
+    case "governance_decisions":
+    case "implemented_actions":
+      return "retry_latest_record_export";
+    case "package_governance":
+    case "package_deliverables":
+    default:
+      return "rerun_after_board_closure_snapshot";
+  }
+}
+
 function normalizeMemoryBoundary(
   memoryBoundary: HarnessBoardResponse["memoryBoundary"],
   board: Pick<HarnessBoardResponse, "completionPackage">
@@ -2400,6 +2645,12 @@ function normalizeMemoryBoundary(
       item.exportRedactionBoundary ?? inferMemoryBoundaryExportRedactionBoundary(item.id);
     const exportSourceDisclosurePolicy =
       item.exportSourceDisclosurePolicy ?? inferMemoryBoundaryExportSourceDisclosurePolicy(item.id);
+    const memoryPlacement = item.memoryPlacement ?? inferMemoryBoundaryMemoryPlacement(item.id);
+    const syncStrategy = item.syncStrategy ?? inferMemoryBoundarySyncStrategy(item.id);
+    const exportRequestShape = item.exportRequestShape ?? inferMemoryBoundaryExportRequestShape(item.id);
+    const exportConfirmationRequirement =
+      item.exportConfirmationRequirement ?? inferMemoryBoundaryExportConfirmationRequirement(item.id);
+    const exportRecoveryPath = item.exportRecoveryPath ?? inferMemoryBoundaryExportRecoveryPath(item.id);
     return {
       ...item,
       readiness,
@@ -2510,6 +2761,20 @@ function normalizeMemoryBoundary(
       exportSourceDisclosurePolicyLabel:
         item.exportSourceDisclosurePolicyLabel
         ?? humanizeMemoryBoundaryExportSourceDisclosurePolicy(exportSourceDisclosurePolicy),
+      memoryPlacement,
+      memoryPlacementLabel: item.memoryPlacementLabel ?? humanizeMemoryBoundaryMemoryPlacement(memoryPlacement),
+      syncStrategy,
+      syncStrategyLabel: item.syncStrategyLabel ?? humanizeMemoryBoundarySyncStrategy(syncStrategy),
+      exportRequestShape,
+      exportRequestShapeLabel:
+        item.exportRequestShapeLabel ?? humanizeMemoryBoundaryExportRequestShape(exportRequestShape),
+      exportConfirmationRequirement,
+      exportConfirmationRequirementLabel:
+        item.exportConfirmationRequirementLabel
+        ?? humanizeMemoryBoundaryExportConfirmationRequirement(exportConfirmationRequirement),
+      exportRecoveryPath,
+      exportRecoveryPathLabel:
+        item.exportRecoveryPathLabel ?? humanizeMemoryBoundaryExportRecoveryPath(exportRecoveryPath),
       promotionActionDescription:
         item.promotionActionDescription
         ?? (promotionActionFamily === "none_runtime_only"
@@ -2562,6 +2827,12 @@ function normalizeMemoryBoundary(
       item.exportRedactionBoundary ?? inferMemoryBoundaryExportRedactionBoundary(item.id);
     const exportSourceDisclosurePolicy =
       item.exportSourceDisclosurePolicy ?? inferMemoryBoundaryExportSourceDisclosurePolicy(item.id);
+    const memoryPlacement = item.memoryPlacement ?? inferMemoryBoundaryMemoryPlacement(item.id);
+    const syncStrategy = item.syncStrategy ?? inferMemoryBoundarySyncStrategy(item.id);
+    const exportRequestShape = item.exportRequestShape ?? inferMemoryBoundaryExportRequestShape(item.id);
+    const exportConfirmationRequirement =
+      item.exportConfirmationRequirement ?? inferMemoryBoundaryExportConfirmationRequirement(item.id);
+    const exportRecoveryPath = item.exportRecoveryPath ?? inferMemoryBoundaryExportRecoveryPath(item.id);
     const nextEligibleSummary = item.nextEligibleSummary
       ?? (readiness === "after_board_closes"
         ? item.id === "package_governance"
@@ -2680,6 +2951,20 @@ function normalizeMemoryBoundary(
       exportSourceDisclosurePolicyLabel:
         item.exportSourceDisclosurePolicyLabel
         ?? humanizeMemoryBoundaryExportSourceDisclosurePolicy(exportSourceDisclosurePolicy),
+      memoryPlacement,
+      memoryPlacementLabel: item.memoryPlacementLabel ?? humanizeMemoryBoundaryMemoryPlacement(memoryPlacement),
+      syncStrategy,
+      syncStrategyLabel: item.syncStrategyLabel ?? humanizeMemoryBoundarySyncStrategy(syncStrategy),
+      exportRequestShape,
+      exportRequestShapeLabel:
+        item.exportRequestShapeLabel ?? humanizeMemoryBoundaryExportRequestShape(exportRequestShape),
+      exportConfirmationRequirement,
+      exportConfirmationRequirementLabel:
+        item.exportConfirmationRequirementLabel
+        ?? humanizeMemoryBoundaryExportConfirmationRequirement(exportConfirmationRequirement),
+      exportRecoveryPath,
+      exportRecoveryPathLabel:
+        item.exportRecoveryPathLabel ?? humanizeMemoryBoundaryExportRecoveryPath(exportRecoveryPath),
       promotionActionDescription:
         item.promotionActionDescription
         ?? (promotionActionFamily === "board_closure_before_export"
@@ -2860,6 +3145,36 @@ function normalizeMemoryBoundary(
     ?? exportReadyItems.filter((item) => item.exportSourceDisclosurePolicy === "decision_summary_only").length;
   const closureSnapshotSummaryOnlyCount = memoryBoundary.closureSnapshotSummaryOnlyCount
     ?? exportReadyItems.filter((item) => item.exportSourceDisclosurePolicy === "closure_snapshot_summary_only").length;
+  const noMemoryPlacementCount = memoryBoundary.noMemoryPlacementCount
+    ?? operationalItems.filter((item) => item.memoryPlacement === "none_runtime_only").length;
+  const governanceHistoryNoteCount = memoryBoundary.governanceHistoryNoteCount
+    ?? exportReadyItems.filter((item) => item.memoryPlacement === "governance_history_note").length;
+  const packageRecordFolderCount = memoryBoundary.packageRecordFolderCount
+    ?? exportReadyItems.filter((item) => item.memoryPlacement === "package_record_folder").length;
+  const noSyncStrategyCount = memoryBoundary.noSyncStrategyCount
+    ?? operationalItems.filter((item) => item.syncStrategy === "none_runtime_only").length;
+  const appendHistoryEntryCount = memoryBoundary.appendHistoryEntryCount
+    ?? exportReadyItems.filter((item) => item.syncStrategy === "append_history_entry").length;
+  const replacePackageSnapshotAfterClosureCount = memoryBoundary.replacePackageSnapshotAfterClosureCount
+    ?? exportReadyItems.filter((item) => item.syncStrategy === "replace_package_snapshot_after_board_closure").length;
+  const noExportRequestShapeCount = memoryBoundary.noExportRequestShapeCount
+    ?? operationalItems.filter((item) => item.exportRequestShape === "none_runtime_only").length;
+  const singleRecordExportRequestCount = memoryBoundary.singleRecordExportRequestCount
+    ?? exportReadyItems.filter((item) => item.exportRequestShape === "single_record_export_request").length;
+  const packageBundleExportRequestCount = memoryBoundary.packageBundleExportRequestCount
+    ?? exportReadyItems.filter((item) => item.exportRequestShape === "package_bundle_export_request").length;
+  const noExportConfirmationRequirementCount = memoryBoundary.noExportConfirmationRequirementCount
+    ?? operationalItems.filter((item) => item.exportConfirmationRequirement === "none_runtime_only").length;
+  const tenantExportConfirmationCount = memoryBoundary.tenantExportConfirmationCount
+    ?? exportReadyItems.filter((item) => item.exportConfirmationRequirement === "tenant_export_confirmation").length;
+  const boardClosureThenTenantExportConfirmationCount = memoryBoundary.boardClosureThenTenantExportConfirmationCount
+    ?? exportReadyItems.filter((item) => item.exportConfirmationRequirement === "board_closure_then_tenant_export_confirmation").length;
+  const runtimeOnlyRecoveryPathCount = memoryBoundary.runtimeOnlyRecoveryPathCount
+    ?? operationalItems.filter((item) => item.exportRecoveryPath === "runtime_only").length;
+  const retryLatestRecordExportCount = memoryBoundary.retryLatestRecordExportCount
+    ?? exportReadyItems.filter((item) => item.exportRecoveryPath === "retry_latest_record_export").length;
+  const rerunAfterBoardClosureSnapshotCount = memoryBoundary.rerunAfterBoardClosureSnapshotCount
+    ?? exportReadyItems.filter((item) => item.exportRecoveryPath === "rerun_after_board_closure_snapshot").length;
 
   return {
     ...memoryBoundary,
@@ -2954,6 +3269,21 @@ function normalizeMemoryBoundary(
       runtimeOnlySourceDisclosureCount,
       decisionSummaryOnlyCount,
       closureSnapshotSummaryOnlyCount,
+      noMemoryPlacementCount,
+      governanceHistoryNoteCount,
+      packageRecordFolderCount,
+      noSyncStrategyCount,
+      appendHistoryEntryCount,
+      replacePackageSnapshotAfterClosureCount,
+      noExportRequestShapeCount,
+      singleRecordExportRequestCount,
+      packageBundleExportRequestCount,
+      noExportConfirmationRequirementCount,
+      tenantExportConfirmationCount,
+      boardClosureThenTenantExportConfirmationCount,
+      runtimeOnlyRecoveryPathCount,
+      retryLatestRecordExportCount,
+      rerunAfterBoardClosureSnapshotCount,
     roleSummary:
       memoryBoundary.roleSummary
       ?? (packagedWaitingCount > 0
@@ -3114,6 +3444,31 @@ function normalizeMemoryBoundary(
         ?? (closureSnapshotSummaryOnlyCount > 0
           ? `${runtimeOnlySourceDisclosureCount} runtime bucket${runtimeOnlySourceDisclosureCount === 1 ? " is" : "s are"} runtime only, ${decisionSummaryOnlyCount} export candidate bucket${decisionSummaryOnlyCount === 1 ? " discloses" : "s disclose"} decision summaries only, and ${closureSnapshotSummaryOnlyCount} bucket${closureSnapshotSummaryOnlyCount === 1 ? " still discloses" : "s still disclose"} closure-snapshot summaries only.`
           : `${runtimeOnlySourceDisclosureCount} runtime bucket${runtimeOnlySourceDisclosureCount === 1 ? " is" : "s are"} runtime only, and ${decisionSummaryOnlyCount} export candidate bucket${decisionSummaryOnlyCount === 1 ? " discloses" : "s disclose"} decision summaries only.`),
+    placementSummary:
+      memoryBoundary.placementSummary
+      ?? (packageRecordFolderCount > 0
+        ? `${noMemoryPlacementCount} runtime buckets have no tenant memory placement, ${governanceHistoryNoteCount} export candidate bucket${governanceHistoryNoteCount === 1 ? " lands" : "s land"} as governance history notes, and ${packageRecordFolderCount} bucket${packageRecordFolderCount === 1 ? " still lands" : "s still land"} in package record folders.`
+        : `${noMemoryPlacementCount} runtime buckets have no tenant memory placement, and ${governanceHistoryNoteCount} export candidate bucket${governanceHistoryNoteCount === 1 ? " lands" : "s land"} as governance history notes.`),
+    syncStrategySummary:
+      memoryBoundary.syncStrategySummary
+      ?? (replacePackageSnapshotAfterClosureCount > 0
+        ? `${noSyncStrategyCount} runtime buckets have no tenant sync strategy, ${appendHistoryEntryCount} export candidate bucket${appendHistoryEntryCount === 1 ? " appends" : "s append"} history entries, and ${replacePackageSnapshotAfterClosureCount} bucket${replacePackageSnapshotAfterClosureCount === 1 ? " still replaces" : "s still replace"} package snapshots after board closure.`
+        : `${noSyncStrategyCount} runtime buckets have no tenant sync strategy, and ${appendHistoryEntryCount} export candidate bucket${appendHistoryEntryCount === 1 ? " appends" : "s append"} history entries.`),
+    requestShapeSummary:
+      memoryBoundary.requestShapeSummary
+      ?? (packageBundleExportRequestCount > 0
+        ? `${noExportRequestShapeCount} runtime buckets have no export request shape, ${singleRecordExportRequestCount} export candidate bucket${singleRecordExportRequestCount === 1 ? " uses" : "s use"} single-record export requests, and ${packageBundleExportRequestCount} bucket${packageBundleExportRequestCount === 1 ? " still uses" : "s still use"} package-bundle export requests.`
+        : `${noExportRequestShapeCount} runtime buckets have no export request shape, and ${singleRecordExportRequestCount} export candidate bucket${singleRecordExportRequestCount === 1 ? " uses" : "s use"} single-record export requests.`),
+    confirmationSummary:
+      memoryBoundary.confirmationSummary
+      ?? (boardClosureThenTenantExportConfirmationCount > 0
+        ? `${noExportConfirmationRequirementCount} runtime buckets have no export confirmation, ${tenantExportConfirmationCount} export candidate bucket${tenantExportConfirmationCount === 1 ? " requires" : "s require"} tenant export confirmation, and ${boardClosureThenTenantExportConfirmationCount} bucket${boardClosureThenTenantExportConfirmationCount === 1 ? " still requires" : "s still require"} board closure before tenant export confirmation.`
+        : `${noExportConfirmationRequirementCount} runtime buckets have no export confirmation, and ${tenantExportConfirmationCount} export candidate bucket${tenantExportConfirmationCount === 1 ? " requires" : "s require"} tenant export confirmation.`),
+    recoveryPathSummary:
+      memoryBoundary.recoveryPathSummary
+      ?? (rerunAfterBoardClosureSnapshotCount > 0
+        ? `${runtimeOnlyRecoveryPathCount} runtime buckets are runtime only, ${retryLatestRecordExportCount} export candidate bucket${retryLatestRecordExportCount === 1 ? " retries" : "s retry"} the latest record export, and ${rerunAfterBoardClosureSnapshotCount} bucket${rerunAfterBoardClosureSnapshotCount === 1 ? " still reruns" : "s still rerun"} after the board-closure snapshot.`
+        : `${runtimeOnlyRecoveryPathCount} runtime buckets are runtime only, and ${retryLatestRecordExportCount} export candidate bucket${retryLatestRecordExportCount === 1 ? " retries" : "s retry"} the latest record export.`),
     partitions: memoryBoundary.partitions ?? {
       runtime: {
         itemCount: operationalItems.length,
@@ -3161,6 +3516,16 @@ function normalizeBoardResponse(
       eligibilityRuleLabel: "Explicit export later",
       sourceSurface: "recent_decisions",
       sourceSurfaceLabel: "Recent decisions",
+      memoryPlacement: "governance_history_note",
+      memoryPlacementLabel: "Governance history note",
+      syncStrategy: "append_history_entry",
+      syncStrategyLabel: "Append history entry",
+      exportRequestShape: "single_record_export_request",
+      exportRequestShapeLabel: "Single-record export request",
+      exportConfirmationRequirement: "tenant_export_confirmation",
+      exportConfirmationRequirementLabel: "Tenant export confirmation",
+      exportRecoveryPath: "retry_latest_record_export",
+      exportRecoveryPathLabel: "Retry latest record export",
       candidateClass: "governance_history",
       candidateClassLabel: "Governance history",
       durabilityCondition: "stable_when_recorded",
@@ -3243,6 +3608,16 @@ function normalizeBoardResponse(
       eligibilityRuleLabel: "Explicit export later",
       sourceSurface: "follow_through",
       sourceSurfaceLabel: "Follow-through history",
+      memoryPlacement: "governance_history_note",
+      memoryPlacementLabel: "Governance history note",
+      syncStrategy: "append_history_entry",
+      syncStrategyLabel: "Append history entry",
+      exportRequestShape: "single_record_export_request",
+      exportRequestShapeLabel: "Single-record export request",
+      exportConfirmationRequirement: "tenant_export_confirmation",
+      exportConfirmationRequirementLabel: "Tenant export confirmation",
+      exportRecoveryPath: "retry_latest_record_export",
+      exportRecoveryPathLabel: "Retry latest record export",
       candidateClass: "governance_history",
       candidateClassLabel: "Governance history",
       durabilityCondition: "stable_when_recorded",
@@ -3330,6 +3705,16 @@ function normalizeBoardResponse(
         : "Explicit export later",
       sourceSurface: "completion_package_governance",
       sourceSurfaceLabel: "Completion package governance",
+        memoryPlacement: "package_record_folder",
+        memoryPlacementLabel: "Package record folder",
+        syncStrategy: "replace_package_snapshot_after_board_closure",
+        syncStrategyLabel: "Replace package snapshot after board closure",
+        exportRequestShape: "package_bundle_export_request",
+        exportRequestShapeLabel: "Package-bundle export request",
+        exportConfirmationRequirement: "board_closure_then_tenant_export_confirmation",
+        exportConfirmationRequirementLabel: "Board closure, then tenant export confirmation",
+        exportRecoveryPath: "rerun_after_board_closure_snapshot",
+        exportRecoveryPathLabel: "Rerun after board-closure snapshot",
       candidateClass: "packaged_output",
       candidateClassLabel: "Packaged output",
       durabilityCondition: board.completionPackage?.hasOpenGovernanceItems
@@ -3488,6 +3873,16 @@ function normalizeBoardResponse(
         : "Explicit export later",
       sourceSurface: "completion_package_deliverables",
       sourceSurfaceLabel: "Completion package deliverables",
+        memoryPlacement: "package_record_folder",
+        memoryPlacementLabel: "Package record folder",
+        syncStrategy: "replace_package_snapshot_after_board_closure",
+        syncStrategyLabel: "Replace package snapshot after board closure",
+        exportRequestShape: "package_bundle_export_request",
+        exportRequestShapeLabel: "Package-bundle export request",
+        exportConfirmationRequirement: "board_closure_then_tenant_export_confirmation",
+        exportConfirmationRequirementLabel: "Board closure, then tenant export confirmation",
+        exportRecoveryPath: "rerun_after_board_closure_snapshot",
+        exportRecoveryPathLabel: "Rerun after board-closure snapshot",
       candidateClass: "packaged_output",
       candidateClassLabel: "Packaged output",
       durabilityCondition: board.completionPackage?.hasOpenGovernanceItems
@@ -3643,7 +4038,7 @@ function normalizeBoardResponse(
 
   return {
     ...board,
-    memoryBoundary: {
+    memoryBoundary: normalizeMemoryBoundary({
       summary:
         "Wealth Factory runtime keeps bounded operational lane memory live while governance and package records stay ready for later tenant-owned export.",
       exportSummary:
@@ -3838,6 +4233,23 @@ function normalizeBoardResponse(
       runtimeOnlySourceDisclosureCount: 2,
       decisionSummaryOnlyCount: exportReadyItems.filter((item) => item.exportSourceDisclosurePolicy === "decision_summary_only").length,
       closureSnapshotSummaryOnlyCount: exportReadyItems.filter((item) => item.exportSourceDisclosurePolicy === "closure_snapshot_summary_only").length,
+      noMemoryPlacementCount: 2,
+      governanceHistoryNoteCount: exportReadyItems.filter((item) => item.memoryPlacement === "governance_history_note").length,
+      packageRecordFolderCount: exportReadyItems.filter((item) => item.memoryPlacement === "package_record_folder").length,
+      noSyncStrategyCount: 2,
+      appendHistoryEntryCount: exportReadyItems.filter((item) => item.syncStrategy === "append_history_entry").length,
+      replacePackageSnapshotAfterClosureCount: exportReadyItems.filter((item) => item.syncStrategy === "replace_package_snapshot_after_board_closure").length,
+      noExportRequestShapeCount: 2,
+      singleRecordExportRequestCount: exportReadyItems.filter((item) => item.exportRequestShape === "single_record_export_request").length,
+      packageBundleExportRequestCount: exportReadyItems.filter((item) => item.exportRequestShape === "package_bundle_export_request").length,
+      noExportConfirmationRequirementCount: 2,
+      tenantExportConfirmationCount: exportReadyItems.filter((item) => item.exportConfirmationRequirement === "tenant_export_confirmation").length,
+      boardClosureThenTenantExportConfirmationCount:
+        exportReadyItems.filter((item) => item.exportConfirmationRequirement === "board_closure_then_tenant_export_confirmation").length,
+      runtimeOnlyRecoveryPathCount: 2,
+      retryLatestRecordExportCount: exportReadyItems.filter((item) => item.exportRecoveryPath === "retry_latest_record_export").length,
+      rerunAfterBoardClosureSnapshotCount:
+        exportReadyItems.filter((item) => item.exportRecoveryPath === "rerun_after_board_closure_snapshot").length,
       sensitivitySummary:
         waitingOnBoardClosureCount > 0
           ? `2 runtime buckets have no export sensitivity, ${exportReadyItems.filter((item) => item.exportSensitivity === "tenant_business_context").length} export candidate bucket${exportReadyItems.filter((item) => item.exportSensitivity === "tenant_business_context").length === 1 ? " carries" : "s carry"} tenant business context, and ${exportReadyItems.filter((item) => item.exportSensitivity === "tenant_deliverable_context").length} bucket${exportReadyItems.filter((item) => item.exportSensitivity === "tenant_deliverable_context").length === 1 ? " still carries" : "s still carry"} tenant deliverable context.`
@@ -3858,6 +4270,26 @@ function normalizeBoardResponse(
         waitingOnBoardClosureCount > 0
           ? `2 runtime buckets are runtime only, ${exportReadyItems.filter((item) => item.exportSourceDisclosurePolicy === "decision_summary_only").length} export candidate bucket${exportReadyItems.filter((item) => item.exportSourceDisclosurePolicy === "decision_summary_only").length === 1 ? " discloses" : "s disclose"} decision summaries only, and ${exportReadyItems.filter((item) => item.exportSourceDisclosurePolicy === "closure_snapshot_summary_only").length} bucket${exportReadyItems.filter((item) => item.exportSourceDisclosurePolicy === "closure_snapshot_summary_only").length === 1 ? " still discloses" : "s still disclose"} closure-snapshot summaries only.`
           : `2 runtime buckets are runtime only, and ${exportReadyItems.filter((item) => item.exportSourceDisclosurePolicy === "decision_summary_only").length} export candidate bucket${exportReadyItems.filter((item) => item.exportSourceDisclosurePolicy === "decision_summary_only").length === 1 ? " discloses" : "s disclose"} decision summaries only.`,
+      placementSummary:
+        waitingOnBoardClosureCount > 0
+          ? `2 runtime buckets have no tenant memory placement, ${exportReadyItems.filter((item) => item.memoryPlacement === "governance_history_note").length} export candidate bucket${exportReadyItems.filter((item) => item.memoryPlacement === "governance_history_note").length === 1 ? " lands" : "s land"} as governance history notes, and ${exportReadyItems.filter((item) => item.memoryPlacement === "package_record_folder").length} bucket${exportReadyItems.filter((item) => item.memoryPlacement === "package_record_folder").length === 1 ? " still lands" : "s still land"} in package record folders.`
+          : `2 runtime buckets have no tenant memory placement, and ${exportReadyItems.filter((item) => item.memoryPlacement === "governance_history_note").length} export candidate bucket${exportReadyItems.filter((item) => item.memoryPlacement === "governance_history_note").length === 1 ? " lands" : "s land"} as governance history notes.`,
+      syncStrategySummary:
+        waitingOnBoardClosureCount > 0
+          ? `2 runtime buckets have no tenant sync strategy, ${exportReadyItems.filter((item) => item.syncStrategy === "append_history_entry").length} export candidate bucket${exportReadyItems.filter((item) => item.syncStrategy === "append_history_entry").length === 1 ? " appends" : "s append"} history entries, and ${exportReadyItems.filter((item) => item.syncStrategy === "replace_package_snapshot_after_board_closure").length} bucket${exportReadyItems.filter((item) => item.syncStrategy === "replace_package_snapshot_after_board_closure").length === 1 ? " still replaces" : "s still replace"} package snapshots after board closure.`
+          : `2 runtime buckets have no tenant sync strategy, and ${exportReadyItems.filter((item) => item.syncStrategy === "append_history_entry").length} export candidate bucket${exportReadyItems.filter((item) => item.syncStrategy === "append_history_entry").length === 1 ? " appends" : "s append"} history entries.`,
+      requestShapeSummary:
+        waitingOnBoardClosureCount > 0
+          ? `2 runtime buckets have no export request shape, ${exportReadyItems.filter((item) => item.exportRequestShape === "single_record_export_request").length} export candidate bucket${exportReadyItems.filter((item) => item.exportRequestShape === "single_record_export_request").length === 1 ? " uses" : "s use"} single-record export requests, and ${exportReadyItems.filter((item) => item.exportRequestShape === "package_bundle_export_request").length} bucket${exportReadyItems.filter((item) => item.exportRequestShape === "package_bundle_export_request").length === 1 ? " still uses" : "s still use"} package-bundle export requests.`
+          : `2 runtime buckets have no export request shape, and ${exportReadyItems.filter((item) => item.exportRequestShape === "single_record_export_request").length} export candidate bucket${exportReadyItems.filter((item) => item.exportRequestShape === "single_record_export_request").length === 1 ? " uses" : "s use"} single-record export requests.`,
+      confirmationSummary:
+        waitingOnBoardClosureCount > 0
+          ? `2 runtime buckets have no export confirmation, ${exportReadyItems.filter((item) => item.exportConfirmationRequirement === "tenant_export_confirmation").length} export candidate bucket${exportReadyItems.filter((item) => item.exportConfirmationRequirement === "tenant_export_confirmation").length === 1 ? " requires" : "s require"} tenant export confirmation, and ${exportReadyItems.filter((item) => item.exportConfirmationRequirement === "board_closure_then_tenant_export_confirmation").length} bucket${exportReadyItems.filter((item) => item.exportConfirmationRequirement === "board_closure_then_tenant_export_confirmation").length === 1 ? " still requires" : "s still require"} board closure before tenant export confirmation.`
+          : `2 runtime buckets have no export confirmation, and ${exportReadyItems.filter((item) => item.exportConfirmationRequirement === "tenant_export_confirmation").length} export candidate bucket${exportReadyItems.filter((item) => item.exportConfirmationRequirement === "tenant_export_confirmation").length === 1 ? " requires" : "s require"} tenant export confirmation.`,
+      recoveryPathSummary:
+        waitingOnBoardClosureCount > 0
+          ? `2 runtime buckets are runtime only, ${exportReadyItems.filter((item) => item.exportRecoveryPath === "retry_latest_record_export").length} export candidate bucket${exportReadyItems.filter((item) => item.exportRecoveryPath === "retry_latest_record_export").length === 1 ? " retries" : "s retry"} the latest record export, and ${exportReadyItems.filter((item) => item.exportRecoveryPath === "rerun_after_board_closure_snapshot").length} bucket${exportReadyItems.filter((item) => item.exportRecoveryPath === "rerun_after_board_closure_snapshot").length === 1 ? " still reruns" : "s still rerun"} after the board-closure snapshot.`
+          : `2 runtime buckets are runtime only, and ${exportReadyItems.filter((item) => item.exportRecoveryPath === "retry_latest_record_export").length} export candidate bucket${exportReadyItems.filter((item) => item.exportRecoveryPath === "retry_latest_record_export").length === 1 ? " retries" : "s retry"} the latest record export.`,
       stateSummary:
         waitingOnBoardClosureCount > 0
           ? `2 runtime buckets stay runtime-only, ${exportReadyItems.filter((item) => item.promotionState === "ready_for_tenant_export").length} export candidate bucket${exportReadyItems.filter((item) => item.promotionState === "ready_for_tenant_export").length === 1 ? " is" : "s are"} ready for tenant export later, and ${exportReadyItems.filter((item) => item.promotionState === "awaiting_board_closure").length} bucket${exportReadyItems.filter((item) => item.promotionState === "awaiting_board_closure").length === 1 ? " is" : "s are"} still awaiting board closure.`
@@ -3896,6 +4328,16 @@ function normalizeBoardResponse(
           eligibilityRuleLabel: "Runtime only",
           sourceSurface: "continuity_snapshots",
           sourceSurfaceLabel: "Continuity snapshots",
+          memoryPlacement: "none_runtime_only",
+          memoryPlacementLabel: "No tenant memory placement",
+          syncStrategy: "none_runtime_only",
+          syncStrategyLabel: "No tenant sync strategy",
+          exportRequestShape: "none_runtime_only",
+          exportRequestShapeLabel: "No export request shape",
+          exportConfirmationRequirement: "none_runtime_only",
+          exportConfirmationRequirementLabel: "No export confirmation",
+          exportRecoveryPath: "runtime_only",
+          exportRecoveryPathLabel: "Runtime only",
           candidateClass: "runtime_operational",
           candidateClassLabel: "Runtime operational",
           durabilityCondition: "runtime_ephemeral",
@@ -3978,6 +4420,16 @@ function normalizeBoardResponse(
           eligibilityRuleLabel: "Runtime only",
           sourceSurface: "pending_attention",
           sourceSurfaceLabel: "Pending attention",
+          memoryPlacement: "none_runtime_only",
+          memoryPlacementLabel: "No tenant memory placement",
+          syncStrategy: "none_runtime_only",
+          syncStrategyLabel: "No tenant sync strategy",
+          exportRequestShape: "none_runtime_only",
+          exportRequestShapeLabel: "No export request shape",
+          exportConfirmationRequirement: "none_runtime_only",
+          exportConfirmationRequirementLabel: "No export confirmation",
+          exportRecoveryPath: "runtime_only",
+          exportRecoveryPathLabel: "Runtime only",
           candidateClass: "runtime_operational",
           candidateClassLabel: "Runtime operational",
           durabilityCondition: "runtime_ephemeral",
@@ -4048,7 +4500,7 @@ function normalizeBoardResponse(
         }
       ],
       exportReadyItems
-    }
+    }, board)
   };
 }
 

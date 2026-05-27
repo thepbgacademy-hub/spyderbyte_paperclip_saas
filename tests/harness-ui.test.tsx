@@ -377,6 +377,16 @@ const boardResponse: HarnessBoardResponse = {
       "2 runtime buckets stay runtime internal only, 2 export candidate buckets use governance-safe redaction, and 2 buckets still require package-safe redaction.",
     sourceDisclosureSummary:
       "2 runtime buckets are runtime only, 2 export candidate buckets disclose decision summaries only, and 2 buckets still disclose closure-snapshot summaries only.",
+    placementSummary:
+      "2 runtime buckets have no tenant memory placement, 2 export candidate buckets land as governance history notes, and 2 buckets still land in package record folders.",
+    syncStrategySummary:
+      "2 runtime buckets have no tenant sync strategy, 2 export candidate buckets append history entries, and 2 buckets still replace package snapshots after board closure.",
+    requestShapeSummary:
+      "2 runtime buckets have no export request shape, 2 export candidate buckets use single-record export requests, and 2 buckets still use package-bundle export requests.",
+    confirmationSummary:
+      "2 runtime buckets have no export confirmation, 2 export candidate buckets require tenant export confirmation, and 2 buckets still require board closure before tenant export confirmation.",
+    recoveryPathSummary:
+      "2 runtime buckets are runtime only, 2 export candidate buckets retry the latest record export, and 2 buckets still rerun after the board-closure snapshot.",
     noPromotionScopeCount: 2,
     singleRecordExportScopeCount: 2,
     packageRecordSetExportScopeCount: 2,
@@ -434,6 +444,21 @@ const boardResponse: HarnessBoardResponse = {
     runtimeOnlySourceDisclosureCount: 2,
     decisionSummaryOnlyCount: 2,
     closureSnapshotSummaryOnlyCount: 2,
+    noMemoryPlacementCount: 2,
+    governanceHistoryNoteCount: 2,
+    packageRecordFolderCount: 2,
+    noSyncStrategyCount: 2,
+    appendHistoryEntryCount: 2,
+    replacePackageSnapshotAfterClosureCount: 2,
+    noExportRequestShapeCount: 2,
+    singleRecordExportRequestCount: 2,
+    packageBundleExportRequestCount: 2,
+    noExportConfirmationRequirementCount: 2,
+    tenantExportConfirmationCount: 2,
+    boardClosureThenTenantExportConfirmationCount: 2,
+    runtimeOnlyRecoveryPathCount: 2,
+    retryLatestRecordExportCount: 2,
+    rerunAfterBoardClosureSnapshotCount: 2,
     partitions: {
       runtime: {
         itemCount: 2,
@@ -529,6 +554,16 @@ const boardResponse: HarnessBoardResponse = {
         exportRedactionBoundaryLabel: "Runtime internal only",
         exportSourceDisclosurePolicy: "runtime_only",
         exportSourceDisclosurePolicyLabel: "Runtime only",
+        memoryPlacement: "none_runtime_only",
+        memoryPlacementLabel: "No tenant memory placement",
+        syncStrategy: "none_runtime_only",
+        syncStrategyLabel: "No tenant sync strategy",
+        exportRequestShape: "none_runtime_only",
+        exportRequestShapeLabel: "No export request shape",
+        exportConfirmationRequirement: "none_runtime_only",
+        exportConfirmationRequirementLabel: "No export confirmation",
+        exportRecoveryPath: "runtime_only",
+        exportRecoveryPathLabel: "Runtime only",
         promotionActionDescription: "No export action applies. This runtime memory stays inside Wealth Factory orchestration."
       },
       {
@@ -611,6 +646,16 @@ const boardResponse: HarnessBoardResponse = {
         exportRedactionBoundaryLabel: "Runtime internal only",
         exportSourceDisclosurePolicy: "runtime_only",
         exportSourceDisclosurePolicyLabel: "Runtime only",
+        memoryPlacement: "none_runtime_only",
+        memoryPlacementLabel: "No tenant memory placement",
+        syncStrategy: "none_runtime_only",
+        syncStrategyLabel: "No tenant sync strategy",
+        exportRequestShape: "none_runtime_only",
+        exportRequestShapeLabel: "No export request shape",
+        exportConfirmationRequirement: "none_runtime_only",
+        exportConfirmationRequirementLabel: "No export confirmation",
+        exportRecoveryPath: "runtime_only",
+        exportRecoveryPathLabel: "Runtime only",
         promotionActionDescription: "No export action applies. This runtime attention state stays inside Wealth Factory orchestration."
       }
     ],
@@ -695,6 +740,16 @@ const boardResponse: HarnessBoardResponse = {
         exportRedactionBoundaryLabel: "Governance-safe redaction",
         exportSourceDisclosurePolicy: "decision_summary_only",
         exportSourceDisclosurePolicyLabel: "Decision summary only",
+        memoryPlacement: "governance_history_note",
+        memoryPlacementLabel: "Governance history note",
+        syncStrategy: "append_history_entry",
+        syncStrategyLabel: "Append history entry",
+        exportRequestShape: "single_record_export_request",
+        exportRequestShapeLabel: "Single-record export request",
+        exportConfirmationRequirement: "tenant_export_confirmation",
+        exportConfirmationRequirementLabel: "Tenant export confirmation",
+        exportRecoveryPath: "retry_latest_record_export",
+        exportRecoveryPathLabel: "Retry latest record export",
         promotionActionDescription: "This governance history is ready to sit behind a later bounded tenant export action."
       },
       {
@@ -777,6 +832,16 @@ const boardResponse: HarnessBoardResponse = {
         exportRedactionBoundaryLabel: "Governance-safe redaction",
         exportSourceDisclosurePolicy: "decision_summary_only",
         exportSourceDisclosurePolicyLabel: "Decision summary only",
+        memoryPlacement: "governance_history_note",
+        memoryPlacementLabel: "Governance history note",
+        syncStrategy: "append_history_entry",
+        syncStrategyLabel: "Append history entry",
+        exportRequestShape: "single_record_export_request",
+        exportRequestShapeLabel: "Single-record export request",
+        exportConfirmationRequirement: "tenant_export_confirmation",
+        exportConfirmationRequirementLabel: "Tenant export confirmation",
+        exportRecoveryPath: "retry_latest_record_export",
+        exportRecoveryPathLabel: "Retry latest record export",
         promotionActionDescription:
           "This implemented follow-through is ready to sit behind a later bounded tenant export action."
       },
@@ -860,6 +925,16 @@ const boardResponse: HarnessBoardResponse = {
         exportRedactionBoundaryLabel: "Package-safe redaction",
         exportSourceDisclosurePolicy: "closure_snapshot_summary_only",
         exportSourceDisclosurePolicyLabel: "Closure snapshot summary only",
+        memoryPlacement: "package_record_folder",
+        memoryPlacementLabel: "Package record folder",
+        syncStrategy: "replace_package_snapshot_after_board_closure",
+        syncStrategyLabel: "Replace package snapshot after board closure",
+        exportRequestShape: "package_bundle_export_request",
+        exportRequestShapeLabel: "Package-bundle export request",
+        exportConfirmationRequirement: "board_closure_then_tenant_export_confirmation",
+        exportConfirmationRequirementLabel: "Board closure, then tenant export confirmation",
+        exportRecoveryPath: "rerun_after_board_closure_snapshot",
+        exportRecoveryPathLabel: "Rerun after board-closure snapshot",
         promotionActionDescription:
           "Board closure still gates this package governance memory before any later tenant export action can apply.",
         nextEligibleSummary: "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
@@ -944,6 +1019,16 @@ const boardResponse: HarnessBoardResponse = {
         exportRedactionBoundaryLabel: "Package-safe redaction",
         exportSourceDisclosurePolicy: "closure_snapshot_summary_only",
         exportSourceDisclosurePolicyLabel: "Closure snapshot summary only",
+        memoryPlacement: "package_record_folder",
+        memoryPlacementLabel: "Package record folder",
+        syncStrategy: "replace_package_snapshot_after_board_closure",
+        syncStrategyLabel: "Replace package snapshot after board closure",
+        exportRequestShape: "package_bundle_export_request",
+        exportRequestShapeLabel: "Package-bundle export request",
+        exportConfirmationRequirement: "board_closure_then_tenant_export_confirmation",
+        exportConfirmationRequirementLabel: "Board closure, then tenant export confirmation",
+        exportRecoveryPath: "rerun_after_board_closure_snapshot",
+        exportRecoveryPathLabel: "Rerun after board-closure snapshot",
         promotionActionDescription:
           "Board closure still gates this packaged deliverable before any later tenant export action can apply.",
         nextEligibleSummary: "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
@@ -1667,6 +1752,20 @@ describe("harness board UI", () => {
     expect(markup).toContain("Package-safe redaction");
     expect(markup).toContain("Decision summary only");
     expect(markup).toContain("Closure snapshot summary only");
+    expect(markup).toContain("No tenant memory placement");
+    expect(markup).toContain("Governance history note");
+    expect(markup).toContain("Package record folder");
+    expect(markup).toContain("No tenant sync strategy");
+    expect(markup).toContain("Append history entry");
+    expect(markup).toContain("Replace package snapshot after board closure");
+    expect(markup).toContain("No export request shape");
+    expect(markup).toContain("Single-record export request");
+    expect(markup).toContain("Package-bundle export request");
+    expect(markup).toContain("No export confirmation");
+    expect(markup).toContain("Tenant export confirmation");
+    expect(markup).toContain("Board closure, then tenant export confirmation");
+    expect(markup).toContain("Retry latest record export");
+    expect(markup).toContain("Rerun after board-closure snapshot");
     expect(markup).toContain("This governance history is ready to sit behind a later bounded tenant export action.");
     expect(markup).toContain("Board closure still gates this packaged deliverable before any later tenant export action can apply.");
     expect(markup).toContain("Source surface: Continuity snapshots");

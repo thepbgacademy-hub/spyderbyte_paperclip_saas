@@ -205,6 +205,16 @@ describe("harness board client", () => {
           "2 runtime buckets stay runtime internal only, 2 export candidate buckets use governance-safe redaction, and 2 buckets still require package-safe redaction.",
         sourceDisclosureSummary:
           "2 runtime buckets are runtime only, 2 export candidate buckets disclose decision summaries only, and 2 buckets still disclose closure-snapshot summaries only.",
+        placementSummary:
+          "2 runtime buckets have no tenant memory placement, 2 export candidate buckets land as governance history notes, and 2 buckets still land in package record folders.",
+        syncStrategySummary:
+          "2 runtime buckets have no tenant sync strategy, 2 export candidate buckets append history entries, and 2 buckets still replace package snapshots after board closure.",
+        requestShapeSummary:
+          "2 runtime buckets have no export request shape, 2 export candidate buckets use single-record export requests, and 2 buckets still use package-bundle export requests.",
+        confirmationSummary:
+          "2 runtime buckets have no export confirmation, 2 export candidate buckets require tenant export confirmation, and 2 buckets still require board closure before tenant export confirmation.",
+        recoveryPathSummary:
+          "2 runtime buckets are runtime only, 2 export candidate buckets retry the latest record export, and 2 buckets still rerun after the board-closure snapshot.",
         readyNowCount: 2,
         waitingOnBoardClosureCount: 2,
         governanceReadyCount: 2,
@@ -238,7 +248,12 @@ describe("harness board client", () => {
             exportAudienceBoundary: "wealth_factory_runtime_only",
             exportSanitizationPolicy: "none_runtime_only",
             exportRedactionBoundary: "runtime_internal_only",
-            exportSourceDisclosurePolicy: "runtime_only"
+            exportSourceDisclosurePolicy: "runtime_only",
+            memoryPlacement: "none_runtime_only",
+            syncStrategy: "none_runtime_only",
+            exportRequestShape: "none_runtime_only",
+            exportConfirmationRequirement: "none_runtime_only",
+            exportRecoveryPath: "runtime_only"
           })
         ]),
         exportReadyItems: expect.arrayContaining([
@@ -264,7 +279,12 @@ describe("harness board client", () => {
             exportAudienceBoundary: "tenant_governance_history_readers",
             exportSanitizationPolicy: "export_as_recorded",
             exportRedactionBoundary: "governance_safe_redaction",
-            exportSourceDisclosurePolicy: "decision_summary_only"
+            exportSourceDisclosurePolicy: "decision_summary_only",
+            memoryPlacement: "governance_history_note",
+            syncStrategy: "append_history_entry",
+            exportRequestShape: "single_record_export_request",
+            exportConfirmationRequirement: "tenant_export_confirmation",
+            exportRecoveryPath: "retry_latest_record_export"
           })
         ])
       })
@@ -511,6 +531,21 @@ describe("harness board client", () => {
     expect(
       board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.exportSourceDisclosurePolicyLabel
     ).toBe("Closure snapshot summary only");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.memoryPlacementLabel
+    ).toBe("Package record folder");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.syncStrategyLabel
+    ).toBe("Replace package snapshot after board closure");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.exportRequestShapeLabel
+    ).toBe("Package-bundle export request");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.exportConfirmationRequirementLabel
+    ).toBe("Board closure, then tenant export confirmation");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.exportRecoveryPathLabel
+    ).toBe("Rerun after board-closure snapshot");
   });
 
   it("derives governance-ready partition counts from readiness, not only from role membership", async () => {

@@ -1639,6 +1639,11 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.sanitizationSummary).toContain("exported as recorded");
     expect(hydrated.memoryBoundary.redactionSummary).toContain("governance-safe redaction");
     expect(hydrated.memoryBoundary.sourceDisclosureSummary).toContain("decision summaries only");
+    expect(hydrated.memoryBoundary.placementSummary).toContain("governance history notes");
+    expect(hydrated.memoryBoundary.syncStrategySummary).toContain("append history entries");
+    expect(hydrated.memoryBoundary.requestShapeSummary).toContain("single-record export requests");
+    expect(hydrated.memoryBoundary.confirmationSummary).toContain("tenant export confirmation");
+    expect(hydrated.memoryBoundary.recoveryPathSummary).toContain("retry the latest record export");
     expect(hydrated.memoryBoundary.blockerSummary).toContain("blocked");
     expect(hydrated.memoryBoundary.authoritySummary).toContain("tenant-controlled");
     expect(hydrated.memoryBoundary.triggerSummary).toContain("tenant export request");
@@ -1720,7 +1725,17 @@ describe("harness board service", () => {
           exportRedactionBoundary: "runtime_internal_only",
           exportRedactionBoundaryLabel: "Runtime internal only",
           exportSourceDisclosurePolicy: "runtime_only",
-          exportSourceDisclosurePolicyLabel: "Runtime only"
+          exportSourceDisclosurePolicyLabel: "Runtime only",
+          memoryPlacement: "none_runtime_only",
+          memoryPlacementLabel: "No tenant memory placement",
+          syncStrategy: "none_runtime_only",
+          syncStrategyLabel: "No tenant sync strategy",
+          exportRequestShape: "none_runtime_only",
+          exportRequestShapeLabel: "No export request shape",
+          exportConfirmationRequirement: "none_runtime_only",
+          exportConfirmationRequirementLabel: "No export confirmation",
+          exportRecoveryPath: "runtime_only",
+          exportRecoveryPathLabel: "Runtime only"
         })
       ])
     );
@@ -1796,7 +1811,17 @@ describe("harness board service", () => {
           exportRedactionBoundary: "governance_safe_redaction",
           exportRedactionBoundaryLabel: "Governance-safe redaction",
           exportSourceDisclosurePolicy: "decision_summary_only",
-          exportSourceDisclosurePolicyLabel: "Decision summary only"
+          exportSourceDisclosurePolicyLabel: "Decision summary only",
+          memoryPlacement: "governance_history_note",
+          memoryPlacementLabel: "Governance history note",
+          syncStrategy: "append_history_entry",
+          syncStrategyLabel: "Append history entry",
+          exportRequestShape: "single_record_export_request",
+          exportRequestShapeLabel: "Single-record export request",
+          exportConfirmationRequirement: "tenant_export_confirmation",
+          exportConfirmationRequirementLabel: "Tenant export confirmation",
+          exportRecoveryPath: "retry_latest_record_export",
+          exportRecoveryPathLabel: "Retry latest record export"
         }),
         expect.objectContaining({
           id: "implemented_actions",

@@ -487,6 +487,11 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     sanitizationSummary: "Export sanitization guidance is pending the latest board state.",
     redactionSummary: "Export redaction guidance is pending the latest board state.",
     sourceDisclosureSummary: "Export source-disclosure guidance is pending the latest board state.",
+    placementSummary: "Tenant memory placement guidance is pending the latest board state.",
+    syncStrategySummary: "Tenant sync strategy guidance is pending the latest board state.",
+    requestShapeSummary: "Export request-shape guidance is pending the latest board state.",
+    confirmationSummary: "Export confirmation guidance is pending the latest board state.",
+    recoveryPathSummary: "Export recovery-path guidance is pending the latest board state.",
     readyNowCount: 0,
     waitingOnBoardClosureCount: 0,
     governanceReadyCount: 0,
@@ -564,6 +569,21 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     runtimeOnlySourceDisclosureCount: 0,
     decisionSummaryOnlyCount: 0,
     closureSnapshotSummaryOnlyCount: 0,
+    noMemoryPlacementCount: 0,
+    governanceHistoryNoteCount: 0,
+    packageRecordFolderCount: 0,
+    noSyncStrategyCount: 0,
+    appendHistoryEntryCount: 0,
+    replacePackageSnapshotAfterClosureCount: 0,
+    noExportRequestShapeCount: 0,
+    singleRecordExportRequestCount: 0,
+    packageBundleExportRequestCount: 0,
+    noExportConfirmationRequirementCount: 0,
+    tenantExportConfirmationCount: 0,
+    boardClosureThenTenantExportConfirmationCount: 0,
+    runtimeOnlyRecoveryPathCount: 0,
+    retryLatestRecordExportCount: 0,
+    rerunAfterBoardClosureSnapshotCount: 0,
     partitions: {
       runtime: { itemCount: 0, summary: "Runtime memory partition is pending the latest board state." },
       governanceHistoryCandidates: {
@@ -631,6 +651,11 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <p style={styles.actionSummary}>{memoryBoundary.sanitizationSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.redactionSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.sourceDisclosureSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.placementSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.syncStrategySummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.requestShapeSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.confirmationSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.recoveryPathSummary}</p>
       <ul style={styles.actionList}>
         <li style={styles.actionItem}>
           <p style={styles.contractMeta}>Runtime partition</p>
@@ -694,6 +719,11 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                     <span style={styles.badge}>{item.exportSanitizationPolicyLabel}</span>
                     <span style={styles.badge}>{item.exportRedactionBoundaryLabel}</span>
                     <span style={styles.badge}>{item.exportSourceDisclosurePolicyLabel}</span>
+                    <span style={styles.badge}>{item.memoryPlacementLabel}</span>
+                    <span style={styles.badge}>{item.syncStrategyLabel}</span>
+                    <span style={styles.badge}>{item.exportRequestShapeLabel}</span>
+                    <span style={styles.badge}>{item.exportConfirmationRequirementLabel}</span>
+                    <span style={styles.badge}>{item.exportRecoveryPathLabel}</span>
                   </div>
                   <p style={styles.actionSummary}>{item.summary}</p>
                   <p style={styles.optionBody}>{item.promotionActionDescription}</p>
