@@ -464,6 +464,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     authoritySummary: "Promotion authority is pending the latest board state.",
     triggerSummary: "Promotion trigger is pending the latest board state.",
     nextStepSummary: "Promotion next-step guidance is pending the latest board state.",
+    actionFamilySummary: "Promotion action family guidance is pending the latest board state.",
     readyNowCount: 0,
     waitingOnBoardClosureCount: 0,
     governanceReadyCount: 0,
@@ -518,6 +519,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <p style={styles.actionSummary}>{memoryBoundary.authoritySummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.triggerSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.nextStepSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.actionFamilySummary}</p>
       <ul style={styles.actionList}>
         <li style={styles.actionItem}>
           <p style={styles.contractMeta}>Runtime partition</p>
@@ -558,8 +560,10 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                     <span style={styles.badge}>{item.promotionAuthorityLabel}</span>
                     <span style={styles.badge}>{item.promotionTriggerLabel}</span>
                     <span style={styles.badge}>{item.promotionNextStepLabel}</span>
+                    <span style={styles.badge}>{item.promotionActionFamilyLabel}</span>
                   </div>
                   <p style={styles.actionSummary}>{item.summary}</p>
+                  <p style={styles.optionBody}>{item.promotionActionDescription}</p>
                   <p style={styles.optionBody}>{`Source surface: ${item.sourceSurfaceLabel}`}</p>
                   {item.nextEligibleSummary ? <p style={styles.actionSummary}>{item.nextEligibleSummary}</p> : null}
                 </li>

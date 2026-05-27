@@ -159,6 +159,11 @@ export type HarnessMemoryBoundaryPromotionNextStep =
   | "tenant_export_available"
   | "board_closure_then_tenant_export";
 
+export type HarnessMemoryBoundaryPromotionActionFamily =
+  | "none_runtime_only"
+  | "tenant_export_candidate"
+  | "board_closure_before_export";
+
 export type HarnessMemoryBoundaryItemView = {
   id:
     | "lane_continuity"
@@ -199,6 +204,9 @@ export type HarnessMemoryBoundaryItemView = {
   promotionStateLabel: string;
   promotionNextStep: HarnessMemoryBoundaryPromotionNextStep;
   promotionNextStepLabel: string;
+  promotionActionFamily: HarnessMemoryBoundaryPromotionActionFamily;
+  promotionActionFamilyLabel: string;
+  promotionActionDescription: string;
   nextEligibleSummary?: string;
 };
 
@@ -226,6 +234,9 @@ export type HarnessMemoryBoundaryView = {
   runtimeOnlyNextStepCount: number;
   tenantExportAvailableNextStepCount: number;
   boardClosureThenTenantExportNextStepCount: number;
+  noPromotionActionCount: number;
+  tenantExportActionFamilyCount: number;
+  boardClosureActionFamilyCount: number;
   roleSummary: string;
   ownershipSummary: string;
   promotionSummary: string;
@@ -235,6 +246,7 @@ export type HarnessMemoryBoundaryView = {
   triggerSummary: string;
   stateSummary: string;
   nextStepSummary: string;
+  actionFamilySummary: string;
   partitions: {
     runtime: HarnessMemoryBoundaryPartitionView;
     governanceHistoryCandidates: HarnessMemoryBoundaryPartitionView;
@@ -3908,7 +3920,10 @@ function buildMemoryBoundaryView(input: {
       promotionState: "runtime_only",
       promotionStateLabel: humanizeMemoryBoundaryPromotionState("runtime_only"),
       promotionNextStep: "none_runtime_only",
-      promotionNextStepLabel: humanizeMemoryBoundaryPromotionNextStep("none_runtime_only")
+      promotionNextStepLabel: humanizeMemoryBoundaryPromotionNextStep("none_runtime_only"),
+      promotionActionFamily: "none_runtime_only",
+      promotionActionFamilyLabel: humanizeMemoryBoundaryPromotionActionFamily("none_runtime_only"),
+      promotionActionDescription: "No export action applies. This runtime memory stays inside Wealth Factory orchestration."
     },
     {
       id: "attention_state",
@@ -3943,7 +3958,10 @@ function buildMemoryBoundaryView(input: {
       promotionState: "runtime_only",
       promotionStateLabel: humanizeMemoryBoundaryPromotionState("runtime_only"),
       promotionNextStep: "none_runtime_only",
-      promotionNextStepLabel: humanizeMemoryBoundaryPromotionNextStep("none_runtime_only")
+      promotionNextStepLabel: humanizeMemoryBoundaryPromotionNextStep("none_runtime_only"),
+      promotionActionFamily: "none_runtime_only",
+      promotionActionFamilyLabel: humanizeMemoryBoundaryPromotionActionFamily("none_runtime_only"),
+      promotionActionDescription: "No export action applies. This runtime attention state stays inside Wealth Factory orchestration."
     }
   ];
 
@@ -3981,7 +3999,10 @@ function buildMemoryBoundaryView(input: {
       promotionState: "ready_for_tenant_export",
       promotionStateLabel: humanizeMemoryBoundaryPromotionState("ready_for_tenant_export"),
       promotionNextStep: "tenant_export_available",
-      promotionNextStepLabel: humanizeMemoryBoundaryPromotionNextStep("tenant_export_available")
+      promotionNextStepLabel: humanizeMemoryBoundaryPromotionNextStep("tenant_export_available"),
+      promotionActionFamily: "tenant_export_candidate",
+      promotionActionFamilyLabel: humanizeMemoryBoundaryPromotionActionFamily("tenant_export_candidate"),
+      promotionActionDescription: "This governance history is ready to sit behind a later bounded tenant export action."
     },
     {
       id: "implemented_actions",
@@ -4016,7 +4037,11 @@ function buildMemoryBoundaryView(input: {
       promotionState: "ready_for_tenant_export",
       promotionStateLabel: humanizeMemoryBoundaryPromotionState("ready_for_tenant_export"),
       promotionNextStep: "tenant_export_available",
-      promotionNextStepLabel: humanizeMemoryBoundaryPromotionNextStep("tenant_export_available")
+      promotionNextStepLabel: humanizeMemoryBoundaryPromotionNextStep("tenant_export_available"),
+      promotionActionFamily: "tenant_export_candidate",
+      promotionActionFamilyLabel: humanizeMemoryBoundaryPromotionActionFamily("tenant_export_candidate"),
+      promotionActionDescription:
+        "This implemented follow-through is ready to sit behind a later bounded tenant export action."
     }
   ];
 
@@ -4107,6 +4132,17 @@ function buildMemoryBoundaryView(input: {
             ? "board_closure_then_tenant_export"
             : "tenant_export_available"
         ),
+        promotionActionFamily: input.completionPackage.hasOpenGovernanceItems
+          ? "board_closure_before_export"
+          : "tenant_export_candidate",
+        promotionActionFamilyLabel: humanizeMemoryBoundaryPromotionActionFamily(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "board_closure_before_export"
+            : "tenant_export_candidate"
+        ),
+        promotionActionDescription: input.completionPackage.hasOpenGovernanceItems
+          ? "Board closure still gates this package governance memory before any later tenant export action can apply."
+          : "This package governance memory is ready to sit behind a later bounded tenant export action.",
         ...(packageReadiness === "after_board_closes"
           ? {
               nextEligibleSummary:
@@ -4196,6 +4232,17 @@ function buildMemoryBoundaryView(input: {
             ? "board_closure_then_tenant_export"
             : "tenant_export_available"
         ),
+        promotionActionFamily: input.completionPackage.hasOpenGovernanceItems
+          ? "board_closure_before_export"
+          : "tenant_export_candidate",
+        promotionActionFamilyLabel: humanizeMemoryBoundaryPromotionActionFamily(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "board_closure_before_export"
+            : "tenant_export_candidate"
+        ),
+        promotionActionDescription: input.completionPackage.hasOpenGovernanceItems
+          ? "Board closure still gates this packaged deliverable before any later tenant export action can apply."
+          : "This packaged deliverable is ready to sit behind a later bounded tenant export action.",
         ...(packageReadiness === "after_board_closes"
           ? {
               nextEligibleSummary:
@@ -4248,6 +4295,15 @@ function buildMemoryBoundaryView(input: {
   const boardClosureThenTenantExportNextStepCount = exportReadyItems.filter(
     (item) => item.promotionNextStep === "board_closure_then_tenant_export"
   ).length;
+  const noPromotionActionCount = operationalItems.filter(
+    (item) => item.promotionActionFamily === "none_runtime_only"
+  ).length;
+  const tenantExportActionFamilyCount = exportReadyItems.filter(
+    (item) => item.promotionActionFamily === "tenant_export_candidate"
+  ).length;
+  const boardClosureActionFamilyCount = exportReadyItems.filter(
+    (item) => item.promotionActionFamily === "board_closure_before_export"
+  ).length;
 
   return {
     summary:
@@ -4274,6 +4330,9 @@ function buildMemoryBoundaryView(input: {
     runtimeOnlyNextStepCount,
     tenantExportAvailableNextStepCount,
     boardClosureThenTenantExportNextStepCount,
+    noPromotionActionCount,
+    tenantExportActionFamilyCount,
+    boardClosureActionFamilyCount,
     roleSummary:
       packagedWaitingCount > 0
         ? `${governanceReadyCount} governance record candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} ready now, and ${packagedWaitingCount} packaged output candidate${packagedWaitingCount === 1 ? "" : "s"} ${packagedWaitingCount === 1 ? "still waits" : "still wait"} on board closure.`
@@ -4308,6 +4367,10 @@ function buildMemoryBoundaryView(input: {
       boardClosureThenTenantExportNextStepCount > 0
         ? `${runtimeOnlyNextStepCount} runtime bucket${runtimeOnlyNextStepCount === 1 ? " has" : "s have"} no promotion step, ${tenantExportAvailableNextStepCount} export candidate bucket${tenantExportAvailableNextStepCount === 1 ? " is" : "s are"} ready for a later tenant export step, and ${boardClosureThenTenantExportNextStepCount} bucket${boardClosureThenTenantExportNextStepCount === 1 ? " still needs" : "s still need"} board closure before tenant export becomes the next step.`
         : `${runtimeOnlyNextStepCount} runtime bucket${runtimeOnlyNextStepCount === 1 ? " has" : "s have"} no promotion step, and ${tenantExportAvailableNextStepCount} export candidate bucket${tenantExportAvailableNextStepCount === 1 ? " is" : "s are"} ready for a later tenant export step.`,
+    actionFamilySummary:
+      boardClosureActionFamilyCount > 0
+        ? `${noPromotionActionCount} runtime bucket${noPromotionActionCount === 1 ? " exposes" : "s expose"} no promotion action, ${tenantExportActionFamilyCount} export candidate bucket${tenantExportActionFamilyCount === 1 ? " sits" : "s sit"} in the tenant export family, and ${boardClosureActionFamilyCount} bucket${boardClosureActionFamilyCount === 1 ? " remains" : "s remain"} in the board-closure-first family.`
+        : `${noPromotionActionCount} runtime bucket${noPromotionActionCount === 1 ? " exposes" : "s expose"} no promotion action, and ${tenantExportActionFamilyCount} export candidate bucket${tenantExportActionFamilyCount === 1 ? " sits" : "s sit"} in the tenant export family.`,
     partitions: {
       runtime: {
         itemCount: operationalItems.length,
@@ -4515,6 +4578,19 @@ function humanizeMemoryBoundaryPromotionNextStep(step: HarnessMemoryBoundaryProm
       return "Board closure, then tenant export";
     default:
       return humanizeLabel(step);
+  }
+}
+
+function humanizeMemoryBoundaryPromotionActionFamily(family: HarnessMemoryBoundaryPromotionActionFamily) {
+  switch (family) {
+    case "none_runtime_only":
+      return "No promotion action";
+    case "tenant_export_candidate":
+      return "Tenant export family";
+    case "board_closure_before_export":
+      return "Board closure first";
+    default:
+      return humanizeLabel(family);
   }
 }
 

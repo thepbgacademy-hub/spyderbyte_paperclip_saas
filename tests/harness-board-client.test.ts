@@ -183,6 +183,8 @@ describe("harness board client", () => {
           "2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later.",
         nextStepSummary:
           "2 runtime buckets have no promotion step, 2 export candidate buckets are ready for a later tenant export step, and 2 buckets still need board closure before tenant export becomes the next step.",
+        actionFamilySummary:
+          "2 runtime buckets expose no promotion action, 2 export candidate buckets sit in the tenant export family, and 2 buckets remain in the board-closure-first family.",
         promotionSummary:
           "2 runtime memory buckets never promote, 2 candidate buckets are ready for explicit export later, and 2 candidate buckets still wait on board closure first.",
         recordTargetSummary:
@@ -212,6 +214,8 @@ describe("harness board client", () => {
             promotionPath: "never_promotes",
             recordTarget: "none_runtime_only",
             promotionNextStep: "none_runtime_only"
+            ,
+            promotionActionFamily: "none_runtime_only"
           })
         ]),
         exportReadyItems: expect.arrayContaining([
@@ -229,6 +233,8 @@ describe("harness board client", () => {
             promotionPath: "ready_for_explicit_export",
             recordTarget: "governance_history_record",
             promotionNextStep: "tenant_export_available"
+            ,
+            promotionActionFamily: "tenant_export_candidate"
           })
         ])
       })
@@ -282,6 +288,9 @@ describe("harness board client", () => {
     );
     expect(board.memoryBoundary.nextStepSummary).toBe(
       "2 runtime buckets have no promotion step, 2 export candidate buckets are ready for a later tenant export step, and 2 buckets still need board closure before tenant export becomes the next step."
+    );
+    expect(board.memoryBoundary.actionFamilySummary).toBe(
+      "2 runtime buckets expose no promotion action, 2 export candidate buckets sit in the tenant export family, and 2 buckets remain in the board-closure-first family."
     );
     expect(board.memoryBoundary.readyNowCount).toBe(2);
     expect(board.memoryBoundary.waitingOnBoardClosureCount).toBe(2);
@@ -337,6 +346,9 @@ describe("harness board client", () => {
     expect(
       board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.promotionNextStepLabel
     ).toBe("Board closure, then tenant export");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.promotionActionFamilyLabel
+    ).toBe("Board closure first");
   });
 
   it("derives governance-ready partition counts from readiness, not only from role membership", async () => {
@@ -517,6 +529,8 @@ describe("harness board client", () => {
           "2 export candidate buckets are waiting only on a later tenant export request, while 2 buckets still need board closure before that request can happen.",
         nextStepSummary:
           "2 runtime buckets have no promotion step, 2 export candidate buckets are ready for a later tenant export step, and 2 buckets still need board closure before tenant export becomes the next step.",
+        actionFamilySummary:
+          "2 runtime buckets expose no promotion action, 2 export candidate buckets sit in the tenant export family, and 2 buckets remain in the board-closure-first family.",
         readyNowCount: 2,
         waitingOnBoardClosureCount: 2,
         governanceReadyCount: 2,
@@ -548,7 +562,9 @@ describe("harness board client", () => {
             promotionTrigger: "not_applicable_runtime",
             promotionTriggerLabel: "No promotion trigger",
             promotionNextStep: "none_runtime_only",
-            promotionNextStepLabel: "No promotion step"
+            promotionNextStepLabel: "No promotion step",
+            promotionActionFamily: "none_runtime_only",
+            promotionActionFamilyLabel: "No promotion action"
           })
         ]),
         exportReadyItems: expect.arrayContaining([
@@ -573,7 +589,9 @@ describe("harness board client", () => {
             promotionTrigger: "tenant_export_request",
             promotionTriggerLabel: "Tenant export request",
             promotionNextStep: "tenant_export_available",
-            promotionNextStepLabel: "Tenant export available"
+            promotionNextStepLabel: "Tenant export available",
+            promotionActionFamily: "tenant_export_candidate",
+            promotionActionFamilyLabel: "Tenant export family"
           })
         ])
       })

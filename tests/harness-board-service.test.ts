@@ -1621,6 +1621,7 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.authoritySummary).toContain("tenant-controlled");
     expect(hydrated.memoryBoundary.triggerSummary).toContain("tenant export request");
     expect(hydrated.memoryBoundary.nextStepSummary).toContain("tenant export step");
+    expect(hydrated.memoryBoundary.actionFamilySummary).toContain("tenant export family");
     expect(hydrated.memoryBoundary.partitions).toMatchObject({
       runtime: { itemCount: 2 },
       governanceHistoryCandidates: { itemCount: 2 }
@@ -1651,7 +1652,9 @@ describe("harness board service", () => {
           promotionTrigger: "not_applicable_runtime",
           promotionTriggerLabel: "No promotion trigger",
           promotionNextStep: "none_runtime_only",
-          promotionNextStepLabel: "No promotion step"
+          promotionNextStepLabel: "No promotion step",
+          promotionActionFamily: "none_runtime_only",
+          promotionActionFamilyLabel: "No promotion action"
         })
       ])
     );
@@ -1681,7 +1684,9 @@ describe("harness board service", () => {
           promotionTrigger: "tenant_export_request",
           promotionTriggerLabel: "Tenant export request",
           promotionNextStep: "tenant_export_available",
-          promotionNextStepLabel: "Tenant export available"
+          promotionNextStepLabel: "Tenant export available",
+          promotionActionFamily: "tenant_export_candidate",
+          promotionActionFamilyLabel: "Tenant export family"
         }),
         expect.objectContaining({
           id: "implemented_actions",
@@ -1707,7 +1712,9 @@ describe("harness board service", () => {
           promotionTrigger: "tenant_export_request",
           promotionTriggerLabel: "Tenant export request",
           promotionNextStep: "tenant_export_available",
-          promotionNextStepLabel: "Tenant export available"
+          promotionNextStepLabel: "Tenant export available",
+          promotionActionFamily: "tenant_export_candidate",
+          promotionActionFamilyLabel: "Tenant export family"
         })
       ])
     );

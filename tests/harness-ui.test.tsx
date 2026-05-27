@@ -314,10 +314,15 @@ const boardResponse: HarnessBoardResponse = {
     runtimeOnlyNextStepCount: 2,
     tenantExportAvailableNextStepCount: 2,
     boardClosureThenTenantExportNextStepCount: 2,
+    noPromotionActionCount: 2,
+    tenantExportActionFamilyCount: 2,
+    boardClosureActionFamilyCount: 2,
     stateSummary:
       "2 runtime buckets stay runtime-only, 2 export candidate buckets are ready for tenant export later, and 2 buckets are still awaiting board closure.",
     nextStepSummary:
       "2 runtime buckets have no promotion step, 2 export candidate buckets are ready for a later tenant export step, and 2 buckets still need board closure before tenant export becomes the next step.",
+    actionFamilySummary:
+      "2 runtime buckets expose no promotion action, 2 export candidate buckets sit in the tenant export family, and 2 buckets remain in the board-closure-first family.",
     partitions: {
       runtime: {
         itemCount: 2,
@@ -366,7 +371,10 @@ const boardResponse: HarnessBoardResponse = {
         promotionState: "runtime_only",
         promotionStateLabel: "Runtime only",
         promotionNextStep: "none_runtime_only",
-        promotionNextStepLabel: "No promotion step"
+        promotionNextStepLabel: "No promotion step",
+        promotionActionFamily: "none_runtime_only",
+        promotionActionFamilyLabel: "No promotion action",
+        promotionActionDescription: "No export action applies. This runtime memory stays inside Wealth Factory orchestration."
       },
       {
         id: "attention_state",
@@ -401,7 +409,10 @@ const boardResponse: HarnessBoardResponse = {
         promotionState: "runtime_only",
         promotionStateLabel: "Runtime only",
         promotionNextStep: "none_runtime_only",
-        promotionNextStepLabel: "No promotion step"
+        promotionNextStepLabel: "No promotion step",
+        promotionActionFamily: "none_runtime_only",
+        promotionActionFamilyLabel: "No promotion action",
+        promotionActionDescription: "No export action applies. This runtime attention state stays inside Wealth Factory orchestration."
       }
     ],
     exportReadyItems: [
@@ -438,7 +449,10 @@ const boardResponse: HarnessBoardResponse = {
         promotionState: "ready_for_tenant_export",
         promotionStateLabel: "Ready for tenant export",
         promotionNextStep: "tenant_export_available",
-        promotionNextStepLabel: "Tenant export available"
+        promotionNextStepLabel: "Tenant export available",
+        promotionActionFamily: "tenant_export_candidate",
+        promotionActionFamilyLabel: "Tenant export family",
+        promotionActionDescription: "This governance history is ready to sit behind a later bounded tenant export action."
       },
       {
         id: "implemented_actions",
@@ -473,7 +487,11 @@ const boardResponse: HarnessBoardResponse = {
         promotionState: "ready_for_tenant_export",
         promotionStateLabel: "Ready for tenant export",
         promotionNextStep: "tenant_export_available",
-        promotionNextStepLabel: "Tenant export available"
+        promotionNextStepLabel: "Tenant export available",
+        promotionActionFamily: "tenant_export_candidate",
+        promotionActionFamilyLabel: "Tenant export family",
+        promotionActionDescription:
+          "This implemented follow-through is ready to sit behind a later bounded tenant export action."
       },
       {
         id: "package_governance",
@@ -509,6 +527,10 @@ const boardResponse: HarnessBoardResponse = {
         promotionStateLabel: "Awaiting board closure",
         promotionNextStep: "board_closure_then_tenant_export",
         promotionNextStepLabel: "Board closure, then tenant export",
+        promotionActionFamily: "board_closure_before_export",
+        promotionActionFamilyLabel: "Board closure first",
+        promotionActionDescription:
+          "Board closure still gates this package governance memory before any later tenant export action can apply.",
         nextEligibleSummary: "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
       },
       {
@@ -545,6 +567,10 @@ const boardResponse: HarnessBoardResponse = {
         promotionStateLabel: "Awaiting board closure",
         promotionNextStep: "board_closure_then_tenant_export",
         promotionNextStepLabel: "Board closure, then tenant export",
+        promotionActionFamily: "board_closure_before_export",
+        promotionActionFamilyLabel: "Board closure first",
+        promotionActionDescription:
+          "Board closure still gates this packaged deliverable before any later tenant export action can apply.",
         nextEligibleSummary: "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
       }
     ]
@@ -1192,6 +1218,8 @@ describe("harness board UI", () => {
     expect(markup).toContain("2 export candidate buckets are still blocked by board closure. Runtime memory stays non-promotable by design.");
     expect(markup).toContain("2 export candidate buckets are already tenant-controlled for later explicit export, while 2 buckets still need board closure before tenant export can own the next step.");
     expect(markup).toContain("2 export candidate buckets are waiting only on a later tenant export request, while 2 buckets still need board closure before that request can happen.");
+    expect(markup).toContain("2 runtime buckets have no promotion step, 2 export candidate buckets are ready for a later tenant export step, and 2 buckets still need board closure before tenant export becomes the next step.");
+    expect(markup).toContain("2 runtime buckets expose no promotion action, 2 export candidate buckets sit in the tenant export family, and 2 buckets remain in the board-closure-first family.");
     expect(markup).toContain("Not applicable in runtime");
     expect(markup).toContain("No blocker");
     expect(markup).toContain("Board closure required");
@@ -1201,6 +1229,11 @@ describe("harness board UI", () => {
     expect(markup).toContain("No promotion trigger");
     expect(markup).toContain("Tenant export request");
     expect(markup).toContain("Board closure");
+    expect(markup).toContain("No promotion action");
+    expect(markup).toContain("Tenant export family");
+    expect(markup).toContain("Board closure first");
+    expect(markup).toContain("This governance history is ready to sit behind a later bounded tenant export action.");
+    expect(markup).toContain("Board closure still gates this packaged deliverable before any later tenant export action can apply.");
     expect(markup).toContain("Source surface: Continuity snapshots");
     expect(markup).toContain("Source surface: Pending attention");
     expect(markup).toContain("Source surface: Recent decisions");
