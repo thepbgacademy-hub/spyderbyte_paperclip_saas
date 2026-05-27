@@ -463,6 +463,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     blockerSummary: "Promotion blocker status is pending the latest board state.",
     authoritySummary: "Promotion authority is pending the latest board state.",
     triggerSummary: "Promotion trigger is pending the latest board state.",
+    nextStepSummary: "Promotion next-step guidance is pending the latest board state.",
     readyNowCount: 0,
     waitingOnBoardClosureCount: 0,
     governanceReadyCount: 0,
@@ -516,6 +517,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <p style={styles.actionSummary}>{memoryBoundary.blockerSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.authoritySummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.triggerSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.nextStepSummary}</p>
       <ul style={styles.actionList}>
         <li style={styles.actionItem}>
           <p style={styles.contractMeta}>Runtime partition</p>
@@ -555,6 +557,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                     <span style={styles.badge}>{item.promotionBlockerLabel}</span>
                     <span style={styles.badge}>{item.promotionAuthorityLabel}</span>
                     <span style={styles.badge}>{item.promotionTriggerLabel}</span>
+                    <span style={styles.badge}>{item.promotionNextStepLabel}</span>
                   </div>
                   <p style={styles.actionSummary}>{item.summary}</p>
                   <p style={styles.optionBody}>{`Source surface: ${item.sourceSurfaceLabel}`}</p>

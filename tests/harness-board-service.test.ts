@@ -1620,6 +1620,7 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.blockerSummary).toContain("blocked");
     expect(hydrated.memoryBoundary.authoritySummary).toContain("tenant-controlled");
     expect(hydrated.memoryBoundary.triggerSummary).toContain("tenant export request");
+    expect(hydrated.memoryBoundary.nextStepSummary).toContain("tenant export step");
     expect(hydrated.memoryBoundary.partitions).toMatchObject({
       runtime: { itemCount: 2 },
       governanceHistoryCandidates: { itemCount: 2 }
@@ -1648,7 +1649,9 @@ describe("harness board service", () => {
           promotionAuthority: "wealth_factory_runtime_only",
           promotionAuthorityLabel: "Wealth Factory runtime only",
           promotionTrigger: "not_applicable_runtime",
-          promotionTriggerLabel: "No promotion trigger"
+          promotionTriggerLabel: "No promotion trigger",
+          promotionNextStep: "none_runtime_only",
+          promotionNextStepLabel: "No promotion step"
         })
       ])
     );
@@ -1676,7 +1679,9 @@ describe("harness board service", () => {
           promotionAuthority: "tenant_explicit_export",
           promotionAuthorityLabel: "Tenant explicit export",
           promotionTrigger: "tenant_export_request",
-          promotionTriggerLabel: "Tenant export request"
+          promotionTriggerLabel: "Tenant export request",
+          promotionNextStep: "tenant_export_available",
+          promotionNextStepLabel: "Tenant export available"
         }),
         expect.objectContaining({
           id: "implemented_actions",
@@ -1700,7 +1705,9 @@ describe("harness board service", () => {
           promotionAuthority: "tenant_explicit_export",
           promotionAuthorityLabel: "Tenant explicit export",
           promotionTrigger: "tenant_export_request",
-          promotionTriggerLabel: "Tenant export request"
+          promotionTriggerLabel: "Tenant export request",
+          promotionNextStep: "tenant_export_available",
+          promotionNextStepLabel: "Tenant export available"
         })
       ])
     );

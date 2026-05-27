@@ -311,8 +311,13 @@ const boardResponse: HarnessBoardResponse = {
     runtimeOnlyStateCount: 2,
     readyForTenantExportStateCount: 2,
     awaitingBoardClosureStateCount: 2,
+    runtimeOnlyNextStepCount: 2,
+    tenantExportAvailableNextStepCount: 2,
+    boardClosureThenTenantExportNextStepCount: 2,
     stateSummary:
       "2 runtime buckets stay runtime-only, 2 export candidate buckets are ready for tenant export later, and 2 buckets are still awaiting board closure.",
+    nextStepSummary:
+      "2 runtime buckets have no promotion step, 2 export candidate buckets are ready for a later tenant export step, and 2 buckets still need board closure before tenant export becomes the next step.",
     partitions: {
       runtime: {
         itemCount: 2,
@@ -359,7 +364,9 @@ const boardResponse: HarnessBoardResponse = {
         promotionTrigger: "not_applicable_runtime",
         promotionTriggerLabel: "No promotion trigger",
         promotionState: "runtime_only",
-        promotionStateLabel: "Runtime only"
+        promotionStateLabel: "Runtime only",
+        promotionNextStep: "none_runtime_only",
+        promotionNextStepLabel: "No promotion step"
       },
       {
         id: "attention_state",
@@ -392,7 +399,9 @@ const boardResponse: HarnessBoardResponse = {
         promotionTrigger: "not_applicable_runtime",
         promotionTriggerLabel: "No promotion trigger",
         promotionState: "runtime_only",
-        promotionStateLabel: "Runtime only"
+        promotionStateLabel: "Runtime only",
+        promotionNextStep: "none_runtime_only",
+        promotionNextStepLabel: "No promotion step"
       }
     ],
     exportReadyItems: [
@@ -427,7 +436,9 @@ const boardResponse: HarnessBoardResponse = {
         promotionTrigger: "tenant_export_request",
         promotionTriggerLabel: "Tenant export request",
         promotionState: "ready_for_tenant_export",
-        promotionStateLabel: "Ready for tenant export"
+        promotionStateLabel: "Ready for tenant export",
+        promotionNextStep: "tenant_export_available",
+        promotionNextStepLabel: "Tenant export available"
       },
       {
         id: "implemented_actions",
@@ -460,7 +471,9 @@ const boardResponse: HarnessBoardResponse = {
         promotionTrigger: "tenant_export_request",
         promotionTriggerLabel: "Tenant export request",
         promotionState: "ready_for_tenant_export",
-        promotionStateLabel: "Ready for tenant export"
+        promotionStateLabel: "Ready for tenant export",
+        promotionNextStep: "tenant_export_available",
+        promotionNextStepLabel: "Tenant export available"
       },
       {
         id: "package_governance",
@@ -494,6 +507,8 @@ const boardResponse: HarnessBoardResponse = {
         promotionTriggerLabel: "Board closure",
         promotionState: "awaiting_board_closure",
         promotionStateLabel: "Awaiting board closure",
+        promotionNextStep: "board_closure_then_tenant_export",
+        promotionNextStepLabel: "Board closure, then tenant export",
         nextEligibleSummary: "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
       },
       {
@@ -528,6 +543,8 @@ const boardResponse: HarnessBoardResponse = {
         promotionTriggerLabel: "Board closure",
         promotionState: "awaiting_board_closure",
         promotionStateLabel: "Awaiting board closure",
+        promotionNextStep: "board_closure_then_tenant_export",
+        promotionNextStepLabel: "Board closure, then tenant export",
         nextEligibleSummary: "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
       }
     ]
