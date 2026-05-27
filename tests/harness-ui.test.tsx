@@ -284,6 +284,9 @@ const boardResponse: HarnessBoardResponse = {
   },
   memoryBoundary: {
     summary: "Wealth Factory runtime keeps bounded operational lane memory live while governance and package records stay ready for later tenant-owned export.",
+    exportSummary: "2 export candidates are ready now, and 2 still wait for board closure.",
+    readyNowCount: 2,
+    waitingOnBoardClosureCount: 2,
     operationalItems: [
       {
         id: "lane_continuity",
@@ -291,7 +294,8 @@ const boardResponse: HarnessBoardResponse = {
         count: 2,
         summary: "Continuity snapshots stay in Wealth Factory runtime as live operational memory.",
         destination: "wealth_factory_runtime",
-        readiness: "live_runtime_only"
+        readiness: "live_runtime_only",
+        readinessLabel: "Live runtime only"
       },
       {
         id: "attention_state",
@@ -299,7 +303,8 @@ const boardResponse: HarnessBoardResponse = {
         count: 1,
         summary: "Current CEO attention stays in runtime truth until the board resolves it explicitly.",
         destination: "wealth_factory_runtime",
-        readiness: "live_runtime_only"
+        readiness: "live_runtime_only",
+        readinessLabel: "Live runtime only"
       }
     ],
     exportReadyItems: [
@@ -309,7 +314,8 @@ const boardResponse: HarnessBoardResponse = {
         count: 1,
         summary: "Bounded decisions are ready for later tenant-owned board records.",
         destination: "tenant_record_candidate",
-        readiness: "ready_now"
+        readiness: "ready_now",
+        readinessLabel: "Ready now"
       },
       {
         id: "implemented_actions",
@@ -317,7 +323,8 @@ const boardResponse: HarnessBoardResponse = {
         count: 1,
         summary: "Implemented governance actions are ready for suggested-versus-implemented history export.",
         destination: "tenant_record_candidate",
-        readiness: "ready_now"
+        readiness: "ready_now",
+        readinessLabel: "Ready now"
       },
       {
         id: "package_governance",
@@ -325,7 +332,9 @@ const boardResponse: HarnessBoardResponse = {
         count: 1,
         summary: "Package-shaped governance items are ready for later tenant-owned board records.",
         destination: "tenant_record_candidate",
-        readiness: "after_board_closes"
+        readiness: "after_board_closes",
+        readinessLabel: "After board closes",
+        nextEligibleSummary: "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
       },
       {
         id: "package_deliverables",
@@ -333,7 +342,9 @@ const boardResponse: HarnessBoardResponse = {
         count: 1,
         summary: "Tenant-facing deliverables are ready to become long-memory business records later.",
         destination: "tenant_record_candidate",
-        readiness: "after_board_closes"
+        readiness: "after_board_closes",
+        readinessLabel: "After board closes",
+        nextEligibleSummary: "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
       }
     ]
   }
@@ -911,8 +922,10 @@ describe("harness board UI", () => {
     expect(markup).toContain("Board pulse");
     expect(markup).toContain("Attention - CEO review required");
     expect(markup).toContain("Approvals - 1");
+    expect(markup).toContain("Export - 2 ready");
     expect(markup).toContain("Package - Assembling");
     expect(markup).toContain("1 deliverable, 1 governance item, 2 recommendations, 1 objection.");
+    expect(markup).toContain("2 export candidates are ready now, and 2 still wait for board closure.");
     expect(markup).toContain("Recent decisions");
     expect(markup).toContain("CEO kept the research expansion under bounded review.");
     expect(markup).toContain("1 preserved decision");
@@ -944,6 +957,8 @@ describe("harness board UI", () => {
     expect(markup).toContain("Live runtime only");
     expect(markup).toContain("Ready now");
     expect(markup).toContain("After board closes");
+    expect(markup).toContain("Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate.");
+    expect(markup).toContain("Board closure is still required before this packaged deliverable becomes a durable tenant record candidate.");
     expect(markup).toContain("Tenant-facing package state");
     expect(markup).toContain("Keep the pricing package readable while the research expansion stays under review.");
     expect(markup).toContain("Deferred approvals: 1");

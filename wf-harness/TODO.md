@@ -168,3 +168,4 @@ This file tracks the new harness subproject only.
 - [x] Surface bounded policy/recommendation context on `followThroughItems` so implemented governance actions already carry enough suggested-versus-implemented memory for later export without reconstructing intent from raw decision rows.
 - [x] Surface a bounded `memoryBoundary` read model so the board can distinguish live Wealth Factory runtime memory from later tenant-record/export candidates without turning future export or Obsidian surfaces into live orchestration truth.
 - [x] Surface bounded `memoryBoundary` readiness states so export-candidate memory that is already stable does not get conflated with package-shaped memory that still waits on board closure.
+- [x] Surface `memoryBoundary` readiness labels, next-eligible export guidance, and pulse-level export summary from the same harness contract so the UI does not re-derive export posture from enums or package heuristics.

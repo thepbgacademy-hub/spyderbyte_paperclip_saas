@@ -104,10 +104,15 @@ export type HarnessMemoryBoundaryItemView = {
   summary: string;
   destination: HarnessMemoryBoundaryDestination;
   readiness: HarnessMemoryBoundaryReadiness;
+  readinessLabel: string;
+  nextEligibleSummary?: string;
 };
 
 export type HarnessMemoryBoundaryView = {
   summary: string;
+  exportSummary: string;
+  readyNowCount: number;
+  waitingOnBoardClosureCount: number;
   operationalItems: HarnessMemoryBoundaryItemView[];
   exportReadyItems: HarnessMemoryBoundaryItemView[];
 };
@@ -3749,7 +3754,8 @@ function buildMemoryBoundaryView(input: {
       count: input.continuity.length,
       summary: "Continuity snapshots stay in Wealth Factory runtime as live operational memory.",
       destination: "wealth_factory_runtime",
-      readiness: "live_runtime_only"
+      readiness: "live_runtime_only",
+      readinessLabel: "Live runtime only"
     },
     {
       id: "attention_state",
@@ -3757,7 +3763,8 @@ function buildMemoryBoundaryView(input: {
       count: input.hasPendingAttention ? 1 : 0,
       summary: "Current CEO attention stays in runtime truth until the board resolves it explicitly.",
       destination: "wealth_factory_runtime",
-      readiness: "live_runtime_only"
+      readiness: "live_runtime_only",
+      readinessLabel: "Live runtime only"
     }
   ];
 
@@ -3768,7 +3775,8 @@ function buildMemoryBoundaryView(input: {
       count: input.recentDecisions.length,
       summary: "Bounded decisions are ready for later tenant-owned board records.",
       destination: "tenant_record_candidate",
-      readiness: "ready_now"
+      readiness: "ready_now",
+      readinessLabel: "Ready now"
     },
     {
       id: "implemented_actions",
@@ -3776,7 +3784,8 @@ function buildMemoryBoundaryView(input: {
       count: input.followThroughItems.length,
       summary: "Implemented governance actions are ready for suggested-versus-implemented history export.",
       destination: "tenant_record_candidate",
-      readiness: "ready_now"
+      readiness: "ready_now",
+      readinessLabel: "Ready now"
     }
   ];
 
@@ -3791,7 +3800,14 @@ function buildMemoryBoundaryView(input: {
         count: input.completionPackage.governanceItems.length,
         summary: "Package-shaped governance items are ready for later tenant-owned board records.",
         destination: "tenant_record_candidate",
-        readiness: packageReadiness
+        readiness: packageReadiness,
+        readinessLabel: humanizeMemoryBoundaryReadiness(packageReadiness),
+        ...(packageReadiness === "after_board_closes"
+          ? {
+              nextEligibleSummary:
+                "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
+            }
+          : {})
       },
       {
         id: "package_deliverables",
@@ -3799,17 +3815,48 @@ function buildMemoryBoundaryView(input: {
         count: input.completionPackage.deliverables.length,
         summary: "Tenant-facing deliverables are ready to become long-memory business records later.",
         destination: "tenant_record_candidate",
-        readiness: packageReadiness
+        readiness: packageReadiness,
+        readinessLabel: humanizeMemoryBoundaryReadiness(packageReadiness),
+        ...(packageReadiness === "after_board_closes"
+          ? {
+              nextEligibleSummary:
+                "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
+            }
+          : {})
       }
     );
   }
 
+  const readyNowCount = exportReadyItems.filter((item) => item.readiness === "ready_now").length;
+  const waitingOnBoardClosureCount = exportReadyItems.filter((item) => item.readiness === "after_board_closes").length;
+
   return {
     summary:
       "Wealth Factory runtime keeps bounded operational lane memory live while governance and package records stay ready for later tenant-owned export.",
+    exportSummary:
+      waitingOnBoardClosureCount > 0
+        ? `${readyNowCount} export candidate${readyNowCount === 1 ? "" : "s"} are ready now, and ${waitingOnBoardClosureCount} still wait for board closure.`
+        : waitingOnBoardClosureCount === 0
+        ? `${readyNowCount} export candidate${readyNowCount === 1 ? "" : "s"} are ready now. No export candidates are waiting on board closure.`
+        : "Export readiness will become visible once the board produces tenant-record candidates.",
+    readyNowCount,
+    waitingOnBoardClosureCount,
     operationalItems,
     exportReadyItems
   };
+}
+
+function humanizeMemoryBoundaryReadiness(readiness: HarnessMemoryBoundaryReadiness) {
+  switch (readiness) {
+    case "live_runtime_only":
+      return "Live runtime only";
+    case "ready_now":
+      return "Ready now";
+    case "after_board_closes":
+      return "After board closes";
+    default:
+      return humanizeLabel(readiness);
+  }
 }
 
 function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivityItem {

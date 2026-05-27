@@ -281,6 +281,7 @@ The first harness implementation slice is now built and verified:
 - CEO review choices also need mutual exclusion at commit time, not just at read time. If `complete_run` and `start_fresh_cycle` validate against the same old board snapshot but only one of them creates a newer cycle, the older run must stop being completable through that same review token or the orchestrator can commit contradictory outcomes under concurrency.
 - Keep the new `memoryBoundary` seam explicit about what is still live operational runtime truth versus what is only export-ready candidate memory. Continuity snapshots and current attention belong to Wealth Factory runtime, while governance decisions, implemented actions, and packaged outputs may be shown as later tenant-record candidates without turning export surfaces into live orchestration state.
 - Keep `memoryBoundary` explicit about readiness as well as destination. Export-candidate memory that is already stable (`governance_decisions`, `implemented_actions`) should not be conflated with package-shaped memory that still waits on board closure, or later Obsidian/export work will treat assembling outputs as if they were already durable tenant records.
+- Once `memoryBoundary` carries readiness, keep the labels and next-eligible guidance in the same contract too. The board pulse and the detail panel should not rebuild their own export-readiness copy from enums or package state heuristics, especially during staggered deploys where partial payloads could otherwise drift into misleading export guidance.
 
 ## Next Step
 

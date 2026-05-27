@@ -1606,12 +1606,16 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary).toEqual(
       expect.objectContaining({
         summary: expect.stringContaining("Wealth Factory runtime"),
+        exportSummary: expect.stringContaining("ready now"),
+        readyNowCount: expect.any(Number),
+        waitingOnBoardClosureCount: expect.any(Number),
         operationalItems: expect.arrayContaining([
           expect.objectContaining({
             id: "lane_continuity",
             destination: "wealth_factory_runtime",
             count: expect.any(Number),
-            readiness: "live_runtime_only"
+            readiness: "live_runtime_only",
+            readinessLabel: "Live runtime only"
           })
         ]),
         exportReadyItems: expect.arrayContaining([
@@ -1619,13 +1623,15 @@ describe("harness board service", () => {
             id: "governance_decisions",
             destination: "tenant_record_candidate",
             count: expect.any(Number),
-            readiness: "ready_now"
+            readiness: "ready_now",
+            readinessLabel: "Ready now"
           }),
           expect.objectContaining({
             id: "implemented_actions",
             destination: "tenant_record_candidate",
             count: expect.any(Number),
-            readiness: "ready_now"
+            readiness: "ready_now",
+            readinessLabel: "Ready now"
           })
         ])
       })
@@ -5452,13 +5458,22 @@ describe("harness board service", () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: "package_governance",
-          readiness: "ready_now"
+          readiness: "ready_now",
+          readinessLabel: "Ready now"
         }),
         expect.objectContaining({
           id: "package_deliverables",
-          readiness: "ready_now"
+          readiness: "ready_now",
+          readinessLabel: "Ready now"
         })
       ])
+    );
+    expect(hydratedBoard.memoryBoundary).toEqual(
+      expect.objectContaining({
+        readyNowCount: 4,
+        waitingOnBoardClosureCount: 0,
+        exportSummary: "4 export candidates are ready now. No export candidates are waiting on board closure."
+      })
     );
   });
 

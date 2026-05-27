@@ -455,6 +455,9 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
   const memoryBoundary = board.memoryBoundary ?? {
     summary:
       "Wealth Factory runtime keeps bounded operational lane memory live while governance and package records stay ready for later tenant-owned export.",
+    exportSummary: "Export readiness is pending the latest board state.",
+    readyNowCount: 0,
+    waitingOnBoardClosureCount: 0,
     operationalItems: [],
     exportReadyItems: []
   };
@@ -479,6 +482,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     <section style={styles.panel}>
       <h2 style={styles.panelTitle}>Memory boundary</h2>
       <p style={styles.panelBody}>{memoryBoundary.summary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.exportSummary}</p>
       <div style={styles.rail}>
         {sections.map((section) => (
           <div key={section.title} style={{ display: "grid", gap: "0.55rem" }}>
@@ -490,9 +494,10 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                   <p style={styles.actionMeta}>{`${item.count} item${item.count === 1 ? "" : "s"}`}</p>
                   <h3 style={styles.actionHeading}>{item.label}</h3>
                   <div style={styles.badgeList}>
-                    <span style={styles.badge}>{describeMemoryBoundaryReadiness(item.readiness)}</span>
+                    <span style={styles.badge}>{item.readinessLabel ?? describeMemoryBoundaryReadiness(item.readiness)}</span>
                   </div>
                   <p style={styles.actionSummary}>{item.summary}</p>
+                  {item.nextEligibleSummary ? <p style={styles.actionSummary}>{item.nextEligibleSummary}</p> : null}
                 </li>
               ))}
             </ul>
@@ -2166,6 +2171,7 @@ export function HarnessBoardPage(props: {
   const packageGovernanceCount = completionPackage?.governanceItems.length ?? 0;
   const packageRecommendationCount = completionPackage?.recommendations.length ?? 0;
   const packageObjectionCount = completionPackage?.objections.length ?? 0;
+  const memoryBoundary = board?.memoryBoundary ?? null;
   const isPreviewMode = controlMode === "preview";
   const liveActionsEnabled = Boolean(board && controlMode === "live");
   const pendingActionAttemptSupport = getBoardActionAttemptSupport(board, controlMode, pendingActionAttempt);
@@ -2208,6 +2214,13 @@ export function HarnessBoardPage(props: {
         pendingApprovals.length > 0
           ? `${pendingApprovals.length} bounded approval request${pendingApprovals.length === 1 ? "" : "s"} still need CEO review.`
           : "No pending approval requests are widening the board."
+    },
+    {
+      key: "export",
+      heading: joinHeadingParts("Export", memoryBoundary ? `${memoryBoundary.readyNowCount} ready` : "Pending"),
+      summary: memoryBoundary
+        ? memoryBoundary.exportSummary
+        : "Export-readiness stays bounded to board memory once the board produces tenant-record candidates."
     },
     {
       key: "package",

@@ -177,18 +177,23 @@ describe("harness board client", () => {
 
     expect(board.memoryBoundary).toEqual(
       expect.objectContaining({
+        exportSummary: "2 export candidates are ready now, and 2 still wait for board closure.",
+        readyNowCount: 2,
+        waitingOnBoardClosureCount: 2,
         operationalItems: expect.arrayContaining([
           expect.objectContaining({
             id: "lane_continuity",
             destination: "wealth_factory_runtime",
-            readiness: "live_runtime_only"
+            readiness: "live_runtime_only",
+            readinessLabel: "Live runtime only"
           })
         ]),
         exportReadyItems: expect.arrayContaining([
           expect.objectContaining({
             id: "governance_decisions",
             destination: "tenant_record_candidate",
-            readiness: "ready_now"
+            readiness: "ready_now",
+            readinessLabel: "Ready now"
           })
         ])
       })
@@ -221,9 +226,18 @@ describe("harness board client", () => {
     const board = await client.fetchBoard();
 
     expect(board.memoryBoundary.operationalItems[0]?.readiness).toBe("live_runtime_only");
+    expect(board.memoryBoundary.operationalItems[0]?.readinessLabel).toBe("Live runtime only");
+    expect(board.memoryBoundary.readyNowCount).toBe(2);
+    expect(board.memoryBoundary.waitingOnBoardClosureCount).toBe(2);
+    expect(board.memoryBoundary.exportSummary).toBe(
+      "2 export candidates are ready now, and 2 still wait for board closure."
+    );
     expect(board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.readiness).toBe(
       "after_board_closes"
     );
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.readinessLabel
+    ).toBe("After board closes");
   });
 
   it("keeps the localhost fallback aligned with the bounded board action contract", () => {
@@ -346,18 +360,23 @@ describe("harness board client", () => {
     expect(fallback.completionPackage?.deliverables).toHaveLength(2);
     expect(fallback.memoryBoundary).toEqual(
       expect.objectContaining({
+        exportSummary: "2 export candidates are ready now, and 2 still wait for board closure.",
+        readyNowCount: 2,
+        waitingOnBoardClosureCount: 2,
         operationalItems: expect.arrayContaining([
           expect.objectContaining({
             id: "lane_continuity",
             destination: "wealth_factory_runtime",
-            readiness: "live_runtime_only"
+            readiness: "live_runtime_only",
+            readinessLabel: "Live runtime only"
           })
         ]),
         exportReadyItems: expect.arrayContaining([
           expect.objectContaining({
             id: "governance_decisions",
             destination: "tenant_record_candidate",
-            readiness: "ready_now"
+            readiness: "ready_now",
+            readinessLabel: "Ready now"
           })
         ])
       })
