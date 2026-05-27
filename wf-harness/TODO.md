@@ -86,7 +86,7 @@ This file tracks the new harness subproject only.
 - [x] Make repeated defer decisions idempotent when no new note or policy context is introduced.
 - [ ] Decide which board-memory records should stay purely operational in Wealth Factory versus which ones should later export into tenant-owned Obsidian as long-memory business records.
 - [ ] Decide whether the widened derived `completionPackage` should stay a read model or graduate into a persisted packaged-output artifact in a later slice.
-- [ ] Keep `resolve-attention` and later action-family branches covered wherever the board contract is consumed, so `review-attention` does not become the only richly rendered control path.
+- [x] Keep `resolve-attention` and later action-family branches covered wherever the board contract is consumed, so `review-attention` does not become the only richly rendered control path.
 - [x] Add explicit packaging policy for how recommendations, objections, and deferred governance items should shape the tenant-facing final handoff.
 - [ ] Decide whether denied governance items should remain derived read-model packaging only or become exportable board-memory artifacts later.
 - [x] Decide whether completed-lane runs should reject or boundedly reopen new follow-on proposals instead of falling back to generic lane-creation rules.

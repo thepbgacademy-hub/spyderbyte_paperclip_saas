@@ -1395,6 +1395,20 @@ describe("harness board UI", () => {
     expect(markup).toContain("Pressure-test the pricing lane");
   });
 
+  it("surfaces the preview variant label when a resolve-attention preview board is seeded explicitly", () => {
+    const markup = renderToStaticMarkup(
+      <HarnessBoardPage
+        initialBoard={resolveAttentionBoardResponse}
+        initialControlMode="preview"
+        initialPreviewVariantLabel="Lane resume"
+      />
+    );
+
+    expect(markup).toContain("Preview variant: Lane resume");
+    expect(markup).toContain("while previewing lane resume.");
+    expect(markup).toContain("Resume lane");
+  });
+
   it("marks stale bounded action errors for board resync", () => {
     expect(
       shouldResyncBoardAfterActionError(
@@ -1522,13 +1536,16 @@ describe("harness board UI", () => {
       browserFallbackEnabled: true,
       fallbackState: {
         board: boardResponse,
-        controlMode: "preview"
+        controlMode: "preview",
+        variant: "review-attention",
+        variantLabel: "Final assembly review"
       }
     });
 
     expect(resolution).toEqual({
       board: boardResponse,
       controlMode: "preview",
+      previewVariantLabel: "Final assembly review",
       feedback
     });
   });

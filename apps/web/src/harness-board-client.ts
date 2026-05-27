@@ -11,6 +11,13 @@ export type HarnessBoardActionResult =
   | { status: "unblocked"; cardId: string; state: "approved" };
 
 export type HarnessBoardControlMode = "live" | "preview";
+export type HarnessBoardFallbackVariant = "review-attention" | "resolve-attention";
+export type HarnessBoardFallbackState = {
+  board: HarnessBoardResponse;
+  controlMode: HarnessBoardControlMode;
+  variant: HarnessBoardFallbackVariant;
+  variantLabel: string;
+};
 
 export type HarnessBoardClientErrorCode =
   | "conflict"
@@ -42,7 +49,7 @@ export class HarnessBoardClientError extends Error {
   }
 }
 
-const defaultBoardResponse: HarnessBoardResponse = {
+const fallbackBoardBase: HarnessBoardResponse = {
   runId: "harness-browser-fallback",
   workflowId: "wf_connect_first_workflow",
   packageId: "pkg_bib_connect",
@@ -340,10 +347,77 @@ const defaultBoardResponse: HarnessBoardResponse = {
   }
 };
 
+const fallbackBoardResponses: Record<HarnessBoardFallbackVariant, HarnessBoardResponse> = {
+  "review-attention": fallbackBoardBase,
+  "resolve-attention": {
+    ...fallbackBoardBase,
+    runId: "harness-browser-fallback-resolve",
+    pendingAttention: {
+      kind: "await_lane_resume",
+      runState: "waiting",
+      statusLabel: "Waiting on lane resume",
+      summary: "Resume the pricing lane once the tenant confirms the updated revenue assumption.",
+      actionRoute: "resolve-attention",
+      actionPath: "/api/harness/runs/harness-browser-fallback-resolve/resolve-attention",
+      actionMethod: "POST",
+      actionLabel: "Resume lane",
+      actionDescription: "Resume the waiting lane when the required board input is ready.",
+      requestFields: [
+        {
+          name: "command",
+          label: "Resolution command",
+          description: "Choose the single bounded command that resolves this attention state.",
+          required: true,
+          allowedValues: ["resume_lane"]
+        },
+        {
+          name: "resumeSummary",
+          label: "Resume summary",
+          description: "Optional tenant-safe note describing what changed before execution resumes.",
+          required: false
+        }
+      ],
+      actionOptions: [
+        {
+          value: "resume_lane",
+          label: "Resume lane",
+          description: "Return the lane to active execution with an optional bounded resume note.",
+          emphasis: "primary",
+          nextEffectSummary: "The lane returns to active execution and re-enters the worker queue through the existing harness path.",
+          exampleRequest: { command: "resume_lane" }
+        }
+      ],
+      recommendedOptionValue: "resume_lane",
+      allowedCommands: ["resume_lane"],
+      requestedAtLabel: "recently",
+      reasonLabel: "Awaiting tenant confirmation",
+      targetCardId: "card-cfo-forecast",
+      targetPersona: "CFO",
+      targetTitle: "Pressure-test the pricing lane",
+      targetSummary: "Resume CFO lane: Pressure-test the pricing lane"
+    }
+  }
+};
+
+const fallbackVariantLabels: Record<HarnessBoardFallbackVariant, string> = {
+  "review-attention": "Final assembly review",
+  "resolve-attention": "Lane resume"
+};
+
 const DEFAULT_HARNESS_BOARD_REQUEST_TIMEOUT_MS = 8_000;
 
 function isLoopbackHost(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
+function parseHarnessFallbackVariant(search: string | undefined): HarnessBoardFallbackVariant {
+  if (typeof search !== "string" || search.length === 0) {
+    return "review-attention";
+  }
+
+  const params = new URLSearchParams(search);
+  const requestedVariant = params.get("harnessPreview");
+  return requestedVariant === "resolve-attention" ? "resolve-attention" : "review-attention";
 }
 
 function isHarnessBoardErrorCode(value: unknown): value is HarnessBoardClientErrorCode {
@@ -391,6 +465,13 @@ export function createHarnessBoardClient(
   options: { requestTimeoutMs?: number } = {}
 ) {
   const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_HARNESS_BOARD_REQUEST_TIMEOUT_MS;
+  const fallbackVariant = parseHarnessFallbackVariant(browserWindow?.location.search);
+  const fallbackState: HarnessBoardFallbackState = {
+    board: fallbackBoardResponses[fallbackVariant],
+    controlMode: "preview",
+    variant: fallbackVariant,
+    variantLabel: fallbackVariantLabels[fallbackVariant]
+  };
 
   async function fetchWithTimeout(input: string, init: RequestInit): Promise<Response> {
     const controller = new AbortController();
@@ -449,14 +530,11 @@ export function createHarnessBoardClient(
     isBrowserFallbackEnabled,
 
     getFallback(): HarnessBoardResponse {
-      return defaultBoardResponse;
+      return fallbackState.board;
     },
 
-    getFallbackState(): { board: HarnessBoardResponse; controlMode: HarnessBoardControlMode } {
-      return {
-        board: defaultBoardResponse,
-        controlMode: "preview"
-      };
+    getFallbackState(): HarnessBoardFallbackState {
+      return fallbackState;
     },
 
     async fetchBoard(): Promise<HarnessBoardResponse> {

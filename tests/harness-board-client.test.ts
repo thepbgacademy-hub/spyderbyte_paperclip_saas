@@ -161,13 +161,15 @@ describe("harness board client", () => {
   it("keeps the localhost fallback aligned with the bounded board action contract", () => {
     const client = createHarnessBoardClient(
       fetch,
-      { location: { hostname: "127.0.0.1" } as Window["location"] }
+      { location: { hostname: "127.0.0.1", search: "" } as Window["location"] }
     );
 
     const fallback = client.getFallback();
     const fallbackState = client.getFallbackState();
 
     expect(fallbackState.controlMode).toBe("preview");
+    expect(fallbackState.variant).toBe("review-attention");
+    expect(fallbackState.variantLabel).toBe("Final assembly review");
     expect(fallbackState.board).toEqual(fallback);
 
     expect(fallback.pendingAttention).toEqual(
@@ -272,5 +274,27 @@ describe("harness board client", () => {
     );
     expect(fallback.completionPackage?.governanceItems).toHaveLength(1);
     expect(fallback.completionPackage?.deliverables).toHaveLength(2);
+  });
+
+  it("supports a bounded resolve-attention localhost fallback variant for preview-only contract work", () => {
+    const client = createHarnessBoardClient(
+      fetch,
+      { location: { hostname: "127.0.0.1", search: "?harnessPreview=resolve-attention" } as Window["location"] }
+    );
+
+    const fallbackState = client.getFallbackState();
+
+    expect(fallbackState.controlMode).toBe("preview");
+    expect(fallbackState.variant).toBe("resolve-attention");
+    expect(fallbackState.variantLabel).toBe("Lane resume");
+    expect(fallbackState.board.pendingAttention).toEqual(
+      expect.objectContaining({
+        actionRoute: "resolve-attention",
+        actionPath: expect.stringContaining("/resolve-attention"),
+        actionLabel: "Resume lane",
+        allowedCommands: ["resume_lane"],
+        targetSummary: expect.stringContaining("Resume CFO lane")
+      })
+    );
   });
 });

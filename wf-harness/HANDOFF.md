@@ -40,6 +40,7 @@ The first harness implementation slice is now built and verified:
 - contract-aware action recovery should stay explicit too: when the live board knows the failed bounded action, retryable failures should offer a safe replay path, invalid-request failures should offer a composer reset path, and neither should rely on the operator to remember the last payload by hand
 - browser-side harness requests should stay bounded in time too: live board loads and actions should fail with an explicit timeout class instead of hanging indefinitely, and that timeout should feed the same contract-owned recovery seam as other retryable failures
 - board-contract coverage should include the non-final-assembly attention seam too: `resolve-attention` preview/live rendering should be exercised directly so resume/unblock controls do not quietly drift behind the richer CEO-review branch
+- localhost fallback should keep those bounded attention variants explicit too: loopback preview must be able to exercise at least the main `review-attention` and `resolve-attention` seams by variant instead of hard-coding one happy-path fixture and quietly letting the other action families drift
 
 ## External References
 

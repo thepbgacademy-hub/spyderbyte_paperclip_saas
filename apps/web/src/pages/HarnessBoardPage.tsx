@@ -5,6 +5,7 @@ import {
   HarnessBoardClientError,
   type HarnessBoardActionResult,
   type HarnessBoardControlMode,
+  type HarnessBoardFallbackState,
   type HarnessBoardResponse
 } from "../harness-board-client.js";
 import {
@@ -337,6 +338,7 @@ export type HarnessBoardFeedback = {
 export type HarnessBoardLoadResolution = {
   board: HarnessBoardResponse | null;
   controlMode: HarnessBoardControlMode | null;
+  previewVariantLabel: string | null;
   feedback: HarnessBoardFeedback;
 };
 
@@ -1272,13 +1274,14 @@ export function describeBoardLoadFeedback(error: unknown): HarnessBoardFeedback 
 export function resolveBoardLoadFailure(input: {
   error: unknown;
   browserFallbackEnabled: boolean;
-  fallbackState: { board: HarnessBoardResponse; controlMode: HarnessBoardControlMode } | null;
+  fallbackState: HarnessBoardFallbackState | null;
 }): HarnessBoardLoadResolution {
   const feedback = describeBoardLoadFeedback(input.error);
   if (input.browserFallbackEnabled && input.fallbackState) {
     return {
       board: input.fallbackState.board,
       controlMode: input.fallbackState.controlMode,
+      previewVariantLabel: input.fallbackState.variantLabel,
       feedback
     };
   }
@@ -1286,6 +1289,7 @@ export function resolveBoardLoadFailure(input: {
   return {
     board: null,
     controlMode: null,
+    previewVariantLabel: null,
     feedback
   };
 }
@@ -1811,6 +1815,7 @@ function renderCompletionPackage(board: HarnessBoardResponse) {
 export function HarnessBoardPage(props: {
   initialBoard?: HarnessBoardResponse | null;
   initialControlMode?: HarnessBoardControlMode;
+  initialPreviewVariantLabel?: string | null;
   initialLoadFeedback?: HarnessBoardFeedback | null;
   initialActionFeedback?: HarnessBoardFeedback | null;
   initialActionAttempt?: HarnessBoardActionAttempt | null;
@@ -1824,6 +1829,10 @@ export function HarnessBoardPage(props: {
   const [controlMode, setControlMode] = useState<HarnessBoardControlMode>(() =>
     props.initialControlMode
       ?? (props.initialBoard ? "preview" : fallbackState?.controlMode ?? "live")
+  );
+  const [previewVariantLabel, setPreviewVariantLabel] = useState<string | null>(() =>
+    props.initialPreviewVariantLabel
+      ?? (props.initialBoard ? null : fallbackState?.variantLabel ?? null)
   );
   const [openCardId, setOpenCardId] = useState<string>(() =>
     (props.initialBoard ?? fallbackState?.board ?? null)?.cards[0]?.id ?? ""
@@ -1848,11 +1857,13 @@ export function HarnessBoardPage(props: {
   function applyBoardState(
     nextBoard: HarnessBoardResponse,
     preferredCardId?: string | null,
-    nextControlMode: HarnessBoardControlMode = "live"
+    nextControlMode: HarnessBoardControlMode = "live",
+    nextPreviewVariantLabel: string | null = null
   ) {
     setLoadError(null);
     setBoard(nextBoard);
     setControlMode(nextControlMode);
+    setPreviewVariantLabel(nextControlMode === "preview" ? nextPreviewVariantLabel : null);
     setActionDrafts((current) => pruneActionDraftsForBoard(nextBoard, current));
     setOpenActionComposerKeys((current) => pruneOpenActionComposerKeysForBoard(nextBoard, current));
     setOpenCardId((current: string) =>
@@ -1910,7 +1921,7 @@ export function HarnessBoardPage(props: {
       });
 
       if (resolution.board && resolution.controlMode) {
-        applyBoardState(resolution.board, null, resolution.controlMode);
+        applyBoardState(resolution.board, null, resolution.controlMode, resolution.previewVariantLabel);
         setLoadError(resolution.feedback);
       } else {
         setLoadError(resolution.feedback);
@@ -1943,7 +1954,7 @@ export function HarnessBoardPage(props: {
       );
       const nextBoard = await harnessBoardClient.fetchBoard();
       const preferredCardId = "cardId" in actionResult ? actionResult.cardId : null;
-      applyBoardState(nextBoard, preferredCardId);
+      applyBoardState(nextBoard, preferredCardId, "live");
       if (!input.preserveDraftOnSuccess) {
         resetDraftValues(attempt.actionKey);
       }
@@ -2002,7 +2013,7 @@ export function HarnessBoardPage(props: {
         });
 
         if (resolution.board && resolution.controlMode) {
-          applyBoardState(resolution.board, null, resolution.controlMode);
+          applyBoardState(resolution.board, null, resolution.controlMode, resolution.previewVariantLabel);
           setLoadError(resolution.feedback);
           return;
         }
@@ -2051,7 +2062,9 @@ export function HarnessBoardPage(props: {
       key: "controls",
       heading: joinHeadingParts("Controls", isPreviewMode ? "Preview" : "Live"),
       summary: isPreviewMode
-        ? "Board actions stay read-only in localhost fallback mode."
+        ? previewVariantLabel
+          ? `Board actions stay read-only in localhost fallback mode while previewing ${previewVariantLabel.toLowerCase()}.`
+          : "Board actions stay read-only in localhost fallback mode."
         : board
         ? "Board actions are bound to live harness mutations through the engine contract."
         : "Board actions will bind to the live harness contract once the board is loaded."
@@ -2425,6 +2438,9 @@ export function HarnessBoardPage(props: {
           <article style={styles.metricCard}>
             <p style={styles.metricLabel}>Control mode</p>
             <p style={styles.metricValue}>{controlMode === "live" ? "Live" : "Preview"}</p>
+            {isPreviewMode && previewVariantLabel ? (
+              <p style={styles.metricLabel}>{previewVariantLabel}</p>
+            ) : null}
           </article>
           <article style={styles.metricCard}>
             <p style={styles.metricLabel}>Recent decisions</p>
@@ -2457,6 +2473,9 @@ export function HarnessBoardPage(props: {
               <p style={styles.panelBody}>
                 This board is using localhost fallback data, so action guidance stays visible but live mutations remain disabled.
               </p>
+              {previewVariantLabel ? (
+                <p style={{ ...styles.contractMeta, marginTop: "0.55rem" }}>{`Preview variant: ${previewVariantLabel}`}</p>
+              ) : null}
             </section>
           ) : null}
           <section style={styles.panel}>
