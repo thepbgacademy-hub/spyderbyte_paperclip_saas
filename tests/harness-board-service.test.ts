@@ -1620,6 +1620,10 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.assemblySummary).toContain("standalone export records");
     expect(hydrated.memoryBoundary.phaseSummary).toContain("phase-one export");
     expect(hydrated.memoryBoundary.mutabilitySummary).toContain("append-only history");
+    expect(hydrated.memoryBoundary.scopeSummary).toContain("single-record exports");
+    expect(hydrated.memoryBoundary.identitySummary).toContain("stable record identity");
+    expect(hydrated.memoryBoundary.auditSummary).toContain("decision-ledger-backed");
+    expect(hydrated.memoryBoundary.concurrencySummary).toContain("promote independently");
     expect(hydrated.memoryBoundary.blockerSummary).toContain("blocked");
     expect(hydrated.memoryBoundary.authoritySummary).toContain("tenant-controlled");
     expect(hydrated.memoryBoundary.triggerSummary).toContain("tenant export request");
@@ -1663,7 +1667,15 @@ describe("harness board service", () => {
           promotionPhase: "not_exported_runtime",
           promotionPhaseLabel: "No export phase",
           promotionMutability: "runtime_mutable",
-          promotionMutabilityLabel: "Runtime mutable"
+          promotionMutabilityLabel: "Runtime mutable",
+          promotionScope: "none_runtime_only",
+          promotionScopeLabel: "No promotion scope",
+          identityStability: "runtime_transient_identity",
+          identityStabilityLabel: "Runtime transient identity",
+          auditBacking: "runtime_state_only",
+          auditBackingLabel: "Runtime-state-backed",
+          concurrencyBoundary: "runtime_only",
+          concurrencyBoundaryLabel: "Runtime only"
         })
       ])
     );
@@ -1701,7 +1713,15 @@ describe("harness board service", () => {
           promotionPhase: "phase_one_governance_history",
           promotionPhaseLabel: "Phase-one export",
           promotionMutability: "append_only_history",
-          promotionMutabilityLabel: "Append-only history"
+          promotionMutabilityLabel: "Append-only history",
+          promotionScope: "single_record_export",
+          promotionScopeLabel: "Single-record export",
+          identityStability: "stable_record_identity",
+          identityStabilityLabel: "Stable record identity",
+          auditBacking: "decision_ledger_backed",
+          auditBackingLabel: "Decision-ledger-backed",
+          concurrencyBoundary: "independent_export_safe",
+          concurrencyBoundaryLabel: "Independent export safe"
         }),
         expect.objectContaining({
           id: "implemented_actions",
@@ -1735,7 +1755,15 @@ describe("harness board service", () => {
           promotionPhase: "phase_one_governance_history",
           promotionPhaseLabel: "Phase-one export",
           promotionMutability: "append_only_history",
-          promotionMutabilityLabel: "Append-only history"
+          promotionMutabilityLabel: "Append-only history",
+          promotionScope: "single_record_export",
+          promotionScopeLabel: "Single-record export",
+          identityStability: "stable_record_identity",
+          identityStabilityLabel: "Stable record identity",
+          auditBacking: "decision_ledger_backed",
+          auditBackingLabel: "Decision-ledger-backed",
+          concurrencyBoundary: "independent_export_safe",
+          concurrencyBoundaryLabel: "Independent export safe"
         })
       ])
     );

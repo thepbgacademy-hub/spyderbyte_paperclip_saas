@@ -468,6 +468,10 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     assemblySummary: "Export assembly guidance is pending the latest board state.",
     phaseSummary: "Export phase guidance is pending the latest board state.",
     mutabilitySummary: "Export mutability guidance is pending the latest board state.",
+    scopeSummary: "Promotion scope guidance is pending the latest board state.",
+    identitySummary: "Identity stability guidance is pending the latest board state.",
+    auditSummary: "Audit backing guidance is pending the latest board state.",
+    concurrencySummary: "Concurrency boundary guidance is pending the latest board state.",
     readyNowCount: 0,
     waitingOnBoardClosureCount: 0,
     governanceReadyCount: 0,
@@ -488,6 +492,18 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     appendOnlyHistoryCount: 0,
     replaceableSnapshotCount: 0,
     stableSnapshotCount: 0,
+    noPromotionScopeCount: 0,
+    singleRecordExportScopeCount: 0,
+    packageRecordSetExportScopeCount: 0,
+    transientIdentityCount: 0,
+    stableIdentityCount: 0,
+    closureFinalizedIdentityCount: 0,
+    runtimeStateOnlyAuditCount: 0,
+    decisionLedgerAuditCount: 0,
+    packageClosureAuditCount: 0,
+    runtimeOnlyConcurrencyCount: 0,
+    independentExportSafeCount: 0,
+    requiresBoardClosureSnapshotCount: 0,
     partitions: {
       runtime: { itemCount: 0, summary: "Runtime memory partition is pending the latest board state." },
       governanceHistoryCandidates: {
@@ -536,6 +552,10 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <p style={styles.actionSummary}>{memoryBoundary.assemblySummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.phaseSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.mutabilitySummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.scopeSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.identitySummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.auditSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.concurrencySummary}</p>
       <ul style={styles.actionList}>
         <li style={styles.actionItem}>
           <p style={styles.contractMeta}>Runtime partition</p>
@@ -580,6 +600,10 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                     <span style={styles.badge}>{item.assemblyShapeLabel}</span>
                     <span style={styles.badge}>{item.promotionPhaseLabel}</span>
                     <span style={styles.badge}>{item.promotionMutabilityLabel}</span>
+                    <span style={styles.badge}>{item.promotionScopeLabel}</span>
+                    <span style={styles.badge}>{item.identityStabilityLabel}</span>
+                    <span style={styles.badge}>{item.auditBackingLabel}</span>
+                    <span style={styles.badge}>{item.concurrencyBoundaryLabel}</span>
                   </div>
                   <p style={styles.actionSummary}>{item.summary}</p>
                   <p style={styles.optionBody}>{item.promotionActionDescription}</p>

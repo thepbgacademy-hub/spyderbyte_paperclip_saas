@@ -313,6 +313,18 @@ describe("harness board client", () => {
     expect(board.memoryBoundary.mutabilitySummary).toBe(
       "2 runtime buckets stay runtime mutable, 2 export candidate buckets are append-only history, and 2 buckets still behave as replaceable package snapshots until board closure."
     );
+    expect(board.memoryBoundary.scopeSummary).toBe(
+      "2 runtime buckets have no promotion scope, 2 export candidate buckets are ready as single-record exports, and 2 buckets still belong to a package record-set export scope."
+    );
+    expect(board.memoryBoundary.identitySummary).toBe(
+      "2 runtime buckets keep transient runtime identity, 2 buckets already have stable record identity, and 2 buckets still finalize identity at board closure."
+    );
+    expect(board.memoryBoundary.auditSummary).toBe(
+      "2 runtime buckets stay runtime-state-backed, 2 buckets are decision-ledger-backed, and 2 buckets are package-closure-backed."
+    );
+    expect(board.memoryBoundary.concurrencySummary).toBe(
+      "2 runtime buckets stay runtime-only, 2 export candidate buckets are safe to promote independently, and 2 buckets still need a board-closure snapshot for concurrency-safe promotion."
+    );
     expect(board.memoryBoundary.readyNowCount).toBe(2);
     expect(board.memoryBoundary.waitingOnBoardClosureCount).toBe(2);
     expect(board.memoryBoundary.governanceReadyCount).toBe(2);
@@ -379,6 +391,18 @@ describe("harness board client", () => {
     expect(
       board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.promotionMutabilityLabel
     ).toBe("Replaceable until board closure");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.promotionScopeLabel
+    ).toBe("Package record-set export");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.identityStabilityLabel
+    ).toBe("Finalized after board closure");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.auditBackingLabel
+    ).toBe("Package-closure-backed");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.concurrencyBoundaryLabel
+    ).toBe("Requires board-closure snapshot");
   });
 
   it("derives governance-ready partition counts from readiness, not only from role membership", async () => {

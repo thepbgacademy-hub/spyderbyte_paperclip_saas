@@ -339,6 +339,26 @@ const boardResponse: HarnessBoardResponse = {
       "2 runtime buckets have no export phase, 2 export candidate buckets are ready in the phase-one export lane, and 2 buckets still wait in the phase-two package export lane.",
     mutabilitySummary:
       "2 runtime buckets stay runtime mutable, 2 export candidate buckets are append-only history, and 2 buckets still behave as replaceable package snapshots until board closure.",
+    scopeSummary:
+      "2 runtime buckets have no promotion scope, 2 export candidate buckets are ready as single-record exports, and 2 buckets still belong to a package record-set export scope.",
+    identitySummary:
+      "2 runtime buckets keep transient runtime identity, 2 buckets already have stable record identity, and 2 buckets still finalize identity at board closure.",
+    auditSummary:
+      "2 runtime buckets stay runtime-state-backed, 2 buckets are decision-ledger-backed, and 2 buckets are package-closure-backed.",
+    concurrencySummary:
+      "2 runtime buckets stay runtime-only, 2 export candidate buckets are safe to promote independently, and 2 buckets still need a board-closure snapshot for concurrency-safe promotion.",
+    noPromotionScopeCount: 2,
+    singleRecordExportScopeCount: 2,
+    packageRecordSetExportScopeCount: 2,
+    transientIdentityCount: 2,
+    stableIdentityCount: 2,
+    closureFinalizedIdentityCount: 2,
+    runtimeStateOnlyAuditCount: 2,
+    decisionLedgerAuditCount: 2,
+    packageClosureAuditCount: 2,
+    runtimeOnlyConcurrencyCount: 2,
+    independentExportSafeCount: 2,
+    requiresBoardClosureSnapshotCount: 2,
     partitions: {
       runtime: {
         itemCount: 2,
@@ -396,6 +416,14 @@ const boardResponse: HarnessBoardResponse = {
         promotionPhaseLabel: "No export phase",
         promotionMutability: "runtime_mutable",
         promotionMutabilityLabel: "Runtime mutable",
+        promotionScope: "none_runtime_only",
+        promotionScopeLabel: "No promotion scope",
+        identityStability: "runtime_transient_identity",
+        identityStabilityLabel: "Runtime transient identity",
+        auditBacking: "runtime_state_only",
+        auditBackingLabel: "Runtime-state-backed",
+        concurrencyBoundary: "runtime_only",
+        concurrencyBoundaryLabel: "Runtime only",
         promotionActionDescription: "No export action applies. This runtime memory stays inside Wealth Factory orchestration."
       },
       {
@@ -440,6 +468,14 @@ const boardResponse: HarnessBoardResponse = {
         promotionPhaseLabel: "No export phase",
         promotionMutability: "runtime_mutable",
         promotionMutabilityLabel: "Runtime mutable",
+        promotionScope: "none_runtime_only",
+        promotionScopeLabel: "No promotion scope",
+        identityStability: "runtime_transient_identity",
+        identityStabilityLabel: "Runtime transient identity",
+        auditBacking: "runtime_state_only",
+        auditBackingLabel: "Runtime-state-backed",
+        concurrencyBoundary: "runtime_only",
+        concurrencyBoundaryLabel: "Runtime only",
         promotionActionDescription: "No export action applies. This runtime attention state stays inside Wealth Factory orchestration."
       }
     ],
@@ -486,6 +522,14 @@ const boardResponse: HarnessBoardResponse = {
         promotionPhaseLabel: "Phase-one export",
         promotionMutability: "append_only_history",
         promotionMutabilityLabel: "Append-only history",
+        promotionScope: "single_record_export",
+        promotionScopeLabel: "Single-record export",
+        identityStability: "stable_record_identity",
+        identityStabilityLabel: "Stable record identity",
+        auditBacking: "decision_ledger_backed",
+        auditBackingLabel: "Decision-ledger-backed",
+        concurrencyBoundary: "independent_export_safe",
+        concurrencyBoundaryLabel: "Independent export safe",
         promotionActionDescription: "This governance history is ready to sit behind a later bounded tenant export action."
       },
       {
@@ -530,6 +574,14 @@ const boardResponse: HarnessBoardResponse = {
         promotionPhaseLabel: "Phase-one export",
         promotionMutability: "append_only_history",
         promotionMutabilityLabel: "Append-only history",
+        promotionScope: "single_record_export",
+        promotionScopeLabel: "Single-record export",
+        identityStability: "stable_record_identity",
+        identityStabilityLabel: "Stable record identity",
+        auditBacking: "decision_ledger_backed",
+        auditBackingLabel: "Decision-ledger-backed",
+        concurrencyBoundary: "independent_export_safe",
+        concurrencyBoundaryLabel: "Independent export safe",
         promotionActionDescription:
           "This implemented follow-through is ready to sit behind a later bounded tenant export action."
       },
@@ -575,6 +627,14 @@ const boardResponse: HarnessBoardResponse = {
         promotionPhaseLabel: "Phase-two package export",
         promotionMutability: "replaceable_until_board_closure",
         promotionMutabilityLabel: "Replaceable until board closure",
+        promotionScope: "package_record_set_export",
+        promotionScopeLabel: "Package record-set export",
+        identityStability: "finalized_after_board_closure",
+        identityStabilityLabel: "Finalized after board closure",
+        auditBacking: "package_closure_backed",
+        auditBackingLabel: "Package-closure-backed",
+        concurrencyBoundary: "requires_board_closure_snapshot",
+        concurrencyBoundaryLabel: "Requires board-closure snapshot",
         promotionActionDescription:
           "Board closure still gates this package governance memory before any later tenant export action can apply.",
         nextEligibleSummary: "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
@@ -621,6 +681,14 @@ const boardResponse: HarnessBoardResponse = {
         promotionPhaseLabel: "Phase-two package export",
         promotionMutability: "replaceable_until_board_closure",
         promotionMutabilityLabel: "Replaceable until board closure",
+        promotionScope: "package_record_set_export",
+        promotionScopeLabel: "Package record-set export",
+        identityStability: "finalized_after_board_closure",
+        identityStabilityLabel: "Finalized after board closure",
+        auditBacking: "package_closure_backed",
+        auditBackingLabel: "Package-closure-backed",
+        concurrencyBoundary: "requires_board_closure_snapshot",
+        concurrencyBoundaryLabel: "Requires board-closure snapshot",
         promotionActionDescription:
           "Board closure still gates this packaged deliverable before any later tenant export action can apply.",
         nextEligibleSummary: "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
@@ -1272,6 +1340,10 @@ describe("harness board UI", () => {
     expect(markup).toContain("2 export candidate buckets are waiting only on a later tenant export request, while 2 buckets still need board closure before that request can happen.");
     expect(markup).toContain("2 runtime buckets have no promotion step, 2 export candidate buckets are ready for a later tenant export step, and 2 buckets still need board closure before tenant export becomes the next step.");
     expect(markup).toContain("2 runtime buckets expose no promotion action, 2 export candidate buckets sit in the tenant export family, and 2 buckets remain in the board-closure-first family.");
+    expect(markup).toContain("2 runtime buckets have no promotion scope, 2 export candidate buckets are ready as single-record exports, and 2 buckets still belong to a package record-set export scope.");
+    expect(markup).toContain("2 runtime buckets keep transient runtime identity, 2 buckets already have stable record identity, and 2 buckets still finalize identity at board closure.");
+    expect(markup).toContain("2 runtime buckets stay runtime-state-backed, 2 buckets are decision-ledger-backed, and 2 buckets are package-closure-backed.");
+    expect(markup).toContain("2 runtime buckets stay runtime-only, 2 export candidate buckets are safe to promote independently, and 2 buckets still need a board-closure snapshot for concurrency-safe promotion.");
     expect(markup).toContain("Not applicable in runtime");
     expect(markup).toContain("No blocker");
     expect(markup).toContain("Board closure required");
@@ -1284,6 +1356,17 @@ describe("harness board UI", () => {
     expect(markup).toContain("No promotion action");
     expect(markup).toContain("Tenant export family");
     expect(markup).toContain("Board closure first");
+    expect(markup).toContain("No promotion scope");
+    expect(markup).toContain("Single-record export");
+    expect(markup).toContain("Package record-set export");
+    expect(markup).toContain("Runtime transient identity");
+    expect(markup).toContain("Stable record identity");
+    expect(markup).toContain("Finalized after board closure");
+    expect(markup).toContain("Runtime-state-backed");
+    expect(markup).toContain("Decision-ledger-backed");
+    expect(markup).toContain("Package-closure-backed");
+    expect(markup).toContain("Independent export safe");
+    expect(markup).toContain("Requires board-closure snapshot");
     expect(markup).toContain("This governance history is ready to sit behind a later bounded tenant export action.");
     expect(markup).toContain("Board closure still gates this packaged deliverable before any later tenant export action can apply.");
     expect(markup).toContain("Source surface: Continuity snapshots");

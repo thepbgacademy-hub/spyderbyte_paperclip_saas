@@ -366,6 +366,18 @@ const fallbackBoardBase: HarnessBoardResponse = {
     appendOnlyHistoryCount: 2,
     replaceableSnapshotCount: 2,
     stableSnapshotCount: 0,
+    noPromotionScopeCount: 2,
+    singleRecordExportScopeCount: 2,
+    packageRecordSetExportScopeCount: 2,
+    transientIdentityCount: 2,
+    stableIdentityCount: 2,
+    closureFinalizedIdentityCount: 2,
+    runtimeStateOnlyAuditCount: 2,
+    decisionLedgerAuditCount: 2,
+    packageClosureAuditCount: 2,
+    runtimeOnlyConcurrencyCount: 2,
+    independentExportSafeCount: 2,
+    requiresBoardClosureSnapshotCount: 2,
     roleSummary: "2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure.",
     nextStepSummary:
       "2 runtime buckets have no promotion step, 2 export candidate buckets are ready for a later tenant export step, and 2 buckets still need board closure before tenant export becomes the next step.",
@@ -377,6 +389,14 @@ const fallbackBoardBase: HarnessBoardResponse = {
       "2 runtime buckets have no export phase, 2 export candidate buckets are ready in the phase-one export lane, and 2 buckets still wait in the phase-two package export lane.",
     mutabilitySummary:
       "2 runtime buckets stay runtime mutable, 2 export candidate buckets are append-only history, and 2 buckets still behave as replaceable package snapshots until board closure.",
+    scopeSummary:
+      "2 runtime buckets have no promotion scope, 2 export candidate buckets are ready as single-record exports, and 2 buckets still belong to a package record-set export scope.",
+    identitySummary:
+      "2 runtime buckets keep transient runtime identity, 2 buckets already have stable record identity, and 2 buckets still finalize identity at board closure.",
+    auditSummary:
+      "2 runtime buckets stay runtime-state-backed, 2 buckets are decision-ledger-backed, and 2 buckets are package-closure-backed.",
+    concurrencySummary:
+      "2 runtime buckets stay runtime-only, 2 export candidate buckets are safe to promote independently, and 2 buckets still need a board-closure snapshot for concurrency-safe promotion.",
     partitions: {
       runtime: {
         itemCount: 2,
@@ -434,6 +454,14 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionPhaseLabel: "No export phase",
         promotionMutability: "runtime_mutable",
         promotionMutabilityLabel: "Runtime mutable",
+        promotionScope: "none_runtime_only",
+        promotionScopeLabel: "No promotion scope",
+        identityStability: "runtime_transient_identity",
+        identityStabilityLabel: "Runtime transient identity",
+        auditBacking: "runtime_state_only",
+        auditBackingLabel: "Runtime-state-backed",
+        concurrencyBoundary: "runtime_only",
+        concurrencyBoundaryLabel: "Runtime only",
         promotionActionDescription: "No export action applies. This runtime memory stays inside Wealth Factory orchestration."
       },
       {
@@ -478,6 +506,14 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionPhaseLabel: "No export phase",
         promotionMutability: "runtime_mutable",
         promotionMutabilityLabel: "Runtime mutable",
+        promotionScope: "none_runtime_only",
+        promotionScopeLabel: "No promotion scope",
+        identityStability: "runtime_transient_identity",
+        identityStabilityLabel: "Runtime transient identity",
+        auditBacking: "runtime_state_only",
+        auditBackingLabel: "Runtime-state-backed",
+        concurrencyBoundary: "runtime_only",
+        concurrencyBoundaryLabel: "Runtime only",
         promotionActionDescription: "No export action applies. This runtime attention state stays inside Wealth Factory orchestration."
       }
     ],
@@ -524,6 +560,14 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionPhaseLabel: "Phase-one export",
         promotionMutability: "append_only_history",
         promotionMutabilityLabel: "Append-only history",
+        promotionScope: "single_record_export",
+        promotionScopeLabel: "Single-record export",
+        identityStability: "stable_record_identity",
+        identityStabilityLabel: "Stable record identity",
+        auditBacking: "decision_ledger_backed",
+        auditBackingLabel: "Decision-ledger-backed",
+        concurrencyBoundary: "independent_export_safe",
+        concurrencyBoundaryLabel: "Independent export safe",
         promotionActionDescription: "This governance history is ready to sit behind a later bounded tenant export action."
       },
       {
@@ -568,6 +612,14 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionPhaseLabel: "Phase-one export",
         promotionMutability: "append_only_history",
         promotionMutabilityLabel: "Append-only history",
+        promotionScope: "single_record_export",
+        promotionScopeLabel: "Single-record export",
+        identityStability: "stable_record_identity",
+        identityStabilityLabel: "Stable record identity",
+        auditBacking: "decision_ledger_backed",
+        auditBackingLabel: "Decision-ledger-backed",
+        concurrencyBoundary: "independent_export_safe",
+        concurrencyBoundaryLabel: "Independent export safe",
         promotionActionDescription:
           "This implemented follow-through is ready to sit behind a later bounded tenant export action."
       },
@@ -613,6 +665,14 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionPhaseLabel: "Phase-two package export",
         promotionMutability: "replaceable_until_board_closure",
         promotionMutabilityLabel: "Replaceable until board closure",
+        promotionScope: "package_record_set_export",
+        promotionScopeLabel: "Package record-set export",
+        identityStability: "finalized_after_board_closure",
+        identityStabilityLabel: "Finalized after board closure",
+        auditBacking: "package_closure_backed",
+        auditBackingLabel: "Package-closure-backed",
+        concurrencyBoundary: "requires_board_closure_snapshot",
+        concurrencyBoundaryLabel: "Requires board-closure snapshot",
         promotionActionDescription:
           "Board closure still gates this package governance memory before any later tenant export action can apply.",
         nextEligibleSummary:
@@ -660,6 +720,14 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionPhaseLabel: "Phase-two package export",
         promotionMutability: "replaceable_until_board_closure",
         promotionMutabilityLabel: "Replaceable until board closure",
+        promotionScope: "package_record_set_export",
+        promotionScopeLabel: "Package record-set export",
+        identityStability: "finalized_after_board_closure",
+        identityStabilityLabel: "Finalized after board closure",
+        auditBacking: "package_closure_backed",
+        auditBackingLabel: "Package-closure-backed",
+        concurrencyBoundary: "requires_board_closure_snapshot",
+        concurrencyBoundaryLabel: "Requires board-closure snapshot",
         promotionActionDescription:
           "Board closure still gates this packaged deliverable before any later tenant export action can apply.",
         nextEligibleSummary:
@@ -1081,6 +1149,66 @@ function humanizeMemoryBoundaryPromotionMutability(
   }
 }
 
+function humanizeMemoryBoundaryPromotionScope(
+  scope: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["promotionScope"]>
+) {
+  switch (scope) {
+    case "none_runtime_only":
+      return "No promotion scope";
+    case "single_record_export":
+      return "Single-record export";
+    case "package_record_set_export":
+      return "Package record-set export";
+    default:
+      return scope;
+  }
+}
+
+function humanizeMemoryBoundaryIdentityStability(
+  stability: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["identityStability"]>
+) {
+  switch (stability) {
+    case "runtime_transient_identity":
+      return "Runtime transient identity";
+    case "stable_record_identity":
+      return "Stable record identity";
+    case "finalized_after_board_closure":
+      return "Finalized after board closure";
+    default:
+      return stability;
+  }
+}
+
+function humanizeMemoryBoundaryAuditBacking(
+  backing: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["auditBacking"]>
+) {
+  switch (backing) {
+    case "runtime_state_only":
+      return "Runtime-state-backed";
+    case "decision_ledger_backed":
+      return "Decision-ledger-backed";
+    case "package_closure_backed":
+      return "Package-closure-backed";
+    default:
+      return backing;
+  }
+}
+
+function humanizeMemoryBoundaryConcurrencyBoundary(
+  boundary: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["concurrencyBoundary"]>
+) {
+  switch (boundary) {
+    case "runtime_only":
+      return "Runtime only";
+    case "independent_export_safe":
+      return "Independent export safe";
+    case "requires_board_closure_snapshot":
+      return "Requires board-closure snapshot";
+    default:
+      return boundary;
+  }
+}
+
 function inferMemoryBoundaryReadiness(
   itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"],
   board: Pick<HarnessBoardResponse, "completionPackage">
@@ -1401,6 +1529,80 @@ function inferMemoryBoundaryPromotionMutability(
   }
 }
 
+function inferMemoryBoundaryPromotionScope(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"]
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["promotionScope"] {
+  switch (itemId) {
+    case "lane_continuity":
+    case "attention_state":
+      return "none_runtime_only";
+    case "package_governance":
+    case "package_deliverables":
+      return "package_record_set_export";
+    case "governance_decisions":
+    case "implemented_actions":
+    default:
+      return "single_record_export";
+  }
+}
+
+function inferMemoryBoundaryIdentityStability(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"],
+  board: Pick<HarnessBoardResponse, "completionPackage">
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["identityStability"] {
+  switch (itemId) {
+    case "lane_continuity":
+    case "attention_state":
+      return "runtime_transient_identity";
+    case "package_governance":
+    case "package_deliverables":
+      return board.completionPackage?.hasOpenGovernanceItems
+        ? "finalized_after_board_closure"
+        : "stable_record_identity";
+    case "governance_decisions":
+    case "implemented_actions":
+    default:
+      return "stable_record_identity";
+  }
+}
+
+function inferMemoryBoundaryAuditBacking(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"]
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["auditBacking"] {
+  switch (itemId) {
+    case "lane_continuity":
+    case "attention_state":
+      return "runtime_state_only";
+    case "package_governance":
+    case "package_deliverables":
+      return "package_closure_backed";
+    case "governance_decisions":
+    case "implemented_actions":
+    default:
+      return "decision_ledger_backed";
+  }
+}
+
+function inferMemoryBoundaryConcurrencyBoundary(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"],
+  board: Pick<HarnessBoardResponse, "completionPackage">
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["concurrencyBoundary"] {
+  switch (itemId) {
+    case "lane_continuity":
+    case "attention_state":
+      return "runtime_only";
+    case "package_governance":
+    case "package_deliverables":
+      return board.completionPackage?.hasOpenGovernanceItems
+        ? "requires_board_closure_snapshot"
+        : "independent_export_safe";
+    case "governance_decisions":
+    case "implemented_actions":
+    default:
+      return "independent_export_safe";
+  }
+}
+
 function normalizeMemoryBoundary(
   memoryBoundary: HarnessBoardResponse["memoryBoundary"],
   board: Pick<HarnessBoardResponse, "completionPackage">
@@ -1424,6 +1626,10 @@ function normalizeMemoryBoundary(
     const assemblyShape = item.assemblyShape ?? inferMemoryBoundaryAssemblyShape(item.id);
     const promotionPhase = item.promotionPhase ?? inferMemoryBoundaryPromotionPhase(item.id);
     const promotionMutability = item.promotionMutability ?? inferMemoryBoundaryPromotionMutability(item.id, board);
+    const promotionScope = item.promotionScope ?? inferMemoryBoundaryPromotionScope(item.id);
+    const identityStability = item.identityStability ?? inferMemoryBoundaryIdentityStability(item.id, board);
+    const auditBacking = item.auditBacking ?? inferMemoryBoundaryAuditBacking(item.id);
+    const concurrencyBoundary = item.concurrencyBoundary ?? inferMemoryBoundaryConcurrencyBoundary(item.id, board);
     return {
       ...item,
       readiness,
@@ -1475,6 +1681,18 @@ function normalizeMemoryBoundary(
       promotionMutability,
       promotionMutabilityLabel:
         item.promotionMutabilityLabel ?? humanizeMemoryBoundaryPromotionMutability(promotionMutability),
+      promotionScope,
+      promotionScopeLabel:
+        item.promotionScopeLabel ?? humanizeMemoryBoundaryPromotionScope(promotionScope),
+      identityStability,
+      identityStabilityLabel:
+        item.identityStabilityLabel ?? humanizeMemoryBoundaryIdentityStability(identityStability),
+      auditBacking,
+      auditBackingLabel:
+        item.auditBackingLabel ?? humanizeMemoryBoundaryAuditBacking(auditBacking),
+      concurrencyBoundary,
+      concurrencyBoundaryLabel:
+        item.concurrencyBoundaryLabel ?? humanizeMemoryBoundaryConcurrencyBoundary(concurrencyBoundary),
       promotionActionDescription:
         item.promotionActionDescription
         ?? (promotionActionFamily === "none_runtime_only"
@@ -1503,6 +1721,10 @@ function normalizeMemoryBoundary(
     const assemblyShape = item.assemblyShape ?? inferMemoryBoundaryAssemblyShape(item.id);
     const promotionPhase = item.promotionPhase ?? inferMemoryBoundaryPromotionPhase(item.id);
     const promotionMutability = item.promotionMutability ?? inferMemoryBoundaryPromotionMutability(item.id, board);
+    const promotionScope = item.promotionScope ?? inferMemoryBoundaryPromotionScope(item.id);
+    const identityStability = item.identityStability ?? inferMemoryBoundaryIdentityStability(item.id, board);
+    const auditBacking = item.auditBacking ?? inferMemoryBoundaryAuditBacking(item.id);
+    const concurrencyBoundary = item.concurrencyBoundary ?? inferMemoryBoundaryConcurrencyBoundary(item.id, board);
     const nextEligibleSummary = item.nextEligibleSummary
       ?? (readiness === "after_board_closes"
         ? item.id === "package_governance"
@@ -1562,6 +1784,18 @@ function normalizeMemoryBoundary(
       promotionMutability,
       promotionMutabilityLabel:
         item.promotionMutabilityLabel ?? humanizeMemoryBoundaryPromotionMutability(promotionMutability),
+      promotionScope,
+      promotionScopeLabel:
+        item.promotionScopeLabel ?? humanizeMemoryBoundaryPromotionScope(promotionScope),
+      identityStability,
+      identityStabilityLabel:
+        item.identityStabilityLabel ?? humanizeMemoryBoundaryIdentityStability(identityStability),
+      auditBacking,
+      auditBackingLabel:
+        item.auditBackingLabel ?? humanizeMemoryBoundaryAuditBacking(auditBacking),
+      concurrencyBoundary,
+      concurrencyBoundaryLabel:
+        item.concurrencyBoundaryLabel ?? humanizeMemoryBoundaryConcurrencyBoundary(concurrencyBoundary),
       promotionActionDescription:
         item.promotionActionDescription
         ?? (promotionActionFamily === "board_closure_before_export"
@@ -1628,6 +1862,30 @@ function normalizeMemoryBoundary(
     ?? exportReadyItems.filter((item) => item.promotionMutability === "replaceable_until_board_closure").length;
   const stableSnapshotCount = memoryBoundary.stableSnapshotCount
     ?? exportReadyItems.filter((item) => item.promotionMutability === "stable_snapshot").length;
+  const noPromotionScopeCount = memoryBoundary.noPromotionScopeCount
+    ?? operationalItems.filter((item) => item.promotionScope === "none_runtime_only").length;
+  const singleRecordExportScopeCount = memoryBoundary.singleRecordExportScopeCount
+    ?? exportReadyItems.filter((item) => item.promotionScope === "single_record_export").length;
+  const packageRecordSetExportScopeCount = memoryBoundary.packageRecordSetExportScopeCount
+    ?? exportReadyItems.filter((item) => item.promotionScope === "package_record_set_export").length;
+  const transientIdentityCount = memoryBoundary.transientIdentityCount
+    ?? operationalItems.filter((item) => item.identityStability === "runtime_transient_identity").length;
+  const stableIdentityCount = memoryBoundary.stableIdentityCount
+    ?? [...operationalItems, ...exportReadyItems].filter((item) => item.identityStability === "stable_record_identity").length;
+  const closureFinalizedIdentityCount = memoryBoundary.closureFinalizedIdentityCount
+    ?? exportReadyItems.filter((item) => item.identityStability === "finalized_after_board_closure").length;
+  const runtimeStateOnlyAuditCount = memoryBoundary.runtimeStateOnlyAuditCount
+    ?? operationalItems.filter((item) => item.auditBacking === "runtime_state_only").length;
+  const decisionLedgerAuditCount = memoryBoundary.decisionLedgerAuditCount
+    ?? exportReadyItems.filter((item) => item.auditBacking === "decision_ledger_backed").length;
+  const packageClosureAuditCount = memoryBoundary.packageClosureAuditCount
+    ?? exportReadyItems.filter((item) => item.auditBacking === "package_closure_backed").length;
+  const runtimeOnlyConcurrencyCount = memoryBoundary.runtimeOnlyConcurrencyCount
+    ?? operationalItems.filter((item) => item.concurrencyBoundary === "runtime_only").length;
+  const independentExportSafeCount = memoryBoundary.independentExportSafeCount
+    ?? exportReadyItems.filter((item) => item.concurrencyBoundary === "independent_export_safe").length;
+  const requiresBoardClosureSnapshotCount = memoryBoundary.requiresBoardClosureSnapshotCount
+    ?? exportReadyItems.filter((item) => item.concurrencyBoundary === "requires_board_closure_snapshot").length;
 
   return {
     ...memoryBoundary,
@@ -1665,6 +1923,18 @@ function normalizeMemoryBoundary(
     appendOnlyHistoryCount,
     replaceableSnapshotCount,
     stableSnapshotCount,
+    noPromotionScopeCount,
+    singleRecordExportScopeCount,
+    packageRecordSetExportScopeCount,
+    transientIdentityCount,
+    stableIdentityCount,
+    closureFinalizedIdentityCount,
+    runtimeStateOnlyAuditCount,
+    decisionLedgerAuditCount,
+    packageClosureAuditCount,
+    runtimeOnlyConcurrencyCount,
+    independentExportSafeCount,
+    requiresBoardClosureSnapshotCount,
     roleSummary:
       memoryBoundary.roleSummary
       ?? (packagedWaitingCount > 0
@@ -1730,6 +2000,26 @@ function normalizeMemoryBoundary(
         : stableSnapshotCount > 0
         ? `${runtimeMutableCount} runtime bucket${runtimeMutableCount === 1 ? " stays" : "s stay"} runtime mutable, ${appendOnlyHistoryCount} export candidate bucket${appendOnlyHistoryCount === 1 ? " is" : "s are"} append-only history, and ${stableSnapshotCount} bucket${stableSnapshotCount === 1 ? " is" : "s are"} now stable package snapshots.`
         : `${runtimeMutableCount} runtime bucket${runtimeMutableCount === 1 ? " stays" : "s stay"} runtime mutable, and ${appendOnlyHistoryCount} export candidate bucket${appendOnlyHistoryCount === 1 ? " is" : "s are"} append-only history.`),
+    scopeSummary:
+      memoryBoundary.scopeSummary
+      ?? (packageRecordSetExportScopeCount > 0
+        ? `${noPromotionScopeCount} runtime bucket${noPromotionScopeCount === 1 ? " has" : "s have"} no promotion scope, ${singleRecordExportScopeCount} export candidate bucket${singleRecordExportScopeCount === 1 ? " is" : "s are"} ready as single-record exports, and ${packageRecordSetExportScopeCount} bucket${packageRecordSetExportScopeCount === 1 ? " still belongs" : "s still belong"} to a package record-set export scope.`
+        : `${noPromotionScopeCount} runtime bucket${noPromotionScopeCount === 1 ? " has" : "s have"} no promotion scope, and ${singleRecordExportScopeCount} export candidate bucket${singleRecordExportScopeCount === 1 ? " is" : "s are"} ready as single-record exports.`),
+    identitySummary:
+      memoryBoundary.identitySummary
+      ?? (closureFinalizedIdentityCount > 0
+        ? `${transientIdentityCount} runtime bucket${transientIdentityCount === 1 ? " keeps" : "s keep"} transient runtime identity, ${stableIdentityCount} bucket${stableIdentityCount === 1 ? " already has" : "s already have"} stable record identity, and ${closureFinalizedIdentityCount} bucket${closureFinalizedIdentityCount === 1 ? " still finalizes" : "s still finalize"} identity at board closure.`
+        : `${transientIdentityCount} runtime bucket${transientIdentityCount === 1 ? " keeps" : "s keep"} transient runtime identity, and ${stableIdentityCount} bucket${stableIdentityCount === 1 ? " already has" : "s already have"} stable record identity.`),
+    auditSummary:
+      memoryBoundary.auditSummary
+      ?? (packageClosureAuditCount > 0
+        ? `${runtimeStateOnlyAuditCount} runtime bucket${runtimeStateOnlyAuditCount === 1 ? " stays" : "s stay"} runtime-state-backed, ${decisionLedgerAuditCount} bucket${decisionLedgerAuditCount === 1 ? " is" : "s are"} decision-ledger-backed, and ${packageClosureAuditCount} bucket${packageClosureAuditCount === 1 ? " is" : "s are"} package-closure-backed.`
+        : `${runtimeStateOnlyAuditCount} runtime bucket${runtimeStateOnlyAuditCount === 1 ? " stays" : "s stay"} runtime-state-backed, and ${decisionLedgerAuditCount} bucket${decisionLedgerAuditCount === 1 ? " is" : "s are"} decision-ledger-backed.`),
+    concurrencySummary:
+      memoryBoundary.concurrencySummary
+      ?? (requiresBoardClosureSnapshotCount > 0
+        ? `${runtimeOnlyConcurrencyCount} runtime bucket${runtimeOnlyConcurrencyCount === 1 ? " stays" : "s stay"} runtime-only, ${independentExportSafeCount} export candidate bucket${independentExportSafeCount === 1 ? " is" : "s are"} safe to promote independently, and ${requiresBoardClosureSnapshotCount} bucket${requiresBoardClosureSnapshotCount === 1 ? " still needs" : "s still need"} a board-closure snapshot for concurrency-safe promotion.`
+        : `${runtimeOnlyConcurrencyCount} runtime bucket${runtimeOnlyConcurrencyCount === 1 ? " stays" : "s stay"} runtime-only, and ${independentExportSafeCount} export candidate bucket${independentExportSafeCount === 1 ? " is" : "s are"} safe to promote independently.`),
     partitions: memoryBoundary.partitions ?? {
       runtime: {
         itemCount: operationalItems.length,
@@ -1803,6 +2093,14 @@ function normalizeBoardResponse(
       promotionPhaseLabel: "Phase-one export",
       promotionMutability: "append_only_history",
       promotionMutabilityLabel: "Append-only history",
+      promotionScope: "single_record_export",
+      promotionScopeLabel: "Single-record export",
+      identityStability: "stable_record_identity",
+      identityStabilityLabel: "Stable record identity",
+      auditBacking: "decision_ledger_backed",
+      auditBackingLabel: "Decision-ledger-backed",
+      concurrencyBoundary: "independent_export_safe",
+      concurrencyBoundaryLabel: "Independent export safe",
       assemblyShape: "standalone_export_record",
       assemblyShapeLabel: "Standalone export record",
       promotionActionDescription: "This governance history is ready to sit behind a later bounded tenant export action."
@@ -1847,6 +2145,14 @@ function normalizeBoardResponse(
       promotionPhaseLabel: "Phase-one export",
       promotionMutability: "append_only_history",
       promotionMutabilityLabel: "Append-only history",
+      promotionScope: "single_record_export",
+      promotionScopeLabel: "Single-record export",
+      identityStability: "stable_record_identity",
+      identityStabilityLabel: "Stable record identity",
+      auditBacking: "decision_ledger_backed",
+      auditBackingLabel: "Decision-ledger-backed",
+      concurrencyBoundary: "independent_export_safe",
+      concurrencyBoundaryLabel: "Independent export safe",
       assemblyShape: "standalone_export_record",
       assemblyShapeLabel: "Standalone export record",
       promotionActionDescription:
@@ -1932,6 +2238,22 @@ function normalizeBoardResponse(
         promotionMutabilityLabel: board.completionPackage?.hasOpenGovernanceItems
           ? "Replaceable until board closure"
           : "Stable snapshot",
+        promotionScope: "package_record_set_export",
+        promotionScopeLabel: "Package record-set export",
+        identityStability: board.completionPackage?.hasOpenGovernanceItems
+          ? "finalized_after_board_closure"
+          : "stable_record_identity",
+        identityStabilityLabel: board.completionPackage?.hasOpenGovernanceItems
+          ? "Finalized after board closure"
+          : "Stable record identity",
+        auditBacking: "package_closure_backed",
+        auditBackingLabel: "Package-closure-backed",
+        concurrencyBoundary: board.completionPackage?.hasOpenGovernanceItems
+          ? "requires_board_closure_snapshot"
+          : "independent_export_safe",
+        concurrencyBoundaryLabel: board.completionPackage?.hasOpenGovernanceItems
+          ? "Requires board-closure snapshot"
+          : "Independent export safe",
         assemblyShape: "package_record_set",
         assemblyShapeLabel: "Package record set",
         promotionActionDescription: board.completionPackage?.hasOpenGovernanceItems
@@ -2024,6 +2346,22 @@ function normalizeBoardResponse(
         promotionMutabilityLabel: board.completionPackage?.hasOpenGovernanceItems
           ? "Replaceable until board closure"
           : "Stable snapshot",
+        promotionScope: "package_record_set_export",
+        promotionScopeLabel: "Package record-set export",
+        identityStability: board.completionPackage?.hasOpenGovernanceItems
+          ? "finalized_after_board_closure"
+          : "stable_record_identity",
+        identityStabilityLabel: board.completionPackage?.hasOpenGovernanceItems
+          ? "Finalized after board closure"
+          : "Stable record identity",
+        auditBacking: "package_closure_backed",
+        auditBackingLabel: "Package-closure-backed",
+        concurrencyBoundary: board.completionPackage?.hasOpenGovernanceItems
+          ? "requires_board_closure_snapshot"
+          : "independent_export_safe",
+        concurrencyBoundaryLabel: board.completionPackage?.hasOpenGovernanceItems
+          ? "Requires board-closure snapshot"
+          : "Independent export safe",
         assemblyShape: "package_record_set",
         assemblyShapeLabel: "Package record set",
         promotionActionDescription: board.completionPackage?.hasOpenGovernanceItems
@@ -2087,6 +2425,18 @@ function normalizeBoardResponse(
       appendOnlyHistoryCount: exportReadyItems.filter((item) => item.promotionMutability === "append_only_history").length,
       replaceableSnapshotCount: exportReadyItems.filter((item) => item.promotionMutability === "replaceable_until_board_closure").length,
       stableSnapshotCount: exportReadyItems.filter((item) => item.promotionMutability === "stable_snapshot").length,
+      noPromotionScopeCount: 2,
+      singleRecordExportScopeCount: exportReadyItems.filter((item) => item.promotionScope === "single_record_export").length,
+      packageRecordSetExportScopeCount: exportReadyItems.filter((item) => item.promotionScope === "package_record_set_export").length,
+      transientIdentityCount: 2,
+      stableIdentityCount: exportReadyItems.filter((item) => item.identityStability === "stable_record_identity").length,
+      closureFinalizedIdentityCount: exportReadyItems.filter((item) => item.identityStability === "finalized_after_board_closure").length,
+      runtimeStateOnlyAuditCount: 2,
+      decisionLedgerAuditCount: exportReadyItems.filter((item) => item.auditBacking === "decision_ledger_backed").length,
+      packageClosureAuditCount: exportReadyItems.filter((item) => item.auditBacking === "package_closure_backed").length,
+      runtimeOnlyConcurrencyCount: 2,
+      independentExportSafeCount: exportReadyItems.filter((item) => item.concurrencyBoundary === "independent_export_safe").length,
+      requiresBoardClosureSnapshotCount: exportReadyItems.filter((item) => item.concurrencyBoundary === "requires_board_closure_snapshot").length,
       roleSummary:
         packagedWaitingCount > 0
           ? `${governanceReadyCount} governance record candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} ready now, and ${packagedWaitingCount} packaged output candidate${packagedWaitingCount === 1 ? "" : "s"} ${packagedWaitingCount === 1 ? "still waits" : "still wait"} on board closure.`
@@ -2133,6 +2483,22 @@ function normalizeBoardResponse(
         waitingOnBoardClosureCount > 0
           ? `2 runtime buckets stay runtime mutable, ${exportReadyItems.filter((item) => item.promotionMutability === "append_only_history").length} export candidate bucket${exportReadyItems.filter((item) => item.promotionMutability === "append_only_history").length === 1 ? " is" : "s are"} append-only history, and ${exportReadyItems.filter((item) => item.promotionMutability === "replaceable_until_board_closure").length} bucket${exportReadyItems.filter((item) => item.promotionMutability === "replaceable_until_board_closure").length === 1 ? " still behaves" : "s still behave"} as replaceable package snapshots until board closure.`
           : `2 runtime buckets stay runtime mutable, ${exportReadyItems.filter((item) => item.promotionMutability === "append_only_history").length} export candidate bucket${exportReadyItems.filter((item) => item.promotionMutability === "append_only_history").length === 1 ? " is" : "s are"} append-only history, and ${exportReadyItems.filter((item) => item.promotionMutability === "stable_snapshot").length} bucket${exportReadyItems.filter((item) => item.promotionMutability === "stable_snapshot").length === 1 ? " is" : "s are"} now stable package snapshots.`,
+      scopeSummary:
+        waitingOnBoardClosureCount > 0
+          ? `2 runtime buckets have no promotion scope, ${exportReadyItems.filter((item) => item.promotionScope === "single_record_export").length} export candidate bucket${exportReadyItems.filter((item) => item.promotionScope === "single_record_export").length === 1 ? " is" : "s are"} ready as single-record exports, and ${exportReadyItems.filter((item) => item.promotionScope === "package_record_set_export").length} bucket${exportReadyItems.filter((item) => item.promotionScope === "package_record_set_export").length === 1 ? " still belongs" : "s still belong"} to a package record-set export scope.`
+          : `2 runtime buckets have no promotion scope, and ${exportReadyItems.filter((item) => item.promotionScope === "single_record_export").length} export candidate bucket${exportReadyItems.filter((item) => item.promotionScope === "single_record_export").length === 1 ? " is" : "s are"} ready as single-record exports.`,
+      identitySummary:
+        waitingOnBoardClosureCount > 0
+          ? `2 runtime buckets keep transient runtime identity, ${exportReadyItems.filter((item) => item.identityStability === "stable_record_identity").length} bucket${exportReadyItems.filter((item) => item.identityStability === "stable_record_identity").length === 1 ? " already has" : "s already have"} stable record identity, and ${exportReadyItems.filter((item) => item.identityStability === "finalized_after_board_closure").length} bucket${exportReadyItems.filter((item) => item.identityStability === "finalized_after_board_closure").length === 1 ? " still finalizes" : "s still finalize"} identity at board closure.`
+          : `2 runtime buckets keep transient runtime identity, and ${exportReadyItems.filter((item) => item.identityStability === "stable_record_identity").length} bucket${exportReadyItems.filter((item) => item.identityStability === "stable_record_identity").length === 1 ? " already has" : "s already have"} stable record identity.`,
+      auditSummary:
+        waitingOnBoardClosureCount > 0
+          ? `2 runtime buckets stay runtime-state-backed, ${exportReadyItems.filter((item) => item.auditBacking === "decision_ledger_backed").length} bucket${exportReadyItems.filter((item) => item.auditBacking === "decision_ledger_backed").length === 1 ? " is" : "s are"} decision-ledger-backed, and ${exportReadyItems.filter((item) => item.auditBacking === "package_closure_backed").length} bucket${exportReadyItems.filter((item) => item.auditBacking === "package_closure_backed").length === 1 ? " is" : "s are"} package-closure-backed.`
+          : `2 runtime buckets stay runtime-state-backed, and ${exportReadyItems.filter((item) => item.auditBacking === "decision_ledger_backed").length} bucket${exportReadyItems.filter((item) => item.auditBacking === "decision_ledger_backed").length === 1 ? " is" : "s are"} decision-ledger-backed.`,
+      concurrencySummary:
+        waitingOnBoardClosureCount > 0
+          ? `2 runtime buckets stay runtime-only, ${exportReadyItems.filter((item) => item.concurrencyBoundary === "independent_export_safe").length} export candidate bucket${exportReadyItems.filter((item) => item.concurrencyBoundary === "independent_export_safe").length === 1 ? " is" : "s are"} safe to promote independently, and ${exportReadyItems.filter((item) => item.concurrencyBoundary === "requires_board_closure_snapshot").length} bucket${exportReadyItems.filter((item) => item.concurrencyBoundary === "requires_board_closure_snapshot").length === 1 ? " still needs" : "s still need"} a board-closure snapshot for concurrency-safe promotion.`
+          : `2 runtime buckets stay runtime-only, and ${exportReadyItems.filter((item) => item.concurrencyBoundary === "independent_export_safe").length} export candidate bucket${exportReadyItems.filter((item) => item.concurrencyBoundary === "independent_export_safe").length === 1 ? " is" : "s are"} safe to promote independently.`,
       stateSummary:
         waitingOnBoardClosureCount > 0
           ? `2 runtime buckets stay runtime-only, ${exportReadyItems.filter((item) => item.promotionState === "ready_for_tenant_export").length} export candidate bucket${exportReadyItems.filter((item) => item.promotionState === "ready_for_tenant_export").length === 1 ? " is" : "s are"} ready for tenant export later, and ${exportReadyItems.filter((item) => item.promotionState === "awaiting_board_closure").length} bucket${exportReadyItems.filter((item) => item.promotionState === "awaiting_board_closure").length === 1 ? " is" : "s are"} still awaiting board closure.`
@@ -2199,6 +2565,14 @@ function normalizeBoardResponse(
           promotionPhaseLabel: "No export phase",
           promotionMutability: "runtime_mutable",
           promotionMutabilityLabel: "Runtime mutable",
+          promotionScope: "none_runtime_only",
+          promotionScopeLabel: "No promotion scope",
+          identityStability: "runtime_transient_identity",
+          identityStabilityLabel: "Runtime transient identity",
+          auditBacking: "runtime_state_only",
+          auditBackingLabel: "Runtime-state-backed",
+          concurrencyBoundary: "runtime_only",
+          concurrencyBoundaryLabel: "Runtime only",
           promotionActionDescription: "No export action applies. This runtime memory stays inside Wealth Factory orchestration."
         },
         {
@@ -2243,6 +2617,14 @@ function normalizeBoardResponse(
           promotionPhaseLabel: "No export phase",
           promotionMutability: "runtime_mutable",
           promotionMutabilityLabel: "Runtime mutable",
+          promotionScope: "none_runtime_only",
+          promotionScopeLabel: "No promotion scope",
+          identityStability: "runtime_transient_identity",
+          identityStabilityLabel: "Runtime transient identity",
+          auditBacking: "runtime_state_only",
+          auditBackingLabel: "Runtime-state-backed",
+          concurrencyBoundary: "runtime_only",
+          concurrencyBoundaryLabel: "Runtime only",
           promotionActionDescription: "No export action applies. This runtime attention state stays inside Wealth Factory orchestration."
         }
       ],
