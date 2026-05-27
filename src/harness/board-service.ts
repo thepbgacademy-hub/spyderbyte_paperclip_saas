@@ -200,6 +200,31 @@ export type HarnessMemoryBoundaryConcurrencyBoundary =
   | "independent_export_safe"
   | "requires_board_closure_snapshot";
 
+export type HarnessMemoryBoundaryExportPayloadShape =
+  | "none_runtime_only"
+  | "governance_history_record"
+  | "package_snapshot_bundle";
+
+export type HarnessMemoryBoundaryIdempotencyPolicy =
+  | "not_applicable_runtime"
+  | "deterministic_upsert"
+  | "board_closure_snapshot_once";
+
+export type HarnessMemoryBoundaryReplaySafety =
+  | "runtime_only"
+  | "replay_safe"
+  | "requires_fresh_board_closure_snapshot";
+
+export type HarnessMemoryBoundaryConflictPolicy =
+  | "runtime_only"
+  | "append_or_upsert"
+  | "replace_latest_closure_snapshot";
+
+export type HarnessMemoryBoundaryExportAtomicity =
+  | "none_runtime_only"
+  | "record_level_atomic"
+  | "closure_bundle_atomic";
+
 export type HarnessMemoryBoundaryItemView = {
   id:
     | "lane_continuity"
@@ -256,6 +281,16 @@ export type HarnessMemoryBoundaryItemView = {
   auditBackingLabel: string;
   concurrencyBoundary: HarnessMemoryBoundaryConcurrencyBoundary;
   concurrencyBoundaryLabel: string;
+  exportPayloadShape: HarnessMemoryBoundaryExportPayloadShape;
+  exportPayloadShapeLabel: string;
+  idempotencyPolicy: HarnessMemoryBoundaryIdempotencyPolicy;
+  idempotencyPolicyLabel: string;
+  replaySafety: HarnessMemoryBoundaryReplaySafety;
+  replaySafetyLabel: string;
+  conflictPolicy: HarnessMemoryBoundaryConflictPolicy;
+  conflictPolicyLabel: string;
+  exportAtomicity: HarnessMemoryBoundaryExportAtomicity;
+  exportAtomicityLabel: string;
   promotionActionDescription: string;
   nextEligibleSummary?: string;
 };
@@ -309,6 +344,21 @@ export type HarnessMemoryBoundaryView = {
   runtimeOnlyConcurrencyCount: number;
   independentExportSafeCount: number;
   requiresBoardClosureSnapshotCount: number;
+  noExportPayloadShapeCount: number;
+  governanceHistoryPayloadCount: number;
+  packageSnapshotBundleCount: number;
+  noIdempotencyPolicyCount: number;
+  deterministicUpsertCount: number;
+  boardClosureSnapshotOnceCount: number;
+  runtimeOnlyReplaySafetyCount: number;
+  replaySafeCount: number;
+  freshClosureSnapshotReplayCount: number;
+  runtimeOnlyConflictPolicyCount: number;
+  appendOrUpsertConflictCount: number;
+  replaceLatestClosureSnapshotCount: number;
+  noExportAtomicityCount: number;
+  recordLevelAtomicCount: number;
+  closureBundleAtomicCount: number;
   roleSummary: string;
   ownershipSummary: string;
   promotionSummary: string;
@@ -326,6 +376,11 @@ export type HarnessMemoryBoundaryView = {
   identitySummary: string;
   auditSummary: string;
   concurrencySummary: string;
+  payloadShapeSummary: string;
+  idempotencySummary: string;
+  replaySafetySummary: string;
+  conflictPolicySummary: string;
+  atomicitySummary: string;
   partitions: {
     runtime: HarnessMemoryBoundaryPartitionView;
     governanceHistoryCandidates: HarnessMemoryBoundaryPartitionView;
@@ -4016,6 +4071,16 @@ function buildMemoryBoundaryView(input: {
       auditBackingLabel: humanizeMemoryBoundaryAuditBacking("runtime_state_only"),
       concurrencyBoundary: "runtime_only",
       concurrencyBoundaryLabel: humanizeMemoryBoundaryConcurrencyBoundary("runtime_only"),
+      exportPayloadShape: "none_runtime_only",
+      exportPayloadShapeLabel: humanizeMemoryBoundaryExportPayloadShape("none_runtime_only"),
+      idempotencyPolicy: "not_applicable_runtime",
+      idempotencyPolicyLabel: humanizeMemoryBoundaryIdempotencyPolicy("not_applicable_runtime"),
+      replaySafety: "runtime_only",
+      replaySafetyLabel: humanizeMemoryBoundaryReplaySafety("runtime_only"),
+      conflictPolicy: "runtime_only",
+      conflictPolicyLabel: humanizeMemoryBoundaryConflictPolicy("runtime_only"),
+      exportAtomicity: "none_runtime_only",
+      exportAtomicityLabel: humanizeMemoryBoundaryExportAtomicity("none_runtime_only"),
       promotionActionDescription: "No export action applies. This runtime memory stays inside Wealth Factory orchestration."
     },
     {
@@ -4068,6 +4133,16 @@ function buildMemoryBoundaryView(input: {
       auditBackingLabel: humanizeMemoryBoundaryAuditBacking("runtime_state_only"),
       concurrencyBoundary: "runtime_only",
       concurrencyBoundaryLabel: humanizeMemoryBoundaryConcurrencyBoundary("runtime_only"),
+      exportPayloadShape: "none_runtime_only",
+      exportPayloadShapeLabel: humanizeMemoryBoundaryExportPayloadShape("none_runtime_only"),
+      idempotencyPolicy: "not_applicable_runtime",
+      idempotencyPolicyLabel: humanizeMemoryBoundaryIdempotencyPolicy("not_applicable_runtime"),
+      replaySafety: "runtime_only",
+      replaySafetyLabel: humanizeMemoryBoundaryReplaySafety("runtime_only"),
+      conflictPolicy: "runtime_only",
+      conflictPolicyLabel: humanizeMemoryBoundaryConflictPolicy("runtime_only"),
+      exportAtomicity: "none_runtime_only",
+      exportAtomicityLabel: humanizeMemoryBoundaryExportAtomicity("none_runtime_only"),
       promotionActionDescription: "No export action applies. This runtime attention state stays inside Wealth Factory orchestration."
     }
   ];
@@ -4123,6 +4198,16 @@ function buildMemoryBoundaryView(input: {
       auditBackingLabel: humanizeMemoryBoundaryAuditBacking("decision_ledger_backed"),
       concurrencyBoundary: "independent_export_safe",
       concurrencyBoundaryLabel: humanizeMemoryBoundaryConcurrencyBoundary("independent_export_safe"),
+      exportPayloadShape: "governance_history_record",
+      exportPayloadShapeLabel: humanizeMemoryBoundaryExportPayloadShape("governance_history_record"),
+      idempotencyPolicy: "deterministic_upsert",
+      idempotencyPolicyLabel: humanizeMemoryBoundaryIdempotencyPolicy("deterministic_upsert"),
+      replaySafety: "replay_safe",
+      replaySafetyLabel: humanizeMemoryBoundaryReplaySafety("replay_safe"),
+      conflictPolicy: "append_or_upsert",
+      conflictPolicyLabel: humanizeMemoryBoundaryConflictPolicy("append_or_upsert"),
+      exportAtomicity: "record_level_atomic",
+      exportAtomicityLabel: humanizeMemoryBoundaryExportAtomicity("record_level_atomic"),
       promotionActionDescription: "This governance history is ready to sit behind a later bounded tenant export action."
     },
     {
@@ -4175,6 +4260,16 @@ function buildMemoryBoundaryView(input: {
       auditBackingLabel: humanizeMemoryBoundaryAuditBacking("decision_ledger_backed"),
       concurrencyBoundary: "independent_export_safe",
       concurrencyBoundaryLabel: humanizeMemoryBoundaryConcurrencyBoundary("independent_export_safe"),
+      exportPayloadShape: "governance_history_record",
+      exportPayloadShapeLabel: humanizeMemoryBoundaryExportPayloadShape("governance_history_record"),
+      idempotencyPolicy: "deterministic_upsert",
+      idempotencyPolicyLabel: humanizeMemoryBoundaryIdempotencyPolicy("deterministic_upsert"),
+      replaySafety: "replay_safe",
+      replaySafetyLabel: humanizeMemoryBoundaryReplaySafety("replay_safe"),
+      conflictPolicy: "append_or_upsert",
+      conflictPolicyLabel: humanizeMemoryBoundaryConflictPolicy("append_or_upsert"),
+      exportAtomicity: "record_level_atomic",
+      exportAtomicityLabel: humanizeMemoryBoundaryExportAtomicity("record_level_atomic"),
       promotionActionDescription:
         "This implemented follow-through is ready to sit behind a later bounded tenant export action."
     }
@@ -4306,6 +4401,40 @@ function buildMemoryBoundaryView(input: {
           input.completionPackage.hasOpenGovernanceItems
             ? "requires_board_closure_snapshot"
             : "independent_export_safe"
+        ),
+        exportPayloadShape: "package_snapshot_bundle",
+        exportPayloadShapeLabel: humanizeMemoryBoundaryExportPayloadShape("package_snapshot_bundle"),
+        idempotencyPolicy: input.completionPackage.hasOpenGovernanceItems
+          ? "board_closure_snapshot_once"
+          : "deterministic_upsert",
+        idempotencyPolicyLabel: humanizeMemoryBoundaryIdempotencyPolicy(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "board_closure_snapshot_once"
+            : "deterministic_upsert"
+        ),
+        replaySafety: input.completionPackage.hasOpenGovernanceItems
+          ? "requires_fresh_board_closure_snapshot"
+          : "replay_safe",
+        replaySafetyLabel: humanizeMemoryBoundaryReplaySafety(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "requires_fresh_board_closure_snapshot"
+            : "replay_safe"
+        ),
+        conflictPolicy: input.completionPackage.hasOpenGovernanceItems
+          ? "replace_latest_closure_snapshot"
+          : "append_or_upsert",
+        conflictPolicyLabel: humanizeMemoryBoundaryConflictPolicy(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "replace_latest_closure_snapshot"
+            : "append_or_upsert"
+        ),
+        exportAtomicity: input.completionPackage.hasOpenGovernanceItems
+          ? "closure_bundle_atomic"
+          : "record_level_atomic",
+        exportAtomicityLabel: humanizeMemoryBoundaryExportAtomicity(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "closure_bundle_atomic"
+            : "record_level_atomic"
         ),
         promotionActionDescription: input.completionPackage.hasOpenGovernanceItems
           ? "Board closure still gates this package governance memory before any later tenant export action can apply."
@@ -4439,6 +4568,40 @@ function buildMemoryBoundaryView(input: {
             ? "requires_board_closure_snapshot"
             : "independent_export_safe"
         ),
+        exportPayloadShape: "package_snapshot_bundle",
+        exportPayloadShapeLabel: humanizeMemoryBoundaryExportPayloadShape("package_snapshot_bundle"),
+        idempotencyPolicy: input.completionPackage.hasOpenGovernanceItems
+          ? "board_closure_snapshot_once"
+          : "deterministic_upsert",
+        idempotencyPolicyLabel: humanizeMemoryBoundaryIdempotencyPolicy(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "board_closure_snapshot_once"
+            : "deterministic_upsert"
+        ),
+        replaySafety: input.completionPackage.hasOpenGovernanceItems
+          ? "requires_fresh_board_closure_snapshot"
+          : "replay_safe",
+        replaySafetyLabel: humanizeMemoryBoundaryReplaySafety(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "requires_fresh_board_closure_snapshot"
+            : "replay_safe"
+        ),
+        conflictPolicy: input.completionPackage.hasOpenGovernanceItems
+          ? "replace_latest_closure_snapshot"
+          : "append_or_upsert",
+        conflictPolicyLabel: humanizeMemoryBoundaryConflictPolicy(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "replace_latest_closure_snapshot"
+            : "append_or_upsert"
+        ),
+        exportAtomicity: input.completionPackage.hasOpenGovernanceItems
+          ? "closure_bundle_atomic"
+          : "record_level_atomic",
+        exportAtomicityLabel: humanizeMemoryBoundaryExportAtomicity(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "closure_bundle_atomic"
+            : "record_level_atomic"
+        ),
         promotionActionDescription: input.completionPackage.hasOpenGovernanceItems
           ? "Board closure still gates this packaged deliverable before any later tenant export action can apply."
           : "This packaged deliverable is ready to sit behind a later bounded tenant export action.",
@@ -4569,6 +4732,51 @@ function buildMemoryBoundaryView(input: {
   const requiresBoardClosureSnapshotCount = exportReadyItems.filter(
     (item) => item.concurrencyBoundary === "requires_board_closure_snapshot"
   ).length;
+  const noExportPayloadShapeCount = operationalItems.filter(
+    (item) => item.exportPayloadShape === "none_runtime_only"
+  ).length;
+  const governanceHistoryPayloadCount = exportReadyItems.filter(
+    (item) => item.exportPayloadShape === "governance_history_record"
+  ).length;
+  const packageSnapshotBundleCount = exportReadyItems.filter(
+    (item) => item.exportPayloadShape === "package_snapshot_bundle"
+  ).length;
+  const noIdempotencyPolicyCount = operationalItems.filter(
+    (item) => item.idempotencyPolicy === "not_applicable_runtime"
+  ).length;
+  const deterministicUpsertCount = exportReadyItems.filter(
+    (item) => item.idempotencyPolicy === "deterministic_upsert"
+  ).length;
+  const boardClosureSnapshotOnceCount = exportReadyItems.filter(
+    (item) => item.idempotencyPolicy === "board_closure_snapshot_once"
+  ).length;
+  const runtimeOnlyReplaySafetyCount = operationalItems.filter(
+    (item) => item.replaySafety === "runtime_only"
+  ).length;
+  const replaySafeCount = exportReadyItems.filter(
+    (item) => item.replaySafety === "replay_safe"
+  ).length;
+  const freshClosureSnapshotReplayCount = exportReadyItems.filter(
+    (item) => item.replaySafety === "requires_fresh_board_closure_snapshot"
+  ).length;
+  const runtimeOnlyConflictPolicyCount = operationalItems.filter(
+    (item) => item.conflictPolicy === "runtime_only"
+  ).length;
+  const appendOrUpsertConflictCount = exportReadyItems.filter(
+    (item) => item.conflictPolicy === "append_or_upsert"
+  ).length;
+  const replaceLatestClosureSnapshotCount = exportReadyItems.filter(
+    (item) => item.conflictPolicy === "replace_latest_closure_snapshot"
+  ).length;
+  const noExportAtomicityCount = operationalItems.filter(
+    (item) => item.exportAtomicity === "none_runtime_only"
+  ).length;
+  const recordLevelAtomicCount = exportReadyItems.filter(
+    (item) => item.exportAtomicity === "record_level_atomic"
+  ).length;
+  const closureBundleAtomicCount = exportReadyItems.filter(
+    (item) => item.exportAtomicity === "closure_bundle_atomic"
+  ).length;
 
   return {
     summary:
@@ -4620,6 +4828,21 @@ function buildMemoryBoundaryView(input: {
     runtimeOnlyConcurrencyCount,
     independentExportSafeCount,
     requiresBoardClosureSnapshotCount,
+    noExportPayloadShapeCount,
+    governanceHistoryPayloadCount,
+    packageSnapshotBundleCount,
+    noIdempotencyPolicyCount,
+    deterministicUpsertCount,
+    boardClosureSnapshotOnceCount,
+    runtimeOnlyReplaySafetyCount,
+    replaySafeCount,
+    freshClosureSnapshotReplayCount,
+    runtimeOnlyConflictPolicyCount,
+    appendOrUpsertConflictCount,
+    replaceLatestClosureSnapshotCount,
+    noExportAtomicityCount,
+    recordLevelAtomicCount,
+    closureBundleAtomicCount,
     roleSummary:
       packagedWaitingCount > 0
         ? `${governanceReadyCount} governance record candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} ready now, and ${packagedWaitingCount} packaged output candidate${packagedWaitingCount === 1 ? "" : "s"} ${packagedWaitingCount === 1 ? "still waits" : "still wait"} on board closure.`
@@ -4688,6 +4911,26 @@ function buildMemoryBoundaryView(input: {
       requiresBoardClosureSnapshotCount > 0
         ? `${runtimeOnlyConcurrencyCount} runtime bucket${runtimeOnlyConcurrencyCount === 1 ? " stays" : "s stay"} runtime-only, ${independentExportSafeCount} export candidate bucket${independentExportSafeCount === 1 ? " is" : "s are"} safe to promote independently, and ${requiresBoardClosureSnapshotCount} bucket${requiresBoardClosureSnapshotCount === 1 ? " still needs" : "s still need"} a board-closure snapshot for concurrency-safe promotion.`
         : `${runtimeOnlyConcurrencyCount} runtime bucket${runtimeOnlyConcurrencyCount === 1 ? " stays" : "s stay"} runtime-only, and ${independentExportSafeCount} export candidate bucket${independentExportSafeCount === 1 ? " is" : "s are"} safe to promote independently.`,
+    payloadShapeSummary:
+      packageSnapshotBundleCount > 0
+        ? `${noExportPayloadShapeCount} runtime bucket${noExportPayloadShapeCount === 1 ? " has" : "s have"} no export payload shape, ${governanceHistoryPayloadCount} export candidate bucket${governanceHistoryPayloadCount === 1 ? " is" : "s are"} shaped as governance history records, and ${packageSnapshotBundleCount} bucket${packageSnapshotBundleCount === 1 ? " still exports" : "s still export"} as package snapshot bundles.`
+        : `${noExportPayloadShapeCount} runtime bucket${noExportPayloadShapeCount === 1 ? " has" : "s have"} no export payload shape, and ${governanceHistoryPayloadCount} export candidate bucket${governanceHistoryPayloadCount === 1 ? " is" : "s are"} shaped as governance history records.`,
+    idempotencySummary:
+      boardClosureSnapshotOnceCount > 0
+        ? `${noIdempotencyPolicyCount} runtime bucket${noIdempotencyPolicyCount === 1 ? " has" : "s have"} no idempotency policy, ${deterministicUpsertCount} export candidate bucket${deterministicUpsertCount === 1 ? " uses" : "use"} deterministic upsert, and ${boardClosureSnapshotOnceCount} bucket${boardClosureSnapshotOnceCount === 1 ? " still depends" : "s still depend"} on a board-closure snapshot-once policy.`
+        : `${noIdempotencyPolicyCount} runtime bucket${noIdempotencyPolicyCount === 1 ? " has" : "s have"} no idempotency policy, and ${deterministicUpsertCount} export candidate bucket${deterministicUpsertCount === 1 ? " uses" : "use"} deterministic upsert.`,
+    replaySafetySummary:
+      freshClosureSnapshotReplayCount > 0
+        ? `${runtimeOnlyReplaySafetyCount} runtime bucket${runtimeOnlyReplaySafetyCount === 1 ? " stays" : "s stay"} runtime-only, ${replaySafeCount} export candidate bucket${replaySafeCount === 1 ? " is" : "s are"} replay-safe, and ${freshClosureSnapshotReplayCount} bucket${freshClosureSnapshotReplayCount === 1 ? " still requires" : "s still require"} a fresh board-closure snapshot before replay.`
+        : `${runtimeOnlyReplaySafetyCount} runtime bucket${runtimeOnlyReplaySafetyCount === 1 ? " stays" : "s stay"} runtime-only, and ${replaySafeCount} export candidate bucket${replaySafeCount === 1 ? " is" : "s are"} replay-safe.`,
+    conflictPolicySummary:
+      replaceLatestClosureSnapshotCount > 0
+        ? `${runtimeOnlyConflictPolicyCount} runtime bucket${runtimeOnlyConflictPolicyCount === 1 ? " stays" : "s stay"} outside export conflicts, ${appendOrUpsertConflictCount} export candidate bucket${appendOrUpsertConflictCount === 1 ? " uses" : "use"} append-or-upsert conflict handling, and ${replaceLatestClosureSnapshotCount} bucket${replaceLatestClosureSnapshotCount === 1 ? " still replaces" : "s still replace"} the latest board-closure snapshot when promoted.`
+        : `${runtimeOnlyConflictPolicyCount} runtime bucket${runtimeOnlyConflictPolicyCount === 1 ? " stays" : "s stay"} outside export conflicts, and ${appendOrUpsertConflictCount} export candidate bucket${appendOrUpsertConflictCount === 1 ? " uses" : "use"} append-or-upsert conflict handling.`,
+    atomicitySummary:
+      closureBundleAtomicCount > 0
+        ? `${noExportAtomicityCount} runtime bucket${noExportAtomicityCount === 1 ? " has" : "s have"} no export atomicity, ${recordLevelAtomicCount} export candidate bucket${recordLevelAtomicCount === 1 ? " commits" : "commit"} as record-level atomic exports, and ${closureBundleAtomicCount} bucket${closureBundleAtomicCount === 1 ? " still depends" : "s still depend"} on closure-bundle atomic export once board closure completes.`
+        : `${noExportAtomicityCount} runtime bucket${noExportAtomicityCount === 1 ? " has" : "s have"} no export atomicity, and ${recordLevelAtomicCount} export candidate bucket${recordLevelAtomicCount === 1 ? " commits" : "commit"} as record-level atomic exports.`,
     partitions: {
       runtime: {
         itemCount: operationalItems.length,
@@ -5001,6 +5244,71 @@ function humanizeMemoryBoundaryConcurrencyBoundary(boundary: HarnessMemoryBounda
       return "Requires board-closure snapshot";
     default:
       return boundary;
+  }
+}
+
+function humanizeMemoryBoundaryExportPayloadShape(shape: HarnessMemoryBoundaryExportPayloadShape) {
+  switch (shape) {
+    case "none_runtime_only":
+      return "No export payload";
+    case "governance_history_record":
+      return "Governance history record";
+    case "package_snapshot_bundle":
+      return "Package snapshot bundle";
+    default:
+      return shape;
+  }
+}
+
+function humanizeMemoryBoundaryIdempotencyPolicy(policy: HarnessMemoryBoundaryIdempotencyPolicy) {
+  switch (policy) {
+    case "not_applicable_runtime":
+      return "No idempotency policy";
+    case "deterministic_upsert":
+      return "Deterministic upsert";
+    case "board_closure_snapshot_once":
+      return "Board-closure snapshot once";
+    default:
+      return policy;
+  }
+}
+
+function humanizeMemoryBoundaryReplaySafety(safety: HarnessMemoryBoundaryReplaySafety) {
+  switch (safety) {
+    case "runtime_only":
+      return "Runtime only";
+    case "replay_safe":
+      return "Replay-safe";
+    case "requires_fresh_board_closure_snapshot":
+      return "Requires fresh board-closure snapshot";
+    default:
+      return safety;
+  }
+}
+
+function humanizeMemoryBoundaryConflictPolicy(policy: HarnessMemoryBoundaryConflictPolicy) {
+  switch (policy) {
+    case "runtime_only":
+      return "Runtime only";
+    case "append_or_upsert":
+      return "Append or upsert";
+    case "replace_latest_closure_snapshot":
+      return "Replace latest closure snapshot";
+    default:
+      return policy;
+  }
+}
+
+function humanizeMemoryBoundaryExportAtomicity(atomicity: HarnessMemoryBoundaryExportAtomicity) {
+  switch (atomicity) {
+    case "none_runtime_only":
+      return "No export atomicity";
+    case "record_level_atomic":
+      return "Record-level atomic";
+    case "closure_bundle_atomic":
+      return "Closure-bundle atomic";
+    default:
+      return atomicity;
   }
 }
 

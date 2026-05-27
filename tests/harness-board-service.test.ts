@@ -1624,6 +1624,11 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.identitySummary).toContain("stable record identity");
     expect(hydrated.memoryBoundary.auditSummary).toContain("decision-ledger-backed");
     expect(hydrated.memoryBoundary.concurrencySummary).toContain("promote independently");
+    expect(hydrated.memoryBoundary.payloadShapeSummary).toContain("governance history records");
+    expect(hydrated.memoryBoundary.idempotencySummary).toContain("deterministic upsert");
+    expect(hydrated.memoryBoundary.replaySafetySummary).toContain("replay-safe");
+    expect(hydrated.memoryBoundary.conflictPolicySummary).toContain("append-or-upsert");
+    expect(hydrated.memoryBoundary.atomicitySummary).toContain("record-level atomic");
     expect(hydrated.memoryBoundary.blockerSummary).toContain("blocked");
     expect(hydrated.memoryBoundary.authoritySummary).toContain("tenant-controlled");
     expect(hydrated.memoryBoundary.triggerSummary).toContain("tenant export request");
@@ -1675,7 +1680,17 @@ describe("harness board service", () => {
           auditBacking: "runtime_state_only",
           auditBackingLabel: "Runtime-state-backed",
           concurrencyBoundary: "runtime_only",
-          concurrencyBoundaryLabel: "Runtime only"
+          concurrencyBoundaryLabel: "Runtime only",
+          exportPayloadShape: "none_runtime_only",
+          exportPayloadShapeLabel: "No export payload",
+          idempotencyPolicy: "not_applicable_runtime",
+          idempotencyPolicyLabel: "No idempotency policy",
+          replaySafety: "runtime_only",
+          replaySafetyLabel: "Runtime only",
+          conflictPolicy: "runtime_only",
+          conflictPolicyLabel: "Runtime only",
+          exportAtomicity: "none_runtime_only",
+          exportAtomicityLabel: "No export atomicity"
         })
       ])
     );
@@ -1721,7 +1736,17 @@ describe("harness board service", () => {
           auditBacking: "decision_ledger_backed",
           auditBackingLabel: "Decision-ledger-backed",
           concurrencyBoundary: "independent_export_safe",
-          concurrencyBoundaryLabel: "Independent export safe"
+          concurrencyBoundaryLabel: "Independent export safe",
+          exportPayloadShape: "governance_history_record",
+          exportPayloadShapeLabel: "Governance history record",
+          idempotencyPolicy: "deterministic_upsert",
+          idempotencyPolicyLabel: "Deterministic upsert",
+          replaySafety: "replay_safe",
+          replaySafetyLabel: "Replay-safe",
+          conflictPolicy: "append_or_upsert",
+          conflictPolicyLabel: "Append or upsert",
+          exportAtomicity: "record_level_atomic",
+          exportAtomicityLabel: "Record-level atomic"
         }),
         expect.objectContaining({
           id: "implemented_actions",
@@ -1763,7 +1788,15 @@ describe("harness board service", () => {
           auditBacking: "decision_ledger_backed",
           auditBackingLabel: "Decision-ledger-backed",
           concurrencyBoundary: "independent_export_safe",
-          concurrencyBoundaryLabel: "Independent export safe"
+          concurrencyBoundaryLabel: "Independent export safe",
+          exportPayloadShape: "governance_history_record",
+          exportPayloadShapeLabel: "Governance history record",
+          idempotencyPolicy: "deterministic_upsert",
+          idempotencyPolicyLabel: "Deterministic upsert",
+          replaySafety: "replay_safe",
+          replaySafetyLabel: "Replay-safe",
+          conflictPolicy: "append_or_upsert",
+          conflictPolicyLabel: "Append or upsert"
         })
       ])
     );

@@ -347,6 +347,16 @@ const boardResponse: HarnessBoardResponse = {
       "2 runtime buckets stay runtime-state-backed, 2 buckets are decision-ledger-backed, and 2 buckets are package-closure-backed.",
     concurrencySummary:
       "2 runtime buckets stay runtime-only, 2 export candidate buckets are safe to promote independently, and 2 buckets still need a board-closure snapshot for concurrency-safe promotion.",
+    payloadShapeSummary:
+      "2 runtime buckets have no export payload shape, 2 export candidate buckets are shaped as governance history records, and 2 buckets still export as package snapshot bundles.",
+    idempotencySummary:
+      "2 runtime buckets have no idempotency policy, 2 export candidate buckets use deterministic upsert, and 2 buckets still depend on a board-closure snapshot-once policy.",
+    replaySafetySummary:
+      "2 runtime buckets stay runtime-only, 2 export candidate buckets are replay-safe, and 2 buckets still require a fresh board-closure snapshot before replay.",
+    conflictPolicySummary:
+      "2 runtime buckets stay outside export conflicts, 2 export candidate buckets use append-or-upsert conflict handling, and 2 buckets still replace the latest board-closure snapshot when promoted.",
+    atomicitySummary:
+      "2 runtime buckets have no export atomicity, 2 export candidate buckets commit as record-level atomic exports, and 2 buckets still depend on closure-bundle atomic export once board closure completes.",
     noPromotionScopeCount: 2,
     singleRecordExportScopeCount: 2,
     packageRecordSetExportScopeCount: 2,
@@ -359,6 +369,21 @@ const boardResponse: HarnessBoardResponse = {
     runtimeOnlyConcurrencyCount: 2,
     independentExportSafeCount: 2,
     requiresBoardClosureSnapshotCount: 2,
+    noExportPayloadShapeCount: 2,
+    governanceHistoryPayloadCount: 2,
+    packageSnapshotBundleCount: 2,
+    noIdempotencyPolicyCount: 2,
+    deterministicUpsertCount: 2,
+    boardClosureSnapshotOnceCount: 2,
+    runtimeOnlyReplaySafetyCount: 2,
+    replaySafeCount: 2,
+    freshClosureSnapshotReplayCount: 2,
+    runtimeOnlyConflictPolicyCount: 2,
+    appendOrUpsertConflictCount: 2,
+    replaceLatestClosureSnapshotCount: 2,
+    noExportAtomicityCount: 2,
+    recordLevelAtomicCount: 2,
+    closureBundleAtomicCount: 2,
     partitions: {
       runtime: {
         itemCount: 2,
@@ -424,6 +449,16 @@ const boardResponse: HarnessBoardResponse = {
         auditBackingLabel: "Runtime-state-backed",
         concurrencyBoundary: "runtime_only",
         concurrencyBoundaryLabel: "Runtime only",
+        exportPayloadShape: "none_runtime_only",
+        exportPayloadShapeLabel: "No export payload",
+        idempotencyPolicy: "not_applicable_runtime",
+        idempotencyPolicyLabel: "No idempotency policy",
+        replaySafety: "runtime_only",
+        replaySafetyLabel: "Runtime only",
+        conflictPolicy: "runtime_only",
+        conflictPolicyLabel: "Runtime only",
+        exportAtomicity: "none_runtime_only",
+        exportAtomicityLabel: "No export atomicity",
         promotionActionDescription: "No export action applies. This runtime memory stays inside Wealth Factory orchestration."
       },
       {
@@ -476,6 +511,16 @@ const boardResponse: HarnessBoardResponse = {
         auditBackingLabel: "Runtime-state-backed",
         concurrencyBoundary: "runtime_only",
         concurrencyBoundaryLabel: "Runtime only",
+        exportPayloadShape: "none_runtime_only",
+        exportPayloadShapeLabel: "No export payload",
+        idempotencyPolicy: "not_applicable_runtime",
+        idempotencyPolicyLabel: "No idempotency policy",
+        replaySafety: "runtime_only",
+        replaySafetyLabel: "Runtime only",
+        conflictPolicy: "runtime_only",
+        conflictPolicyLabel: "Runtime only",
+        exportAtomicity: "none_runtime_only",
+        exportAtomicityLabel: "No export atomicity",
         promotionActionDescription: "No export action applies. This runtime attention state stays inside Wealth Factory orchestration."
       }
     ],
@@ -530,6 +575,16 @@ const boardResponse: HarnessBoardResponse = {
         auditBackingLabel: "Decision-ledger-backed",
         concurrencyBoundary: "independent_export_safe",
         concurrencyBoundaryLabel: "Independent export safe",
+        exportPayloadShape: "governance_history_record",
+        exportPayloadShapeLabel: "Governance history record",
+        idempotencyPolicy: "deterministic_upsert",
+        idempotencyPolicyLabel: "Deterministic upsert",
+        replaySafety: "replay_safe",
+        replaySafetyLabel: "Replay-safe",
+        conflictPolicy: "append_or_upsert",
+        conflictPolicyLabel: "Append or upsert",
+        exportAtomicity: "record_level_atomic",
+        exportAtomicityLabel: "Record-level atomic",
         promotionActionDescription: "This governance history is ready to sit behind a later bounded tenant export action."
       },
       {
@@ -582,6 +637,16 @@ const boardResponse: HarnessBoardResponse = {
         auditBackingLabel: "Decision-ledger-backed",
         concurrencyBoundary: "independent_export_safe",
         concurrencyBoundaryLabel: "Independent export safe",
+        exportPayloadShape: "governance_history_record",
+        exportPayloadShapeLabel: "Governance history record",
+        idempotencyPolicy: "deterministic_upsert",
+        idempotencyPolicyLabel: "Deterministic upsert",
+        replaySafety: "replay_safe",
+        replaySafetyLabel: "Replay-safe",
+        conflictPolicy: "append_or_upsert",
+        conflictPolicyLabel: "Append or upsert",
+        exportAtomicity: "record_level_atomic",
+        exportAtomicityLabel: "Record-level atomic",
         promotionActionDescription:
           "This implemented follow-through is ready to sit behind a later bounded tenant export action."
       },
@@ -635,6 +700,16 @@ const boardResponse: HarnessBoardResponse = {
         auditBackingLabel: "Package-closure-backed",
         concurrencyBoundary: "requires_board_closure_snapshot",
         concurrencyBoundaryLabel: "Requires board-closure snapshot",
+        exportPayloadShape: "package_snapshot_bundle",
+        exportPayloadShapeLabel: "Package snapshot bundle",
+        idempotencyPolicy: "board_closure_snapshot_once",
+        idempotencyPolicyLabel: "Board-closure snapshot once",
+        replaySafety: "requires_fresh_board_closure_snapshot",
+        replaySafetyLabel: "Requires fresh board-closure snapshot",
+        conflictPolicy: "replace_latest_closure_snapshot",
+        conflictPolicyLabel: "Replace latest closure snapshot",
+        exportAtomicity: "closure_bundle_atomic",
+        exportAtomicityLabel: "Closure-bundle atomic",
         promotionActionDescription:
           "Board closure still gates this package governance memory before any later tenant export action can apply.",
         nextEligibleSummary: "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
@@ -689,6 +764,16 @@ const boardResponse: HarnessBoardResponse = {
         auditBackingLabel: "Package-closure-backed",
         concurrencyBoundary: "requires_board_closure_snapshot",
         concurrencyBoundaryLabel: "Requires board-closure snapshot",
+        exportPayloadShape: "package_snapshot_bundle",
+        exportPayloadShapeLabel: "Package snapshot bundle",
+        idempotencyPolicy: "board_closure_snapshot_once",
+        idempotencyPolicyLabel: "Board-closure snapshot once",
+        replaySafety: "requires_fresh_board_closure_snapshot",
+        replaySafetyLabel: "Requires fresh board-closure snapshot",
+        conflictPolicy: "replace_latest_closure_snapshot",
+        conflictPolicyLabel: "Replace latest closure snapshot",
+        exportAtomicity: "closure_bundle_atomic",
+        exportAtomicityLabel: "Closure-bundle atomic",
         promotionActionDescription:
           "Board closure still gates this packaged deliverable before any later tenant export action can apply.",
         nextEligibleSummary: "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
@@ -1344,6 +1429,10 @@ describe("harness board UI", () => {
     expect(markup).toContain("2 runtime buckets keep transient runtime identity, 2 buckets already have stable record identity, and 2 buckets still finalize identity at board closure.");
     expect(markup).toContain("2 runtime buckets stay runtime-state-backed, 2 buckets are decision-ledger-backed, and 2 buckets are package-closure-backed.");
     expect(markup).toContain("2 runtime buckets stay runtime-only, 2 export candidate buckets are safe to promote independently, and 2 buckets still need a board-closure snapshot for concurrency-safe promotion.");
+    expect(markup).toContain("2 runtime buckets have no export payload shape, 2 export candidate buckets are shaped as governance history records, and 2 buckets still export as package snapshot bundles.");
+    expect(markup).toContain("2 runtime buckets have no idempotency policy, 2 export candidate buckets use deterministic upsert, and 2 buckets still depend on a board-closure snapshot-once policy.");
+    expect(markup).toContain("2 runtime buckets stay runtime-only, 2 export candidate buckets are replay-safe, and 2 buckets still require a fresh board-closure snapshot before replay.");
+    expect(markup).toContain("2 runtime buckets stay outside export conflicts, 2 export candidate buckets use append-or-upsert conflict handling, and 2 buckets still replace the latest board-closure snapshot when promoted.");
     expect(markup).toContain("Not applicable in runtime");
     expect(markup).toContain("No blocker");
     expect(markup).toContain("Board closure required");
@@ -1367,6 +1456,19 @@ describe("harness board UI", () => {
     expect(markup).toContain("Package-closure-backed");
     expect(markup).toContain("Independent export safe");
     expect(markup).toContain("Requires board-closure snapshot");
+    expect(markup).toContain("No export payload");
+    expect(markup).toContain("Governance history record");
+    expect(markup).toContain("Package snapshot bundle");
+    expect(markup).toContain("No idempotency policy");
+    expect(markup).toContain("Deterministic upsert");
+    expect(markup).toContain("Board-closure snapshot once");
+    expect(markup).toContain("Replay-safe");
+    expect(markup).toContain("Requires fresh board-closure snapshot");
+    expect(markup).toContain("Append or upsert");
+    expect(markup).toContain("Replace latest closure snapshot");
+    expect(markup).toContain("No export atomicity");
+    expect(markup).toContain("Record-level atomic");
+    expect(markup).toContain("Closure-bundle atomic");
     expect(markup).toContain("This governance history is ready to sit behind a later bounded tenant export action.");
     expect(markup).toContain("Board closure still gates this packaged deliverable before any later tenant export action can apply.");
     expect(markup).toContain("Source surface: Continuity snapshots");

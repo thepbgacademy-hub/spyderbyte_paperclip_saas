@@ -472,6 +472,11 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     identitySummary: "Identity stability guidance is pending the latest board state.",
     auditSummary: "Audit backing guidance is pending the latest board state.",
     concurrencySummary: "Concurrency boundary guidance is pending the latest board state.",
+    payloadShapeSummary: "Export payload shape guidance is pending the latest board state.",
+    idempotencySummary: "Idempotency guidance is pending the latest board state.",
+    replaySafetySummary: "Replay safety guidance is pending the latest board state.",
+    conflictPolicySummary: "Conflict policy guidance is pending the latest board state.",
+    atomicitySummary: "Export atomicity guidance is pending the latest board state.",
     readyNowCount: 0,
     waitingOnBoardClosureCount: 0,
     governanceReadyCount: 0,
@@ -504,6 +509,21 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     runtimeOnlyConcurrencyCount: 0,
     independentExportSafeCount: 0,
     requiresBoardClosureSnapshotCount: 0,
+    noExportPayloadShapeCount: 0,
+    governanceHistoryPayloadCount: 0,
+    packageSnapshotBundleCount: 0,
+    noIdempotencyPolicyCount: 0,
+    deterministicUpsertCount: 0,
+    boardClosureSnapshotOnceCount: 0,
+    runtimeOnlyReplaySafetyCount: 0,
+    replaySafeCount: 0,
+    freshClosureSnapshotReplayCount: 0,
+    runtimeOnlyConflictPolicyCount: 0,
+    appendOrUpsertConflictCount: 0,
+    replaceLatestClosureSnapshotCount: 0,
+    noExportAtomicityCount: 0,
+    recordLevelAtomicCount: 0,
+    closureBundleAtomicCount: 0,
     partitions: {
       runtime: { itemCount: 0, summary: "Runtime memory partition is pending the latest board state." },
       governanceHistoryCandidates: {
@@ -556,6 +576,11 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <p style={styles.actionSummary}>{memoryBoundary.identitySummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.auditSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.concurrencySummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.payloadShapeSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.idempotencySummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.replaySafetySummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.conflictPolicySummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.atomicitySummary}</p>
       <ul style={styles.actionList}>
         <li style={styles.actionItem}>
           <p style={styles.contractMeta}>Runtime partition</p>
@@ -604,6 +629,11 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                     <span style={styles.badge}>{item.identityStabilityLabel}</span>
                     <span style={styles.badge}>{item.auditBackingLabel}</span>
                     <span style={styles.badge}>{item.concurrencyBoundaryLabel}</span>
+                    <span style={styles.badge}>{item.exportPayloadShapeLabel}</span>
+                    <span style={styles.badge}>{item.idempotencyPolicyLabel}</span>
+                    <span style={styles.badge}>{item.replaySafetyLabel}</span>
+                    <span style={styles.badge}>{item.conflictPolicyLabel}</span>
+                    <span style={styles.badge}>{item.exportAtomicityLabel}</span>
                   </div>
                   <p style={styles.actionSummary}>{item.summary}</p>
                   <p style={styles.optionBody}>{item.promotionActionDescription}</p>
