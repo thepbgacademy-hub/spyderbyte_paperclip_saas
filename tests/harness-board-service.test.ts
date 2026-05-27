@@ -4391,7 +4391,7 @@ describe("harness board service", () => {
     );
   });
 
-  it("approves a carried-forward direct CEO request into a new lane when conditions clear in the fresh cycle", async () => {
+  it("keeps a carried-forward direct CEO request in pending review even when conditions clear in the fresh cycle", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
       authenticate: vi.fn().mockResolvedValue({
@@ -4463,12 +4463,12 @@ describe("harness board service", () => {
       mode: "reopen_deferred"
     });
 
-    const created = await expectCreatedCard(service.createTopLevelChildCard({
+    const repeated = await service.createTopLevelChildCard({
       authorization: "Bearer valid",
       persona: "researcher",
       title: "Gathering competitor price anchors",
       deliverableType: "research_brief"
-    }));
+    });
 
     const proposals = await repository.listProposalsForRun(freshCycle.runId);
     const carriedForward = proposals.find(
@@ -4479,20 +4479,21 @@ describe("harness board service", () => {
     );
     const board = await service.listBoardState({ authorization: "Bearer valid" });
 
-    expect(created.cardId).toBeTruthy();
+    expect(repeated).toEqual({
+      status: "deferred",
+      proposalId: carriedForward?.id
+    });
     expect(carriedForward).toEqual(
       expect.objectContaining({
-        status: "approved",
-        approvedCardId: created.cardId
+        status: "proposed"
       })
     );
-    expect(board.pendingApprovals).toEqual([]);
-    expect(board.followThroughItems).toEqual(
+    expect(board.pendingApprovals).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          action: "opened_lane",
-          proposalId: carriedForward?.id,
-          targetCardId: created.cardId
+          id: carriedForward?.id,
+          title: "Gather competitor price anchors",
+          targetPersona: "RESEARCHER"
         })
       ])
     );

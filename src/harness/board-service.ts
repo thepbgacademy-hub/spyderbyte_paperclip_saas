@@ -358,7 +358,7 @@ export function createHarnessBoardService(options: {
         ]);
         runtime.resumeRun({ run, cards, proposals, continuity });
         const ceoCard = cards.find((card) => card.persona === "ceo" && card.parentCardId === null);
-        const earlierUnresolvedDirectRequest = ceoCard
+        const latestUnresolvedTopLevelRequest = ceoCard
           ? findLatestUnresolvedTopLevelProposalForAssignment(proposals, {
               ceoCardId: ceoCard.id,
               persona: normalizedPersona,
@@ -366,6 +366,12 @@ export function createHarnessBoardService(options: {
               deliverableType: normalizedDeliverableType
             })
           : null;
+        const earlierUnresolvedDirectRequest =
+          latestUnresolvedTopLevelRequest?.requestedByPersona === "ceo" ? latestUnresolvedTopLevelRequest : null;
+        const carriedForwardReviewRequest =
+          latestUnresolvedTopLevelRequest && latestUnresolvedTopLevelRequest.requestedByPersona !== "ceo"
+            ? latestUnresolvedTopLevelRequest
+            : null;
 
         async function approveEarlierDirectRequestIntoExistingLane(input: {
           proposal: HarnessSubCardProposal;
@@ -673,6 +679,13 @@ export function createHarnessBoardService(options: {
             policyReason: "completed_lanes_only",
             decisionNote: "CEO deferred this proposal because the board is already packaging completed work for this run."
           });
+        }
+
+        if (carriedForwardReviewRequest) {
+          return {
+            status: "deferred",
+            proposalId: carriedForwardReviewRequest.id
+          };
         }
 
         const existingCard = findMatchingOpenChildCard(cards, {

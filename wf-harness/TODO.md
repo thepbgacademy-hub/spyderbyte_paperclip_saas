@@ -131,7 +131,7 @@ This file tracks the new harness subproject only.
 - [x] Keep governance-only CEO attention visible without advertising impossible explicit review commands when the run is not actually in the final-assembly review seam.
 - [x] Route governance-only CEO attention toward the bounded pending-approvals queue so active/blocked backlog states point at the real proposal review surface instead of leaving the UI to guess the next move.
 - [x] Expose bounded proposal-decision action metadata on each `pendingApprovals` row so the board can act on individual approvals without inferring command families from labels or surrounding attention routes.
-- [x] Reuse carried-forward or otherwise unresolved top-level direct CEO follow-on proposals when the same bounded assignment later clears, so CEO-card governance memory resolves into the created/reused/reopened lane instead of lingering as stale pending intent.
+- [x] Reuse unresolved same-run top-level direct CEO follow-on proposals when the same bounded assignment later clears, while keeping fresh-cycle carried-forward proposals in explicit CEO review until they are approved through the bounded governance seam.
 - [x] Expose bounded action paths alongside board command metadata so proposal rows and actionable attention states stop relying on client-side route reconstruction.
 - [x] Expose bounded action methods plus minimal request-field metadata alongside board command metadata so proposal rows and actionable attention states stop relying on client-side request-body reconstruction.
 - [x] Expose bounded action labels, descriptions, and option metadata alongside board command metadata so proposal rows and actionable attention states stop relying on client-side choice-semantics reconstruction.
