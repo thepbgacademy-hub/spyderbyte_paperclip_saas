@@ -1634,6 +1634,11 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.freshnessSummary).toContain("latest record state");
     expect(hydrated.memoryBoundary.validationSummary).toContain("record level");
     expect(hydrated.memoryBoundary.completenessSummary).toContain("self-contained records");
+    expect(hydrated.memoryBoundary.sensitivitySummary).toContain("tenant business context");
+    expect(hydrated.memoryBoundary.audienceSummary).toContain("governance-history readers");
+    expect(hydrated.memoryBoundary.sanitizationSummary).toContain("exported as recorded");
+    expect(hydrated.memoryBoundary.redactionSummary).toContain("governance-safe redaction");
+    expect(hydrated.memoryBoundary.sourceDisclosureSummary).toContain("decision summaries only");
     expect(hydrated.memoryBoundary.blockerSummary).toContain("blocked");
     expect(hydrated.memoryBoundary.authoritySummary).toContain("tenant-controlled");
     expect(hydrated.memoryBoundary.triggerSummary).toContain("tenant export request");
@@ -1705,7 +1710,17 @@ describe("harness board service", () => {
           exportValidationBoundary: "none_runtime_only",
           exportValidationBoundaryLabel: "No export validation",
           exportCompletenessRule: "none_runtime_only",
-          exportCompletenessRuleLabel: "No export completeness rule"
+          exportCompletenessRuleLabel: "No export completeness rule",
+          exportSensitivity: "none_runtime_only",
+          exportSensitivityLabel: "No export sensitivity",
+          exportAudienceBoundary: "wealth_factory_runtime_only",
+          exportAudienceBoundaryLabel: "Wealth Factory runtime only",
+          exportSanitizationPolicy: "none_runtime_only",
+          exportSanitizationPolicyLabel: "No export sanitization",
+          exportRedactionBoundary: "runtime_internal_only",
+          exportRedactionBoundaryLabel: "Runtime internal only",
+          exportSourceDisclosurePolicy: "runtime_only",
+          exportSourceDisclosurePolicyLabel: "Runtime only"
         })
       ])
     );
@@ -1771,7 +1786,17 @@ describe("harness board service", () => {
           exportValidationBoundary: "record_level_validation",
           exportValidationBoundaryLabel: "Record-level validation",
           exportCompletenessRule: "self_contained_record",
-          exportCompletenessRuleLabel: "Self-contained record"
+          exportCompletenessRuleLabel: "Self-contained record",
+          exportSensitivity: "tenant_business_context",
+          exportSensitivityLabel: "Tenant business context",
+          exportAudienceBoundary: "tenant_governance_history_readers",
+          exportAudienceBoundaryLabel: "Tenant governance-history readers",
+          exportSanitizationPolicy: "export_as_recorded",
+          exportSanitizationPolicyLabel: "Export as recorded",
+          exportRedactionBoundary: "governance_safe_redaction",
+          exportRedactionBoundaryLabel: "Governance-safe redaction",
+          exportSourceDisclosurePolicy: "decision_summary_only",
+          exportSourceDisclosurePolicyLabel: "Decision summary only"
         }),
         expect.objectContaining({
           id: "implemented_actions",

@@ -367,6 +367,16 @@ const boardResponse: HarnessBoardResponse = {
       "2 runtime buckets have no export validation boundary, 2 export candidate buckets validate at record level, and 2 buckets still validate at closure-bundle level.",
     completenessSummary:
       "2 runtime buckets have no export completeness rule, 2 export candidate buckets are self-contained records, and 2 buckets still complete as board-closure bundles.",
+    sensitivitySummary:
+      "2 runtime buckets have no export sensitivity, 2 export candidate buckets carry tenant business context, and 2 buckets still carry tenant deliverable context.",
+    audienceSummary:
+      "2 runtime buckets stay Wealth Factory runtime only, 2 export candidate buckets are aimed at tenant governance-history readers, and 2 buckets still target tenant package consumers.",
+    sanitizationSummary:
+      "2 runtime buckets have no export sanitization, 2 export candidate buckets export as recorded, and 2 buckets still require sanitization before package export.",
+    redactionSummary:
+      "2 runtime buckets stay runtime internal only, 2 export candidate buckets use governance-safe redaction, and 2 buckets still require package-safe redaction.",
+    sourceDisclosureSummary:
+      "2 runtime buckets are runtime only, 2 export candidate buckets disclose decision summaries only, and 2 buckets still disclose closure-snapshot summaries only.",
     noPromotionScopeCount: 2,
     singleRecordExportScopeCount: 2,
     packageRecordSetExportScopeCount: 2,
@@ -409,6 +419,21 @@ const boardResponse: HarnessBoardResponse = {
     noExportCompletenessRuleCount: 2,
     selfContainedRecordCount: 2,
     boardClosureCompleteBundleCount: 2,
+    noExportSensitivityCount: 2,
+    tenantBusinessContextCount: 2,
+    tenantDeliverableContextCount: 2,
+    runtimeOnlyAudienceCount: 2,
+    governanceHistoryAudienceCount: 2,
+    packageConsumerAudienceCount: 2,
+    noExportSanitizationCount: 2,
+    exportAsRecordedCount: 2,
+    sanitizeBeforePackageExportCount: 2,
+    runtimeInternalOnlyRedactionCount: 2,
+    governanceSafeRedactionCount: 2,
+    packageSafeRedactionCount: 2,
+    runtimeOnlySourceDisclosureCount: 2,
+    decisionSummaryOnlyCount: 2,
+    closureSnapshotSummaryOnlyCount: 2,
     partitions: {
       runtime: {
         itemCount: 2,
@@ -494,6 +519,16 @@ const boardResponse: HarnessBoardResponse = {
         exportValidationBoundaryLabel: "No export validation",
         exportCompletenessRule: "none_runtime_only",
         exportCompletenessRuleLabel: "No export completeness rule",
+        exportSensitivity: "none_runtime_only",
+        exportSensitivityLabel: "No export sensitivity",
+        exportAudienceBoundary: "wealth_factory_runtime_only",
+        exportAudienceBoundaryLabel: "Wealth Factory runtime only",
+        exportSanitizationPolicy: "none_runtime_only",
+        exportSanitizationPolicyLabel: "No export sanitization",
+        exportRedactionBoundary: "runtime_internal_only",
+        exportRedactionBoundaryLabel: "Runtime internal only",
+        exportSourceDisclosurePolicy: "runtime_only",
+        exportSourceDisclosurePolicyLabel: "Runtime only",
         promotionActionDescription: "No export action applies. This runtime memory stays inside Wealth Factory orchestration."
       },
       {
@@ -566,6 +601,16 @@ const boardResponse: HarnessBoardResponse = {
         exportValidationBoundaryLabel: "No export validation",
         exportCompletenessRule: "none_runtime_only",
         exportCompletenessRuleLabel: "No export completeness rule",
+        exportSensitivity: "none_runtime_only",
+        exportSensitivityLabel: "No export sensitivity",
+        exportAudienceBoundary: "wealth_factory_runtime_only",
+        exportAudienceBoundaryLabel: "Wealth Factory runtime only",
+        exportSanitizationPolicy: "none_runtime_only",
+        exportSanitizationPolicyLabel: "No export sanitization",
+        exportRedactionBoundary: "runtime_internal_only",
+        exportRedactionBoundaryLabel: "Runtime internal only",
+        exportSourceDisclosurePolicy: "runtime_only",
+        exportSourceDisclosurePolicyLabel: "Runtime only",
         promotionActionDescription: "No export action applies. This runtime attention state stays inside Wealth Factory orchestration."
       }
     ],
@@ -640,6 +685,16 @@ const boardResponse: HarnessBoardResponse = {
         exportValidationBoundaryLabel: "Record-level validation",
         exportCompletenessRule: "self_contained_record",
         exportCompletenessRuleLabel: "Self-contained record",
+        exportSensitivity: "tenant_business_context",
+        exportSensitivityLabel: "Tenant business context",
+        exportAudienceBoundary: "tenant_governance_history_readers",
+        exportAudienceBoundaryLabel: "Tenant governance-history readers",
+        exportSanitizationPolicy: "export_as_recorded",
+        exportSanitizationPolicyLabel: "Export as recorded",
+        exportRedactionBoundary: "governance_safe_redaction",
+        exportRedactionBoundaryLabel: "Governance-safe redaction",
+        exportSourceDisclosurePolicy: "decision_summary_only",
+        exportSourceDisclosurePolicyLabel: "Decision summary only",
         promotionActionDescription: "This governance history is ready to sit behind a later bounded tenant export action."
       },
       {
@@ -712,6 +767,16 @@ const boardResponse: HarnessBoardResponse = {
         exportValidationBoundaryLabel: "Record-level validation",
         exportCompletenessRule: "self_contained_record",
         exportCompletenessRuleLabel: "Self-contained record",
+        exportSensitivity: "tenant_business_context",
+        exportSensitivityLabel: "Tenant business context",
+        exportAudienceBoundary: "tenant_governance_history_readers",
+        exportAudienceBoundaryLabel: "Tenant governance-history readers",
+        exportSanitizationPolicy: "export_as_recorded",
+        exportSanitizationPolicyLabel: "Export as recorded",
+        exportRedactionBoundary: "governance_safe_redaction",
+        exportRedactionBoundaryLabel: "Governance-safe redaction",
+        exportSourceDisclosurePolicy: "decision_summary_only",
+        exportSourceDisclosurePolicyLabel: "Decision summary only",
         promotionActionDescription:
           "This implemented follow-through is ready to sit behind a later bounded tenant export action."
       },
@@ -785,6 +850,16 @@ const boardResponse: HarnessBoardResponse = {
         exportValidationBoundaryLabel: "Closure-bundle validation",
         exportCompletenessRule: "board_closure_complete_bundle",
         exportCompletenessRuleLabel: "Board-closure-complete bundle",
+        exportSensitivity: "tenant_deliverable_context",
+        exportSensitivityLabel: "Tenant deliverable context",
+        exportAudienceBoundary: "tenant_package_consumers",
+        exportAudienceBoundaryLabel: "Tenant package consumers",
+        exportSanitizationPolicy: "sanitize_before_package_export",
+        exportSanitizationPolicyLabel: "Sanitize before package export",
+        exportRedactionBoundary: "package_safe_redaction",
+        exportRedactionBoundaryLabel: "Package-safe redaction",
+        exportSourceDisclosurePolicy: "closure_snapshot_summary_only",
+        exportSourceDisclosurePolicyLabel: "Closure snapshot summary only",
         promotionActionDescription:
           "Board closure still gates this package governance memory before any later tenant export action can apply.",
         nextEligibleSummary: "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
@@ -859,6 +934,16 @@ const boardResponse: HarnessBoardResponse = {
         exportValidationBoundaryLabel: "Closure-bundle validation",
         exportCompletenessRule: "board_closure_complete_bundle",
         exportCompletenessRuleLabel: "Board-closure-complete bundle",
+        exportSensitivity: "tenant_deliverable_context",
+        exportSensitivityLabel: "Tenant deliverable context",
+        exportAudienceBoundary: "tenant_package_consumers",
+        exportAudienceBoundaryLabel: "Tenant package consumers",
+        exportSanitizationPolicy: "sanitize_before_package_export",
+        exportSanitizationPolicyLabel: "Sanitize before package export",
+        exportRedactionBoundary: "package_safe_redaction",
+        exportRedactionBoundaryLabel: "Package-safe redaction",
+        exportSourceDisclosurePolicy: "closure_snapshot_summary_only",
+        exportSourceDisclosurePolicyLabel: "Closure snapshot summary only",
         promotionActionDescription:
           "Board closure still gates this packaged deliverable before any later tenant export action can apply.",
         nextEligibleSummary: "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
@@ -1569,6 +1654,19 @@ describe("harness board UI", () => {
     expect(markup).toContain("No export completeness rule");
     expect(markup).toContain("Self-contained record");
     expect(markup).toContain("Board-closure-complete bundle");
+    expect(markup).toContain("No export sensitivity");
+    expect(markup).toContain("Tenant business context");
+    expect(markup).toContain("Tenant deliverable context");
+    expect(markup).toContain("Tenant governance-history readers");
+    expect(markup).toContain("Tenant package consumers");
+    expect(markup).toContain("No export sanitization");
+    expect(markup).toContain("Export as recorded");
+    expect(markup).toContain("Sanitize before package export");
+    expect(markup).toContain("Runtime internal only");
+    expect(markup).toContain("Governance-safe redaction");
+    expect(markup).toContain("Package-safe redaction");
+    expect(markup).toContain("Decision summary only");
+    expect(markup).toContain("Closure snapshot summary only");
     expect(markup).toContain("This governance history is ready to sit behind a later bounded tenant export action.");
     expect(markup).toContain("Board closure still gates this packaged deliverable before any later tenant export action can apply.");
     expect(markup).toContain("Source surface: Continuity snapshots");

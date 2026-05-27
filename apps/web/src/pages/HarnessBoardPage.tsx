@@ -482,6 +482,11 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     freshnessSummary: "Export freshness guidance is pending the latest board state.",
     validationSummary: "Export validation guidance is pending the latest board state.",
     completenessSummary: "Export completeness guidance is pending the latest board state.",
+    sensitivitySummary: "Export sensitivity guidance is pending the latest board state.",
+    audienceSummary: "Export audience guidance is pending the latest board state.",
+    sanitizationSummary: "Export sanitization guidance is pending the latest board state.",
+    redactionSummary: "Export redaction guidance is pending the latest board state.",
+    sourceDisclosureSummary: "Export source-disclosure guidance is pending the latest board state.",
     readyNowCount: 0,
     waitingOnBoardClosureCount: 0,
     governanceReadyCount: 0,
@@ -544,6 +549,21 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     noExportCompletenessRuleCount: 0,
     selfContainedRecordCount: 0,
     boardClosureCompleteBundleCount: 0,
+    noExportSensitivityCount: 0,
+    tenantBusinessContextCount: 0,
+    tenantDeliverableContextCount: 0,
+    runtimeOnlyAudienceCount: 0,
+    governanceHistoryAudienceCount: 0,
+    packageConsumerAudienceCount: 0,
+    noExportSanitizationCount: 0,
+    exportAsRecordedCount: 0,
+    sanitizeBeforePackageExportCount: 0,
+    runtimeInternalOnlyRedactionCount: 0,
+    governanceSafeRedactionCount: 0,
+    packageSafeRedactionCount: 0,
+    runtimeOnlySourceDisclosureCount: 0,
+    decisionSummaryOnlyCount: 0,
+    closureSnapshotSummaryOnlyCount: 0,
     partitions: {
       runtime: { itemCount: 0, summary: "Runtime memory partition is pending the latest board state." },
       governanceHistoryCandidates: {
@@ -606,6 +626,11 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <p style={styles.actionSummary}>{memoryBoundary.freshnessSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.validationSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.completenessSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.sensitivitySummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.audienceSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.sanitizationSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.redactionSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.sourceDisclosureSummary}</p>
       <ul style={styles.actionList}>
         <li style={styles.actionItem}>
           <p style={styles.contractMeta}>Runtime partition</p>
@@ -664,6 +689,11 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                     <span style={styles.badge}>{item.exportFreshnessSourceLabel}</span>
                     <span style={styles.badge}>{item.exportValidationBoundaryLabel}</span>
                     <span style={styles.badge}>{item.exportCompletenessRuleLabel}</span>
+                    <span style={styles.badge}>{item.exportSensitivityLabel}</span>
+                    <span style={styles.badge}>{item.exportAudienceBoundaryLabel}</span>
+                    <span style={styles.badge}>{item.exportSanitizationPolicyLabel}</span>
+                    <span style={styles.badge}>{item.exportRedactionBoundaryLabel}</span>
+                    <span style={styles.badge}>{item.exportSourceDisclosurePolicyLabel}</span>
                   </div>
                   <p style={styles.actionSummary}>{item.summary}</p>
                   <p style={styles.optionBody}>{item.promotionActionDescription}</p>

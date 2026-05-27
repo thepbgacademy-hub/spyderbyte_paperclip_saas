@@ -250,6 +250,31 @@ export type HarnessMemoryBoundaryExportCompletenessRule =
   | "self_contained_record"
   | "board_closure_complete_bundle";
 
+export type HarnessMemoryBoundaryExportSensitivity =
+  | "none_runtime_only"
+  | "tenant_business_context"
+  | "tenant_deliverable_context";
+
+export type HarnessMemoryBoundaryExportAudienceBoundary =
+  | "wealth_factory_runtime_only"
+  | "tenant_governance_history_readers"
+  | "tenant_package_consumers";
+
+export type HarnessMemoryBoundaryExportSanitizationPolicy =
+  | "none_runtime_only"
+  | "export_as_recorded"
+  | "sanitize_before_package_export";
+
+export type HarnessMemoryBoundaryExportRedactionBoundary =
+  | "runtime_internal_only"
+  | "governance_safe_redaction"
+  | "package_safe_redaction";
+
+export type HarnessMemoryBoundaryExportSourceDisclosurePolicy =
+  | "runtime_only"
+  | "decision_summary_only"
+  | "closure_snapshot_summary_only";
+
 export type HarnessMemoryBoundaryItemView = {
   id:
     | "lane_continuity"
@@ -326,6 +351,16 @@ export type HarnessMemoryBoundaryItemView = {
   exportValidationBoundaryLabel: string;
   exportCompletenessRule: HarnessMemoryBoundaryExportCompletenessRule;
   exportCompletenessRuleLabel: string;
+  exportSensitivity: HarnessMemoryBoundaryExportSensitivity;
+  exportSensitivityLabel: string;
+  exportAudienceBoundary: HarnessMemoryBoundaryExportAudienceBoundary;
+  exportAudienceBoundaryLabel: string;
+  exportSanitizationPolicy: HarnessMemoryBoundaryExportSanitizationPolicy;
+  exportSanitizationPolicyLabel: string;
+  exportRedactionBoundary: HarnessMemoryBoundaryExportRedactionBoundary;
+  exportRedactionBoundaryLabel: string;
+  exportSourceDisclosurePolicy: HarnessMemoryBoundaryExportSourceDisclosurePolicy;
+  exportSourceDisclosurePolicyLabel: string;
   promotionActionDescription: string;
   nextEligibleSummary?: string;
 };
@@ -409,6 +444,21 @@ export type HarnessMemoryBoundaryView = {
   noExportCompletenessRuleCount: number;
   selfContainedRecordCount: number;
   boardClosureCompleteBundleCount: number;
+  noExportSensitivityCount: number;
+  tenantBusinessContextCount: number;
+  tenantDeliverableContextCount: number;
+  runtimeOnlyAudienceCount: number;
+  governanceHistoryAudienceCount: number;
+  packageConsumerAudienceCount: number;
+  noExportSanitizationCount: number;
+  exportAsRecordedCount: number;
+  sanitizeBeforePackageExportCount: number;
+  runtimeInternalOnlyRedactionCount: number;
+  governanceSafeRedactionCount: number;
+  packageSafeRedactionCount: number;
+  runtimeOnlySourceDisclosureCount: number;
+  decisionSummaryOnlyCount: number;
+  closureSnapshotSummaryOnlyCount: number;
   roleSummary: string;
   ownershipSummary: string;
   promotionSummary: string;
@@ -436,6 +486,11 @@ export type HarnessMemoryBoundaryView = {
   freshnessSummary: string;
   validationSummary: string;
   completenessSummary: string;
+  sensitivitySummary: string;
+  audienceSummary: string;
+  sanitizationSummary: string;
+  redactionSummary: string;
+  sourceDisclosureSummary: string;
   partitions: {
     runtime: HarnessMemoryBoundaryPartitionView;
     governanceHistoryCandidates: HarnessMemoryBoundaryPartitionView;
@@ -4146,6 +4201,16 @@ function buildMemoryBoundaryView(input: {
       exportValidationBoundaryLabel: humanizeMemoryBoundaryExportValidationBoundary("none_runtime_only"),
       exportCompletenessRule: "none_runtime_only",
       exportCompletenessRuleLabel: humanizeMemoryBoundaryExportCompletenessRule("none_runtime_only"),
+      exportSensitivity: "none_runtime_only",
+      exportSensitivityLabel: humanizeMemoryBoundaryExportSensitivity("none_runtime_only"),
+      exportAudienceBoundary: "wealth_factory_runtime_only",
+      exportAudienceBoundaryLabel: humanizeMemoryBoundaryExportAudienceBoundary("wealth_factory_runtime_only"),
+      exportSanitizationPolicy: "none_runtime_only",
+      exportSanitizationPolicyLabel: humanizeMemoryBoundaryExportSanitizationPolicy("none_runtime_only"),
+      exportRedactionBoundary: "runtime_internal_only",
+      exportRedactionBoundaryLabel: humanizeMemoryBoundaryExportRedactionBoundary("runtime_internal_only"),
+      exportSourceDisclosurePolicy: "runtime_only",
+      exportSourceDisclosurePolicyLabel: humanizeMemoryBoundaryExportSourceDisclosurePolicy("runtime_only"),
       promotionActionDescription: "No export action applies. This runtime memory stays inside Wealth Factory orchestration."
     },
     {
@@ -4218,6 +4283,16 @@ function buildMemoryBoundaryView(input: {
       exportValidationBoundaryLabel: humanizeMemoryBoundaryExportValidationBoundary("none_runtime_only"),
       exportCompletenessRule: "none_runtime_only",
       exportCompletenessRuleLabel: humanizeMemoryBoundaryExportCompletenessRule("none_runtime_only"),
+      exportSensitivity: "none_runtime_only",
+      exportSensitivityLabel: humanizeMemoryBoundaryExportSensitivity("none_runtime_only"),
+      exportAudienceBoundary: "wealth_factory_runtime_only",
+      exportAudienceBoundaryLabel: humanizeMemoryBoundaryExportAudienceBoundary("wealth_factory_runtime_only"),
+      exportSanitizationPolicy: "none_runtime_only",
+      exportSanitizationPolicyLabel: humanizeMemoryBoundaryExportSanitizationPolicy("none_runtime_only"),
+      exportRedactionBoundary: "runtime_internal_only",
+      exportRedactionBoundaryLabel: humanizeMemoryBoundaryExportRedactionBoundary("runtime_internal_only"),
+      exportSourceDisclosurePolicy: "runtime_only",
+      exportSourceDisclosurePolicyLabel: humanizeMemoryBoundaryExportSourceDisclosurePolicy("runtime_only"),
       promotionActionDescription: "No export action applies. This runtime attention state stays inside Wealth Factory orchestration."
     }
   ];
@@ -4293,6 +4368,16 @@ function buildMemoryBoundaryView(input: {
       exportValidationBoundaryLabel: humanizeMemoryBoundaryExportValidationBoundary("record_level_validation"),
       exportCompletenessRule: "self_contained_record",
       exportCompletenessRuleLabel: humanizeMemoryBoundaryExportCompletenessRule("self_contained_record"),
+      exportSensitivity: "tenant_business_context",
+      exportSensitivityLabel: humanizeMemoryBoundaryExportSensitivity("tenant_business_context"),
+      exportAudienceBoundary: "tenant_governance_history_readers",
+      exportAudienceBoundaryLabel: humanizeMemoryBoundaryExportAudienceBoundary("tenant_governance_history_readers"),
+      exportSanitizationPolicy: "export_as_recorded",
+      exportSanitizationPolicyLabel: humanizeMemoryBoundaryExportSanitizationPolicy("export_as_recorded"),
+      exportRedactionBoundary: "governance_safe_redaction",
+      exportRedactionBoundaryLabel: humanizeMemoryBoundaryExportRedactionBoundary("governance_safe_redaction"),
+      exportSourceDisclosurePolicy: "decision_summary_only",
+      exportSourceDisclosurePolicyLabel: humanizeMemoryBoundaryExportSourceDisclosurePolicy("decision_summary_only"),
       promotionActionDescription: "This governance history is ready to sit behind a later bounded tenant export action."
     },
     {
@@ -4365,6 +4450,16 @@ function buildMemoryBoundaryView(input: {
       exportValidationBoundaryLabel: humanizeMemoryBoundaryExportValidationBoundary("record_level_validation"),
       exportCompletenessRule: "self_contained_record",
       exportCompletenessRuleLabel: humanizeMemoryBoundaryExportCompletenessRule("self_contained_record"),
+      exportSensitivity: "tenant_business_context",
+      exportSensitivityLabel: humanizeMemoryBoundaryExportSensitivity("tenant_business_context"),
+      exportAudienceBoundary: "tenant_governance_history_readers",
+      exportAudienceBoundaryLabel: humanizeMemoryBoundaryExportAudienceBoundary("tenant_governance_history_readers"),
+      exportSanitizationPolicy: "export_as_recorded",
+      exportSanitizationPolicyLabel: humanizeMemoryBoundaryExportSanitizationPolicy("export_as_recorded"),
+      exportRedactionBoundary: "governance_safe_redaction",
+      exportRedactionBoundaryLabel: humanizeMemoryBoundaryExportRedactionBoundary("governance_safe_redaction"),
+      exportSourceDisclosurePolicy: "decision_summary_only",
+      exportSourceDisclosurePolicyLabel: humanizeMemoryBoundaryExportSourceDisclosurePolicy("decision_summary_only"),
       promotionActionDescription:
         "This implemented follow-through is ready to sit behind a later bounded tenant export action."
     }
@@ -4547,6 +4642,16 @@ function buildMemoryBoundaryView(input: {
         exportValidationBoundaryLabel: humanizeMemoryBoundaryExportValidationBoundary("closure_bundle_validation"),
         exportCompletenessRule: "board_closure_complete_bundle",
         exportCompletenessRuleLabel: humanizeMemoryBoundaryExportCompletenessRule("board_closure_complete_bundle"),
+        exportSensitivity: "tenant_deliverable_context",
+        exportSensitivityLabel: humanizeMemoryBoundaryExportSensitivity("tenant_deliverable_context"),
+        exportAudienceBoundary: "tenant_package_consumers",
+        exportAudienceBoundaryLabel: humanizeMemoryBoundaryExportAudienceBoundary("tenant_package_consumers"),
+        exportSanitizationPolicy: "sanitize_before_package_export",
+        exportSanitizationPolicyLabel: humanizeMemoryBoundaryExportSanitizationPolicy("sanitize_before_package_export"),
+        exportRedactionBoundary: "package_safe_redaction",
+        exportRedactionBoundaryLabel: humanizeMemoryBoundaryExportRedactionBoundary("package_safe_redaction"),
+        exportSourceDisclosurePolicy: "closure_snapshot_summary_only",
+        exportSourceDisclosurePolicyLabel: humanizeMemoryBoundaryExportSourceDisclosurePolicy("closure_snapshot_summary_only"),
         promotionActionDescription: input.completionPackage.hasOpenGovernanceItems
           ? "Board closure still gates this package governance memory before any later tenant export action can apply."
           : "This package governance memory is ready to sit behind a later bounded tenant export action.",
@@ -4729,6 +4834,16 @@ function buildMemoryBoundaryView(input: {
         exportValidationBoundaryLabel: humanizeMemoryBoundaryExportValidationBoundary("closure_bundle_validation"),
         exportCompletenessRule: "board_closure_complete_bundle",
         exportCompletenessRuleLabel: humanizeMemoryBoundaryExportCompletenessRule("board_closure_complete_bundle"),
+        exportSensitivity: "tenant_deliverable_context",
+        exportSensitivityLabel: humanizeMemoryBoundaryExportSensitivity("tenant_deliverable_context"),
+        exportAudienceBoundary: "tenant_package_consumers",
+        exportAudienceBoundaryLabel: humanizeMemoryBoundaryExportAudienceBoundary("tenant_package_consumers"),
+        exportSanitizationPolicy: "sanitize_before_package_export",
+        exportSanitizationPolicyLabel: humanizeMemoryBoundaryExportSanitizationPolicy("sanitize_before_package_export"),
+        exportRedactionBoundary: "package_safe_redaction",
+        exportRedactionBoundaryLabel: humanizeMemoryBoundaryExportRedactionBoundary("package_safe_redaction"),
+        exportSourceDisclosurePolicy: "closure_snapshot_summary_only",
+        exportSourceDisclosurePolicyLabel: humanizeMemoryBoundaryExportSourceDisclosurePolicy("closure_snapshot_summary_only"),
         promotionActionDescription: input.completionPackage.hasOpenGovernanceItems
           ? "Board closure still gates this packaged deliverable before any later tenant export action can apply."
           : "This packaged deliverable is ready to sit behind a later bounded tenant export action.",
@@ -4949,6 +5064,51 @@ function buildMemoryBoundaryView(input: {
   const boardClosureCompleteBundleCount = exportReadyItems.filter(
     (item) => item.exportCompletenessRule === "board_closure_complete_bundle"
   ).length;
+  const noExportSensitivityCount = operationalItems.filter(
+    (item) => item.exportSensitivity === "none_runtime_only"
+  ).length;
+  const tenantBusinessContextCount = exportReadyItems.filter(
+    (item) => item.exportSensitivity === "tenant_business_context"
+  ).length;
+  const tenantDeliverableContextCount = exportReadyItems.filter(
+    (item) => item.exportSensitivity === "tenant_deliverable_context"
+  ).length;
+  const runtimeOnlyAudienceCount = operationalItems.filter(
+    (item) => item.exportAudienceBoundary === "wealth_factory_runtime_only"
+  ).length;
+  const governanceHistoryAudienceCount = exportReadyItems.filter(
+    (item) => item.exportAudienceBoundary === "tenant_governance_history_readers"
+  ).length;
+  const packageConsumerAudienceCount = exportReadyItems.filter(
+    (item) => item.exportAudienceBoundary === "tenant_package_consumers"
+  ).length;
+  const noExportSanitizationCount = operationalItems.filter(
+    (item) => item.exportSanitizationPolicy === "none_runtime_only"
+  ).length;
+  const exportAsRecordedCount = exportReadyItems.filter(
+    (item) => item.exportSanitizationPolicy === "export_as_recorded"
+  ).length;
+  const sanitizeBeforePackageExportCount = exportReadyItems.filter(
+    (item) => item.exportSanitizationPolicy === "sanitize_before_package_export"
+  ).length;
+  const runtimeInternalOnlyRedactionCount = operationalItems.filter(
+    (item) => item.exportRedactionBoundary === "runtime_internal_only"
+  ).length;
+  const governanceSafeRedactionCount = exportReadyItems.filter(
+    (item) => item.exportRedactionBoundary === "governance_safe_redaction"
+  ).length;
+  const packageSafeRedactionCount = exportReadyItems.filter(
+    (item) => item.exportRedactionBoundary === "package_safe_redaction"
+  ).length;
+  const runtimeOnlySourceDisclosureCount = operationalItems.filter(
+    (item) => item.exportSourceDisclosurePolicy === "runtime_only"
+  ).length;
+  const decisionSummaryOnlyCount = exportReadyItems.filter(
+    (item) => item.exportSourceDisclosurePolicy === "decision_summary_only"
+  ).length;
+  const closureSnapshotSummaryOnlyCount = exportReadyItems.filter(
+    (item) => item.exportSourceDisclosurePolicy === "closure_snapshot_summary_only"
+  ).length;
 
   return {
     summary:
@@ -5030,6 +5190,21 @@ function buildMemoryBoundaryView(input: {
     noExportCompletenessRuleCount,
     selfContainedRecordCount,
     boardClosureCompleteBundleCount,
+    noExportSensitivityCount,
+    tenantBusinessContextCount,
+    tenantDeliverableContextCount,
+    runtimeOnlyAudienceCount,
+    governanceHistoryAudienceCount,
+    packageConsumerAudienceCount,
+    noExportSanitizationCount,
+    exportAsRecordedCount,
+    sanitizeBeforePackageExportCount,
+    runtimeInternalOnlyRedactionCount,
+    governanceSafeRedactionCount,
+    packageSafeRedactionCount,
+    runtimeOnlySourceDisclosureCount,
+    decisionSummaryOnlyCount,
+    closureSnapshotSummaryOnlyCount,
     roleSummary:
       packagedWaitingCount > 0
         ? `${governanceReadyCount} governance record candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} ready now, and ${packagedWaitingCount} packaged output candidate${packagedWaitingCount === 1 ? "" : "s"} ${packagedWaitingCount === 1 ? "still waits" : "still wait"} on board closure.`
@@ -5138,6 +5313,26 @@ function buildMemoryBoundaryView(input: {
       boardClosureCompleteBundleCount > 0
         ? `${noExportCompletenessRuleCount} runtime bucket${noExportCompletenessRuleCount === 1 ? " has" : "s have"} no export completeness rule, ${selfContainedRecordCount} export candidate bucket${selfContainedRecordCount === 1 ? " is" : "s are"} self-contained records, and ${boardClosureCompleteBundleCount} bucket${boardClosureCompleteBundleCount === 1 ? " still completes" : "s still complete"} as board-closure bundles.`
         : `${noExportCompletenessRuleCount} runtime bucket${noExportCompletenessRuleCount === 1 ? " has" : "s have"} no export completeness rule, and ${selfContainedRecordCount} export candidate bucket${selfContainedRecordCount === 1 ? " is" : "s are"} self-contained records.`,
+    sensitivitySummary:
+      tenantDeliverableContextCount > 0
+        ? `${noExportSensitivityCount} runtime bucket${noExportSensitivityCount === 1 ? " has" : "s have"} no export sensitivity, ${tenantBusinessContextCount} export candidate bucket${tenantBusinessContextCount === 1 ? " carries" : "s carry"} tenant business context, and ${tenantDeliverableContextCount} bucket${tenantDeliverableContextCount === 1 ? " still carries" : "s still carry"} tenant deliverable context.`
+        : `${noExportSensitivityCount} runtime bucket${noExportSensitivityCount === 1 ? " has" : "s have"} no export sensitivity, and ${tenantBusinessContextCount} export candidate bucket${tenantBusinessContextCount === 1 ? " carries" : "s carry"} tenant business context.`,
+    audienceSummary:
+      packageConsumerAudienceCount > 0
+        ? `${runtimeOnlyAudienceCount} runtime bucket${runtimeOnlyAudienceCount === 1 ? " stays" : "s stay"} Wealth Factory runtime only, ${governanceHistoryAudienceCount} export candidate bucket${governanceHistoryAudienceCount === 1 ? " is aimed" : "s are aimed"} at tenant governance-history readers, and ${packageConsumerAudienceCount} bucket${packageConsumerAudienceCount === 1 ? " still targets" : "s still target"} tenant package consumers.`
+        : `${runtimeOnlyAudienceCount} runtime bucket${runtimeOnlyAudienceCount === 1 ? " stays" : "s stay"} Wealth Factory runtime only, and ${governanceHistoryAudienceCount} export candidate bucket${governanceHistoryAudienceCount === 1 ? " is aimed" : "s are aimed"} at tenant governance-history readers.`,
+    sanitizationSummary:
+      sanitizeBeforePackageExportCount > 0
+        ? `${noExportSanitizationCount} runtime bucket${noExportSanitizationCount === 1 ? " has" : "s have"} no export sanitization, ${exportAsRecordedCount} export candidate bucket${exportAsRecordedCount === 1 ? " is exported" : "s are exported"} as recorded, and ${sanitizeBeforePackageExportCount} bucket${sanitizeBeforePackageExportCount === 1 ? " still requires" : "s still require"} sanitization before package export.`
+        : `${noExportSanitizationCount} runtime bucket${noExportSanitizationCount === 1 ? " has" : "s have"} no export sanitization, and ${exportAsRecordedCount} export candidate bucket${exportAsRecordedCount === 1 ? " is exported" : "s are exported"} as recorded.`,
+    redactionSummary:
+      packageSafeRedactionCount > 0
+        ? `${runtimeInternalOnlyRedactionCount} runtime bucket${runtimeInternalOnlyRedactionCount === 1 ? " stays" : "s stay"} runtime internal only, ${governanceSafeRedactionCount} export candidate bucket${governanceSafeRedactionCount === 1 ? " uses" : "s use"} governance-safe redaction, and ${packageSafeRedactionCount} bucket${packageSafeRedactionCount === 1 ? " still requires" : "s still require"} package-safe redaction.`
+        : `${runtimeInternalOnlyRedactionCount} runtime bucket${runtimeInternalOnlyRedactionCount === 1 ? " stays" : "s stay"} runtime internal only, and ${governanceSafeRedactionCount} export candidate bucket${governanceSafeRedactionCount === 1 ? " uses" : "s use"} governance-safe redaction.`,
+    sourceDisclosureSummary:
+      closureSnapshotSummaryOnlyCount > 0
+        ? `${runtimeOnlySourceDisclosureCount} runtime bucket${runtimeOnlySourceDisclosureCount === 1 ? " is" : "s are"} runtime only, ${decisionSummaryOnlyCount} export candidate bucket${decisionSummaryOnlyCount === 1 ? " discloses" : "s disclose"} decision summaries only, and ${closureSnapshotSummaryOnlyCount} bucket${closureSnapshotSummaryOnlyCount === 1 ? " still discloses" : "s still disclose"} closure-snapshot summaries only.`
+        : `${runtimeOnlySourceDisclosureCount} runtime bucket${runtimeOnlySourceDisclosureCount === 1 ? " is" : "s are"} runtime only, and ${decisionSummaryOnlyCount} export candidate bucket${decisionSummaryOnlyCount === 1 ? " discloses" : "s disclose"} decision summaries only.`,
     partitions: {
       runtime: {
         itemCount: operationalItems.length,
@@ -5581,6 +5776,79 @@ function humanizeMemoryBoundaryExportCompletenessRule(rule: HarnessMemoryBoundar
       return "Board-closure-complete bundle";
     default:
       return rule;
+  }
+}
+
+function humanizeMemoryBoundaryExportSensitivity(sensitivity: HarnessMemoryBoundaryExportSensitivity) {
+  switch (sensitivity) {
+    case "none_runtime_only":
+      return "No export sensitivity";
+    case "tenant_business_context":
+      return "Tenant business context";
+    case "tenant_deliverable_context":
+      return "Tenant deliverable context";
+    default:
+      return sensitivity;
+  }
+}
+
+function humanizeMemoryBoundaryExportAudienceBoundary(
+  audience: HarnessMemoryBoundaryExportAudienceBoundary
+) {
+  switch (audience) {
+    case "wealth_factory_runtime_only":
+      return "Wealth Factory runtime only";
+    case "tenant_governance_history_readers":
+      return "Tenant governance-history readers";
+    case "tenant_package_consumers":
+      return "Tenant package consumers";
+    default:
+      return audience;
+  }
+}
+
+function humanizeMemoryBoundaryExportSanitizationPolicy(
+  policy: HarnessMemoryBoundaryExportSanitizationPolicy
+) {
+  switch (policy) {
+    case "none_runtime_only":
+      return "No export sanitization";
+    case "export_as_recorded":
+      return "Export as recorded";
+    case "sanitize_before_package_export":
+      return "Sanitize before package export";
+    default:
+      return policy;
+  }
+}
+
+function humanizeMemoryBoundaryExportRedactionBoundary(
+  boundary: HarnessMemoryBoundaryExportRedactionBoundary
+) {
+  switch (boundary) {
+    case "runtime_internal_only":
+      return "Runtime internal only";
+    case "governance_safe_redaction":
+      return "Governance-safe redaction";
+    case "package_safe_redaction":
+      return "Package-safe redaction";
+    default:
+      return boundary;
+  }
+}
+
+function humanizeMemoryBoundaryExportSourceDisclosurePolicy(
+  policy: HarnessMemoryBoundaryExportSourceDisclosurePolicy
+) {
+  switch (policy) {
+    case "runtime_only":
+      return "Runtime only";
+    case "decision_summary_only":
+      return "Decision summary only";
+    case "closure_snapshot_summary_only":
+      return "Closure snapshot summary only";
+    default:
+      return policy;
   }
 }
 

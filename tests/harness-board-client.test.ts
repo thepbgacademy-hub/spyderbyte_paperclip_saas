@@ -195,6 +195,16 @@ describe("harness board client", () => {
           "2 runtime memory buckets never promote, 2 candidate buckets are ready for explicit export later, and 2 candidate buckets still wait on board closure first.",
         recordTargetSummary:
           "2 governance history record candidates are ready, while 2 package record candidates stay package-shaped until board closure completes.",
+        sensitivitySummary:
+          "2 runtime buckets have no export sensitivity, 2 export candidate buckets carry tenant business context, and 2 buckets still carry tenant deliverable context.",
+        audienceSummary:
+          "2 runtime buckets stay Wealth Factory runtime only, 2 export candidate buckets are aimed at tenant governance-history readers, and 2 buckets still target tenant package consumers.",
+        sanitizationSummary:
+          "2 runtime buckets have no export sanitization, 2 export candidate buckets are exported as recorded, and 2 buckets still require sanitization before package export.",
+        redactionSummary:
+          "2 runtime buckets stay runtime internal only, 2 export candidate buckets use governance-safe redaction, and 2 buckets still require package-safe redaction.",
+        sourceDisclosureSummary:
+          "2 runtime buckets are runtime only, 2 export candidate buckets disclose decision summaries only, and 2 buckets still disclose closure-snapshot summaries only.",
         readyNowCount: 2,
         waitingOnBoardClosureCount: 2,
         governanceReadyCount: 2,
@@ -219,12 +229,16 @@ describe("harness board client", () => {
             ownershipBoundary: "wealth_factory_only",
             promotionPath: "never_promotes",
             recordTarget: "none_runtime_only",
-            promotionNextStep: "none_runtime_only"
-            ,
+            promotionNextStep: "none_runtime_only",
             promotionActionFamily: "none_runtime_only",
             assemblyShape: "none_runtime_only",
             promotionPhase: "not_exported_runtime",
-            promotionMutability: "runtime_mutable"
+            promotionMutability: "runtime_mutable",
+            exportSensitivity: "none_runtime_only",
+            exportAudienceBoundary: "wealth_factory_runtime_only",
+            exportSanitizationPolicy: "none_runtime_only",
+            exportRedactionBoundary: "runtime_internal_only",
+            exportSourceDisclosurePolicy: "runtime_only"
           })
         ]),
         exportReadyItems: expect.arrayContaining([
@@ -241,12 +255,16 @@ describe("harness board client", () => {
             ownershipBoundary: "tenant_owned_later",
             promotionPath: "ready_for_explicit_export",
             recordTarget: "governance_history_record",
-            promotionNextStep: "tenant_export_available"
-            ,
+            promotionNextStep: "tenant_export_available",
             promotionActionFamily: "tenant_export_candidate",
             assemblyShape: "standalone_export_record",
             promotionPhase: "phase_one_governance_history",
-            promotionMutability: "append_only_history"
+            promotionMutability: "append_only_history",
+            exportSensitivity: "tenant_business_context",
+            exportAudienceBoundary: "tenant_governance_history_readers",
+            exportSanitizationPolicy: "export_as_recorded",
+            exportRedactionBoundary: "governance_safe_redaction",
+            exportSourceDisclosurePolicy: "decision_summary_only"
           })
         ])
       })
@@ -354,6 +372,21 @@ describe("harness board client", () => {
     );
     expect(board.memoryBoundary.completenessSummary).toBe(
       "2 runtime buckets have no export completeness rule, 2 export candidate buckets are self-contained records, and 2 buckets still complete as board-closure bundles."
+    );
+    expect(board.memoryBoundary.sensitivitySummary).toBe(
+      "2 runtime buckets have no export sensitivity, 2 export candidate buckets carry tenant business context, and 2 buckets still carry tenant deliverable context."
+    );
+    expect(board.memoryBoundary.audienceSummary).toBe(
+      "2 runtime buckets stay Wealth Factory runtime only, 2 export candidate buckets are aimed at tenant governance-history readers, and 2 buckets still target tenant package consumers."
+    );
+    expect(board.memoryBoundary.sanitizationSummary).toBe(
+      "2 runtime buckets have no export sanitization, 2 export candidate buckets export as recorded, and 2 buckets still require sanitization before package export."
+    );
+    expect(board.memoryBoundary.redactionSummary).toBe(
+      "2 runtime buckets stay runtime internal only, 2 export candidate buckets use governance-safe redaction, and 2 buckets still require package-safe redaction."
+    );
+    expect(board.memoryBoundary.sourceDisclosureSummary).toBe(
+      "2 runtime buckets are runtime only, 2 export candidate buckets disclose decision summaries only, and 2 buckets still disclose closure-snapshot summaries only."
     );
     expect(board.memoryBoundary.readyNowCount).toBe(2);
     expect(board.memoryBoundary.waitingOnBoardClosureCount).toBe(2);
@@ -463,6 +496,21 @@ describe("harness board client", () => {
     expect(
       board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.exportCompletenessRuleLabel
     ).toBe("Board-closure-complete bundle");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.exportSensitivityLabel
+    ).toBe("Tenant deliverable context");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.exportAudienceBoundaryLabel
+    ).toBe("Tenant package consumers");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.exportSanitizationPolicyLabel
+    ).toBe("Sanitize before package export");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.exportRedactionBoundaryLabel
+    ).toBe("Package-safe redaction");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.exportSourceDisclosurePolicyLabel
+    ).toBe("Closure snapshot summary only");
   });
 
   it("derives governance-ready partition counts from readiness, not only from role membership", async () => {
