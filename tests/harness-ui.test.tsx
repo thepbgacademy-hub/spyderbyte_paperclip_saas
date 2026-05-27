@@ -357,6 +357,16 @@ const boardResponse: HarnessBoardResponse = {
       "2 runtime buckets stay outside export conflicts, 2 export candidate buckets use append-or-upsert conflict handling, and 2 buckets still replace the latest board-closure snapshot when promoted.",
     atomicitySummary:
       "2 runtime buckets have no export atomicity, 2 export candidate buckets commit as record-level atomic exports, and 2 buckets still depend on closure-bundle atomic export once board closure completes.",
+    derivationSummary:
+      "2 runtime buckets have no export derivation basis, 2 export candidate buckets are derived from decision history, and 2 buckets are derived from the board-closure snapshot.",
+    revisionSummary:
+      "2 runtime buckets have no export revision policy, 2 export candidate buckets append as new revisions, and 2 buckets still replace the current closure-bundle revision.",
+    freshnessSummary:
+      "2 runtime buckets have no export freshness source, 2 export candidate buckets use the latest record state, and 2 buckets still depend on the latest board-closure snapshot.",
+    validationSummary:
+      "2 runtime buckets have no export validation boundary, 2 export candidate buckets validate at record level, and 2 buckets still validate at closure-bundle level.",
+    completenessSummary:
+      "2 runtime buckets have no export completeness rule, 2 export candidate buckets are self-contained records, and 2 buckets still complete as board-closure bundles.",
     noPromotionScopeCount: 2,
     singleRecordExportScopeCount: 2,
     packageRecordSetExportScopeCount: 2,
@@ -384,6 +394,21 @@ const boardResponse: HarnessBoardResponse = {
     noExportAtomicityCount: 2,
     recordLevelAtomicCount: 2,
     closureBundleAtomicCount: 2,
+    noExportDerivationBasisCount: 2,
+    decisionHistoryDerivedCount: 2,
+    boardClosureSnapshotDerivedCount: 2,
+    noExportRevisionPolicyCount: 2,
+    appendNewRevisionCount: 2,
+    replaceClosureBundleRevisionCount: 2,
+    noExportFreshnessSourceCount: 2,
+    latestRecordStateCount: 2,
+    latestBoardClosureSnapshotCount: 2,
+    noExportValidationBoundaryCount: 2,
+    recordLevelValidationCount: 2,
+    closureBundleValidationCount: 2,
+    noExportCompletenessRuleCount: 2,
+    selfContainedRecordCount: 2,
+    boardClosureCompleteBundleCount: 2,
     partitions: {
       runtime: {
         itemCount: 2,
@@ -459,6 +484,16 @@ const boardResponse: HarnessBoardResponse = {
         conflictPolicyLabel: "Runtime only",
         exportAtomicity: "none_runtime_only",
         exportAtomicityLabel: "No export atomicity",
+        exportDerivationBasis: "none_runtime_only",
+        exportDerivationBasisLabel: "No export derivation",
+        exportRevisionPolicy: "none_runtime_only",
+        exportRevisionPolicyLabel: "No export revision policy",
+        exportFreshnessSource: "none_runtime_only",
+        exportFreshnessSourceLabel: "No export freshness source",
+        exportValidationBoundary: "none_runtime_only",
+        exportValidationBoundaryLabel: "No export validation",
+        exportCompletenessRule: "none_runtime_only",
+        exportCompletenessRuleLabel: "No export completeness rule",
         promotionActionDescription: "No export action applies. This runtime memory stays inside Wealth Factory orchestration."
       },
       {
@@ -521,6 +556,16 @@ const boardResponse: HarnessBoardResponse = {
         conflictPolicyLabel: "Runtime only",
         exportAtomicity: "none_runtime_only",
         exportAtomicityLabel: "No export atomicity",
+        exportDerivationBasis: "none_runtime_only",
+        exportDerivationBasisLabel: "No export derivation",
+        exportRevisionPolicy: "none_runtime_only",
+        exportRevisionPolicyLabel: "No export revision policy",
+        exportFreshnessSource: "none_runtime_only",
+        exportFreshnessSourceLabel: "No export freshness source",
+        exportValidationBoundary: "none_runtime_only",
+        exportValidationBoundaryLabel: "No export validation",
+        exportCompletenessRule: "none_runtime_only",
+        exportCompletenessRuleLabel: "No export completeness rule",
         promotionActionDescription: "No export action applies. This runtime attention state stays inside Wealth Factory orchestration."
       }
     ],
@@ -585,6 +630,16 @@ const boardResponse: HarnessBoardResponse = {
         conflictPolicyLabel: "Append or upsert",
         exportAtomicity: "record_level_atomic",
         exportAtomicityLabel: "Record-level atomic",
+        exportDerivationBasis: "decision_history_derived",
+        exportDerivationBasisLabel: "Decision-history-derived",
+        exportRevisionPolicy: "append_new_revision",
+        exportRevisionPolicyLabel: "Append new revision",
+        exportFreshnessSource: "latest_record_state",
+        exportFreshnessSourceLabel: "Latest record state",
+        exportValidationBoundary: "record_level_validation",
+        exportValidationBoundaryLabel: "Record-level validation",
+        exportCompletenessRule: "self_contained_record",
+        exportCompletenessRuleLabel: "Self-contained record",
         promotionActionDescription: "This governance history is ready to sit behind a later bounded tenant export action."
       },
       {
@@ -647,6 +702,16 @@ const boardResponse: HarnessBoardResponse = {
         conflictPolicyLabel: "Append or upsert",
         exportAtomicity: "record_level_atomic",
         exportAtomicityLabel: "Record-level atomic",
+        exportDerivationBasis: "decision_history_derived",
+        exportDerivationBasisLabel: "Decision-history-derived",
+        exportRevisionPolicy: "append_new_revision",
+        exportRevisionPolicyLabel: "Append new revision",
+        exportFreshnessSource: "latest_record_state",
+        exportFreshnessSourceLabel: "Latest record state",
+        exportValidationBoundary: "record_level_validation",
+        exportValidationBoundaryLabel: "Record-level validation",
+        exportCompletenessRule: "self_contained_record",
+        exportCompletenessRuleLabel: "Self-contained record",
         promotionActionDescription:
           "This implemented follow-through is ready to sit behind a later bounded tenant export action."
       },
@@ -710,6 +775,16 @@ const boardResponse: HarnessBoardResponse = {
         conflictPolicyLabel: "Replace latest closure snapshot",
         exportAtomicity: "closure_bundle_atomic",
         exportAtomicityLabel: "Closure-bundle atomic",
+        exportDerivationBasis: "board_closure_snapshot_derived",
+        exportDerivationBasisLabel: "Board-closure-snapshot-derived",
+        exportRevisionPolicy: "replace_closure_bundle_revision",
+        exportRevisionPolicyLabel: "Replace closure-bundle revision",
+        exportFreshnessSource: "latest_board_closure_snapshot",
+        exportFreshnessSourceLabel: "Latest board-closure snapshot",
+        exportValidationBoundary: "closure_bundle_validation",
+        exportValidationBoundaryLabel: "Closure-bundle validation",
+        exportCompletenessRule: "board_closure_complete_bundle",
+        exportCompletenessRuleLabel: "Board-closure-complete bundle",
         promotionActionDescription:
           "Board closure still gates this package governance memory before any later tenant export action can apply.",
         nextEligibleSummary: "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
@@ -774,6 +849,16 @@ const boardResponse: HarnessBoardResponse = {
         conflictPolicyLabel: "Replace latest closure snapshot",
         exportAtomicity: "closure_bundle_atomic",
         exportAtomicityLabel: "Closure-bundle atomic",
+        exportDerivationBasis: "board_closure_snapshot_derived",
+        exportDerivationBasisLabel: "Board-closure-snapshot-derived",
+        exportRevisionPolicy: "replace_closure_bundle_revision",
+        exportRevisionPolicyLabel: "Replace closure-bundle revision",
+        exportFreshnessSource: "latest_board_closure_snapshot",
+        exportFreshnessSourceLabel: "Latest board-closure snapshot",
+        exportValidationBoundary: "closure_bundle_validation",
+        exportValidationBoundaryLabel: "Closure-bundle validation",
+        exportCompletenessRule: "board_closure_complete_bundle",
+        exportCompletenessRuleLabel: "Board-closure-complete bundle",
         promotionActionDescription:
           "Board closure still gates this packaged deliverable before any later tenant export action can apply.",
         nextEligibleSummary: "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
@@ -1469,6 +1554,21 @@ describe("harness board UI", () => {
     expect(markup).toContain("No export atomicity");
     expect(markup).toContain("Record-level atomic");
     expect(markup).toContain("Closure-bundle atomic");
+    expect(markup).toContain("No export derivation");
+    expect(markup).toContain("Decision-history-derived");
+    expect(markup).toContain("Board-closure-snapshot-derived");
+    expect(markup).toContain("No export revision policy");
+    expect(markup).toContain("Append new revision");
+    expect(markup).toContain("Replace closure-bundle revision");
+    expect(markup).toContain("No export freshness source");
+    expect(markup).toContain("Latest record state");
+    expect(markup).toContain("Latest board-closure snapshot");
+    expect(markup).toContain("No export validation");
+    expect(markup).toContain("Record-level validation");
+    expect(markup).toContain("Closure-bundle validation");
+    expect(markup).toContain("No export completeness rule");
+    expect(markup).toContain("Self-contained record");
+    expect(markup).toContain("Board-closure-complete bundle");
     expect(markup).toContain("This governance history is ready to sit behind a later bounded tenant export action.");
     expect(markup).toContain("Board closure still gates this packaged deliverable before any later tenant export action can apply.");
     expect(markup).toContain("Source surface: Continuity snapshots");

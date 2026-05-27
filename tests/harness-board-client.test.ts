@@ -340,6 +340,21 @@ describe("harness board client", () => {
     expect(board.memoryBoundary.atomicitySummary).toBe(
       "2 runtime buckets have no export atomicity, 2 export candidate buckets commit as record-level atomic exports, and 2 buckets still depend on closure-bundle atomic export once board closure completes."
     );
+    expect(board.memoryBoundary.derivationSummary).toBe(
+      "2 runtime buckets have no export derivation basis, 2 export candidate buckets are derived from decision history, and 2 buckets are derived from the board-closure snapshot."
+    );
+    expect(board.memoryBoundary.revisionSummary).toBe(
+      "2 runtime buckets have no export revision policy, 2 export candidate buckets append as new revisions, and 2 buckets still replace the current closure-bundle revision."
+    );
+    expect(board.memoryBoundary.freshnessSummary).toBe(
+      "2 runtime buckets have no export freshness source, 2 export candidate buckets use the latest record state, and 2 buckets still depend on the latest board-closure snapshot."
+    );
+    expect(board.memoryBoundary.validationSummary).toBe(
+      "2 runtime buckets have no export validation boundary, 2 export candidate buckets validate at record level, and 2 buckets still validate at closure-bundle level."
+    );
+    expect(board.memoryBoundary.completenessSummary).toBe(
+      "2 runtime buckets have no export completeness rule, 2 export candidate buckets are self-contained records, and 2 buckets still complete as board-closure bundles."
+    );
     expect(board.memoryBoundary.readyNowCount).toBe(2);
     expect(board.memoryBoundary.waitingOnBoardClosureCount).toBe(2);
     expect(board.memoryBoundary.governanceReadyCount).toBe(2);
@@ -433,6 +448,21 @@ describe("harness board client", () => {
     expect(
       board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.exportAtomicityLabel
     ).toBe("Closure-bundle atomic");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.exportDerivationBasisLabel
+    ).toBe("Board-closure-snapshot-derived");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.exportRevisionPolicyLabel
+    ).toBe("Replace closure-bundle revision");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.exportFreshnessSourceLabel
+    ).toBe("Latest board-closure snapshot");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.exportValidationBoundaryLabel
+    ).toBe("Closure-bundle validation");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.exportCompletenessRuleLabel
+    ).toBe("Board-closure-complete bundle");
   });
 
   it("derives governance-ready partition counts from readiness, not only from role membership", async () => {

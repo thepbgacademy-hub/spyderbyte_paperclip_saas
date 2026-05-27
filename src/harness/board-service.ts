@@ -225,6 +225,31 @@ export type HarnessMemoryBoundaryExportAtomicity =
   | "record_level_atomic"
   | "closure_bundle_atomic";
 
+export type HarnessMemoryBoundaryExportDerivationBasis =
+  | "none_runtime_only"
+  | "decision_history_derived"
+  | "board_closure_snapshot_derived";
+
+export type HarnessMemoryBoundaryExportRevisionPolicy =
+  | "none_runtime_only"
+  | "append_new_revision"
+  | "replace_closure_bundle_revision";
+
+export type HarnessMemoryBoundaryExportFreshnessSource =
+  | "none_runtime_only"
+  | "latest_record_state"
+  | "latest_board_closure_snapshot";
+
+export type HarnessMemoryBoundaryExportValidationBoundary =
+  | "none_runtime_only"
+  | "record_level_validation"
+  | "closure_bundle_validation";
+
+export type HarnessMemoryBoundaryExportCompletenessRule =
+  | "none_runtime_only"
+  | "self_contained_record"
+  | "board_closure_complete_bundle";
+
 export type HarnessMemoryBoundaryItemView = {
   id:
     | "lane_continuity"
@@ -291,6 +316,16 @@ export type HarnessMemoryBoundaryItemView = {
   conflictPolicyLabel: string;
   exportAtomicity: HarnessMemoryBoundaryExportAtomicity;
   exportAtomicityLabel: string;
+  exportDerivationBasis: HarnessMemoryBoundaryExportDerivationBasis;
+  exportDerivationBasisLabel: string;
+  exportRevisionPolicy: HarnessMemoryBoundaryExportRevisionPolicy;
+  exportRevisionPolicyLabel: string;
+  exportFreshnessSource: HarnessMemoryBoundaryExportFreshnessSource;
+  exportFreshnessSourceLabel: string;
+  exportValidationBoundary: HarnessMemoryBoundaryExportValidationBoundary;
+  exportValidationBoundaryLabel: string;
+  exportCompletenessRule: HarnessMemoryBoundaryExportCompletenessRule;
+  exportCompletenessRuleLabel: string;
   promotionActionDescription: string;
   nextEligibleSummary?: string;
 };
@@ -359,6 +394,21 @@ export type HarnessMemoryBoundaryView = {
   noExportAtomicityCount: number;
   recordLevelAtomicCount: number;
   closureBundleAtomicCount: number;
+  noExportDerivationBasisCount: number;
+  decisionHistoryDerivedCount: number;
+  boardClosureSnapshotDerivedCount: number;
+  noExportRevisionPolicyCount: number;
+  appendNewRevisionCount: number;
+  replaceClosureBundleRevisionCount: number;
+  noExportFreshnessSourceCount: number;
+  latestRecordStateCount: number;
+  latestBoardClosureSnapshotCount: number;
+  noExportValidationBoundaryCount: number;
+  recordLevelValidationCount: number;
+  closureBundleValidationCount: number;
+  noExportCompletenessRuleCount: number;
+  selfContainedRecordCount: number;
+  boardClosureCompleteBundleCount: number;
   roleSummary: string;
   ownershipSummary: string;
   promotionSummary: string;
@@ -381,6 +431,11 @@ export type HarnessMemoryBoundaryView = {
   replaySafetySummary: string;
   conflictPolicySummary: string;
   atomicitySummary: string;
+  derivationSummary: string;
+  revisionSummary: string;
+  freshnessSummary: string;
+  validationSummary: string;
+  completenessSummary: string;
   partitions: {
     runtime: HarnessMemoryBoundaryPartitionView;
     governanceHistoryCandidates: HarnessMemoryBoundaryPartitionView;
@@ -4081,6 +4136,16 @@ function buildMemoryBoundaryView(input: {
       conflictPolicyLabel: humanizeMemoryBoundaryConflictPolicy("runtime_only"),
       exportAtomicity: "none_runtime_only",
       exportAtomicityLabel: humanizeMemoryBoundaryExportAtomicity("none_runtime_only"),
+      exportDerivationBasis: "none_runtime_only",
+      exportDerivationBasisLabel: humanizeMemoryBoundaryExportDerivationBasis("none_runtime_only"),
+      exportRevisionPolicy: "none_runtime_only",
+      exportRevisionPolicyLabel: humanizeMemoryBoundaryExportRevisionPolicy("none_runtime_only"),
+      exportFreshnessSource: "none_runtime_only",
+      exportFreshnessSourceLabel: humanizeMemoryBoundaryExportFreshnessSource("none_runtime_only"),
+      exportValidationBoundary: "none_runtime_only",
+      exportValidationBoundaryLabel: humanizeMemoryBoundaryExportValidationBoundary("none_runtime_only"),
+      exportCompletenessRule: "none_runtime_only",
+      exportCompletenessRuleLabel: humanizeMemoryBoundaryExportCompletenessRule("none_runtime_only"),
       promotionActionDescription: "No export action applies. This runtime memory stays inside Wealth Factory orchestration."
     },
     {
@@ -4143,6 +4208,16 @@ function buildMemoryBoundaryView(input: {
       conflictPolicyLabel: humanizeMemoryBoundaryConflictPolicy("runtime_only"),
       exportAtomicity: "none_runtime_only",
       exportAtomicityLabel: humanizeMemoryBoundaryExportAtomicity("none_runtime_only"),
+      exportDerivationBasis: "none_runtime_only",
+      exportDerivationBasisLabel: humanizeMemoryBoundaryExportDerivationBasis("none_runtime_only"),
+      exportRevisionPolicy: "none_runtime_only",
+      exportRevisionPolicyLabel: humanizeMemoryBoundaryExportRevisionPolicy("none_runtime_only"),
+      exportFreshnessSource: "none_runtime_only",
+      exportFreshnessSourceLabel: humanizeMemoryBoundaryExportFreshnessSource("none_runtime_only"),
+      exportValidationBoundary: "none_runtime_only",
+      exportValidationBoundaryLabel: humanizeMemoryBoundaryExportValidationBoundary("none_runtime_only"),
+      exportCompletenessRule: "none_runtime_only",
+      exportCompletenessRuleLabel: humanizeMemoryBoundaryExportCompletenessRule("none_runtime_only"),
       promotionActionDescription: "No export action applies. This runtime attention state stays inside Wealth Factory orchestration."
     }
   ];
@@ -4208,6 +4283,16 @@ function buildMemoryBoundaryView(input: {
       conflictPolicyLabel: humanizeMemoryBoundaryConflictPolicy("append_or_upsert"),
       exportAtomicity: "record_level_atomic",
       exportAtomicityLabel: humanizeMemoryBoundaryExportAtomicity("record_level_atomic"),
+      exportDerivationBasis: "decision_history_derived",
+      exportDerivationBasisLabel: humanizeMemoryBoundaryExportDerivationBasis("decision_history_derived"),
+      exportRevisionPolicy: "append_new_revision",
+      exportRevisionPolicyLabel: humanizeMemoryBoundaryExportRevisionPolicy("append_new_revision"),
+      exportFreshnessSource: "latest_record_state",
+      exportFreshnessSourceLabel: humanizeMemoryBoundaryExportFreshnessSource("latest_record_state"),
+      exportValidationBoundary: "record_level_validation",
+      exportValidationBoundaryLabel: humanizeMemoryBoundaryExportValidationBoundary("record_level_validation"),
+      exportCompletenessRule: "self_contained_record",
+      exportCompletenessRuleLabel: humanizeMemoryBoundaryExportCompletenessRule("self_contained_record"),
       promotionActionDescription: "This governance history is ready to sit behind a later bounded tenant export action."
     },
     {
@@ -4270,6 +4355,16 @@ function buildMemoryBoundaryView(input: {
       conflictPolicyLabel: humanizeMemoryBoundaryConflictPolicy("append_or_upsert"),
       exportAtomicity: "record_level_atomic",
       exportAtomicityLabel: humanizeMemoryBoundaryExportAtomicity("record_level_atomic"),
+      exportDerivationBasis: "decision_history_derived",
+      exportDerivationBasisLabel: humanizeMemoryBoundaryExportDerivationBasis("decision_history_derived"),
+      exportRevisionPolicy: "append_new_revision",
+      exportRevisionPolicyLabel: humanizeMemoryBoundaryExportRevisionPolicy("append_new_revision"),
+      exportFreshnessSource: "latest_record_state",
+      exportFreshnessSourceLabel: humanizeMemoryBoundaryExportFreshnessSource("latest_record_state"),
+      exportValidationBoundary: "record_level_validation",
+      exportValidationBoundaryLabel: humanizeMemoryBoundaryExportValidationBoundary("record_level_validation"),
+      exportCompletenessRule: "self_contained_record",
+      exportCompletenessRuleLabel: humanizeMemoryBoundaryExportCompletenessRule("self_contained_record"),
       promotionActionDescription:
         "This implemented follow-through is ready to sit behind a later bounded tenant export action."
     }
@@ -4436,6 +4531,22 @@ function buildMemoryBoundaryView(input: {
             ? "closure_bundle_atomic"
             : "record_level_atomic"
         ),
+        exportDerivationBasis: "board_closure_snapshot_derived",
+        exportDerivationBasisLabel: humanizeMemoryBoundaryExportDerivationBasis("board_closure_snapshot_derived"),
+        exportRevisionPolicy: input.completionPackage.hasOpenGovernanceItems
+          ? "replace_closure_bundle_revision"
+          : "append_new_revision",
+        exportRevisionPolicyLabel: humanizeMemoryBoundaryExportRevisionPolicy(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "replace_closure_bundle_revision"
+            : "append_new_revision"
+        ),
+        exportFreshnessSource: "latest_board_closure_snapshot",
+        exportFreshnessSourceLabel: humanizeMemoryBoundaryExportFreshnessSource("latest_board_closure_snapshot"),
+        exportValidationBoundary: "closure_bundle_validation",
+        exportValidationBoundaryLabel: humanizeMemoryBoundaryExportValidationBoundary("closure_bundle_validation"),
+        exportCompletenessRule: "board_closure_complete_bundle",
+        exportCompletenessRuleLabel: humanizeMemoryBoundaryExportCompletenessRule("board_closure_complete_bundle"),
         promotionActionDescription: input.completionPackage.hasOpenGovernanceItems
           ? "Board closure still gates this package governance memory before any later tenant export action can apply."
           : "This package governance memory is ready to sit behind a later bounded tenant export action.",
@@ -4602,6 +4713,22 @@ function buildMemoryBoundaryView(input: {
             ? "closure_bundle_atomic"
             : "record_level_atomic"
         ),
+        exportDerivationBasis: "board_closure_snapshot_derived",
+        exportDerivationBasisLabel: humanizeMemoryBoundaryExportDerivationBasis("board_closure_snapshot_derived"),
+        exportRevisionPolicy: input.completionPackage.hasOpenGovernanceItems
+          ? "replace_closure_bundle_revision"
+          : "append_new_revision",
+        exportRevisionPolicyLabel: humanizeMemoryBoundaryExportRevisionPolicy(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "replace_closure_bundle_revision"
+            : "append_new_revision"
+        ),
+        exportFreshnessSource: "latest_board_closure_snapshot",
+        exportFreshnessSourceLabel: humanizeMemoryBoundaryExportFreshnessSource("latest_board_closure_snapshot"),
+        exportValidationBoundary: "closure_bundle_validation",
+        exportValidationBoundaryLabel: humanizeMemoryBoundaryExportValidationBoundary("closure_bundle_validation"),
+        exportCompletenessRule: "board_closure_complete_bundle",
+        exportCompletenessRuleLabel: humanizeMemoryBoundaryExportCompletenessRule("board_closure_complete_bundle"),
         promotionActionDescription: input.completionPackage.hasOpenGovernanceItems
           ? "Board closure still gates this packaged deliverable before any later tenant export action can apply."
           : "This packaged deliverable is ready to sit behind a later bounded tenant export action.",
@@ -4777,6 +4904,51 @@ function buildMemoryBoundaryView(input: {
   const closureBundleAtomicCount = exportReadyItems.filter(
     (item) => item.exportAtomicity === "closure_bundle_atomic"
   ).length;
+  const noExportDerivationBasisCount = operationalItems.filter(
+    (item) => item.exportDerivationBasis === "none_runtime_only"
+  ).length;
+  const decisionHistoryDerivedCount = exportReadyItems.filter(
+    (item) => item.exportDerivationBasis === "decision_history_derived"
+  ).length;
+  const boardClosureSnapshotDerivedCount = exportReadyItems.filter(
+    (item) => item.exportDerivationBasis === "board_closure_snapshot_derived"
+  ).length;
+  const noExportRevisionPolicyCount = operationalItems.filter(
+    (item) => item.exportRevisionPolicy === "none_runtime_only"
+  ).length;
+  const appendNewRevisionCount = exportReadyItems.filter(
+    (item) => item.exportRevisionPolicy === "append_new_revision"
+  ).length;
+  const replaceClosureBundleRevisionCount = exportReadyItems.filter(
+    (item) => item.exportRevisionPolicy === "replace_closure_bundle_revision"
+  ).length;
+  const noExportFreshnessSourceCount = operationalItems.filter(
+    (item) => item.exportFreshnessSource === "none_runtime_only"
+  ).length;
+  const latestRecordStateCount = exportReadyItems.filter(
+    (item) => item.exportFreshnessSource === "latest_record_state"
+  ).length;
+  const latestBoardClosureSnapshotCount = exportReadyItems.filter(
+    (item) => item.exportFreshnessSource === "latest_board_closure_snapshot"
+  ).length;
+  const noExportValidationBoundaryCount = operationalItems.filter(
+    (item) => item.exportValidationBoundary === "none_runtime_only"
+  ).length;
+  const recordLevelValidationCount = exportReadyItems.filter(
+    (item) => item.exportValidationBoundary === "record_level_validation"
+  ).length;
+  const closureBundleValidationCount = exportReadyItems.filter(
+    (item) => item.exportValidationBoundary === "closure_bundle_validation"
+  ).length;
+  const noExportCompletenessRuleCount = operationalItems.filter(
+    (item) => item.exportCompletenessRule === "none_runtime_only"
+  ).length;
+  const selfContainedRecordCount = exportReadyItems.filter(
+    (item) => item.exportCompletenessRule === "self_contained_record"
+  ).length;
+  const boardClosureCompleteBundleCount = exportReadyItems.filter(
+    (item) => item.exportCompletenessRule === "board_closure_complete_bundle"
+  ).length;
 
   return {
     summary:
@@ -4843,6 +5015,21 @@ function buildMemoryBoundaryView(input: {
     noExportAtomicityCount,
     recordLevelAtomicCount,
     closureBundleAtomicCount,
+    noExportDerivationBasisCount,
+    decisionHistoryDerivedCount,
+    boardClosureSnapshotDerivedCount,
+    noExportRevisionPolicyCount,
+    appendNewRevisionCount,
+    replaceClosureBundleRevisionCount,
+    noExportFreshnessSourceCount,
+    latestRecordStateCount,
+    latestBoardClosureSnapshotCount,
+    noExportValidationBoundaryCount,
+    recordLevelValidationCount,
+    closureBundleValidationCount,
+    noExportCompletenessRuleCount,
+    selfContainedRecordCount,
+    boardClosureCompleteBundleCount,
     roleSummary:
       packagedWaitingCount > 0
         ? `${governanceReadyCount} governance record candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} ready now, and ${packagedWaitingCount} packaged output candidate${packagedWaitingCount === 1 ? "" : "s"} ${packagedWaitingCount === 1 ? "still waits" : "still wait"} on board closure.`
@@ -4931,6 +5118,26 @@ function buildMemoryBoundaryView(input: {
       closureBundleAtomicCount > 0
         ? `${noExportAtomicityCount} runtime bucket${noExportAtomicityCount === 1 ? " has" : "s have"} no export atomicity, ${recordLevelAtomicCount} export candidate bucket${recordLevelAtomicCount === 1 ? " commits" : "commit"} as record-level atomic exports, and ${closureBundleAtomicCount} bucket${closureBundleAtomicCount === 1 ? " still depends" : "s still depend"} on closure-bundle atomic export once board closure completes.`
         : `${noExportAtomicityCount} runtime bucket${noExportAtomicityCount === 1 ? " has" : "s have"} no export atomicity, and ${recordLevelAtomicCount} export candidate bucket${recordLevelAtomicCount === 1 ? " commits" : "commit"} as record-level atomic exports.`,
+    derivationSummary:
+      boardClosureSnapshotDerivedCount > 0
+        ? `${noExportDerivationBasisCount} runtime bucket${noExportDerivationBasisCount === 1 ? " has" : "s have"} no export derivation basis, ${decisionHistoryDerivedCount} export candidate bucket${decisionHistoryDerivedCount === 1 ? " is" : "s are"} derived from decision history, and ${boardClosureSnapshotDerivedCount} bucket${boardClosureSnapshotDerivedCount === 1 ? " is" : "s are"} derived from the board-closure snapshot.`
+        : `${noExportDerivationBasisCount} runtime bucket${noExportDerivationBasisCount === 1 ? " has" : "s have"} no export derivation basis, and ${decisionHistoryDerivedCount} export candidate bucket${decisionHistoryDerivedCount === 1 ? " is" : "s are"} derived from decision history.`,
+    revisionSummary:
+      replaceClosureBundleRevisionCount > 0
+        ? `${noExportRevisionPolicyCount} runtime bucket${noExportRevisionPolicyCount === 1 ? " has" : "s have"} no export revision policy, ${appendNewRevisionCount} export candidate bucket${appendNewRevisionCount === 1 ? " appends" : "append"} as new revisions, and ${replaceClosureBundleRevisionCount} bucket${replaceClosureBundleRevisionCount === 1 ? " still replaces" : "s still replace"} the current closure-bundle revision.`
+        : `${noExportRevisionPolicyCount} runtime bucket${noExportRevisionPolicyCount === 1 ? " has" : "s have"} no export revision policy, and ${appendNewRevisionCount} export candidate bucket${appendNewRevisionCount === 1 ? " appends" : "append"} as new revisions.`,
+    freshnessSummary:
+      latestBoardClosureSnapshotCount > 0
+        ? `${noExportFreshnessSourceCount} runtime bucket${noExportFreshnessSourceCount === 1 ? " has" : "s have"} no export freshness source, ${latestRecordStateCount} export candidate bucket${latestRecordStateCount === 1 ? " uses" : "use"} the latest record state, and ${latestBoardClosureSnapshotCount} bucket${latestBoardClosureSnapshotCount === 1 ? " still depends" : "s still depend"} on the latest board-closure snapshot.`
+        : `${noExportFreshnessSourceCount} runtime bucket${noExportFreshnessSourceCount === 1 ? " has" : "s have"} no export freshness source, and ${latestRecordStateCount} export candidate bucket${latestRecordStateCount === 1 ? " uses" : "use"} the latest record state.`,
+    validationSummary:
+      closureBundleValidationCount > 0
+        ? `${noExportValidationBoundaryCount} runtime bucket${noExportValidationBoundaryCount === 1 ? " has" : "s have"} no export validation boundary, ${recordLevelValidationCount} export candidate bucket${recordLevelValidationCount === 1 ? " validates" : "validate"} at record level, and ${closureBundleValidationCount} bucket${closureBundleValidationCount === 1 ? " still validates" : "s still validate"} at closure-bundle level.`
+        : `${noExportValidationBoundaryCount} runtime bucket${noExportValidationBoundaryCount === 1 ? " has" : "s have"} no export validation boundary, and ${recordLevelValidationCount} export candidate bucket${recordLevelValidationCount === 1 ? " validates" : "validate"} at record level.`,
+    completenessSummary:
+      boardClosureCompleteBundleCount > 0
+        ? `${noExportCompletenessRuleCount} runtime bucket${noExportCompletenessRuleCount === 1 ? " has" : "s have"} no export completeness rule, ${selfContainedRecordCount} export candidate bucket${selfContainedRecordCount === 1 ? " is" : "s are"} self-contained records, and ${boardClosureCompleteBundleCount} bucket${boardClosureCompleteBundleCount === 1 ? " still completes" : "s still complete"} as board-closure bundles.`
+        : `${noExportCompletenessRuleCount} runtime bucket${noExportCompletenessRuleCount === 1 ? " has" : "s have"} no export completeness rule, and ${selfContainedRecordCount} export candidate bucket${selfContainedRecordCount === 1 ? " is" : "s are"} self-contained records.`,
     partitions: {
       runtime: {
         itemCount: operationalItems.length,
@@ -5309,6 +5516,71 @@ function humanizeMemoryBoundaryExportAtomicity(atomicity: HarnessMemoryBoundaryE
       return "Closure-bundle atomic";
     default:
       return atomicity;
+  }
+}
+
+function humanizeMemoryBoundaryExportDerivationBasis(basis: HarnessMemoryBoundaryExportDerivationBasis) {
+  switch (basis) {
+    case "none_runtime_only":
+      return "No export derivation";
+    case "decision_history_derived":
+      return "Decision-history-derived";
+    case "board_closure_snapshot_derived":
+      return "Board-closure-snapshot-derived";
+    default:
+      return basis;
+  }
+}
+
+function humanizeMemoryBoundaryExportRevisionPolicy(policy: HarnessMemoryBoundaryExportRevisionPolicy) {
+  switch (policy) {
+    case "none_runtime_only":
+      return "No export revision policy";
+    case "append_new_revision":
+      return "Append new revision";
+    case "replace_closure_bundle_revision":
+      return "Replace closure-bundle revision";
+    default:
+      return policy;
+  }
+}
+
+function humanizeMemoryBoundaryExportFreshnessSource(source: HarnessMemoryBoundaryExportFreshnessSource) {
+  switch (source) {
+    case "none_runtime_only":
+      return "No export freshness source";
+    case "latest_record_state":
+      return "Latest record state";
+    case "latest_board_closure_snapshot":
+      return "Latest board-closure snapshot";
+    default:
+      return source;
+  }
+}
+
+function humanizeMemoryBoundaryExportValidationBoundary(boundary: HarnessMemoryBoundaryExportValidationBoundary) {
+  switch (boundary) {
+    case "none_runtime_only":
+      return "No export validation";
+    case "record_level_validation":
+      return "Record-level validation";
+    case "closure_bundle_validation":
+      return "Closure-bundle validation";
+    default:
+      return boundary;
+  }
+}
+
+function humanizeMemoryBoundaryExportCompletenessRule(rule: HarnessMemoryBoundaryExportCompletenessRule) {
+  switch (rule) {
+    case "none_runtime_only":
+      return "No export completeness rule";
+    case "self_contained_record":
+      return "Self-contained record";
+    case "board_closure_complete_bundle":
+      return "Board-closure-complete bundle";
+    default:
+      return rule;
   }
 }
 

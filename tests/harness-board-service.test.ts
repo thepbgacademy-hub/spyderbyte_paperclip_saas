@@ -1629,6 +1629,11 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.replaySafetySummary).toContain("replay-safe");
     expect(hydrated.memoryBoundary.conflictPolicySummary).toContain("append-or-upsert");
     expect(hydrated.memoryBoundary.atomicitySummary).toContain("record-level atomic");
+    expect(hydrated.memoryBoundary.derivationSummary).toContain("decision history");
+    expect(hydrated.memoryBoundary.revisionSummary).toContain("new revisions");
+    expect(hydrated.memoryBoundary.freshnessSummary).toContain("latest record state");
+    expect(hydrated.memoryBoundary.validationSummary).toContain("record level");
+    expect(hydrated.memoryBoundary.completenessSummary).toContain("self-contained records");
     expect(hydrated.memoryBoundary.blockerSummary).toContain("blocked");
     expect(hydrated.memoryBoundary.authoritySummary).toContain("tenant-controlled");
     expect(hydrated.memoryBoundary.triggerSummary).toContain("tenant export request");
@@ -1690,7 +1695,17 @@ describe("harness board service", () => {
           conflictPolicy: "runtime_only",
           conflictPolicyLabel: "Runtime only",
           exportAtomicity: "none_runtime_only",
-          exportAtomicityLabel: "No export atomicity"
+          exportAtomicityLabel: "No export atomicity",
+          exportDerivationBasis: "none_runtime_only",
+          exportDerivationBasisLabel: "No export derivation",
+          exportRevisionPolicy: "none_runtime_only",
+          exportRevisionPolicyLabel: "No export revision policy",
+          exportFreshnessSource: "none_runtime_only",
+          exportFreshnessSourceLabel: "No export freshness source",
+          exportValidationBoundary: "none_runtime_only",
+          exportValidationBoundaryLabel: "No export validation",
+          exportCompletenessRule: "none_runtime_only",
+          exportCompletenessRuleLabel: "No export completeness rule"
         })
       ])
     );
@@ -1746,7 +1761,17 @@ describe("harness board service", () => {
           conflictPolicy: "append_or_upsert",
           conflictPolicyLabel: "Append or upsert",
           exportAtomicity: "record_level_atomic",
-          exportAtomicityLabel: "Record-level atomic"
+          exportAtomicityLabel: "Record-level atomic",
+          exportDerivationBasis: "decision_history_derived",
+          exportDerivationBasisLabel: "Decision-history-derived",
+          exportRevisionPolicy: "append_new_revision",
+          exportRevisionPolicyLabel: "Append new revision",
+          exportFreshnessSource: "latest_record_state",
+          exportFreshnessSourceLabel: "Latest record state",
+          exportValidationBoundary: "record_level_validation",
+          exportValidationBoundaryLabel: "Record-level validation",
+          exportCompletenessRule: "self_contained_record",
+          exportCompletenessRuleLabel: "Self-contained record"
         }),
         expect.objectContaining({
           id: "implemented_actions",
