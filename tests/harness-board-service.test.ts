@@ -3935,7 +3935,12 @@ describe("harness board service", () => {
         exportRevisionPolicyLabel: "Append new revision",
         exportFreshnessSourceLabel: "Latest record state",
         exportValidationBoundaryLabel: "Record-level validation",
-        exportCompletenessRuleLabel: "Self-contained record"
+        exportCompletenessRuleLabel: "Self-contained record",
+        exportSensitivityLabel: "Tenant business context",
+        exportAudienceBoundaryLabel: "Tenant governance-history readers",
+        exportSanitizationPolicyLabel: "Export as recorded",
+        exportRedactionBoundaryLabel: "Governance-safe redaction",
+        exportSourceDisclosurePolicyLabel: "Decision summary only"
       })
     ]);
   });

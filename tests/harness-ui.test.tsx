@@ -1676,6 +1676,16 @@ describe("harness board UI", () => {
     expect(markup).toContain("Closure-bundle validation");
     expect(markup).toContain("Self-contained record");
     expect(markup).toContain("Board-closure-complete bundle");
+    expect(markup).toContain("Tenant business context");
+    expect(markup).toContain("Tenant deliverable context");
+    expect(markup).toContain("Tenant governance-history readers");
+    expect(markup).toContain("Tenant package consumers");
+    expect(markup).toContain("Export as recorded");
+    expect(markup).toContain("Sanitize before package export");
+    expect(markup).toContain("Governance-safe redaction");
+    expect(markup).toContain("Package-safe redaction");
+    expect(markup).toContain("Decision summary only");
+    expect(markup).toContain("Closure snapshot summary only");
     expect(markup).toContain("Depends on: Governance history export");
     expect(markup).toContain("2 runtime memory buckets stay live only inside Wealth Factory orchestration.");
     expect(markup).toContain("2 governance history candidates are stable enough for later tenant-owned export.");

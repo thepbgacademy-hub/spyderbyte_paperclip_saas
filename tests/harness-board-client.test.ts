@@ -577,7 +577,12 @@ describe("harness board client", () => {
           exportRevisionPolicyLabel: "Append new revision",
           exportFreshnessSourceLabel: "Latest record state",
           exportValidationBoundaryLabel: "Record-level validation",
-          exportCompletenessRuleLabel: "Self-contained record"
+          exportCompletenessRuleLabel: "Self-contained record",
+          exportSensitivityLabel: "Tenant business context",
+          exportAudienceBoundaryLabel: "Tenant governance-history readers",
+          exportSanitizationPolicyLabel: "Export as recorded",
+          exportRedactionBoundaryLabel: "Governance-safe redaction",
+          exportSourceDisclosurePolicyLabel: "Decision summary only"
         }),
         expect.objectContaining({
           id: "package_bundle_export",
@@ -597,6 +602,11 @@ describe("harness board client", () => {
           exportFreshnessSourceLabel: "Latest board-closure snapshot",
           exportValidationBoundaryLabel: "Closure-bundle validation",
           exportCompletenessRuleLabel: "Board-closure-complete bundle",
+          exportSensitivityLabel: "Tenant deliverable context",
+          exportAudienceBoundaryLabel: "Tenant package consumers",
+          exportSanitizationPolicyLabel: "Sanitize before package export",
+          exportRedactionBoundaryLabel: "Package-safe redaction",
+          exportSourceDisclosurePolicyLabel: "Closure snapshot summary only",
           dependsOnCandidateLabels: ["Governance history export"]
         })
       ])

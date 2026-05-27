@@ -644,6 +644,19 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
             exportValidationBoundaryLabel: candidate.exportValidationBoundaryLabel ?? "Record-level validation",
             exportCompletenessRule: candidate.exportCompletenessRule ?? "self_contained_record",
             exportCompletenessRuleLabel: candidate.exportCompletenessRuleLabel ?? "Self-contained record",
+            exportSensitivity: candidate.exportSensitivity ?? "tenant_business_context",
+            exportSensitivityLabel: candidate.exportSensitivityLabel ?? "Tenant business context",
+            exportAudienceBoundary: candidate.exportAudienceBoundary ?? "tenant_governance_history_readers",
+            exportAudienceBoundaryLabel:
+              candidate.exportAudienceBoundaryLabel ?? "Tenant governance-history readers",
+            exportSanitizationPolicy: candidate.exportSanitizationPolicy ?? "export_as_recorded",
+            exportSanitizationPolicyLabel: candidate.exportSanitizationPolicyLabel ?? "Export as recorded",
+            exportRedactionBoundary: candidate.exportRedactionBoundary ?? "governance_safe_redaction",
+            exportRedactionBoundaryLabel: candidate.exportRedactionBoundaryLabel ?? "Governance-safe redaction",
+            exportSourceDisclosurePolicy:
+              candidate.exportSourceDisclosurePolicy ?? "decision_summary_only",
+            exportSourceDisclosurePolicyLabel:
+              candidate.exportSourceDisclosurePolicyLabel ?? "Decision summary only",
             exportSequence: candidate.exportSequence ?? "foundational_first",
             exportSequenceLabel: candidate.exportSequenceLabel ?? "Foundational export sequence",
             exportDependencyPolicy: candidate.exportDependencyPolicy ?? "independent_candidate",
@@ -676,6 +689,20 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
             exportValidationBoundaryLabel: candidate.exportValidationBoundaryLabel ?? "Closure-bundle validation",
             exportCompletenessRule: candidate.exportCompletenessRule ?? "board_closure_complete_bundle",
             exportCompletenessRuleLabel: candidate.exportCompletenessRuleLabel ?? "Board-closure-complete bundle",
+            exportSensitivity: candidate.exportSensitivity ?? "tenant_deliverable_context",
+            exportSensitivityLabel: candidate.exportSensitivityLabel ?? "Tenant deliverable context",
+            exportAudienceBoundary: candidate.exportAudienceBoundary ?? "tenant_package_consumers",
+            exportAudienceBoundaryLabel: candidate.exportAudienceBoundaryLabel ?? "Tenant package consumers",
+            exportSanitizationPolicy:
+              candidate.exportSanitizationPolicy ?? "sanitize_before_package_export",
+            exportSanitizationPolicyLabel:
+              candidate.exportSanitizationPolicyLabel ?? "Sanitize before package export",
+            exportRedactionBoundary: candidate.exportRedactionBoundary ?? "package_safe_redaction",
+            exportRedactionBoundaryLabel: candidate.exportRedactionBoundaryLabel ?? "Package-safe redaction",
+            exportSourceDisclosurePolicy:
+              candidate.exportSourceDisclosurePolicy ?? "closure_snapshot_summary_only",
+            exportSourceDisclosurePolicyLabel:
+              candidate.exportSourceDisclosurePolicyLabel ?? "Closure snapshot summary only",
             exportSequence: candidate.exportSequence ?? "board_closure_following",
             exportSequenceLabel: candidate.exportSequenceLabel ?? "Board-closure-following sequence",
             exportDependencyPolicy:
@@ -806,6 +833,11 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                 <span style={styles.badge}>{candidate.exportFreshnessSourceLabel}</span>
                 <span style={styles.badge}>{candidate.exportValidationBoundaryLabel}</span>
                 <span style={styles.badge}>{candidate.exportCompletenessRuleLabel}</span>
+                <span style={styles.badge}>{candidate.exportSensitivityLabel}</span>
+                <span style={styles.badge}>{candidate.exportAudienceBoundaryLabel}</span>
+                <span style={styles.badge}>{candidate.exportSanitizationPolicyLabel}</span>
+                <span style={styles.badge}>{candidate.exportRedactionBoundaryLabel}</span>
+                <span style={styles.badge}>{candidate.exportSourceDisclosurePolicyLabel}</span>
                 {candidate.exportSequenceLabel ? <span style={styles.badge}>{candidate.exportSequenceLabel}</span> : null}
                 {candidate.exportDependencyPolicyLabel ? <span style={styles.badge}>{candidate.exportDependencyPolicyLabel}</span> : null}
               </div>
@@ -977,6 +1009,16 @@ function deriveMemoryBoundaryExportCandidates(
       exportValidationBoundaryLabel: representative.exportValidationBoundaryLabel,
       exportCompletenessRule: representative.exportCompletenessRule,
       exportCompletenessRuleLabel: representative.exportCompletenessRuleLabel,
+      exportSensitivity: representative.exportSensitivity,
+      exportSensitivityLabel: representative.exportSensitivityLabel,
+      exportAudienceBoundary: representative.exportAudienceBoundary,
+      exportAudienceBoundaryLabel: representative.exportAudienceBoundaryLabel,
+      exportSanitizationPolicy: representative.exportSanitizationPolicy,
+      exportSanitizationPolicyLabel: representative.exportSanitizationPolicyLabel,
+      exportRedactionBoundary: representative.exportRedactionBoundary,
+      exportRedactionBoundaryLabel: representative.exportRedactionBoundaryLabel,
+      exportSourceDisclosurePolicy: representative.exportSourceDisclosurePolicy,
+      exportSourceDisclosurePolicyLabel: representative.exportSourceDisclosurePolicyLabel,
       exportSequence: "foundational_first",
       exportSequenceLabel: "Foundational export sequence",
       exportDependencyPolicy: "independent_candidate",
@@ -1038,6 +1080,16 @@ function deriveMemoryBoundaryExportCandidates(
       exportValidationBoundaryLabel: representative.exportValidationBoundaryLabel,
       exportCompletenessRule: representative.exportCompletenessRule,
       exportCompletenessRuleLabel: representative.exportCompletenessRuleLabel,
+      exportSensitivity: representative.exportSensitivity,
+      exportSensitivityLabel: representative.exportSensitivityLabel,
+      exportAudienceBoundary: representative.exportAudienceBoundary,
+      exportAudienceBoundaryLabel: representative.exportAudienceBoundaryLabel,
+      exportSanitizationPolicy: representative.exportSanitizationPolicy,
+      exportSanitizationPolicyLabel: representative.exportSanitizationPolicyLabel,
+      exportRedactionBoundary: representative.exportRedactionBoundary,
+      exportRedactionBoundaryLabel: representative.exportRedactionBoundaryLabel,
+      exportSourceDisclosurePolicy: representative.exportSourceDisclosurePolicy,
+      exportSourceDisclosurePolicyLabel: representative.exportSourceDisclosurePolicyLabel,
       exportSequence: "board_closure_following",
       exportSequenceLabel: "Board-closure-following sequence",
       exportDependencyPolicy: "depends_on_governance_history_export",

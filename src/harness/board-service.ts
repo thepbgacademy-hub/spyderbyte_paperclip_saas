@@ -458,6 +458,16 @@ export type HarnessMemoryBoundaryExportCandidateView = {
   exportValidationBoundaryLabel: string;
   exportCompletenessRule: HarnessMemoryBoundaryExportCompletenessRule;
   exportCompletenessRuleLabel: string;
+  exportSensitivity: HarnessMemoryBoundaryExportSensitivity;
+  exportSensitivityLabel: string;
+  exportAudienceBoundary: HarnessMemoryBoundaryExportAudienceBoundary;
+  exportAudienceBoundaryLabel: string;
+  exportSanitizationPolicy: HarnessMemoryBoundaryExportSanitizationPolicy;
+  exportSanitizationPolicyLabel: string;
+  exportRedactionBoundary: HarnessMemoryBoundaryExportRedactionBoundary;
+  exportRedactionBoundaryLabel: string;
+  exportSourceDisclosurePolicy: HarnessMemoryBoundaryExportSourceDisclosurePolicy;
+  exportSourceDisclosurePolicyLabel: string;
   exportSequence?: HarnessMemoryBoundaryExportSequence;
   exportSequenceLabel?: string;
   exportDependencyPolicy?: HarnessMemoryBoundaryExportDependencyPolicy;
@@ -5409,6 +5419,16 @@ function buildMemoryBoundaryView(input: {
       exportValidationBoundaryLabel: representative.exportValidationBoundaryLabel,
       exportCompletenessRule: representative.exportCompletenessRule,
       exportCompletenessRuleLabel: representative.exportCompletenessRuleLabel,
+      exportSensitivity: representative.exportSensitivity,
+      exportSensitivityLabel: representative.exportSensitivityLabel,
+      exportAudienceBoundary: representative.exportAudienceBoundary,
+      exportAudienceBoundaryLabel: representative.exportAudienceBoundaryLabel,
+      exportSanitizationPolicy: representative.exportSanitizationPolicy,
+      exportSanitizationPolicyLabel: representative.exportSanitizationPolicyLabel,
+      exportRedactionBoundary: representative.exportRedactionBoundary,
+      exportRedactionBoundaryLabel: representative.exportRedactionBoundaryLabel,
+      exportSourceDisclosurePolicy: representative.exportSourceDisclosurePolicy,
+      exportSourceDisclosurePolicyLabel: representative.exportSourceDisclosurePolicyLabel,
       exportSequence: "foundational_first",
       exportSequenceLabel: humanizeMemoryBoundaryExportSequence("foundational_first"),
       exportDependencyPolicy: "independent_candidate",
@@ -5471,6 +5491,16 @@ function buildMemoryBoundaryView(input: {
       exportValidationBoundaryLabel: representative.exportValidationBoundaryLabel,
       exportCompletenessRule: representative.exportCompletenessRule,
       exportCompletenessRuleLabel: representative.exportCompletenessRuleLabel,
+      exportSensitivity: representative.exportSensitivity,
+      exportSensitivityLabel: representative.exportSensitivityLabel,
+      exportAudienceBoundary: representative.exportAudienceBoundary,
+      exportAudienceBoundaryLabel: representative.exportAudienceBoundaryLabel,
+      exportSanitizationPolicy: representative.exportSanitizationPolicy,
+      exportSanitizationPolicyLabel: representative.exportSanitizationPolicyLabel,
+      exportRedactionBoundary: representative.exportRedactionBoundary,
+      exportRedactionBoundaryLabel: representative.exportRedactionBoundaryLabel,
+      exportSourceDisclosurePolicy: representative.exportSourceDisclosurePolicy,
+      exportSourceDisclosurePolicyLabel: representative.exportSourceDisclosurePolicyLabel,
       exportSequence: "board_closure_following",
       exportSequenceLabel: humanizeMemoryBoundaryExportSequence("board_closure_following"),
       exportDependencyPolicy: "depends_on_governance_history_export",
