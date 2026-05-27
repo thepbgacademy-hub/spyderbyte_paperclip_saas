@@ -281,6 +281,48 @@ const boardResponse: HarnessBoardResponse = {
         outcome: "Margin ranges are stable with one pricing decision still pending."
       }
     ]
+  },
+  memoryBoundary: {
+    summary: "Wealth Factory runtime keeps bounded operational lane memory live while governance and package records stay ready for later tenant-owned export.",
+    operationalItems: [
+      {
+        id: "lane_continuity",
+        label: "Lane continuity",
+        count: 2,
+        summary: "Continuity snapshots stay in Wealth Factory runtime as live operational memory.",
+        destination: "wealth_factory_runtime"
+      },
+      {
+        id: "attention_state",
+        label: "Attention state",
+        count: 1,
+        summary: "Current CEO attention stays in runtime truth until the board resolves it explicitly.",
+        destination: "wealth_factory_runtime"
+      }
+    ],
+    exportReadyItems: [
+      {
+        id: "governance_decisions",
+        label: "Governance decisions",
+        count: 1,
+        summary: "Bounded decisions are ready for later tenant-owned board records.",
+        destination: "tenant_record_candidate"
+      },
+      {
+        id: "implemented_actions",
+        label: "Implemented actions",
+        count: 1,
+        summary: "Implemented governance actions are ready for suggested-versus-implemented history export.",
+        destination: "tenant_record_candidate"
+      },
+      {
+        id: "package_deliverables",
+        label: "Packaged deliverables",
+        count: 1,
+        summary: "Tenant-facing deliverables are ready to become long-memory business records later.",
+        destination: "tenant_record_candidate"
+      }
+    ]
   }
 };
 
@@ -876,6 +918,15 @@ describe("harness board UI", () => {
     expect(markup).toContain("Recommendation: Carry the pricing readout into the tenant-facing package.");
     expect(markup).toContain("Objection: Do not widen the board cycle until the pricing package is finalized.");
     expect(markup).toContain("Completion package");
+    expect(markup).toContain("Memory boundary");
+    expect(markup).toContain("Wealth Factory runtime keeps bounded operational lane memory live");
+    expect(markup).toContain("Lane continuity");
+    expect(markup).toContain("Attention state");
+    expect(markup).toContain("Governance decisions");
+    expect(markup).toContain("Implemented actions");
+    expect(markup).toContain("Packaged deliverables");
+    expect(markup).toContain("Stays in runtime");
+    expect(markup).toContain("Ready for export later");
     expect(markup).toContain("Tenant-facing package state");
     expect(markup).toContain("Keep the pricing package readable while the research expansion stays under review.");
     expect(markup).toContain("Deferred approvals: 1");

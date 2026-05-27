@@ -1603,6 +1603,30 @@ describe("harness board service", () => {
     });
 
     const hydrated = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(hydrated.memoryBoundary).toEqual(
+      expect.objectContaining({
+        summary: expect.stringContaining("Wealth Factory runtime"),
+        operationalItems: expect.arrayContaining([
+          expect.objectContaining({
+            id: "lane_continuity",
+            destination: "wealth_factory_runtime",
+            count: expect.any(Number)
+          })
+        ]),
+        exportReadyItems: expect.arrayContaining([
+          expect.objectContaining({
+            id: "governance_decisions",
+            destination: "tenant_record_candidate",
+            count: expect.any(Number)
+          }),
+          expect.objectContaining({
+            id: "implemented_actions",
+            destination: "tenant_record_candidate",
+            count: expect.any(Number)
+          })
+        ])
+      })
+    );
     expect(hydrated.followThroughItems).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

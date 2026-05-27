@@ -451,6 +451,55 @@ function renderActionOptions(
   );
 }
 
+function renderMemoryBoundary(board: HarnessBoardResponse) {
+  const memoryBoundary = board.memoryBoundary ?? {
+    summary:
+      "Wealth Factory runtime keeps bounded operational lane memory live while governance and package records stay ready for later tenant-owned export.",
+    operationalItems: [],
+    exportReadyItems: []
+  };
+  const sections: Array<{
+    title: string;
+    destinationLabel: string;
+    items: typeof memoryBoundary.operationalItems;
+  }> = [
+    {
+      title: "Stays in runtime",
+      destinationLabel: "Wealth Factory runtime",
+      items: memoryBoundary.operationalItems
+    },
+    {
+      title: "Ready for export later",
+      destinationLabel: "Tenant record candidate",
+      items: memoryBoundary.exportReadyItems
+    }
+  ];
+
+  return (
+    <section style={styles.panel}>
+      <h2 style={styles.panelTitle}>Memory boundary</h2>
+      <p style={styles.panelBody}>{memoryBoundary.summary}</p>
+      <div style={styles.rail}>
+        {sections.map((section) => (
+          <div key={section.title} style={{ display: "grid", gap: "0.55rem" }}>
+            <p style={styles.contractMeta}>{section.title}</p>
+            <p style={styles.actionSummary}>{section.destinationLabel}</p>
+            <ul style={styles.actionList}>
+              {section.items.map((item) => (
+                <li key={item.id} style={styles.actionItem}>
+                  <p style={styles.actionMeta}>{`${item.count} item${item.count === 1 ? "" : "s"}`}</p>
+                  <h3 style={styles.actionHeading}>{item.label}</h3>
+                  <p style={styles.actionSummary}>{item.summary}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function getOptionButtonLabel(
   option: {
     label: string;
@@ -2952,6 +3001,8 @@ export function HarnessBoardPage(props: {
               </ul>
             </section>
           ) : null}
+
+          {board ? renderMemoryBoundary(board) : null}
 
           {board ? renderCompletionPackage(board) : null}
 

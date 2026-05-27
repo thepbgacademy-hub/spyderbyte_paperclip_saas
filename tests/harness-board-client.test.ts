@@ -158,6 +158,41 @@ describe("harness board client", () => {
     } satisfies Partial<HarnessBoardClientError>);
   });
 
+  it("derives a bounded memory boundary when an older live board payload omits that seam", async () => {
+    const previewClient = createHarnessBoardClient(
+      fetch,
+      { location: { hostname: "127.0.0.1", search: "" } as Window["location"] }
+    );
+    const { memoryBoundary: _memoryBoundary, ...legacyShape } = previewClient.getFallback();
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => legacyShape
+    });
+    const client = createHarnessBoardClient(
+      fetchImpl as unknown as typeof fetch,
+      { location: { hostname: "app.spyderbyte.cloud" } as Window["location"] }
+    );
+
+    const board = await client.fetchBoard();
+
+    expect(board.memoryBoundary).toEqual(
+      expect.objectContaining({
+        operationalItems: expect.arrayContaining([
+          expect.objectContaining({
+            id: "lane_continuity",
+            destination: "wealth_factory_runtime"
+          })
+        ]),
+        exportReadyItems: expect.arrayContaining([
+          expect.objectContaining({
+            id: "governance_decisions",
+            destination: "tenant_record_candidate"
+          })
+        ])
+      })
+    );
+  });
+
   it("keeps the localhost fallback aligned with the bounded board action contract", () => {
     const client = createHarnessBoardClient(
       fetch,
@@ -276,6 +311,22 @@ describe("harness board client", () => {
     );
     expect(fallback.completionPackage?.governanceItems).toHaveLength(1);
     expect(fallback.completionPackage?.deliverables).toHaveLength(2);
+    expect(fallback.memoryBoundary).toEqual(
+      expect.objectContaining({
+        operationalItems: expect.arrayContaining([
+          expect.objectContaining({
+            id: "lane_continuity",
+            destination: "wealth_factory_runtime"
+          })
+        ]),
+        exportReadyItems: expect.arrayContaining([
+          expect.objectContaining({
+            id: "governance_decisions",
+            destination: "tenant_record_candidate"
+          })
+        ])
+      })
+    );
   });
 
   it("supports a bounded resolve-attention localhost fallback variant for preview-only contract work", () => {

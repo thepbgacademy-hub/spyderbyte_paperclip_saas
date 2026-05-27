@@ -80,7 +80,30 @@ export type HarnessBoardResponse = {
   pendingAttention?: HarnessPendingAttentionView;
   recentDecisions: HarnessRecentDecisionView[];
   followThroughItems: HarnessFollowThroughView[];
+  memoryBoundary: HarnessMemoryBoundaryView;
   completionPackage?: HarnessCompletionPackageView;
+};
+
+export type HarnessMemoryBoundaryDestination = "wealth_factory_runtime" | "tenant_record_candidate";
+
+export type HarnessMemoryBoundaryItemView = {
+  id:
+    | "lane_continuity"
+    | "attention_state"
+    | "governance_decisions"
+    | "implemented_actions"
+    | "package_deliverables"
+    | "package_governance";
+  label: string;
+  count: number;
+  summary: string;
+  destination: HarnessMemoryBoundaryDestination;
+};
+
+export type HarnessMemoryBoundaryView = {
+  summary: string;
+  operationalItems: HarnessMemoryBoundaryItemView[];
+  exportReadyItems: HarnessMemoryBoundaryItemView[];
 };
 
 export type HarnessActionRequestFieldView = {
@@ -3632,6 +3655,13 @@ function buildHarnessBoardResponse(input: {
     proposals: input.proposals,
     events: input.events
   });
+  const memoryBoundary = buildMemoryBoundaryView({
+    continuity: input.continuity,
+    hasPendingAttention: Boolean(pendingAttention),
+    recentDecisions,
+    followThroughItems,
+    completionPackage
+  });
   const sortedPendingProposals = input.proposals
     .filter((proposal) => proposal.status === "proposed" || proposal.status === "deferred")
     .sort(comparePendingProposalQueue);
@@ -3694,7 +3724,76 @@ function buildHarnessBoardResponse(input: {
     ...(pendingAttention ? { pendingAttention } : {}),
     recentDecisions,
     followThroughItems,
+    memoryBoundary,
     ...(completionPackage ? { completionPackage } : {})
+  };
+}
+
+function buildMemoryBoundaryView(input: {
+  continuity: readonly HarnessCardContinuityRecord[];
+  hasPendingAttention: boolean;
+  recentDecisions: readonly HarnessRecentDecisionView[];
+  followThroughItems: readonly HarnessFollowThroughView[];
+  completionPackage: HarnessCompletionPackageView | undefined;
+}): HarnessMemoryBoundaryView {
+  const operationalItems: HarnessMemoryBoundaryItemView[] = [
+    {
+      id: "lane_continuity",
+      label: "Lane continuity",
+      count: input.continuity.length,
+      summary: "Continuity snapshots stay in Wealth Factory runtime as live operational memory.",
+      destination: "wealth_factory_runtime"
+    },
+    {
+      id: "attention_state",
+      label: "Attention state",
+      count: input.hasPendingAttention ? 1 : 0,
+      summary: "Current CEO attention stays in runtime truth until the board resolves it explicitly.",
+      destination: "wealth_factory_runtime"
+    }
+  ];
+
+  const exportReadyItems: HarnessMemoryBoundaryItemView[] = [
+    {
+      id: "governance_decisions",
+      label: "Governance decisions",
+      count: input.recentDecisions.length,
+      summary: "Bounded decisions are ready for later tenant-owned board records.",
+      destination: "tenant_record_candidate"
+    },
+    {
+      id: "implemented_actions",
+      label: "Implemented actions",
+      count: input.followThroughItems.length,
+      summary: "Implemented governance actions are ready for suggested-versus-implemented history export.",
+      destination: "tenant_record_candidate"
+    }
+  ];
+
+  if (input.completionPackage) {
+    exportReadyItems.push(
+      {
+        id: "package_governance",
+        label: "Package governance",
+        count: input.completionPackage.governanceItems.length,
+        summary: "Package-shaped governance items are ready for later tenant-owned board records.",
+        destination: "tenant_record_candidate"
+      },
+      {
+        id: "package_deliverables",
+        label: "Packaged deliverables",
+        count: input.completionPackage.deliverables.length,
+        summary: "Tenant-facing deliverables are ready to become long-memory business records later.",
+        destination: "tenant_record_candidate"
+      }
+    );
+  }
+
+  return {
+    summary:
+      "Wealth Factory runtime keeps bounded operational lane memory live while governance and package records stay ready for later tenant-owned export.",
+    operationalItems,
+    exportReadyItems
   };
 }
 

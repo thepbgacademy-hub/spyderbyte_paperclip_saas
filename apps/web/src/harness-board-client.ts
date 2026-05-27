@@ -319,6 +319,56 @@ const fallbackBoardBase: HarnessBoardResponse = {
       timestampLabel: "recently"
     }
   ],
+  memoryBoundary: {
+    summary:
+      "Wealth Factory runtime keeps bounded operational lane memory live while governance and package records stay ready for later tenant-owned export.",
+    operationalItems: [
+      {
+        id: "lane_continuity",
+        label: "Lane continuity",
+        count: 1,
+        summary: "Continuity snapshots stay in Wealth Factory runtime as live operational memory.",
+        destination: "wealth_factory_runtime"
+      },
+      {
+        id: "attention_state",
+        label: "Attention state",
+        count: 1,
+        summary: "Current CEO attention stays in runtime truth until the board resolves it explicitly.",
+        destination: "wealth_factory_runtime"
+      }
+    ],
+    exportReadyItems: [
+      {
+        id: "governance_decisions",
+        label: "Governance decisions",
+        count: 1,
+        summary: "Bounded decisions are ready for later tenant-owned board records.",
+        destination: "tenant_record_candidate"
+      },
+      {
+        id: "implemented_actions",
+        label: "Implemented actions",
+        count: 1,
+        summary: "Implemented governance actions are ready for suggested-versus-implemented history export.",
+        destination: "tenant_record_candidate"
+      },
+      {
+        id: "package_governance",
+        label: "Package governance",
+        count: 1,
+        summary: "Package-shaped governance items are ready for later tenant-owned board records.",
+        destination: "tenant_record_candidate"
+      },
+      {
+        id: "package_deliverables",
+        label: "Packaged deliverables",
+        count: 2,
+        summary: "Tenant-facing deliverables are ready to become long-memory business records later.",
+        destination: "tenant_record_candidate"
+      }
+    ]
+  },
   completionPackage: {
     status: "assembling",
     summary: "The current board package is almost ready, with one bounded governance question still shaping the handoff.",
@@ -450,6 +500,74 @@ const fallbackVariantLabels: Record<HarnessBoardFallbackVariant, string> = {
 };
 
 const DEFAULT_HARNESS_BOARD_REQUEST_TIMEOUT_MS = 8_000;
+
+type LegacyHarnessBoardResponse = Omit<HarnessBoardResponse, "memoryBoundary"> & {
+  memoryBoundary?: HarnessBoardResponse["memoryBoundary"] | undefined;
+};
+
+function normalizeBoardResponse(
+  board: HarnessBoardResponse | LegacyHarnessBoardResponse
+): HarnessBoardResponse {
+  if (board.memoryBoundary) {
+    return board as HarnessBoardResponse;
+  }
+
+  return {
+    ...board,
+    memoryBoundary: {
+      summary:
+        "Wealth Factory runtime keeps bounded operational lane memory live while governance and package records stay ready for later tenant-owned export.",
+      operationalItems: [
+        {
+          id: "lane_continuity",
+          label: "Lane continuity",
+          count: board.cards.filter((card) =>
+            card.detailSections.some((section) => section.id === "continuity-memory")
+          ).length,
+          summary: "Continuity snapshots stay in Wealth Factory runtime as live operational memory.",
+          destination: "wealth_factory_runtime"
+        },
+        {
+          id: "attention_state",
+          label: "Attention state",
+          count: board.pendingAttention ? 1 : 0,
+          summary: "Current CEO attention stays in runtime truth until the board resolves it explicitly.",
+          destination: "wealth_factory_runtime"
+        }
+      ],
+      exportReadyItems: [
+        {
+          id: "governance_decisions",
+          label: "Governance decisions",
+          count: board.recentDecisions.length,
+          summary: "Bounded decisions are ready for later tenant-owned board records.",
+          destination: "tenant_record_candidate"
+        },
+        {
+          id: "implemented_actions",
+          label: "Implemented actions",
+          count: board.followThroughItems.length,
+          summary: "Implemented governance actions are ready for suggested-versus-implemented history export.",
+          destination: "tenant_record_candidate"
+        },
+        {
+          id: "package_governance",
+          label: "Package governance",
+          count: board.completionPackage?.governanceItems.length ?? 0,
+          summary: "Package-shaped governance items are ready for later tenant-owned board records.",
+          destination: "tenant_record_candidate"
+        },
+        {
+          id: "package_deliverables",
+          label: "Packaged deliverables",
+          count: board.completionPackage?.deliverables.length ?? 0,
+          summary: "Tenant-facing deliverables are ready to become long-memory business records later.",
+          destination: "tenant_record_candidate"
+        }
+      ]
+    }
+  };
+}
 
 function isLoopbackHost(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
@@ -597,7 +715,9 @@ export function createHarnessBoardClient(
         await readHarnessError(response, "Unable to load harness board");
       }
 
-      return (await response.json()) as HarnessBoardResponse;
+      return normalizeBoardResponse(
+        await response.json() as HarnessBoardResponse | LegacyHarnessBoardResponse
+      );
     },
 
     submitAction
