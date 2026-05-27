@@ -125,8 +125,13 @@ export type HarnessPendingAttentionView = {
   allowedDecisions?: HarnessAttentionReviewDecision[];
   allowedCommands?: HarnessAttentionResolutionCommand[];
   pendingApprovalCount?: number;
+  proposedApprovalCount?: number;
+  deferredApprovalCount?: number;
+  backlogMode?: "new_work_waiting" | "carry_forward_review" | "mixed_backlog";
   requestedAtLabel?: string;
   reasonLabel?: string;
+  targetProposalId?: string;
+  targetStatusLabel?: string;
   targetCardId?: string;
   targetPersona?: string;
   targetTitle?: string;
@@ -3493,6 +3498,9 @@ function buildHarnessBoardResponse(input: {
     proposals: input.proposals,
     events: input.events
   });
+  const sortedPendingProposals = input.proposals
+    .filter((proposal) => proposal.status === "proposed" || proposal.status === "deferred")
+    .sort(comparePendingProposalQueue);
   const latestDecisionByProposalId = new Map<string, HarnessBoardDecisionRecord>();
   for (const decision of input.decisions) {
     if (decision.proposalId && !latestDecisionByProposalId.has(decision.proposalId)) {
@@ -3506,9 +3514,7 @@ function buildHarnessBoardResponse(input: {
     packageId: input.run.packageId,
     columns,
     cards,
-    pendingApprovals: input.proposals
-      .filter((proposal) => proposal.status === "proposed" || proposal.status === "deferred")
-      .map((proposal) => {
+    pendingApprovals: sortedPendingProposals.map((proposal) => {
         const policyView = toPendingApprovalPolicyView({
           cards: input.cards,
           proposal,
@@ -3664,6 +3670,19 @@ function buildPendingAttentionView(input: {
   const pendingApprovalCount = input.proposals.filter(
     (proposal) => proposal.status === "proposed" || proposal.status === "deferred"
   ).length;
+  const proposedApprovalCount = input.proposals.filter((proposal) => proposal.status === "proposed").length;
+  const deferredApprovalCount = input.proposals.filter((proposal) => proposal.status === "deferred").length;
+  const firstPendingProposal = input.proposals
+    .filter((proposal) => proposal.status === "proposed" || proposal.status === "deferred")
+    .sort(comparePendingProposalQueue)[0];
+  const backlogMode =
+    proposedApprovalCount > 0 && deferredApprovalCount > 0
+      ? "mixed_backlog"
+      : deferredApprovalCount > 0
+        ? "carry_forward_review"
+        : proposedApprovalCount > 0
+          ? "new_work_waiting"
+          : undefined;
 
   return {
     kind: action.kind,
@@ -3734,7 +3753,26 @@ function buildPendingAttentionView(input: {
               actionRoute: "pending-approvals" as const,
               actionLabel: "Review pending approvals",
               actionDescription: "Open the proposal review queue to clear governance backlog before more work starts.",
-              pendingApprovalCount
+              pendingApprovalCount,
+              ...(typeof backlogMode === "string"
+                ? {
+                    proposedApprovalCount,
+                    deferredApprovalCount,
+                    backlogMode
+                  }
+                : {}),
+              ...(firstPendingProposal
+                ? {
+                    targetProposalId: firstPendingProposal.id,
+                    targetStatusLabel:
+                      firstPendingProposal.status === "deferred"
+                        ? "Deferred for later CEO review"
+                        : "Pending CEO approval",
+                    targetPersona: firstPendingProposal.persona.toUpperCase(),
+                    targetTitle: firstPendingProposal.title,
+                    targetSummary: `Next queue target: ${firstPendingProposal.persona.toUpperCase()} · ${firstPendingProposal.title}`
+                  }
+                : {})
             })
       : {
           actionRoute: "resolve-attention" as const,
@@ -3889,6 +3927,16 @@ function buildPendingApprovalActionOptions(input: {
       }
     }
   ];
+}
+
+function comparePendingProposalQueue(left: HarnessSubCardProposal, right: HarnessSubCardProposal) {
+  const leftRank = left.status === "proposed" ? 0 : 1;
+  const rightRank = right.status === "proposed" ? 0 : 1;
+  if (leftRank !== rightRank) {
+    return leftRank - rightRank;
+  }
+
+  return left.id.localeCompare(right.id);
 }
 
 function formatAttentionActivityLabel(input: {

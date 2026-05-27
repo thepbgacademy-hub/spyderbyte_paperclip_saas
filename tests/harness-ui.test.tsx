@@ -334,8 +334,16 @@ const pendingApprovalsAttentionBoardResponse: HarnessBoardResponse = {
     actionLabel: "Review pending approvals",
     actionDescription: "Open the proposal review queue to clear governance backlog before more work starts.",
     pendingApprovalCount: 1,
+    proposedApprovalCount: 1,
+    deferredApprovalCount: 0,
+    backlogMode: "new_work_waiting",
     requestedAtLabel: "11:52 AM",
-    reasonLabel: "Governance backlog"
+    reasonLabel: "Governance backlog",
+    targetProposalId: "proposal-research",
+    targetStatusLabel: "Pending CEO approval",
+    targetPersona: "RESEARCHER",
+    targetTitle: "Gather competitor price anchors",
+    targetSummary: "Next queue target: RESEARCHER · Gather competitor price anchors"
   }
 };
 
@@ -1439,7 +1447,11 @@ describe("harness board UI", () => {
     expect(markup).toContain("while previewing approval backlog.");
     expect(markup).toContain("Review pending approvals");
     expect(markup).toContain("Pending approvals in queue: 1");
+    expect(markup).toContain("Backlog mode: New work waiting");
+    expect(markup).toContain("Queue composition: 1 proposed, 0 deferred");
     expect(markup).toContain("Action family: pending approvals");
+    expect(markup).toContain("Next queue target: RESEARCHER · Gather competitor price anchors");
+    expect(markup).toContain("Queue target status: Pending CEO approval");
   });
 
   it("marks stale bounded action errors for board resync", () => {

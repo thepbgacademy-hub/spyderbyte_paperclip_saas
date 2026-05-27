@@ -1123,6 +1123,21 @@ function humanizeValue(value: string) {
   return value.replace(/_/g, " ");
 }
 
+function describeBacklogMode(
+  mode: NonNullable<NonNullable<HarnessBoardResponse["pendingAttention"]>["backlogMode"]> | undefined
+) {
+  switch (mode) {
+    case "new_work_waiting":
+      return "New work waiting";
+    case "carry_forward_review":
+      return "Carry-forward review";
+    case "mixed_backlog":
+      return "Mixed backlog";
+    default:
+      return null;
+  }
+}
+
 function joinHeadingParts(left: string, right: string) {
   return `${left} - ${right}`;
 }
@@ -2072,7 +2087,11 @@ export function HarnessBoardPage(props: {
     {
       key: "attention",
       heading: joinHeadingParts("Attention", pendingAttention?.statusLabel ?? "Clear"),
-      summary: pendingAttention?.summary ?? "No active board attention is currently waiting on the CEO."
+      summary: pendingAttention
+        ? pendingAttention.targetSummary
+          ? `${pendingAttention.summary} ${pendingAttention.targetSummary}.${pendingAttention.targetStatusLabel ? ` ${pendingAttention.targetStatusLabel}.` : ""}${describeBacklogMode(pendingAttention.backlogMode) ? ` ${describeBacklogMode(pendingAttention.backlogMode)}.` : ""}`
+          : pendingAttention.summary
+        : "No active board attention is currently waiting on the CEO."
     },
     {
       key: "approvals",
@@ -2547,8 +2566,17 @@ export function HarnessBoardPage(props: {
                   {typeof pendingAttention.pendingApprovalCount === "number" ? (
                     <p style={styles.actionSummary}>{`Pending approvals in queue: ${pendingAttention.pendingApprovalCount}`}</p>
                   ) : null}
+                  {describeBacklogMode(pendingAttention.backlogMode) ? (
+                    <p style={styles.actionSummary}>{`Backlog mode: ${describeBacklogMode(pendingAttention.backlogMode)}`}</p>
+                  ) : null}
+                  {typeof pendingAttention.proposedApprovalCount === "number" && typeof pendingAttention.deferredApprovalCount === "number" ? (
+                    <p style={styles.actionSummary}>{`Queue composition: ${pendingAttention.proposedApprovalCount} proposed, ${pendingAttention.deferredApprovalCount} deferred`}</p>
+                  ) : null}
                   {pendingAttention.targetSummary ? (
                     <p style={styles.actionSummary}>{pendingAttention.targetSummary}</p>
+                  ) : null}
+                  {pendingAttention.targetStatusLabel ? (
+                    <p style={styles.actionSummary}>{`Queue target status: ${pendingAttention.targetStatusLabel}`}</p>
                   ) : null}
                   {pendingAttention.actionMethod && pendingAttention.actionPath ? (
                     <p style={styles.contractMeta}>{`${pendingAttention.actionMethod} ${pendingAttention.actionPath}`}</p>
@@ -2638,8 +2666,21 @@ export function HarnessBoardPage(props: {
               <p style={styles.panelBody}>Bounded decision options coming directly from the harness action contract.</p>
               <ul style={styles.actionList}>
                 {pendingApprovals.map((approval: HarnessBoardResponse["pendingApprovals"][number]) => (
-                  <li key={approval.id} style={styles.actionItem}>
-                    <p style={styles.actionMeta}>{approval.statusLabel}</p>
+                  <li
+                    key={approval.id}
+                    style={{
+                      ...styles.actionItem,
+                      ...(pendingAttention?.targetProposalId === approval.id
+                        ? {
+                            border: "1px solid rgba(125, 211, 252, 0.48)",
+                            boxShadow: "0 0 0 1px rgba(125, 211, 252, 0.18)"
+                          }
+                        : {})
+                    }}
+                  >
+                    <p style={styles.actionMeta}>
+                      {pendingAttention?.targetProposalId === approval.id ? `Next queue target · ${approval.statusLabel}` : approval.statusLabel}
+                    </p>
                     <h3 style={styles.actionHeading}>{approval.actionLabel}</h3>
                     <p style={styles.actionSummary}>{approval.actionDescription}</p>
                     <p style={styles.actionSummary}>{`Requested by ${approval.requestedByPersona} for ${approval.targetPersona}`}</p>

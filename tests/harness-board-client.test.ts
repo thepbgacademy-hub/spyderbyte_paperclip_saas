@@ -314,7 +314,13 @@ describe("harness board client", () => {
         actionRoute: "pending-approvals",
         actionLabel: "Review pending approvals",
         pendingApprovalCount: 1,
-        reasonLabel: "Governance backlog"
+        proposedApprovalCount: 1,
+        deferredApprovalCount: 0,
+        backlogMode: "new_work_waiting",
+        reasonLabel: "Governance backlog",
+        targetProposalId: "proposal-fallback-1",
+        targetStatusLabel: "Pending CEO approval",
+        targetSummary: expect.stringContaining("Next queue target: RESEARCHER")
       })
     );
   });

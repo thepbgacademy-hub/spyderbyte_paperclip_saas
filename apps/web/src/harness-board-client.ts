@@ -350,6 +350,8 @@ const fallbackBoardBase: HarnessBoardResponse = {
   }
 };
 
+const fallbackPendingApprovalHead = fallbackBoardBase.pendingApprovals[0];
+
 const fallbackBoardResponses: Record<HarnessBoardFallbackVariant, HarnessBoardResponse> = {
   "review-attention": fallbackBoardBase,
   "resolve-attention": {
@@ -412,8 +414,20 @@ const fallbackBoardResponses: Record<HarnessBoardFallbackVariant, HarnessBoardRe
       actionLabel: "Review pending approvals",
       actionDescription: "Open the proposal review queue to clear governance backlog before more work starts.",
       pendingApprovalCount: fallbackBoardBase.pendingApprovals.length,
+      proposedApprovalCount: 1,
+      deferredApprovalCount: 0,
+      backlogMode: "new_work_waiting",
       requestedAtLabel: "recently",
-      reasonLabel: "Governance backlog"
+      reasonLabel: "Governance backlog",
+      ...(fallbackPendingApprovalHead
+        ? {
+            targetProposalId: fallbackPendingApprovalHead.id,
+            targetStatusLabel: fallbackPendingApprovalHead.statusLabel,
+            targetPersona: fallbackPendingApprovalHead.targetPersona,
+            targetTitle: fallbackPendingApprovalHead.title,
+            targetSummary: `Next queue target: ${fallbackPendingApprovalHead.targetPersona} · ${fallbackPendingApprovalHead.title}`
+          }
+        : {})
     }
   }
 };
@@ -577,3 +591,4 @@ export function createHarnessBoardClient(
     submitAction
   };
 }
+

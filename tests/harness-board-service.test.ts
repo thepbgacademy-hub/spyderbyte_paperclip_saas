@@ -764,7 +764,15 @@ describe("harness board service", () => {
       actionLabel: "Review pending approvals",
       actionDescription: "Open the proposal review queue to clear governance backlog before more work starts.",
       pendingApprovalCount: 1,
-      reasonLabel: "Governance backlog"
+      proposedApprovalCount: 1,
+      deferredApprovalCount: 0,
+      backlogMode: "new_work_waiting",
+      reasonLabel: "Governance backlog",
+      targetProposalId: "proposal_governance_backlog_1",
+      targetStatusLabel: "Pending CEO approval",
+      targetPersona: "RESEARCHER",
+      targetTitle: "Investigate market signals before another lane opens",
+      targetSummary: "Next queue target: RESEARCHER · Investigate market signals before another lane opens"
     });
   });
 
@@ -826,8 +834,74 @@ describe("harness board service", () => {
       actionLabel: "Review pending approvals",
       actionDescription: "Open the proposal review queue to clear governance backlog before more work starts.",
       pendingApprovalCount: 1,
-      reasonLabel: "Governance hold"
+      proposedApprovalCount: 0,
+      deferredApprovalCount: 1,
+      backlogMode: "carry_forward_review",
+      reasonLabel: "Governance hold",
+      targetProposalId: "proposal_governance_hold_1",
+      targetStatusLabel: "Deferred for later CEO review",
+      targetPersona: "RESEARCHER",
+      targetTitle: "Compare alternate pricing anchors",
+      targetSummary: "Next queue target: RESEARCHER · Compare alternate pricing anchors"
     });
+  });
+
+  it("reports mixed backlog composition when proposed and deferred approvals coexist", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const cards = await repository.listCardsForRun(board.runId);
+    const ceoCard = cards.find((card) => card.persona === "ceo");
+    await repository.insertProposal({
+      id: "proposal_governance_mixed_2",
+      runId: board.runId,
+      parentCardId: ceoCard!.id,
+      requestedByCardId: ceoCard!.id,
+      requestedByPersona: "ceo",
+      persona: "cfo",
+      title: "Revisit an earlier pricing objection",
+      deliverableType: "pricing_review",
+      status: "deferred"
+    });
+    await repository.insertProposal({
+      id: "proposal_governance_mixed_1",
+      runId: board.runId,
+      parentCardId: ceoCard!.id,
+      requestedByCardId: ceoCard!.id,
+      requestedByPersona: "ceo",
+      persona: "researcher",
+      title: "Gather fresh competitor price anchors",
+      deliverableType: "research_brief",
+      status: "proposed"
+    });
+
+    const hydrated = await service.listBoardState({ authorization: "Bearer valid" });
+
+    expect(hydrated.pendingAttention).toEqual(
+      expect.objectContaining({
+        actionRoute: "pending-approvals",
+        pendingApprovalCount: 2,
+        proposedApprovalCount: 1,
+        deferredApprovalCount: 1,
+        backlogMode: "mixed_backlog",
+        targetProposalId: "proposal_governance_mixed_1",
+        targetStatusLabel: "Pending CEO approval"
+      })
+    );
   });
 
   it("keeps historical attention activity but clears pendingAttention after an explicit resolution", async () => {
