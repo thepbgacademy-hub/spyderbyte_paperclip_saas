@@ -572,7 +572,12 @@ describe("harness board client", () => {
           idempotencyPolicyLabel: "Deterministic upsert",
           replaySafetyLabel: "Replay-safe",
           conflictPolicyLabel: "Append or upsert",
-          exportAtomicityLabel: "Record-level atomic"
+          exportAtomicityLabel: "Record-level atomic",
+          exportDerivationBasisLabel: "Decision-history-derived",
+          exportRevisionPolicyLabel: "Append new revision",
+          exportFreshnessSourceLabel: "Latest record state",
+          exportValidationBoundaryLabel: "Record-level validation",
+          exportCompletenessRuleLabel: "Self-contained record"
         }),
         expect.objectContaining({
           id: "package_bundle_export",
@@ -587,6 +592,11 @@ describe("harness board client", () => {
           replaySafetyLabel: "Requires fresh board-closure snapshot",
           conflictPolicyLabel: "Replace latest closure snapshot",
           exportAtomicityLabel: "Closure-bundle atomic",
+          exportDerivationBasisLabel: "Board-closure-snapshot-derived",
+          exportRevisionPolicyLabel: "Replace closure-bundle revision",
+          exportFreshnessSourceLabel: "Latest board-closure snapshot",
+          exportValidationBoundaryLabel: "Closure-bundle validation",
+          exportCompletenessRuleLabel: "Board-closure-complete bundle",
           dependsOnCandidateLabels: ["Governance history export"]
         })
       ])

@@ -1666,6 +1666,16 @@ describe("harness board UI", () => {
     expect(markup).toContain("Replace latest closure snapshot");
     expect(markup).toContain("Record-level atomic");
     expect(markup).toContain("Closure-bundle atomic");
+    expect(markup).toContain("Decision-history-derived");
+    expect(markup).toContain("Board-closure-snapshot-derived");
+    expect(markup).toContain("Append new revision");
+    expect(markup).toContain("Replace closure-bundle revision");
+    expect(markup).toContain("Latest record state");
+    expect(markup).toContain("Latest board-closure snapshot");
+    expect(markup).toContain("Record-level validation");
+    expect(markup).toContain("Closure-bundle validation");
+    expect(markup).toContain("Self-contained record");
+    expect(markup).toContain("Board-closure-complete bundle");
     expect(markup).toContain("Depends on: Governance history export");
     expect(markup).toContain("2 runtime memory buckets stay live only inside Wealth Factory orchestration.");
     expect(markup).toContain("2 governance history candidates are stable enough for later tenant-owned export.");

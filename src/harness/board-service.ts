@@ -448,6 +448,16 @@ export type HarnessMemoryBoundaryExportCandidateView = {
   conflictPolicyLabel: string;
   exportAtomicity: HarnessMemoryBoundaryExportAtomicity;
   exportAtomicityLabel: string;
+  exportDerivationBasis: HarnessMemoryBoundaryExportDerivationBasis;
+  exportDerivationBasisLabel: string;
+  exportRevisionPolicy: HarnessMemoryBoundaryExportRevisionPolicy;
+  exportRevisionPolicyLabel: string;
+  exportFreshnessSource: HarnessMemoryBoundaryExportFreshnessSource;
+  exportFreshnessSourceLabel: string;
+  exportValidationBoundary: HarnessMemoryBoundaryExportValidationBoundary;
+  exportValidationBoundaryLabel: string;
+  exportCompletenessRule: HarnessMemoryBoundaryExportCompletenessRule;
+  exportCompletenessRuleLabel: string;
   exportSequence?: HarnessMemoryBoundaryExportSequence;
   exportSequenceLabel?: string;
   exportDependencyPolicy?: HarnessMemoryBoundaryExportDependencyPolicy;
@@ -5389,6 +5399,16 @@ function buildMemoryBoundaryView(input: {
       conflictPolicyLabel: representative.conflictPolicyLabel,
       exportAtomicity: representative.exportAtomicity,
       exportAtomicityLabel: representative.exportAtomicityLabel,
+      exportDerivationBasis: representative.exportDerivationBasis,
+      exportDerivationBasisLabel: representative.exportDerivationBasisLabel,
+      exportRevisionPolicy: representative.exportRevisionPolicy,
+      exportRevisionPolicyLabel: representative.exportRevisionPolicyLabel,
+      exportFreshnessSource: representative.exportFreshnessSource,
+      exportFreshnessSourceLabel: representative.exportFreshnessSourceLabel,
+      exportValidationBoundary: representative.exportValidationBoundary,
+      exportValidationBoundaryLabel: representative.exportValidationBoundaryLabel,
+      exportCompletenessRule: representative.exportCompletenessRule,
+      exportCompletenessRuleLabel: representative.exportCompletenessRuleLabel,
       exportSequence: "foundational_first",
       exportSequenceLabel: humanizeMemoryBoundaryExportSequence("foundational_first"),
       exportDependencyPolicy: "independent_candidate",
@@ -5441,6 +5461,16 @@ function buildMemoryBoundaryView(input: {
       conflictPolicyLabel: representative.conflictPolicyLabel,
       exportAtomicity: representative.exportAtomicity,
       exportAtomicityLabel: representative.exportAtomicityLabel,
+      exportDerivationBasis: representative.exportDerivationBasis,
+      exportDerivationBasisLabel: representative.exportDerivationBasisLabel,
+      exportRevisionPolicy: representative.exportRevisionPolicy,
+      exportRevisionPolicyLabel: representative.exportRevisionPolicyLabel,
+      exportFreshnessSource: representative.exportFreshnessSource,
+      exportFreshnessSourceLabel: representative.exportFreshnessSourceLabel,
+      exportValidationBoundary: representative.exportValidationBoundary,
+      exportValidationBoundaryLabel: representative.exportValidationBoundaryLabel,
+      exportCompletenessRule: representative.exportCompletenessRule,
+      exportCompletenessRuleLabel: representative.exportCompletenessRuleLabel,
       exportSequence: "board_closure_following",
       exportSequenceLabel: humanizeMemoryBoundaryExportSequence("board_closure_following"),
       exportDependencyPolicy: "depends_on_governance_history_export",

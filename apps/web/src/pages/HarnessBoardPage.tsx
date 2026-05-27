@@ -634,6 +634,16 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
             conflictPolicyLabel: candidate.conflictPolicyLabel ?? "Append or upsert",
             exportAtomicity: candidate.exportAtomicity ?? "record_level_atomic",
             exportAtomicityLabel: candidate.exportAtomicityLabel ?? "Record-level atomic",
+            exportDerivationBasis: candidate.exportDerivationBasis ?? "decision_history_derived",
+            exportDerivationBasisLabel: candidate.exportDerivationBasisLabel ?? "Decision-history-derived",
+            exportRevisionPolicy: candidate.exportRevisionPolicy ?? "append_new_revision",
+            exportRevisionPolicyLabel: candidate.exportRevisionPolicyLabel ?? "Append new revision",
+            exportFreshnessSource: candidate.exportFreshnessSource ?? "latest_record_state",
+            exportFreshnessSourceLabel: candidate.exportFreshnessSourceLabel ?? "Latest record state",
+            exportValidationBoundary: candidate.exportValidationBoundary ?? "record_level_validation",
+            exportValidationBoundaryLabel: candidate.exportValidationBoundaryLabel ?? "Record-level validation",
+            exportCompletenessRule: candidate.exportCompletenessRule ?? "self_contained_record",
+            exportCompletenessRuleLabel: candidate.exportCompletenessRuleLabel ?? "Self-contained record",
             exportSequence: candidate.exportSequence ?? "foundational_first",
             exportSequenceLabel: candidate.exportSequenceLabel ?? "Foundational export sequence",
             exportDependencyPolicy: candidate.exportDependencyPolicy ?? "independent_candidate",
@@ -656,6 +666,16 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
             conflictPolicyLabel: candidate.conflictPolicyLabel ?? "Replace latest closure snapshot",
             exportAtomicity: candidate.exportAtomicity ?? "closure_bundle_atomic",
             exportAtomicityLabel: candidate.exportAtomicityLabel ?? "Closure-bundle atomic",
+            exportDerivationBasis: candidate.exportDerivationBasis ?? "board_closure_snapshot_derived",
+            exportDerivationBasisLabel: candidate.exportDerivationBasisLabel ?? "Board-closure-snapshot-derived",
+            exportRevisionPolicy: candidate.exportRevisionPolicy ?? "replace_closure_bundle_revision",
+            exportRevisionPolicyLabel: candidate.exportRevisionPolicyLabel ?? "Replace closure-bundle revision",
+            exportFreshnessSource: candidate.exportFreshnessSource ?? "latest_board_closure_snapshot",
+            exportFreshnessSourceLabel: candidate.exportFreshnessSourceLabel ?? "Latest board-closure snapshot",
+            exportValidationBoundary: candidate.exportValidationBoundary ?? "closure_bundle_validation",
+            exportValidationBoundaryLabel: candidate.exportValidationBoundaryLabel ?? "Closure-bundle validation",
+            exportCompletenessRule: candidate.exportCompletenessRule ?? "board_closure_complete_bundle",
+            exportCompletenessRuleLabel: candidate.exportCompletenessRuleLabel ?? "Board-closure-complete bundle",
             exportSequence: candidate.exportSequence ?? "board_closure_following",
             exportSequenceLabel: candidate.exportSequenceLabel ?? "Board-closure-following sequence",
             exportDependencyPolicy:
@@ -781,6 +801,11 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                 <span style={styles.badge}>{candidate.replaySafetyLabel}</span>
                 <span style={styles.badge}>{candidate.conflictPolicyLabel}</span>
                 <span style={styles.badge}>{candidate.exportAtomicityLabel}</span>
+                <span style={styles.badge}>{candidate.exportDerivationBasisLabel}</span>
+                <span style={styles.badge}>{candidate.exportRevisionPolicyLabel}</span>
+                <span style={styles.badge}>{candidate.exportFreshnessSourceLabel}</span>
+                <span style={styles.badge}>{candidate.exportValidationBoundaryLabel}</span>
+                <span style={styles.badge}>{candidate.exportCompletenessRuleLabel}</span>
                 {candidate.exportSequenceLabel ? <span style={styles.badge}>{candidate.exportSequenceLabel}</span> : null}
                 {candidate.exportDependencyPolicyLabel ? <span style={styles.badge}>{candidate.exportDependencyPolicyLabel}</span> : null}
               </div>
@@ -942,6 +967,16 @@ function deriveMemoryBoundaryExportCandidates(
       conflictPolicyLabel: representative.conflictPolicyLabel,
       exportAtomicity: representative.exportAtomicity,
       exportAtomicityLabel: representative.exportAtomicityLabel,
+      exportDerivationBasis: representative.exportDerivationBasis,
+      exportDerivationBasisLabel: representative.exportDerivationBasisLabel,
+      exportRevisionPolicy: representative.exportRevisionPolicy,
+      exportRevisionPolicyLabel: representative.exportRevisionPolicyLabel,
+      exportFreshnessSource: representative.exportFreshnessSource,
+      exportFreshnessSourceLabel: representative.exportFreshnessSourceLabel,
+      exportValidationBoundary: representative.exportValidationBoundary,
+      exportValidationBoundaryLabel: representative.exportValidationBoundaryLabel,
+      exportCompletenessRule: representative.exportCompletenessRule,
+      exportCompletenessRuleLabel: representative.exportCompletenessRuleLabel,
       exportSequence: "foundational_first",
       exportSequenceLabel: "Foundational export sequence",
       exportDependencyPolicy: "independent_candidate",
@@ -993,6 +1028,16 @@ function deriveMemoryBoundaryExportCandidates(
       conflictPolicyLabel: representative.conflictPolicyLabel,
       exportAtomicity: representative.exportAtomicity,
       exportAtomicityLabel: representative.exportAtomicityLabel,
+      exportDerivationBasis: representative.exportDerivationBasis,
+      exportDerivationBasisLabel: representative.exportDerivationBasisLabel,
+      exportRevisionPolicy: representative.exportRevisionPolicy,
+      exportRevisionPolicyLabel: representative.exportRevisionPolicyLabel,
+      exportFreshnessSource: representative.exportFreshnessSource,
+      exportFreshnessSourceLabel: representative.exportFreshnessSourceLabel,
+      exportValidationBoundary: representative.exportValidationBoundary,
+      exportValidationBoundaryLabel: representative.exportValidationBoundaryLabel,
+      exportCompletenessRule: representative.exportCompletenessRule,
+      exportCompletenessRuleLabel: representative.exportCompletenessRuleLabel,
       exportSequence: "board_closure_following",
       exportSequenceLabel: "Board-closure-following sequence",
       exportDependencyPolicy: "depends_on_governance_history_export",

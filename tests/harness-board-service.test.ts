@@ -3930,7 +3930,12 @@ describe("harness board service", () => {
         idempotencyPolicyLabel: "Deterministic upsert",
         replaySafetyLabel: "Replay-safe",
         conflictPolicyLabel: "Append or upsert",
-        exportAtomicityLabel: "Record-level atomic"
+        exportAtomicityLabel: "Record-level atomic",
+        exportDerivationBasisLabel: "Decision-history-derived",
+        exportRevisionPolicyLabel: "Append new revision",
+        exportFreshnessSourceLabel: "Latest record state",
+        exportValidationBoundaryLabel: "Record-level validation",
+        exportCompletenessRuleLabel: "Self-contained record"
       })
     ]);
   });

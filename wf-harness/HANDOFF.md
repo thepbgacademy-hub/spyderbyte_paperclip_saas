@@ -44,6 +44,7 @@ The first harness implementation slice is now built and verified:
 - governance-backlog preview should stay explicit too: loopback preview must also be able to exercise the `pending-approvals` attention branch so the non-final-assembly CEO queue path stays visible and testable instead of hiding behind the richer review/resume variants
 - governance-backlog attention should point at its first bounded queue target too: when the board is waiting on proposal review instead of a direct mutation seam, surface the first pending proposal as tenant-safe target metadata so the CEO queue path stays concrete under concurrency instead of reading like a generic backlog warning
 - grouped export candidates should own write semantics too: once governance-history and package-bundle export candidates exist, payload shape, idempotency, replay safety, conflict handling, and atomicity should travel on the grouped candidate contract instead of being recomputed later from member buckets
+- grouped export candidates should own preparation semantics too: derivation basis, revision policy, freshness source, validation boundary, and completeness rule should travel on the grouped candidate contract instead of being recomputed later from member buckets
 
 ## External References
 
