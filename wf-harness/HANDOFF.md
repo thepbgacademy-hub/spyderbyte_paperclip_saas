@@ -41,6 +41,7 @@ The first harness implementation slice is now built and verified:
 - browser-side harness requests should stay bounded in time too: live board loads and actions should fail with an explicit timeout class instead of hanging indefinitely, and that timeout should feed the same contract-owned recovery seam as other retryable failures
 - board-contract coverage should include the non-final-assembly attention seam too: `resolve-attention` preview/live rendering should be exercised directly so resume/unblock controls do not quietly drift behind the richer CEO-review branch
 - localhost fallback should keep those bounded attention variants explicit too: loopback preview must be able to exercise at least the main `review-attention` and `resolve-attention` seams by variant instead of hard-coding one happy-path fixture and quietly letting the other action families drift
+- governance-backlog preview should stay explicit too: loopback preview must also be able to exercise the `pending-approvals` attention branch so the non-final-assembly CEO queue path stays visible and testable instead of hiding behind the richer review/resume variants
 
 ## External References
 

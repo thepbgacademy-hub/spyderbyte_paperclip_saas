@@ -297,4 +297,25 @@ describe("harness board client", () => {
       })
     );
   });
+
+  it("supports a bounded pending-approvals localhost fallback variant for governance-backlog preview work", () => {
+    const client = createHarnessBoardClient(
+      fetch,
+      { location: { hostname: "127.0.0.1", search: "?harnessPreview=pending-approvals" } as Window["location"] }
+    );
+
+    const fallbackState = client.getFallbackState();
+
+    expect(fallbackState.controlMode).toBe("preview");
+    expect(fallbackState.variant).toBe("pending-approvals");
+    expect(fallbackState.variantLabel).toBe("Approval backlog");
+    expect(fallbackState.board.pendingAttention).toEqual(
+      expect.objectContaining({
+        actionRoute: "pending-approvals",
+        actionLabel: "Review pending approvals",
+        pendingApprovalCount: 1,
+        reasonLabel: "Governance backlog"
+      })
+    );
+  });
 });

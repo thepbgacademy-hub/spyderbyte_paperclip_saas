@@ -322,6 +322,23 @@ const resolveAttentionBoardResponse: HarnessBoardResponse = {
   }
 };
 
+const pendingApprovalsAttentionBoardResponse: HarnessBoardResponse = {
+  ...boardResponse,
+  runId: "run_ui_test_3",
+  pendingAttention: {
+    kind: "queue_ceo_review",
+    runState: "active",
+    statusLabel: "CEO approval backlog",
+    summary: "Clear the bounded proposal queue before widening the current board cycle.",
+    actionRoute: "pending-approvals",
+    actionLabel: "Review pending approvals",
+    actionDescription: "Open the proposal review queue to clear governance backlog before more work starts.",
+    pendingApprovalCount: 1,
+    requestedAtLabel: "11:52 AM",
+    reasonLabel: "Governance backlog"
+  }
+};
+
 describe("harness board UI", () => {
   it("builds bounded live action payloads from contract fields plus user drafts", () => {
     const attentionOption = boardResponse.pendingAttention?.actionOptions?.find((option) => option.value === "start_fresh_cycle");
@@ -1407,6 +1424,22 @@ describe("harness board UI", () => {
     expect(markup).toContain("Preview variant: Lane resume");
     expect(markup).toContain("while previewing lane resume.");
     expect(markup).toContain("Resume lane");
+  });
+
+  it("surfaces the approval-backlog preview variant with bounded governance guidance", () => {
+    const markup = renderToStaticMarkup(
+      <HarnessBoardPage
+        initialBoard={pendingApprovalsAttentionBoardResponse}
+        initialControlMode="preview"
+        initialPreviewVariantLabel="Approval backlog"
+      />
+    );
+
+    expect(markup).toContain("Preview variant: Approval backlog");
+    expect(markup).toContain("while previewing approval backlog.");
+    expect(markup).toContain("Review pending approvals");
+    expect(markup).toContain("Pending approvals in queue: 1");
+    expect(markup).toContain("Action family: pending approvals");
   });
 
   it("marks stale bounded action errors for board resync", () => {

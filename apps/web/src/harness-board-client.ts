@@ -11,7 +11,10 @@ export type HarnessBoardActionResult =
   | { status: "unblocked"; cardId: string; state: "approved" };
 
 export type HarnessBoardControlMode = "live" | "preview";
-export type HarnessBoardFallbackVariant = "review-attention" | "resolve-attention";
+export type HarnessBoardFallbackVariant =
+  | "review-attention"
+  | "resolve-attention"
+  | "pending-approvals";
 export type HarnessBoardFallbackState = {
   board: HarnessBoardResponse;
   controlMode: HarnessBoardControlMode;
@@ -396,12 +399,29 @@ const fallbackBoardResponses: Record<HarnessBoardFallbackVariant, HarnessBoardRe
       targetTitle: "Pressure-test the pricing lane",
       targetSummary: "Resume CFO lane: Pressure-test the pricing lane"
     }
+  },
+  "pending-approvals": {
+    ...fallbackBoardBase,
+    runId: "harness-browser-fallback-pending-approvals",
+    pendingAttention: {
+      kind: "queue_ceo_review",
+      runState: "active",
+      statusLabel: "CEO approval backlog",
+      summary: "Clear the bounded proposal queue before widening the current board cycle.",
+      actionRoute: "pending-approvals",
+      actionLabel: "Review pending approvals",
+      actionDescription: "Open the proposal review queue to clear governance backlog before more work starts.",
+      pendingApprovalCount: fallbackBoardBase.pendingApprovals.length,
+      requestedAtLabel: "recently",
+      reasonLabel: "Governance backlog"
+    }
   }
 };
 
 const fallbackVariantLabels: Record<HarnessBoardFallbackVariant, string> = {
   "review-attention": "Final assembly review",
-  "resolve-attention": "Lane resume"
+  "resolve-attention": "Lane resume",
+  "pending-approvals": "Approval backlog"
 };
 
 const DEFAULT_HARNESS_BOARD_REQUEST_TIMEOUT_MS = 8_000;
@@ -417,7 +437,13 @@ function parseHarnessFallbackVariant(search: string | undefined): HarnessBoardFa
 
   const params = new URLSearchParams(search);
   const requestedVariant = params.get("harnessPreview");
-  return requestedVariant === "resolve-attention" ? "resolve-attention" : "review-attention";
+  if (requestedVariant === "resolve-attention") {
+    return "resolve-attention";
+  }
+  if (requestedVariant === "pending-approvals") {
+    return "pending-approvals";
+  }
+  return "review-attention";
 }
 
 function isHarnessBoardErrorCode(value: unknown): value is HarnessBoardClientErrorCode {
