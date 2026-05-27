@@ -382,6 +382,7 @@ export type HarnessBoardActionAttempt = {
   actionPath: string;
   actionRoute?: HarnessBoardResponse["pendingApprovals"][number]["actionRoute"] | NonNullable<HarnessBoardResponse["pendingAttention"]>["actionRoute"];
   actionMethod: "POST";
+  actionToken: string;
   requestBody: Record<string, unknown>;
   noticeLabel: string;
 };
@@ -1319,6 +1320,8 @@ function describeBoardActionError(error: unknown, fallbackLabel: string) {
       return "Your session can’t submit this live board action right now.";
     case "conflict":
       return "The live harness board changed before this action could be applied. Refresh the board and try again.";
+    case "stale_contract":
+      return "This live board action no longer matches the current harness contract.";
     case "invalid_request":
       return "This action payload no longer matches the live board contract.";
     case "rate_limited":
@@ -1366,6 +1369,17 @@ export function describeBoardActionFeedback(
         context.actionRoute === "resolve-attention"
           ? "Review the required fields again before retrying the lane recovery command."
           : "Review the required fields again before retrying this bounded board action."
+      ]
+    };
+  }
+
+  if (error.code === "stale_contract") {
+    return {
+      message: fallbackMessage,
+      recoveryTitle: "Contract refresh",
+      recoverySteps: [
+        "Reload the live board to fetch the current engine-owned action contract.",
+        "Choose the next bounded action from the refreshed board instead of replaying the stale request token."
       ]
     };
   }
@@ -1444,7 +1458,7 @@ export function describeBoardActionFeedback(
 
 export function shouldResyncBoardAfterActionError(error: unknown) {
   return error instanceof HarnessBoardClientError
-    && (error.code === "conflict" || error.code === "invalid_request" || error.code === "not_found");
+    && (error.code === "conflict" || error.code === "invalid_request" || error.code === "not_found" || error.code === "stale_contract");
 }
 
 export function canRetryBoardActionAfterError(error: unknown) {
@@ -1456,7 +1470,7 @@ export function canResetBoardActionComposerAfterError(error: unknown) {
   return error instanceof HarnessBoardClientError && error.code === "invalid_request";
 }
 
-type HarnessBoardActionAttemptSupport = "unavailable" | "missing" | "reset_only" | "replay_safe";
+type HarnessBoardActionAttemptSupport = "unavailable" | "missing" | "contract_changed" | "reset_only" | "replay_safe";
 
 type HarnessBoardActionAttemptSupportDescription = {
   label: string;
@@ -1491,6 +1505,11 @@ export function describeActionAttemptSupport(
       return {
         label: "Payload drifted",
         summary: `${noticeLabel} is still exposed by the current board contract, but the last payload for ${normalizedLabel} no longer fits the current request rules.`
+      };
+    case "contract_changed":
+      return {
+        label: "Contract changed",
+        summary: `${noticeLabel} is still present at this route, but the current board contract issued a newer action token for it, so replay would push stale operator intent.`
       };
     case "missing":
       return {
@@ -1592,6 +1611,9 @@ function getBoardActionAttemptSupport(
       : undefined;
 
   if (matchingAttentionOption) {
+    if (board.pendingAttention?.actionToken !== attempt.actionToken) {
+      return "contract_changed";
+    }
     return actionPayloadMatchesCurrentContract({
       fields: board.pendingAttention?.requestFields,
       option: matchingAttentionOption,
@@ -1613,6 +1635,10 @@ function getBoardActionAttemptSupport(
     const matchingOption = approval.actionOptions?.find((option) => option.value === attemptControlValue);
     if (!matchingOption) {
       continue;
+    }
+
+    if (approval.actionToken !== attempt.actionToken) {
+      return "contract_changed";
     }
 
     return actionPayloadMatchesCurrentContract({
@@ -1646,6 +1672,16 @@ function decorateActionFeedbackForCurrentContract(
       recoverySteps: [
         ...feedback.recoverySteps,
         `The current board still supports ${noticeLabel.toLowerCase()}, but the last payload no longer fits the bounded contract. Reset the composer to the current defaults before trying again.`
+      ]
+    };
+  }
+
+  if (support === "contract_changed") {
+    return {
+      ...feedback,
+      recoverySteps: [
+        ...feedback.recoverySteps,
+        `The current board still exposes ${noticeLabel.toLowerCase()}, but it now carries a newer engine-issued action token. Reload and choose the refreshed contract action instead of replaying the stale request.`
       ]
     };
   }
@@ -1717,6 +1753,8 @@ function describeActionReloadNotice(
       return `Live board re-synced and ${attempt.noticeLabel.toLowerCase()} can be retried safely from the current contract.`;
     case "reset_only":
       return `Live board re-synced and ${attempt.noticeLabel.toLowerCase()} now needs the current contract defaults before trying again.`;
+    case "contract_changed":
+      return `Live board re-synced and ${attempt.noticeLabel.toLowerCase()} now carries a newer contract token. Re-open it from the refreshed board before submitting again.`;
     case "missing":
       return `Live board re-synced and ${attempt.noticeLabel.toLowerCase()} is no longer available on the current contract.`;
     case "unavailable":
@@ -2196,7 +2234,7 @@ export function HarnessBoardPage(props: {
       ) : null}
       {pendingActionAttempt
       && actionError
-      && (pendingActionAttemptSupport === "missing" || pendingActionAttemptSupport === "unavailable") ? (
+      && (pendingActionAttemptSupport === "missing" || pendingActionAttemptSupport === "unavailable" || pendingActionAttemptSupport === "contract_changed") ? (
         <button
           type="button"
           style={styles.secondaryButton}
@@ -2207,11 +2245,17 @@ export function HarnessBoardPage(props: {
             setActionNotice(
               pendingActionAttemptSupport === "missing"
                 ? `Dismissed stale recovery guidance for ${pendingActionAttempt.noticeLabel.toLowerCase()}.`
+                : pendingActionAttemptSupport === "contract_changed"
+                  ? `Dismissed stale contract guidance for ${pendingActionAttempt.noticeLabel.toLowerCase()}.`
                 : `Dismissed recovery guidance for ${pendingActionAttempt.noticeLabel.toLowerCase()}.`
             );
           }}
         >
-          {pendingActionAttemptSupport === "missing" ? "Dismiss stale action issue" : "Dismiss action issue"}
+          {pendingActionAttemptSupport === "missing"
+            ? "Dismiss stale action issue"
+            : pendingActionAttemptSupport === "contract_changed"
+              ? "Dismiss stale contract issue"
+              : "Dismiss action issue"}
         </button>
       ) : null}
     </>
@@ -2260,11 +2304,12 @@ export function HarnessBoardPage(props: {
     actionPath: string;
     actionRoute?: HarnessBoardResponse["pendingApprovals"][number]["actionRoute"] | NonNullable<HarnessBoardResponse["pendingAttention"]>["actionRoute"];
     actionMethod: "POST" | undefined;
+    actionToken: string | undefined;
     exampleRequest: Record<string, unknown> | undefined;
     confirmationLabel: string | undefined;
     noticeLabel: string;
   }) {
-    if (!liveActionsEnabled || !input.exampleRequest) {
+    if (!liveActionsEnabled || !input.exampleRequest || !input.actionToken) {
       return;
     }
 
@@ -2282,7 +2327,11 @@ export function HarnessBoardPage(props: {
       actionPath: input.actionPath,
       actionRoute: input.actionRoute,
       actionMethod: input.actionMethod ?? "POST",
-      requestBody: input.exampleRequest,
+      actionToken: input.actionToken,
+      requestBody: {
+        ...input.exampleRequest,
+        actionToken: input.actionToken
+      },
       noticeLabel: input.noticeLabel
     });
   }
@@ -2621,6 +2670,7 @@ export function HarnessBoardPage(props: {
                                   actionPath: pendingAttention.actionPath!,
                                   actionRoute: pendingAttention.actionRoute,
                                   actionMethod: pendingAttention.actionMethod,
+                                  actionToken: pendingAttention.actionToken,
                                   exampleRequest: actionState.payload,
                                   confirmationLabel: option.requiresConfirmation ? option.confirmationLabel : undefined,
                                   noticeLabel: option.label
@@ -2733,6 +2783,7 @@ export function HarnessBoardPage(props: {
                                     actionPath: approval.actionPath,
                                     actionRoute: approval.actionRoute,
                                     actionMethod: approval.actionMethod,
+                                    actionToken: approval.actionToken,
                                     exampleRequest: actionState.payload,
                                     confirmationLabel: option.requiresConfirmation ? option.confirmationLabel : undefined,
                                     noticeLabel: option.label

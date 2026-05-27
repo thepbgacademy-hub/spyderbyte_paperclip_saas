@@ -4,6 +4,7 @@ import { assertAllowedOrigin, createSecurityHeaders, validateRequestBodySize } f
 import {
   type HarnessAttentionResolutionCommand,
   type HarnessAttentionReviewDecision,
+  HarnessActionContractConflictError,
   HarnessCardCreationConflictError,
   HarnessCardProgressionConflictError,
   HarnessRunCompletionConflictError,
@@ -43,6 +44,7 @@ type HarnessApi = {
     cookie?: string;
     proposalId: string;
     decision: "approve" | "defer" | "deny";
+    actionToken: string;
     decisionNote?: string;
     targetCardId?: string;
   }): Promise<{ status: "proposed" | "approved" | "deferred" | "denied"; cardId?: string }>;
@@ -51,12 +53,14 @@ type HarnessApi = {
     cookie?: string;
     runId: string;
     completionSummary: string;
+    actionToken: string;
   }): Promise<{ runId: string; state: "done" }>;
   reviewPendingAttention?(request: {
     authorization: string;
     cookie?: string;
     runId: string;
     decision: HarnessAttentionReviewDecision;
+    actionToken: string;
     completionSummary?: string;
     mode?: HarnessFreshCycleMode;
   }): Promise<
@@ -68,6 +72,7 @@ type HarnessApi = {
     cookie?: string;
     runId: string;
     command: HarnessAttentionResolutionCommand;
+    actionToken: string;
     resumeSummary?: string;
   }): Promise<
     | { status: "resumed"; cardId: string; state: "working" }
@@ -77,6 +82,7 @@ type HarnessApi = {
     authorization: string;
     cookie?: string;
     runId: string;
+    actionToken: string;
     mode?: HarnessFreshCycleMode;
   }): Promise<{ runId: string; reopenedProposalCount: number }>;
 };
@@ -223,7 +229,8 @@ export function createHarnessHttpHandler(options: {
       if (completeMatch) {
         const bodyInput = readJsonObject(request.body);
         const completionSummary = readRequiredString(bodyInput?.completionSummary);
-        if (!completionSummary) {
+        const actionToken = readRequiredString(bodyInput?.actionToken);
+        if (!completionSummary || !actionToken) {
           return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
         }
 
@@ -231,7 +238,8 @@ export function createHarnessHttpHandler(options: {
           authorization: request.headers.authorization ?? "",
           ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
           runId: decodeURIComponent(completeMatch[1] ?? ""),
-          completionSummary
+          completionSummary,
+          actionToken
         });
         assertWealthFactoryResponse(body);
         return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
@@ -244,7 +252,11 @@ export function createHarnessHttpHandler(options: {
         }
         const bodyInput = readJsonObject(request.body);
         const decision = readOptionalString(bodyInput?.decision);
+        const actionToken = readRequiredString(bodyInput?.actionToken);
         if (decision !== "complete_run" && decision !== "start_fresh_cycle") {
+          return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
+        }
+        if (!actionToken) {
           return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
         }
 
@@ -262,6 +274,7 @@ export function createHarnessHttpHandler(options: {
           ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
           runId: decodeURIComponent(reviewAttentionMatch[1] ?? ""),
           decision,
+          actionToken,
           ...(completionSummary ? { completionSummary } : {}),
           ...(freshCycleMode === "reopen_deferred" || freshCycleMode === "clean" ? { mode: freshCycleMode } : {})
         });
@@ -276,7 +289,11 @@ export function createHarnessHttpHandler(options: {
         }
         const bodyInput = readJsonObject(request.body);
         const command = readOptionalString(bodyInput?.command);
+        const actionToken = readRequiredString(bodyInput?.actionToken);
         if (command !== "resume_lane" && command !== "unblock_lane") {
+          return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
+        }
+        if (!actionToken) {
           return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
         }
         const resumeSummary = readOptionalString(bodyInput?.resumeSummary);
@@ -286,6 +303,7 @@ export function createHarnessHttpHandler(options: {
           ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
           runId: decodeURIComponent(resolveAttentionMatch[1] ?? ""),
           command,
+          actionToken,
           ...(resumeSummary ? { resumeSummary } : {})
         });
         assertWealthFactoryResponse(body);
@@ -298,8 +316,9 @@ export function createHarnessHttpHandler(options: {
           return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
         }
         const bodyInput = readJsonObject(request.body);
+        const actionToken = readRequiredString(bodyInput?.actionToken);
         const freshCycleMode = readOptionalString(bodyInput?.mode);
-        if (freshCycleMode && freshCycleMode !== "reopen_deferred" && freshCycleMode !== "clean") {
+        if (!actionToken || (freshCycleMode && freshCycleMode !== "reopen_deferred" && freshCycleMode !== "clean")) {
           return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
         }
         const validatedFreshCycleMode: HarnessFreshCycleMode | undefined =
@@ -307,7 +326,8 @@ export function createHarnessHttpHandler(options: {
         const freshCycleRequest: Parameters<NonNullable<typeof options.startFreshCycle>>[0] = {
           authorization: request.headers.authorization ?? "",
           ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
-          runId: decodeURIComponent(freshCycleMatch[1] ?? "")
+          runId: decodeURIComponent(freshCycleMatch[1] ?? ""),
+          actionToken
         };
         if (validatedFreshCycleMode) {
           freshCycleRequest.mode = validatedFreshCycleMode;
@@ -325,8 +345,12 @@ export function createHarnessHttpHandler(options: {
       }
       const bodyInput = readJsonObject(request.body);
       const decision = readOptionalString(bodyInput?.decision);
+      const actionToken = readRequiredString(bodyInput?.actionToken);
       const routeDecision = proposalMatch[2] === "approve" ? "approve" : decision ?? "";
       if (!routeDecision || !["approve", "defer", "deny"].includes(routeDecision)) {
+        return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
+      }
+      if (!actionToken) {
         return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
       }
       const decisionNote = readOptionalString(bodyInput?.decisionNote);
@@ -337,6 +361,7 @@ export function createHarnessHttpHandler(options: {
         authorization: request.headers.authorization ?? "",
         ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
         decision: routeDecision as "approve" | "defer" | "deny",
+        actionToken,
         ...(decisionNote ? { decisionNote } : {}),
         ...(targetCardId ? { targetCardId } : {})
       });
@@ -348,6 +373,11 @@ export function createHarnessHttpHandler(options: {
     } catch (error) {
       if (error instanceof ApiAuthError) {
         return { status: 401, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "unauthorized" } };
+      }
+      if (
+        error instanceof HarnessActionContractConflictError
+      ) {
+        return { status: 409, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "stale_contract" } };
       }
       if (
         error instanceof HarnessCardCreationConflictError ||

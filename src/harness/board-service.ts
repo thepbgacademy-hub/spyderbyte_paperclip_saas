@@ -1,5 +1,5 @@
 import { ApiAuthError, type ApiSession } from "../api/dashboard-api.js";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { DurableAuditEvent } from "../audit/durable-audit.js";
 import type {
   HarnessBoardDecisionRecord,
@@ -117,6 +117,7 @@ export type HarnessPendingAttentionView = {
   actionRoute?: "review-attention" | "resolve-attention" | "pending-approvals";
   actionPath?: string;
   actionMethod?: "POST";
+  actionToken?: string;
   actionLabel?: string;
   actionDescription?: string;
   requestFields?: HarnessActionRequestFieldView[];
@@ -159,6 +160,7 @@ export type HarnessPendingApprovalView = {
   actionRoute: "proposal-decision";
   actionPath: string;
   actionMethod: "POST";
+  actionToken: string;
   actionLabel: string;
   actionDescription: string;
   requestFields: HarnessActionRequestFieldView[];
@@ -265,6 +267,13 @@ export class HarnessRunCycleConflictError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "HarnessRunCycleConflictError";
+  }
+}
+
+export class HarnessActionContractConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "HarnessActionContractConflictError";
   }
 }
 
@@ -1012,6 +1021,7 @@ export function createHarnessBoardService(options: {
       cookie?: string;
       proposalId: string;
       decision: "approve" | "defer" | "deny";
+      actionToken?: string;
       decisionNote?: string;
       targetCardId?: string;
     }): Promise<{ status: HarnessProposalStatus; cardId?: string }> {
@@ -1073,6 +1083,27 @@ export function createHarnessBoardService(options: {
           proposal
         });
         const latestDecisionForProposal = latestDecisionByProposalId.get(proposal.id) ?? null;
+        if (request.actionToken) {
+          assertHarnessActionToken(
+            createPendingApprovalActionToken({
+              proposal,
+              policyReason: proposalPolicyReason,
+              ...(selectDeliverableOwnerConflictTarget({
+                cards,
+                proposal
+              })?.id
+                ? {
+                    handoffTargetCardId: selectDeliverableOwnerConflictTarget({
+                      cards,
+                      proposal
+                    })!.id
+                  }
+                : {}),
+              ...(latestDecisionForProposal?.createdAt ? { latestDecisionCreatedAt: latestDecisionForProposal.createdAt } : {})
+            }),
+            request.actionToken
+          );
+        }
         if (proposal.status === "deferred" && request.decision === "defer") {
           const unchangedDecisionNote =
             !trimmedDecisionNote ||
@@ -2256,6 +2287,7 @@ export function createHarnessBoardService(options: {
       cookie?: string;
       runId: string;
       completionSummary: string;
+      actionToken?: string;
       resolvedAttention?: HarnessAttentionState;
     }): Promise<{ runId: string; state: "done" }> {
       const access = await authorizeHarnessRequest({
@@ -2284,15 +2316,56 @@ export function createHarnessBoardService(options: {
           return { runId: run.id, state: "done" as const };
         }
 
-        const [cards, proposals] = await Promise.all([
+        const [cards, proposals, events, latestRun] = await Promise.all([
           repository.listCardsForRun(run.id),
-          repository.listProposalsForRun(run.id)
+          repository.listProposalsForRun(run.id),
+          request.actionToken || request.resolvedAttention?.action.kind === "queue_ceo_review"
+            ? repository.listEventsForRun(run.id)
+            : Promise.resolve([]),
+          repository.findLatestRunForTenantWorkflow({
+            tenantId: run.tenantId,
+            workflowId: run.workflowId
+          })
         ]);
+        if (!latestRun || latestRun.id !== run.id) {
+          throw new HarnessRunCompletionConflictError("Harness run completion must target the latest board cycle");
+        }
         const derivedState = deriveHarnessRunState({
           run,
           cards,
           proposals
         });
+        if (request.actionToken || request.resolvedAttention?.action.kind === "queue_ceo_review") {
+          const pendingAttention = determineHarnessPostOutcomeAction({
+            runState: run.state,
+            cards,
+            proposals,
+            nextDispatchCard: null
+          });
+          const currentAttention = deriveCurrentHarnessAttentionState(events);
+          if (
+            !pendingAttention
+            || pendingAttention.kind !== "queue_ceo_review"
+            || (currentAttention && !isSameAttentionAction(currentAttention.action, pendingAttention))
+          ) {
+            throw new HarnessRunCompletionConflictError("Harness run is not waiting on CEO review");
+          }
+          if (request.actionToken) {
+            assertHarnessActionToken(
+              createPendingAttentionActionToken({
+                runId: run.id,
+                action: pendingAttention
+              }),
+              request.actionToken
+            );
+          }
+          if (
+            request.resolvedAttention
+            && !isSameAttentionAction(request.resolvedAttention.action, pendingAttention)
+          ) {
+            throw new HarnessRunCompletionConflictError("Harness run CEO review changed before completion");
+          }
+        }
         if (derivedState !== "assembling") {
           throw new HarnessRunCompletionConflictError("Harness run is not ready for final assembly");
         }
@@ -2386,6 +2459,7 @@ export function createHarnessBoardService(options: {
       cookie?: string;
       runId: string;
       decision: HarnessAttentionReviewDecision;
+      actionToken?: string;
       completionSummary?: string;
       mode?: HarnessFreshCycleMode;
     }): Promise<
@@ -2425,6 +2499,15 @@ export function createHarnessBoardService(options: {
       ) {
         throw new HarnessRunCompletionConflictError("Harness run is not waiting on CEO review");
       }
+      if (request.actionToken) {
+        assertHarnessActionToken(
+          createPendingAttentionActionToken({
+            runId: run.id,
+            action: pendingAttention
+          }),
+          request.actionToken
+        );
+      }
       const resolvedAttention = currentAttention ?? buildDerivedAttentionState(pendingAttention);
 
       if (request.decision === "complete_run") {
@@ -2437,6 +2520,7 @@ export function createHarnessBoardService(options: {
           ...(request.cookie ? { cookie: request.cookie } : {}),
           runId: request.runId,
           completionSummary,
+          ...(request.actionToken ? { actionToken: request.actionToken } : {}),
           resolvedAttention
         });
         return {
@@ -2449,6 +2533,7 @@ export function createHarnessBoardService(options: {
         authorization: request.authorization,
         ...(request.cookie ? { cookie: request.cookie } : {}),
         runId: request.runId,
+        ...(request.actionToken ? { actionToken: request.actionToken } : {}),
         resolvedAttention,
         ...(request.mode ? { mode: request.mode } : {})
       });
@@ -2464,6 +2549,7 @@ export function createHarnessBoardService(options: {
       cookie?: string;
       runId: string;
       command: HarnessAttentionResolutionCommand;
+      actionToken?: string;
       resumeSummary?: string;
     }): Promise<{ status: "resumed"; cardId: string; state: "working" } | { status: "unblocked"; cardId: string; state: "approved" }> {
       const access = await authorizeHarnessRequest({
@@ -2503,6 +2589,15 @@ export function createHarnessBoardService(options: {
           || (currentAttention && !isSameAttentionAction(currentAttention.action, pendingAttention))
         ) {
           throw new HarnessCardProgressionConflictError("Harness run has no active attention to resolve");
+        }
+        if (request.actionToken) {
+          assertHarnessActionToken(
+            createPendingAttentionActionToken({
+              runId: run.id,
+              action: pendingAttention
+            }),
+            request.actionToken
+          );
         }
 
         if (
@@ -2690,6 +2785,7 @@ export function createHarnessBoardService(options: {
       authorization: string;
       cookie?: string;
       runId: string;
+      actionToken?: string;
       mode?: HarnessFreshCycleMode;
       resolvedAttention?: HarnessAttentionState;
     }): Promise<{ runId: string; reopenedProposalCount: number }> {
@@ -2724,11 +2820,45 @@ export function createHarnessBoardService(options: {
 
         const freshCycleMode = request.mode ?? "reopen_deferred";
 
-        const [cards, proposals, decisions] = await Promise.all([
+        const [cards, proposals, decisions, events] = await Promise.all([
           repository.listCardsForRun(run.id),
           repository.listProposalsForRun(run.id),
-          repository.listDecisionsForRun(run.id)
+          repository.listDecisionsForRun(run.id),
+          request.actionToken || request.resolvedAttention?.action.kind === "queue_ceo_review"
+            ? repository.listEventsForRun(run.id)
+            : Promise.resolve([])
         ]);
+        if (request.actionToken || request.resolvedAttention?.action.kind === "queue_ceo_review") {
+          const pendingAttention = determineHarnessPostOutcomeAction({
+            runState: run.state,
+            cards,
+            proposals,
+            nextDispatchCard: null
+          });
+          const currentAttention = deriveCurrentHarnessAttentionState(events);
+          if (
+            !pendingAttention
+            || pendingAttention.kind !== "queue_ceo_review"
+            || (currentAttention && !isSameAttentionAction(currentAttention.action, pendingAttention))
+          ) {
+            throw new HarnessRunCycleConflictError("Harness run is not waiting on CEO review");
+          }
+          if (request.actionToken) {
+            assertHarnessActionToken(
+              createPendingAttentionActionToken({
+                runId: run.id,
+                action: pendingAttention
+              }),
+              request.actionToken
+            );
+          }
+          if (
+            request.resolvedAttention
+            && !isSameAttentionAction(request.resolvedAttention.action, pendingAttention)
+          ) {
+            throw new HarnessRunCycleConflictError("Harness run CEO review changed before the fresh cycle started");
+          }
+        }
         const ceoCard = cards.find((card) => card.persona === "ceo" && card.parentCardId === null);
         if (!ceoCard) {
           throw new HarnessRunCycleConflictError("Harness packaged run is missing the CEO card");
@@ -3531,6 +3661,18 @@ function buildHarnessBoardResponse(input: {
           actionRoute: "proposal-decision",
           actionPath: `/api/harness/proposals/${encodeURIComponent(proposal.id)}/decision`,
           actionMethod: "POST" as const,
+          actionToken: createPendingApprovalActionToken({
+            proposal,
+            policyReason: determineProposalPolicyReason({
+              run: input.run,
+              cards: input.cards,
+              proposal
+            }),
+            ...(policyView.handoffTargetCardId ? { handoffTargetCardId: policyView.handoffTargetCardId } : {}),
+            ...(latestDecisionByProposalId.get(proposal.id)?.createdAt
+              ? { latestDecisionCreatedAt: latestDecisionByProposalId.get(proposal.id)!.createdAt }
+              : {})
+          }),
           actionLabel: "Review proposal decision",
           actionDescription: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
           requestFields: buildPendingApprovalRequestFields(policyView.handoffTargetCardId),
@@ -3695,6 +3837,10 @@ function buildPendingAttentionView(input: {
               actionRoute: "review-attention" as const,
               actionPath: `/api/harness/runs/${encodeURIComponent(input.run.id)}/review-attention`,
               actionMethod: "POST" as const,
+              actionToken: createPendingAttentionActionToken({
+                runId: input.run.id,
+                action
+              }),
               actionLabel: "Review final assembly",
               actionDescription: "Finish the current board cycle or intentionally start the next one.",
               requestFields: [
@@ -3778,6 +3924,10 @@ function buildPendingAttentionView(input: {
           actionRoute: "resolve-attention" as const,
           actionPath: `/api/harness/runs/${encodeURIComponent(input.run.id)}/resolve-attention`,
           actionMethod: "POST" as const,
+          actionToken: createPendingAttentionActionToken({
+            runId: input.run.id,
+            action
+          }),
           actionLabel: action.kind === "await_lane_resume" ? "Resume lane" : "Unblock lane",
           actionDescription:
             action.kind === "await_lane_resume"
@@ -3937,6 +4087,52 @@ function comparePendingProposalQueue(left: HarnessSubCardProposal, right: Harnes
   }
 
   return left.id.localeCompare(right.id);
+}
+
+function createHarnessActionToken(parts: readonly string[]) {
+  return createHash("sha256")
+    .update(parts.join("|"))
+    .digest("hex")
+    .slice(0, 24);
+}
+
+function createPendingApprovalActionToken(input: {
+  proposal: HarnessSubCardProposal;
+  policyReason: string;
+  handoffTargetCardId?: string;
+  latestDecisionCreatedAt?: string;
+}) {
+  return createHarnessActionToken([
+    "proposal-decision",
+    input.proposal.id,
+    input.proposal.status,
+    input.proposal.persona,
+    input.proposal.title,
+    input.proposal.deliverableType,
+    input.policyReason,
+    input.handoffTargetCardId ?? "",
+    input.latestDecisionCreatedAt ?? ""
+  ]);
+}
+
+function createPendingAttentionActionToken(input: {
+  runId: string;
+  action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
+}) {
+  return createHarnessActionToken([
+    "pending-attention",
+    input.runId,
+    input.action.kind,
+    input.action.runState,
+    "reason" in input.action ? input.action.reason : "",
+    "cardId" in input.action ? input.action.cardId : ""
+  ]);
+}
+
+function assertHarnessActionToken(expectedToken: string, providedToken: string | undefined) {
+  if (!providedToken || providedToken !== expectedToken) {
+    throw new HarnessActionContractConflictError("Harness action token no longer matches the current board contract");
+  }
 }
 
 function formatAttentionActivityLabel(input: {

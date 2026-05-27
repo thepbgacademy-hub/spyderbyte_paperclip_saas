@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ApiAuthError } from "../src/api/dashboard-api.js";
 import {
+  HarnessActionContractConflictError,
   HarnessCardCreationConflictError,
   HarnessCardProgressionConflictError,
   HarnessRunCycleConflictError
@@ -211,9 +212,15 @@ describe("harness HTTP boundary", () => {
       headers: {
         origin: "https://portal.wealthfactory.test",
         authorization: "Bearer valid",
-        cookie: "wf_session=abc"
+        cookie: "wf_session=abc",
+        "content-type": "application/json"
       },
-      bodyByteLength: 0,
+      body: {
+        actionToken: "test-proposal-token"
+      },
+      bodyByteLength: JSON.stringify({
+        actionToken: "test-proposal-token"
+      }).length,
       ip: "203.0.113.10"
     });
 
@@ -222,7 +229,8 @@ describe("harness HTTP boundary", () => {
       proposalId: "proposal_1",
       authorization: "Bearer valid",
       cookie: "wf_session=abc",
-      decision: "approve"
+      decision: "approve",
+      actionToken: "test-proposal-token"
     });
     expect(response.body).toEqual({ status: "approved", cardId: "card_new_1" });
   });
@@ -250,6 +258,7 @@ describe("harness HTTP boundary", () => {
       },
       body: {
         decision: "approve",
+        actionToken: "test-proposal-token",
         targetCardId: "card_owner_1"
       },
       bodyByteLength: 64,
@@ -262,6 +271,7 @@ describe("harness HTTP boundary", () => {
       authorization: "Bearer valid",
       cookie: "wf_session=abc",
       decision: "approve",
+      actionToken: "test-proposal-token",
       targetCardId: "card_owner_1"
     });
     expect(response.body).toEqual({ status: "approved", cardId: "card_owner_1" });
@@ -290,6 +300,7 @@ describe("harness HTTP boundary", () => {
       },
       body: {
         decision: "defer",
+        actionToken: "test-proposal-token",
         decisionNote: "Wait for the current lane to finish first."
       },
       bodyByteLength: 74,
@@ -302,6 +313,7 @@ describe("harness HTTP boundary", () => {
       authorization: "Bearer valid",
       cookie: "wf_session=abc",
       decision: "defer",
+      actionToken: "test-proposal-token",
       decisionNote: "Wait for the current lane to finish first."
     });
     expect(response.body).toEqual({ status: "deferred" });
@@ -325,9 +337,15 @@ describe("harness HTTP boundary", () => {
       headers: {
         origin: "https://portal.wealthfactory.test",
         authorization: "Bearer valid",
-        cookie: "wf_session=abc"
+        cookie: "wf_session=abc",
+        "content-type": "application/json"
       },
-      bodyByteLength: 0,
+      body: {
+        actionToken: "test-proposal-token"
+      },
+      bodyByteLength: JSON.stringify({
+        actionToken: "test-proposal-token"
+      }).length,
       ip: "203.0.113.10"
     });
 
@@ -752,7 +770,8 @@ describe("harness HTTP boundary", () => {
       method: "POST",
       path: "/api/harness/runs/run_123/complete",
       body: {
-        completionSummary: "The CEO packaged the final business-facing outcome."
+        completionSummary: "The CEO packaged the final business-facing outcome.",
+        actionToken: "test-review-token"
       },
       headers: {
         origin: "https://portal.wealthfactory.test",
@@ -769,9 +788,47 @@ describe("harness HTTP boundary", () => {
       authorization: "Bearer valid",
       cookie: "wf_session=abc",
       runId: "run_123",
-      completionSummary: "The CEO packaged the final business-facing outcome."
+      completionSummary: "The CEO packaged the final business-facing outcome.",
+      actionToken: "test-review-token"
     });
     expect(response.body).toEqual({ runId: "run_123", state: "done" });
+  });
+
+  it("maps stale complete-run contract drift without exposing backend details", async () => {
+    const completeRun = vi
+      .fn()
+      .mockRejectedValueOnce(new HarnessActionContractConflictError("stale token"));
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/complete",
+      body: {
+        completionSummary: "The CEO packaged the final business-facing outcome.",
+        actionToken: "stale-review-token"
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        "content-type": "application/json"
+      },
+      bodyByteLength: JSON.stringify({
+        completionSummary: "The CEO packaged the final business-facing outcome.",
+        actionToken: "stale-review-token"
+      }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({ code: "stale_contract" });
   });
 
   it("reviews pending CEO attention by completing the run through the guarded write route", async () => {
@@ -792,6 +849,7 @@ describe("harness HTTP boundary", () => {
       path: "/api/harness/runs/run_123/review-attention",
       body: {
         decision: "complete_run",
+        actionToken: "test-review-token",
         completionSummary: "The CEO accepted the board output and packaged the business-facing result."
       },
       headers: {
@@ -802,6 +860,7 @@ describe("harness HTTP boundary", () => {
       },
       bodyByteLength: JSON.stringify({
         decision: "complete_run",
+        actionToken: "test-review-token",
         completionSummary: "The CEO accepted the board output and packaged the business-facing result."
       }).length,
       ip: "203.0.113.10"
@@ -813,6 +872,7 @@ describe("harness HTTP boundary", () => {
       cookie: "wf_session=abc",
       runId: "run_123",
       decision: "complete_run",
+      actionToken: "test-review-token",
       completionSummary: "The CEO accepted the board output and packaged the business-facing result."
     });
     expect(response.body).toEqual({ status: "done", runId: "run_123" });
@@ -838,6 +898,7 @@ describe("harness HTTP boundary", () => {
       path: "/api/harness/runs/run_123/review-attention",
       body: {
         decision: "start_fresh_cycle",
+        actionToken: "test-review-token",
         mode: "clean"
       },
       headers: {
@@ -848,6 +909,7 @@ describe("harness HTTP boundary", () => {
       },
       bodyByteLength: JSON.stringify({
         decision: "start_fresh_cycle",
+        actionToken: "test-review-token",
         mode: "clean"
       }).length,
       ip: "203.0.113.10"
@@ -859,6 +921,7 @@ describe("harness HTTP boundary", () => {
       cookie: "wf_session=abc",
       runId: "run_123",
       decision: "start_fresh_cycle",
+      actionToken: "test-review-token",
       mode: "clean"
     });
     expect(response.body).toEqual({ status: "fresh_cycle_started", runId: "run_124", reopenedProposalCount: 2 });
@@ -953,14 +1016,18 @@ describe("harness HTTP boundary", () => {
       method: "POST" as const,
       path: "/api/harness/runs/run_123/review-attention",
       body: {
-        decision: "start_fresh_cycle"
+        decision: "start_fresh_cycle",
+        actionToken: "test-review-token"
       },
       headers: {
         origin: "https://portal.wealthfactory.test",
         authorization: "Bearer valid",
         "content-type": "application/json"
       },
-      bodyByteLength: JSON.stringify({ decision: "start_fresh_cycle" }).length,
+      bodyByteLength: JSON.stringify({
+        decision: "start_fresh_cycle",
+        actionToken: "test-review-token"
+      }).length,
       ip: "203.0.113.10"
     };
 
@@ -973,6 +1040,81 @@ describe("harness HTTP boundary", () => {
     expect(conflict.body).toEqual({ code: "conflict" });
     expect(serviceUnavailable.status).toBe(500);
     expect(serviceUnavailable.body).toEqual({ code: "service_unavailable" });
+  });
+
+  it("maps stale review-attention contract drift without exposing backend details", async () => {
+    const reviewPendingAttention = vi
+      .fn()
+      .mockRejectedValueOnce(new HarnessActionContractConflictError("stale token"));
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      reviewPendingAttention,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/review-attention",
+      body: {
+        decision: "start_fresh_cycle",
+        actionToken: "stale-review-token"
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        "content-type": "application/json"
+      },
+      bodyByteLength: JSON.stringify({
+        decision: "start_fresh_cycle",
+        actionToken: "stale-review-token"
+      }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({ code: "stale_contract" });
+  });
+
+  it("maps stale proposal-decision contract drift without exposing backend details", async () => {
+    const decideProposal = vi
+      .fn()
+      .mockRejectedValueOnce(new HarnessActionContractConflictError("stale token"));
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal,
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/proposals/proposal_1/decision",
+      body: {
+        decision: "approve",
+        actionToken: "stale-proposal-token"
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        "content-type": "application/json"
+      },
+      bodyByteLength: JSON.stringify({
+        decision: "approve",
+        actionToken: "stale-proposal-token"
+      }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({ code: "stale_contract" });
   });
 
   it("resolves pending lane-resume attention through the guarded write route", async () => {
@@ -995,6 +1137,7 @@ describe("harness HTTP boundary", () => {
       path: "/api/harness/runs/run_123/resolve-attention",
       body: {
         command: "resume_lane",
+        actionToken: "test-resolve-token",
         resumeSummary: "Resume the pricing review with the confirmed revenue assumption."
       },
       headers: {
@@ -1016,6 +1159,7 @@ describe("harness HTTP boundary", () => {
       cookie: "wf_session=abc",
       runId: "run_123",
       command: "resume_lane",
+      actionToken: "test-resolve-token",
       resumeSummary: "Resume the pricing review with the confirmed revenue assumption."
     });
     expect(response.body).toEqual({ status: "resumed", cardId: "card_waiting_1", state: "working" });
@@ -1041,6 +1185,7 @@ describe("harness HTTP boundary", () => {
       path: "/api/harness/runs/run_123/resolve-attention",
       body: {
         command: "unblock_lane",
+        actionToken: "test-resolve-token",
         resumeSummary: "The blocker is cleared and this lane can return to the board queue."
       },
       headers: {
@@ -1062,6 +1207,7 @@ describe("harness HTTP boundary", () => {
       cookie: "wf_session=abc",
       runId: "run_123",
       command: "unblock_lane",
+      actionToken: "test-resolve-token",
       resumeSummary: "The blocker is cleared and this lane can return to the board queue."
     });
     expect(response.body).toEqual({ status: "unblocked", cardId: "card_blocked_1", state: "approved" });
@@ -1121,14 +1267,18 @@ describe("harness HTTP boundary", () => {
       method: "POST" as const,
       path: "/api/harness/runs/run_123/resolve-attention",
       body: {
-        command: "resume_lane"
+        command: "resume_lane",
+        actionToken: "test-resolve-token"
       },
       headers: {
         origin: "https://portal.wealthfactory.test",
         authorization: "Bearer valid",
         "content-type": "application/json"
       },
-      bodyByteLength: JSON.stringify({ command: "resume_lane" }).length,
+      bodyByteLength: JSON.stringify({
+        command: "resume_lane",
+        actionToken: "test-resolve-token"
+      }).length,
       ip: "203.0.113.10"
     };
 
@@ -1141,6 +1291,44 @@ describe("harness HTTP boundary", () => {
     expect(conflict.body).toEqual({ code: "conflict" });
     expect(serviceUnavailable.status).toBe(500);
     expect(serviceUnavailable.body).toEqual({ code: "service_unavailable" });
+  });
+
+  it("maps stale resolve-attention contract drift without exposing backend details", async () => {
+    const resolvePendingAttention = vi
+      .fn()
+      .mockRejectedValueOnce(new HarnessActionContractConflictError("stale token"));
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      resolvePendingAttention,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/resolve-attention",
+      body: {
+        command: "resume_lane",
+        actionToken: "stale-resolve-token"
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        "content-type": "application/json"
+      },
+      bodyByteLength: JSON.stringify({
+        command: "resume_lane",
+        actionToken: "stale-resolve-token"
+      }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({ code: "stale_contract" });
   });
 
   it("starts a fresh board cycle through the guarded write route", async () => {
@@ -1162,10 +1350,11 @@ describe("harness HTTP boundary", () => {
       headers: {
         origin: "https://portal.wealthfactory.test",
         authorization: "Bearer valid",
-        cookie: "wf_session=abc"
+        cookie: "wf_session=abc",
+        "content-type": "application/json"
       },
-      body: { mode: "clean" },
-      bodyByteLength: JSON.stringify({ mode: "clean" }).length,
+      body: { mode: "clean", actionToken: "test-review-token" },
+      bodyByteLength: JSON.stringify({ mode: "clean", actionToken: "test-review-token" }).length,
       ip: "203.0.113.10"
     });
 
@@ -1174,6 +1363,7 @@ describe("harness HTTP boundary", () => {
       authorization: "Bearer valid",
       cookie: "wf_session=abc",
       runId: "run_123",
+      actionToken: "test-review-token",
       mode: "clean"
     });
     expect(response.body).toEqual({ runId: "run_124", reopenedProposalCount: 2 });
@@ -1197,10 +1387,11 @@ describe("harness HTTP boundary", () => {
       path: "/api/harness/runs/run_123/fresh-cycle",
       headers: {
         origin: "https://portal.wealthfactory.test",
-        authorization: "Bearer valid"
+        authorization: "Bearer valid",
+        "content-type": "application/json"
       },
-      body: { mode: "reopen_everything" },
-      bodyByteLength: JSON.stringify({ mode: "reopen_everything" }).length,
+      body: { mode: "reopen_everything", actionToken: "test-review-token" },
+      bodyByteLength: JSON.stringify({ mode: "reopen_everything", actionToken: "test-review-token" }).length,
       ip: "203.0.113.10"
     });
 
@@ -1229,11 +1420,19 @@ describe("harness HTTP boundary", () => {
     const baseRequest = {
       method: "POST" as const,
       path: "/api/harness/runs/run_123/fresh-cycle",
+      body: {
+        mode: "reopen_deferred",
+        actionToken: "test-review-token"
+      },
       headers: {
         origin: "https://portal.wealthfactory.test",
-        authorization: "Bearer valid"
+        authorization: "Bearer valid",
+        "content-type": "application/json"
       },
-      bodyByteLength: 0,
+      bodyByteLength: JSON.stringify({
+        mode: "reopen_deferred",
+        actionToken: "test-review-token"
+      }).length,
       ip: "203.0.113.10"
     };
 
@@ -1246,5 +1445,43 @@ describe("harness HTTP boundary", () => {
     expect(conflict.body).toEqual({ code: "conflict" });
     expect(serviceUnavailable.status).toBe(500);
     expect(serviceUnavailable.body).toEqual({ code: "service_unavailable" });
+  });
+
+  it("maps stale fresh-cycle contract drift without exposing backend details", async () => {
+    const startFreshCycle = vi
+      .fn()
+      .mockRejectedValueOnce(new HarnessActionContractConflictError("stale token"));
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      startFreshCycle,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/fresh-cycle",
+      body: {
+        mode: "reopen_deferred",
+        actionToken: "stale-review-token"
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        "content-type": "application/json"
+      },
+      bodyByteLength: JSON.stringify({
+        mode: "reopen_deferred",
+        actionToken: "stale-review-token"
+      }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({ code: "stale_contract" });
   });
 });

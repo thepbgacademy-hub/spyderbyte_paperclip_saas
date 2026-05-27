@@ -452,11 +452,17 @@ describe("runtime server", () => {
       headers: {
         authorization: "Bearer token",
         origin: "https://www.spyderbyte.cloud",
-        "content-length": "69",
+        "content-length": String(
+          JSON.stringify({
+            completionSummary: "The CEO packaged the final business-facing outcome.",
+            actionToken: "test-review-token"
+          }).length
+        ),
         "content-type": "application/json"
       },
       body: JSON.stringify({
-        completionSummary: "The CEO packaged the final business-facing outcome."
+        completionSummary: "The CEO packaged the final business-facing outcome.",
+        actionToken: "test-review-token"
       })
     });
     const response = createResponse();
@@ -490,9 +496,9 @@ describe("runtime server", () => {
         authorization: "Bearer token",
         origin: "https://www.spyderbyte.cloud",
         "content-type": "application/json",
-        "content-length": String(JSON.stringify({ mode: "clean" }).length)
+        "content-length": String(JSON.stringify({ mode: "clean", actionToken: "test-review-token" }).length)
       },
-      body: JSON.stringify({ mode: "clean" })
+      body: JSON.stringify({ mode: "clean", actionToken: "test-review-token" })
     });
     const response = createResponse();
 
@@ -506,6 +512,7 @@ describe("runtime server", () => {
     expect(harnessBoardService?.startFreshCycle).toHaveBeenCalledWith(
       expect.objectContaining({
         runId: "run_123",
+        actionToken: "test-review-token",
         mode: "clean"
       })
     );

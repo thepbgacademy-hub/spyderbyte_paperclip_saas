@@ -162,3 +162,5 @@ This file tracks the new harness subproject only.
 - [x] Preserve the last known bounded contract labels and field labels when a live refresh removes an action or field, so concurrency cleanup guidance stays human-readable instead of falling back to raw option values or field keys.
 - [x] Keep contract-refresh guidance structured with bounded affected-action and impact-count metadata so the board page and pulse can summarize concurrency cleanup without inventing page-local status heuristics.
 - [x] Keep contract-refresh recovery guidance structured too, so the board page and pulse expose bounded next-safe-step actions after live contract drift instead of leaving operators to infer recovery from a raw cleanup notice.
+- [x] Extend the bounded board `actionToken` seam across legacy CEO mutation routes so `/complete` and `/fresh-cycle` cannot bypass `stale_contract` protection after the explicit review contract was introduced.
+- [x] Re-check CEO review exclusivity at commit time, so a fresh-cycle decision makes the older packaged run non-completable through the same review token instead of allowing contradictory outcomes under concurrency.

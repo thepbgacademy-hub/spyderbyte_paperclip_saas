@@ -29,6 +29,7 @@ export type HarnessBoardClientErrorCode =
   | "rate_limited"
   | "request_rejected"
   | "service_unavailable"
+  | "stale_contract"
   | "timed_out"
   | "unauthorized"
   | "unknown";
@@ -182,6 +183,7 @@ const fallbackBoardBase: HarnessBoardResponse = {
       actionRoute: "proposal-decision",
       actionPath: "/api/harness/proposals/proposal-fallback-1/decision",
       actionMethod: "POST",
+      actionToken: "preview-proposal-fallback-1",
       actionLabel: "Review proposal decision",
       actionDescription: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
       requestFields: [
@@ -243,6 +245,7 @@ const fallbackBoardBase: HarnessBoardResponse = {
     actionRoute: "review-attention",
     actionPath: "/api/harness/runs/harness-browser-fallback/review-attention",
     actionMethod: "POST",
+    actionToken: "preview-review-attention",
     actionLabel: "Review final assembly",
     actionDescription: "Finish the current board cycle or intentionally start the next one.",
     requestFields: [
@@ -365,6 +368,7 @@ const fallbackBoardResponses: Record<HarnessBoardFallbackVariant, HarnessBoardRe
       actionRoute: "resolve-attention",
       actionPath: "/api/harness/runs/harness-browser-fallback-resolve/resolve-attention",
       actionMethod: "POST",
+      actionToken: "preview-resolve-attention",
       actionLabel: "Resume lane",
       actionDescription: "Resume the waiting lane when the required board input is ready.",
       requestFields: [
@@ -468,6 +472,7 @@ function isHarnessBoardErrorCode(value: unknown): value is HarnessBoardClientErr
     "rate_limited",
     "request_rejected",
     "service_unavailable",
+    "stale_contract",
     "unauthorized",
     "unknown"
   ].includes(String(value));

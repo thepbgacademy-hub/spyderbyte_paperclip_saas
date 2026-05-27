@@ -110,6 +110,7 @@ const boardResponse: HarnessBoardResponse = {
       actionRoute: "proposal-decision",
       actionPath: "/api/harness/proposals/proposal_ui_test_1/decision",
       actionMethod: "POST",
+      actionToken: "test-proposal-token",
       actionLabel: "Review proposal decision",
       actionDescription: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
       requestFields: [
@@ -171,6 +172,7 @@ const boardResponse: HarnessBoardResponse = {
     actionRoute: "review-attention",
     actionPath: "/api/harness/runs/run_ui_test_1/review-attention",
     actionMethod: "POST",
+    actionToken: "test-review-token",
     actionLabel: "Review final assembly",
     actionDescription: "Finish the current board cycle or intentionally start the next one.",
     requestFields: [
@@ -284,6 +286,7 @@ const resolveAttentionBoardResponse: HarnessBoardResponse = {
     actionRoute: "resolve-attention",
     actionPath: "/api/harness/runs/run_ui_test_2/resolve-attention",
     actionMethod: "POST",
+    actionToken: "test-resolve-token",
     actionLabel: "Resume lane",
     actionDescription: "Resume the waiting lane when the required board input is ready.",
     requestFields: [
@@ -1139,6 +1142,7 @@ describe("harness board UI", () => {
           actionPath: "/api/harness/proposals/proposal_ui_test_1/decision",
           actionRoute: "proposal-decision",
           actionMethod: "POST",
+          actionToken: "test-proposal-token",
           requestBody: { decision: "approve" },
           noticeLabel: "Approve proposal"
         }}
@@ -1178,6 +1182,7 @@ describe("harness board UI", () => {
           actionPath: "/api/harness/proposals/proposal_old/decision",
           actionRoute: "proposal-decision",
           actionMethod: "POST",
+          actionToken: "test-proposal-old-token",
           requestBody: { decision: "approve" },
           noticeLabel: "Approve proposal"
         }}
@@ -1220,6 +1225,7 @@ describe("harness board UI", () => {
           actionPath: "/api/harness/runs/run_ui_test_2/resolve-attention",
           actionRoute: "resolve-attention",
           actionMethod: "POST",
+          actionToken: "test-resolve-token",
           requestBody: { command: "resume_lane", resumeSummary: "Resume CFO lane" },
           noticeLabel: "Resume lane"
         }}
@@ -1260,6 +1266,7 @@ describe("harness board UI", () => {
           actionPath: "/api/harness/runs/run_ui_test_1/review-attention",
           actionRoute: "review-attention",
           actionMethod: "POST",
+          actionToken: "test-review-token",
           requestBody: { decision: "start_fresh_cycle", mode: "invalid_mode" },
           noticeLabel: "Start fresh cycle"
         }}
@@ -1303,6 +1310,7 @@ describe("harness board UI", () => {
           actionPath: "/api/harness/runs/run_ui_test_2/resolve-attention",
           actionRoute: "resolve-attention",
           actionMethod: "POST",
+          actionToken: "test-resolve-token",
           requestBody: { command: "unblock_lane" },
           noticeLabel: "Unblock lane"
         }}
@@ -1343,6 +1351,7 @@ describe("harness board UI", () => {
           actionPath: "/api/harness/proposals/proposal_ui_test_1/decision",
           actionRoute: "proposal-decision",
           actionMethod: "POST",
+          actionToken: "test-proposal-token",
           requestBody: { decision: "approve" },
           noticeLabel: "Approve proposal"
         }}
@@ -1384,6 +1393,7 @@ describe("harness board UI", () => {
           actionPath: "/api/harness/proposals/proposal_ui_test_1/decision",
           actionRoute: "proposal-decision",
           actionMethod: "POST",
+          actionToken: "test-proposal-token",
           requestBody: { decision: "approve" },
           noticeLabel: "Approve proposal"
         }}
