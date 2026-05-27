@@ -3925,7 +3925,12 @@ describe("harness board service", () => {
         syncStrategyLabel: "Append history entry",
         exportRequestShapeLabel: "Single-record export request",
         exportConfirmationRequirementLabel: "Tenant export confirmation",
-        exportRecoveryPathLabel: "Retry latest record export"
+        exportRecoveryPathLabel: "Retry latest record export",
+        exportPayloadShapeLabel: "Governance history record",
+        idempotencyPolicyLabel: "Deterministic upsert",
+        replaySafetyLabel: "Replay-safe",
+        conflictPolicyLabel: "Append or upsert",
+        exportAtomicityLabel: "Record-level atomic"
       })
     ]);
   });

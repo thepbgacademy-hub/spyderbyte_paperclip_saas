@@ -438,6 +438,16 @@ export type HarnessMemoryBoundaryExportCandidateView = {
   exportConfirmationRequirementLabel: string;
   exportRecoveryPath: HarnessMemoryBoundaryExportRecoveryPath;
   exportRecoveryPathLabel: string;
+  exportPayloadShape: HarnessMemoryBoundaryExportPayloadShape;
+  exportPayloadShapeLabel: string;
+  idempotencyPolicy: HarnessMemoryBoundaryIdempotencyPolicy;
+  idempotencyPolicyLabel: string;
+  replaySafety: HarnessMemoryBoundaryReplaySafety;
+  replaySafetyLabel: string;
+  conflictPolicy: HarnessMemoryBoundaryConflictPolicy;
+  conflictPolicyLabel: string;
+  exportAtomicity: HarnessMemoryBoundaryExportAtomicity;
+  exportAtomicityLabel: string;
   exportSequence?: HarnessMemoryBoundaryExportSequence;
   exportSequenceLabel?: string;
   exportDependencyPolicy?: HarnessMemoryBoundaryExportDependencyPolicy;
@@ -5369,6 +5379,16 @@ function buildMemoryBoundaryView(input: {
       exportConfirmationRequirementLabel: representative.exportConfirmationRequirementLabel,
       exportRecoveryPath: representative.exportRecoveryPath,
       exportRecoveryPathLabel: representative.exportRecoveryPathLabel,
+      exportPayloadShape: representative.exportPayloadShape,
+      exportPayloadShapeLabel: representative.exportPayloadShapeLabel,
+      idempotencyPolicy: representative.idempotencyPolicy,
+      idempotencyPolicyLabel: representative.idempotencyPolicyLabel,
+      replaySafety: representative.replaySafety,
+      replaySafetyLabel: representative.replaySafetyLabel,
+      conflictPolicy: representative.conflictPolicy,
+      conflictPolicyLabel: representative.conflictPolicyLabel,
+      exportAtomicity: representative.exportAtomicity,
+      exportAtomicityLabel: representative.exportAtomicityLabel,
       exportSequence: "foundational_first",
       exportSequenceLabel: humanizeMemoryBoundaryExportSequence("foundational_first"),
       exportDependencyPolicy: "independent_candidate",
@@ -5411,6 +5431,16 @@ function buildMemoryBoundaryView(input: {
       exportConfirmationRequirementLabel: representative.exportConfirmationRequirementLabel,
       exportRecoveryPath: representative.exportRecoveryPath,
       exportRecoveryPathLabel: representative.exportRecoveryPathLabel,
+      exportPayloadShape: representative.exportPayloadShape,
+      exportPayloadShapeLabel: representative.exportPayloadShapeLabel,
+      idempotencyPolicy: representative.idempotencyPolicy,
+      idempotencyPolicyLabel: representative.idempotencyPolicyLabel,
+      replaySafety: representative.replaySafety,
+      replaySafetyLabel: representative.replaySafetyLabel,
+      conflictPolicy: representative.conflictPolicy,
+      conflictPolicyLabel: representative.conflictPolicyLabel,
+      exportAtomicity: representative.exportAtomicity,
+      exportAtomicityLabel: representative.exportAtomicityLabel,
       exportSequence: "board_closure_following",
       exportSequenceLabel: humanizeMemoryBoundaryExportSequence("board_closure_following"),
       exportDependencyPolicy: "depends_on_governance_history_export",

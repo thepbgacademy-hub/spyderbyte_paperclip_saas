@@ -567,7 +567,12 @@ describe("harness board client", () => {
           readinessLabel: "Ready now",
           exportRequestShapeLabel: "Single-record export request",
           exportSequenceLabel: "Foundational export sequence",
-          exportDependencyPolicyLabel: "Independent export candidate"
+          exportDependencyPolicyLabel: "Independent export candidate",
+          exportPayloadShapeLabel: "Governance history record",
+          idempotencyPolicyLabel: "Deterministic upsert",
+          replaySafetyLabel: "Replay-safe",
+          conflictPolicyLabel: "Append or upsert",
+          exportAtomicityLabel: "Record-level atomic"
         }),
         expect.objectContaining({
           id: "package_bundle_export",
@@ -577,6 +582,11 @@ describe("harness board client", () => {
           exportRequestShapeLabel: "Package-bundle export request",
           exportSequenceLabel: "Board-closure-following sequence",
           exportDependencyPolicyLabel: "Depends on governance history export",
+          exportPayloadShapeLabel: "Package snapshot bundle",
+          idempotencyPolicyLabel: "Board-closure snapshot once",
+          replaySafetyLabel: "Requires fresh board-closure snapshot",
+          conflictPolicyLabel: "Replace latest closure snapshot",
+          exportAtomicityLabel: "Closure-bundle atomic",
           dependsOnCandidateLabels: ["Governance history export"]
         })
       ])

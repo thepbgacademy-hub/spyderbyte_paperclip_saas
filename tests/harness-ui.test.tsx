@@ -1658,6 +1658,14 @@ describe("harness board UI", () => {
     expect(markup).toContain("Board-closure-following sequence");
     expect(markup).toContain("Independent export candidate");
     expect(markup).toContain("Depends on governance history export");
+    expect(markup).toContain("Deterministic upsert");
+    expect(markup).toContain("Board-closure snapshot once");
+    expect(markup).toContain("Replay-safe");
+    expect(markup).toContain("Requires fresh board-closure snapshot");
+    expect(markup).toContain("Append or upsert");
+    expect(markup).toContain("Replace latest closure snapshot");
+    expect(markup).toContain("Record-level atomic");
+    expect(markup).toContain("Closure-bundle atomic");
     expect(markup).toContain("Depends on: Governance history export");
     expect(markup).toContain("2 runtime memory buckets stay live only inside Wealth Factory orchestration.");
     expect(markup).toContain("2 governance history candidates are stable enough for later tenant-owned export.");

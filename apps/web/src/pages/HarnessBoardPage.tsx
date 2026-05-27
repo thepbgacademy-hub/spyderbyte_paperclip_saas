@@ -624,6 +624,16 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       candidate.id === "governance_history_export"
         ? {
             ...candidate,
+            exportPayloadShape: candidate.exportPayloadShape ?? "governance_history_record",
+            exportPayloadShapeLabel: candidate.exportPayloadShapeLabel ?? "Governance history record",
+            idempotencyPolicy: candidate.idempotencyPolicy ?? "deterministic_upsert",
+            idempotencyPolicyLabel: candidate.idempotencyPolicyLabel ?? "Deterministic upsert",
+            replaySafety: candidate.replaySafety ?? "replay_safe",
+            replaySafetyLabel: candidate.replaySafetyLabel ?? "Replay-safe",
+            conflictPolicy: candidate.conflictPolicy ?? "append_or_upsert",
+            conflictPolicyLabel: candidate.conflictPolicyLabel ?? "Append or upsert",
+            exportAtomicity: candidate.exportAtomicity ?? "record_level_atomic",
+            exportAtomicityLabel: candidate.exportAtomicityLabel ?? "Record-level atomic",
             exportSequence: candidate.exportSequence ?? "foundational_first",
             exportSequenceLabel: candidate.exportSequenceLabel ?? "Foundational export sequence",
             exportDependencyPolicy: candidate.exportDependencyPolicy ?? "independent_candidate",
@@ -636,6 +646,16 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
           }
         : {
             ...candidate,
+            exportPayloadShape: candidate.exportPayloadShape ?? "package_snapshot_bundle",
+            exportPayloadShapeLabel: candidate.exportPayloadShapeLabel ?? "Package snapshot bundle",
+            idempotencyPolicy: candidate.idempotencyPolicy ?? "board_closure_snapshot_once",
+            idempotencyPolicyLabel: candidate.idempotencyPolicyLabel ?? "Board-closure snapshot once",
+            replaySafety: candidate.replaySafety ?? "requires_fresh_board_closure_snapshot",
+            replaySafetyLabel: candidate.replaySafetyLabel ?? "Requires fresh board-closure snapshot",
+            conflictPolicy: candidate.conflictPolicy ?? "replace_latest_closure_snapshot",
+            conflictPolicyLabel: candidate.conflictPolicyLabel ?? "Replace latest closure snapshot",
+            exportAtomicity: candidate.exportAtomicity ?? "closure_bundle_atomic",
+            exportAtomicityLabel: candidate.exportAtomicityLabel ?? "Closure-bundle atomic",
             exportSequence: candidate.exportSequence ?? "board_closure_following",
             exportSequenceLabel: candidate.exportSequenceLabel ?? "Board-closure-following sequence",
             exportDependencyPolicy:
@@ -756,6 +776,11 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                 <span style={styles.badge}>{candidate.exportRequestShapeLabel}</span>
                 <span style={styles.badge}>{candidate.exportConfirmationRequirementLabel}</span>
                 <span style={styles.badge}>{candidate.exportRecoveryPathLabel}</span>
+                <span style={styles.badge}>{candidate.exportPayloadShapeLabel}</span>
+                <span style={styles.badge}>{candidate.idempotencyPolicyLabel}</span>
+                <span style={styles.badge}>{candidate.replaySafetyLabel}</span>
+                <span style={styles.badge}>{candidate.conflictPolicyLabel}</span>
+                <span style={styles.badge}>{candidate.exportAtomicityLabel}</span>
                 {candidate.exportSequenceLabel ? <span style={styles.badge}>{candidate.exportSequenceLabel}</span> : null}
                 {candidate.exportDependencyPolicyLabel ? <span style={styles.badge}>{candidate.exportDependencyPolicyLabel}</span> : null}
               </div>
@@ -907,6 +932,16 @@ function deriveMemoryBoundaryExportCandidates(
       exportConfirmationRequirementLabel: representative.exportConfirmationRequirementLabel,
       exportRecoveryPath: representative.exportRecoveryPath,
       exportRecoveryPathLabel: representative.exportRecoveryPathLabel,
+      exportPayloadShape: representative.exportPayloadShape,
+      exportPayloadShapeLabel: representative.exportPayloadShapeLabel,
+      idempotencyPolicy: representative.idempotencyPolicy,
+      idempotencyPolicyLabel: representative.idempotencyPolicyLabel,
+      replaySafety: representative.replaySafety,
+      replaySafetyLabel: representative.replaySafetyLabel,
+      conflictPolicy: representative.conflictPolicy,
+      conflictPolicyLabel: representative.conflictPolicyLabel,
+      exportAtomicity: representative.exportAtomicity,
+      exportAtomicityLabel: representative.exportAtomicityLabel,
       exportSequence: "foundational_first",
       exportSequenceLabel: "Foundational export sequence",
       exportDependencyPolicy: "independent_candidate",
@@ -948,6 +983,16 @@ function deriveMemoryBoundaryExportCandidates(
       exportConfirmationRequirementLabel: representative.exportConfirmationRequirementLabel,
       exportRecoveryPath: representative.exportRecoveryPath,
       exportRecoveryPathLabel: representative.exportRecoveryPathLabel,
+      exportPayloadShape: representative.exportPayloadShape,
+      exportPayloadShapeLabel: representative.exportPayloadShapeLabel,
+      idempotencyPolicy: representative.idempotencyPolicy,
+      idempotencyPolicyLabel: representative.idempotencyPolicyLabel,
+      replaySafety: representative.replaySafety,
+      replaySafetyLabel: representative.replaySafetyLabel,
+      conflictPolicy: representative.conflictPolicy,
+      conflictPolicyLabel: representative.conflictPolicyLabel,
+      exportAtomicity: representative.exportAtomicity,
+      exportAtomicityLabel: representative.exportAtomicityLabel,
       exportSequence: "board_closure_following",
       exportSequenceLabel: "Board-closure-following sequence",
       exportDependencyPolicy: "depends_on_governance_history_export",
