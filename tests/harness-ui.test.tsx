@@ -286,6 +286,8 @@ const boardResponse: HarnessBoardResponse = {
     summary: "Wealth Factory runtime keeps bounded operational lane memory live while governance and package records stay ready for later tenant-owned export.",
     exportSummary: "2 export candidates are ready now, and 2 still wait for board closure.",
     roleSummary: "2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure.",
+    ownershipSummary:
+      "2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later.",
     readyNowCount: 2,
     waitingOnBoardClosureCount: 2,
     governanceReadyCount: 2,
@@ -323,7 +325,9 @@ const boardResponse: HarnessBoardResponse = {
         candidateClass: "runtime_operational",
         candidateClassLabel: "Runtime operational",
         durabilityCondition: "runtime_ephemeral",
-        durabilityConditionLabel: "Runtime ephemeral"
+        durabilityConditionLabel: "Runtime ephemeral",
+        ownershipBoundary: "wealth_factory_only",
+        ownershipBoundaryLabel: "Wealth Factory only"
       },
       {
         id: "attention_state",
@@ -342,7 +346,9 @@ const boardResponse: HarnessBoardResponse = {
         candidateClass: "runtime_operational",
         candidateClassLabel: "Runtime operational",
         durabilityCondition: "runtime_ephemeral",
-        durabilityConditionLabel: "Runtime ephemeral"
+        durabilityConditionLabel: "Runtime ephemeral",
+        ownershipBoundary: "wealth_factory_only",
+        ownershipBoundaryLabel: "Wealth Factory only"
       }
     ],
     exportReadyItems: [
@@ -363,7 +369,9 @@ const boardResponse: HarnessBoardResponse = {
         candidateClass: "governance_history",
         candidateClassLabel: "Governance history",
         durabilityCondition: "stable_when_recorded",
-        durabilityConditionLabel: "Stable when recorded"
+        durabilityConditionLabel: "Stable when recorded",
+        ownershipBoundary: "tenant_owned_later",
+        ownershipBoundaryLabel: "Tenant-owned later"
       },
       {
         id: "implemented_actions",
@@ -382,7 +390,9 @@ const boardResponse: HarnessBoardResponse = {
         candidateClass: "governance_history",
         candidateClassLabel: "Governance history",
         durabilityCondition: "stable_when_recorded",
-        durabilityConditionLabel: "Stable when recorded"
+        durabilityConditionLabel: "Stable when recorded",
+        ownershipBoundary: "tenant_owned_later",
+        ownershipBoundaryLabel: "Tenant-owned later"
       },
       {
         id: "package_governance",
@@ -402,6 +412,8 @@ const boardResponse: HarnessBoardResponse = {
         candidateClassLabel: "Packaged output",
         durabilityCondition: "stable_after_board_closure",
         durabilityConditionLabel: "Stable after board closure",
+        ownershipBoundary: "tenant_owned_later",
+        ownershipBoundaryLabel: "Tenant-owned later",
         nextEligibleSummary: "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
       },
       {
@@ -422,6 +434,8 @@ const boardResponse: HarnessBoardResponse = {
         candidateClassLabel: "Packaged output",
         durabilityCondition: "stable_after_board_closure",
         durabilityConditionLabel: "Stable after board closure",
+        ownershipBoundary: "tenant_owned_later",
+        ownershipBoundaryLabel: "Tenant-owned later",
         nextEligibleSummary: "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
       }
     ]
@@ -1005,6 +1019,7 @@ describe("harness board UI", () => {
     expect(markup).toContain("1 deliverable, 1 governance item, 2 recommendations, 1 objection.");
     expect(markup).toContain("2 export candidates are ready now, and 2 still wait for board closure.");
     expect(markup).toContain("2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure.");
+    expect(markup).toContain("2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later.");
     expect(markup).toContain("Recent decisions");
     expect(markup).toContain("CEO kept the research expansion under bounded review.");
     expect(markup).toContain("1 preserved decision");
@@ -1054,6 +1069,8 @@ describe("harness board UI", () => {
     expect(markup).toContain("Runtime ephemeral");
     expect(markup).toContain("Stable when recorded");
     expect(markup).toContain("Stable after board closure");
+    expect(markup).toContain("Wealth Factory only");
+    expect(markup).toContain("Tenant-owned later");
     expect(markup).toContain("Source surface: Continuity snapshots");
     expect(markup).toContain("Source surface: Pending attention");
     expect(markup).toContain("Source surface: Recent decisions");
@@ -1202,6 +1219,7 @@ describe("harness board UI", () => {
     expect(markup).toContain("Preview mode");
     expect(markup).toContain("live mutations remain disabled");
     expect(markup).toContain("Live board actions are unavailable in localhost fallback mode.");
+    expect(markup).toContain("2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later.");
     expect(markup).toContain("Controls - Preview");
   });
 

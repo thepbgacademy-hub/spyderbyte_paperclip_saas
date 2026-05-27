@@ -119,6 +119,10 @@ export type HarnessMemoryBoundaryDurabilityCondition =
   | "stable_when_recorded"
   | "stable_after_board_closure";
 
+export type HarnessMemoryBoundaryOwnershipBoundary =
+  | "wealth_factory_only"
+  | "tenant_owned_later";
+
 export type HarnessMemoryBoundaryItemView = {
   id:
     | "lane_continuity"
@@ -143,6 +147,8 @@ export type HarnessMemoryBoundaryItemView = {
   candidateClassLabel: string;
   durabilityCondition: HarnessMemoryBoundaryDurabilityCondition;
   durabilityConditionLabel: string;
+  ownershipBoundary: HarnessMemoryBoundaryOwnershipBoundary;
+  ownershipBoundaryLabel: string;
   nextEligibleSummary?: string;
 };
 
@@ -160,6 +166,7 @@ export type HarnessMemoryBoundaryView = {
   packagedReadyCount: number;
   packagedWaitingCount: number;
   roleSummary: string;
+  ownershipSummary: string;
   partitions: {
     runtime: HarnessMemoryBoundaryPartitionView;
     governanceHistoryCandidates: HarnessMemoryBoundaryPartitionView;
@@ -3817,7 +3824,9 @@ function buildMemoryBoundaryView(input: {
       candidateClass: "runtime_operational",
       candidateClassLabel: humanizeMemoryBoundaryCandidateClass("runtime_operational"),
       durabilityCondition: "runtime_ephemeral",
-      durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition("runtime_ephemeral")
+      durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition("runtime_ephemeral"),
+      ownershipBoundary: "wealth_factory_only",
+      ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("wealth_factory_only")
     },
     {
       id: "attention_state",
@@ -3836,7 +3845,9 @@ function buildMemoryBoundaryView(input: {
       candidateClass: "runtime_operational",
       candidateClassLabel: humanizeMemoryBoundaryCandidateClass("runtime_operational"),
       durabilityCondition: "runtime_ephemeral",
-      durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition("runtime_ephemeral")
+      durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition("runtime_ephemeral"),
+      ownershipBoundary: "wealth_factory_only",
+      ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("wealth_factory_only")
     }
   ];
 
@@ -3858,7 +3869,9 @@ function buildMemoryBoundaryView(input: {
       candidateClass: "governance_history",
       candidateClassLabel: humanizeMemoryBoundaryCandidateClass("governance_history"),
       durabilityCondition: "stable_when_recorded",
-      durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition("stable_when_recorded")
+      durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition("stable_when_recorded"),
+      ownershipBoundary: "tenant_owned_later",
+      ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("tenant_owned_later")
     },
     {
       id: "implemented_actions",
@@ -3877,7 +3890,9 @@ function buildMemoryBoundaryView(input: {
       candidateClass: "governance_history",
       candidateClassLabel: humanizeMemoryBoundaryCandidateClass("governance_history"),
       durabilityCondition: "stable_when_recorded",
-      durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition("stable_when_recorded")
+      durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition("stable_when_recorded"),
+      ownershipBoundary: "tenant_owned_later",
+      ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("tenant_owned_later")
     }
   ];
 
@@ -3916,6 +3931,8 @@ function buildMemoryBoundaryView(input: {
             ? "stable_after_board_closure"
             : "stable_when_recorded"
         ),
+        ownershipBoundary: "tenant_owned_later",
+        ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("tenant_owned_later"),
         ...(packageReadiness === "after_board_closes"
           ? {
               nextEligibleSummary:
@@ -3953,6 +3970,8 @@ function buildMemoryBoundaryView(input: {
             ? "stable_after_board_closure"
             : "stable_when_recorded"
         ),
+        ownershipBoundary: "tenant_owned_later",
+        ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("tenant_owned_later"),
         ...(packageReadiness === "after_board_closes"
           ? {
               nextEligibleSummary:
@@ -3993,6 +4012,8 @@ function buildMemoryBoundaryView(input: {
       packagedWaitingCount > 0
         ? `${governanceReadyCount} governance record candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} ready now, and ${packagedWaitingCount} packaged output candidate${packagedWaitingCount === 1 ? "" : "s"} ${packagedWaitingCount === 1 ? "still waits" : "still wait"} on board closure.`
         : `${governanceReadyCount + packagedReadyCount} tenant-record candidate${governanceReadyCount + packagedReadyCount === 1 ? " is" : "s are"} ready now, including ${governanceReadyCount} governance history candidate${governanceReadyCount === 1 ? "" : "s"} and ${packagedReadyCount} packaged output candidate${packagedReadyCount === 1 ? "" : "s"}.`,
+    ownershipSummary:
+      `${operationalItems.length} runtime memor${operationalItems.length === 1 ? "y bucket stays" : "y buckets stay"} Wealth Factory-only, while ${exportReadyItems.length} tenant-record candidate bucket${exportReadyItems.length === 1 ? "" : "s"} may become tenant-owned later.`,
     partitions: {
       runtime: {
         itemCount: operationalItems.length,
@@ -4096,6 +4117,17 @@ function humanizeMemoryBoundaryDurabilityCondition(condition: HarnessMemoryBound
       return "Stable after board closure";
     default:
       return condition;
+  }
+}
+
+function humanizeMemoryBoundaryOwnershipBoundary(boundary: HarnessMemoryBoundaryOwnershipBoundary) {
+  switch (boundary) {
+    case "wealth_factory_only":
+      return "Wealth Factory only";
+    case "tenant_owned_later":
+      return "Tenant-owned later";
+    default:
+      return boundary;
   }
 }
 

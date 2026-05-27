@@ -457,6 +457,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       "Wealth Factory runtime keeps bounded operational lane memory live while governance and package records stay ready for later tenant-owned export.",
     exportSummary: "Export readiness is pending the latest board state.",
     roleSummary: "The boundary split is pending the latest board state.",
+    ownershipSummary: "Ownership posture is pending the latest board state.",
     readyNowCount: 0,
     waitingOnBoardClosureCount: 0,
     governanceReadyCount: 0,
@@ -499,6 +500,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <p style={styles.panelBody}>{memoryBoundary.summary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.exportSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.roleSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.ownershipSummary}</p>
       <ul style={styles.actionList}>
         <li style={styles.actionItem}>
           <p style={styles.contractMeta}>Runtime partition</p>
@@ -532,6 +534,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                     <span style={styles.badge}>{item.eligibilityRuleLabel}</span>
                     <span style={styles.badge}>{item.candidateClassLabel}</span>
                     <span style={styles.badge}>{item.durabilityConditionLabel}</span>
+                    <span style={styles.badge}>{item.ownershipBoundaryLabel}</span>
                   </div>
                   <p style={styles.actionSummary}>{item.summary}</p>
                   <p style={styles.optionBody}>{`Source surface: ${item.sourceSurfaceLabel}`}</p>

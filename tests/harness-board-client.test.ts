@@ -179,6 +179,8 @@ describe("harness board client", () => {
       expect.objectContaining({
         exportSummary: "2 export candidates are ready now, and 2 still wait for board closure.",
         roleSummary: "2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure.",
+        ownershipSummary:
+          "2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later.",
         readyNowCount: 2,
         waitingOnBoardClosureCount: 2,
         governanceReadyCount: 2,
@@ -199,7 +201,8 @@ describe("harness board client", () => {
             eligibilityRule: "runtime_only",
             sourceSurface: "continuity_snapshots",
             candidateClass: "runtime_operational",
-            durabilityCondition: "runtime_ephemeral"
+            durabilityCondition: "runtime_ephemeral",
+            ownershipBoundary: "wealth_factory_only"
           })
         ]),
         exportReadyItems: expect.arrayContaining([
@@ -212,7 +215,8 @@ describe("harness board client", () => {
             eligibilityRule: "explicit_export_later",
             sourceSurface: "recent_decisions",
             candidateClass: "governance_history",
-            durabilityCondition: "stable_when_recorded"
+            durabilityCondition: "stable_when_recorded",
+            ownershipBoundary: "tenant_owned_later"
           })
         ])
       })
@@ -246,6 +250,9 @@ describe("harness board client", () => {
 
     expect(board.memoryBoundary.operationalItems[0]?.readiness).toBe("live_runtime_only");
     expect(board.memoryBoundary.operationalItems[0]?.readinessLabel).toBe("Live runtime only");
+    expect(board.memoryBoundary.ownershipSummary).toBe(
+      "2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later."
+    );
     expect(board.memoryBoundary.readyNowCount).toBe(2);
     expect(board.memoryBoundary.waitingOnBoardClosureCount).toBe(2);
     expect(board.memoryBoundary.governanceReadyCount).toBe(2);
@@ -274,6 +281,9 @@ describe("harness board client", () => {
     expect(
       board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.durabilityConditionLabel
     ).toBe("Stable after board closure");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.ownershipBoundaryLabel
+    ).toBe("Tenant-owned later");
   });
 
   it("derives governance-ready partition counts from readiness, not only from role membership", async () => {
@@ -440,6 +450,8 @@ describe("harness board client", () => {
       expect.objectContaining({
         exportSummary: "2 export candidates are ready now, and 2 still wait for board closure.",
         roleSummary: "2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure.",
+        ownershipSummary:
+          "2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later.",
         readyNowCount: 2,
         waitingOnBoardClosureCount: 2,
         governanceReadyCount: 2,
@@ -452,7 +464,9 @@ describe("harness board client", () => {
             readinessLabel: "Live runtime only",
             sourceSurface: "continuity_snapshots",
             candidateClass: "runtime_operational",
-            durabilityCondition: "runtime_ephemeral"
+            durabilityCondition: "runtime_ephemeral",
+            ownershipBoundary: "wealth_factory_only",
+            ownershipBoundaryLabel: "Wealth Factory only"
           })
         ]),
         exportReadyItems: expect.arrayContaining([
@@ -463,7 +477,9 @@ describe("harness board client", () => {
             readinessLabel: "Ready now",
             sourceSurface: "recent_decisions",
             candidateClass: "governance_history",
-            durabilityCondition: "stable_when_recorded"
+            durabilityCondition: "stable_when_recorded",
+            ownershipBoundary: "tenant_owned_later",
+            ownershipBoundaryLabel: "Tenant-owned later"
           })
         ])
       })
