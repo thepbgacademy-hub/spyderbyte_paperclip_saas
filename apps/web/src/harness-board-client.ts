@@ -325,6 +325,24 @@ const fallbackBoardBase: HarnessBoardResponse = {
     exportSummary: "2 export candidates are ready now, and 2 still wait for board closure.",
     readyNowCount: 2,
     waitingOnBoardClosureCount: 2,
+    governanceReadyCount: 2,
+    packagedReadyCount: 0,
+    packagedWaitingCount: 2,
+    roleSummary: "2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure.",
+    partitions: {
+      runtime: {
+        itemCount: 2,
+        summary: "2 runtime memory buckets stay live only inside Wealth Factory orchestration."
+      },
+      governanceHistoryCandidates: {
+        itemCount: 2,
+        summary: "2 governance history candidates are stable enough for later tenant-owned export."
+      },
+      packagedOutputCandidates: {
+        itemCount: 2,
+        summary: "2 packaged output candidates still wait on board closure before later export."
+      }
+    },
     operationalItems: [
       {
         id: "lane_continuity",
@@ -333,7 +351,13 @@ const fallbackBoardBase: HarnessBoardResponse = {
         summary: "Continuity snapshots stay in Wealth Factory runtime as live operational memory.",
         destination: "wealth_factory_runtime",
         readiness: "live_runtime_only",
-        readinessLabel: "Live runtime only"
+        readinessLabel: "Live runtime only",
+        role: "runtime_memory",
+        roleLabel: "Runtime memory",
+        eligibilityRule: "runtime_only",
+        eligibilityRuleLabel: "Runtime only",
+        sourceSurface: "continuity_snapshots",
+        sourceSurfaceLabel: "Continuity snapshots"
       },
       {
         id: "attention_state",
@@ -342,7 +366,13 @@ const fallbackBoardBase: HarnessBoardResponse = {
         summary: "Current CEO attention stays in runtime truth until the board resolves it explicitly.",
         destination: "wealth_factory_runtime",
         readiness: "live_runtime_only",
-        readinessLabel: "Live runtime only"
+        readinessLabel: "Live runtime only",
+        role: "runtime_memory",
+        roleLabel: "Runtime memory",
+        eligibilityRule: "runtime_only",
+        eligibilityRuleLabel: "Runtime only",
+        sourceSurface: "pending_attention",
+        sourceSurfaceLabel: "Pending attention"
       }
     ],
     exportReadyItems: [
@@ -353,7 +383,13 @@ const fallbackBoardBase: HarnessBoardResponse = {
         summary: "Bounded decisions are ready for later tenant-owned board records.",
         destination: "tenant_record_candidate",
         readiness: "ready_now",
-        readinessLabel: "Ready now"
+        readinessLabel: "Ready now",
+        role: "governance_record_candidate",
+        roleLabel: "Governance record candidate",
+        eligibilityRule: "explicit_export_later",
+        eligibilityRuleLabel: "Explicit export later",
+        sourceSurface: "recent_decisions",
+        sourceSurfaceLabel: "Recent decisions"
       },
       {
         id: "implemented_actions",
@@ -362,7 +398,13 @@ const fallbackBoardBase: HarnessBoardResponse = {
         summary: "Implemented governance actions are ready for suggested-versus-implemented history export.",
         destination: "tenant_record_candidate",
         readiness: "ready_now",
-        readinessLabel: "Ready now"
+        readinessLabel: "Ready now",
+        role: "governance_record_candidate",
+        roleLabel: "Governance record candidate",
+        eligibilityRule: "explicit_export_later",
+        eligibilityRuleLabel: "Explicit export later",
+        sourceSurface: "follow_through",
+        sourceSurfaceLabel: "Follow-through history"
       },
       {
         id: "package_governance",
@@ -372,6 +414,12 @@ const fallbackBoardBase: HarnessBoardResponse = {
         destination: "tenant_record_candidate",
         readiness: "after_board_closes",
         readinessLabel: "After board closes",
+        role: "packaged_record_candidate",
+        roleLabel: "Packaged record candidate",
+        eligibilityRule: "after_board_closes_then_export",
+        eligibilityRuleLabel: "After board closes, then export",
+        sourceSurface: "completion_package_governance",
+        sourceSurfaceLabel: "Completion package governance",
         nextEligibleSummary:
           "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
       },
@@ -383,6 +431,12 @@ const fallbackBoardBase: HarnessBoardResponse = {
         destination: "tenant_record_candidate",
         readiness: "after_board_closes",
         readinessLabel: "After board closes",
+        role: "packaged_record_candidate",
+        roleLabel: "Packaged record candidate",
+        eligibilityRule: "after_board_closes_then_export",
+        eligibilityRuleLabel: "After board closes, then export",
+        sourceSurface: "completion_package_deliverables",
+        sourceSurfaceLabel: "Completion package deliverables",
         nextEligibleSummary:
           "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
       }
@@ -539,6 +593,57 @@ function humanizeMemoryBoundaryReadiness(
   }
 }
 
+function humanizeMemoryBoundaryRole(
+  role: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["role"]>
+) {
+  switch (role) {
+    case "runtime_memory":
+      return "Runtime memory";
+    case "governance_record_candidate":
+      return "Governance record candidate";
+    case "packaged_record_candidate":
+      return "Packaged record candidate";
+    default:
+      return role;
+  }
+}
+
+function humanizeMemoryBoundaryEligibilityRule(
+  rule: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["eligibilityRule"]>
+) {
+  switch (rule) {
+    case "runtime_only":
+      return "Runtime only";
+    case "explicit_export_later":
+      return "Explicit export later";
+    case "after_board_closes_then_export":
+      return "After board closes, then export";
+    default:
+      return rule;
+  }
+}
+
+function humanizeMemoryBoundarySourceSurface(
+  surface: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["sourceSurface"]>
+) {
+  switch (surface) {
+    case "continuity_snapshots":
+      return "Continuity snapshots";
+    case "pending_attention":
+      return "Pending attention";
+    case "recent_decisions":
+      return "Recent decisions";
+    case "follow_through":
+      return "Follow-through history";
+    case "completion_package_governance":
+      return "Completion package governance";
+    case "completion_package_deliverables":
+      return "Completion package deliverables";
+    default:
+      return surface;
+  }
+}
+
 function inferMemoryBoundaryReadiness(
   itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"],
   board: Pick<HarnessBoardResponse, "completionPackage">
@@ -554,20 +659,84 @@ function inferMemoryBoundaryReadiness(
   return "ready_now";
 }
 
+function inferMemoryBoundaryRole(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"]
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["role"] {
+  if (itemId === "lane_continuity" || itemId === "attention_state") {
+    return "runtime_memory";
+  }
+
+  if (itemId === "package_governance" || itemId === "package_deliverables") {
+    return "packaged_record_candidate";
+  }
+
+  return "governance_record_candidate";
+}
+
+function inferMemoryBoundaryEligibilityRule(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"],
+  board: Pick<HarnessBoardResponse, "completionPackage">
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["eligibilityRule"] {
+  if (itemId === "lane_continuity" || itemId === "attention_state") {
+    return "runtime_only";
+  }
+
+  if (itemId === "package_governance" || itemId === "package_deliverables") {
+    return board.completionPackage?.hasOpenGovernanceItems
+      ? "after_board_closes_then_export"
+      : "explicit_export_later";
+  }
+
+  return "explicit_export_later";
+}
+
+function inferMemoryBoundarySourceSurface(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"]
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["sourceSurface"] {
+  switch (itemId) {
+    case "lane_continuity":
+      return "continuity_snapshots";
+    case "attention_state":
+      return "pending_attention";
+    case "governance_decisions":
+      return "recent_decisions";
+    case "implemented_actions":
+      return "follow_through";
+    case "package_governance":
+      return "completion_package_governance";
+    case "package_deliverables":
+      return "completion_package_deliverables";
+    default:
+      return "recent_decisions";
+  }
+}
+
 function normalizeMemoryBoundary(
   memoryBoundary: HarnessBoardResponse["memoryBoundary"],
   board: Pick<HarnessBoardResponse, "completionPackage">
 ): HarnessBoardResponse["memoryBoundary"] {
   const operationalItems = memoryBoundary.operationalItems.map((item) => {
     const readiness = item.readiness ?? inferMemoryBoundaryReadiness(item.id, board);
+    const role = item.role ?? inferMemoryBoundaryRole(item.id);
+    const eligibilityRule = item.eligibilityRule ?? inferMemoryBoundaryEligibilityRule(item.id, board);
+    const sourceSurface = item.sourceSurface ?? inferMemoryBoundarySourceSurface(item.id);
     return {
       ...item,
       readiness,
-      readinessLabel: item.readinessLabel ?? humanizeMemoryBoundaryReadiness(readiness)
+      readinessLabel: item.readinessLabel ?? humanizeMemoryBoundaryReadiness(readiness),
+      role,
+      roleLabel: item.roleLabel ?? humanizeMemoryBoundaryRole(role),
+      eligibilityRule,
+      eligibilityRuleLabel: item.eligibilityRuleLabel ?? humanizeMemoryBoundaryEligibilityRule(eligibilityRule),
+      sourceSurface,
+      sourceSurfaceLabel: item.sourceSurfaceLabel ?? humanizeMemoryBoundarySourceSurface(sourceSurface)
     };
   });
   const exportReadyItems = memoryBoundary.exportReadyItems.map((item) => {
     const readiness = item.readiness ?? inferMemoryBoundaryReadiness(item.id, board);
+    const role = item.role ?? inferMemoryBoundaryRole(item.id);
+    const eligibilityRule = item.eligibilityRule ?? inferMemoryBoundaryEligibilityRule(item.id, board);
+    const sourceSurface = item.sourceSurface ?? inferMemoryBoundarySourceSurface(item.id);
     const nextEligibleSummary = item.nextEligibleSummary
       ?? (readiness === "after_board_closes"
         ? item.id === "package_governance"
@@ -580,6 +749,12 @@ function normalizeMemoryBoundary(
       ...item,
       readiness,
       readinessLabel: item.readinessLabel ?? humanizeMemoryBoundaryReadiness(readiness),
+      role,
+      roleLabel: item.roleLabel ?? humanizeMemoryBoundaryRole(role),
+      eligibilityRule,
+      eligibilityRuleLabel: item.eligibilityRuleLabel ?? humanizeMemoryBoundaryEligibilityRule(eligibilityRule),
+      sourceSurface,
+      sourceSurfaceLabel: item.sourceSurfaceLabel ?? humanizeMemoryBoundarySourceSurface(sourceSurface),
       ...(nextEligibleSummary ? { nextEligibleSummary } : {})
     };
   });
@@ -587,16 +762,47 @@ function normalizeMemoryBoundary(
     ?? exportReadyItems.filter((item) => item.readiness === "ready_now").length;
   const waitingOnBoardClosureCount = memoryBoundary.waitingOnBoardClosureCount
     ?? exportReadyItems.filter((item) => item.readiness === "after_board_closes").length;
+  const governanceReadyCount = memoryBoundary.governanceReadyCount
+    ?? exportReadyItems.filter((item) => item.role === "governance_record_candidate" && item.readiness === "ready_now").length;
+  const packagedReadyCount = memoryBoundary.packagedReadyCount
+    ?? exportReadyItems.filter((item) => item.role === "packaged_record_candidate" && item.readiness === "ready_now").length;
+  const packagedWaitingCount = memoryBoundary.packagedWaitingCount
+    ?? exportReadyItems.filter((item) => item.role === "packaged_record_candidate" && item.readiness === "after_board_closes").length;
 
   return {
     ...memoryBoundary,
     exportSummary:
       memoryBoundary.exportSummary
       ?? (waitingOnBoardClosureCount > 0
-        ? `${readyNowCount} export candidate${readyNowCount === 1 ? "" : "s"} are ready now, and ${waitingOnBoardClosureCount} still wait for board closure.`
-        : `${readyNowCount} export candidate${readyNowCount === 1 ? "" : "s"} are ready now. No export candidates are waiting on board closure.`),
+        ? `${readyNowCount} export candidate${readyNowCount === 1 ? "" : "s"} ${readyNowCount === 1 ? "is" : "are"} ready now, and ${waitingOnBoardClosureCount} ${waitingOnBoardClosureCount === 1 ? "still waits" : "still wait"} for board closure.`
+        : `${readyNowCount} export candidate${readyNowCount === 1 ? "" : "s"} ${readyNowCount === 1 ? "is" : "are"} ready now. No export candidates are waiting on board closure.`),
     readyNowCount,
     waitingOnBoardClosureCount,
+    governanceReadyCount,
+    packagedReadyCount,
+    packagedWaitingCount,
+    roleSummary:
+      memoryBoundary.roleSummary
+      ?? (packagedWaitingCount > 0
+        ? `${governanceReadyCount} governance record candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} ready now, and ${packagedWaitingCount} packaged output candidate${packagedWaitingCount === 1 ? "" : "s"} ${packagedWaitingCount === 1 ? "still waits" : "still wait"} on board closure.`
+        : `${governanceReadyCount + packagedReadyCount} tenant-record candidate${governanceReadyCount + packagedReadyCount === 1 ? " is" : "s are"} ready now, including ${governanceReadyCount} governance history candidate${governanceReadyCount === 1 ? "" : "s"} and ${packagedReadyCount} packaged output candidate${packagedReadyCount === 1 ? "" : "s"}.`),
+    partitions: memoryBoundary.partitions ?? {
+      runtime: {
+        itemCount: operationalItems.length,
+        summary: `${operationalItems.length} runtime memor${operationalItems.length === 1 ? "y bucket stays" : "y buckets stay"} live only inside Wealth Factory orchestration.`
+      },
+      governanceHistoryCandidates: {
+        itemCount: governanceReadyCount,
+        summary: `${governanceReadyCount} governance history candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} stable enough for later tenant-owned export.`
+      },
+      packagedOutputCandidates: {
+        itemCount: packagedReadyCount + packagedWaitingCount,
+        summary:
+          packagedWaitingCount > 0
+            ? `${packagedWaitingCount} packaged output candidate${packagedWaitingCount === 1 ? "" : "s"} ${packagedWaitingCount === 1 ? "still waits" : "still wait"} on board closure before later export.`
+            : `${packagedReadyCount} packaged output candidate${packagedReadyCount === 1 ? "" : "s"} ${packagedReadyCount === 1 ? "is" : "are"} ready for later tenant-owned export.`
+      }
+    },
     operationalItems,
     exportReadyItems
   };
@@ -620,7 +826,13 @@ function normalizeBoardResponse(
       summary: "Bounded decisions are ready for later tenant-owned board records.",
       destination: "tenant_record_candidate",
       readiness: "ready_now",
-      readinessLabel: "Ready now"
+      readinessLabel: "Ready now",
+      role: "governance_record_candidate",
+      roleLabel: "Governance record candidate",
+      eligibilityRule: "explicit_export_later",
+      eligibilityRuleLabel: "Explicit export later",
+      sourceSurface: "recent_decisions",
+      sourceSurfaceLabel: "Recent decisions"
     },
     {
       id: "implemented_actions",
@@ -629,7 +841,13 @@ function normalizeBoardResponse(
       summary: "Implemented governance actions are ready for suggested-versus-implemented history export.",
       destination: "tenant_record_candidate",
       readiness: "ready_now",
-      readinessLabel: "Ready now"
+      readinessLabel: "Ready now",
+      role: "governance_record_candidate",
+      roleLabel: "Governance record candidate",
+      eligibilityRule: "explicit_export_later",
+      eligibilityRuleLabel: "Explicit export later",
+      sourceSurface: "follow_through",
+      sourceSurfaceLabel: "Follow-through history"
     },
     {
       id: "package_governance",
@@ -639,6 +857,16 @@ function normalizeBoardResponse(
       destination: "tenant_record_candidate",
       readiness: board.completionPackage?.hasOpenGovernanceItems ? "after_board_closes" : "ready_now",
       readinessLabel: board.completionPackage?.hasOpenGovernanceItems ? "After board closes" : "Ready now",
+      role: "packaged_record_candidate",
+      roleLabel: "Packaged record candidate",
+      eligibilityRule: board.completionPackage?.hasOpenGovernanceItems
+        ? "after_board_closes_then_export"
+        : "explicit_export_later",
+      eligibilityRuleLabel: board.completionPackage?.hasOpenGovernanceItems
+        ? "After board closes, then export"
+        : "Explicit export later",
+      sourceSurface: "completion_package_governance",
+      sourceSurfaceLabel: "Completion package governance",
       ...(board.completionPackage?.hasOpenGovernanceItems
         ? {
             nextEligibleSummary:
@@ -654,6 +882,16 @@ function normalizeBoardResponse(
       destination: "tenant_record_candidate",
       readiness: board.completionPackage?.hasOpenGovernanceItems ? "after_board_closes" : "ready_now",
       readinessLabel: board.completionPackage?.hasOpenGovernanceItems ? "After board closes" : "Ready now",
+      role: "packaged_record_candidate",
+      roleLabel: "Packaged record candidate",
+      eligibilityRule: board.completionPackage?.hasOpenGovernanceItems
+        ? "after_board_closes_then_export"
+        : "explicit_export_later",
+      eligibilityRuleLabel: board.completionPackage?.hasOpenGovernanceItems
+        ? "After board closes, then export"
+        : "Explicit export later",
+      sourceSurface: "completion_package_deliverables",
+      sourceSurfaceLabel: "Completion package deliverables",
       ...(board.completionPackage?.hasOpenGovernanceItems
         ? {
             nextEligibleSummary:
@@ -664,6 +902,15 @@ function normalizeBoardResponse(
   ];
   const readyNowCount = exportReadyItems.filter((item) => item.readiness === "ready_now").length;
   const waitingOnBoardClosureCount = exportReadyItems.filter((item) => item.readiness === "after_board_closes").length;
+  const governanceReadyCount = exportReadyItems.filter(
+    (item) => item.role === "governance_record_candidate" && item.readiness === "ready_now"
+  ).length;
+  const packagedReadyCount = exportReadyItems.filter(
+    (item) => item.role === "packaged_record_candidate" && item.readiness === "ready_now"
+  ).length;
+  const packagedWaitingCount = exportReadyItems.filter(
+    (item) => item.role === "packaged_record_candidate" && item.readiness === "after_board_closes"
+  ).length;
 
   return {
     ...board,
@@ -672,10 +919,34 @@ function normalizeBoardResponse(
         "Wealth Factory runtime keeps bounded operational lane memory live while governance and package records stay ready for later tenant-owned export.",
       exportSummary:
         waitingOnBoardClosureCount > 0
-          ? `${readyNowCount} export candidate${readyNowCount === 1 ? "" : "s"} are ready now, and ${waitingOnBoardClosureCount} still wait for board closure.`
-          : `${readyNowCount} export candidate${readyNowCount === 1 ? "" : "s"} are ready now. No export candidates are waiting on board closure.`,
+          ? `${readyNowCount} export candidate${readyNowCount === 1 ? "" : "s"} ${readyNowCount === 1 ? "is" : "are"} ready now, and ${waitingOnBoardClosureCount} ${waitingOnBoardClosureCount === 1 ? "still waits" : "still wait"} for board closure.`
+          : `${readyNowCount} export candidate${readyNowCount === 1 ? "" : "s"} ${readyNowCount === 1 ? "is" : "are"} ready now. No export candidates are waiting on board closure.`,
       readyNowCount,
       waitingOnBoardClosureCount,
+      governanceReadyCount,
+      packagedReadyCount,
+      packagedWaitingCount,
+      roleSummary:
+        packagedWaitingCount > 0
+          ? `${governanceReadyCount} governance record candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} ready now, and ${packagedWaitingCount} packaged output candidate${packagedWaitingCount === 1 ? "" : "s"} ${packagedWaitingCount === 1 ? "still waits" : "still wait"} on board closure.`
+          : `${governanceReadyCount + packagedReadyCount} tenant-record candidate${governanceReadyCount + packagedReadyCount === 1 ? " is" : "s are"} ready now, including ${governanceReadyCount} governance history candidate${governanceReadyCount === 1 ? "" : "s"} and ${packagedReadyCount} packaged output candidate${packagedReadyCount === 1 ? "" : "s"}.`,
+      partitions: {
+        runtime: {
+          itemCount: 2,
+          summary: "2 runtime memory buckets stay live only inside Wealth Factory orchestration."
+        },
+        governanceHistoryCandidates: {
+          itemCount: governanceReadyCount,
+          summary: `${governanceReadyCount} governance history candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} stable enough for later tenant-owned export.`
+        },
+        packagedOutputCandidates: {
+          itemCount: packagedReadyCount + packagedWaitingCount,
+          summary:
+            packagedWaitingCount > 0
+              ? `${packagedWaitingCount} packaged output candidate${packagedWaitingCount === 1 ? "" : "s"} ${packagedWaitingCount === 1 ? "still waits" : "still wait"} on board closure before later export.`
+              : `${packagedReadyCount} packaged output candidate${packagedReadyCount === 1 ? "" : "s"} ${packagedReadyCount === 1 ? "is" : "are"} ready for later tenant-owned export.`
+        }
+      },
       operationalItems: [
         {
           id: "lane_continuity",
@@ -686,7 +957,13 @@ function normalizeBoardResponse(
           summary: "Continuity snapshots stay in Wealth Factory runtime as live operational memory.",
           destination: "wealth_factory_runtime",
           readiness: "live_runtime_only",
-          readinessLabel: "Live runtime only"
+          readinessLabel: "Live runtime only",
+          role: "runtime_memory",
+          roleLabel: "Runtime memory",
+          eligibilityRule: "runtime_only",
+          eligibilityRuleLabel: "Runtime only",
+          sourceSurface: "continuity_snapshots",
+          sourceSurfaceLabel: "Continuity snapshots"
         },
         {
           id: "attention_state",
@@ -695,7 +972,13 @@ function normalizeBoardResponse(
           summary: "Current CEO attention stays in runtime truth until the board resolves it explicitly.",
           destination: "wealth_factory_runtime",
           readiness: "live_runtime_only",
-          readinessLabel: "Live runtime only"
+          readinessLabel: "Live runtime only",
+          role: "runtime_memory",
+          roleLabel: "Runtime memory",
+          eligibilityRule: "runtime_only",
+          eligibilityRuleLabel: "Runtime only",
+          sourceSurface: "pending_attention",
+          sourceSurfaceLabel: "Pending attention"
         }
       ],
       exportReadyItems

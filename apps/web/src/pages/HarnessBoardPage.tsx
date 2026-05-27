@@ -456,8 +456,23 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     summary:
       "Wealth Factory runtime keeps bounded operational lane memory live while governance and package records stay ready for later tenant-owned export.",
     exportSummary: "Export readiness is pending the latest board state.",
+    roleSummary: "The boundary split is pending the latest board state.",
     readyNowCount: 0,
     waitingOnBoardClosureCount: 0,
+    governanceReadyCount: 0,
+    packagedReadyCount: 0,
+    packagedWaitingCount: 0,
+    partitions: {
+      runtime: { itemCount: 0, summary: "Runtime memory partition is pending the latest board state." },
+      governanceHistoryCandidates: {
+        itemCount: 0,
+        summary: "Governance history candidate partition is pending the latest board state."
+      },
+      packagedOutputCandidates: {
+        itemCount: 0,
+        summary: "Packaged output candidate partition is pending the latest board state."
+      }
+    },
     operationalItems: [],
     exportReadyItems: []
   };
@@ -483,6 +498,24 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <h2 style={styles.panelTitle}>Memory boundary</h2>
       <p style={styles.panelBody}>{memoryBoundary.summary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.exportSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.roleSummary}</p>
+      <ul style={styles.actionList}>
+        <li style={styles.actionItem}>
+          <p style={styles.contractMeta}>Runtime partition</p>
+          <p style={styles.actionHeading}>{`${memoryBoundary.partitions.runtime.itemCount} bucket${memoryBoundary.partitions.runtime.itemCount === 1 ? "" : "s"}`}</p>
+          <p style={styles.actionSummary}>{memoryBoundary.partitions.runtime.summary}</p>
+        </li>
+        <li style={styles.actionItem}>
+          <p style={styles.contractMeta}>Governance history candidates</p>
+          <p style={styles.actionHeading}>{`${memoryBoundary.partitions.governanceHistoryCandidates.itemCount} bucket${memoryBoundary.partitions.governanceHistoryCandidates.itemCount === 1 ? "" : "s"}`}</p>
+          <p style={styles.actionSummary}>{memoryBoundary.partitions.governanceHistoryCandidates.summary}</p>
+        </li>
+        <li style={styles.actionItem}>
+          <p style={styles.contractMeta}>Packaged output candidates</p>
+          <p style={styles.actionHeading}>{`${memoryBoundary.partitions.packagedOutputCandidates.itemCount} bucket${memoryBoundary.partitions.packagedOutputCandidates.itemCount === 1 ? "" : "s"}`}</p>
+          <p style={styles.actionSummary}>{memoryBoundary.partitions.packagedOutputCandidates.summary}</p>
+        </li>
+      </ul>
       <div style={styles.rail}>
         {sections.map((section) => (
           <div key={section.title} style={{ display: "grid", gap: "0.55rem" }}>
@@ -495,8 +528,11 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                   <h3 style={styles.actionHeading}>{item.label}</h3>
                   <div style={styles.badgeList}>
                     <span style={styles.badge}>{item.readinessLabel ?? describeMemoryBoundaryReadiness(item.readiness)}</span>
+                    <span style={styles.badge}>{item.roleLabel}</span>
+                    <span style={styles.badge}>{item.eligibilityRuleLabel}</span>
                   </div>
                   <p style={styles.actionSummary}>{item.summary}</p>
+                  <p style={styles.optionBody}>{`Source surface: ${item.sourceSurfaceLabel}`}</p>
                   {item.nextEligibleSummary ? <p style={styles.actionSummary}>{item.nextEligibleSummary}</p> : null}
                 </li>
               ))}

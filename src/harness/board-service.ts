@@ -91,6 +91,24 @@ export type HarnessMemoryBoundaryReadiness =
   | "ready_now"
   | "after_board_closes";
 
+export type HarnessMemoryBoundaryRole =
+  | "runtime_memory"
+  | "governance_record_candidate"
+  | "packaged_record_candidate";
+
+export type HarnessMemoryBoundaryEligibilityRule =
+  | "runtime_only"
+  | "explicit_export_later"
+  | "after_board_closes_then_export";
+
+export type HarnessMemoryBoundarySourceSurface =
+  | "continuity_snapshots"
+  | "pending_attention"
+  | "recent_decisions"
+  | "follow_through"
+  | "completion_package_governance"
+  | "completion_package_deliverables";
+
 export type HarnessMemoryBoundaryItemView = {
   id:
     | "lane_continuity"
@@ -105,7 +123,18 @@ export type HarnessMemoryBoundaryItemView = {
   destination: HarnessMemoryBoundaryDestination;
   readiness: HarnessMemoryBoundaryReadiness;
   readinessLabel: string;
+  role: HarnessMemoryBoundaryRole;
+  roleLabel: string;
+  eligibilityRule: HarnessMemoryBoundaryEligibilityRule;
+  eligibilityRuleLabel: string;
+  sourceSurface: HarnessMemoryBoundarySourceSurface;
+  sourceSurfaceLabel: string;
   nextEligibleSummary?: string;
+};
+
+export type HarnessMemoryBoundaryPartitionView = {
+  itemCount: number;
+  summary: string;
 };
 
 export type HarnessMemoryBoundaryView = {
@@ -113,6 +142,15 @@ export type HarnessMemoryBoundaryView = {
   exportSummary: string;
   readyNowCount: number;
   waitingOnBoardClosureCount: number;
+  governanceReadyCount: number;
+  packagedReadyCount: number;
+  packagedWaitingCount: number;
+  roleSummary: string;
+  partitions: {
+    runtime: HarnessMemoryBoundaryPartitionView;
+    governanceHistoryCandidates: HarnessMemoryBoundaryPartitionView;
+    packagedOutputCandidates: HarnessMemoryBoundaryPartitionView;
+  };
   operationalItems: HarnessMemoryBoundaryItemView[];
   exportReadyItems: HarnessMemoryBoundaryItemView[];
 };
@@ -3755,7 +3793,13 @@ function buildMemoryBoundaryView(input: {
       summary: "Continuity snapshots stay in Wealth Factory runtime as live operational memory.",
       destination: "wealth_factory_runtime",
       readiness: "live_runtime_only",
-      readinessLabel: "Live runtime only"
+      readinessLabel: "Live runtime only",
+      role: "runtime_memory",
+      roleLabel: humanizeMemoryBoundaryRole("runtime_memory"),
+      eligibilityRule: "runtime_only",
+      eligibilityRuleLabel: humanizeMemoryBoundaryEligibilityRule("runtime_only"),
+      sourceSurface: "continuity_snapshots",
+      sourceSurfaceLabel: humanizeMemoryBoundarySourceSurface("continuity_snapshots")
     },
     {
       id: "attention_state",
@@ -3764,7 +3808,13 @@ function buildMemoryBoundaryView(input: {
       summary: "Current CEO attention stays in runtime truth until the board resolves it explicitly.",
       destination: "wealth_factory_runtime",
       readiness: "live_runtime_only",
-      readinessLabel: "Live runtime only"
+      readinessLabel: "Live runtime only",
+      role: "runtime_memory",
+      roleLabel: humanizeMemoryBoundaryRole("runtime_memory"),
+      eligibilityRule: "runtime_only",
+      eligibilityRuleLabel: humanizeMemoryBoundaryEligibilityRule("runtime_only"),
+      sourceSurface: "pending_attention",
+      sourceSurfaceLabel: humanizeMemoryBoundarySourceSurface("pending_attention")
     }
   ];
 
@@ -3776,7 +3826,13 @@ function buildMemoryBoundaryView(input: {
       summary: "Bounded decisions are ready for later tenant-owned board records.",
       destination: "tenant_record_candidate",
       readiness: "ready_now",
-      readinessLabel: "Ready now"
+      readinessLabel: "Ready now",
+      role: "governance_record_candidate",
+      roleLabel: humanizeMemoryBoundaryRole("governance_record_candidate"),
+      eligibilityRule: "explicit_export_later",
+      eligibilityRuleLabel: humanizeMemoryBoundaryEligibilityRule("explicit_export_later"),
+      sourceSurface: "recent_decisions",
+      sourceSurfaceLabel: humanizeMemoryBoundarySourceSurface("recent_decisions")
     },
     {
       id: "implemented_actions",
@@ -3785,7 +3841,13 @@ function buildMemoryBoundaryView(input: {
       summary: "Implemented governance actions are ready for suggested-versus-implemented history export.",
       destination: "tenant_record_candidate",
       readiness: "ready_now",
-      readinessLabel: "Ready now"
+      readinessLabel: "Ready now",
+      role: "governance_record_candidate",
+      roleLabel: humanizeMemoryBoundaryRole("governance_record_candidate"),
+      eligibilityRule: "explicit_export_later",
+      eligibilityRuleLabel: humanizeMemoryBoundaryEligibilityRule("explicit_export_later"),
+      sourceSurface: "follow_through",
+      sourceSurfaceLabel: humanizeMemoryBoundarySourceSurface("follow_through")
     }
   ];
 
@@ -3802,6 +3864,18 @@ function buildMemoryBoundaryView(input: {
         destination: "tenant_record_candidate",
         readiness: packageReadiness,
         readinessLabel: humanizeMemoryBoundaryReadiness(packageReadiness),
+        role: "packaged_record_candidate",
+        roleLabel: humanizeMemoryBoundaryRole("packaged_record_candidate"),
+        eligibilityRule: input.completionPackage.hasOpenGovernanceItems
+          ? "after_board_closes_then_export"
+          : "explicit_export_later",
+        eligibilityRuleLabel: humanizeMemoryBoundaryEligibilityRule(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "after_board_closes_then_export"
+            : "explicit_export_later"
+        ),
+        sourceSurface: "completion_package_governance",
+        sourceSurfaceLabel: humanizeMemoryBoundarySourceSurface("completion_package_governance"),
         ...(packageReadiness === "after_board_closes"
           ? {
               nextEligibleSummary:
@@ -3817,6 +3891,18 @@ function buildMemoryBoundaryView(input: {
         destination: "tenant_record_candidate",
         readiness: packageReadiness,
         readinessLabel: humanizeMemoryBoundaryReadiness(packageReadiness),
+        role: "packaged_record_candidate",
+        roleLabel: humanizeMemoryBoundaryRole("packaged_record_candidate"),
+        eligibilityRule: input.completionPackage.hasOpenGovernanceItems
+          ? "after_board_closes_then_export"
+          : "explicit_export_later",
+        eligibilityRuleLabel: humanizeMemoryBoundaryEligibilityRule(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "after_board_closes_then_export"
+            : "explicit_export_later"
+        ),
+        sourceSurface: "completion_package_deliverables",
+        sourceSurfaceLabel: humanizeMemoryBoundarySourceSurface("completion_package_deliverables"),
         ...(packageReadiness === "after_board_closes"
           ? {
               nextEligibleSummary:
@@ -3829,18 +3915,51 @@ function buildMemoryBoundaryView(input: {
 
   const readyNowCount = exportReadyItems.filter((item) => item.readiness === "ready_now").length;
   const waitingOnBoardClosureCount = exportReadyItems.filter((item) => item.readiness === "after_board_closes").length;
+  const governanceReadyCount = exportReadyItems.filter(
+    (item) => item.role === "governance_record_candidate" && item.readiness === "ready_now"
+  ).length;
+  const packagedReadyCount = exportReadyItems.filter(
+    (item) => item.role === "packaged_record_candidate" && item.readiness === "ready_now"
+  ).length;
+  const packagedWaitingCount = exportReadyItems.filter(
+    (item) => item.role === "packaged_record_candidate" && item.readiness === "after_board_closes"
+  ).length;
 
   return {
     summary:
       "Wealth Factory runtime keeps bounded operational lane memory live while governance and package records stay ready for later tenant-owned export.",
     exportSummary:
       waitingOnBoardClosureCount > 0
-        ? `${readyNowCount} export candidate${readyNowCount === 1 ? "" : "s"} are ready now, and ${waitingOnBoardClosureCount} still wait for board closure.`
+        ? `${readyNowCount} export candidate${readyNowCount === 1 ? "" : "s"} ${readyNowCount === 1 ? "is" : "are"} ready now, and ${waitingOnBoardClosureCount} ${waitingOnBoardClosureCount === 1 ? "still waits" : "still wait"} for board closure.`
         : waitingOnBoardClosureCount === 0
-        ? `${readyNowCount} export candidate${readyNowCount === 1 ? "" : "s"} are ready now. No export candidates are waiting on board closure.`
+        ? `${readyNowCount} export candidate${readyNowCount === 1 ? "" : "s"} ${readyNowCount === 1 ? "is" : "are"} ready now. No export candidates are waiting on board closure.`
         : "Export readiness will become visible once the board produces tenant-record candidates.",
     readyNowCount,
     waitingOnBoardClosureCount,
+    governanceReadyCount,
+    packagedReadyCount,
+    packagedWaitingCount,
+    roleSummary:
+      packagedWaitingCount > 0
+        ? `${governanceReadyCount} governance record candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} ready now, and ${packagedWaitingCount} packaged output candidate${packagedWaitingCount === 1 ? "" : "s"} ${packagedWaitingCount === 1 ? "still waits" : "still wait"} on board closure.`
+        : `${governanceReadyCount + packagedReadyCount} tenant-record candidate${governanceReadyCount + packagedReadyCount === 1 ? " is" : "s are"} ready now, including ${governanceReadyCount} governance history candidate${governanceReadyCount === 1 ? "" : "s"} and ${packagedReadyCount} packaged output candidate${packagedReadyCount === 1 ? "" : "s"}.`,
+    partitions: {
+      runtime: {
+        itemCount: operationalItems.length,
+        summary: `${operationalItems.length} runtime memor${operationalItems.length === 1 ? "y bucket stays" : "y buckets stay"} live only inside Wealth Factory orchestration.`
+      },
+      governanceHistoryCandidates: {
+        itemCount: governanceReadyCount,
+        summary: `${governanceReadyCount} governance history candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} stable enough for later tenant-owned export.`
+      },
+      packagedOutputCandidates: {
+        itemCount: packagedReadyCount + packagedWaitingCount,
+        summary:
+          packagedWaitingCount > 0
+            ? `${packagedWaitingCount} packaged output candidate${packagedWaitingCount === 1 ? "" : "s"} ${packagedWaitingCount === 1 ? "still waits" : "still wait"} on board closure before later export.`
+            : `${packagedReadyCount} packaged output candidate${packagedReadyCount === 1 ? "" : "s"} ${packagedReadyCount === 1 ? "is" : "are"} ready for later tenant-owned export.`
+      }
+    },
     operationalItems,
     exportReadyItems
   };
@@ -3856,6 +3975,51 @@ function humanizeMemoryBoundaryReadiness(readiness: HarnessMemoryBoundaryReadine
       return "After board closes";
     default:
       return humanizeLabel(readiness);
+  }
+}
+
+function humanizeMemoryBoundaryRole(role: HarnessMemoryBoundaryRole) {
+  switch (role) {
+    case "runtime_memory":
+      return "Runtime memory";
+    case "governance_record_candidate":
+      return "Governance record candidate";
+    case "packaged_record_candidate":
+      return "Packaged record candidate";
+    default:
+      return role;
+  }
+}
+
+function humanizeMemoryBoundaryEligibilityRule(rule: HarnessMemoryBoundaryEligibilityRule) {
+  switch (rule) {
+    case "runtime_only":
+      return "Runtime only";
+    case "explicit_export_later":
+      return "Explicit export later";
+    case "after_board_closes_then_export":
+      return "After board closes, then export";
+    default:
+      return rule;
+  }
+}
+
+function humanizeMemoryBoundarySourceSurface(surface: HarnessMemoryBoundarySourceSurface) {
+  switch (surface) {
+    case "continuity_snapshots":
+      return "Continuity snapshots";
+    case "pending_attention":
+      return "Pending attention";
+    case "recent_decisions":
+      return "Recent decisions";
+    case "follow_through":
+      return "Follow-through history";
+    case "completion_package_governance":
+      return "Completion package governance";
+    case "completion_package_deliverables":
+      return "Completion package deliverables";
+    default:
+      return surface;
   }
 }
 

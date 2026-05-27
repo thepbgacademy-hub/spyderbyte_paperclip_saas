@@ -1603,38 +1603,53 @@ describe("harness board service", () => {
     });
 
     const hydrated = await service.listBoardState({ authorization: "Bearer valid" });
-    expect(hydrated.memoryBoundary).toEqual(
-      expect.objectContaining({
-        summary: expect.stringContaining("Wealth Factory runtime"),
-        exportSummary: expect.stringContaining("ready now"),
-        readyNowCount: expect.any(Number),
-        waitingOnBoardClosureCount: expect.any(Number),
-        operationalItems: expect.arrayContaining([
-          expect.objectContaining({
-            id: "lane_continuity",
-            destination: "wealth_factory_runtime",
-            count: expect.any(Number),
-            readiness: "live_runtime_only",
-            readinessLabel: "Live runtime only"
-          })
-        ]),
-        exportReadyItems: expect.arrayContaining([
-          expect.objectContaining({
-            id: "governance_decisions",
-            destination: "tenant_record_candidate",
-            count: expect.any(Number),
-            readiness: "ready_now",
-            readinessLabel: "Ready now"
-          }),
-          expect.objectContaining({
-            id: "implemented_actions",
-            destination: "tenant_record_candidate",
-            count: expect.any(Number),
-            readiness: "ready_now",
-            readinessLabel: "Ready now"
-          })
-        ])
-      })
+    expect(hydrated.memoryBoundary.summary).toContain("Wealth Factory runtime");
+    expect(hydrated.memoryBoundary.exportSummary).toContain("ready now");
+    expect(hydrated.memoryBoundary.roleSummary).toContain("governance history candidate");
+    expect(hydrated.memoryBoundary.readyNowCount).toEqual(expect.any(Number));
+    expect(hydrated.memoryBoundary.waitingOnBoardClosureCount).toEqual(expect.any(Number));
+    expect(hydrated.memoryBoundary.governanceReadyCount).toEqual(expect.any(Number));
+    expect(hydrated.memoryBoundary.partitions).toMatchObject({
+      runtime: { itemCount: 2 },
+      governanceHistoryCandidates: { itemCount: 2 }
+    });
+    expect(hydrated.memoryBoundary.operationalItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "lane_continuity",
+          destination: "wealth_factory_runtime",
+          count: expect.any(Number),
+          readiness: "live_runtime_only",
+          readinessLabel: "Live runtime only",
+          role: "runtime_memory",
+          eligibilityRule: "runtime_only",
+          sourceSurface: "continuity_snapshots"
+        })
+      ])
+    );
+    expect(hydrated.memoryBoundary.exportReadyItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "governance_decisions",
+          destination: "tenant_record_candidate",
+          count: expect.any(Number),
+          readiness: "ready_now",
+          readinessLabel: "Ready now",
+          role: "governance_record_candidate",
+          eligibilityRule: "explicit_export_later",
+          sourceSurface: "recent_decisions"
+        }),
+        expect.objectContaining({
+          id: "implemented_actions",
+          destination: "tenant_record_candidate",
+          count: expect.any(Number),
+          readiness: "ready_now",
+          readinessLabel: "Ready now",
+          role: "governance_record_candidate",
+          eligibilityRule: "explicit_export_later",
+          sourceSurface: "follow_through"
+        })
+      ])
     );
     expect(hydrated.followThroughItems).toEqual(
       expect.arrayContaining([
@@ -5459,12 +5474,18 @@ describe("harness board service", () => {
         expect.objectContaining({
           id: "package_governance",
           readiness: "ready_now",
-          readinessLabel: "Ready now"
+          readinessLabel: "Ready now",
+          role: "packaged_record_candidate",
+          eligibilityRule: "explicit_export_later",
+          sourceSurface: "completion_package_governance"
         }),
         expect.objectContaining({
           id: "package_deliverables",
           readiness: "ready_now",
-          readinessLabel: "Ready now"
+          readinessLabel: "Ready now",
+          role: "packaged_record_candidate",
+          eligibilityRule: "explicit_export_later",
+          sourceSurface: "completion_package_deliverables"
         })
       ])
     );
@@ -5472,7 +5493,12 @@ describe("harness board service", () => {
       expect.objectContaining({
         readyNowCount: 4,
         waitingOnBoardClosureCount: 0,
-        exportSummary: "4 export candidates are ready now. No export candidates are waiting on board closure."
+        governanceReadyCount: 2,
+        packagedReadyCount: 2,
+        packagedWaitingCount: 0,
+        exportSummary: "4 export candidates are ready now. No export candidates are waiting on board closure.",
+        roleSummary:
+          "4 tenant-record candidates are ready now, including 2 governance history candidates and 2 packaged output candidates."
       })
     );
   });

@@ -178,14 +178,26 @@ describe("harness board client", () => {
     expect(board.memoryBoundary).toEqual(
       expect.objectContaining({
         exportSummary: "2 export candidates are ready now, and 2 still wait for board closure.",
+        roleSummary: "2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure.",
         readyNowCount: 2,
         waitingOnBoardClosureCount: 2,
+        governanceReadyCount: 2,
+        packagedReadyCount: 0,
+        packagedWaitingCount: 2,
+        partitions: expect.objectContaining({
+          runtime: expect.objectContaining({ itemCount: 2 }),
+          governanceHistoryCandidates: expect.objectContaining({ itemCount: 2 }),
+          packagedOutputCandidates: expect.objectContaining({ itemCount: 2 })
+        }),
         operationalItems: expect.arrayContaining([
           expect.objectContaining({
             id: "lane_continuity",
             destination: "wealth_factory_runtime",
             readiness: "live_runtime_only",
-            readinessLabel: "Live runtime only"
+            readinessLabel: "Live runtime only",
+            role: "runtime_memory",
+            eligibilityRule: "runtime_only",
+            sourceSurface: "continuity_snapshots"
           })
         ]),
         exportReadyItems: expect.arrayContaining([
@@ -193,7 +205,10 @@ describe("harness board client", () => {
             id: "governance_decisions",
             destination: "tenant_record_candidate",
             readiness: "ready_now",
-            readinessLabel: "Ready now"
+            readinessLabel: "Ready now",
+            role: "governance_record_candidate",
+            eligibilityRule: "explicit_export_later",
+            sourceSurface: "recent_decisions"
           })
         ])
       })
@@ -229,6 +244,11 @@ describe("harness board client", () => {
     expect(board.memoryBoundary.operationalItems[0]?.readinessLabel).toBe("Live runtime only");
     expect(board.memoryBoundary.readyNowCount).toBe(2);
     expect(board.memoryBoundary.waitingOnBoardClosureCount).toBe(2);
+    expect(board.memoryBoundary.governanceReadyCount).toBe(2);
+    expect(board.memoryBoundary.packagedWaitingCount).toBe(2);
+    expect(board.memoryBoundary.roleSummary).toBe(
+      "2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure."
+    );
     expect(board.memoryBoundary.exportSummary).toBe(
       "2 export candidates are ready now, and 2 still wait for board closure."
     );
@@ -238,6 +258,54 @@ describe("harness board client", () => {
     expect(
       board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.readinessLabel
     ).toBe("After board closes");
+    expect(board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.role).toBe(
+      "packaged_record_candidate"
+    );
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.sourceSurfaceLabel
+    ).toBe("Completion package deliverables");
+  });
+
+  it("derives governance-ready partition counts from readiness, not only from role membership", async () => {
+    const previewClient = createHarnessBoardClient(
+      fetch,
+      { location: { hostname: "127.0.0.1", search: "" } as Window["location"] }
+    );
+    const fallback = previewClient.getFallback();
+    const stagedBoundary = {
+      ...fallback.memoryBoundary,
+      governanceReadyCount: undefined,
+      roleSummary: undefined,
+      partitions: undefined,
+      exportReadyItems: fallback.memoryBoundary.exportReadyItems.map((item) =>
+        item.id === "governance_decisions"
+          ? {
+              ...item,
+              readiness: "after_board_closes" as const,
+              readinessLabel: "After board closes"
+            }
+          : item
+      )
+    };
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...fallback,
+        memoryBoundary: stagedBoundary
+      })
+    });
+    const client = createHarnessBoardClient(
+      fetchImpl as unknown as typeof fetch,
+      { location: { hostname: "app.spyderbyte.cloud" } as Window["location"] }
+    );
+
+    const board = await client.fetchBoard();
+
+    expect(board.memoryBoundary.governanceReadyCount).toBe(1);
+    expect(board.memoryBoundary.roleSummary).toBe(
+      "1 governance record candidate is ready now, and 2 packaged output candidates still wait on board closure."
+    );
+    expect(board.memoryBoundary.partitions.governanceHistoryCandidates.itemCount).toBe(1);
   });
 
   it("keeps the localhost fallback aligned with the bounded board action contract", () => {
@@ -361,14 +429,18 @@ describe("harness board client", () => {
     expect(fallback.memoryBoundary).toEqual(
       expect.objectContaining({
         exportSummary: "2 export candidates are ready now, and 2 still wait for board closure.",
+        roleSummary: "2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure.",
         readyNowCount: 2,
         waitingOnBoardClosureCount: 2,
+        governanceReadyCount: 2,
+        packagedWaitingCount: 2,
         operationalItems: expect.arrayContaining([
           expect.objectContaining({
             id: "lane_continuity",
             destination: "wealth_factory_runtime",
             readiness: "live_runtime_only",
-            readinessLabel: "Live runtime only"
+            readinessLabel: "Live runtime only",
+            sourceSurface: "continuity_snapshots"
           })
         ]),
         exportReadyItems: expect.arrayContaining([
@@ -376,7 +448,8 @@ describe("harness board client", () => {
             id: "governance_decisions",
             destination: "tenant_record_candidate",
             readiness: "ready_now",
-            readinessLabel: "Ready now"
+            readinessLabel: "Ready now",
+            sourceSurface: "recent_decisions"
           })
         ])
       })

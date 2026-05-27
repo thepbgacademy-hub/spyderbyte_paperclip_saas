@@ -285,8 +285,26 @@ const boardResponse: HarnessBoardResponse = {
   memoryBoundary: {
     summary: "Wealth Factory runtime keeps bounded operational lane memory live while governance and package records stay ready for later tenant-owned export.",
     exportSummary: "2 export candidates are ready now, and 2 still wait for board closure.",
+    roleSummary: "2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure.",
     readyNowCount: 2,
     waitingOnBoardClosureCount: 2,
+    governanceReadyCount: 2,
+    packagedReadyCount: 0,
+    packagedWaitingCount: 2,
+    partitions: {
+      runtime: {
+        itemCount: 2,
+        summary: "2 runtime memory buckets stay live only inside Wealth Factory orchestration."
+      },
+      governanceHistoryCandidates: {
+        itemCount: 2,
+        summary: "2 governance history candidates are stable enough for later tenant-owned export."
+      },
+      packagedOutputCandidates: {
+        itemCount: 2,
+        summary: "2 packaged output candidates still wait on board closure before later export."
+      }
+    },
     operationalItems: [
       {
         id: "lane_continuity",
@@ -295,7 +313,13 @@ const boardResponse: HarnessBoardResponse = {
         summary: "Continuity snapshots stay in Wealth Factory runtime as live operational memory.",
         destination: "wealth_factory_runtime",
         readiness: "live_runtime_only",
-        readinessLabel: "Live runtime only"
+        readinessLabel: "Live runtime only",
+        role: "runtime_memory",
+        roleLabel: "Runtime memory",
+        eligibilityRule: "runtime_only",
+        eligibilityRuleLabel: "Runtime only",
+        sourceSurface: "continuity_snapshots",
+        sourceSurfaceLabel: "Continuity snapshots"
       },
       {
         id: "attention_state",
@@ -304,7 +328,13 @@ const boardResponse: HarnessBoardResponse = {
         summary: "Current CEO attention stays in runtime truth until the board resolves it explicitly.",
         destination: "wealth_factory_runtime",
         readiness: "live_runtime_only",
-        readinessLabel: "Live runtime only"
+        readinessLabel: "Live runtime only",
+        role: "runtime_memory",
+        roleLabel: "Runtime memory",
+        eligibilityRule: "runtime_only",
+        eligibilityRuleLabel: "Runtime only",
+        sourceSurface: "pending_attention",
+        sourceSurfaceLabel: "Pending attention"
       }
     ],
     exportReadyItems: [
@@ -315,7 +345,13 @@ const boardResponse: HarnessBoardResponse = {
         summary: "Bounded decisions are ready for later tenant-owned board records.",
         destination: "tenant_record_candidate",
         readiness: "ready_now",
-        readinessLabel: "Ready now"
+        readinessLabel: "Ready now",
+        role: "governance_record_candidate",
+        roleLabel: "Governance record candidate",
+        eligibilityRule: "explicit_export_later",
+        eligibilityRuleLabel: "Explicit export later",
+        sourceSurface: "recent_decisions",
+        sourceSurfaceLabel: "Recent decisions"
       },
       {
         id: "implemented_actions",
@@ -324,7 +360,13 @@ const boardResponse: HarnessBoardResponse = {
         summary: "Implemented governance actions are ready for suggested-versus-implemented history export.",
         destination: "tenant_record_candidate",
         readiness: "ready_now",
-        readinessLabel: "Ready now"
+        readinessLabel: "Ready now",
+        role: "governance_record_candidate",
+        roleLabel: "Governance record candidate",
+        eligibilityRule: "explicit_export_later",
+        eligibilityRuleLabel: "Explicit export later",
+        sourceSurface: "follow_through",
+        sourceSurfaceLabel: "Follow-through history"
       },
       {
         id: "package_governance",
@@ -334,6 +376,12 @@ const boardResponse: HarnessBoardResponse = {
         destination: "tenant_record_candidate",
         readiness: "after_board_closes",
         readinessLabel: "After board closes",
+        role: "packaged_record_candidate",
+        roleLabel: "Packaged record candidate",
+        eligibilityRule: "after_board_closes_then_export",
+        eligibilityRuleLabel: "After board closes, then export",
+        sourceSurface: "completion_package_governance",
+        sourceSurfaceLabel: "Completion package governance",
         nextEligibleSummary: "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
       },
       {
@@ -344,6 +392,12 @@ const boardResponse: HarnessBoardResponse = {
         destination: "tenant_record_candidate",
         readiness: "after_board_closes",
         readinessLabel: "After board closes",
+        role: "packaged_record_candidate",
+        roleLabel: "Packaged record candidate",
+        eligibilityRule: "after_board_closes_then_export",
+        eligibilityRuleLabel: "After board closes, then export",
+        sourceSurface: "completion_package_deliverables",
+        sourceSurfaceLabel: "Completion package deliverables",
         nextEligibleSummary: "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
       }
     ]
@@ -926,6 +980,7 @@ describe("harness board UI", () => {
     expect(markup).toContain("Package - Assembling");
     expect(markup).toContain("1 deliverable, 1 governance item, 2 recommendations, 1 objection.");
     expect(markup).toContain("2 export candidates are ready now, and 2 still wait for board closure.");
+    expect(markup).toContain("2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure.");
     expect(markup).toContain("Recent decisions");
     expect(markup).toContain("CEO kept the research expansion under bounded review.");
     expect(markup).toContain("1 preserved decision");
@@ -957,6 +1012,24 @@ describe("harness board UI", () => {
     expect(markup).toContain("Live runtime only");
     expect(markup).toContain("Ready now");
     expect(markup).toContain("After board closes");
+    expect(markup).toContain("Runtime partition");
+    expect(markup).toContain("Governance history candidates");
+    expect(markup).toContain("Packaged output candidates");
+    expect(markup).toContain("2 runtime memory buckets stay live only inside Wealth Factory orchestration.");
+    expect(markup).toContain("2 governance history candidates are stable enough for later tenant-owned export.");
+    expect(markup).toContain("2 packaged output candidates still wait on board closure before later export.");
+    expect(markup).toContain("Runtime memory");
+    expect(markup).toContain("Governance record candidate");
+    expect(markup).toContain("Packaged record candidate");
+    expect(markup).toContain("Runtime only");
+    expect(markup).toContain("Explicit export later");
+    expect(markup).toContain("After board closes, then export");
+    expect(markup).toContain("Source surface: Continuity snapshots");
+    expect(markup).toContain("Source surface: Pending attention");
+    expect(markup).toContain("Source surface: Recent decisions");
+    expect(markup).toContain("Source surface: Follow-through history");
+    expect(markup).toContain("Source surface: Completion package governance");
+    expect(markup).toContain("Source surface: Completion package deliverables");
     expect(markup).toContain("Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate.");
     expect(markup).toContain("Board closure is still required before this packaged deliverable becomes a durable tenant record candidate.");
     expect(markup).toContain("Tenant-facing package state");
