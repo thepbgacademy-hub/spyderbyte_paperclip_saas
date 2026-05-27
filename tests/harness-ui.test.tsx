@@ -317,12 +317,28 @@ const boardResponse: HarnessBoardResponse = {
     noPromotionActionCount: 2,
     tenantExportActionFamilyCount: 2,
     boardClosureActionFamilyCount: 2,
+    noAssemblyShapeCount: 2,
+    standaloneExportRecordCount: 2,
+    packageRecordSetCount: 2,
+    noExportPhaseCount: 2,
+    phaseOneExportCount: 2,
+    phaseTwoExportCount: 2,
+    runtimeMutableCount: 2,
+    appendOnlyHistoryCount: 2,
+    replaceableSnapshotCount: 2,
+    stableSnapshotCount: 0,
     stateSummary:
       "2 runtime buckets stay runtime-only, 2 export candidate buckets are ready for tenant export later, and 2 buckets are still awaiting board closure.",
     nextStepSummary:
       "2 runtime buckets have no promotion step, 2 export candidate buckets are ready for a later tenant export step, and 2 buckets still need board closure before tenant export becomes the next step.",
     actionFamilySummary:
       "2 runtime buckets expose no promotion action, 2 export candidate buckets sit in the tenant export family, and 2 buckets remain in the board-closure-first family.",
+    assemblySummary:
+      "2 runtime buckets have no export assembly, 2 export candidate buckets are ready as standalone export records, and 2 buckets still belong to a package record set after board closure.",
+    phaseSummary:
+      "2 runtime buckets have no export phase, 2 export candidate buckets are ready in the phase-one export lane, and 2 buckets still wait in the phase-two package export lane.",
+    mutabilitySummary:
+      "2 runtime buckets stay runtime mutable, 2 export candidate buckets are append-only history, and 2 buckets still behave as replaceable package snapshots until board closure.",
     partitions: {
       runtime: {
         itemCount: 2,
@@ -374,6 +390,12 @@ const boardResponse: HarnessBoardResponse = {
         promotionNextStepLabel: "No promotion step",
         promotionActionFamily: "none_runtime_only",
         promotionActionFamilyLabel: "No promotion action",
+        assemblyShape: "none_runtime_only",
+        assemblyShapeLabel: "No export assembly",
+        promotionPhase: "not_exported_runtime",
+        promotionPhaseLabel: "No export phase",
+        promotionMutability: "runtime_mutable",
+        promotionMutabilityLabel: "Runtime mutable",
         promotionActionDescription: "No export action applies. This runtime memory stays inside Wealth Factory orchestration."
       },
       {
@@ -412,6 +434,12 @@ const boardResponse: HarnessBoardResponse = {
         promotionNextStepLabel: "No promotion step",
         promotionActionFamily: "none_runtime_only",
         promotionActionFamilyLabel: "No promotion action",
+        assemblyShape: "none_runtime_only",
+        assemblyShapeLabel: "No export assembly",
+        promotionPhase: "not_exported_runtime",
+        promotionPhaseLabel: "No export phase",
+        promotionMutability: "runtime_mutable",
+        promotionMutabilityLabel: "Runtime mutable",
         promotionActionDescription: "No export action applies. This runtime attention state stays inside Wealth Factory orchestration."
       }
     ],
@@ -452,6 +480,12 @@ const boardResponse: HarnessBoardResponse = {
         promotionNextStepLabel: "Tenant export available",
         promotionActionFamily: "tenant_export_candidate",
         promotionActionFamilyLabel: "Tenant export family",
+        assemblyShape: "standalone_export_record",
+        assemblyShapeLabel: "Standalone export record",
+        promotionPhase: "phase_one_governance_history",
+        promotionPhaseLabel: "Phase-one export",
+        promotionMutability: "append_only_history",
+        promotionMutabilityLabel: "Append-only history",
         promotionActionDescription: "This governance history is ready to sit behind a later bounded tenant export action."
       },
       {
@@ -490,6 +524,12 @@ const boardResponse: HarnessBoardResponse = {
         promotionNextStepLabel: "Tenant export available",
         promotionActionFamily: "tenant_export_candidate",
         promotionActionFamilyLabel: "Tenant export family",
+        assemblyShape: "standalone_export_record",
+        assemblyShapeLabel: "Standalone export record",
+        promotionPhase: "phase_one_governance_history",
+        promotionPhaseLabel: "Phase-one export",
+        promotionMutability: "append_only_history",
+        promotionMutabilityLabel: "Append-only history",
         promotionActionDescription:
           "This implemented follow-through is ready to sit behind a later bounded tenant export action."
       },
@@ -529,6 +569,12 @@ const boardResponse: HarnessBoardResponse = {
         promotionNextStepLabel: "Board closure, then tenant export",
         promotionActionFamily: "board_closure_before_export",
         promotionActionFamilyLabel: "Board closure first",
+        assemblyShape: "package_record_set",
+        assemblyShapeLabel: "Package record set",
+        promotionPhase: "phase_two_package_export",
+        promotionPhaseLabel: "Phase-two package export",
+        promotionMutability: "replaceable_until_board_closure",
+        promotionMutabilityLabel: "Replaceable until board closure",
         promotionActionDescription:
           "Board closure still gates this package governance memory before any later tenant export action can apply.",
         nextEligibleSummary: "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
@@ -569,6 +615,12 @@ const boardResponse: HarnessBoardResponse = {
         promotionNextStepLabel: "Board closure, then tenant export",
         promotionActionFamily: "board_closure_before_export",
         promotionActionFamilyLabel: "Board closure first",
+        assemblyShape: "package_record_set",
+        assemblyShapeLabel: "Package record set",
+        promotionPhase: "phase_two_package_export",
+        promotionPhaseLabel: "Phase-two package export",
+        promotionMutability: "replaceable_until_board_closure",
+        promotionMutabilityLabel: "Replaceable until board closure",
         promotionActionDescription:
           "Board closure still gates this packaged deliverable before any later tenant export action can apply.",
         nextEligibleSummary: "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."

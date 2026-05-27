@@ -1617,6 +1617,9 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.ownershipSummary).toContain("Wealth Factory-only");
     expect(hydrated.memoryBoundary.promotionSummary).toContain("never promote");
     expect(hydrated.memoryBoundary.recordTargetSummary).toContain("governance history record");
+    expect(hydrated.memoryBoundary.assemblySummary).toContain("standalone export records");
+    expect(hydrated.memoryBoundary.phaseSummary).toContain("phase-one export");
+    expect(hydrated.memoryBoundary.mutabilitySummary).toContain("append-only history");
     expect(hydrated.memoryBoundary.blockerSummary).toContain("blocked");
     expect(hydrated.memoryBoundary.authoritySummary).toContain("tenant-controlled");
     expect(hydrated.memoryBoundary.triggerSummary).toContain("tenant export request");
@@ -1654,7 +1657,13 @@ describe("harness board service", () => {
           promotionNextStep: "none_runtime_only",
           promotionNextStepLabel: "No promotion step",
           promotionActionFamily: "none_runtime_only",
-          promotionActionFamilyLabel: "No promotion action"
+          promotionActionFamilyLabel: "No promotion action",
+          assemblyShape: "none_runtime_only",
+          assemblyShapeLabel: "No export assembly",
+          promotionPhase: "not_exported_runtime",
+          promotionPhaseLabel: "No export phase",
+          promotionMutability: "runtime_mutable",
+          promotionMutabilityLabel: "Runtime mutable"
         })
       ])
     );
@@ -1686,7 +1695,13 @@ describe("harness board service", () => {
           promotionNextStep: "tenant_export_available",
           promotionNextStepLabel: "Tenant export available",
           promotionActionFamily: "tenant_export_candidate",
-          promotionActionFamilyLabel: "Tenant export family"
+          promotionActionFamilyLabel: "Tenant export family",
+          assemblyShape: "standalone_export_record",
+          assemblyShapeLabel: "Standalone export record",
+          promotionPhase: "phase_one_governance_history",
+          promotionPhaseLabel: "Phase-one export",
+          promotionMutability: "append_only_history",
+          promotionMutabilityLabel: "Append-only history"
         }),
         expect.objectContaining({
           id: "implemented_actions",
@@ -1714,7 +1729,13 @@ describe("harness board service", () => {
           promotionNextStep: "tenant_export_available",
           promotionNextStepLabel: "Tenant export available",
           promotionActionFamily: "tenant_export_candidate",
-          promotionActionFamilyLabel: "Tenant export family"
+          promotionActionFamilyLabel: "Tenant export family",
+          assemblyShape: "standalone_export_record",
+          assemblyShapeLabel: "Standalone export record",
+          promotionPhase: "phase_one_governance_history",
+          promotionPhaseLabel: "Phase-one export",
+          promotionMutability: "append_only_history",
+          promotionMutabilityLabel: "Append-only history"
         })
       ])
     );

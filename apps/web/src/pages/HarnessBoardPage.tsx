@@ -465,6 +465,9 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     triggerSummary: "Promotion trigger is pending the latest board state.",
     nextStepSummary: "Promotion next-step guidance is pending the latest board state.",
     actionFamilySummary: "Promotion action family guidance is pending the latest board state.",
+    assemblySummary: "Export assembly guidance is pending the latest board state.",
+    phaseSummary: "Export phase guidance is pending the latest board state.",
+    mutabilitySummary: "Export mutability guidance is pending the latest board state.",
     readyNowCount: 0,
     waitingOnBoardClosureCount: 0,
     governanceReadyCount: 0,
@@ -475,6 +478,16 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     boardControlledCandidateCount: 0,
     tenantExportTriggerCount: 0,
     boardClosureTriggerCount: 0,
+    noAssemblyShapeCount: 0,
+    standaloneExportRecordCount: 0,
+    packageRecordSetCount: 0,
+    noExportPhaseCount: 0,
+    phaseOneExportCount: 0,
+    phaseTwoExportCount: 0,
+    runtimeMutableCount: 0,
+    appendOnlyHistoryCount: 0,
+    replaceableSnapshotCount: 0,
+    stableSnapshotCount: 0,
     partitions: {
       runtime: { itemCount: 0, summary: "Runtime memory partition is pending the latest board state." },
       governanceHistoryCandidates: {
@@ -520,6 +533,9 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <p style={styles.actionSummary}>{memoryBoundary.triggerSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.nextStepSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.actionFamilySummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.assemblySummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.phaseSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.mutabilitySummary}</p>
       <ul style={styles.actionList}>
         <li style={styles.actionItem}>
           <p style={styles.contractMeta}>Runtime partition</p>
@@ -561,6 +577,9 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                     <span style={styles.badge}>{item.promotionTriggerLabel}</span>
                     <span style={styles.badge}>{item.promotionNextStepLabel}</span>
                     <span style={styles.badge}>{item.promotionActionFamilyLabel}</span>
+                    <span style={styles.badge}>{item.assemblyShapeLabel}</span>
+                    <span style={styles.badge}>{item.promotionPhaseLabel}</span>
+                    <span style={styles.badge}>{item.promotionMutabilityLabel}</span>
                   </div>
                   <p style={styles.actionSummary}>{item.summary}</p>
                   <p style={styles.optionBody}>{item.promotionActionDescription}</p>

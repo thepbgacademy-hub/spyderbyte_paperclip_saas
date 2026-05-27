@@ -164,6 +164,22 @@ export type HarnessMemoryBoundaryPromotionActionFamily =
   | "tenant_export_candidate"
   | "board_closure_before_export";
 
+export type HarnessMemoryBoundaryAssemblyShape =
+  | "none_runtime_only"
+  | "standalone_export_record"
+  | "package_record_set";
+
+export type HarnessMemoryBoundaryPromotionPhase =
+  | "not_exported_runtime"
+  | "phase_one_governance_history"
+  | "phase_two_package_export";
+
+export type HarnessMemoryBoundaryPromotionMutability =
+  | "runtime_mutable"
+  | "append_only_history"
+  | "replaceable_until_board_closure"
+  | "stable_snapshot";
+
 export type HarnessMemoryBoundaryItemView = {
   id:
     | "lane_continuity"
@@ -206,6 +222,12 @@ export type HarnessMemoryBoundaryItemView = {
   promotionNextStepLabel: string;
   promotionActionFamily: HarnessMemoryBoundaryPromotionActionFamily;
   promotionActionFamilyLabel: string;
+  assemblyShape: HarnessMemoryBoundaryAssemblyShape;
+  assemblyShapeLabel: string;
+  promotionPhase: HarnessMemoryBoundaryPromotionPhase;
+  promotionPhaseLabel: string;
+  promotionMutability: HarnessMemoryBoundaryPromotionMutability;
+  promotionMutabilityLabel: string;
   promotionActionDescription: string;
   nextEligibleSummary?: string;
 };
@@ -237,6 +259,16 @@ export type HarnessMemoryBoundaryView = {
   noPromotionActionCount: number;
   tenantExportActionFamilyCount: number;
   boardClosureActionFamilyCount: number;
+  noAssemblyShapeCount: number;
+  standaloneExportRecordCount: number;
+  packageRecordSetCount: number;
+  noExportPhaseCount: number;
+  phaseOneExportCount: number;
+  phaseTwoExportCount: number;
+  runtimeMutableCount: number;
+  appendOnlyHistoryCount: number;
+  replaceableSnapshotCount: number;
+  stableSnapshotCount: number;
   roleSummary: string;
   ownershipSummary: string;
   promotionSummary: string;
@@ -247,6 +279,9 @@ export type HarnessMemoryBoundaryView = {
   stateSummary: string;
   nextStepSummary: string;
   actionFamilySummary: string;
+  assemblySummary: string;
+  phaseSummary: string;
+  mutabilitySummary: string;
   partitions: {
     runtime: HarnessMemoryBoundaryPartitionView;
     governanceHistoryCandidates: HarnessMemoryBoundaryPartitionView;
@@ -3923,6 +3958,12 @@ function buildMemoryBoundaryView(input: {
       promotionNextStepLabel: humanizeMemoryBoundaryPromotionNextStep("none_runtime_only"),
       promotionActionFamily: "none_runtime_only",
       promotionActionFamilyLabel: humanizeMemoryBoundaryPromotionActionFamily("none_runtime_only"),
+      assemblyShape: "none_runtime_only",
+      assemblyShapeLabel: humanizeMemoryBoundaryAssemblyShape("none_runtime_only"),
+      promotionPhase: "not_exported_runtime",
+      promotionPhaseLabel: humanizeMemoryBoundaryPromotionPhase("not_exported_runtime"),
+      promotionMutability: "runtime_mutable",
+      promotionMutabilityLabel: humanizeMemoryBoundaryPromotionMutability("runtime_mutable"),
       promotionActionDescription: "No export action applies. This runtime memory stays inside Wealth Factory orchestration."
     },
     {
@@ -3961,6 +4002,12 @@ function buildMemoryBoundaryView(input: {
       promotionNextStepLabel: humanizeMemoryBoundaryPromotionNextStep("none_runtime_only"),
       promotionActionFamily: "none_runtime_only",
       promotionActionFamilyLabel: humanizeMemoryBoundaryPromotionActionFamily("none_runtime_only"),
+      assemblyShape: "none_runtime_only",
+      assemblyShapeLabel: humanizeMemoryBoundaryAssemblyShape("none_runtime_only"),
+      promotionPhase: "not_exported_runtime",
+      promotionPhaseLabel: humanizeMemoryBoundaryPromotionPhase("not_exported_runtime"),
+      promotionMutability: "runtime_mutable",
+      promotionMutabilityLabel: humanizeMemoryBoundaryPromotionMutability("runtime_mutable"),
       promotionActionDescription: "No export action applies. This runtime attention state stays inside Wealth Factory orchestration."
     }
   ];
@@ -4002,6 +4049,12 @@ function buildMemoryBoundaryView(input: {
       promotionNextStepLabel: humanizeMemoryBoundaryPromotionNextStep("tenant_export_available"),
       promotionActionFamily: "tenant_export_candidate",
       promotionActionFamilyLabel: humanizeMemoryBoundaryPromotionActionFamily("tenant_export_candidate"),
+      assemblyShape: "standalone_export_record",
+      assemblyShapeLabel: humanizeMemoryBoundaryAssemblyShape("standalone_export_record"),
+      promotionPhase: "phase_one_governance_history",
+      promotionPhaseLabel: humanizeMemoryBoundaryPromotionPhase("phase_one_governance_history"),
+      promotionMutability: "append_only_history",
+      promotionMutabilityLabel: humanizeMemoryBoundaryPromotionMutability("append_only_history"),
       promotionActionDescription: "This governance history is ready to sit behind a later bounded tenant export action."
     },
     {
@@ -4040,6 +4093,12 @@ function buildMemoryBoundaryView(input: {
       promotionNextStepLabel: humanizeMemoryBoundaryPromotionNextStep("tenant_export_available"),
       promotionActionFamily: "tenant_export_candidate",
       promotionActionFamilyLabel: humanizeMemoryBoundaryPromotionActionFamily("tenant_export_candidate"),
+      assemblyShape: "standalone_export_record",
+      assemblyShapeLabel: humanizeMemoryBoundaryAssemblyShape("standalone_export_record"),
+      promotionPhase: "phase_one_governance_history",
+      promotionPhaseLabel: humanizeMemoryBoundaryPromotionPhase("phase_one_governance_history"),
+      promotionMutability: "append_only_history",
+      promotionMutabilityLabel: humanizeMemoryBoundaryPromotionMutability("append_only_history"),
       promotionActionDescription:
         "This implemented follow-through is ready to sit behind a later bounded tenant export action."
     }
@@ -4139,6 +4198,18 @@ function buildMemoryBoundaryView(input: {
           input.completionPackage.hasOpenGovernanceItems
             ? "board_closure_before_export"
             : "tenant_export_candidate"
+        ),
+        assemblyShape: "package_record_set",
+        assemblyShapeLabel: humanizeMemoryBoundaryAssemblyShape("package_record_set"),
+        promotionPhase: "phase_two_package_export",
+        promotionPhaseLabel: humanizeMemoryBoundaryPromotionPhase("phase_two_package_export"),
+        promotionMutability: input.completionPackage.hasOpenGovernanceItems
+          ? "replaceable_until_board_closure"
+          : "stable_snapshot",
+        promotionMutabilityLabel: humanizeMemoryBoundaryPromotionMutability(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "replaceable_until_board_closure"
+            : "stable_snapshot"
         ),
         promotionActionDescription: input.completionPackage.hasOpenGovernanceItems
           ? "Board closure still gates this package governance memory before any later tenant export action can apply."
@@ -4240,6 +4311,18 @@ function buildMemoryBoundaryView(input: {
             ? "board_closure_before_export"
             : "tenant_export_candidate"
         ),
+        assemblyShape: "package_record_set",
+        assemblyShapeLabel: humanizeMemoryBoundaryAssemblyShape("package_record_set"),
+        promotionPhase: "phase_two_package_export",
+        promotionPhaseLabel: humanizeMemoryBoundaryPromotionPhase("phase_two_package_export"),
+        promotionMutability: input.completionPackage.hasOpenGovernanceItems
+          ? "replaceable_until_board_closure"
+          : "stable_snapshot",
+        promotionMutabilityLabel: humanizeMemoryBoundaryPromotionMutability(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "replaceable_until_board_closure"
+            : "stable_snapshot"
+        ),
         promotionActionDescription: input.completionPackage.hasOpenGovernanceItems
           ? "Board closure still gates this packaged deliverable before any later tenant export action can apply."
           : "This packaged deliverable is ready to sit behind a later bounded tenant export action.",
@@ -4304,6 +4387,36 @@ function buildMemoryBoundaryView(input: {
   const boardClosureActionFamilyCount = exportReadyItems.filter(
     (item) => item.promotionActionFamily === "board_closure_before_export"
   ).length;
+  const noAssemblyShapeCount = operationalItems.filter(
+    (item) => item.assemblyShape === "none_runtime_only"
+  ).length;
+  const standaloneExportRecordCount = exportReadyItems.filter(
+    (item) => item.assemblyShape === "standalone_export_record"
+  ).length;
+  const packageRecordSetCount = exportReadyItems.filter(
+    (item) => item.assemblyShape === "package_record_set"
+  ).length;
+  const noExportPhaseCount = operationalItems.filter(
+    (item) => item.promotionPhase === "not_exported_runtime"
+  ).length;
+  const phaseOneExportCount = exportReadyItems.filter(
+    (item) => item.promotionPhase === "phase_one_governance_history"
+  ).length;
+  const phaseTwoExportCount = exportReadyItems.filter(
+    (item) => item.promotionPhase === "phase_two_package_export"
+  ).length;
+  const runtimeMutableCount = operationalItems.filter(
+    (item) => item.promotionMutability === "runtime_mutable"
+  ).length;
+  const appendOnlyHistoryCount = exportReadyItems.filter(
+    (item) => item.promotionMutability === "append_only_history"
+  ).length;
+  const replaceableSnapshotCount = exportReadyItems.filter(
+    (item) => item.promotionMutability === "replaceable_until_board_closure"
+  ).length;
+  const stableSnapshotCount = exportReadyItems.filter(
+    (item) => item.promotionMutability === "stable_snapshot"
+  ).length;
 
   return {
     summary:
@@ -4333,6 +4446,16 @@ function buildMemoryBoundaryView(input: {
     noPromotionActionCount,
     tenantExportActionFamilyCount,
     boardClosureActionFamilyCount,
+    noAssemblyShapeCount,
+    standaloneExportRecordCount,
+    packageRecordSetCount,
+    noExportPhaseCount,
+    phaseOneExportCount,
+    phaseTwoExportCount,
+    runtimeMutableCount,
+    appendOnlyHistoryCount,
+    replaceableSnapshotCount,
+    stableSnapshotCount,
     roleSummary:
       packagedWaitingCount > 0
         ? `${governanceReadyCount} governance record candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} ready now, and ${packagedWaitingCount} packaged output candidate${packagedWaitingCount === 1 ? "" : "s"} ${packagedWaitingCount === 1 ? "still waits" : "still wait"} on board closure.`
@@ -4371,6 +4494,20 @@ function buildMemoryBoundaryView(input: {
       boardClosureActionFamilyCount > 0
         ? `${noPromotionActionCount} runtime bucket${noPromotionActionCount === 1 ? " exposes" : "s expose"} no promotion action, ${tenantExportActionFamilyCount} export candidate bucket${tenantExportActionFamilyCount === 1 ? " sits" : "s sit"} in the tenant export family, and ${boardClosureActionFamilyCount} bucket${boardClosureActionFamilyCount === 1 ? " remains" : "s remain"} in the board-closure-first family.`
         : `${noPromotionActionCount} runtime bucket${noPromotionActionCount === 1 ? " exposes" : "s expose"} no promotion action, and ${tenantExportActionFamilyCount} export candidate bucket${tenantExportActionFamilyCount === 1 ? " sits" : "s sit"} in the tenant export family.`,
+    assemblySummary:
+      packageRecordSetCount > 0
+        ? `${noAssemblyShapeCount} runtime bucket${noAssemblyShapeCount === 1 ? " has" : "s have"} no export assembly, ${standaloneExportRecordCount} export candidate bucket${standaloneExportRecordCount === 1 ? " is" : "s are"} ready as standalone export records, and ${packageRecordSetCount} bucket${packageRecordSetCount === 1 ? " still belongs" : "s still belong"} to a package record set after board closure.`
+        : `${noAssemblyShapeCount} runtime bucket${noAssemblyShapeCount === 1 ? " has" : "s have"} no export assembly, and ${standaloneExportRecordCount} export candidate bucket${standaloneExportRecordCount === 1 ? " is" : "s are"} ready as standalone export records.`,
+    phaseSummary:
+      phaseTwoExportCount > 0
+        ? `${noExportPhaseCount} runtime bucket${noExportPhaseCount === 1 ? " has" : "s have"} no export phase, ${phaseOneExportCount} export candidate bucket${phaseOneExportCount === 1 ? " is" : "s are"} ready in the phase-one export lane, and ${phaseTwoExportCount} bucket${phaseTwoExportCount === 1 ? " still waits" : "s still wait"} in the phase-two package export lane.`
+        : `${noExportPhaseCount} runtime bucket${noExportPhaseCount === 1 ? " has" : "s have"} no export phase, and ${phaseOneExportCount} export candidate bucket${phaseOneExportCount === 1 ? " is" : "s are"} ready in the phase-one export lane.`,
+    mutabilitySummary:
+      replaceableSnapshotCount > 0
+        ? `${runtimeMutableCount} runtime bucket${runtimeMutableCount === 1 ? " stays" : "s stay"} runtime mutable, ${appendOnlyHistoryCount} export candidate bucket${appendOnlyHistoryCount === 1 ? " is" : "s are"} append-only history, and ${replaceableSnapshotCount} bucket${replaceableSnapshotCount === 1 ? " still behaves" : "s still behave"} as replaceable package snapshots until board closure.`
+        : stableSnapshotCount > 0
+        ? `${runtimeMutableCount} runtime bucket${runtimeMutableCount === 1 ? " stays" : "s stay"} runtime mutable, ${appendOnlyHistoryCount} export candidate bucket${appendOnlyHistoryCount === 1 ? " is" : "s are"} append-only history, and ${stableSnapshotCount} bucket${stableSnapshotCount === 1 ? " is" : "s are"} now stable package snapshots.`
+        : `${runtimeMutableCount} runtime bucket${runtimeMutableCount === 1 ? " stays" : "s stay"} runtime mutable, and ${appendOnlyHistoryCount} export candidate bucket${appendOnlyHistoryCount === 1 ? " is" : "s are"} append-only history.`,
     partitions: {
       runtime: {
         itemCount: operationalItems.length,
@@ -4591,6 +4728,47 @@ function humanizeMemoryBoundaryPromotionActionFamily(family: HarnessMemoryBounda
       return "Board closure first";
     default:
       return humanizeLabel(family);
+  }
+}
+
+function humanizeMemoryBoundaryAssemblyShape(shape: HarnessMemoryBoundaryAssemblyShape) {
+  switch (shape) {
+    case "none_runtime_only":
+      return "No export assembly";
+    case "standalone_export_record":
+      return "Standalone export record";
+    case "package_record_set":
+      return "Package record set";
+    default:
+      return shape;
+  }
+}
+
+function humanizeMemoryBoundaryPromotionPhase(phase: HarnessMemoryBoundaryPromotionPhase) {
+  switch (phase) {
+    case "not_exported_runtime":
+      return "No export phase";
+    case "phase_one_governance_history":
+      return "Phase-one export";
+    case "phase_two_package_export":
+      return "Phase-two package export";
+    default:
+      return phase;
+  }
+}
+
+function humanizeMemoryBoundaryPromotionMutability(mutability: HarnessMemoryBoundaryPromotionMutability) {
+  switch (mutability) {
+    case "runtime_mutable":
+      return "Runtime mutable";
+    case "append_only_history":
+      return "Append-only history";
+    case "replaceable_until_board_closure":
+      return "Replaceable until board closure";
+    case "stable_snapshot":
+      return "Stable snapshot";
+    default:
+      return mutability;
   }
 }
 

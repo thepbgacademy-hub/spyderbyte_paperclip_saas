@@ -185,6 +185,12 @@ describe("harness board client", () => {
           "2 runtime buckets have no promotion step, 2 export candidate buckets are ready for a later tenant export step, and 2 buckets still need board closure before tenant export becomes the next step.",
         actionFamilySummary:
           "2 runtime buckets expose no promotion action, 2 export candidate buckets sit in the tenant export family, and 2 buckets remain in the board-closure-first family.",
+        assemblySummary:
+          "2 runtime buckets have no export assembly, 2 export candidate buckets are ready as standalone export records, and 2 buckets still belong to a package record set after board closure.",
+        phaseSummary:
+          "2 runtime buckets have no export phase, 2 export candidate buckets are ready in the phase-one export lane, and 2 buckets still wait in the phase-two package export lane.",
+        mutabilitySummary:
+          "2 runtime buckets stay runtime mutable, 2 export candidate buckets are append-only history, and 2 buckets still behave as replaceable package snapshots until board closure.",
         promotionSummary:
           "2 runtime memory buckets never promote, 2 candidate buckets are ready for explicit export later, and 2 candidate buckets still wait on board closure first.",
         recordTargetSummary:
@@ -215,7 +221,10 @@ describe("harness board client", () => {
             recordTarget: "none_runtime_only",
             promotionNextStep: "none_runtime_only"
             ,
-            promotionActionFamily: "none_runtime_only"
+            promotionActionFamily: "none_runtime_only",
+            assemblyShape: "none_runtime_only",
+            promotionPhase: "not_exported_runtime",
+            promotionMutability: "runtime_mutable"
           })
         ]),
         exportReadyItems: expect.arrayContaining([
@@ -234,7 +243,10 @@ describe("harness board client", () => {
             recordTarget: "governance_history_record",
             promotionNextStep: "tenant_export_available"
             ,
-            promotionActionFamily: "tenant_export_candidate"
+            promotionActionFamily: "tenant_export_candidate",
+            assemblyShape: "standalone_export_record",
+            promotionPhase: "phase_one_governance_history",
+            promotionMutability: "append_only_history"
           })
         ])
       })
@@ -291,6 +303,15 @@ describe("harness board client", () => {
     );
     expect(board.memoryBoundary.actionFamilySummary).toBe(
       "2 runtime buckets expose no promotion action, 2 export candidate buckets sit in the tenant export family, and 2 buckets remain in the board-closure-first family."
+    );
+    expect(board.memoryBoundary.assemblySummary).toBe(
+      "2 runtime buckets have no export assembly, 2 export candidate buckets are ready as standalone export records, and 2 buckets still belong to a package record set after board closure."
+    );
+    expect(board.memoryBoundary.phaseSummary).toBe(
+      "2 runtime buckets have no export phase, 2 export candidate buckets are ready in the phase-one export lane, and 2 buckets still wait in the phase-two package export lane."
+    );
+    expect(board.memoryBoundary.mutabilitySummary).toBe(
+      "2 runtime buckets stay runtime mutable, 2 export candidate buckets are append-only history, and 2 buckets still behave as replaceable package snapshots until board closure."
     );
     expect(board.memoryBoundary.readyNowCount).toBe(2);
     expect(board.memoryBoundary.waitingOnBoardClosureCount).toBe(2);
@@ -349,6 +370,15 @@ describe("harness board client", () => {
     expect(
       board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.promotionActionFamilyLabel
     ).toBe("Board closure first");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.assemblyShapeLabel
+    ).toBe("Package record set");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.promotionPhaseLabel
+    ).toBe("Phase-two package export");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.promotionMutabilityLabel
+    ).toBe("Replaceable until board closure");
   });
 
   it("derives governance-ready partition counts from readiness, not only from role membership", async () => {

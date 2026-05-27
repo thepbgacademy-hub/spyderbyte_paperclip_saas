@@ -356,11 +356,27 @@ const fallbackBoardBase: HarnessBoardResponse = {
     noPromotionActionCount: 2,
     tenantExportActionFamilyCount: 2,
     boardClosureActionFamilyCount: 2,
+    noAssemblyShapeCount: 2,
+    standaloneExportRecordCount: 2,
+    packageRecordSetCount: 2,
+    noExportPhaseCount: 2,
+    phaseOneExportCount: 2,
+    phaseTwoExportCount: 2,
+    runtimeMutableCount: 2,
+    appendOnlyHistoryCount: 2,
+    replaceableSnapshotCount: 2,
+    stableSnapshotCount: 0,
     roleSummary: "2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure.",
     nextStepSummary:
       "2 runtime buckets have no promotion step, 2 export candidate buckets are ready for a later tenant export step, and 2 buckets still need board closure before tenant export becomes the next step.",
     actionFamilySummary:
       "2 runtime buckets expose no promotion action, 2 export candidate buckets sit in the tenant export family, and 2 buckets remain in the board-closure-first family.",
+    assemblySummary:
+      "2 runtime buckets have no export assembly, 2 export candidate buckets are ready as standalone export records, and 2 buckets still belong to a package record set after board closure.",
+    phaseSummary:
+      "2 runtime buckets have no export phase, 2 export candidate buckets are ready in the phase-one export lane, and 2 buckets still wait in the phase-two package export lane.",
+    mutabilitySummary:
+      "2 runtime buckets stay runtime mutable, 2 export candidate buckets are append-only history, and 2 buckets still behave as replaceable package snapshots until board closure.",
     partitions: {
       runtime: {
         itemCount: 2,
@@ -412,6 +428,12 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionNextStepLabel: "No promotion step",
         promotionActionFamily: "none_runtime_only",
         promotionActionFamilyLabel: "No promotion action",
+        assemblyShape: "none_runtime_only",
+        assemblyShapeLabel: "No export assembly",
+        promotionPhase: "not_exported_runtime",
+        promotionPhaseLabel: "No export phase",
+        promotionMutability: "runtime_mutable",
+        promotionMutabilityLabel: "Runtime mutable",
         promotionActionDescription: "No export action applies. This runtime memory stays inside Wealth Factory orchestration."
       },
       {
@@ -450,6 +472,12 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionNextStepLabel: "No promotion step",
         promotionActionFamily: "none_runtime_only",
         promotionActionFamilyLabel: "No promotion action",
+        assemblyShape: "none_runtime_only",
+        assemblyShapeLabel: "No export assembly",
+        promotionPhase: "not_exported_runtime",
+        promotionPhaseLabel: "No export phase",
+        promotionMutability: "runtime_mutable",
+        promotionMutabilityLabel: "Runtime mutable",
         promotionActionDescription: "No export action applies. This runtime attention state stays inside Wealth Factory orchestration."
       }
     ],
@@ -490,6 +518,12 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionNextStepLabel: "Tenant export available",
         promotionActionFamily: "tenant_export_candidate",
         promotionActionFamilyLabel: "Tenant export family",
+        assemblyShape: "standalone_export_record",
+        assemblyShapeLabel: "Standalone export record",
+        promotionPhase: "phase_one_governance_history",
+        promotionPhaseLabel: "Phase-one export",
+        promotionMutability: "append_only_history",
+        promotionMutabilityLabel: "Append-only history",
         promotionActionDescription: "This governance history is ready to sit behind a later bounded tenant export action."
       },
       {
@@ -528,6 +562,12 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionNextStepLabel: "Tenant export available",
         promotionActionFamily: "tenant_export_candidate",
         promotionActionFamilyLabel: "Tenant export family",
+        assemblyShape: "standalone_export_record",
+        assemblyShapeLabel: "Standalone export record",
+        promotionPhase: "phase_one_governance_history",
+        promotionPhaseLabel: "Phase-one export",
+        promotionMutability: "append_only_history",
+        promotionMutabilityLabel: "Append-only history",
         promotionActionDescription:
           "This implemented follow-through is ready to sit behind a later bounded tenant export action."
       },
@@ -567,6 +607,12 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionNextStepLabel: "Board closure, then tenant export",
         promotionActionFamily: "board_closure_before_export",
         promotionActionFamilyLabel: "Board closure first",
+        assemblyShape: "package_record_set",
+        assemblyShapeLabel: "Package record set",
+        promotionPhase: "phase_two_package_export",
+        promotionPhaseLabel: "Phase-two package export",
+        promotionMutability: "replaceable_until_board_closure",
+        promotionMutabilityLabel: "Replaceable until board closure",
         promotionActionDescription:
           "Board closure still gates this package governance memory before any later tenant export action can apply.",
         nextEligibleSummary:
@@ -608,6 +654,12 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionNextStepLabel: "Board closure, then tenant export",
         promotionActionFamily: "board_closure_before_export",
         promotionActionFamilyLabel: "Board closure first",
+        assemblyShape: "package_record_set",
+        assemblyShapeLabel: "Package record set",
+        promotionPhase: "phase_two_package_export",
+        promotionPhaseLabel: "Phase-two package export",
+        promotionMutability: "replaceable_until_board_closure",
+        promotionMutabilityLabel: "Replaceable until board closure",
         promotionActionDescription:
           "Board closure still gates this packaged deliverable before any later tenant export action can apply.",
         nextEligibleSummary:
@@ -982,6 +1034,53 @@ function humanizeMemoryBoundaryPromotionActionFamily(
   }
 }
 
+function humanizeMemoryBoundaryAssemblyShape(
+  shape: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["assemblyShape"]>
+) {
+  switch (shape) {
+    case "none_runtime_only":
+      return "No export assembly";
+    case "standalone_export_record":
+      return "Standalone export record";
+    case "package_record_set":
+      return "Package record set";
+    default:
+      return shape;
+  }
+}
+
+function humanizeMemoryBoundaryPromotionPhase(
+  phase: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["promotionPhase"]>
+) {
+  switch (phase) {
+    case "not_exported_runtime":
+      return "No export phase";
+    case "phase_one_governance_history":
+      return "Phase-one export";
+    case "phase_two_package_export":
+      return "Phase-two package export";
+    default:
+      return phase;
+  }
+}
+
+function humanizeMemoryBoundaryPromotionMutability(
+  mutability: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["promotionMutability"]>
+) {
+  switch (mutability) {
+    case "runtime_mutable":
+      return "Runtime mutable";
+    case "append_only_history":
+      return "Append-only history";
+    case "replaceable_until_board_closure":
+      return "Replaceable until board closure";
+    case "stable_snapshot":
+      return "Stable snapshot";
+    default:
+      return mutability;
+  }
+}
+
 function inferMemoryBoundaryReadiness(
   itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"],
   board: Pick<HarnessBoardResponse, "completionPackage">
@@ -1246,6 +1345,62 @@ function inferMemoryBoundaryPromotionActionFamily(
   }
 }
 
+function inferMemoryBoundaryAssemblyShape(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"]
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["assemblyShape"] {
+  switch (itemId) {
+    case "lane_continuity":
+    case "attention_state":
+      return "none_runtime_only";
+    case "governance_decisions":
+    case "implemented_actions":
+      return "standalone_export_record";
+    case "package_governance":
+    case "package_deliverables":
+      return "package_record_set";
+    default:
+      return "standalone_export_record";
+  }
+}
+
+function inferMemoryBoundaryPromotionPhase(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"]
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["promotionPhase"] {
+  switch (itemId) {
+    case "lane_continuity":
+    case "attention_state":
+      return "not_exported_runtime";
+    case "governance_decisions":
+    case "implemented_actions":
+      return "phase_one_governance_history";
+    case "package_governance":
+    case "package_deliverables":
+      return "phase_two_package_export";
+    default:
+      return "phase_one_governance_history";
+  }
+}
+
+function inferMemoryBoundaryPromotionMutability(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"],
+  board: Pick<HarnessBoardResponse, "completionPackage">
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["promotionMutability"] {
+  switch (itemId) {
+    case "lane_continuity":
+    case "attention_state":
+      return "runtime_mutable";
+    case "package_governance":
+    case "package_deliverables":
+      return board.completionPackage?.hasOpenGovernanceItems
+        ? "replaceable_until_board_closure"
+        : "stable_snapshot";
+    case "governance_decisions":
+    case "implemented_actions":
+    default:
+      return "append_only_history";
+  }
+}
+
 function normalizeMemoryBoundary(
   memoryBoundary: HarnessBoardResponse["memoryBoundary"],
   board: Pick<HarnessBoardResponse, "completionPackage">
@@ -1266,6 +1421,9 @@ function normalizeMemoryBoundary(
     const promotionState = item.promotionState ?? inferMemoryBoundaryPromotionState(item.id, board);
     const promotionNextStep = item.promotionNextStep ?? inferMemoryBoundaryPromotionNextStep(item.id, board);
     const promotionActionFamily = item.promotionActionFamily ?? inferMemoryBoundaryPromotionActionFamily(item.id, board);
+    const assemblyShape = item.assemblyShape ?? inferMemoryBoundaryAssemblyShape(item.id);
+    const promotionPhase = item.promotionPhase ?? inferMemoryBoundaryPromotionPhase(item.id);
+    const promotionMutability = item.promotionMutability ?? inferMemoryBoundaryPromotionMutability(item.id, board);
     return {
       ...item,
       readiness,
@@ -1308,6 +1466,15 @@ function normalizeMemoryBoundary(
       promotionActionFamily,
       promotionActionFamilyLabel:
         item.promotionActionFamilyLabel ?? humanizeMemoryBoundaryPromotionActionFamily(promotionActionFamily),
+      assemblyShape,
+      assemblyShapeLabel:
+        item.assemblyShapeLabel ?? humanizeMemoryBoundaryAssemblyShape(assemblyShape),
+      promotionPhase,
+      promotionPhaseLabel:
+        item.promotionPhaseLabel ?? humanizeMemoryBoundaryPromotionPhase(promotionPhase),
+      promotionMutability,
+      promotionMutabilityLabel:
+        item.promotionMutabilityLabel ?? humanizeMemoryBoundaryPromotionMutability(promotionMutability),
       promotionActionDescription:
         item.promotionActionDescription
         ?? (promotionActionFamily === "none_runtime_only"
@@ -1333,6 +1500,9 @@ function normalizeMemoryBoundary(
     const promotionState = item.promotionState ?? inferMemoryBoundaryPromotionState(item.id, board);
     const promotionNextStep = item.promotionNextStep ?? inferMemoryBoundaryPromotionNextStep(item.id, board);
     const promotionActionFamily = item.promotionActionFamily ?? inferMemoryBoundaryPromotionActionFamily(item.id, board);
+    const assemblyShape = item.assemblyShape ?? inferMemoryBoundaryAssemblyShape(item.id);
+    const promotionPhase = item.promotionPhase ?? inferMemoryBoundaryPromotionPhase(item.id);
+    const promotionMutability = item.promotionMutability ?? inferMemoryBoundaryPromotionMutability(item.id, board);
     const nextEligibleSummary = item.nextEligibleSummary
       ?? (readiness === "after_board_closes"
         ? item.id === "package_governance"
@@ -1383,6 +1553,15 @@ function normalizeMemoryBoundary(
       promotionActionFamily,
       promotionActionFamilyLabel:
         item.promotionActionFamilyLabel ?? humanizeMemoryBoundaryPromotionActionFamily(promotionActionFamily),
+      assemblyShape,
+      assemblyShapeLabel:
+        item.assemblyShapeLabel ?? humanizeMemoryBoundaryAssemblyShape(assemblyShape),
+      promotionPhase,
+      promotionPhaseLabel:
+        item.promotionPhaseLabel ?? humanizeMemoryBoundaryPromotionPhase(promotionPhase),
+      promotionMutability,
+      promotionMutabilityLabel:
+        item.promotionMutabilityLabel ?? humanizeMemoryBoundaryPromotionMutability(promotionMutability),
       promotionActionDescription:
         item.promotionActionDescription
         ?? (promotionActionFamily === "board_closure_before_export"
@@ -1429,6 +1608,26 @@ function normalizeMemoryBoundary(
     ?? exportReadyItems.filter((item) => item.promotionActionFamily === "tenant_export_candidate").length;
   const boardClosureActionFamilyCount = memoryBoundary.boardClosureActionFamilyCount
     ?? exportReadyItems.filter((item) => item.promotionActionFamily === "board_closure_before_export").length;
+  const noAssemblyShapeCount = memoryBoundary.noAssemblyShapeCount
+    ?? operationalItems.filter((item) => item.assemblyShape === "none_runtime_only").length;
+  const standaloneExportRecordCount = memoryBoundary.standaloneExportRecordCount
+    ?? exportReadyItems.filter((item) => item.assemblyShape === "standalone_export_record").length;
+  const packageRecordSetCount = memoryBoundary.packageRecordSetCount
+    ?? exportReadyItems.filter((item) => item.assemblyShape === "package_record_set").length;
+  const noExportPhaseCount = memoryBoundary.noExportPhaseCount
+    ?? operationalItems.filter((item) => item.promotionPhase === "not_exported_runtime").length;
+  const phaseOneExportCount = memoryBoundary.phaseOneExportCount
+    ?? exportReadyItems.filter((item) => item.promotionPhase === "phase_one_governance_history").length;
+  const phaseTwoExportCount = memoryBoundary.phaseTwoExportCount
+    ?? exportReadyItems.filter((item) => item.promotionPhase === "phase_two_package_export").length;
+  const runtimeMutableCount = memoryBoundary.runtimeMutableCount
+    ?? operationalItems.filter((item) => item.promotionMutability === "runtime_mutable").length;
+  const appendOnlyHistoryCount = memoryBoundary.appendOnlyHistoryCount
+    ?? exportReadyItems.filter((item) => item.promotionMutability === "append_only_history").length;
+  const replaceableSnapshotCount = memoryBoundary.replaceableSnapshotCount
+    ?? exportReadyItems.filter((item) => item.promotionMutability === "replaceable_until_board_closure").length;
+  const stableSnapshotCount = memoryBoundary.stableSnapshotCount
+    ?? exportReadyItems.filter((item) => item.promotionMutability === "stable_snapshot").length;
 
   return {
     ...memoryBoundary,
@@ -1456,6 +1655,16 @@ function normalizeMemoryBoundary(
     noPromotionActionCount,
     tenantExportActionFamilyCount,
     boardClosureActionFamilyCount,
+    noAssemblyShapeCount,
+    standaloneExportRecordCount,
+    packageRecordSetCount,
+    noExportPhaseCount,
+    phaseOneExportCount,
+    phaseTwoExportCount,
+    runtimeMutableCount,
+    appendOnlyHistoryCount,
+    replaceableSnapshotCount,
+    stableSnapshotCount,
     roleSummary:
       memoryBoundary.roleSummary
       ?? (packagedWaitingCount > 0
@@ -1504,6 +1713,23 @@ function normalizeMemoryBoundary(
       ?? (boardClosureActionFamilyCount > 0
         ? `${noPromotionActionCount} runtime bucket${noPromotionActionCount === 1 ? " exposes" : "s expose"} no promotion action, ${tenantExportActionFamilyCount} export candidate bucket${tenantExportActionFamilyCount === 1 ? " sits" : "s sit"} in the tenant export family, and ${boardClosureActionFamilyCount} bucket${boardClosureActionFamilyCount === 1 ? " remains" : "s remain"} in the board-closure-first family.`
         : `${noPromotionActionCount} runtime bucket${noPromotionActionCount === 1 ? " exposes" : "s expose"} no promotion action, and ${tenantExportActionFamilyCount} export candidate bucket${tenantExportActionFamilyCount === 1 ? " sits" : "s sit"} in the tenant export family.`),
+    assemblySummary:
+      memoryBoundary.assemblySummary
+      ?? (packageRecordSetCount > 0
+        ? `${noAssemblyShapeCount} runtime bucket${noAssemblyShapeCount === 1 ? " has" : "s have"} no export assembly, ${standaloneExportRecordCount} export candidate bucket${standaloneExportRecordCount === 1 ? " is" : "s are"} ready as standalone export records, and ${packageRecordSetCount} bucket${packageRecordSetCount === 1 ? " still belongs" : "s still belong"} to a package record set after board closure.`
+        : `${noAssemblyShapeCount} runtime bucket${noAssemblyShapeCount === 1 ? " has" : "s have"} no export assembly, and ${standaloneExportRecordCount} export candidate bucket${standaloneExportRecordCount === 1 ? " is" : "s are"} ready as standalone export records.`),
+    phaseSummary:
+      memoryBoundary.phaseSummary
+      ?? (phaseTwoExportCount > 0
+        ? `${noExportPhaseCount} runtime bucket${noExportPhaseCount === 1 ? " has" : "s have"} no export phase, ${phaseOneExportCount} export candidate bucket${phaseOneExportCount === 1 ? " is" : "s are"} ready in the phase-one export lane, and ${phaseTwoExportCount} bucket${phaseTwoExportCount === 1 ? " still waits" : "s still wait"} in the phase-two package export lane.`
+        : `${noExportPhaseCount} runtime bucket${noExportPhaseCount === 1 ? " has" : "s have"} no export phase, and ${phaseOneExportCount} export candidate bucket${phaseOneExportCount === 1 ? " is" : "s are"} ready in the phase-one export lane.`),
+    mutabilitySummary:
+      memoryBoundary.mutabilitySummary
+      ?? (replaceableSnapshotCount > 0
+        ? `${runtimeMutableCount} runtime bucket${runtimeMutableCount === 1 ? " stays" : "s stay"} runtime mutable, ${appendOnlyHistoryCount} export candidate bucket${appendOnlyHistoryCount === 1 ? " is" : "s are"} append-only history, and ${replaceableSnapshotCount} bucket${replaceableSnapshotCount === 1 ? " still behaves" : "s still behave"} as replaceable package snapshots until board closure.`
+        : stableSnapshotCount > 0
+        ? `${runtimeMutableCount} runtime bucket${runtimeMutableCount === 1 ? " stays" : "s stay"} runtime mutable, ${appendOnlyHistoryCount} export candidate bucket${appendOnlyHistoryCount === 1 ? " is" : "s are"} append-only history, and ${stableSnapshotCount} bucket${stableSnapshotCount === 1 ? " is" : "s are"} now stable package snapshots.`
+        : `${runtimeMutableCount} runtime bucket${runtimeMutableCount === 1 ? " stays" : "s stay"} runtime mutable, and ${appendOnlyHistoryCount} export candidate bucket${appendOnlyHistoryCount === 1 ? " is" : "s are"} append-only history.`),
     partitions: memoryBoundary.partitions ?? {
       runtime: {
         itemCount: operationalItems.length,
@@ -1573,6 +1799,12 @@ function normalizeBoardResponse(
       promotionNextStepLabel: "Tenant export available",
       promotionActionFamily: "tenant_export_candidate",
       promotionActionFamilyLabel: "Tenant export family",
+      promotionPhase: "phase_one_governance_history",
+      promotionPhaseLabel: "Phase-one export",
+      promotionMutability: "append_only_history",
+      promotionMutabilityLabel: "Append-only history",
+      assemblyShape: "standalone_export_record",
+      assemblyShapeLabel: "Standalone export record",
       promotionActionDescription: "This governance history is ready to sit behind a later bounded tenant export action."
     },
     {
@@ -1611,6 +1843,12 @@ function normalizeBoardResponse(
       promotionNextStepLabel: "Tenant export available",
       promotionActionFamily: "tenant_export_candidate",
       promotionActionFamilyLabel: "Tenant export family",
+      promotionPhase: "phase_one_governance_history",
+      promotionPhaseLabel: "Phase-one export",
+      promotionMutability: "append_only_history",
+      promotionMutabilityLabel: "Append-only history",
+      assemblyShape: "standalone_export_record",
+      assemblyShapeLabel: "Standalone export record",
       promotionActionDescription:
         "This implemented follow-through is ready to sit behind a later bounded tenant export action."
     },
@@ -1686,6 +1924,16 @@ function normalizeBoardResponse(
         promotionActionFamilyLabel: board.completionPackage?.hasOpenGovernanceItems
           ? "Board closure first"
           : "Tenant export family",
+        promotionPhase: "phase_two_package_export",
+        promotionPhaseLabel: "Phase-two package export",
+        promotionMutability: board.completionPackage?.hasOpenGovernanceItems
+          ? "replaceable_until_board_closure"
+          : "stable_snapshot",
+        promotionMutabilityLabel: board.completionPackage?.hasOpenGovernanceItems
+          ? "Replaceable until board closure"
+          : "Stable snapshot",
+        assemblyShape: "package_record_set",
+        assemblyShapeLabel: "Package record set",
         promotionActionDescription: board.completionPackage?.hasOpenGovernanceItems
           ? "Board closure still gates this package governance memory before any later tenant export action can apply."
           : "This package governance memory is ready to sit behind a later bounded tenant export action.",
@@ -1768,6 +2016,16 @@ function normalizeBoardResponse(
         promotionActionFamilyLabel: board.completionPackage?.hasOpenGovernanceItems
           ? "Board closure first"
           : "Tenant export family",
+        promotionPhase: "phase_two_package_export",
+        promotionPhaseLabel: "Phase-two package export",
+        promotionMutability: board.completionPackage?.hasOpenGovernanceItems
+          ? "replaceable_until_board_closure"
+          : "stable_snapshot",
+        promotionMutabilityLabel: board.completionPackage?.hasOpenGovernanceItems
+          ? "Replaceable until board closure"
+          : "Stable snapshot",
+        assemblyShape: "package_record_set",
+        assemblyShapeLabel: "Package record set",
         promotionActionDescription: board.completionPackage?.hasOpenGovernanceItems
           ? "Board closure still gates this packaged deliverable before any later tenant export action can apply."
           : "This packaged deliverable is ready to sit behind a later bounded tenant export action.",
@@ -1819,6 +2077,16 @@ function normalizeBoardResponse(
       noPromotionActionCount: 2,
       tenantExportActionFamilyCount: exportReadyItems.filter((item) => item.promotionActionFamily === "tenant_export_candidate").length,
       boardClosureActionFamilyCount: exportReadyItems.filter((item) => item.promotionActionFamily === "board_closure_before_export").length,
+      noAssemblyShapeCount: 2,
+      standaloneExportRecordCount: exportReadyItems.filter((item) => item.assemblyShape === "standalone_export_record").length,
+      packageRecordSetCount: exportReadyItems.filter((item) => item.assemblyShape === "package_record_set").length,
+      noExportPhaseCount: 2,
+      phaseOneExportCount: exportReadyItems.filter((item) => item.promotionPhase === "phase_one_governance_history").length,
+      phaseTwoExportCount: exportReadyItems.filter((item) => item.promotionPhase === "phase_two_package_export").length,
+      runtimeMutableCount: 2,
+      appendOnlyHistoryCount: exportReadyItems.filter((item) => item.promotionMutability === "append_only_history").length,
+      replaceableSnapshotCount: exportReadyItems.filter((item) => item.promotionMutability === "replaceable_until_board_closure").length,
+      stableSnapshotCount: exportReadyItems.filter((item) => item.promotionMutability === "stable_snapshot").length,
       roleSummary:
         packagedWaitingCount > 0
           ? `${governanceReadyCount} governance record candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} ready now, and ${packagedWaitingCount} packaged output candidate${packagedWaitingCount === 1 ? "" : "s"} ${packagedWaitingCount === 1 ? "still waits" : "still wait"} on board closure.`
@@ -1853,6 +2121,18 @@ function normalizeBoardResponse(
         waitingOnBoardClosureCount > 0
           ? `2 runtime buckets expose no promotion action, ${exportReadyItems.filter((item) => item.promotionActionFamily === "tenant_export_candidate").length} export candidate bucket${exportReadyItems.filter((item) => item.promotionActionFamily === "tenant_export_candidate").length === 1 ? " sits" : "s sit"} in the tenant export family, and ${exportReadyItems.filter((item) => item.promotionActionFamily === "board_closure_before_export").length} bucket${exportReadyItems.filter((item) => item.promotionActionFamily === "board_closure_before_export").length === 1 ? " remains" : "s remain"} in the board-closure-first family.`
           : `2 runtime buckets expose no promotion action, and ${exportReadyItems.filter((item) => item.promotionActionFamily === "tenant_export_candidate").length} export candidate bucket${exportReadyItems.filter((item) => item.promotionActionFamily === "tenant_export_candidate").length === 1 ? " sits" : "s sit"} in the tenant export family.`,
+      assemblySummary:
+        waitingOnBoardClosureCount > 0
+          ? `2 runtime buckets have no export assembly, ${exportReadyItems.filter((item) => item.assemblyShape === "standalone_export_record").length} export candidate bucket${exportReadyItems.filter((item) => item.assemblyShape === "standalone_export_record").length === 1 ? " is" : "s are"} ready as standalone export records, and ${exportReadyItems.filter((item) => item.assemblyShape === "package_record_set").length} bucket${exportReadyItems.filter((item) => item.assemblyShape === "package_record_set").length === 1 ? " still belongs" : "s still belong"} to a package record set after board closure.`
+          : `2 runtime buckets have no export assembly, and ${exportReadyItems.filter((item) => item.assemblyShape === "standalone_export_record").length} export candidate bucket${exportReadyItems.filter((item) => item.assemblyShape === "standalone_export_record").length === 1 ? " is" : "s are"} ready as standalone export records.`,
+      phaseSummary:
+        waitingOnBoardClosureCount > 0
+          ? `2 runtime buckets have no export phase, ${exportReadyItems.filter((item) => item.promotionPhase === "phase_one_governance_history").length} export candidate bucket${exportReadyItems.filter((item) => item.promotionPhase === "phase_one_governance_history").length === 1 ? " is" : "s are"} ready in the phase-one export lane, and ${exportReadyItems.filter((item) => item.promotionPhase === "phase_two_package_export").length} bucket${exportReadyItems.filter((item) => item.promotionPhase === "phase_two_package_export").length === 1 ? " still waits" : "s still wait"} in the phase-two package export lane.`
+          : `2 runtime buckets have no export phase, and ${exportReadyItems.filter((item) => item.promotionPhase === "phase_one_governance_history").length} export candidate bucket${exportReadyItems.filter((item) => item.promotionPhase === "phase_one_governance_history").length === 1 ? " is" : "s are"} ready in the phase-one export lane.`,
+      mutabilitySummary:
+        waitingOnBoardClosureCount > 0
+          ? `2 runtime buckets stay runtime mutable, ${exportReadyItems.filter((item) => item.promotionMutability === "append_only_history").length} export candidate bucket${exportReadyItems.filter((item) => item.promotionMutability === "append_only_history").length === 1 ? " is" : "s are"} append-only history, and ${exportReadyItems.filter((item) => item.promotionMutability === "replaceable_until_board_closure").length} bucket${exportReadyItems.filter((item) => item.promotionMutability === "replaceable_until_board_closure").length === 1 ? " still behaves" : "s still behave"} as replaceable package snapshots until board closure.`
+          : `2 runtime buckets stay runtime mutable, ${exportReadyItems.filter((item) => item.promotionMutability === "append_only_history").length} export candidate bucket${exportReadyItems.filter((item) => item.promotionMutability === "append_only_history").length === 1 ? " is" : "s are"} append-only history, and ${exportReadyItems.filter((item) => item.promotionMutability === "stable_snapshot").length} bucket${exportReadyItems.filter((item) => item.promotionMutability === "stable_snapshot").length === 1 ? " is" : "s are"} now stable package snapshots.`,
       stateSummary:
         waitingOnBoardClosureCount > 0
           ? `2 runtime buckets stay runtime-only, ${exportReadyItems.filter((item) => item.promotionState === "ready_for_tenant_export").length} export candidate bucket${exportReadyItems.filter((item) => item.promotionState === "ready_for_tenant_export").length === 1 ? " is" : "s are"} ready for tenant export later, and ${exportReadyItems.filter((item) => item.promotionState === "awaiting_board_closure").length} bucket${exportReadyItems.filter((item) => item.promotionState === "awaiting_board_closure").length === 1 ? " is" : "s are"} still awaiting board closure.`
@@ -1913,6 +2193,12 @@ function normalizeBoardResponse(
           promotionNextStepLabel: "No promotion step",
           promotionActionFamily: "none_runtime_only",
           promotionActionFamilyLabel: "No promotion action",
+          assemblyShape: "none_runtime_only",
+          assemblyShapeLabel: "No export assembly",
+          promotionPhase: "not_exported_runtime",
+          promotionPhaseLabel: "No export phase",
+          promotionMutability: "runtime_mutable",
+          promotionMutabilityLabel: "Runtime mutable",
           promotionActionDescription: "No export action applies. This runtime memory stays inside Wealth Factory orchestration."
         },
         {
@@ -1951,6 +2237,12 @@ function normalizeBoardResponse(
           promotionNextStepLabel: "No promotion step",
           promotionActionFamily: "none_runtime_only",
           promotionActionFamilyLabel: "No promotion action",
+          assemblyShape: "none_runtime_only",
+          assemblyShapeLabel: "No export assembly",
+          promotionPhase: "not_exported_runtime",
+          promotionPhaseLabel: "No export phase",
+          promotionMutability: "runtime_mutable",
+          promotionMutabilityLabel: "Runtime mutable",
           promotionActionDescription: "No export action applies. This runtime attention state stays inside Wealth Factory orchestration."
         }
       ],
