@@ -1610,10 +1610,13 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.waitingOnBoardClosureCount).toEqual(expect.any(Number));
     expect(hydrated.memoryBoundary.governanceReadyCount).toEqual(expect.any(Number));
     expect(hydrated.memoryBoundary.blockedCandidateCount).toEqual(expect.any(Number));
+    expect(hydrated.memoryBoundary.tenantControlledCandidateCount).toEqual(expect.any(Number));
+    expect(hydrated.memoryBoundary.boardControlledCandidateCount).toEqual(expect.any(Number));
     expect(hydrated.memoryBoundary.ownershipSummary).toContain("Wealth Factory-only");
     expect(hydrated.memoryBoundary.promotionSummary).toContain("never promote");
     expect(hydrated.memoryBoundary.recordTargetSummary).toContain("governance history record");
     expect(hydrated.memoryBoundary.blockerSummary).toContain("blocked");
+    expect(hydrated.memoryBoundary.authoritySummary).toContain("tenant-controlled");
     expect(hydrated.memoryBoundary.partitions).toMatchObject({
       runtime: { itemCount: 2 },
       governanceHistoryCandidates: { itemCount: 2 }
@@ -1638,7 +1641,9 @@ describe("harness board service", () => {
           recordTarget: "none_runtime_only",
           recordTargetLabel: "Runtime only",
           promotionBlocker: "not_applicable_runtime_only",
-          promotionBlockerLabel: "Not applicable in runtime"
+          promotionBlockerLabel: "Not applicable in runtime",
+          promotionAuthority: "wealth_factory_runtime_only",
+          promotionAuthorityLabel: "Wealth Factory runtime only"
         })
       ])
     );
@@ -1662,7 +1667,9 @@ describe("harness board service", () => {
           recordTarget: "governance_history_record",
           recordTargetLabel: "Governance history record",
           promotionBlocker: "none_ready_now",
-          promotionBlockerLabel: "No blocker"
+          promotionBlockerLabel: "No blocker",
+          promotionAuthority: "tenant_explicit_export",
+          promotionAuthorityLabel: "Tenant explicit export"
         }),
         expect.objectContaining({
           id: "implemented_actions",
@@ -1682,7 +1689,9 @@ describe("harness board service", () => {
           recordTarget: "governance_history_record",
           recordTargetLabel: "Governance history record",
           promotionBlocker: "none_ready_now",
-          promotionBlockerLabel: "No blocker"
+          promotionBlockerLabel: "No blocker",
+          promotionAuthority: "tenant_explicit_export",
+          promotionAuthorityLabel: "Tenant explicit export"
         })
       ])
     );
