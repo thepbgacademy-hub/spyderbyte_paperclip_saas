@@ -1651,6 +1651,9 @@ describe("harness board UI", () => {
     expect(markup).toContain("Runtime partition");
     expect(markup).toContain("Governance history candidates");
     expect(markup).toContain("Packaged output candidates");
+    expect(markup).toContain("Export candidate groups");
+    expect(markup).toContain("Governance history export");
+    expect(markup).toContain("Package bundle export");
     expect(markup).toContain("2 runtime memory buckets stay live only inside Wealth Factory orchestration.");
     expect(markup).toContain("2 governance history candidates are stable enough for later tenant-owned export.");
     expect(markup).toContain("2 packaged output candidates still wait on board closure before later export.");

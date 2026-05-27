@@ -492,6 +492,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     requestShapeSummary: "Export request-shape guidance is pending the latest board state.",
     confirmationSummary: "Export confirmation guidance is pending the latest board state.",
     recoveryPathSummary: "Export recovery-path guidance is pending the latest board state.",
+    exportCandidateSummary: "Export candidate grouping is pending the latest board state.",
     readyNowCount: 0,
     waitingOnBoardClosureCount: 0,
     governanceReadyCount: 0,
@@ -584,6 +585,9 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     runtimeOnlyRecoveryPathCount: 0,
     retryLatestRecordExportCount: 0,
     rerunAfterBoardClosureSnapshotCount: 0,
+    exportCandidateGroupCount: 0,
+    readyExportCandidateGroupCount: 0,
+    waitingExportCandidateGroupCount: 0,
     partitions: {
       runtime: { itemCount: 0, summary: "Runtime memory partition is pending the latest board state." },
       governanceHistoryCandidates: {
@@ -596,7 +600,8 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       }
     },
     operationalItems: [],
-    exportReadyItems: []
+    exportReadyItems: [],
+    exportCandidates: []
   };
   const sections: Array<{
     title: string;
@@ -614,6 +619,16 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       items: memoryBoundary.exportReadyItems
     }
   ];
+  const exportCandidates = memoryBoundary.exportCandidates ?? deriveMemoryBoundaryExportCandidates(memoryBoundary);
+  const exportCandidateGroupCount = memoryBoundary.exportCandidateGroupCount ?? exportCandidates.length;
+  const readyExportCandidateGroupCount = memoryBoundary.readyExportCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.readiness === "ready_now").length;
+  const waitingExportCandidateGroupCount = memoryBoundary.waitingExportCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.readiness === "after_board_closes").length;
+  const exportCandidateSummary = memoryBoundary.exportCandidateSummary
+    ?? (waitingExportCandidateGroupCount > 0
+      ? `${readyExportCandidateGroupCount} export candidate group${readyExportCandidateGroupCount === 1 ? " is" : "s are"} ready for later tenant export, and ${waitingExportCandidateGroupCount} group${waitingExportCandidateGroupCount === 1 ? " still waits" : "s still wait"} on board closure first.`
+      : `${readyExportCandidateGroupCount} export candidate group${readyExportCandidateGroupCount === 1 ? " is" : "s are"} ready for later tenant export.`);
 
   return (
     <section style={styles.panel}>
@@ -656,6 +671,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <p style={styles.actionSummary}>{memoryBoundary.requestShapeSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.confirmationSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.recoveryPathSummary}</p>
+      <p style={styles.actionSummary}>{exportCandidateSummary}</p>
       <ul style={styles.actionList}>
         <li style={styles.actionItem}>
           <p style={styles.contractMeta}>Runtime partition</p>
@@ -673,6 +689,32 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
           <p style={styles.actionSummary}>{memoryBoundary.partitions.packagedOutputCandidates.summary}</p>
         </li>
       </ul>
+      <div style={{ display: "grid", gap: "0.55rem" }}>
+        <p style={styles.contractMeta}>Export candidate groups</p>
+        <p style={styles.actionSummary}>{`${exportCandidateGroupCount} grouped export candidate${exportCandidateGroupCount === 1 ? "" : "s"} are currently visible in the board contract.`}</p>
+        <ul style={styles.actionList}>
+          {exportCandidates.map((candidate) => (
+            <li key={candidate.id} style={styles.actionItem}>
+              <p style={styles.actionMeta}>{`${candidate.itemCount} bucket${candidate.itemCount === 1 ? "" : "s"}`}</p>
+              <h3 style={styles.actionHeading}>{candidate.label}</h3>
+              <div style={styles.badgeList}>
+                <span style={styles.badge}>{candidate.readinessLabel}</span>
+                <span style={styles.badge}>{candidate.promotionStateLabel}</span>
+                <span style={styles.badge}>{candidate.promotionNextStepLabel}</span>
+                <span style={styles.badge}>{candidate.promotionActionFamilyLabel}</span>
+                <span style={styles.badge}>{candidate.memoryPlacementLabel}</span>
+                <span style={styles.badge}>{candidate.syncStrategyLabel}</span>
+                <span style={styles.badge}>{candidate.exportRequestShapeLabel}</span>
+                <span style={styles.badge}>{candidate.exportConfirmationRequirementLabel}</span>
+                <span style={styles.badge}>{candidate.exportRecoveryPathLabel}</span>
+              </div>
+              <p style={styles.actionSummary}>{candidate.summary}</p>
+              <p style={styles.optionBody}>{`Grouped buckets: ${candidate.itemLabels.join(", ")}`}</p>
+              {candidate.nextEligibleSummary ? <p style={styles.actionSummary}>{candidate.nextEligibleSummary}</p> : null}
+            </li>
+          ))}
+        </ul>
+      </div>
       <div style={styles.rail}>
         {sections.map((section) => (
           <div key={section.title} style={{ display: "grid", gap: "0.55rem" }}>
@@ -755,6 +797,99 @@ function describeMemoryBoundaryReadiness(
     default:
       return humanizeValue(readiness);
   }
+}
+
+function deriveMemoryBoundaryExportCandidates(
+  memoryBoundary: HarnessBoardResponse["memoryBoundary"]
+): NonNullable<HarnessBoardResponse["memoryBoundary"]["exportCandidates"]> {
+  const isGovernanceExportReadyItem = (
+    item: HarnessBoardResponse["memoryBoundary"]["exportReadyItems"][number]
+  ): item is HarnessBoardResponse["memoryBoundary"]["exportReadyItems"][number] & {
+    id: "governance_decisions" | "implemented_actions";
+  } => item.id === "governance_decisions" || item.id === "implemented_actions";
+  const isPackageExportReadyItem = (
+    item: HarnessBoardResponse["memoryBoundary"]["exportReadyItems"][number]
+  ): item is HarnessBoardResponse["memoryBoundary"]["exportReadyItems"][number] & {
+    id: "package_governance" | "package_deliverables";
+  } => item.id === "package_governance" || item.id === "package_deliverables";
+  const governanceItems = memoryBoundary.exportReadyItems.filter(
+    (item): item is HarnessBoardResponse["memoryBoundary"]["exportReadyItems"][number] & {
+      id: "governance_decisions" | "implemented_actions";
+    } => item.count > 0 && isGovernanceExportReadyItem(item)
+  );
+  const packageItems = memoryBoundary.exportReadyItems.filter(
+    (item): item is HarnessBoardResponse["memoryBoundary"]["exportReadyItems"][number] & {
+      id: "package_governance" | "package_deliverables";
+    } => item.count > 0 && isPackageExportReadyItem(item)
+  );
+  const candidates: NonNullable<HarnessBoardResponse["memoryBoundary"]["exportCandidates"]> = [];
+
+  if (governanceItems.length > 0) {
+    const representative = governanceItems[0]!;
+    candidates.push({
+      id: "governance_history_export",
+      label: "Governance history export",
+      itemCount: governanceItems.length,
+      itemIds: governanceItems.map((item) => item.id),
+      itemLabels: governanceItems.map((item) => item.label),
+      summary:
+        `${governanceItems.length} governance histor${governanceItems.length === 1 ? "y bucket is" : "y buckets are"} grouped into one later tenant export candidate that appends governance history notes.`,
+      readiness: representative.readiness,
+      readinessLabel: representative.readinessLabel,
+      promotionState: representative.promotionState,
+      promotionStateLabel: representative.promotionStateLabel,
+      promotionNextStep: representative.promotionNextStep,
+      promotionNextStepLabel: representative.promotionNextStepLabel,
+      promotionActionFamily: representative.promotionActionFamily,
+      promotionActionFamilyLabel: representative.promotionActionFamilyLabel,
+      memoryPlacement: representative.memoryPlacement,
+      memoryPlacementLabel: representative.memoryPlacementLabel,
+      syncStrategy: representative.syncStrategy,
+      syncStrategyLabel: representative.syncStrategyLabel,
+      exportRequestShape: representative.exportRequestShape,
+      exportRequestShapeLabel: representative.exportRequestShapeLabel,
+      exportConfirmationRequirement: representative.exportConfirmationRequirement,
+      exportConfirmationRequirementLabel: representative.exportConfirmationRequirementLabel,
+      exportRecoveryPath: representative.exportRecoveryPath,
+      exportRecoveryPathLabel: representative.exportRecoveryPathLabel
+    });
+  }
+
+  if (packageItems.length > 0) {
+    const representative = packageItems.find((item) => item.readiness === "after_board_closes") ?? packageItems[0]!;
+    candidates.push({
+      id: "package_bundle_export",
+      label: "Package bundle export",
+      itemCount: packageItems.length,
+      itemIds: packageItems.map((item) => item.id),
+      itemLabels: packageItems.map((item) => item.label),
+      summary:
+        representative.readiness === "after_board_closes"
+          ? `${packageItems.length} packaged-output bucket${packageItems.length === 1 ? " still waits" : "s still wait"} on board closure before the tenant bundle can replace the latest package snapshot.`
+          : `${packageItems.length} packaged-output bucket${packageItems.length === 1 ? " is" : "s are"} grouped into one later tenant export candidate for the package bundle.`,
+      readiness: representative.readiness,
+      readinessLabel: representative.readinessLabel,
+      promotionState: representative.promotionState,
+      promotionStateLabel: representative.promotionStateLabel,
+      promotionNextStep: representative.promotionNextStep,
+      promotionNextStepLabel: representative.promotionNextStepLabel,
+      promotionActionFamily: representative.promotionActionFamily,
+      promotionActionFamilyLabel: representative.promotionActionFamilyLabel,
+      memoryPlacement: representative.memoryPlacement,
+      memoryPlacementLabel: representative.memoryPlacementLabel,
+      syncStrategy: representative.syncStrategy,
+      syncStrategyLabel: representative.syncStrategyLabel,
+      exportRequestShape: representative.exportRequestShape,
+      exportRequestShapeLabel: representative.exportRequestShapeLabel,
+      exportConfirmationRequirement: representative.exportConfirmationRequirement,
+      exportConfirmationRequirementLabel: representative.exportConfirmationRequirementLabel,
+      exportRecoveryPath: representative.exportRecoveryPath,
+      exportRecoveryPathLabel: representative.exportRecoveryPathLabel,
+      ...(representative.nextEligibleSummary ? { nextEligibleSummary: representative.nextEligibleSummary } : {})
+    });
+  }
+
+  return candidates;
 }
 
 function getOptionButtonLabel(

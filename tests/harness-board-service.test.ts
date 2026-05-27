@@ -1644,6 +1644,10 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.requestShapeSummary).toContain("single-record export requests");
     expect(hydrated.memoryBoundary.confirmationSummary).toContain("tenant export confirmation");
     expect(hydrated.memoryBoundary.recoveryPathSummary).toContain("retry the latest record export");
+    expect(hydrated.memoryBoundary.exportCandidateSummary).toContain("export candidate group");
+    expect(hydrated.memoryBoundary.exportCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.readyExportCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.waitingExportCandidateGroupCount).toBe(0);
     expect(hydrated.memoryBoundary.blockerSummary).toContain("blocked");
     expect(hydrated.memoryBoundary.authoritySummary).toContain("tenant-controlled");
     expect(hydrated.memoryBoundary.triggerSummary).toContain("tenant export request");
@@ -3903,6 +3907,19 @@ describe("harness board service", () => {
         })
       ])
     );
+    expect(hydrated.memoryBoundary.exportCandidates).toEqual([
+      expect.objectContaining({
+        id: "governance_history_export",
+        label: "Governance history export",
+        itemCount: 2,
+        readinessLabel: "Ready now",
+        memoryPlacementLabel: "Governance history note",
+        syncStrategyLabel: "Append history entry",
+        exportRequestShapeLabel: "Single-record export request",
+        exportConfirmationRequirementLabel: "Tenant export confirmation",
+        exportRecoveryPathLabel: "Retry latest record export"
+      })
+    ]);
   });
 
   it("fails closed when approval mutation is invoked without an atomic runner", async () => {

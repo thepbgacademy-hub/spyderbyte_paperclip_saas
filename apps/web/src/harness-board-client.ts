@@ -2598,6 +2598,99 @@ function inferMemoryBoundaryExportRecoveryPath(
   }
 }
 
+function buildExportCandidatesFromMemoryBoundaryItems(
+  exportReadyItems: HarnessBoardResponse["memoryBoundary"]["exportReadyItems"]
+): NonNullable<HarnessBoardResponse["memoryBoundary"]["exportCandidates"]> {
+  const isGovernanceExportReadyItem = (
+    item: HarnessBoardResponse["memoryBoundary"]["exportReadyItems"][number]
+  ): item is HarnessBoardResponse["memoryBoundary"]["exportReadyItems"][number] & {
+    id: "governance_decisions" | "implemented_actions";
+  } => item.id === "governance_decisions" || item.id === "implemented_actions";
+  const isPackageExportReadyItem = (
+    item: HarnessBoardResponse["memoryBoundary"]["exportReadyItems"][number]
+  ): item is HarnessBoardResponse["memoryBoundary"]["exportReadyItems"][number] & {
+    id: "package_governance" | "package_deliverables";
+  } => item.id === "package_governance" || item.id === "package_deliverables";
+  const governanceItems = exportReadyItems.filter(
+    (item): item is HarnessBoardResponse["memoryBoundary"]["exportReadyItems"][number] & {
+      id: "governance_decisions" | "implemented_actions";
+    } => item.count > 0 && isGovernanceExportReadyItem(item)
+  );
+  const packageItems = exportReadyItems.filter(
+    (item): item is HarnessBoardResponse["memoryBoundary"]["exportReadyItems"][number] & {
+      id: "package_governance" | "package_deliverables";
+    } => item.count > 0 && isPackageExportReadyItem(item)
+  );
+  const candidates: NonNullable<HarnessBoardResponse["memoryBoundary"]["exportCandidates"]> = [];
+
+  if (governanceItems.length > 0) {
+    const representative = governanceItems[0]!;
+    candidates.push({
+      id: "governance_history_export",
+      label: "Governance history export",
+      itemCount: governanceItems.length,
+      itemIds: governanceItems.map((item) => item.id),
+      itemLabels: governanceItems.map((item) => item.label),
+      summary:
+        `${governanceItems.length} governance histor${governanceItems.length === 1 ? "y bucket is" : "y buckets are"} grouped into one later tenant export candidate that appends governance history notes.`,
+      readiness: representative.readiness,
+      readinessLabel: representative.readinessLabel,
+      promotionState: representative.promotionState,
+      promotionStateLabel: representative.promotionStateLabel,
+      promotionNextStep: representative.promotionNextStep,
+      promotionNextStepLabel: representative.promotionNextStepLabel,
+      promotionActionFamily: representative.promotionActionFamily,
+      promotionActionFamilyLabel: representative.promotionActionFamilyLabel,
+      memoryPlacement: representative.memoryPlacement,
+      memoryPlacementLabel: representative.memoryPlacementLabel,
+      syncStrategy: representative.syncStrategy,
+      syncStrategyLabel: representative.syncStrategyLabel,
+      exportRequestShape: representative.exportRequestShape,
+      exportRequestShapeLabel: representative.exportRequestShapeLabel,
+      exportConfirmationRequirement: representative.exportConfirmationRequirement,
+      exportConfirmationRequirementLabel: representative.exportConfirmationRequirementLabel,
+      exportRecoveryPath: representative.exportRecoveryPath,
+      exportRecoveryPathLabel: representative.exportRecoveryPathLabel
+    });
+  }
+
+  if (packageItems.length > 0) {
+    const representative = packageItems.find((item) => item.readiness === "after_board_closes") ?? packageItems[0]!;
+    candidates.push({
+      id: "package_bundle_export",
+      label: "Package bundle export",
+      itemCount: packageItems.length,
+      itemIds: packageItems.map((item) => item.id),
+      itemLabels: packageItems.map((item) => item.label),
+      summary:
+        representative.readiness === "after_board_closes"
+          ? `${packageItems.length} packaged-output bucket${packageItems.length === 1 ? " still waits" : "s still wait"} on board closure before the tenant bundle can replace the latest package snapshot.`
+          : `${packageItems.length} packaged-output bucket${packageItems.length === 1 ? " is" : "s are"} grouped into one later tenant export candidate for the package bundle.`,
+      readiness: representative.readiness,
+      readinessLabel: representative.readinessLabel,
+      promotionState: representative.promotionState,
+      promotionStateLabel: representative.promotionStateLabel,
+      promotionNextStep: representative.promotionNextStep,
+      promotionNextStepLabel: representative.promotionNextStepLabel,
+      promotionActionFamily: representative.promotionActionFamily,
+      promotionActionFamilyLabel: representative.promotionActionFamilyLabel,
+      memoryPlacement: representative.memoryPlacement,
+      memoryPlacementLabel: representative.memoryPlacementLabel,
+      syncStrategy: representative.syncStrategy,
+      syncStrategyLabel: representative.syncStrategyLabel,
+      exportRequestShape: representative.exportRequestShape,
+      exportRequestShapeLabel: representative.exportRequestShapeLabel,
+      exportConfirmationRequirement: representative.exportConfirmationRequirement,
+      exportConfirmationRequirementLabel: representative.exportConfirmationRequirementLabel,
+      exportRecoveryPath: representative.exportRecoveryPath,
+      exportRecoveryPathLabel: representative.exportRecoveryPathLabel,
+      ...(representative.nextEligibleSummary ? { nextEligibleSummary: representative.nextEligibleSummary } : {})
+    });
+  }
+
+  return candidates;
+}
+
 function normalizeMemoryBoundary(
   memoryBoundary: HarnessBoardResponse["memoryBoundary"],
   board: Pick<HarnessBoardResponse, "completionPackage">
@@ -3175,6 +3268,12 @@ function normalizeMemoryBoundary(
     ?? exportReadyItems.filter((item) => item.exportRecoveryPath === "retry_latest_record_export").length;
   const rerunAfterBoardClosureSnapshotCount = memoryBoundary.rerunAfterBoardClosureSnapshotCount
     ?? exportReadyItems.filter((item) => item.exportRecoveryPath === "rerun_after_board_closure_snapshot").length;
+  const exportCandidates = memoryBoundary.exportCandidates ?? buildExportCandidatesFromMemoryBoundaryItems(exportReadyItems);
+  const exportCandidateGroupCount = memoryBoundary.exportCandidateGroupCount ?? exportCandidates.length;
+  const readyExportCandidateGroupCount = memoryBoundary.readyExportCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.readiness === "ready_now").length;
+  const waitingExportCandidateGroupCount = memoryBoundary.waitingExportCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.readiness === "after_board_closes").length;
 
   return {
     ...memoryBoundary,
@@ -3469,6 +3568,14 @@ function normalizeMemoryBoundary(
       ?? (rerunAfterBoardClosureSnapshotCount > 0
         ? `${runtimeOnlyRecoveryPathCount} runtime buckets are runtime only, ${retryLatestRecordExportCount} export candidate bucket${retryLatestRecordExportCount === 1 ? " retries" : "s retry"} the latest record export, and ${rerunAfterBoardClosureSnapshotCount} bucket${rerunAfterBoardClosureSnapshotCount === 1 ? " still reruns" : "s still rerun"} after the board-closure snapshot.`
         : `${runtimeOnlyRecoveryPathCount} runtime buckets are runtime only, and ${retryLatestRecordExportCount} export candidate bucket${retryLatestRecordExportCount === 1 ? " retries" : "s retry"} the latest record export.`),
+    exportCandidateSummary:
+      memoryBoundary.exportCandidateSummary
+      ?? (waitingExportCandidateGroupCount > 0
+        ? `${readyExportCandidateGroupCount} export candidate group${readyExportCandidateGroupCount === 1 ? " is" : "s are"} ready for later tenant export, and ${waitingExportCandidateGroupCount} group${waitingExportCandidateGroupCount === 1 ? " still waits" : "s still wait"} on board closure first.`
+        : `${readyExportCandidateGroupCount} export candidate group${readyExportCandidateGroupCount === 1 ? " is" : "s are"} ready for later tenant export.`),
+    exportCandidateGroupCount,
+    readyExportCandidateGroupCount,
+    waitingExportCandidateGroupCount,
     partitions: memoryBoundary.partitions ?? {
       runtime: {
         itemCount: operationalItems.length,
@@ -3487,7 +3594,8 @@ function normalizeMemoryBoundary(
       }
     },
     operationalItems,
-    exportReadyItems
+    exportReadyItems,
+    exportCandidates
   };
 }
 

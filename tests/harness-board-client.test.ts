@@ -546,6 +546,28 @@ describe("harness board client", () => {
     expect(
       board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.exportRecoveryPathLabel
     ).toBe("Rerun after board-closure snapshot");
+    expect(board.memoryBoundary.exportCandidateSummary).toContain("export candidate group");
+    expect(board.memoryBoundary.exportCandidateGroupCount).toBe(2);
+    expect(board.memoryBoundary.readyExportCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.waitingExportCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.exportCandidates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "governance_history_export",
+          label: "Governance history export",
+          itemCount: 2,
+          readinessLabel: "Ready now",
+          exportRequestShapeLabel: "Single-record export request"
+        }),
+        expect.objectContaining({
+          id: "package_bundle_export",
+          label: "Package bundle export",
+          itemCount: 2,
+          readinessLabel: "After board closes",
+          exportRequestShapeLabel: "Package-bundle export request"
+        })
+      ])
+    );
   });
 
   it("derives governance-ready partition counts from readiness, not only from role membership", async () => {
@@ -584,6 +606,8 @@ describe("harness board client", () => {
     const board = await client.fetchBoard();
 
     expect(board.memoryBoundary.governanceReadyCount).toBe(1);
+    expect(board.memoryBoundary.readyExportCandidateGroupCount).toBe(0);
+    expect(board.memoryBoundary.waitingExportCandidateGroupCount).toBe(2);
     expect(board.memoryBoundary.roleSummary).toBe(
       "1 governance record candidate is ready now, and 2 packaged output candidates still wait on board closure."
     );
