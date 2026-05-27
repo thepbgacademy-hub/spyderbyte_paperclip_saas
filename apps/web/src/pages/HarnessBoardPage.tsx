@@ -459,6 +459,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     roleSummary: "The boundary split is pending the latest board state.",
     ownershipSummary: "Ownership posture is pending the latest board state.",
     promotionSummary: "Promotion path is pending the latest board state.",
+    recordTargetSummary: "Record target is pending the latest board state.",
     readyNowCount: 0,
     waitingOnBoardClosureCount: 0,
     governanceReadyCount: 0,
@@ -503,6 +504,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <p style={styles.actionSummary}>{memoryBoundary.roleSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.ownershipSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.promotionSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.recordTargetSummary}</p>
       <ul style={styles.actionList}>
         <li style={styles.actionItem}>
           <p style={styles.contractMeta}>Runtime partition</p>
@@ -538,6 +540,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                     <span style={styles.badge}>{item.durabilityConditionLabel}</span>
                     <span style={styles.badge}>{item.ownershipBoundaryLabel}</span>
                     <span style={styles.badge}>{item.promotionPathLabel}</span>
+                    <span style={styles.badge}>{item.recordTargetLabel}</span>
                   </div>
                   <p style={styles.actionSummary}>{item.summary}</p>
                   <p style={styles.optionBody}>{`Source surface: ${item.sourceSurfaceLabel}`}</p>

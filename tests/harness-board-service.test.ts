@@ -1611,6 +1611,7 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.governanceReadyCount).toEqual(expect.any(Number));
     expect(hydrated.memoryBoundary.ownershipSummary).toContain("Wealth Factory-only");
     expect(hydrated.memoryBoundary.promotionSummary).toContain("never promote");
+    expect(hydrated.memoryBoundary.recordTargetSummary).toContain("governance history record");
     expect(hydrated.memoryBoundary.partitions).toMatchObject({
       runtime: { itemCount: 2 },
       governanceHistoryCandidates: { itemCount: 2 }
@@ -1631,7 +1632,9 @@ describe("harness board service", () => {
           ownershipBoundary: "wealth_factory_only",
           ownershipBoundaryLabel: "Wealth Factory only",
           promotionPath: "never_promotes",
-          promotionPathLabel: "Never promotes"
+          promotionPathLabel: "Never promotes",
+          recordTarget: "none_runtime_only",
+          recordTargetLabel: "Runtime only"
         })
       ])
     );
@@ -1651,7 +1654,9 @@ describe("harness board service", () => {
           ownershipBoundary: "tenant_owned_later",
           ownershipBoundaryLabel: "Tenant-owned later",
           promotionPath: "ready_for_explicit_export",
-          promotionPathLabel: "Ready for explicit export"
+          promotionPathLabel: "Ready for explicit export",
+          recordTarget: "governance_history_record",
+          recordTargetLabel: "Governance history record"
         }),
         expect.objectContaining({
           id: "implemented_actions",
@@ -1667,7 +1672,9 @@ describe("harness board service", () => {
           ownershipBoundary: "tenant_owned_later",
           ownershipBoundaryLabel: "Tenant-owned later",
           promotionPath: "ready_for_explicit_export",
-          promotionPathLabel: "Ready for explicit export"
+          promotionPathLabel: "Ready for explicit export",
+          recordTarget: "governance_history_record",
+          recordTargetLabel: "Governance history record"
         })
       ])
     );

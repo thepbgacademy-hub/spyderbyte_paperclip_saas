@@ -290,6 +290,8 @@ const boardResponse: HarnessBoardResponse = {
       "2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later.",
     promotionSummary:
       "2 runtime memory buckets never promote, 2 candidate buckets are ready for explicit export later, and 2 candidate buckets still wait on board closure first.",
+    recordTargetSummary:
+      "2 governance history record candidates are ready, while 2 package record candidates stay package-shaped until board closure completes.",
     readyNowCount: 2,
     waitingOnBoardClosureCount: 2,
     governanceReadyCount: 2,
@@ -331,7 +333,9 @@ const boardResponse: HarnessBoardResponse = {
         ownershipBoundary: "wealth_factory_only",
         ownershipBoundaryLabel: "Wealth Factory only",
         promotionPath: "never_promotes",
-        promotionPathLabel: "Never promotes"
+        promotionPathLabel: "Never promotes",
+        recordTarget: "none_runtime_only",
+        recordTargetLabel: "Runtime only"
       },
       {
         id: "attention_state",
@@ -354,7 +358,9 @@ const boardResponse: HarnessBoardResponse = {
         ownershipBoundary: "wealth_factory_only",
         ownershipBoundaryLabel: "Wealth Factory only",
         promotionPath: "never_promotes",
-        promotionPathLabel: "Never promotes"
+        promotionPathLabel: "Never promotes",
+        recordTarget: "none_runtime_only",
+        recordTargetLabel: "Runtime only"
       }
     ],
     exportReadyItems: [
@@ -379,7 +385,9 @@ const boardResponse: HarnessBoardResponse = {
         ownershipBoundary: "tenant_owned_later",
         ownershipBoundaryLabel: "Tenant-owned later",
         promotionPath: "ready_for_explicit_export",
-        promotionPathLabel: "Ready for explicit export"
+        promotionPathLabel: "Ready for explicit export",
+        recordTarget: "governance_history_record",
+        recordTargetLabel: "Governance history record"
       },
       {
         id: "implemented_actions",
@@ -402,7 +410,9 @@ const boardResponse: HarnessBoardResponse = {
         ownershipBoundary: "tenant_owned_later",
         ownershipBoundaryLabel: "Tenant-owned later",
         promotionPath: "ready_for_explicit_export",
-        promotionPathLabel: "Ready for explicit export"
+        promotionPathLabel: "Ready for explicit export",
+        recordTarget: "governance_history_record",
+        recordTargetLabel: "Governance history record"
       },
       {
         id: "package_governance",
@@ -426,6 +436,8 @@ const boardResponse: HarnessBoardResponse = {
         ownershipBoundaryLabel: "Tenant-owned later",
         promotionPath: "after_board_closure_then_export",
         promotionPathLabel: "After board closure, then export",
+        recordTarget: "package_governance_record",
+        recordTargetLabel: "Package governance record",
         nextEligibleSummary: "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
       },
       {
@@ -450,6 +462,8 @@ const boardResponse: HarnessBoardResponse = {
         ownershipBoundaryLabel: "Tenant-owned later",
         promotionPath: "after_board_closure_then_export",
         promotionPathLabel: "After board closure, then export",
+        recordTarget: "package_deliverable_record",
+        recordTargetLabel: "Package deliverable record",
         nextEligibleSummary: "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
       }
     ]
@@ -1035,6 +1049,7 @@ describe("harness board UI", () => {
     expect(markup).toContain("2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure.");
     expect(markup).toContain("2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later.");
     expect(markup).toContain("2 runtime memory buckets never promote, 2 candidate buckets are ready for explicit export later, and 2 candidate buckets still wait on board closure first.");
+    expect(markup).toContain("2 governance history record candidates are ready, while 2 package record candidates stay package-shaped until board closure completes.");
     expect(markup).toContain("Recent decisions");
     expect(markup).toContain("CEO kept the research expansion under bounded review.");
     expect(markup).toContain("1 preserved decision");
@@ -1089,6 +1104,10 @@ describe("harness board UI", () => {
     expect(markup).toContain("Never promotes");
     expect(markup).toContain("Ready for explicit export");
     expect(markup).toContain("After board closure, then export");
+    expect(markup).toContain("Runtime only");
+    expect(markup).toContain("Governance history record");
+    expect(markup).toContain("Package governance record");
+    expect(markup).toContain("Package deliverable record");
     expect(markup).toContain("Source surface: Continuity snapshots");
     expect(markup).toContain("Source surface: Pending attention");
     expect(markup).toContain("Source surface: Recent decisions");

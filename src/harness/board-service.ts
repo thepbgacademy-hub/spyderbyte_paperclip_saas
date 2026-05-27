@@ -128,6 +128,12 @@ export type HarnessMemoryBoundaryPromotionPath =
   | "ready_for_explicit_export"
   | "after_board_closure_then_export";
 
+export type HarnessMemoryBoundaryRecordTarget =
+  | "none_runtime_only"
+  | "governance_history_record"
+  | "package_governance_record"
+  | "package_deliverable_record";
+
 export type HarnessMemoryBoundaryItemView = {
   id:
     | "lane_continuity"
@@ -156,6 +162,8 @@ export type HarnessMemoryBoundaryItemView = {
   ownershipBoundaryLabel: string;
   promotionPath: HarnessMemoryBoundaryPromotionPath;
   promotionPathLabel: string;
+  recordTarget: HarnessMemoryBoundaryRecordTarget;
+  recordTargetLabel: string;
   nextEligibleSummary?: string;
 };
 
@@ -175,6 +183,7 @@ export type HarnessMemoryBoundaryView = {
   roleSummary: string;
   ownershipSummary: string;
   promotionSummary: string;
+  recordTargetSummary: string;
   partitions: {
     runtime: HarnessMemoryBoundaryPartitionView;
     governanceHistoryCandidates: HarnessMemoryBoundaryPartitionView;
@@ -3836,7 +3845,9 @@ function buildMemoryBoundaryView(input: {
       ownershipBoundary: "wealth_factory_only",
       ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("wealth_factory_only"),
       promotionPath: "never_promotes",
-      promotionPathLabel: humanizeMemoryBoundaryPromotionPath("never_promotes")
+      promotionPathLabel: humanizeMemoryBoundaryPromotionPath("never_promotes"),
+      recordTarget: "none_runtime_only",
+      recordTargetLabel: humanizeMemoryBoundaryRecordTarget("none_runtime_only")
     },
     {
       id: "attention_state",
@@ -3859,7 +3870,9 @@ function buildMemoryBoundaryView(input: {
       ownershipBoundary: "wealth_factory_only",
       ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("wealth_factory_only"),
       promotionPath: "never_promotes",
-      promotionPathLabel: humanizeMemoryBoundaryPromotionPath("never_promotes")
+      promotionPathLabel: humanizeMemoryBoundaryPromotionPath("never_promotes"),
+      recordTarget: "none_runtime_only",
+      recordTargetLabel: humanizeMemoryBoundaryRecordTarget("none_runtime_only")
     }
   ];
 
@@ -3885,7 +3898,9 @@ function buildMemoryBoundaryView(input: {
       ownershipBoundary: "tenant_owned_later",
       ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("tenant_owned_later"),
       promotionPath: "ready_for_explicit_export",
-      promotionPathLabel: humanizeMemoryBoundaryPromotionPath("ready_for_explicit_export")
+      promotionPathLabel: humanizeMemoryBoundaryPromotionPath("ready_for_explicit_export"),
+      recordTarget: "governance_history_record",
+      recordTargetLabel: humanizeMemoryBoundaryRecordTarget("governance_history_record")
     },
     {
       id: "implemented_actions",
@@ -3908,7 +3923,9 @@ function buildMemoryBoundaryView(input: {
       ownershipBoundary: "tenant_owned_later",
       ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("tenant_owned_later"),
       promotionPath: "ready_for_explicit_export",
-      promotionPathLabel: humanizeMemoryBoundaryPromotionPath("ready_for_explicit_export")
+      promotionPathLabel: humanizeMemoryBoundaryPromotionPath("ready_for_explicit_export"),
+      recordTarget: "governance_history_record",
+      recordTargetLabel: humanizeMemoryBoundaryRecordTarget("governance_history_record")
     }
   ];
 
@@ -3957,6 +3974,8 @@ function buildMemoryBoundaryView(input: {
             ? "after_board_closure_then_export"
             : "ready_for_explicit_export"
         ),
+        recordTarget: "package_governance_record",
+        recordTargetLabel: humanizeMemoryBoundaryRecordTarget("package_governance_record"),
         ...(packageReadiness === "after_board_closes"
           ? {
               nextEligibleSummary:
@@ -4004,6 +4023,8 @@ function buildMemoryBoundaryView(input: {
             ? "after_board_closure_then_export"
             : "ready_for_explicit_export"
         ),
+        recordTarget: "package_deliverable_record",
+        recordTargetLabel: humanizeMemoryBoundaryRecordTarget("package_deliverable_record"),
         ...(packageReadiness === "after_board_closes"
           ? {
               nextEligibleSummary:
@@ -4050,6 +4071,10 @@ function buildMemoryBoundaryView(input: {
       waitingOnBoardClosureCount > 0
         ? `${operationalItems.length} runtime memor${operationalItems.length === 1 ? "y bucket never promotes" : "y buckets never promote"}, ${readyNowCount} candidate bucket${readyNowCount === 1 ? " is" : "s are"} ready for explicit export later, and ${waitingOnBoardClosureCount} candidate bucket${waitingOnBoardClosureCount === 1 ? " still waits" : "s still wait"} on board closure first.`
         : `${operationalItems.length} runtime memor${operationalItems.length === 1 ? "y bucket never promotes" : "y buckets never promote"}, and ${readyNowCount} candidate bucket${readyNowCount === 1 ? " is" : "s are"} ready for explicit export later.`,
+    recordTargetSummary:
+      waitingOnBoardClosureCount > 0
+        ? `${governanceReadyCount} governance history record candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} ready, while ${packagedReadyCount + packagedWaitingCount} package record candidate${packagedReadyCount + packagedWaitingCount === 1 ? "" : "s"} ${packagedReadyCount + packagedWaitingCount === 1 ? "stays" : "stay"} package-shaped${packagedWaitingCount > 0 ? " until board closure completes" : ""}.`
+        : `${governanceReadyCount} governance history record candidate${governanceReadyCount === 1 ? "" : "s"} and ${packagedReadyCount} package record candidate${packagedReadyCount === 1 ? "" : "s"} are ready for later tenant export.`,
     partitions: {
       runtime: {
         itemCount: operationalItems.length,
@@ -4177,6 +4202,21 @@ function humanizeMemoryBoundaryPromotionPath(path: HarnessMemoryBoundaryPromotio
       return "After board closure, then export";
     default:
       return path;
+  }
+}
+
+function humanizeMemoryBoundaryRecordTarget(target: HarnessMemoryBoundaryRecordTarget) {
+  switch (target) {
+    case "none_runtime_only":
+      return "Runtime only";
+    case "governance_history_record":
+      return "Governance history record";
+    case "package_governance_record":
+      return "Package governance record";
+    case "package_deliverable_record":
+      return "Package deliverable record";
+    default:
+      return target;
   }
 }
 

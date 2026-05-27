@@ -327,6 +327,8 @@ const fallbackBoardBase: HarnessBoardResponse = {
       "2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later.",
     promotionSummary:
       "2 runtime memory buckets never promote, 2 candidate buckets are ready for explicit export later, and 2 candidate buckets still wait on board closure first.",
+    recordTargetSummary:
+      "2 governance history record candidates are ready, while 2 package record candidates stay package-shaped until board closure completes.",
     readyNowCount: 2,
     waitingOnBoardClosureCount: 2,
     governanceReadyCount: 2,
@@ -369,7 +371,9 @@ const fallbackBoardBase: HarnessBoardResponse = {
         ownershipBoundary: "wealth_factory_only",
         ownershipBoundaryLabel: "Wealth Factory only",
         promotionPath: "never_promotes",
-        promotionPathLabel: "Never promotes"
+        promotionPathLabel: "Never promotes",
+        recordTarget: "none_runtime_only",
+        recordTargetLabel: "Runtime only"
       },
       {
         id: "attention_state",
@@ -392,7 +396,9 @@ const fallbackBoardBase: HarnessBoardResponse = {
         ownershipBoundary: "wealth_factory_only",
         ownershipBoundaryLabel: "Wealth Factory only",
         promotionPath: "never_promotes",
-        promotionPathLabel: "Never promotes"
+        promotionPathLabel: "Never promotes",
+        recordTarget: "none_runtime_only",
+        recordTargetLabel: "Runtime only"
       }
     ],
     exportReadyItems: [
@@ -417,7 +423,9 @@ const fallbackBoardBase: HarnessBoardResponse = {
         ownershipBoundary: "tenant_owned_later",
         ownershipBoundaryLabel: "Tenant-owned later",
         promotionPath: "ready_for_explicit_export",
-        promotionPathLabel: "Ready for explicit export"
+        promotionPathLabel: "Ready for explicit export",
+        recordTarget: "governance_history_record",
+        recordTargetLabel: "Governance history record"
       },
       {
         id: "implemented_actions",
@@ -440,7 +448,9 @@ const fallbackBoardBase: HarnessBoardResponse = {
         ownershipBoundary: "tenant_owned_later",
         ownershipBoundaryLabel: "Tenant-owned later",
         promotionPath: "ready_for_explicit_export",
-        promotionPathLabel: "Ready for explicit export"
+        promotionPathLabel: "Ready for explicit export",
+        recordTarget: "governance_history_record",
+        recordTargetLabel: "Governance history record"
       },
       {
         id: "package_governance",
@@ -464,6 +474,8 @@ const fallbackBoardBase: HarnessBoardResponse = {
         ownershipBoundaryLabel: "Tenant-owned later",
         promotionPath: "after_board_closure_then_export",
         promotionPathLabel: "After board closure, then export",
+        recordTarget: "package_governance_record",
+        recordTargetLabel: "Package governance record",
         nextEligibleSummary:
           "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
       },
@@ -489,6 +501,8 @@ const fallbackBoardBase: HarnessBoardResponse = {
         ownershipBoundaryLabel: "Tenant-owned later",
         promotionPath: "after_board_closure_then_export",
         promotionPathLabel: "After board closure, then export",
+        recordTarget: "package_deliverable_record",
+        recordTargetLabel: "Package deliverable record",
         nextEligibleSummary:
           "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
       }
@@ -754,6 +768,23 @@ function humanizeMemoryBoundaryPromotionPath(
   }
 }
 
+function humanizeMemoryBoundaryRecordTarget(
+  target: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["recordTarget"]>
+) {
+  switch (target) {
+    case "none_runtime_only":
+      return "Runtime only";
+    case "governance_history_record":
+      return "Governance history record";
+    case "package_governance_record":
+      return "Package governance record";
+    case "package_deliverable_record":
+      return "Package deliverable record";
+    default:
+      return target;
+  }
+}
+
 function inferMemoryBoundaryReadiness(
   itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"],
   board: Pick<HarnessBoardResponse, "completionPackage">
@@ -883,6 +914,25 @@ function inferMemoryBoundaryPromotionPath(
   return "ready_for_explicit_export";
 }
 
+function inferMemoryBoundaryRecordTarget(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"]
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["recordTarget"] {
+  switch (itemId) {
+    case "lane_continuity":
+    case "attention_state":
+      return "none_runtime_only";
+    case "governance_decisions":
+    case "implemented_actions":
+      return "governance_history_record";
+    case "package_governance":
+      return "package_governance_record";
+    case "package_deliverables":
+      return "package_deliverable_record";
+    default:
+      return "governance_history_record";
+  }
+}
+
 function normalizeMemoryBoundary(
   memoryBoundary: HarnessBoardResponse["memoryBoundary"],
   board: Pick<HarnessBoardResponse, "completionPackage">
@@ -896,6 +946,7 @@ function normalizeMemoryBoundary(
     const durabilityCondition = item.durabilityCondition ?? inferMemoryBoundaryDurabilityCondition(item.id, board);
     const ownershipBoundary = item.ownershipBoundary ?? inferMemoryBoundaryOwnershipBoundary(item.id);
     const promotionPath = item.promotionPath ?? inferMemoryBoundaryPromotionPath(item.id, board);
+    const recordTarget = item.recordTarget ?? inferMemoryBoundaryRecordTarget(item.id);
     return {
       ...item,
       readiness,
@@ -916,7 +967,10 @@ function normalizeMemoryBoundary(
         item.ownershipBoundaryLabel ?? humanizeMemoryBoundaryOwnershipBoundary(ownershipBoundary),
       promotionPath,
       promotionPathLabel:
-        item.promotionPathLabel ?? humanizeMemoryBoundaryPromotionPath(promotionPath)
+        item.promotionPathLabel ?? humanizeMemoryBoundaryPromotionPath(promotionPath),
+      recordTarget,
+      recordTargetLabel:
+        item.recordTargetLabel ?? humanizeMemoryBoundaryRecordTarget(recordTarget)
     };
   });
   const exportReadyItems = memoryBoundary.exportReadyItems.map((item) => {
@@ -928,6 +982,7 @@ function normalizeMemoryBoundary(
     const durabilityCondition = item.durabilityCondition ?? inferMemoryBoundaryDurabilityCondition(item.id, board);
     const ownershipBoundary = item.ownershipBoundary ?? inferMemoryBoundaryOwnershipBoundary(item.id);
     const promotionPath = item.promotionPath ?? inferMemoryBoundaryPromotionPath(item.id, board);
+    const recordTarget = item.recordTarget ?? inferMemoryBoundaryRecordTarget(item.id);
     const nextEligibleSummary = item.nextEligibleSummary
       ?? (readiness === "after_board_closes"
         ? item.id === "package_governance"
@@ -957,6 +1012,9 @@ function normalizeMemoryBoundary(
       promotionPath,
       promotionPathLabel:
         item.promotionPathLabel ?? humanizeMemoryBoundaryPromotionPath(promotionPath),
+      recordTarget,
+      recordTargetLabel:
+        item.recordTargetLabel ?? humanizeMemoryBoundaryRecordTarget(recordTarget),
       ...(nextEligibleSummary ? { nextEligibleSummary } : {})
     };
   });
@@ -996,6 +1054,11 @@ function normalizeMemoryBoundary(
       ?? (waitingOnBoardClosureCount > 0
         ? `${operationalItems.length} runtime memor${operationalItems.length === 1 ? "y bucket never promotes" : "y buckets never promote"}, ${readyNowCount} candidate bucket${readyNowCount === 1 ? " is" : "s are"} ready for explicit export later, and ${waitingOnBoardClosureCount} candidate bucket${waitingOnBoardClosureCount === 1 ? " still waits" : "s still wait"} on board closure first.`
         : `${operationalItems.length} runtime memor${operationalItems.length === 1 ? "y bucket never promotes" : "y buckets never promote"}, and ${readyNowCount} candidate bucket${readyNowCount === 1 ? " is" : "s are"} ready for explicit export later.`),
+    recordTargetSummary:
+      memoryBoundary.recordTargetSummary
+      ?? (waitingOnBoardClosureCount > 0
+        ? `${governanceReadyCount} governance history record candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} ready, while ${packagedReadyCount + packagedWaitingCount} package record candidate${packagedReadyCount + packagedWaitingCount === 1 ? "" : "s"} ${packagedReadyCount + packagedWaitingCount === 1 ? "stays" : "stay"} package-shaped${waitingOnBoardClosureCount > 0 ? " until board closure completes" : ""}.`
+        : `${governanceReadyCount} governance history record candidate${governanceReadyCount === 1 ? "" : "s"} and ${packagedReadyCount} package record candidate${packagedReadyCount === 1 ? "" : "s"} are ready for later tenant export.`),
     partitions: memoryBoundary.partitions ?? {
       runtime: {
         itemCount: operationalItems.length,
@@ -1050,7 +1113,9 @@ function normalizeBoardResponse(
       ownershipBoundary: "tenant_owned_later",
       ownershipBoundaryLabel: "Tenant-owned later",
       promotionPath: "ready_for_explicit_export",
-      promotionPathLabel: "Ready for explicit export"
+      promotionPathLabel: "Ready for explicit export",
+      recordTarget: "governance_history_record",
+      recordTargetLabel: "Governance history record"
     },
     {
       id: "implemented_actions",
@@ -1073,7 +1138,9 @@ function normalizeBoardResponse(
       ownershipBoundary: "tenant_owned_later",
       ownershipBoundaryLabel: "Tenant-owned later",
       promotionPath: "ready_for_explicit_export",
-      promotionPathLabel: "Ready for explicit export"
+      promotionPathLabel: "Ready for explicit export",
+      recordTarget: "governance_history_record",
+      recordTargetLabel: "Governance history record"
     },
     {
       id: "package_governance",
@@ -1109,6 +1176,8 @@ function normalizeBoardResponse(
         promotionPathLabel: board.completionPackage?.hasOpenGovernanceItems
           ? "After board closure, then export"
           : "Ready for explicit export",
+        recordTarget: "package_governance_record",
+        recordTargetLabel: "Package governance record",
         ...(board.completionPackage?.hasOpenGovernanceItems
           ? {
             nextEligibleSummary:
@@ -1150,6 +1219,8 @@ function normalizeBoardResponse(
         promotionPathLabel: board.completionPackage?.hasOpenGovernanceItems
           ? "After board closure, then export"
           : "Ready for explicit export",
+        recordTarget: "package_deliverable_record",
+        recordTargetLabel: "Package deliverable record",
         ...(board.completionPackage?.hasOpenGovernanceItems
           ? {
             nextEligibleSummary:
@@ -1194,6 +1265,10 @@ function normalizeBoardResponse(
         waitingOnBoardClosureCount > 0
           ? `2 runtime memory buckets never promote, ${readyNowCount} candidate bucket${readyNowCount === 1 ? " is" : "s are"} ready for explicit export later, and ${waitingOnBoardClosureCount} candidate bucket${waitingOnBoardClosureCount === 1 ? " still waits" : "s still wait"} on board closure first.`
           : `2 runtime memory buckets never promote, and ${readyNowCount} candidate bucket${readyNowCount === 1 ? " is" : "s are"} ready for explicit export later.`,
+      recordTargetSummary:
+        waitingOnBoardClosureCount > 0
+          ? `${governanceReadyCount} governance history record candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} ready, while ${packagedReadyCount + packagedWaitingCount} package record candidate${packagedReadyCount + packagedWaitingCount === 1 ? "" : "s"} ${packagedReadyCount + packagedWaitingCount === 1 ? "stays" : "stay"} package-shaped until board closure completes.`
+          : `${governanceReadyCount} governance history record candidate${governanceReadyCount === 1 ? "" : "s"} and ${packagedReadyCount} package record candidate${packagedReadyCount === 1 ? "" : "s"} are ready for later tenant export.`,
       partitions: {
         runtime: {
           itemCount: 2,
@@ -1235,7 +1310,9 @@ function normalizeBoardResponse(
           ownershipBoundary: "wealth_factory_only",
           ownershipBoundaryLabel: "Wealth Factory only",
           promotionPath: "never_promotes",
-          promotionPathLabel: "Never promotes"
+          promotionPathLabel: "Never promotes",
+          recordTarget: "none_runtime_only",
+          recordTargetLabel: "Runtime only"
         },
         {
           id: "attention_state",
@@ -1258,7 +1335,9 @@ function normalizeBoardResponse(
           ownershipBoundary: "wealth_factory_only",
           ownershipBoundaryLabel: "Wealth Factory only",
           promotionPath: "never_promotes",
-          promotionPathLabel: "Never promotes"
+          promotionPathLabel: "Never promotes",
+          recordTarget: "none_runtime_only",
+          recordTargetLabel: "Runtime only"
         }
       ],
       exportReadyItems
