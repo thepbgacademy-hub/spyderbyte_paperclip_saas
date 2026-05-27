@@ -308,6 +308,11 @@ const boardResponse: HarnessBoardResponse = {
     boardControlledCandidateCount: 2,
     tenantExportTriggerCount: 2,
     boardClosureTriggerCount: 2,
+    runtimeOnlyStateCount: 2,
+    readyForTenantExportStateCount: 2,
+    awaitingBoardClosureStateCount: 2,
+    stateSummary:
+      "2 runtime buckets stay runtime-only, 2 export candidate buckets are ready for tenant export later, and 2 buckets are still awaiting board closure.",
     partitions: {
       runtime: {
         itemCount: 2,
@@ -352,7 +357,9 @@ const boardResponse: HarnessBoardResponse = {
         promotionAuthority: "wealth_factory_runtime_only",
         promotionAuthorityLabel: "Wealth Factory runtime only",
         promotionTrigger: "not_applicable_runtime",
-        promotionTriggerLabel: "No promotion trigger"
+        promotionTriggerLabel: "No promotion trigger",
+        promotionState: "runtime_only",
+        promotionStateLabel: "Runtime only"
       },
       {
         id: "attention_state",
@@ -383,7 +390,9 @@ const boardResponse: HarnessBoardResponse = {
         promotionAuthority: "wealth_factory_runtime_only",
         promotionAuthorityLabel: "Wealth Factory runtime only",
         promotionTrigger: "not_applicable_runtime",
-        promotionTriggerLabel: "No promotion trigger"
+        promotionTriggerLabel: "No promotion trigger",
+        promotionState: "runtime_only",
+        promotionStateLabel: "Runtime only"
       }
     ],
     exportReadyItems: [
@@ -416,7 +425,9 @@ const boardResponse: HarnessBoardResponse = {
         promotionAuthority: "tenant_explicit_export",
         promotionAuthorityLabel: "Tenant explicit export",
         promotionTrigger: "tenant_export_request",
-        promotionTriggerLabel: "Tenant export request"
+        promotionTriggerLabel: "Tenant export request",
+        promotionState: "ready_for_tenant_export",
+        promotionStateLabel: "Ready for tenant export"
       },
       {
         id: "implemented_actions",
@@ -447,7 +458,9 @@ const boardResponse: HarnessBoardResponse = {
         promotionAuthority: "tenant_explicit_export",
         promotionAuthorityLabel: "Tenant explicit export",
         promotionTrigger: "tenant_export_request",
-        promotionTriggerLabel: "Tenant export request"
+        promotionTriggerLabel: "Tenant export request",
+        promotionState: "ready_for_tenant_export",
+        promotionStateLabel: "Ready for tenant export"
       },
       {
         id: "package_governance",
@@ -479,6 +492,8 @@ const boardResponse: HarnessBoardResponse = {
         promotionAuthorityLabel: "Board closure, then tenant export",
         promotionTrigger: "board_closure",
         promotionTriggerLabel: "Board closure",
+        promotionState: "awaiting_board_closure",
+        promotionStateLabel: "Awaiting board closure",
         nextEligibleSummary: "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
       },
       {
@@ -511,6 +526,8 @@ const boardResponse: HarnessBoardResponse = {
         promotionAuthorityLabel: "Board closure, then tenant export",
         promotionTrigger: "board_closure",
         promotionTriggerLabel: "Board closure",
+        promotionState: "awaiting_board_closure",
+        promotionStateLabel: "Awaiting board closure",
         nextEligibleSummary: "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
       }
     ]

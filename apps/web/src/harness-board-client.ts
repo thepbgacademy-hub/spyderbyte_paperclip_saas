@@ -335,6 +335,8 @@ const fallbackBoardBase: HarnessBoardResponse = {
       "2 export candidate buckets are already tenant-controlled for later explicit export, while 2 buckets still need board closure before tenant export can own the next step.",
     triggerSummary:
       "2 export candidate buckets are waiting only on a later tenant export request, while 2 buckets still need board closure before that request can happen.",
+    stateSummary:
+      "2 runtime buckets stay runtime-only, 2 export candidate buckets are ready for tenant export later, and 2 buckets are still awaiting board closure.",
     readyNowCount: 2,
     waitingOnBoardClosureCount: 2,
     governanceReadyCount: 2,
@@ -345,6 +347,9 @@ const fallbackBoardBase: HarnessBoardResponse = {
     boardControlledCandidateCount: 2,
     tenantExportTriggerCount: 2,
     boardClosureTriggerCount: 2,
+    runtimeOnlyStateCount: 2,
+    readyForTenantExportStateCount: 2,
+    awaitingBoardClosureStateCount: 2,
     roleSummary: "2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure.",
     partitions: {
       runtime: {
@@ -390,7 +395,9 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionAuthority: "wealth_factory_runtime_only",
         promotionAuthorityLabel: "Wealth Factory runtime only",
         promotionTrigger: "not_applicable_runtime",
-        promotionTriggerLabel: "No promotion trigger"
+        promotionTriggerLabel: "No promotion trigger",
+        promotionState: "runtime_only",
+        promotionStateLabel: "Runtime only"
       },
       {
         id: "attention_state",
@@ -421,7 +428,9 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionAuthority: "wealth_factory_runtime_only",
         promotionAuthorityLabel: "Wealth Factory runtime only",
         promotionTrigger: "not_applicable_runtime",
-        promotionTriggerLabel: "No promotion trigger"
+        promotionTriggerLabel: "No promotion trigger",
+        promotionState: "runtime_only",
+        promotionStateLabel: "Runtime only"
       }
     ],
     exportReadyItems: [
@@ -454,7 +463,9 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionAuthority: "tenant_explicit_export",
         promotionAuthorityLabel: "Tenant explicit export",
         promotionTrigger: "tenant_export_request",
-        promotionTriggerLabel: "Tenant export request"
+        promotionTriggerLabel: "Tenant export request",
+        promotionState: "ready_for_tenant_export",
+        promotionStateLabel: "Ready for tenant export"
       },
       {
         id: "implemented_actions",
@@ -485,7 +496,9 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionAuthority: "tenant_explicit_export",
         promotionAuthorityLabel: "Tenant explicit export",
         promotionTrigger: "tenant_export_request",
-        promotionTriggerLabel: "Tenant export request"
+        promotionTriggerLabel: "Tenant export request",
+        promotionState: "ready_for_tenant_export",
+        promotionStateLabel: "Ready for tenant export"
       },
       {
         id: "package_governance",
@@ -517,6 +530,8 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionAuthorityLabel: "Board closure, then tenant export",
         promotionTrigger: "board_closure",
         promotionTriggerLabel: "Board closure",
+        promotionState: "awaiting_board_closure",
+        promotionStateLabel: "Awaiting board closure",
         nextEligibleSummary:
           "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
       },
@@ -550,6 +565,8 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionAuthorityLabel: "Board closure, then tenant export",
         promotionTrigger: "board_closure",
         promotionTriggerLabel: "Board closure",
+        promotionState: "awaiting_board_closure",
+        promotionStateLabel: "Awaiting board closure",
         nextEligibleSummary:
           "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
       }
@@ -877,6 +894,21 @@ function humanizeMemoryBoundaryPromotionTrigger(
   }
 }
 
+function humanizeMemoryBoundaryPromotionState(
+  state: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["promotionState"]>
+) {
+  switch (state) {
+    case "runtime_only":
+      return "Runtime only";
+    case "ready_for_tenant_export":
+      return "Ready for tenant export";
+    case "awaiting_board_closure":
+      return "Awaiting board closure";
+    default:
+      return state;
+  }
+}
+
 function inferMemoryBoundaryReadiness(
   itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"],
   board: Pick<HarnessBoardResponse, "completionPackage">
@@ -1081,6 +1113,26 @@ function inferMemoryBoundaryPromotionTrigger(
   }
 }
 
+function inferMemoryBoundaryPromotionState(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"],
+  board: Pick<HarnessBoardResponse, "completionPackage">
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["promotionState"] {
+  switch (itemId) {
+    case "lane_continuity":
+    case "attention_state":
+      return "runtime_only";
+    case "package_governance":
+    case "package_deliverables":
+      return board.completionPackage?.hasOpenGovernanceItems
+        ? "awaiting_board_closure"
+        : "ready_for_tenant_export";
+    case "governance_decisions":
+    case "implemented_actions":
+    default:
+      return "ready_for_tenant_export";
+  }
+}
+
 function normalizeMemoryBoundary(
   memoryBoundary: HarnessBoardResponse["memoryBoundary"],
   board: Pick<HarnessBoardResponse, "completionPackage">
@@ -1098,6 +1150,7 @@ function normalizeMemoryBoundary(
     const promotionBlocker = item.promotionBlocker ?? inferMemoryBoundaryPromotionBlocker(item.id, board);
     const promotionAuthority = item.promotionAuthority ?? inferMemoryBoundaryPromotionAuthority(item.id, board);
     const promotionTrigger = item.promotionTrigger ?? inferMemoryBoundaryPromotionTrigger(item.id, board);
+    const promotionState = item.promotionState ?? inferMemoryBoundaryPromotionState(item.id, board);
     return {
       ...item,
       readiness,
@@ -1130,7 +1183,10 @@ function normalizeMemoryBoundary(
         item.promotionAuthorityLabel ?? humanizeMemoryBoundaryPromotionAuthority(promotionAuthority),
       promotionTrigger,
       promotionTriggerLabel:
-        item.promotionTriggerLabel ?? humanizeMemoryBoundaryPromotionTrigger(promotionTrigger)
+        item.promotionTriggerLabel ?? humanizeMemoryBoundaryPromotionTrigger(promotionTrigger),
+      promotionState,
+      promotionStateLabel:
+        item.promotionStateLabel ?? humanizeMemoryBoundaryPromotionState(promotionState)
     };
   });
   const exportReadyItems = memoryBoundary.exportReadyItems.map((item) => {
@@ -1146,6 +1202,7 @@ function normalizeMemoryBoundary(
     const promotionBlocker = item.promotionBlocker ?? inferMemoryBoundaryPromotionBlocker(item.id, board);
     const promotionAuthority = item.promotionAuthority ?? inferMemoryBoundaryPromotionAuthority(item.id, board);
     const promotionTrigger = item.promotionTrigger ?? inferMemoryBoundaryPromotionTrigger(item.id, board);
+    const promotionState = item.promotionState ?? inferMemoryBoundaryPromotionState(item.id, board);
     const nextEligibleSummary = item.nextEligibleSummary
       ?? (readiness === "after_board_closes"
         ? item.id === "package_governance"
@@ -1187,6 +1244,9 @@ function normalizeMemoryBoundary(
       promotionTrigger,
       promotionTriggerLabel:
         item.promotionTriggerLabel ?? humanizeMemoryBoundaryPromotionTrigger(promotionTrigger),
+      promotionState,
+      promotionStateLabel:
+        item.promotionStateLabel ?? humanizeMemoryBoundaryPromotionState(promotionState),
       ...(nextEligibleSummary ? { nextEligibleSummary } : {})
     };
   });
@@ -1210,6 +1270,12 @@ function normalizeMemoryBoundary(
     ?? exportReadyItems.filter((item) => item.promotionTrigger === "tenant_export_request").length;
   const boardClosureTriggerCount = memoryBoundary.boardClosureTriggerCount
     ?? exportReadyItems.filter((item) => item.promotionTrigger === "board_closure").length;
+  const runtimeOnlyStateCount = memoryBoundary.runtimeOnlyStateCount
+    ?? operationalItems.filter((item) => item.promotionState === "runtime_only").length;
+  const readyForTenantExportStateCount = memoryBoundary.readyForTenantExportStateCount
+    ?? exportReadyItems.filter((item) => item.promotionState === "ready_for_tenant_export").length;
+  const awaitingBoardClosureStateCount = memoryBoundary.awaitingBoardClosureStateCount
+    ?? exportReadyItems.filter((item) => item.promotionState === "awaiting_board_closure").length;
 
   return {
     ...memoryBoundary,
@@ -1228,6 +1294,9 @@ function normalizeMemoryBoundary(
     boardControlledCandidateCount,
     tenantExportTriggerCount,
     boardClosureTriggerCount,
+    runtimeOnlyStateCount,
+    readyForTenantExportStateCount,
+    awaitingBoardClosureStateCount,
     roleSummary:
       memoryBoundary.roleSummary
       ?? (packagedWaitingCount > 0
@@ -1261,6 +1330,11 @@ function normalizeMemoryBoundary(
       ?? (boardClosureTriggerCount > 0
         ? `${tenantExportTriggerCount} export candidate bucket${tenantExportTriggerCount === 1 ? " is" : "s are"} waiting only on a later tenant export request, while ${boardClosureTriggerCount} bucket${boardClosureTriggerCount === 1 ? " still needs" : "s still need"} board closure before that request can happen.`
         : `${tenantExportTriggerCount} export candidate bucket${tenantExportTriggerCount === 1 ? " is" : "s are"} ready for a later tenant export request, while runtime memory has no promotion trigger.`),
+    stateSummary:
+      memoryBoundary.stateSummary
+      ?? (awaitingBoardClosureStateCount > 0
+        ? `${runtimeOnlyStateCount} runtime bucket${runtimeOnlyStateCount === 1 ? " stays" : "s stay"} runtime-only, ${readyForTenantExportStateCount} export candidate bucket${readyForTenantExportStateCount === 1 ? " is" : "s are"} ready for tenant export later, and ${awaitingBoardClosureStateCount} bucket${awaitingBoardClosureStateCount === 1 ? " is" : "s are"} still awaiting board closure.`
+        : `${runtimeOnlyStateCount} runtime bucket${runtimeOnlyStateCount === 1 ? " stays" : "s stay"} runtime-only, and ${readyForTenantExportStateCount} export candidate bucket${readyForTenantExportStateCount === 1 ? " is" : "s are"} ready for tenant export later.`),
     partitions: memoryBoundary.partitions ?? {
       runtime: {
         itemCount: operationalItems.length,
@@ -1323,7 +1397,9 @@ function normalizeBoardResponse(
       promotionAuthority: "tenant_explicit_export",
       promotionAuthorityLabel: "Tenant explicit export",
       promotionTrigger: "tenant_export_request",
-      promotionTriggerLabel: "Tenant export request"
+      promotionTriggerLabel: "Tenant export request",
+      promotionState: "ready_for_tenant_export",
+      promotionStateLabel: "Ready for tenant export"
     },
     {
       id: "implemented_actions",
@@ -1354,7 +1430,9 @@ function normalizeBoardResponse(
       promotionAuthority: "tenant_explicit_export",
       promotionAuthorityLabel: "Tenant explicit export",
       promotionTrigger: "tenant_export_request",
-      promotionTriggerLabel: "Tenant export request"
+      promotionTriggerLabel: "Tenant export request",
+      promotionState: "ready_for_tenant_export",
+      promotionStateLabel: "Ready for tenant export"
     },
     {
       id: "package_governance",
@@ -1410,6 +1488,12 @@ function normalizeBoardResponse(
         promotionTriggerLabel: board.completionPackage?.hasOpenGovernanceItems
           ? "Board closure"
           : "Tenant export request",
+        promotionState: board.completionPackage?.hasOpenGovernanceItems
+          ? "awaiting_board_closure"
+          : "ready_for_tenant_export",
+        promotionStateLabel: board.completionPackage?.hasOpenGovernanceItems
+          ? "Awaiting board closure"
+          : "Ready for tenant export",
         ...(board.completionPackage?.hasOpenGovernanceItems
           ? {
             nextEligibleSummary:
@@ -1471,6 +1555,12 @@ function normalizeBoardResponse(
         promotionTriggerLabel: board.completionPackage?.hasOpenGovernanceItems
           ? "Board closure"
           : "Tenant export request",
+        promotionState: board.completionPackage?.hasOpenGovernanceItems
+          ? "awaiting_board_closure"
+          : "ready_for_tenant_export",
+        promotionStateLabel: board.completionPackage?.hasOpenGovernanceItems
+          ? "Awaiting board closure"
+          : "Ready for tenant export",
         ...(board.completionPackage?.hasOpenGovernanceItems
           ? {
             nextEligibleSummary:
@@ -1510,6 +1600,9 @@ function normalizeBoardResponse(
       boardControlledCandidateCount: exportReadyItems.filter((item) => item.promotionAuthority === "board_closure_then_tenant_export").length,
       tenantExportTriggerCount: exportReadyItems.filter((item) => item.promotionTrigger === "tenant_export_request").length,
       boardClosureTriggerCount: exportReadyItems.filter((item) => item.promotionTrigger === "board_closure").length,
+      runtimeOnlyStateCount: 2,
+      readyForTenantExportStateCount: exportReadyItems.filter((item) => item.promotionState === "ready_for_tenant_export").length,
+      awaitingBoardClosureStateCount: exportReadyItems.filter((item) => item.promotionState === "awaiting_board_closure").length,
       roleSummary:
         packagedWaitingCount > 0
           ? `${governanceReadyCount} governance record candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} ready now, and ${packagedWaitingCount} packaged output candidate${packagedWaitingCount === 1 ? "" : "s"} ${packagedWaitingCount === 1 ? "still waits" : "still wait"} on board closure.`
@@ -1536,6 +1629,10 @@ function normalizeBoardResponse(
         waitingOnBoardClosureCount > 0
           ? `${readyNowCount} export candidate bucket${readyNowCount === 1 ? " is" : "s are"} waiting only on a later tenant export request, while ${waitingOnBoardClosureCount} bucket${waitingOnBoardClosureCount === 1 ? " still needs" : "s still need"} board closure before that request can happen.`
           : `${readyNowCount} export candidate bucket${readyNowCount === 1 ? " is" : "s are"} ready for a later tenant export request, while runtime memory has no promotion trigger.`,
+      stateSummary:
+        waitingOnBoardClosureCount > 0
+          ? `2 runtime buckets stay runtime-only, ${exportReadyItems.filter((item) => item.promotionState === "ready_for_tenant_export").length} export candidate bucket${exportReadyItems.filter((item) => item.promotionState === "ready_for_tenant_export").length === 1 ? " is" : "s are"} ready for tenant export later, and ${exportReadyItems.filter((item) => item.promotionState === "awaiting_board_closure").length} bucket${exportReadyItems.filter((item) => item.promotionState === "awaiting_board_closure").length === 1 ? " is" : "s are"} still awaiting board closure.`
+          : `2 runtime buckets stay runtime-only, and ${exportReadyItems.filter((item) => item.promotionState === "ready_for_tenant_export").length} export candidate bucket${exportReadyItems.filter((item) => item.promotionState === "ready_for_tenant_export").length === 1 ? " is" : "s are"} ready for tenant export later.`,
       partitions: {
         runtime: {
           itemCount: 2,
@@ -1585,7 +1682,9 @@ function normalizeBoardResponse(
           promotionAuthority: "wealth_factory_runtime_only",
           promotionAuthorityLabel: "Wealth Factory runtime only",
           promotionTrigger: "not_applicable_runtime",
-          promotionTriggerLabel: "No promotion trigger"
+          promotionTriggerLabel: "No promotion trigger",
+          promotionState: "runtime_only",
+          promotionStateLabel: "Runtime only"
         },
         {
           id: "attention_state",
@@ -1616,7 +1715,9 @@ function normalizeBoardResponse(
           promotionAuthority: "wealth_factory_runtime_only",
           promotionAuthorityLabel: "Wealth Factory runtime only",
           promotionTrigger: "not_applicable_runtime",
-          promotionTriggerLabel: "No promotion trigger"
+          promotionTriggerLabel: "No promotion trigger",
+          promotionState: "runtime_only",
+          promotionStateLabel: "Runtime only"
         }
       ],
       exportReadyItems
