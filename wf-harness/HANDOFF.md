@@ -289,6 +289,7 @@ The first harness implementation slice is now built and verified:
 - Keep `memoryBoundary` explicit about record target too. If a promotable bucket becomes a governance history record, a package governance record, or a package deliverable record, that target should stay contract-owned so later long-memory/export work never has to infer destination shape from item ids, source surfaces, or summary prose.
 - Keep `memoryBoundary` explicit about promotion blockers too. If a bucket is runtime-only by design or still blocked on board closure, that blocker should stay contract-owned so later export work never has to infer blockage from readiness prose or package state alone.
 - Keep `memoryBoundary` explicit about promotion authority too. If the next step belongs to Wealth Factory runtime, tenant explicit export, or board closure first, that authority should stay contract-owned so later export work never has to infer who owns promotion from path plus blocker.
+- Keep `memoryBoundary` explicit about promotion trigger too. If the next move depends on no trigger, a tenant export request, or board closure first, that trigger should stay contract-owned so later export work never has to infer what actually fires promotion from authority plus blocker.
 
 ## Next Step
 

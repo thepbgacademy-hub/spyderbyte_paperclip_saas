@@ -1612,11 +1612,14 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.blockedCandidateCount).toEqual(expect.any(Number));
     expect(hydrated.memoryBoundary.tenantControlledCandidateCount).toEqual(expect.any(Number));
     expect(hydrated.memoryBoundary.boardControlledCandidateCount).toEqual(expect.any(Number));
+    expect(hydrated.memoryBoundary.tenantExportTriggerCount).toEqual(expect.any(Number));
+    expect(hydrated.memoryBoundary.boardClosureTriggerCount).toEqual(expect.any(Number));
     expect(hydrated.memoryBoundary.ownershipSummary).toContain("Wealth Factory-only");
     expect(hydrated.memoryBoundary.promotionSummary).toContain("never promote");
     expect(hydrated.memoryBoundary.recordTargetSummary).toContain("governance history record");
     expect(hydrated.memoryBoundary.blockerSummary).toContain("blocked");
     expect(hydrated.memoryBoundary.authoritySummary).toContain("tenant-controlled");
+    expect(hydrated.memoryBoundary.triggerSummary).toContain("tenant export request");
     expect(hydrated.memoryBoundary.partitions).toMatchObject({
       runtime: { itemCount: 2 },
       governanceHistoryCandidates: { itemCount: 2 }
@@ -1643,7 +1646,9 @@ describe("harness board service", () => {
           promotionBlocker: "not_applicable_runtime_only",
           promotionBlockerLabel: "Not applicable in runtime",
           promotionAuthority: "wealth_factory_runtime_only",
-          promotionAuthorityLabel: "Wealth Factory runtime only"
+          promotionAuthorityLabel: "Wealth Factory runtime only",
+          promotionTrigger: "not_applicable_runtime",
+          promotionTriggerLabel: "No promotion trigger"
         })
       ])
     );
@@ -1669,7 +1674,9 @@ describe("harness board service", () => {
           promotionBlocker: "none_ready_now",
           promotionBlockerLabel: "No blocker",
           promotionAuthority: "tenant_explicit_export",
-          promotionAuthorityLabel: "Tenant explicit export"
+          promotionAuthorityLabel: "Tenant explicit export",
+          promotionTrigger: "tenant_export_request",
+          promotionTriggerLabel: "Tenant export request"
         }),
         expect.objectContaining({
           id: "implemented_actions",
@@ -1691,7 +1698,9 @@ describe("harness board service", () => {
           promotionBlocker: "none_ready_now",
           promotionBlockerLabel: "No blocker",
           promotionAuthority: "tenant_explicit_export",
-          promotionAuthorityLabel: "Tenant explicit export"
+          promotionAuthorityLabel: "Tenant explicit export",
+          promotionTrigger: "tenant_export_request",
+          promotionTriggerLabel: "Tenant export request"
         })
       ])
     );

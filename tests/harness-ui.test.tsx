@@ -296,6 +296,8 @@ const boardResponse: HarnessBoardResponse = {
       "2 export candidate buckets are still blocked by board closure. Runtime memory stays non-promotable by design.",
     authoritySummary:
       "2 export candidate buckets are already tenant-controlled for later explicit export, while 2 buckets still need board closure before tenant export can own the next step.",
+    triggerSummary:
+      "2 export candidate buckets are waiting only on a later tenant export request, while 2 buckets still need board closure before that request can happen.",
     readyNowCount: 2,
     waitingOnBoardClosureCount: 2,
     governanceReadyCount: 2,
@@ -304,6 +306,8 @@ const boardResponse: HarnessBoardResponse = {
     blockedCandidateCount: 2,
     tenantControlledCandidateCount: 2,
     boardControlledCandidateCount: 2,
+    tenantExportTriggerCount: 2,
+    boardClosureTriggerCount: 2,
     partitions: {
       runtime: {
         itemCount: 2,
@@ -346,7 +350,9 @@ const boardResponse: HarnessBoardResponse = {
         promotionBlocker: "not_applicable_runtime_only",
         promotionBlockerLabel: "Not applicable in runtime",
         promotionAuthority: "wealth_factory_runtime_only",
-        promotionAuthorityLabel: "Wealth Factory runtime only"
+        promotionAuthorityLabel: "Wealth Factory runtime only",
+        promotionTrigger: "not_applicable_runtime",
+        promotionTriggerLabel: "No promotion trigger"
       },
       {
         id: "attention_state",
@@ -375,7 +381,9 @@ const boardResponse: HarnessBoardResponse = {
         promotionBlocker: "not_applicable_runtime_only",
         promotionBlockerLabel: "Not applicable in runtime",
         promotionAuthority: "wealth_factory_runtime_only",
-        promotionAuthorityLabel: "Wealth Factory runtime only"
+        promotionAuthorityLabel: "Wealth Factory runtime only",
+        promotionTrigger: "not_applicable_runtime",
+        promotionTriggerLabel: "No promotion trigger"
       }
     ],
     exportReadyItems: [
@@ -406,7 +414,9 @@ const boardResponse: HarnessBoardResponse = {
         promotionBlocker: "none_ready_now",
         promotionBlockerLabel: "No blocker",
         promotionAuthority: "tenant_explicit_export",
-        promotionAuthorityLabel: "Tenant explicit export"
+        promotionAuthorityLabel: "Tenant explicit export",
+        promotionTrigger: "tenant_export_request",
+        promotionTriggerLabel: "Tenant export request"
       },
       {
         id: "implemented_actions",
@@ -435,7 +445,9 @@ const boardResponse: HarnessBoardResponse = {
         promotionBlocker: "none_ready_now",
         promotionBlockerLabel: "No blocker",
         promotionAuthority: "tenant_explicit_export",
-        promotionAuthorityLabel: "Tenant explicit export"
+        promotionAuthorityLabel: "Tenant explicit export",
+        promotionTrigger: "tenant_export_request",
+        promotionTriggerLabel: "Tenant export request"
       },
       {
         id: "package_governance",
@@ -465,6 +477,8 @@ const boardResponse: HarnessBoardResponse = {
         promotionBlockerLabel: "Board closure required",
         promotionAuthority: "board_closure_then_tenant_export",
         promotionAuthorityLabel: "Board closure, then tenant export",
+        promotionTrigger: "board_closure",
+        promotionTriggerLabel: "Board closure",
         nextEligibleSummary: "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
       },
       {
@@ -495,6 +509,8 @@ const boardResponse: HarnessBoardResponse = {
         promotionBlockerLabel: "Board closure required",
         promotionAuthority: "board_closure_then_tenant_export",
         promotionAuthorityLabel: "Board closure, then tenant export",
+        promotionTrigger: "board_closure",
+        promotionTriggerLabel: "Board closure",
         nextEligibleSummary: "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
       }
     ]
@@ -1141,12 +1157,16 @@ describe("harness board UI", () => {
     expect(markup).toContain("Package deliverable record");
     expect(markup).toContain("2 export candidate buckets are still blocked by board closure. Runtime memory stays non-promotable by design.");
     expect(markup).toContain("2 export candidate buckets are already tenant-controlled for later explicit export, while 2 buckets still need board closure before tenant export can own the next step.");
+    expect(markup).toContain("2 export candidate buckets are waiting only on a later tenant export request, while 2 buckets still need board closure before that request can happen.");
     expect(markup).toContain("Not applicable in runtime");
     expect(markup).toContain("No blocker");
     expect(markup).toContain("Board closure required");
     expect(markup).toContain("Wealth Factory runtime only");
     expect(markup).toContain("Tenant explicit export");
     expect(markup).toContain("Board closure, then tenant export");
+    expect(markup).toContain("No promotion trigger");
+    expect(markup).toContain("Tenant export request");
+    expect(markup).toContain("Board closure");
     expect(markup).toContain("Source surface: Continuity snapshots");
     expect(markup).toContain("Source surface: Pending attention");
     expect(markup).toContain("Source surface: Recent decisions");

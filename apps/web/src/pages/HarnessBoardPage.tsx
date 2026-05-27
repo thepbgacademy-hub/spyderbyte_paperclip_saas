@@ -462,6 +462,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     recordTargetSummary: "Record target is pending the latest board state.",
     blockerSummary: "Promotion blocker status is pending the latest board state.",
     authoritySummary: "Promotion authority is pending the latest board state.",
+    triggerSummary: "Promotion trigger is pending the latest board state.",
     readyNowCount: 0,
     waitingOnBoardClosureCount: 0,
     governanceReadyCount: 0,
@@ -470,6 +471,8 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     blockedCandidateCount: 0,
     tenantControlledCandidateCount: 0,
     boardControlledCandidateCount: 0,
+    tenantExportTriggerCount: 0,
+    boardClosureTriggerCount: 0,
     partitions: {
       runtime: { itemCount: 0, summary: "Runtime memory partition is pending the latest board state." },
       governanceHistoryCandidates: {
@@ -512,6 +515,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <p style={styles.actionSummary}>{memoryBoundary.recordTargetSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.blockerSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.authoritySummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.triggerSummary}</p>
       <ul style={styles.actionList}>
         <li style={styles.actionItem}>
           <p style={styles.contractMeta}>Runtime partition</p>
@@ -550,6 +554,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                     <span style={styles.badge}>{item.recordTargetLabel}</span>
                     <span style={styles.badge}>{item.promotionBlockerLabel}</span>
                     <span style={styles.badge}>{item.promotionAuthorityLabel}</span>
+                    <span style={styles.badge}>{item.promotionTriggerLabel}</span>
                   </div>
                   <p style={styles.actionSummary}>{item.summary}</p>
                   <p style={styles.optionBody}>{`Source surface: ${item.sourceSurfaceLabel}`}</p>
