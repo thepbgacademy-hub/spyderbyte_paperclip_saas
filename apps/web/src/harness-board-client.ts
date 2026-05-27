@@ -325,6 +325,8 @@ const fallbackBoardBase: HarnessBoardResponse = {
     exportSummary: "2 export candidates are ready now, and 2 still wait for board closure.",
     ownershipSummary:
       "2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later.",
+    promotionSummary:
+      "2 runtime memory buckets never promote, 2 candidate buckets are ready for explicit export later, and 2 candidate buckets still wait on board closure first.",
     readyNowCount: 2,
     waitingOnBoardClosureCount: 2,
     governanceReadyCount: 2,
@@ -365,7 +367,9 @@ const fallbackBoardBase: HarnessBoardResponse = {
         durabilityCondition: "runtime_ephemeral",
         durabilityConditionLabel: "Runtime ephemeral",
         ownershipBoundary: "wealth_factory_only",
-        ownershipBoundaryLabel: "Wealth Factory only"
+        ownershipBoundaryLabel: "Wealth Factory only",
+        promotionPath: "never_promotes",
+        promotionPathLabel: "Never promotes"
       },
       {
         id: "attention_state",
@@ -386,7 +390,9 @@ const fallbackBoardBase: HarnessBoardResponse = {
         durabilityCondition: "runtime_ephemeral",
         durabilityConditionLabel: "Runtime ephemeral",
         ownershipBoundary: "wealth_factory_only",
-        ownershipBoundaryLabel: "Wealth Factory only"
+        ownershipBoundaryLabel: "Wealth Factory only",
+        promotionPath: "never_promotes",
+        promotionPathLabel: "Never promotes"
       }
     ],
     exportReadyItems: [
@@ -409,7 +415,9 @@ const fallbackBoardBase: HarnessBoardResponse = {
         durabilityCondition: "stable_when_recorded",
         durabilityConditionLabel: "Stable when recorded",
         ownershipBoundary: "tenant_owned_later",
-        ownershipBoundaryLabel: "Tenant-owned later"
+        ownershipBoundaryLabel: "Tenant-owned later",
+        promotionPath: "ready_for_explicit_export",
+        promotionPathLabel: "Ready for explicit export"
       },
       {
         id: "implemented_actions",
@@ -430,7 +438,9 @@ const fallbackBoardBase: HarnessBoardResponse = {
         durabilityCondition: "stable_when_recorded",
         durabilityConditionLabel: "Stable when recorded",
         ownershipBoundary: "tenant_owned_later",
-        ownershipBoundaryLabel: "Tenant-owned later"
+        ownershipBoundaryLabel: "Tenant-owned later",
+        promotionPath: "ready_for_explicit_export",
+        promotionPathLabel: "Ready for explicit export"
       },
       {
         id: "package_governance",
@@ -452,6 +462,8 @@ const fallbackBoardBase: HarnessBoardResponse = {
         durabilityConditionLabel: "Stable after board closure",
         ownershipBoundary: "tenant_owned_later",
         ownershipBoundaryLabel: "Tenant-owned later",
+        promotionPath: "after_board_closure_then_export",
+        promotionPathLabel: "After board closure, then export",
         nextEligibleSummary:
           "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
       },
@@ -475,6 +487,8 @@ const fallbackBoardBase: HarnessBoardResponse = {
         durabilityConditionLabel: "Stable after board closure",
         ownershipBoundary: "tenant_owned_later",
         ownershipBoundaryLabel: "Tenant-owned later",
+        promotionPath: "after_board_closure_then_export",
+        promotionPathLabel: "After board closure, then export",
         nextEligibleSummary:
           "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
       }
@@ -725,6 +739,21 @@ function humanizeMemoryBoundaryOwnershipBoundary(
   }
 }
 
+function humanizeMemoryBoundaryPromotionPath(
+  path: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["promotionPath"]>
+) {
+  switch (path) {
+    case "never_promotes":
+      return "Never promotes";
+    case "ready_for_explicit_export":
+      return "Ready for explicit export";
+    case "after_board_closure_then_export":
+      return "After board closure, then export";
+    default:
+      return path;
+  }
+}
+
 function inferMemoryBoundaryReadiness(
   itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"],
   board: Pick<HarnessBoardResponse, "completionPackage">
@@ -837,6 +866,23 @@ function inferMemoryBoundaryOwnershipBoundary(
   return "tenant_owned_later";
 }
 
+function inferMemoryBoundaryPromotionPath(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"],
+  board: Pick<HarnessBoardResponse, "completionPackage">
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["promotionPath"] {
+  if (itemId === "lane_continuity" || itemId === "attention_state") {
+    return "never_promotes";
+  }
+
+  if (itemId === "package_governance" || itemId === "package_deliverables") {
+    return board.completionPackage?.hasOpenGovernanceItems
+      ? "after_board_closure_then_export"
+      : "ready_for_explicit_export";
+  }
+
+  return "ready_for_explicit_export";
+}
+
 function normalizeMemoryBoundary(
   memoryBoundary: HarnessBoardResponse["memoryBoundary"],
   board: Pick<HarnessBoardResponse, "completionPackage">
@@ -849,6 +895,7 @@ function normalizeMemoryBoundary(
     const candidateClass = item.candidateClass ?? inferMemoryBoundaryCandidateClass(item.id);
     const durabilityCondition = item.durabilityCondition ?? inferMemoryBoundaryDurabilityCondition(item.id, board);
     const ownershipBoundary = item.ownershipBoundary ?? inferMemoryBoundaryOwnershipBoundary(item.id);
+    const promotionPath = item.promotionPath ?? inferMemoryBoundaryPromotionPath(item.id, board);
     return {
       ...item,
       readiness,
@@ -866,7 +913,10 @@ function normalizeMemoryBoundary(
         item.durabilityConditionLabel ?? humanizeMemoryBoundaryDurabilityCondition(durabilityCondition),
       ownershipBoundary,
       ownershipBoundaryLabel:
-        item.ownershipBoundaryLabel ?? humanizeMemoryBoundaryOwnershipBoundary(ownershipBoundary)
+        item.ownershipBoundaryLabel ?? humanizeMemoryBoundaryOwnershipBoundary(ownershipBoundary),
+      promotionPath,
+      promotionPathLabel:
+        item.promotionPathLabel ?? humanizeMemoryBoundaryPromotionPath(promotionPath)
     };
   });
   const exportReadyItems = memoryBoundary.exportReadyItems.map((item) => {
@@ -877,6 +927,7 @@ function normalizeMemoryBoundary(
     const candidateClass = item.candidateClass ?? inferMemoryBoundaryCandidateClass(item.id);
     const durabilityCondition = item.durabilityCondition ?? inferMemoryBoundaryDurabilityCondition(item.id, board);
     const ownershipBoundary = item.ownershipBoundary ?? inferMemoryBoundaryOwnershipBoundary(item.id);
+    const promotionPath = item.promotionPath ?? inferMemoryBoundaryPromotionPath(item.id, board);
     const nextEligibleSummary = item.nextEligibleSummary
       ?? (readiness === "after_board_closes"
         ? item.id === "package_governance"
@@ -903,6 +954,9 @@ function normalizeMemoryBoundary(
       ownershipBoundary,
       ownershipBoundaryLabel:
         item.ownershipBoundaryLabel ?? humanizeMemoryBoundaryOwnershipBoundary(ownershipBoundary),
+      promotionPath,
+      promotionPathLabel:
+        item.promotionPathLabel ?? humanizeMemoryBoundaryPromotionPath(promotionPath),
       ...(nextEligibleSummary ? { nextEligibleSummary } : {})
     };
   });
@@ -937,6 +991,11 @@ function normalizeMemoryBoundary(
     ownershipSummary:
       memoryBoundary.ownershipSummary
       ?? `${operationalItems.length} runtime memor${operationalItems.length === 1 ? "y bucket stays" : "y buckets stay"} Wealth Factory-only, while ${exportReadyItems.length} tenant-record candidate bucket${exportReadyItems.length === 1 ? "" : "s"} may become tenant-owned later.`,
+    promotionSummary:
+      memoryBoundary.promotionSummary
+      ?? (waitingOnBoardClosureCount > 0
+        ? `${operationalItems.length} runtime memor${operationalItems.length === 1 ? "y bucket never promotes" : "y buckets never promote"}, ${readyNowCount} candidate bucket${readyNowCount === 1 ? " is" : "s are"} ready for explicit export later, and ${waitingOnBoardClosureCount} candidate bucket${waitingOnBoardClosureCount === 1 ? " still waits" : "s still wait"} on board closure first.`
+        : `${operationalItems.length} runtime memor${operationalItems.length === 1 ? "y bucket never promotes" : "y buckets never promote"}, and ${readyNowCount} candidate bucket${readyNowCount === 1 ? " is" : "s are"} ready for explicit export later.`),
     partitions: memoryBoundary.partitions ?? {
       runtime: {
         itemCount: operationalItems.length,
@@ -989,7 +1048,9 @@ function normalizeBoardResponse(
       durabilityCondition: "stable_when_recorded",
       durabilityConditionLabel: "Stable when recorded",
       ownershipBoundary: "tenant_owned_later",
-      ownershipBoundaryLabel: "Tenant-owned later"
+      ownershipBoundaryLabel: "Tenant-owned later",
+      promotionPath: "ready_for_explicit_export",
+      promotionPathLabel: "Ready for explicit export"
     },
     {
       id: "implemented_actions",
@@ -1010,7 +1071,9 @@ function normalizeBoardResponse(
       durabilityCondition: "stable_when_recorded",
       durabilityConditionLabel: "Stable when recorded",
       ownershipBoundary: "tenant_owned_later",
-      ownershipBoundaryLabel: "Tenant-owned later"
+      ownershipBoundaryLabel: "Tenant-owned later",
+      promotionPath: "ready_for_explicit_export",
+      promotionPathLabel: "Ready for explicit export"
     },
     {
       id: "package_governance",
@@ -1040,6 +1103,12 @@ function normalizeBoardResponse(
           : "Stable when recorded",
         ownershipBoundary: "tenant_owned_later",
         ownershipBoundaryLabel: "Tenant-owned later",
+        promotionPath: board.completionPackage?.hasOpenGovernanceItems
+          ? "after_board_closure_then_export"
+          : "ready_for_explicit_export",
+        promotionPathLabel: board.completionPackage?.hasOpenGovernanceItems
+          ? "After board closure, then export"
+          : "Ready for explicit export",
         ...(board.completionPackage?.hasOpenGovernanceItems
           ? {
             nextEligibleSummary:
@@ -1075,6 +1144,12 @@ function normalizeBoardResponse(
           : "Stable when recorded",
         ownershipBoundary: "tenant_owned_later",
         ownershipBoundaryLabel: "Tenant-owned later",
+        promotionPath: board.completionPackage?.hasOpenGovernanceItems
+          ? "after_board_closure_then_export"
+          : "ready_for_explicit_export",
+        promotionPathLabel: board.completionPackage?.hasOpenGovernanceItems
+          ? "After board closure, then export"
+          : "Ready for explicit export",
         ...(board.completionPackage?.hasOpenGovernanceItems
           ? {
             nextEligibleSummary:
@@ -1115,6 +1190,10 @@ function normalizeBoardResponse(
           : `${governanceReadyCount + packagedReadyCount} tenant-record candidate${governanceReadyCount + packagedReadyCount === 1 ? " is" : "s are"} ready now, including ${governanceReadyCount} governance history candidate${governanceReadyCount === 1 ? "" : "s"} and ${packagedReadyCount} packaged output candidate${packagedReadyCount === 1 ? "" : "s"}.`,
       ownershipSummary:
         `2 runtime memory buckets stay Wealth Factory-only, while ${exportReadyItems.length} tenant-record candidate bucket${exportReadyItems.length === 1 ? "" : "s"} may become tenant-owned later.`,
+      promotionSummary:
+        waitingOnBoardClosureCount > 0
+          ? `2 runtime memory buckets never promote, ${readyNowCount} candidate bucket${readyNowCount === 1 ? " is" : "s are"} ready for explicit export later, and ${waitingOnBoardClosureCount} candidate bucket${waitingOnBoardClosureCount === 1 ? " still waits" : "s still wait"} on board closure first.`
+          : `2 runtime memory buckets never promote, and ${readyNowCount} candidate bucket${readyNowCount === 1 ? " is" : "s are"} ready for explicit export later.`,
       partitions: {
         runtime: {
           itemCount: 2,
@@ -1154,7 +1233,9 @@ function normalizeBoardResponse(
           durabilityCondition: "runtime_ephemeral",
           durabilityConditionLabel: "Runtime ephemeral",
           ownershipBoundary: "wealth_factory_only",
-          ownershipBoundaryLabel: "Wealth Factory only"
+          ownershipBoundaryLabel: "Wealth Factory only",
+          promotionPath: "never_promotes",
+          promotionPathLabel: "Never promotes"
         },
         {
           id: "attention_state",
@@ -1175,7 +1256,9 @@ function normalizeBoardResponse(
           durabilityCondition: "runtime_ephemeral",
           durabilityConditionLabel: "Runtime ephemeral",
           ownershipBoundary: "wealth_factory_only",
-          ownershipBoundaryLabel: "Wealth Factory only"
+          ownershipBoundaryLabel: "Wealth Factory only",
+          promotionPath: "never_promotes",
+          promotionPathLabel: "Never promotes"
         }
       ],
       exportReadyItems

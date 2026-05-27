@@ -181,6 +181,8 @@ describe("harness board client", () => {
         roleSummary: "2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure.",
         ownershipSummary:
           "2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later.",
+        promotionSummary:
+          "2 runtime memory buckets never promote, 2 candidate buckets are ready for explicit export later, and 2 candidate buckets still wait on board closure first.",
         readyNowCount: 2,
         waitingOnBoardClosureCount: 2,
         governanceReadyCount: 2,
@@ -202,7 +204,8 @@ describe("harness board client", () => {
             sourceSurface: "continuity_snapshots",
             candidateClass: "runtime_operational",
             durabilityCondition: "runtime_ephemeral",
-            ownershipBoundary: "wealth_factory_only"
+            ownershipBoundary: "wealth_factory_only",
+            promotionPath: "never_promotes"
           })
         ]),
         exportReadyItems: expect.arrayContaining([
@@ -216,7 +219,8 @@ describe("harness board client", () => {
             sourceSurface: "recent_decisions",
             candidateClass: "governance_history",
             durabilityCondition: "stable_when_recorded",
-            ownershipBoundary: "tenant_owned_later"
+            ownershipBoundary: "tenant_owned_later",
+            promotionPath: "ready_for_explicit_export"
           })
         ])
       })
@@ -253,6 +257,9 @@ describe("harness board client", () => {
     expect(board.memoryBoundary.ownershipSummary).toBe(
       "2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later."
     );
+    expect(board.memoryBoundary.promotionSummary).toBe(
+      "2 runtime memory buckets never promote, 2 candidate buckets are ready for explicit export later, and 2 candidate buckets still wait on board closure first."
+    );
     expect(board.memoryBoundary.readyNowCount).toBe(2);
     expect(board.memoryBoundary.waitingOnBoardClosureCount).toBe(2);
     expect(board.memoryBoundary.governanceReadyCount).toBe(2);
@@ -284,6 +291,9 @@ describe("harness board client", () => {
     expect(
       board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.ownershipBoundaryLabel
     ).toBe("Tenant-owned later");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.promotionPathLabel
+    ).toBe("After board closure, then export");
   });
 
   it("derives governance-ready partition counts from readiness, not only from role membership", async () => {
@@ -452,6 +462,8 @@ describe("harness board client", () => {
         roleSummary: "2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure.",
         ownershipSummary:
           "2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later.",
+        promotionSummary:
+          "2 runtime memory buckets never promote, 2 candidate buckets are ready for explicit export later, and 2 candidate buckets still wait on board closure first.",
         readyNowCount: 2,
         waitingOnBoardClosureCount: 2,
         governanceReadyCount: 2,
@@ -466,7 +478,9 @@ describe("harness board client", () => {
             candidateClass: "runtime_operational",
             durabilityCondition: "runtime_ephemeral",
             ownershipBoundary: "wealth_factory_only",
-            ownershipBoundaryLabel: "Wealth Factory only"
+            ownershipBoundaryLabel: "Wealth Factory only",
+            promotionPath: "never_promotes",
+            promotionPathLabel: "Never promotes"
           })
         ]),
         exportReadyItems: expect.arrayContaining([
@@ -479,7 +493,9 @@ describe("harness board client", () => {
             candidateClass: "governance_history",
             durabilityCondition: "stable_when_recorded",
             ownershipBoundary: "tenant_owned_later",
-            ownershipBoundaryLabel: "Tenant-owned later"
+            ownershipBoundaryLabel: "Tenant-owned later",
+            promotionPath: "ready_for_explicit_export",
+            promotionPathLabel: "Ready for explicit export"
           })
         ])
       })

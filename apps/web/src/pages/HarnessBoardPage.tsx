@@ -458,6 +458,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     exportSummary: "Export readiness is pending the latest board state.",
     roleSummary: "The boundary split is pending the latest board state.",
     ownershipSummary: "Ownership posture is pending the latest board state.",
+    promotionSummary: "Promotion path is pending the latest board state.",
     readyNowCount: 0,
     waitingOnBoardClosureCount: 0,
     governanceReadyCount: 0,
@@ -501,6 +502,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <p style={styles.actionSummary}>{memoryBoundary.exportSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.roleSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.ownershipSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.promotionSummary}</p>
       <ul style={styles.actionList}>
         <li style={styles.actionItem}>
           <p style={styles.contractMeta}>Runtime partition</p>
@@ -535,6 +537,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                     <span style={styles.badge}>{item.candidateClassLabel}</span>
                     <span style={styles.badge}>{item.durabilityConditionLabel}</span>
                     <span style={styles.badge}>{item.ownershipBoundaryLabel}</span>
+                    <span style={styles.badge}>{item.promotionPathLabel}</span>
                   </div>
                   <p style={styles.actionSummary}>{item.summary}</p>
                   <p style={styles.optionBody}>{`Source surface: ${item.sourceSurfaceLabel}`}</p>

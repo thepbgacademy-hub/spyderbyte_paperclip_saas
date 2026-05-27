@@ -123,6 +123,11 @@ export type HarnessMemoryBoundaryOwnershipBoundary =
   | "wealth_factory_only"
   | "tenant_owned_later";
 
+export type HarnessMemoryBoundaryPromotionPath =
+  | "never_promotes"
+  | "ready_for_explicit_export"
+  | "after_board_closure_then_export";
+
 export type HarnessMemoryBoundaryItemView = {
   id:
     | "lane_continuity"
@@ -149,6 +154,8 @@ export type HarnessMemoryBoundaryItemView = {
   durabilityConditionLabel: string;
   ownershipBoundary: HarnessMemoryBoundaryOwnershipBoundary;
   ownershipBoundaryLabel: string;
+  promotionPath: HarnessMemoryBoundaryPromotionPath;
+  promotionPathLabel: string;
   nextEligibleSummary?: string;
 };
 
@@ -167,6 +174,7 @@ export type HarnessMemoryBoundaryView = {
   packagedWaitingCount: number;
   roleSummary: string;
   ownershipSummary: string;
+  promotionSummary: string;
   partitions: {
     runtime: HarnessMemoryBoundaryPartitionView;
     governanceHistoryCandidates: HarnessMemoryBoundaryPartitionView;
@@ -3826,7 +3834,9 @@ function buildMemoryBoundaryView(input: {
       durabilityCondition: "runtime_ephemeral",
       durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition("runtime_ephemeral"),
       ownershipBoundary: "wealth_factory_only",
-      ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("wealth_factory_only")
+      ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("wealth_factory_only"),
+      promotionPath: "never_promotes",
+      promotionPathLabel: humanizeMemoryBoundaryPromotionPath("never_promotes")
     },
     {
       id: "attention_state",
@@ -3847,7 +3857,9 @@ function buildMemoryBoundaryView(input: {
       durabilityCondition: "runtime_ephemeral",
       durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition("runtime_ephemeral"),
       ownershipBoundary: "wealth_factory_only",
-      ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("wealth_factory_only")
+      ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("wealth_factory_only"),
+      promotionPath: "never_promotes",
+      promotionPathLabel: humanizeMemoryBoundaryPromotionPath("never_promotes")
     }
   ];
 
@@ -3871,7 +3883,9 @@ function buildMemoryBoundaryView(input: {
       durabilityCondition: "stable_when_recorded",
       durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition("stable_when_recorded"),
       ownershipBoundary: "tenant_owned_later",
-      ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("tenant_owned_later")
+      ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("tenant_owned_later"),
+      promotionPath: "ready_for_explicit_export",
+      promotionPathLabel: humanizeMemoryBoundaryPromotionPath("ready_for_explicit_export")
     },
     {
       id: "implemented_actions",
@@ -3892,7 +3906,9 @@ function buildMemoryBoundaryView(input: {
       durabilityCondition: "stable_when_recorded",
       durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition("stable_when_recorded"),
       ownershipBoundary: "tenant_owned_later",
-      ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("tenant_owned_later")
+      ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("tenant_owned_later"),
+      promotionPath: "ready_for_explicit_export",
+      promotionPathLabel: humanizeMemoryBoundaryPromotionPath("ready_for_explicit_export")
     }
   ];
 
@@ -3933,6 +3949,14 @@ function buildMemoryBoundaryView(input: {
         ),
         ownershipBoundary: "tenant_owned_later",
         ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("tenant_owned_later"),
+        promotionPath: input.completionPackage.hasOpenGovernanceItems
+          ? "after_board_closure_then_export"
+          : "ready_for_explicit_export",
+        promotionPathLabel: humanizeMemoryBoundaryPromotionPath(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "after_board_closure_then_export"
+            : "ready_for_explicit_export"
+        ),
         ...(packageReadiness === "after_board_closes"
           ? {
               nextEligibleSummary:
@@ -3972,6 +3996,14 @@ function buildMemoryBoundaryView(input: {
         ),
         ownershipBoundary: "tenant_owned_later",
         ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("tenant_owned_later"),
+        promotionPath: input.completionPackage.hasOpenGovernanceItems
+          ? "after_board_closure_then_export"
+          : "ready_for_explicit_export",
+        promotionPathLabel: humanizeMemoryBoundaryPromotionPath(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "after_board_closure_then_export"
+            : "ready_for_explicit_export"
+        ),
         ...(packageReadiness === "after_board_closes"
           ? {
               nextEligibleSummary:
@@ -4014,6 +4046,10 @@ function buildMemoryBoundaryView(input: {
         : `${governanceReadyCount + packagedReadyCount} tenant-record candidate${governanceReadyCount + packagedReadyCount === 1 ? " is" : "s are"} ready now, including ${governanceReadyCount} governance history candidate${governanceReadyCount === 1 ? "" : "s"} and ${packagedReadyCount} packaged output candidate${packagedReadyCount === 1 ? "" : "s"}.`,
     ownershipSummary:
       `${operationalItems.length} runtime memor${operationalItems.length === 1 ? "y bucket stays" : "y buckets stay"} Wealth Factory-only, while ${exportReadyItems.length} tenant-record candidate bucket${exportReadyItems.length === 1 ? "" : "s"} may become tenant-owned later.`,
+    promotionSummary:
+      waitingOnBoardClosureCount > 0
+        ? `${operationalItems.length} runtime memor${operationalItems.length === 1 ? "y bucket never promotes" : "y buckets never promote"}, ${readyNowCount} candidate bucket${readyNowCount === 1 ? " is" : "s are"} ready for explicit export later, and ${waitingOnBoardClosureCount} candidate bucket${waitingOnBoardClosureCount === 1 ? " still waits" : "s still wait"} on board closure first.`
+        : `${operationalItems.length} runtime memor${operationalItems.length === 1 ? "y bucket never promotes" : "y buckets never promote"}, and ${readyNowCount} candidate bucket${readyNowCount === 1 ? " is" : "s are"} ready for explicit export later.`,
     partitions: {
       runtime: {
         itemCount: operationalItems.length,
@@ -4128,6 +4164,19 @@ function humanizeMemoryBoundaryOwnershipBoundary(boundary: HarnessMemoryBoundary
       return "Tenant-owned later";
     default:
       return boundary;
+  }
+}
+
+function humanizeMemoryBoundaryPromotionPath(path: HarnessMemoryBoundaryPromotionPath) {
+  switch (path) {
+    case "never_promotes":
+      return "Never promotes";
+    case "ready_for_explicit_export":
+      return "Ready for explicit export";
+    case "after_board_closure_then_export":
+      return "After board closure, then export";
+    default:
+      return path;
   }
 }
 
