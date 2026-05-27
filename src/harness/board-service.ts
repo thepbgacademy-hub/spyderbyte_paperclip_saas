@@ -422,6 +422,18 @@ export type HarnessMemoryBoundaryExportCandidateView = {
   summary: string;
   readiness: HarnessMemoryBoundaryReadiness;
   readinessLabel: string;
+  candidateClass: HarnessMemoryBoundaryCandidateClass;
+  candidateClassLabel: string;
+  durabilityCondition: HarnessMemoryBoundaryDurabilityCondition;
+  durabilityConditionLabel: string;
+  ownershipBoundary: HarnessMemoryBoundaryOwnershipBoundary;
+  ownershipBoundaryLabel: string;
+  recordTarget: HarnessMemoryBoundaryRecordTarget;
+  recordTargetLabel: string;
+  promotionAuthority: HarnessMemoryBoundaryPromotionAuthority;
+  promotionAuthorityLabel: string;
+  promotionTrigger: HarnessMemoryBoundaryPromotionTrigger;
+  promotionTriggerLabel: string;
   promotionState: HarnessMemoryBoundaryPromotionState;
   promotionStateLabel: string;
   promotionNextStep: HarnessMemoryBoundaryPromotionNextStep;
@@ -5383,6 +5395,18 @@ function buildMemoryBoundaryView(input: {
         `${governanceHistoryCandidateItems.length} governance histor${governanceHistoryCandidateItems.length === 1 ? "y bucket is" : "y buckets are"} grouped into one later tenant export candidate that appends governance history notes.`,
       readiness: representative.readiness,
       readinessLabel: representative.readinessLabel,
+      candidateClass: "governance_history",
+      candidateClassLabel: humanizeMemoryBoundaryCandidateClass("governance_history"),
+      durabilityCondition: "stable_when_recorded",
+      durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition("stable_when_recorded"),
+      ownershipBoundary: "tenant_owned_later",
+      ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("tenant_owned_later"),
+      recordTarget: "governance_history_record",
+      recordTargetLabel: humanizeMemoryBoundaryRecordTarget("governance_history_record"),
+      promotionAuthority: "tenant_explicit_export",
+      promotionAuthorityLabel: humanizeMemoryBoundaryPromotionAuthority("tenant_explicit_export"),
+      promotionTrigger: "tenant_export_request",
+      promotionTriggerLabel: humanizeMemoryBoundaryPromotionTrigger("tenant_export_request"),
       promotionState: representative.promotionState,
       promotionStateLabel: representative.promotionStateLabel,
       promotionNextStep: representative.promotionNextStep,
@@ -5455,6 +5479,18 @@ function buildMemoryBoundaryView(input: {
           : `${packageBundleCandidateItems.length} packaged-output bucket${packageBundleCandidateItems.length === 1 ? " is" : "s are"} grouped into one later tenant export candidate for the package bundle.`,
       readiness: representative.readiness,
       readinessLabel: representative.readinessLabel,
+      candidateClass: "packaged_output",
+      candidateClassLabel: humanizeMemoryBoundaryCandidateClass("packaged_output"),
+      durabilityCondition: "stable_after_board_closure",
+      durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition("stable_after_board_closure"),
+      ownershipBoundary: "tenant_owned_later",
+      ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("tenant_owned_later"),
+      recordTarget: "package_deliverable_record",
+      recordTargetLabel: "Package bundle export records",
+      promotionAuthority: "board_closure_then_tenant_export",
+      promotionAuthorityLabel: humanizeMemoryBoundaryPromotionAuthority("board_closure_then_tenant_export"),
+      promotionTrigger: "board_closure",
+      promotionTriggerLabel: humanizeMemoryBoundaryPromotionTrigger("board_closure"),
       promotionState: representative.promotionState,
       promotionStateLabel: representative.promotionStateLabel,
       promotionNextStep: representative.promotionNextStep,

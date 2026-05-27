@@ -624,6 +624,18 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       candidate.id === "governance_history_export"
         ? {
             ...candidate,
+            candidateClass: candidate.candidateClass ?? "governance_history",
+            candidateClassLabel: candidate.candidateClassLabel ?? "Governance history",
+            durabilityCondition: candidate.durabilityCondition ?? "stable_when_recorded",
+            durabilityConditionLabel: candidate.durabilityConditionLabel ?? "Stable when recorded",
+            ownershipBoundary: candidate.ownershipBoundary ?? "tenant_owned_later",
+            ownershipBoundaryLabel: candidate.ownershipBoundaryLabel ?? "Tenant-owned later",
+            recordTarget: candidate.recordTarget ?? "governance_history_record",
+            recordTargetLabel: candidate.recordTargetLabel ?? "Governance history record",
+            promotionAuthority: candidate.promotionAuthority ?? "tenant_explicit_export",
+            promotionAuthorityLabel: candidate.promotionAuthorityLabel ?? "Tenant explicit export",
+            promotionTrigger: candidate.promotionTrigger ?? "tenant_export_request",
+            promotionTriggerLabel: candidate.promotionTriggerLabel ?? "Tenant export request",
             exportPayloadShape: candidate.exportPayloadShape ?? "governance_history_record",
             exportPayloadShapeLabel: candidate.exportPayloadShapeLabel ?? "Governance history record",
             idempotencyPolicy: candidate.idempotencyPolicy ?? "deterministic_upsert",
@@ -669,6 +681,19 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
           }
         : {
             ...candidate,
+            candidateClass: candidate.candidateClass ?? "packaged_output",
+            candidateClassLabel: candidate.candidateClassLabel ?? "Packaged output",
+            durabilityCondition: candidate.durabilityCondition ?? "stable_after_board_closure",
+            durabilityConditionLabel: candidate.durabilityConditionLabel ?? "Stable after board closure",
+            ownershipBoundary: candidate.ownershipBoundary ?? "tenant_owned_later",
+            ownershipBoundaryLabel: candidate.ownershipBoundaryLabel ?? "Tenant-owned later",
+            recordTarget: candidate.recordTarget ?? "package_deliverable_record",
+            recordTargetLabel: candidate.recordTargetLabel ?? "Package bundle export records",
+            promotionAuthority: candidate.promotionAuthority ?? "board_closure_then_tenant_export",
+            promotionAuthorityLabel:
+              candidate.promotionAuthorityLabel ?? "Board closure, then tenant export",
+            promotionTrigger: candidate.promotionTrigger ?? "board_closure",
+            promotionTriggerLabel: candidate.promotionTriggerLabel ?? "Board closure",
             exportPayloadShape: candidate.exportPayloadShape ?? "package_snapshot_bundle",
             exportPayloadShapeLabel: candidate.exportPayloadShapeLabel ?? "Package snapshot bundle",
             idempotencyPolicy: candidate.idempotencyPolicy ?? "board_closure_snapshot_once",
@@ -815,6 +840,12 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
               <h3 style={styles.actionHeading}>{candidate.label}</h3>
               <div style={styles.badgeList}>
                 <span style={styles.badge}>{candidate.readinessLabel}</span>
+                <span style={styles.badge}>{candidate.candidateClassLabel}</span>
+                <span style={styles.badge}>{candidate.durabilityConditionLabel}</span>
+                <span style={styles.badge}>{candidate.ownershipBoundaryLabel}</span>
+                <span style={styles.badge}>{candidate.recordTargetLabel}</span>
+                <span style={styles.badge}>{candidate.promotionAuthorityLabel}</span>
+                <span style={styles.badge}>{candidate.promotionTriggerLabel}</span>
                 <span style={styles.badge}>{candidate.promotionStateLabel}</span>
                 <span style={styles.badge}>{candidate.promotionNextStepLabel}</span>
                 <span style={styles.badge}>{candidate.promotionActionFamilyLabel}</span>
@@ -973,6 +1004,18 @@ function deriveMemoryBoundaryExportCandidates(
         `${governanceItems.length} governance histor${governanceItems.length === 1 ? "y bucket is" : "y buckets are"} grouped into one later tenant export candidate that appends governance history notes.`,
       readiness: representative.readiness,
       readinessLabel: representative.readinessLabel,
+      candidateClass: "governance_history",
+      candidateClassLabel: "Governance history",
+      durabilityCondition: "stable_when_recorded",
+      durabilityConditionLabel: "Stable when recorded",
+      ownershipBoundary: "tenant_owned_later",
+      ownershipBoundaryLabel: "Tenant-owned later",
+      recordTarget: "governance_history_record",
+      recordTargetLabel: "Governance history record",
+      promotionAuthority: "tenant_explicit_export",
+      promotionAuthorityLabel: "Tenant explicit export",
+      promotionTrigger: "tenant_export_request",
+      promotionTriggerLabel: "Tenant export request",
       promotionState: representative.promotionState,
       promotionStateLabel: representative.promotionStateLabel,
       promotionNextStep: representative.promotionNextStep,
@@ -1044,6 +1087,18 @@ function deriveMemoryBoundaryExportCandidates(
           : `${packageItems.length} packaged-output bucket${packageItems.length === 1 ? " is" : "s are"} grouped into one later tenant export candidate for the package bundle.`,
       readiness: representative.readiness,
       readinessLabel: representative.readinessLabel,
+      candidateClass: "packaged_output",
+      candidateClassLabel: "Packaged output",
+      durabilityCondition: "stable_after_board_closure",
+      durabilityConditionLabel: "Stable after board closure",
+      ownershipBoundary: "tenant_owned_later",
+      ownershipBoundaryLabel: "Tenant-owned later",
+      recordTarget: "package_deliverable_record",
+      recordTargetLabel: "Package bundle export records",
+      promotionAuthority: "board_closure_then_tenant_export",
+      promotionAuthorityLabel: "Board closure, then tenant export",
+      promotionTrigger: "board_closure",
+      promotionTriggerLabel: "Board closure",
       promotionState: representative.promotionState,
       promotionStateLabel: representative.promotionStateLabel,
       promotionNextStep: representative.promotionNextStep,

@@ -3940,7 +3940,13 @@ describe("harness board service", () => {
         exportAudienceBoundaryLabel: "Tenant governance-history readers",
         exportSanitizationPolicyLabel: "Export as recorded",
         exportRedactionBoundaryLabel: "Governance-safe redaction",
-        exportSourceDisclosurePolicyLabel: "Decision summary only"
+        exportSourceDisclosurePolicyLabel: "Decision summary only",
+        candidateClassLabel: "Governance history",
+        durabilityConditionLabel: "Stable when recorded",
+        ownershipBoundaryLabel: "Tenant-owned later",
+        recordTargetLabel: "Governance history record",
+        promotionAuthorityLabel: "Tenant explicit export",
+        promotionTriggerLabel: "Tenant export request"
       })
     ]);
   });
