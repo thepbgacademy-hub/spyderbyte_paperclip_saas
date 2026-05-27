@@ -246,7 +246,9 @@ describe("harness board client", () => {
       expect.arrayContaining([
         expect.objectContaining({
           action: "opened_lane",
-          persona: "CFO"
+          persona: "CFO",
+          policyReasonLabel: expect.any(String),
+          recommendationSummary: expect.any(String)
         })
       ])
     );

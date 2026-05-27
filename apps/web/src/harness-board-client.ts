@@ -106,6 +106,11 @@ const fallbackBoardBase: HarnessBoardResponse = {
           id: "snapshot",
           title: "Snapshot",
           body: "This fallback board keeps the shell usable during static web development without exposing backend mechanics."
+        },
+        {
+          id: "continuity-memory",
+          title: "Continuity memory",
+          body: "Source: Resume override\nUpdated: recently\nLatest outcome memory: Keep the launch plan narrowed to the first three bounded moves."
         }
       ]
     },
@@ -298,7 +303,9 @@ const fallbackBoardBase: HarnessBoardResponse = {
       summary: "CEO opened a new pricing review lane for CFO.",
       timestampLabel: "recently",
       persona: "CFO",
-      deliverableLabel: "Pricing Review"
+      deliverableLabel: "Pricing Review",
+      policyReasonLabel: "New lane approved",
+      recommendationSummary: "Open a dedicated pricing review lane for CFO."
     }
   ],
   recentDecisions: [

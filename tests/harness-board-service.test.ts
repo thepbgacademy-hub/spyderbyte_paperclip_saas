@@ -1609,7 +1609,9 @@ describe("harness board service", () => {
           action: "opened_lane",
           summary: "CEO opened a new pricing review lane for CFO.",
           persona: "CFO",
-          deliverableLabel: "Pricing Review"
+          deliverableLabel: "Pricing Review",
+          policyReasonLabel: "New lane approved",
+          recommendationSummary: "Open a dedicated pricing review lane for CFO."
         }),
         expect.objectContaining({
           action: "reused_lane",
@@ -1617,7 +1619,10 @@ describe("harness board service", () => {
           targetCardId: created.cardId,
           summary: "CEO folded a proposal into the existing pricing review lane.",
           persona: "CFO",
-          deliverableLabel: "Pricing Review"
+          deliverableLabel: "Pricing Review",
+          policyReasonLabel: "Existing lane reused",
+          resolutionLabel: "Update Existing Lane",
+          recommendationSummary: "Advance this pricing review inside the existing CFO lane."
         })
       ])
     );
@@ -2496,7 +2501,11 @@ describe("harness board service", () => {
           targetCardId: parentCard.cardId,
           summary: "CEO handed the active pricing review lane to RESEARCHER.",
           persona: "RESEARCHER",
-          deliverableLabel: "Pricing Review"
+          deliverableLabel: "Pricing Review",
+          policyReasonLabel: "Waiting on current lane owner",
+          resolutionLabel: "Handoff Existing Lane",
+          recommendationSummary:
+            "Hand this pricing review lane to RESEARCHER and continue the work inside the existing board lane."
         })
       ])
     );
@@ -2509,6 +2518,10 @@ describe("harness board service", () => {
         expect.objectContaining({
           id: "absorbed-work",
           body: expect.stringContaining("CFO: Pressure-test the pricing lane")
+        }),
+        expect.objectContaining({
+          id: "continuity-memory",
+          body: expect.stringContaining("Source: Lane handoff")
         })
       ])
     );
@@ -3605,6 +3618,18 @@ describe("harness board service", () => {
     expect(hydratedLane?.lane).toBe("planning");
     expect(hydratedLane?.activity.some((item) => item.label.includes("reopened this completed research brief lane"))).toBe(
       true
+    );
+    expect(hydratedLane?.detailSections).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "continuity-memory",
+          body: expect.stringContaining("Source: Proposal absorbed")
+        }),
+        expect.objectContaining({
+          id: "continuity-memory",
+          body: expect.stringContaining("Latest outcome memory: Initial competitor pricing anchors are recorded.")
+        })
+      ])
     );
   });
 

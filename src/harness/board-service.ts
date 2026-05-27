@@ -148,6 +148,10 @@ export type HarnessFollowThroughView = {
   proposalId?: string;
   persona?: string;
   deliverableLabel?: string;
+  resolutionLabel?: string;
+  policyReasonLabel?: string;
+  recommendationSummary?: string;
+  objectionSummary?: string;
 };
 
 export type HarnessPendingApprovalView = {
@@ -4237,6 +4241,14 @@ function toBoardCardView(input: {
       body: absorbedWorkItems.map((item) => `- ${item}`).join("\n")
     });
   }
+  const continuityMemorySection = buildContinuityMemorySection({
+    continuity: input.continuity,
+    absorbedWorkItems,
+    resultSummary: input.resultSummary
+  });
+  if (continuityMemorySection) {
+    detailSections.push(continuityMemorySection);
+  }
 
   return {
     id: input.card.id,
@@ -4552,7 +4564,63 @@ function describeContinuitySnapshot(
   return `${personaLabel} owns a deliverable-focused card that can resume from persisted state after interruption.`;
 }
 
+function buildContinuityMemorySection(input: {
+  continuity: HarnessCardContinuityRecord | null;
+  absorbedWorkItems: readonly string[];
+  resultSummary?: string | undefined;
+}): HarnessBoardDetailSection | null {
+  if (!input.continuity) {
+    return null;
+  }
+
+  const lines = [
+    `Source: ${humanizeContinuitySource(input.continuity.continuitySource)}`,
+    `Updated: ${formatBoardTimestamp(input.continuity.updatedAt)}`
+  ];
+
+  const latestOutcome = input.resultSummary ?? input.continuity.latestResultSummary;
+  if (latestOutcome) {
+    lines.push(`Latest outcome memory: ${latestOutcome}`);
+  }
+
+  const latestAbsorbedWorkItem = input.absorbedWorkItems.at(-1);
+  if (latestAbsorbedWorkItem) {
+    lines.push(`Latest absorbed work: ${latestAbsorbedWorkItem}`);
+  }
+
+  if (input.absorbedWorkItems.length > 1) {
+    lines.push(`Absorbed work items tracked: ${input.absorbedWorkItems.length}`);
+  }
+
+  return {
+    id: "continuity-memory",
+    title: "Continuity memory",
+    body: lines.join("\n")
+  };
+}
+
+function humanizeContinuitySource(value: HarnessCardContinuityRecord["continuitySource"]): string {
+  switch (value) {
+    case "state_transition":
+      return "State transition";
+    case "resume_override":
+      return "Resume override";
+    case "proposal_absorbed":
+      return "Proposal absorbed";
+    case "lane_handoff":
+      return "Lane handoff";
+    case "result_recorded":
+      return "Result recorded";
+    default:
+      return humanizeValue(value);
+  }
+}
+
 function humanizeDeliverableType(value: string): string {
+  return humanizeLabel(value.replace(/_/gu, " "));
+}
+
+function humanizeValue(value: string): string {
   return humanizeLabel(value.replace(/_/gu, " "));
 }
 
@@ -4610,7 +4678,11 @@ function toFollowThroughView(decision: HarnessBoardDecisionRecord): HarnessFollo
     ...(decision.targetCardId ? { targetCardId: decision.targetCardId } : {}),
     ...(decision.proposalId ? { proposalId: decision.proposalId } : {}),
     ...(decision.persona ? { persona: decision.persona.toUpperCase() } : {}),
-    ...(decision.deliverableType ? { deliverableLabel: humanizeDeliverableType(decision.deliverableType) } : {})
+    ...(decision.deliverableType ? { deliverableLabel: humanizeDeliverableType(decision.deliverableType) } : {}),
+    ...(decision.resolution ? { resolutionLabel: humanizeValue(decision.resolution) } : {}),
+    ...(decision.policyReason ? { policyReasonLabel: humanizePolicyReason(decision.policyReason) } : {}),
+    ...(decision.recommendationSummary ? { recommendationSummary: decision.recommendationSummary } : {}),
+    ...(decision.objectionSummary ? { objectionSummary: decision.objectionSummary } : {})
   };
 }
 

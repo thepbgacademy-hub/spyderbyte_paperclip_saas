@@ -56,6 +56,11 @@ const cards: HarnessBoardCard[] = [
         id: "snapshot",
         title: "Snapshot",
         body: "High-level planning notes stay visible without exposing execution internals."
+      },
+      {
+        id: "continuity-memory",
+        title: "Continuity memory",
+        body: "Source: Resume override\nUpdated: 11:07 AM\nLatest outcome memory: Keep the launch brief tight."
       }
     ]
   },
@@ -237,7 +242,11 @@ const boardResponse: HarnessBoardResponse = {
       summary: "CEO packaged the current pricing outcome for tenant-facing review.",
       timestampLabel: "11:19 AM",
       persona: "CFO",
-      deliverableLabel: "Margin review"
+      deliverableLabel: "Margin review",
+      policyReasonLabel: "New lane approved",
+      resolutionLabel: "Create Lane",
+      recommendationSummary: "Carry the pricing readout into the tenant-facing package.",
+      objectionSummary: "Do not widen the board cycle until the pricing package is finalized."
     }
   ],
   completionPackage: {
@@ -770,6 +779,9 @@ describe("harness board UI", () => {
 
     expect(markup).toContain("Card details");
     expect(markup).toContain("High-level planning notes stay visible");
+    expect(markup).toContain("Continuity memory");
+    expect(markup).toContain("Source: Resume override");
+    expect(markup).toContain("Latest outcome memory: Keep the launch brief tight.");
     expect(markup).not.toContain("skill");
     expect(markup).not.toContain("trace");
   });
@@ -859,6 +871,10 @@ describe("harness board UI", () => {
     expect(markup).toContain("Action: packaged outcome");
     expect(markup).toContain("Persona: CFO");
     expect(markup).toContain("Deliverable: Margin review");
+    expect(markup).toContain("Policy reason: New lane approved");
+    expect(markup).toContain("Resolution: Create Lane");
+    expect(markup).toContain("Recommendation: Carry the pricing readout into the tenant-facing package.");
+    expect(markup).toContain("Objection: Do not widen the board cycle until the pricing package is finalized.");
     expect(markup).toContain("Completion package");
     expect(markup).toContain("Tenant-facing package state");
     expect(markup).toContain("Keep the pricing package readable while the research expansion stays under review.");

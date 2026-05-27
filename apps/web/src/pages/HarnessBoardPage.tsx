@@ -2935,6 +2935,18 @@ export function HarnessBoardPage(props: {
                     {item.deliverableLabel ? (
                       <p style={styles.actionSummary}>{`Deliverable: ${item.deliverableLabel}`}</p>
                     ) : null}
+                    {item.policyReasonLabel ? (
+                      <p style={styles.actionSummary}>{`Policy reason: ${item.policyReasonLabel}`}</p>
+                    ) : null}
+                    {item.resolutionLabel ? (
+                      <p style={styles.actionSummary}>{`Resolution: ${item.resolutionLabel}`}</p>
+                    ) : null}
+                    {item.recommendationSummary ? (
+                      <p style={styles.actionSummary}>{`Recommendation: ${item.recommendationSummary}`}</p>
+                    ) : null}
+                    {item.objectionSummary ? (
+                      <p style={styles.actionSummary}>{`Objection: ${item.objectionSummary}`}</p>
+                    ) : null}
                   </li>
                 ))}
               </ul>

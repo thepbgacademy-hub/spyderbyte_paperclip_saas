@@ -164,3 +164,5 @@ This file tracks the new harness subproject only.
 - [x] Keep contract-refresh recovery guidance structured too, so the board page and pulse expose bounded next-safe-step actions after live contract drift instead of leaving operators to infer recovery from a raw cleanup notice.
 - [x] Extend the bounded board `actionToken` seam across legacy CEO mutation routes so `/complete` and `/fresh-cycle` cannot bypass `stale_contract` protection after the explicit review contract was introduced.
 - [x] Re-check CEO review exclusivity at commit time, so a fresh-cycle decision makes the older packaged run non-completable through the same review token instead of allowing contradictory outcomes under concurrency.
+- [x] Surface bounded lane continuity memory on card details so continuity source, latest outcome memory, and latest absorbed-work context stay tenant-visible without replaying raw card events or opening a second notes store.
+- [x] Surface bounded policy/recommendation context on `followThroughItems` so implemented governance actions already carry enough suggested-versus-implemented memory for later export without reconstructing intent from raw decision rows.
