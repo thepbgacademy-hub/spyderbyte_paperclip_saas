@@ -267,10 +267,14 @@ describe("harness board client", () => {
     expect(board.memoryBoundary.recordTargetSummary).toBe(
       "2 governance history record candidates are ready, while 2 package record candidates stay package-shaped until board closure completes."
     );
+    expect(board.memoryBoundary.blockerSummary).toBe(
+      "2 export candidate buckets are still blocked by board closure. Runtime memory stays non-promotable by design."
+    );
     expect(board.memoryBoundary.readyNowCount).toBe(2);
     expect(board.memoryBoundary.waitingOnBoardClosureCount).toBe(2);
     expect(board.memoryBoundary.governanceReadyCount).toBe(2);
     expect(board.memoryBoundary.packagedWaitingCount).toBe(2);
+    expect(board.memoryBoundary.blockedCandidateCount).toBe(2);
     expect(board.memoryBoundary.roleSummary).toBe(
       "2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure."
     );
@@ -304,6 +308,9 @@ describe("harness board client", () => {
     expect(
       board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.recordTargetLabel
     ).toBe("Package deliverable record");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.promotionBlockerLabel
+    ).toBe("Board closure required");
   });
 
   it("derives governance-ready partition counts from readiness, not only from role membership", async () => {
@@ -476,10 +483,13 @@ describe("harness board client", () => {
           "2 runtime memory buckets never promote, 2 candidate buckets are ready for explicit export later, and 2 candidate buckets still wait on board closure first.",
         recordTargetSummary:
           "2 governance history record candidates are ready, while 2 package record candidates stay package-shaped until board closure completes.",
+        blockerSummary:
+          "2 export candidate buckets are still blocked by board closure. Runtime memory stays non-promotable by design.",
         readyNowCount: 2,
         waitingOnBoardClosureCount: 2,
         governanceReadyCount: 2,
         packagedWaitingCount: 2,
+        blockedCandidateCount: 2,
         operationalItems: expect.arrayContaining([
           expect.objectContaining({
             id: "lane_continuity",
@@ -494,7 +504,9 @@ describe("harness board client", () => {
             promotionPath: "never_promotes",
             promotionPathLabel: "Never promotes",
             recordTarget: "none_runtime_only",
-            recordTargetLabel: "Runtime only"
+            recordTargetLabel: "Runtime only",
+            promotionBlocker: "not_applicable_runtime_only",
+            promotionBlockerLabel: "Not applicable in runtime"
           })
         ]),
         exportReadyItems: expect.arrayContaining([
@@ -511,7 +523,9 @@ describe("harness board client", () => {
             promotionPath: "ready_for_explicit_export",
             promotionPathLabel: "Ready for explicit export",
             recordTarget: "governance_history_record",
-            recordTargetLabel: "Governance history record"
+            recordTargetLabel: "Governance history record",
+            promotionBlocker: "none_ready_now",
+            promotionBlockerLabel: "No blocker"
           })
         ])
       })

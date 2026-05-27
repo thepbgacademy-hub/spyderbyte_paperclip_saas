@@ -134,6 +134,11 @@ export type HarnessMemoryBoundaryRecordTarget =
   | "package_governance_record"
   | "package_deliverable_record";
 
+export type HarnessMemoryBoundaryPromotionBlocker =
+  | "not_applicable_runtime_only"
+  | "none_ready_now"
+  | "board_closure_required";
+
 export type HarnessMemoryBoundaryItemView = {
   id:
     | "lane_continuity"
@@ -164,6 +169,8 @@ export type HarnessMemoryBoundaryItemView = {
   promotionPathLabel: string;
   recordTarget: HarnessMemoryBoundaryRecordTarget;
   recordTargetLabel: string;
+  promotionBlocker: HarnessMemoryBoundaryPromotionBlocker;
+  promotionBlockerLabel: string;
   nextEligibleSummary?: string;
 };
 
@@ -180,10 +187,12 @@ export type HarnessMemoryBoundaryView = {
   governanceReadyCount: number;
   packagedReadyCount: number;
   packagedWaitingCount: number;
+  blockedCandidateCount: number;
   roleSummary: string;
   ownershipSummary: string;
   promotionSummary: string;
   recordTargetSummary: string;
+  blockerSummary: string;
   partitions: {
     runtime: HarnessMemoryBoundaryPartitionView;
     governanceHistoryCandidates: HarnessMemoryBoundaryPartitionView;
@@ -3847,7 +3856,9 @@ function buildMemoryBoundaryView(input: {
       promotionPath: "never_promotes",
       promotionPathLabel: humanizeMemoryBoundaryPromotionPath("never_promotes"),
       recordTarget: "none_runtime_only",
-      recordTargetLabel: humanizeMemoryBoundaryRecordTarget("none_runtime_only")
+      recordTargetLabel: humanizeMemoryBoundaryRecordTarget("none_runtime_only"),
+      promotionBlocker: "not_applicable_runtime_only",
+      promotionBlockerLabel: humanizeMemoryBoundaryPromotionBlocker("not_applicable_runtime_only")
     },
     {
       id: "attention_state",
@@ -3872,7 +3883,9 @@ function buildMemoryBoundaryView(input: {
       promotionPath: "never_promotes",
       promotionPathLabel: humanizeMemoryBoundaryPromotionPath("never_promotes"),
       recordTarget: "none_runtime_only",
-      recordTargetLabel: humanizeMemoryBoundaryRecordTarget("none_runtime_only")
+      recordTargetLabel: humanizeMemoryBoundaryRecordTarget("none_runtime_only"),
+      promotionBlocker: "not_applicable_runtime_only",
+      promotionBlockerLabel: humanizeMemoryBoundaryPromotionBlocker("not_applicable_runtime_only")
     }
   ];
 
@@ -3900,7 +3913,9 @@ function buildMemoryBoundaryView(input: {
       promotionPath: "ready_for_explicit_export",
       promotionPathLabel: humanizeMemoryBoundaryPromotionPath("ready_for_explicit_export"),
       recordTarget: "governance_history_record",
-      recordTargetLabel: humanizeMemoryBoundaryRecordTarget("governance_history_record")
+      recordTargetLabel: humanizeMemoryBoundaryRecordTarget("governance_history_record"),
+      promotionBlocker: "none_ready_now",
+      promotionBlockerLabel: humanizeMemoryBoundaryPromotionBlocker("none_ready_now")
     },
     {
       id: "implemented_actions",
@@ -3925,7 +3940,9 @@ function buildMemoryBoundaryView(input: {
       promotionPath: "ready_for_explicit_export",
       promotionPathLabel: humanizeMemoryBoundaryPromotionPath("ready_for_explicit_export"),
       recordTarget: "governance_history_record",
-      recordTargetLabel: humanizeMemoryBoundaryRecordTarget("governance_history_record")
+      recordTargetLabel: humanizeMemoryBoundaryRecordTarget("governance_history_record"),
+      promotionBlocker: "none_ready_now",
+      promotionBlockerLabel: humanizeMemoryBoundaryPromotionBlocker("none_ready_now")
     }
   ];
 
@@ -3976,6 +3993,14 @@ function buildMemoryBoundaryView(input: {
         ),
         recordTarget: "package_governance_record",
         recordTargetLabel: humanizeMemoryBoundaryRecordTarget("package_governance_record"),
+        promotionBlocker: input.completionPackage.hasOpenGovernanceItems
+          ? "board_closure_required"
+          : "none_ready_now",
+        promotionBlockerLabel: humanizeMemoryBoundaryPromotionBlocker(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "board_closure_required"
+            : "none_ready_now"
+        ),
         ...(packageReadiness === "after_board_closes"
           ? {
               nextEligibleSummary:
@@ -4025,6 +4050,14 @@ function buildMemoryBoundaryView(input: {
         ),
         recordTarget: "package_deliverable_record",
         recordTargetLabel: humanizeMemoryBoundaryRecordTarget("package_deliverable_record"),
+        promotionBlocker: input.completionPackage.hasOpenGovernanceItems
+          ? "board_closure_required"
+          : "none_ready_now",
+        promotionBlockerLabel: humanizeMemoryBoundaryPromotionBlocker(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "board_closure_required"
+            : "none_ready_now"
+        ),
         ...(packageReadiness === "after_board_closes"
           ? {
               nextEligibleSummary:
@@ -4046,6 +4079,9 @@ function buildMemoryBoundaryView(input: {
   const packagedWaitingCount = exportReadyItems.filter(
     (item) => item.role === "packaged_record_candidate" && item.readiness === "after_board_closes"
   ).length;
+  const blockedCandidateCount = exportReadyItems.filter(
+    (item) => item.promotionBlocker === "board_closure_required"
+  ).length;
 
   return {
     summary:
@@ -4061,6 +4097,7 @@ function buildMemoryBoundaryView(input: {
     governanceReadyCount,
     packagedReadyCount,
     packagedWaitingCount,
+    blockedCandidateCount,
     roleSummary:
       packagedWaitingCount > 0
         ? `${governanceReadyCount} governance record candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} ready now, and ${packagedWaitingCount} packaged output candidate${packagedWaitingCount === 1 ? "" : "s"} ${packagedWaitingCount === 1 ? "still waits" : "still wait"} on board closure.`
@@ -4075,6 +4112,10 @@ function buildMemoryBoundaryView(input: {
       waitingOnBoardClosureCount > 0
         ? `${governanceReadyCount} governance history record candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} ready, while ${packagedReadyCount + packagedWaitingCount} package record candidate${packagedReadyCount + packagedWaitingCount === 1 ? "" : "s"} ${packagedReadyCount + packagedWaitingCount === 1 ? "stays" : "stay"} package-shaped${packagedWaitingCount > 0 ? " until board closure completes" : ""}.`
         : `${governanceReadyCount} governance history record candidate${governanceReadyCount === 1 ? "" : "s"} and ${packagedReadyCount} package record candidate${packagedReadyCount === 1 ? "" : "s"} are ready for later tenant export.`,
+    blockerSummary:
+      blockedCandidateCount > 0
+        ? `${blockedCandidateCount} export candidate bucket${blockedCandidateCount === 1 ? " is" : "s are"} still blocked by board closure. Runtime memory stays non-promotable by design.`
+        : "No export candidate buckets are currently blocked. Runtime memory stays non-promotable by design.",
     partitions: {
       runtime: {
         itemCount: operationalItems.length,
@@ -4217,6 +4258,19 @@ function humanizeMemoryBoundaryRecordTarget(target: HarnessMemoryBoundaryRecordT
       return "Package deliverable record";
     default:
       return target;
+  }
+}
+
+function humanizeMemoryBoundaryPromotionBlocker(blocker: HarnessMemoryBoundaryPromotionBlocker) {
+  switch (blocker) {
+    case "not_applicable_runtime_only":
+      return "Not applicable in runtime";
+    case "none_ready_now":
+      return "No blocker";
+    case "board_closure_required":
+      return "Board closure required";
+    default:
+      return humanizeLabel(blocker);
   }
 }
 

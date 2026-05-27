@@ -329,11 +329,14 @@ const fallbackBoardBase: HarnessBoardResponse = {
       "2 runtime memory buckets never promote, 2 candidate buckets are ready for explicit export later, and 2 candidate buckets still wait on board closure first.",
     recordTargetSummary:
       "2 governance history record candidates are ready, while 2 package record candidates stay package-shaped until board closure completes.",
+    blockerSummary:
+      "2 export candidate buckets are still blocked by board closure. Runtime memory stays non-promotable by design.",
     readyNowCount: 2,
     waitingOnBoardClosureCount: 2,
     governanceReadyCount: 2,
     packagedReadyCount: 0,
     packagedWaitingCount: 2,
+    blockedCandidateCount: 2,
     roleSummary: "2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure.",
     partitions: {
       runtime: {
@@ -373,7 +376,9 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionPath: "never_promotes",
         promotionPathLabel: "Never promotes",
         recordTarget: "none_runtime_only",
-        recordTargetLabel: "Runtime only"
+        recordTargetLabel: "Runtime only",
+        promotionBlocker: "not_applicable_runtime_only",
+        promotionBlockerLabel: "Not applicable in runtime"
       },
       {
         id: "attention_state",
@@ -398,7 +403,9 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionPath: "never_promotes",
         promotionPathLabel: "Never promotes",
         recordTarget: "none_runtime_only",
-        recordTargetLabel: "Runtime only"
+        recordTargetLabel: "Runtime only",
+        promotionBlocker: "not_applicable_runtime_only",
+        promotionBlockerLabel: "Not applicable in runtime"
       }
     ],
     exportReadyItems: [
@@ -425,7 +432,9 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionPath: "ready_for_explicit_export",
         promotionPathLabel: "Ready for explicit export",
         recordTarget: "governance_history_record",
-        recordTargetLabel: "Governance history record"
+        recordTargetLabel: "Governance history record",
+        promotionBlocker: "none_ready_now",
+        promotionBlockerLabel: "No blocker"
       },
       {
         id: "implemented_actions",
@@ -450,7 +459,9 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionPath: "ready_for_explicit_export",
         promotionPathLabel: "Ready for explicit export",
         recordTarget: "governance_history_record",
-        recordTargetLabel: "Governance history record"
+        recordTargetLabel: "Governance history record",
+        promotionBlocker: "none_ready_now",
+        promotionBlockerLabel: "No blocker"
       },
       {
         id: "package_governance",
@@ -476,6 +487,8 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionPathLabel: "After board closure, then export",
         recordTarget: "package_governance_record",
         recordTargetLabel: "Package governance record",
+        promotionBlocker: "board_closure_required",
+        promotionBlockerLabel: "Board closure required",
         nextEligibleSummary:
           "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
       },
@@ -503,6 +516,8 @@ const fallbackBoardBase: HarnessBoardResponse = {
         promotionPathLabel: "After board closure, then export",
         recordTarget: "package_deliverable_record",
         recordTargetLabel: "Package deliverable record",
+        promotionBlocker: "board_closure_required",
+        promotionBlockerLabel: "Board closure required",
         nextEligibleSummary:
           "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
       }
@@ -785,6 +800,21 @@ function humanizeMemoryBoundaryRecordTarget(
   }
 }
 
+function humanizeMemoryBoundaryPromotionBlocker(
+  blocker: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["promotionBlocker"]>
+) {
+  switch (blocker) {
+    case "not_applicable_runtime_only":
+      return "Not applicable in runtime";
+    case "none_ready_now":
+      return "No blocker";
+    case "board_closure_required":
+      return "Board closure required";
+    default:
+      return blocker;
+  }
+}
+
 function inferMemoryBoundaryReadiness(
   itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"],
   board: Pick<HarnessBoardResponse, "completionPackage">
@@ -933,6 +963,24 @@ function inferMemoryBoundaryRecordTarget(
   }
 }
 
+function inferMemoryBoundaryPromotionBlocker(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"],
+  board: Pick<HarnessBoardResponse, "completionPackage">
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["promotionBlocker"] {
+  switch (itemId) {
+    case "lane_continuity":
+    case "attention_state":
+      return "not_applicable_runtime_only";
+    case "package_governance":
+    case "package_deliverables":
+      return board.completionPackage?.hasOpenGovernanceItems ? "board_closure_required" : "none_ready_now";
+    case "governance_decisions":
+    case "implemented_actions":
+    default:
+      return "none_ready_now";
+  }
+}
+
 function normalizeMemoryBoundary(
   memoryBoundary: HarnessBoardResponse["memoryBoundary"],
   board: Pick<HarnessBoardResponse, "completionPackage">
@@ -947,6 +995,7 @@ function normalizeMemoryBoundary(
     const ownershipBoundary = item.ownershipBoundary ?? inferMemoryBoundaryOwnershipBoundary(item.id);
     const promotionPath = item.promotionPath ?? inferMemoryBoundaryPromotionPath(item.id, board);
     const recordTarget = item.recordTarget ?? inferMemoryBoundaryRecordTarget(item.id);
+    const promotionBlocker = item.promotionBlocker ?? inferMemoryBoundaryPromotionBlocker(item.id, board);
     return {
       ...item,
       readiness,
@@ -970,7 +1019,10 @@ function normalizeMemoryBoundary(
         item.promotionPathLabel ?? humanizeMemoryBoundaryPromotionPath(promotionPath),
       recordTarget,
       recordTargetLabel:
-        item.recordTargetLabel ?? humanizeMemoryBoundaryRecordTarget(recordTarget)
+        item.recordTargetLabel ?? humanizeMemoryBoundaryRecordTarget(recordTarget),
+      promotionBlocker,
+      promotionBlockerLabel:
+        item.promotionBlockerLabel ?? humanizeMemoryBoundaryPromotionBlocker(promotionBlocker)
     };
   });
   const exportReadyItems = memoryBoundary.exportReadyItems.map((item) => {
@@ -983,6 +1035,7 @@ function normalizeMemoryBoundary(
     const ownershipBoundary = item.ownershipBoundary ?? inferMemoryBoundaryOwnershipBoundary(item.id);
     const promotionPath = item.promotionPath ?? inferMemoryBoundaryPromotionPath(item.id, board);
     const recordTarget = item.recordTarget ?? inferMemoryBoundaryRecordTarget(item.id);
+    const promotionBlocker = item.promotionBlocker ?? inferMemoryBoundaryPromotionBlocker(item.id, board);
     const nextEligibleSummary = item.nextEligibleSummary
       ?? (readiness === "after_board_closes"
         ? item.id === "package_governance"
@@ -1015,6 +1068,9 @@ function normalizeMemoryBoundary(
       recordTarget,
       recordTargetLabel:
         item.recordTargetLabel ?? humanizeMemoryBoundaryRecordTarget(recordTarget),
+      promotionBlocker,
+      promotionBlockerLabel:
+        item.promotionBlockerLabel ?? humanizeMemoryBoundaryPromotionBlocker(promotionBlocker),
       ...(nextEligibleSummary ? { nextEligibleSummary } : {})
     };
   });
@@ -1028,6 +1084,8 @@ function normalizeMemoryBoundary(
     ?? exportReadyItems.filter((item) => item.role === "packaged_record_candidate" && item.readiness === "ready_now").length;
   const packagedWaitingCount = memoryBoundary.packagedWaitingCount
     ?? exportReadyItems.filter((item) => item.role === "packaged_record_candidate" && item.readiness === "after_board_closes").length;
+  const blockedCandidateCount = memoryBoundary.blockedCandidateCount
+    ?? exportReadyItems.filter((item) => item.promotionBlocker === "board_closure_required").length;
 
   return {
     ...memoryBoundary,
@@ -1041,6 +1099,7 @@ function normalizeMemoryBoundary(
     governanceReadyCount,
     packagedReadyCount,
     packagedWaitingCount,
+    blockedCandidateCount,
     roleSummary:
       memoryBoundary.roleSummary
       ?? (packagedWaitingCount > 0
@@ -1059,6 +1118,11 @@ function normalizeMemoryBoundary(
       ?? (waitingOnBoardClosureCount > 0
         ? `${governanceReadyCount} governance history record candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} ready, while ${packagedReadyCount + packagedWaitingCount} package record candidate${packagedReadyCount + packagedWaitingCount === 1 ? "" : "s"} ${packagedReadyCount + packagedWaitingCount === 1 ? "stays" : "stay"} package-shaped${waitingOnBoardClosureCount > 0 ? " until board closure completes" : ""}.`
         : `${governanceReadyCount} governance history record candidate${governanceReadyCount === 1 ? "" : "s"} and ${packagedReadyCount} package record candidate${packagedReadyCount === 1 ? "" : "s"} are ready for later tenant export.`),
+    blockerSummary:
+      memoryBoundary.blockerSummary
+      ?? (blockedCandidateCount > 0
+        ? `${blockedCandidateCount} export candidate bucket${blockedCandidateCount === 1 ? " is" : "s are"} still blocked by board closure. Runtime memory stays non-promotable by design.`
+        : "No export candidate buckets are currently blocked. Runtime memory stays non-promotable by design."),
     partitions: memoryBoundary.partitions ?? {
       runtime: {
         itemCount: operationalItems.length,
@@ -1115,7 +1179,9 @@ function normalizeBoardResponse(
       promotionPath: "ready_for_explicit_export",
       promotionPathLabel: "Ready for explicit export",
       recordTarget: "governance_history_record",
-      recordTargetLabel: "Governance history record"
+      recordTargetLabel: "Governance history record",
+      promotionBlocker: "none_ready_now",
+      promotionBlockerLabel: "No blocker"
     },
     {
       id: "implemented_actions",
@@ -1140,7 +1206,9 @@ function normalizeBoardResponse(
       promotionPath: "ready_for_explicit_export",
       promotionPathLabel: "Ready for explicit export",
       recordTarget: "governance_history_record",
-      recordTargetLabel: "Governance history record"
+      recordTargetLabel: "Governance history record",
+      promotionBlocker: "none_ready_now",
+      promotionBlockerLabel: "No blocker"
     },
     {
       id: "package_governance",
@@ -1178,6 +1246,12 @@ function normalizeBoardResponse(
           : "Ready for explicit export",
         recordTarget: "package_governance_record",
         recordTargetLabel: "Package governance record",
+        promotionBlocker: board.completionPackage?.hasOpenGovernanceItems
+          ? "board_closure_required"
+          : "none_ready_now",
+        promotionBlockerLabel: board.completionPackage?.hasOpenGovernanceItems
+          ? "Board closure required"
+          : "No blocker",
         ...(board.completionPackage?.hasOpenGovernanceItems
           ? {
             nextEligibleSummary:
@@ -1221,6 +1295,12 @@ function normalizeBoardResponse(
           : "Ready for explicit export",
         recordTarget: "package_deliverable_record",
         recordTargetLabel: "Package deliverable record",
+        promotionBlocker: board.completionPackage?.hasOpenGovernanceItems
+          ? "board_closure_required"
+          : "none_ready_now",
+        promotionBlockerLabel: board.completionPackage?.hasOpenGovernanceItems
+          ? "Board closure required"
+          : "No blocker",
         ...(board.completionPackage?.hasOpenGovernanceItems
           ? {
             nextEligibleSummary:
@@ -1255,6 +1335,7 @@ function normalizeBoardResponse(
       governanceReadyCount,
       packagedReadyCount,
       packagedWaitingCount,
+      blockedCandidateCount: waitingOnBoardClosureCount,
       roleSummary:
         packagedWaitingCount > 0
           ? `${governanceReadyCount} governance record candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} ready now, and ${packagedWaitingCount} packaged output candidate${packagedWaitingCount === 1 ? "" : "s"} ${packagedWaitingCount === 1 ? "still waits" : "still wait"} on board closure.`
@@ -1269,6 +1350,10 @@ function normalizeBoardResponse(
         waitingOnBoardClosureCount > 0
           ? `${governanceReadyCount} governance history record candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} ready, while ${packagedReadyCount + packagedWaitingCount} package record candidate${packagedReadyCount + packagedWaitingCount === 1 ? "" : "s"} ${packagedReadyCount + packagedWaitingCount === 1 ? "stays" : "stay"} package-shaped until board closure completes.`
           : `${governanceReadyCount} governance history record candidate${governanceReadyCount === 1 ? "" : "s"} and ${packagedReadyCount} package record candidate${packagedReadyCount === 1 ? "" : "s"} are ready for later tenant export.`,
+      blockerSummary:
+        waitingOnBoardClosureCount > 0
+          ? `${waitingOnBoardClosureCount} export candidate bucket${waitingOnBoardClosureCount === 1 ? " is" : "s are"} still blocked by board closure. Runtime memory stays non-promotable by design.`
+          : "No export candidate buckets are currently blocked. Runtime memory stays non-promotable by design.",
       partitions: {
         runtime: {
           itemCount: 2,
@@ -1312,7 +1397,9 @@ function normalizeBoardResponse(
           promotionPath: "never_promotes",
           promotionPathLabel: "Never promotes",
           recordTarget: "none_runtime_only",
-          recordTargetLabel: "Runtime only"
+          recordTargetLabel: "Runtime only",
+          promotionBlocker: "not_applicable_runtime_only",
+          promotionBlockerLabel: "Not applicable in runtime"
         },
         {
           id: "attention_state",
@@ -1337,7 +1424,9 @@ function normalizeBoardResponse(
           promotionPath: "never_promotes",
           promotionPathLabel: "Never promotes",
           recordTarget: "none_runtime_only",
-          recordTargetLabel: "Runtime only"
+          recordTargetLabel: "Runtime only",
+          promotionBlocker: "not_applicable_runtime_only",
+          promotionBlockerLabel: "Not applicable in runtime"
         }
       ],
       exportReadyItems

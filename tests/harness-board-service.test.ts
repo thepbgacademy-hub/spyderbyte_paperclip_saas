@@ -1609,9 +1609,11 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.readyNowCount).toEqual(expect.any(Number));
     expect(hydrated.memoryBoundary.waitingOnBoardClosureCount).toEqual(expect.any(Number));
     expect(hydrated.memoryBoundary.governanceReadyCount).toEqual(expect.any(Number));
+    expect(hydrated.memoryBoundary.blockedCandidateCount).toEqual(expect.any(Number));
     expect(hydrated.memoryBoundary.ownershipSummary).toContain("Wealth Factory-only");
     expect(hydrated.memoryBoundary.promotionSummary).toContain("never promote");
     expect(hydrated.memoryBoundary.recordTargetSummary).toContain("governance history record");
+    expect(hydrated.memoryBoundary.blockerSummary).toContain("blocked");
     expect(hydrated.memoryBoundary.partitions).toMatchObject({
       runtime: { itemCount: 2 },
       governanceHistoryCandidates: { itemCount: 2 }
@@ -1634,7 +1636,9 @@ describe("harness board service", () => {
           promotionPath: "never_promotes",
           promotionPathLabel: "Never promotes",
           recordTarget: "none_runtime_only",
-          recordTargetLabel: "Runtime only"
+          recordTargetLabel: "Runtime only",
+          promotionBlocker: "not_applicable_runtime_only",
+          promotionBlockerLabel: "Not applicable in runtime"
         })
       ])
     );
@@ -1656,7 +1660,9 @@ describe("harness board service", () => {
           promotionPath: "ready_for_explicit_export",
           promotionPathLabel: "Ready for explicit export",
           recordTarget: "governance_history_record",
-          recordTargetLabel: "Governance history record"
+          recordTargetLabel: "Governance history record",
+          promotionBlocker: "none_ready_now",
+          promotionBlockerLabel: "No blocker"
         }),
         expect.objectContaining({
           id: "implemented_actions",
@@ -1674,7 +1680,9 @@ describe("harness board service", () => {
           promotionPath: "ready_for_explicit_export",
           promotionPathLabel: "Ready for explicit export",
           recordTarget: "governance_history_record",
-          recordTargetLabel: "Governance history record"
+          recordTargetLabel: "Governance history record",
+          promotionBlocker: "none_ready_now",
+          promotionBlockerLabel: "No blocker"
         })
       ])
     );

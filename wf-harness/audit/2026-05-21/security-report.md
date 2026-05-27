@@ -246,6 +246,7 @@ No issues identified in the harness slice. The board HTTP boundary now distingui
 - Re-ran the scan after adding contract-owned `memoryBoundary` ownership-boundary metadata. The touched slice still introduced no live secret exposure; it only refines tenant-safe runtime-versus-tenant-record ownership posture already derived from public board state and does not widen provider context, required capabilities, BYOK material, or raw execution payloads.
 - Re-ran the scan after adding contract-owned `memoryBoundary` promotion-path metadata. The touched slice still introduced no live secret exposure; it only refines tenant-safe export-readiness path semantics already derived from public board state and does not widen provider context, required capabilities, BYOK material, or raw execution payloads.
 - Re-ran the scan after adding contract-owned `memoryBoundary` record-target metadata. The touched slice still introduced no live secret exposure; it only refines tenant-safe long-memory target semantics already derived from public board state and does not widen provider context, required capabilities, BYOK material, or raw execution payloads.
+- Re-ran the scan after adding contract-owned `memoryBoundary` promotion-blocker metadata and blocked-candidate summaries. The touched slice still introduced no live secret exposure; it only refines tenant-safe export-blockage semantics already derived from public board/package state and does not widen provider context, required capabilities, BYOK material, or raw execution payloads.
 
 ## Remediation Priority
 

@@ -292,11 +292,14 @@ const boardResponse: HarnessBoardResponse = {
       "2 runtime memory buckets never promote, 2 candidate buckets are ready for explicit export later, and 2 candidate buckets still wait on board closure first.",
     recordTargetSummary:
       "2 governance history record candidates are ready, while 2 package record candidates stay package-shaped until board closure completes.",
+    blockerSummary:
+      "2 export candidate buckets are still blocked by board closure. Runtime memory stays non-promotable by design.",
     readyNowCount: 2,
     waitingOnBoardClosureCount: 2,
     governanceReadyCount: 2,
     packagedReadyCount: 0,
     packagedWaitingCount: 2,
+    blockedCandidateCount: 2,
     partitions: {
       runtime: {
         itemCount: 2,
@@ -335,7 +338,9 @@ const boardResponse: HarnessBoardResponse = {
         promotionPath: "never_promotes",
         promotionPathLabel: "Never promotes",
         recordTarget: "none_runtime_only",
-        recordTargetLabel: "Runtime only"
+        recordTargetLabel: "Runtime only",
+        promotionBlocker: "not_applicable_runtime_only",
+        promotionBlockerLabel: "Not applicable in runtime"
       },
       {
         id: "attention_state",
@@ -360,7 +365,9 @@ const boardResponse: HarnessBoardResponse = {
         promotionPath: "never_promotes",
         promotionPathLabel: "Never promotes",
         recordTarget: "none_runtime_only",
-        recordTargetLabel: "Runtime only"
+        recordTargetLabel: "Runtime only",
+        promotionBlocker: "not_applicable_runtime_only",
+        promotionBlockerLabel: "Not applicable in runtime"
       }
     ],
     exportReadyItems: [
@@ -387,7 +394,9 @@ const boardResponse: HarnessBoardResponse = {
         promotionPath: "ready_for_explicit_export",
         promotionPathLabel: "Ready for explicit export",
         recordTarget: "governance_history_record",
-        recordTargetLabel: "Governance history record"
+        recordTargetLabel: "Governance history record",
+        promotionBlocker: "none_ready_now",
+        promotionBlockerLabel: "No blocker"
       },
       {
         id: "implemented_actions",
@@ -412,7 +421,9 @@ const boardResponse: HarnessBoardResponse = {
         promotionPath: "ready_for_explicit_export",
         promotionPathLabel: "Ready for explicit export",
         recordTarget: "governance_history_record",
-        recordTargetLabel: "Governance history record"
+        recordTargetLabel: "Governance history record",
+        promotionBlocker: "none_ready_now",
+        promotionBlockerLabel: "No blocker"
       },
       {
         id: "package_governance",
@@ -438,6 +449,8 @@ const boardResponse: HarnessBoardResponse = {
         promotionPathLabel: "After board closure, then export",
         recordTarget: "package_governance_record",
         recordTargetLabel: "Package governance record",
+        promotionBlocker: "board_closure_required",
+        promotionBlockerLabel: "Board closure required",
         nextEligibleSummary: "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
       },
       {
@@ -464,6 +477,8 @@ const boardResponse: HarnessBoardResponse = {
         promotionPathLabel: "After board closure, then export",
         recordTarget: "package_deliverable_record",
         recordTargetLabel: "Package deliverable record",
+        promotionBlocker: "board_closure_required",
+        promotionBlockerLabel: "Board closure required",
         nextEligibleSummary: "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
       }
     ]
@@ -1108,6 +1123,10 @@ describe("harness board UI", () => {
     expect(markup).toContain("Governance history record");
     expect(markup).toContain("Package governance record");
     expect(markup).toContain("Package deliverable record");
+    expect(markup).toContain("2 export candidate buckets are still blocked by board closure. Runtime memory stays non-promotable by design.");
+    expect(markup).toContain("Not applicable in runtime");
+    expect(markup).toContain("No blocker");
+    expect(markup).toContain("Board closure required");
     expect(markup).toContain("Source surface: Continuity snapshots");
     expect(markup).toContain("Source surface: Pending attention");
     expect(markup).toContain("Source surface: Recent decisions");
