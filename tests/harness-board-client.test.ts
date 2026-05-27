@@ -197,7 +197,9 @@ describe("harness board client", () => {
             readinessLabel: "Live runtime only",
             role: "runtime_memory",
             eligibilityRule: "runtime_only",
-            sourceSurface: "continuity_snapshots"
+            sourceSurface: "continuity_snapshots",
+            candidateClass: "runtime_operational",
+            durabilityCondition: "runtime_ephemeral"
           })
         ]),
         exportReadyItems: expect.arrayContaining([
@@ -208,7 +210,9 @@ describe("harness board client", () => {
             readinessLabel: "Ready now",
             role: "governance_record_candidate",
             eligibilityRule: "explicit_export_later",
-            sourceSurface: "recent_decisions"
+            sourceSurface: "recent_decisions",
+            candidateClass: "governance_history",
+            durabilityCondition: "stable_when_recorded"
           })
         ])
       })
@@ -264,6 +268,12 @@ describe("harness board client", () => {
     expect(
       board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.sourceSurfaceLabel
     ).toBe("Completion package deliverables");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.candidateClassLabel
+    ).toBe("Packaged output");
+    expect(
+      board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.durabilityConditionLabel
+    ).toBe("Stable after board closure");
   });
 
   it("derives governance-ready partition counts from readiness, not only from role membership", async () => {
@@ -440,7 +450,9 @@ describe("harness board client", () => {
             destination: "wealth_factory_runtime",
             readiness: "live_runtime_only",
             readinessLabel: "Live runtime only",
-            sourceSurface: "continuity_snapshots"
+            sourceSurface: "continuity_snapshots",
+            candidateClass: "runtime_operational",
+            durabilityCondition: "runtime_ephemeral"
           })
         ]),
         exportReadyItems: expect.arrayContaining([
@@ -449,7 +461,9 @@ describe("harness board client", () => {
             destination: "tenant_record_candidate",
             readiness: "ready_now",
             readinessLabel: "Ready now",
-            sourceSurface: "recent_decisions"
+            sourceSurface: "recent_decisions",
+            candidateClass: "governance_history",
+            durabilityCondition: "stable_when_recorded"
           })
         ])
       })

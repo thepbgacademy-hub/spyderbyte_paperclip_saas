@@ -283,6 +283,7 @@ The first harness implementation slice is now built and verified:
 - Keep `memoryBoundary` explicit about readiness as well as destination. Export-candidate memory that is already stable (`governance_decisions`, `implemented_actions`) should not be conflated with package-shaped memory that still waits on board closure, or later Obsidian/export work will treat assembling outputs as if they were already durable tenant records.
 - Once `memoryBoundary` carries readiness, keep the labels and next-eligible guidance in the same contract too. The board pulse and the detail panel should not rebuild their own export-readiness copy from enums or package state heuristics, especially during staggered deploys where partial payloads could otherwise drift into misleading export guidance.
 - Keep `memoryBoundary` explicit about memory role and source as well. Runtime memory, governance-history candidates, and packaged-output candidates should stay contract-owned categories, and the board should receive their source surfaces and partition summaries from the harness instead of reverse-engineering the split from item ids or fallback prose.
+- Keep `memoryBoundary` explicit about candidate class and durability condition too. Runtime-operational memory, governance-history candidates, and packaged-output candidates should advertise whether they are runtime-ephemeral, stable when recorded, or only stable after board closure, so later Obsidian/export work never has to infer long-memory durability from a mix of role, readiness, and prose.
 
 ## Next Step
 

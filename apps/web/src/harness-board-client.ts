@@ -357,7 +357,11 @@ const fallbackBoardBase: HarnessBoardResponse = {
         eligibilityRule: "runtime_only",
         eligibilityRuleLabel: "Runtime only",
         sourceSurface: "continuity_snapshots",
-        sourceSurfaceLabel: "Continuity snapshots"
+        sourceSurfaceLabel: "Continuity snapshots",
+        candidateClass: "runtime_operational",
+        candidateClassLabel: "Runtime operational",
+        durabilityCondition: "runtime_ephemeral",
+        durabilityConditionLabel: "Runtime ephemeral"
       },
       {
         id: "attention_state",
@@ -372,7 +376,11 @@ const fallbackBoardBase: HarnessBoardResponse = {
         eligibilityRule: "runtime_only",
         eligibilityRuleLabel: "Runtime only",
         sourceSurface: "pending_attention",
-        sourceSurfaceLabel: "Pending attention"
+        sourceSurfaceLabel: "Pending attention",
+        candidateClass: "runtime_operational",
+        candidateClassLabel: "Runtime operational",
+        durabilityCondition: "runtime_ephemeral",
+        durabilityConditionLabel: "Runtime ephemeral"
       }
     ],
     exportReadyItems: [
@@ -389,7 +397,11 @@ const fallbackBoardBase: HarnessBoardResponse = {
         eligibilityRule: "explicit_export_later",
         eligibilityRuleLabel: "Explicit export later",
         sourceSurface: "recent_decisions",
-        sourceSurfaceLabel: "Recent decisions"
+        sourceSurfaceLabel: "Recent decisions",
+        candidateClass: "governance_history",
+        candidateClassLabel: "Governance history",
+        durabilityCondition: "stable_when_recorded",
+        durabilityConditionLabel: "Stable when recorded"
       },
       {
         id: "implemented_actions",
@@ -404,7 +416,11 @@ const fallbackBoardBase: HarnessBoardResponse = {
         eligibilityRule: "explicit_export_later",
         eligibilityRuleLabel: "Explicit export later",
         sourceSurface: "follow_through",
-        sourceSurfaceLabel: "Follow-through history"
+        sourceSurfaceLabel: "Follow-through history",
+        candidateClass: "governance_history",
+        candidateClassLabel: "Governance history",
+        durabilityCondition: "stable_when_recorded",
+        durabilityConditionLabel: "Stable when recorded"
       },
       {
         id: "package_governance",
@@ -420,6 +436,10 @@ const fallbackBoardBase: HarnessBoardResponse = {
         eligibilityRuleLabel: "After board closes, then export",
         sourceSurface: "completion_package_governance",
         sourceSurfaceLabel: "Completion package governance",
+        candidateClass: "packaged_output",
+        candidateClassLabel: "Packaged output",
+        durabilityCondition: "stable_after_board_closure",
+        durabilityConditionLabel: "Stable after board closure",
         nextEligibleSummary:
           "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
       },
@@ -437,6 +457,10 @@ const fallbackBoardBase: HarnessBoardResponse = {
         eligibilityRuleLabel: "After board closes, then export",
         sourceSurface: "completion_package_deliverables",
         sourceSurfaceLabel: "Completion package deliverables",
+        candidateClass: "packaged_output",
+        candidateClassLabel: "Packaged output",
+        durabilityCondition: "stable_after_board_closure",
+        durabilityConditionLabel: "Stable after board closure",
         nextEligibleSummary:
           "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
       }
@@ -644,6 +668,36 @@ function humanizeMemoryBoundarySourceSurface(
   }
 }
 
+function humanizeMemoryBoundaryCandidateClass(
+  candidateClass: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["candidateClass"]>
+) {
+  switch (candidateClass) {
+    case "runtime_operational":
+      return "Runtime operational";
+    case "governance_history":
+      return "Governance history";
+    case "packaged_output":
+      return "Packaged output";
+    default:
+      return candidateClass;
+  }
+}
+
+function humanizeMemoryBoundaryDurabilityCondition(
+  condition: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["durabilityCondition"]>
+) {
+  switch (condition) {
+    case "runtime_ephemeral":
+      return "Runtime ephemeral";
+    case "stable_when_recorded":
+      return "Stable when recorded";
+    case "stable_after_board_closure":
+      return "Stable after board closure";
+    default:
+      return condition;
+  }
+}
+
 function inferMemoryBoundaryReadiness(
   itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"],
   board: Pick<HarnessBoardResponse, "completionPackage">
@@ -711,6 +765,41 @@ function inferMemoryBoundarySourceSurface(
   }
 }
 
+function inferMemoryBoundaryCandidateClass(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"]
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["candidateClass"] {
+  switch (itemId) {
+    case "lane_continuity":
+    case "attention_state":
+      return "runtime_operational";
+    case "governance_decisions":
+    case "implemented_actions":
+      return "governance_history";
+    case "package_governance":
+    case "package_deliverables":
+      return "packaged_output";
+    default:
+      return "governance_history";
+  }
+}
+
+function inferMemoryBoundaryDurabilityCondition(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"],
+  board: Pick<HarnessBoardResponse, "completionPackage">
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["durabilityCondition"] {
+  if (itemId === "lane_continuity" || itemId === "attention_state") {
+    return "runtime_ephemeral";
+  }
+
+  if (itemId === "package_governance" || itemId === "package_deliverables") {
+    return board.completionPackage?.hasOpenGovernanceItems
+      ? "stable_after_board_closure"
+      : "stable_when_recorded";
+  }
+
+  return "stable_when_recorded";
+}
+
 function normalizeMemoryBoundary(
   memoryBoundary: HarnessBoardResponse["memoryBoundary"],
   board: Pick<HarnessBoardResponse, "completionPackage">
@@ -720,6 +809,8 @@ function normalizeMemoryBoundary(
     const role = item.role ?? inferMemoryBoundaryRole(item.id);
     const eligibilityRule = item.eligibilityRule ?? inferMemoryBoundaryEligibilityRule(item.id, board);
     const sourceSurface = item.sourceSurface ?? inferMemoryBoundarySourceSurface(item.id);
+    const candidateClass = item.candidateClass ?? inferMemoryBoundaryCandidateClass(item.id);
+    const durabilityCondition = item.durabilityCondition ?? inferMemoryBoundaryDurabilityCondition(item.id, board);
     return {
       ...item,
       readiness,
@@ -729,7 +820,12 @@ function normalizeMemoryBoundary(
       eligibilityRule,
       eligibilityRuleLabel: item.eligibilityRuleLabel ?? humanizeMemoryBoundaryEligibilityRule(eligibilityRule),
       sourceSurface,
-      sourceSurfaceLabel: item.sourceSurfaceLabel ?? humanizeMemoryBoundarySourceSurface(sourceSurface)
+      sourceSurfaceLabel: item.sourceSurfaceLabel ?? humanizeMemoryBoundarySourceSurface(sourceSurface),
+      candidateClass,
+      candidateClassLabel: item.candidateClassLabel ?? humanizeMemoryBoundaryCandidateClass(candidateClass),
+      durabilityCondition,
+      durabilityConditionLabel:
+        item.durabilityConditionLabel ?? humanizeMemoryBoundaryDurabilityCondition(durabilityCondition)
     };
   });
   const exportReadyItems = memoryBoundary.exportReadyItems.map((item) => {
@@ -737,6 +833,8 @@ function normalizeMemoryBoundary(
     const role = item.role ?? inferMemoryBoundaryRole(item.id);
     const eligibilityRule = item.eligibilityRule ?? inferMemoryBoundaryEligibilityRule(item.id, board);
     const sourceSurface = item.sourceSurface ?? inferMemoryBoundarySourceSurface(item.id);
+    const candidateClass = item.candidateClass ?? inferMemoryBoundaryCandidateClass(item.id);
+    const durabilityCondition = item.durabilityCondition ?? inferMemoryBoundaryDurabilityCondition(item.id, board);
     const nextEligibleSummary = item.nextEligibleSummary
       ?? (readiness === "after_board_closes"
         ? item.id === "package_governance"
@@ -755,6 +853,11 @@ function normalizeMemoryBoundary(
       eligibilityRuleLabel: item.eligibilityRuleLabel ?? humanizeMemoryBoundaryEligibilityRule(eligibilityRule),
       sourceSurface,
       sourceSurfaceLabel: item.sourceSurfaceLabel ?? humanizeMemoryBoundarySourceSurface(sourceSurface),
+      candidateClass,
+      candidateClassLabel: item.candidateClassLabel ?? humanizeMemoryBoundaryCandidateClass(candidateClass),
+      durabilityCondition,
+      durabilityConditionLabel:
+        item.durabilityConditionLabel ?? humanizeMemoryBoundaryDurabilityCondition(durabilityCondition),
       ...(nextEligibleSummary ? { nextEligibleSummary } : {})
     };
   });
@@ -832,7 +935,11 @@ function normalizeBoardResponse(
       eligibilityRule: "explicit_export_later",
       eligibilityRuleLabel: "Explicit export later",
       sourceSurface: "recent_decisions",
-      sourceSurfaceLabel: "Recent decisions"
+      sourceSurfaceLabel: "Recent decisions",
+      candidateClass: "governance_history",
+      candidateClassLabel: "Governance history",
+      durabilityCondition: "stable_when_recorded",
+      durabilityConditionLabel: "Stable when recorded"
     },
     {
       id: "implemented_actions",
@@ -847,7 +954,11 @@ function normalizeBoardResponse(
       eligibilityRule: "explicit_export_later",
       eligibilityRuleLabel: "Explicit export later",
       sourceSurface: "follow_through",
-      sourceSurfaceLabel: "Follow-through history"
+      sourceSurfaceLabel: "Follow-through history",
+      candidateClass: "governance_history",
+      candidateClassLabel: "Governance history",
+      durabilityCondition: "stable_when_recorded",
+      durabilityConditionLabel: "Stable when recorded"
     },
     {
       id: "package_governance",
@@ -867,6 +978,14 @@ function normalizeBoardResponse(
         : "Explicit export later",
       sourceSurface: "completion_package_governance",
       sourceSurfaceLabel: "Completion package governance",
+      candidateClass: "packaged_output",
+      candidateClassLabel: "Packaged output",
+      durabilityCondition: board.completionPackage?.hasOpenGovernanceItems
+        ? "stable_after_board_closure"
+        : "stable_when_recorded",
+      durabilityConditionLabel: board.completionPackage?.hasOpenGovernanceItems
+        ? "Stable after board closure"
+        : "Stable when recorded",
       ...(board.completionPackage?.hasOpenGovernanceItems
         ? {
             nextEligibleSummary:
@@ -892,6 +1011,14 @@ function normalizeBoardResponse(
         : "Explicit export later",
       sourceSurface: "completion_package_deliverables",
       sourceSurfaceLabel: "Completion package deliverables",
+      candidateClass: "packaged_output",
+      candidateClassLabel: "Packaged output",
+      durabilityCondition: board.completionPackage?.hasOpenGovernanceItems
+        ? "stable_after_board_closure"
+        : "stable_when_recorded",
+      durabilityConditionLabel: board.completionPackage?.hasOpenGovernanceItems
+        ? "Stable after board closure"
+        : "Stable when recorded",
       ...(board.completionPackage?.hasOpenGovernanceItems
         ? {
             nextEligibleSummary:
@@ -963,7 +1090,11 @@ function normalizeBoardResponse(
           eligibilityRule: "runtime_only",
           eligibilityRuleLabel: "Runtime only",
           sourceSurface: "continuity_snapshots",
-          sourceSurfaceLabel: "Continuity snapshots"
+          sourceSurfaceLabel: "Continuity snapshots",
+          candidateClass: "runtime_operational",
+          candidateClassLabel: "Runtime operational",
+          durabilityCondition: "runtime_ephemeral",
+          durabilityConditionLabel: "Runtime ephemeral"
         },
         {
           id: "attention_state",
@@ -978,7 +1109,11 @@ function normalizeBoardResponse(
           eligibilityRule: "runtime_only",
           eligibilityRuleLabel: "Runtime only",
           sourceSurface: "pending_attention",
-          sourceSurfaceLabel: "Pending attention"
+          sourceSurfaceLabel: "Pending attention",
+          candidateClass: "runtime_operational",
+          candidateClassLabel: "Runtime operational",
+          durabilityCondition: "runtime_ephemeral",
+          durabilityConditionLabel: "Runtime ephemeral"
         }
       ],
       exportReadyItems

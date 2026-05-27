@@ -530,6 +530,8 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                     <span style={styles.badge}>{item.readinessLabel ?? describeMemoryBoundaryReadiness(item.readiness)}</span>
                     <span style={styles.badge}>{item.roleLabel}</span>
                     <span style={styles.badge}>{item.eligibilityRuleLabel}</span>
+                    <span style={styles.badge}>{item.candidateClassLabel}</span>
+                    <span style={styles.badge}>{item.durabilityConditionLabel}</span>
                   </div>
                   <p style={styles.actionSummary}>{item.summary}</p>
                   <p style={styles.optionBody}>{`Source surface: ${item.sourceSurfaceLabel}`}</p>

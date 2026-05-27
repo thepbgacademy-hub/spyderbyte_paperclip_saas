@@ -319,7 +319,11 @@ const boardResponse: HarnessBoardResponse = {
         eligibilityRule: "runtime_only",
         eligibilityRuleLabel: "Runtime only",
         sourceSurface: "continuity_snapshots",
-        sourceSurfaceLabel: "Continuity snapshots"
+        sourceSurfaceLabel: "Continuity snapshots",
+        candidateClass: "runtime_operational",
+        candidateClassLabel: "Runtime operational",
+        durabilityCondition: "runtime_ephemeral",
+        durabilityConditionLabel: "Runtime ephemeral"
       },
       {
         id: "attention_state",
@@ -334,7 +338,11 @@ const boardResponse: HarnessBoardResponse = {
         eligibilityRule: "runtime_only",
         eligibilityRuleLabel: "Runtime only",
         sourceSurface: "pending_attention",
-        sourceSurfaceLabel: "Pending attention"
+        sourceSurfaceLabel: "Pending attention",
+        candidateClass: "runtime_operational",
+        candidateClassLabel: "Runtime operational",
+        durabilityCondition: "runtime_ephemeral",
+        durabilityConditionLabel: "Runtime ephemeral"
       }
     ],
     exportReadyItems: [
@@ -351,7 +359,11 @@ const boardResponse: HarnessBoardResponse = {
         eligibilityRule: "explicit_export_later",
         eligibilityRuleLabel: "Explicit export later",
         sourceSurface: "recent_decisions",
-        sourceSurfaceLabel: "Recent decisions"
+        sourceSurfaceLabel: "Recent decisions",
+        candidateClass: "governance_history",
+        candidateClassLabel: "Governance history",
+        durabilityCondition: "stable_when_recorded",
+        durabilityConditionLabel: "Stable when recorded"
       },
       {
         id: "implemented_actions",
@@ -366,7 +378,11 @@ const boardResponse: HarnessBoardResponse = {
         eligibilityRule: "explicit_export_later",
         eligibilityRuleLabel: "Explicit export later",
         sourceSurface: "follow_through",
-        sourceSurfaceLabel: "Follow-through history"
+        sourceSurfaceLabel: "Follow-through history",
+        candidateClass: "governance_history",
+        candidateClassLabel: "Governance history",
+        durabilityCondition: "stable_when_recorded",
+        durabilityConditionLabel: "Stable when recorded"
       },
       {
         id: "package_governance",
@@ -382,6 +398,10 @@ const boardResponse: HarnessBoardResponse = {
         eligibilityRuleLabel: "After board closes, then export",
         sourceSurface: "completion_package_governance",
         sourceSurfaceLabel: "Completion package governance",
+        candidateClass: "packaged_output",
+        candidateClassLabel: "Packaged output",
+        durabilityCondition: "stable_after_board_closure",
+        durabilityConditionLabel: "Stable after board closure",
         nextEligibleSummary: "Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate."
       },
       {
@@ -398,6 +418,10 @@ const boardResponse: HarnessBoardResponse = {
         eligibilityRuleLabel: "After board closes, then export",
         sourceSurface: "completion_package_deliverables",
         sourceSurfaceLabel: "Completion package deliverables",
+        candidateClass: "packaged_output",
+        candidateClassLabel: "Packaged output",
+        durabilityCondition: "stable_after_board_closure",
+        durabilityConditionLabel: "Stable after board closure",
         nextEligibleSummary: "Board closure is still required before this packaged deliverable becomes a durable tenant record candidate."
       }
     ]
@@ -1024,6 +1048,12 @@ describe("harness board UI", () => {
     expect(markup).toContain("Runtime only");
     expect(markup).toContain("Explicit export later");
     expect(markup).toContain("After board closes, then export");
+    expect(markup).toContain("Runtime operational");
+    expect(markup).toContain("Governance history");
+    expect(markup).toContain("Packaged output");
+    expect(markup).toContain("Runtime ephemeral");
+    expect(markup).toContain("Stable when recorded");
+    expect(markup).toContain("Stable after board closure");
     expect(markup).toContain("Source surface: Continuity snapshots");
     expect(markup).toContain("Source surface: Pending attention");
     expect(markup).toContain("Source surface: Recent decisions");

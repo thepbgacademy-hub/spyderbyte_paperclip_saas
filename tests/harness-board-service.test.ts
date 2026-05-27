@@ -1623,7 +1623,9 @@ describe("harness board service", () => {
           readinessLabel: "Live runtime only",
           role: "runtime_memory",
           eligibilityRule: "runtime_only",
-          sourceSurface: "continuity_snapshots"
+          sourceSurface: "continuity_snapshots",
+          candidateClass: "runtime_operational",
+          durabilityCondition: "runtime_ephemeral"
         })
       ])
     );
@@ -1637,7 +1639,9 @@ describe("harness board service", () => {
           readinessLabel: "Ready now",
           role: "governance_record_candidate",
           eligibilityRule: "explicit_export_later",
-          sourceSurface: "recent_decisions"
+          sourceSurface: "recent_decisions",
+          candidateClass: "governance_history",
+          durabilityCondition: "stable_when_recorded"
         }),
         expect.objectContaining({
           id: "implemented_actions",
@@ -1647,7 +1651,9 @@ describe("harness board service", () => {
           readinessLabel: "Ready now",
           role: "governance_record_candidate",
           eligibilityRule: "explicit_export_later",
-          sourceSurface: "follow_through"
+          sourceSurface: "follow_through",
+          candidateClass: "governance_history",
+          durabilityCondition: "stable_when_recorded"
         })
       ])
     );
@@ -5477,7 +5483,9 @@ describe("harness board service", () => {
           readinessLabel: "Ready now",
           role: "packaged_record_candidate",
           eligibilityRule: "explicit_export_later",
-          sourceSurface: "completion_package_governance"
+          sourceSurface: "completion_package_governance",
+          candidateClass: "packaged_output",
+          durabilityCondition: "stable_when_recorded"
         }),
         expect.objectContaining({
           id: "package_deliverables",
@@ -5485,7 +5493,9 @@ describe("harness board service", () => {
           readinessLabel: "Ready now",
           role: "packaged_record_candidate",
           eligibilityRule: "explicit_export_later",
-          sourceSurface: "completion_package_deliverables"
+          sourceSurface: "completion_package_deliverables",
+          candidateClass: "packaged_output",
+          durabilityCondition: "stable_when_recorded"
         })
       ])
     );

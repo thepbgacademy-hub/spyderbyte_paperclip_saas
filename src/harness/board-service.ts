@@ -109,6 +109,16 @@ export type HarnessMemoryBoundarySourceSurface =
   | "completion_package_governance"
   | "completion_package_deliverables";
 
+export type HarnessMemoryBoundaryCandidateClass =
+  | "runtime_operational"
+  | "governance_history"
+  | "packaged_output";
+
+export type HarnessMemoryBoundaryDurabilityCondition =
+  | "runtime_ephemeral"
+  | "stable_when_recorded"
+  | "stable_after_board_closure";
+
 export type HarnessMemoryBoundaryItemView = {
   id:
     | "lane_continuity"
@@ -129,6 +139,10 @@ export type HarnessMemoryBoundaryItemView = {
   eligibilityRuleLabel: string;
   sourceSurface: HarnessMemoryBoundarySourceSurface;
   sourceSurfaceLabel: string;
+  candidateClass: HarnessMemoryBoundaryCandidateClass;
+  candidateClassLabel: string;
+  durabilityCondition: HarnessMemoryBoundaryDurabilityCondition;
+  durabilityConditionLabel: string;
   nextEligibleSummary?: string;
 };
 
@@ -3799,7 +3813,11 @@ function buildMemoryBoundaryView(input: {
       eligibilityRule: "runtime_only",
       eligibilityRuleLabel: humanizeMemoryBoundaryEligibilityRule("runtime_only"),
       sourceSurface: "continuity_snapshots",
-      sourceSurfaceLabel: humanizeMemoryBoundarySourceSurface("continuity_snapshots")
+      sourceSurfaceLabel: humanizeMemoryBoundarySourceSurface("continuity_snapshots"),
+      candidateClass: "runtime_operational",
+      candidateClassLabel: humanizeMemoryBoundaryCandidateClass("runtime_operational"),
+      durabilityCondition: "runtime_ephemeral",
+      durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition("runtime_ephemeral")
     },
     {
       id: "attention_state",
@@ -3814,7 +3832,11 @@ function buildMemoryBoundaryView(input: {
       eligibilityRule: "runtime_only",
       eligibilityRuleLabel: humanizeMemoryBoundaryEligibilityRule("runtime_only"),
       sourceSurface: "pending_attention",
-      sourceSurfaceLabel: humanizeMemoryBoundarySourceSurface("pending_attention")
+      sourceSurfaceLabel: humanizeMemoryBoundarySourceSurface("pending_attention"),
+      candidateClass: "runtime_operational",
+      candidateClassLabel: humanizeMemoryBoundaryCandidateClass("runtime_operational"),
+      durabilityCondition: "runtime_ephemeral",
+      durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition("runtime_ephemeral")
     }
   ];
 
@@ -3832,7 +3854,11 @@ function buildMemoryBoundaryView(input: {
       eligibilityRule: "explicit_export_later",
       eligibilityRuleLabel: humanizeMemoryBoundaryEligibilityRule("explicit_export_later"),
       sourceSurface: "recent_decisions",
-      sourceSurfaceLabel: humanizeMemoryBoundarySourceSurface("recent_decisions")
+      sourceSurfaceLabel: humanizeMemoryBoundarySourceSurface("recent_decisions"),
+      candidateClass: "governance_history",
+      candidateClassLabel: humanizeMemoryBoundaryCandidateClass("governance_history"),
+      durabilityCondition: "stable_when_recorded",
+      durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition("stable_when_recorded")
     },
     {
       id: "implemented_actions",
@@ -3847,7 +3873,11 @@ function buildMemoryBoundaryView(input: {
       eligibilityRule: "explicit_export_later",
       eligibilityRuleLabel: humanizeMemoryBoundaryEligibilityRule("explicit_export_later"),
       sourceSurface: "follow_through",
-      sourceSurfaceLabel: humanizeMemoryBoundarySourceSurface("follow_through")
+      sourceSurfaceLabel: humanizeMemoryBoundarySourceSurface("follow_through"),
+      candidateClass: "governance_history",
+      candidateClassLabel: humanizeMemoryBoundaryCandidateClass("governance_history"),
+      durabilityCondition: "stable_when_recorded",
+      durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition("stable_when_recorded")
     }
   ];
 
@@ -3876,6 +3906,16 @@ function buildMemoryBoundaryView(input: {
         ),
         sourceSurface: "completion_package_governance",
         sourceSurfaceLabel: humanizeMemoryBoundarySourceSurface("completion_package_governance"),
+        candidateClass: "packaged_output",
+        candidateClassLabel: humanizeMemoryBoundaryCandidateClass("packaged_output"),
+        durabilityCondition: input.completionPackage.hasOpenGovernanceItems
+          ? "stable_after_board_closure"
+          : "stable_when_recorded",
+        durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "stable_after_board_closure"
+            : "stable_when_recorded"
+        ),
         ...(packageReadiness === "after_board_closes"
           ? {
               nextEligibleSummary:
@@ -3903,6 +3943,16 @@ function buildMemoryBoundaryView(input: {
         ),
         sourceSurface: "completion_package_deliverables",
         sourceSurfaceLabel: humanizeMemoryBoundarySourceSurface("completion_package_deliverables"),
+        candidateClass: "packaged_output",
+        candidateClassLabel: humanizeMemoryBoundaryCandidateClass("packaged_output"),
+        durabilityCondition: input.completionPackage.hasOpenGovernanceItems
+          ? "stable_after_board_closure"
+          : "stable_when_recorded",
+        durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition(
+          input.completionPackage.hasOpenGovernanceItems
+            ? "stable_after_board_closure"
+            : "stable_when_recorded"
+        ),
         ...(packageReadiness === "after_board_closes"
           ? {
               nextEligibleSummary:
@@ -4020,6 +4070,32 @@ function humanizeMemoryBoundarySourceSurface(surface: HarnessMemoryBoundarySourc
       return "Completion package deliverables";
     default:
       return surface;
+  }
+}
+
+function humanizeMemoryBoundaryCandidateClass(candidateClass: HarnessMemoryBoundaryCandidateClass) {
+  switch (candidateClass) {
+    case "runtime_operational":
+      return "Runtime operational";
+    case "governance_history":
+      return "Governance history";
+    case "packaged_output":
+      return "Packaged output";
+    default:
+      return candidateClass;
+  }
+}
+
+function humanizeMemoryBoundaryDurabilityCondition(condition: HarnessMemoryBoundaryDurabilityCondition) {
+  switch (condition) {
+    case "runtime_ephemeral":
+      return "Runtime ephemeral";
+    case "stable_when_recorded":
+      return "Stable when recorded";
+    case "stable_after_board_closure":
+      return "Stable after board closure";
+    default:
+      return condition;
   }
 }
 
