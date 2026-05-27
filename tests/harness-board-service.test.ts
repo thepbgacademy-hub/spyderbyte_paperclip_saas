@@ -1648,6 +1648,12 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.exportCandidateGroupCount).toBe(1);
     expect(hydrated.memoryBoundary.readyExportCandidateGroupCount).toBe(1);
     expect(hydrated.memoryBoundary.waitingExportCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.foundationalExportCandidateCount).toBe(1);
+    expect(hydrated.memoryBoundary.boardClosureFollowingExportCandidateCount).toBe(0);
+    expect(hydrated.memoryBoundary.independentExportCandidateCount).toBe(1);
+    expect(hydrated.memoryBoundary.dependentExportCandidateCount).toBe(0);
+    expect(hydrated.memoryBoundary.sequenceSummary).toContain("foundational export sequence");
+    expect(hydrated.memoryBoundary.dependencySummary).toContain("stands independently");
     expect(hydrated.memoryBoundary.blockerSummary).toContain("blocked");
     expect(hydrated.memoryBoundary.authoritySummary).toContain("tenant-controlled");
     expect(hydrated.memoryBoundary.triggerSummary).toContain("tenant export request");
@@ -3913,6 +3919,8 @@ describe("harness board service", () => {
         label: "Governance history export",
         itemCount: 2,
         readinessLabel: "Ready now",
+        exportSequenceLabel: "Foundational export sequence",
+        exportDependencyPolicyLabel: "Independent export candidate",
         memoryPlacementLabel: "Governance history note",
         syncStrategyLabel: "Append history entry",
         exportRequestShapeLabel: "Single-record export request",

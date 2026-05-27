@@ -619,16 +619,63 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       items: memoryBoundary.exportReadyItems
     }
   ];
-  const exportCandidates = memoryBoundary.exportCandidates ?? deriveMemoryBoundaryExportCandidates(memoryBoundary);
+  const exportCandidates = (memoryBoundary.exportCandidates ?? deriveMemoryBoundaryExportCandidates(memoryBoundary)).map(
+    (candidate) =>
+      candidate.id === "governance_history_export"
+        ? {
+            ...candidate,
+            exportSequence: candidate.exportSequence ?? "foundational_first",
+            exportSequenceLabel: candidate.exportSequenceLabel ?? "Foundational export sequence",
+            exportDependencyPolicy: candidate.exportDependencyPolicy ?? "independent_candidate",
+            exportDependencyPolicyLabel: candidate.exportDependencyPolicyLabel ?? "Independent export candidate",
+            dependsOnCandidateIds: candidate.dependsOnCandidateIds ?? [],
+            dependsOnCandidateLabels: candidate.dependsOnCandidateLabels ?? [],
+            dependencySummary:
+              candidate.dependencySummary
+              ?? "This governance history candidate can promote independently once the tenant requests export."
+          }
+        : {
+            ...candidate,
+            exportSequence: candidate.exportSequence ?? "board_closure_following",
+            exportSequenceLabel: candidate.exportSequenceLabel ?? "Board-closure-following sequence",
+            exportDependencyPolicy:
+              candidate.exportDependencyPolicy ?? "depends_on_governance_history_export",
+            exportDependencyPolicyLabel:
+              candidate.exportDependencyPolicyLabel ?? "Depends on governance history export",
+            dependsOnCandidateIds: candidate.dependsOnCandidateIds ?? ["governance_history_export"],
+            dependsOnCandidateLabels: candidate.dependsOnCandidateLabels ?? ["Governance history export"],
+            dependencySummary:
+              candidate.dependencySummary
+              ?? (candidate.readiness === "after_board_closes"
+                ? "This package bundle candidate still waits on board closure and later follows the governance history export candidate."
+                : "This package bundle candidate follows the governance history export candidate once the tenant reaches export time.")
+          }
+  );
   const exportCandidateGroupCount = memoryBoundary.exportCandidateGroupCount ?? exportCandidates.length;
   const readyExportCandidateGroupCount = memoryBoundary.readyExportCandidateGroupCount
     ?? exportCandidates.filter((candidate) => candidate.readiness === "ready_now").length;
   const waitingExportCandidateGroupCount = memoryBoundary.waitingExportCandidateGroupCount
     ?? exportCandidates.filter((candidate) => candidate.readiness === "after_board_closes").length;
+  const foundationalExportCandidateCount = memoryBoundary.foundationalExportCandidateCount
+    ?? exportCandidates.filter((candidate) => candidate.exportSequence === "foundational_first").length;
+  const boardClosureFollowingExportCandidateCount = memoryBoundary.boardClosureFollowingExportCandidateCount
+    ?? exportCandidates.filter((candidate) => candidate.exportSequence === "board_closure_following").length;
+  const independentExportCandidateCount = memoryBoundary.independentExportCandidateCount
+    ?? exportCandidates.filter((candidate) => candidate.exportDependencyPolicy === "independent_candidate").length;
+  const dependentExportCandidateCount = memoryBoundary.dependentExportCandidateCount
+    ?? exportCandidates.filter((candidate) => candidate.exportDependencyPolicy === "depends_on_governance_history_export").length;
   const exportCandidateSummary = memoryBoundary.exportCandidateSummary
     ?? (waitingExportCandidateGroupCount > 0
       ? `${readyExportCandidateGroupCount} export candidate group${readyExportCandidateGroupCount === 1 ? " is" : "s are"} ready for later tenant export, and ${waitingExportCandidateGroupCount} group${waitingExportCandidateGroupCount === 1 ? " still waits" : "s still wait"} on board closure first.`
       : `${readyExportCandidateGroupCount} export candidate group${readyExportCandidateGroupCount === 1 ? " is" : "s are"} ready for later tenant export.`);
+  const sequenceSummary = memoryBoundary.sequenceSummary
+    ?? (boardClosureFollowingExportCandidateCount > 0
+      ? `${foundationalExportCandidateCount} export candidate group${foundationalExportCandidateCount === 1 ? " forms" : "s form"} the foundational export sequence, and ${boardClosureFollowingExportCandidateCount} group${boardClosureFollowingExportCandidateCount === 1 ? " follows" : "s follow"} after board closure.`
+      : `${foundationalExportCandidateCount} export candidate group${foundationalExportCandidateCount === 1 ? " forms" : "s form"} the foundational export sequence. No later board-closure-following candidate groups are waiting right now.`);
+  const dependencySummary = memoryBoundary.dependencySummary
+    ?? (dependentExportCandidateCount > 0
+      ? `${independentExportCandidateCount} export candidate group${independentExportCandidateCount === 1 ? " stands" : "s stand"} independently, while ${dependentExportCandidateCount} group${dependentExportCandidateCount === 1 ? " still depends" : "s still depend"} on the governance history export candidate.`
+      : `${independentExportCandidateCount} export candidate group${independentExportCandidateCount === 1 ? " stands" : "s stand"} independently. No grouped export candidates currently depend on governance history export.`);
 
   return (
     <section style={styles.panel}>
@@ -672,6 +719,8 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <p style={styles.actionSummary}>{memoryBoundary.confirmationSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.recoveryPathSummary}</p>
       <p style={styles.actionSummary}>{exportCandidateSummary}</p>
+      <p style={styles.actionSummary}>{sequenceSummary}</p>
+      <p style={styles.actionSummary}>{dependencySummary}</p>
       <ul style={styles.actionList}>
         <li style={styles.actionItem}>
           <p style={styles.contractMeta}>Runtime partition</p>
@@ -707,9 +756,15 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                 <span style={styles.badge}>{candidate.exportRequestShapeLabel}</span>
                 <span style={styles.badge}>{candidate.exportConfirmationRequirementLabel}</span>
                 <span style={styles.badge}>{candidate.exportRecoveryPathLabel}</span>
+                {candidate.exportSequenceLabel ? <span style={styles.badge}>{candidate.exportSequenceLabel}</span> : null}
+                {candidate.exportDependencyPolicyLabel ? <span style={styles.badge}>{candidate.exportDependencyPolicyLabel}</span> : null}
               </div>
               <p style={styles.actionSummary}>{candidate.summary}</p>
+              {candidate.dependencySummary ? <p style={styles.actionSummary}>{candidate.dependencySummary}</p> : null}
               <p style={styles.optionBody}>{`Grouped buckets: ${candidate.itemLabels.join(", ")}`}</p>
+              {candidate.dependsOnCandidateLabels && candidate.dependsOnCandidateLabels.length > 0 ? (
+                <p style={styles.actionSummary}>{`Depends on: ${candidate.dependsOnCandidateLabels.join(", ")}`}</p>
+              ) : null}
               {candidate.nextEligibleSummary ? <p style={styles.actionSummary}>{candidate.nextEligibleSummary}</p> : null}
             </li>
           ))}
@@ -851,7 +906,15 @@ function deriveMemoryBoundaryExportCandidates(
       exportConfirmationRequirement: representative.exportConfirmationRequirement,
       exportConfirmationRequirementLabel: representative.exportConfirmationRequirementLabel,
       exportRecoveryPath: representative.exportRecoveryPath,
-      exportRecoveryPathLabel: representative.exportRecoveryPathLabel
+      exportRecoveryPathLabel: representative.exportRecoveryPathLabel,
+      exportSequence: "foundational_first",
+      exportSequenceLabel: "Foundational export sequence",
+      exportDependencyPolicy: "independent_candidate",
+      exportDependencyPolicyLabel: "Independent export candidate",
+      dependsOnCandidateIds: [],
+      dependsOnCandidateLabels: [],
+      dependencySummary:
+        "This governance history candidate can promote independently once the tenant requests export."
     });
   }
 
@@ -885,6 +948,16 @@ function deriveMemoryBoundaryExportCandidates(
       exportConfirmationRequirementLabel: representative.exportConfirmationRequirementLabel,
       exportRecoveryPath: representative.exportRecoveryPath,
       exportRecoveryPathLabel: representative.exportRecoveryPathLabel,
+      exportSequence: "board_closure_following",
+      exportSequenceLabel: "Board-closure-following sequence",
+      exportDependencyPolicy: "depends_on_governance_history_export",
+      exportDependencyPolicyLabel: "Depends on governance history export",
+      dependsOnCandidateIds: ["governance_history_export"],
+      dependsOnCandidateLabels: ["Governance history export"],
+      dependencySummary:
+        representative.readiness === "after_board_closes"
+          ? "This package bundle candidate still waits on board closure and later follows the governance history export candidate."
+          : "This package bundle candidate follows the governance history export candidate once the tenant reaches export time.",
       ...(representative.nextEligibleSummary ? { nextEligibleSummary: representative.nextEligibleSummary } : {})
     });
   }

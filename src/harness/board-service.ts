@@ -163,6 +163,12 @@ export type HarnessMemoryBoundaryPromotionActionFamily =
   | "none_runtime_only"
   | "tenant_export_candidate"
   | "board_closure_before_export";
+export type HarnessMemoryBoundaryExportSequence =
+  | "foundational_first"
+  | "board_closure_following";
+export type HarnessMemoryBoundaryExportDependencyPolicy =
+  | "independent_candidate"
+  | "depends_on_governance_history_export";
 
 export type HarnessMemoryBoundaryAssemblyShape =
   | "none_runtime_only"
@@ -432,6 +438,13 @@ export type HarnessMemoryBoundaryExportCandidateView = {
   exportConfirmationRequirementLabel: string;
   exportRecoveryPath: HarnessMemoryBoundaryExportRecoveryPath;
   exportRecoveryPathLabel: string;
+  exportSequence?: HarnessMemoryBoundaryExportSequence;
+  exportSequenceLabel?: string;
+  exportDependencyPolicy?: HarnessMemoryBoundaryExportDependencyPolicy;
+  exportDependencyPolicyLabel?: string;
+  dependsOnCandidateIds?: Array<"governance_history_export" | "package_bundle_export">;
+  dependsOnCandidateLabels?: string[];
+  dependencySummary?: string;
   nextEligibleSummary?: string;
 };
 
@@ -580,6 +593,12 @@ export type HarnessMemoryBoundaryView = {
   exportCandidateGroupCount?: number;
   readyExportCandidateGroupCount?: number;
   waitingExportCandidateGroupCount?: number;
+  foundationalExportCandidateCount?: number;
+  boardClosureFollowingExportCandidateCount?: number;
+  independentExportCandidateCount?: number;
+  dependentExportCandidateCount?: number;
+  sequenceSummary?: string;
+  dependencySummary?: string;
   partitions: {
     runtime: HarnessMemoryBoundaryPartitionView;
     governanceHistoryCandidates: HarnessMemoryBoundaryPartitionView;
@@ -5349,7 +5368,15 @@ function buildMemoryBoundaryView(input: {
       exportConfirmationRequirement: representative.exportConfirmationRequirement,
       exportConfirmationRequirementLabel: representative.exportConfirmationRequirementLabel,
       exportRecoveryPath: representative.exportRecoveryPath,
-      exportRecoveryPathLabel: representative.exportRecoveryPathLabel
+      exportRecoveryPathLabel: representative.exportRecoveryPathLabel,
+      exportSequence: "foundational_first",
+      exportSequenceLabel: humanizeMemoryBoundaryExportSequence("foundational_first"),
+      exportDependencyPolicy: "independent_candidate",
+      exportDependencyPolicyLabel: humanizeMemoryBoundaryExportDependencyPolicy("independent_candidate"),
+      dependsOnCandidateIds: [],
+      dependsOnCandidateLabels: [],
+      dependencySummary:
+        "This governance history candidate can promote independently once the tenant requests export."
     });
   }
 
@@ -5384,12 +5411,34 @@ function buildMemoryBoundaryView(input: {
       exportConfirmationRequirementLabel: representative.exportConfirmationRequirementLabel,
       exportRecoveryPath: representative.exportRecoveryPath,
       exportRecoveryPathLabel: representative.exportRecoveryPathLabel,
+      exportSequence: "board_closure_following",
+      exportSequenceLabel: humanizeMemoryBoundaryExportSequence("board_closure_following"),
+      exportDependencyPolicy: "depends_on_governance_history_export",
+      exportDependencyPolicyLabel: humanizeMemoryBoundaryExportDependencyPolicy("depends_on_governance_history_export"),
+      dependsOnCandidateIds: ["governance_history_export"],
+      dependsOnCandidateLabels: ["Governance history export"],
+      dependencySummary:
+        representative.readiness === "after_board_closes"
+          ? "This package bundle candidate still waits on board closure and later follows the governance history export candidate."
+          : "This package bundle candidate follows the governance history export candidate once the tenant reaches export time.",
       ...(representative.nextEligibleSummary ? { nextEligibleSummary: representative.nextEligibleSummary } : {})
     });
   }
   const exportCandidateGroupCount = exportCandidates.length;
   const readyExportCandidateGroupCount = exportCandidates.filter((candidate) => candidate.readiness === "ready_now").length;
   const waitingExportCandidateGroupCount = exportCandidates.filter((candidate) => candidate.readiness === "after_board_closes").length;
+  const foundationalExportCandidateCount = exportCandidates.filter(
+    (candidate) => candidate.exportSequence === "foundational_first"
+  ).length;
+  const boardClosureFollowingExportCandidateCount = exportCandidates.filter(
+    (candidate) => candidate.exportSequence === "board_closure_following"
+  ).length;
+  const independentExportCandidateCount = exportCandidates.filter(
+    (candidate) => candidate.exportDependencyPolicy === "independent_candidate"
+  ).length;
+  const dependentExportCandidateCount = exportCandidates.filter(
+    (candidate) => candidate.exportDependencyPolicy === "depends_on_governance_history_export"
+  ).length;
 
   return {
     summary:
@@ -5656,6 +5705,18 @@ function buildMemoryBoundaryView(input: {
     exportCandidateGroupCount,
     readyExportCandidateGroupCount,
     waitingExportCandidateGroupCount,
+    foundationalExportCandidateCount,
+    boardClosureFollowingExportCandidateCount,
+    independentExportCandidateCount,
+    dependentExportCandidateCount,
+    sequenceSummary:
+      boardClosureFollowingExportCandidateCount > 0
+        ? `${foundationalExportCandidateCount} export candidate group${foundationalExportCandidateCount === 1 ? " forms" : "s form"} the foundational export sequence, and ${boardClosureFollowingExportCandidateCount} group${boardClosureFollowingExportCandidateCount === 1 ? " follows" : "s follow"} after board closure.`
+        : `${foundationalExportCandidateCount} export candidate group${foundationalExportCandidateCount === 1 ? " forms" : "s form"} the foundational export sequence. No later board-closure-following candidate groups are waiting right now.`,
+    dependencySummary:
+      dependentExportCandidateCount > 0
+        ? `${independentExportCandidateCount} export candidate group${independentExportCandidateCount === 1 ? " stands" : "s stand"} independently, while ${dependentExportCandidateCount} group${dependentExportCandidateCount === 1 ? " still depends" : "s still depend"} on the governance history export candidate.`
+        : `${independentExportCandidateCount} export candidate group${independentExportCandidateCount === 1 ? " stands" : "s stand"} independently. No grouped export candidates currently depend on governance history export.`,
     partitions: {
       runtime: {
         itemCount: operationalItems.length,
@@ -5877,6 +5938,28 @@ function humanizeMemoryBoundaryPromotionActionFamily(family: HarnessMemoryBounda
       return "Board closure first";
     default:
       return humanizeLabel(family);
+  }
+}
+
+function humanizeMemoryBoundaryExportSequence(sequence: HarnessMemoryBoundaryExportSequence) {
+  switch (sequence) {
+    case "foundational_first":
+      return "Foundational export sequence";
+    case "board_closure_following":
+      return "Board-closure-following sequence";
+    default:
+      return humanizeLabel(sequence);
+  }
+}
+
+function humanizeMemoryBoundaryExportDependencyPolicy(policy: HarnessMemoryBoundaryExportDependencyPolicy) {
+  switch (policy) {
+    case "independent_candidate":
+      return "Independent export candidate";
+    case "depends_on_governance_history_export":
+      return "Depends on governance history export";
+    default:
+      return humanizeLabel(policy);
   }
 }
 

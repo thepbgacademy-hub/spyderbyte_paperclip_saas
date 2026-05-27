@@ -181,6 +181,10 @@ describe("harness board client", () => {
         roleSummary: "2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure.",
         ownershipSummary:
           "2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later.",
+        sequenceSummary:
+          "1 export candidate group forms the foundational export sequence, and 1 group follows after board closure.",
+        dependencySummary:
+          "1 export candidate group stands independently, while 1 group still depends on the governance history export candidate.",
         nextStepSummary:
           "2 runtime buckets have no promotion step, 2 export candidate buckets are ready for a later tenant export step, and 2 buckets still need board closure before tenant export becomes the next step.",
         actionFamilySummary:
@@ -550,6 +554,10 @@ describe("harness board client", () => {
     expect(board.memoryBoundary.exportCandidateGroupCount).toBe(2);
     expect(board.memoryBoundary.readyExportCandidateGroupCount).toBe(1);
     expect(board.memoryBoundary.waitingExportCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.foundationalExportCandidateCount).toBe(1);
+    expect(board.memoryBoundary.boardClosureFollowingExportCandidateCount).toBe(1);
+    expect(board.memoryBoundary.independentExportCandidateCount).toBe(1);
+    expect(board.memoryBoundary.dependentExportCandidateCount).toBe(1);
     expect(board.memoryBoundary.exportCandidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -557,14 +565,19 @@ describe("harness board client", () => {
           label: "Governance history export",
           itemCount: 2,
           readinessLabel: "Ready now",
-          exportRequestShapeLabel: "Single-record export request"
+          exportRequestShapeLabel: "Single-record export request",
+          exportSequenceLabel: "Foundational export sequence",
+          exportDependencyPolicyLabel: "Independent export candidate"
         }),
         expect.objectContaining({
           id: "package_bundle_export",
           label: "Package bundle export",
           itemCount: 2,
           readinessLabel: "After board closes",
-          exportRequestShapeLabel: "Package-bundle export request"
+          exportRequestShapeLabel: "Package-bundle export request",
+          exportSequenceLabel: "Board-closure-following sequence",
+          exportDependencyPolicyLabel: "Depends on governance history export",
+          dependsOnCandidateLabels: ["Governance history export"]
         })
       ])
     );
@@ -606,8 +619,12 @@ describe("harness board client", () => {
     const board = await client.fetchBoard();
 
     expect(board.memoryBoundary.governanceReadyCount).toBe(1);
-    expect(board.memoryBoundary.readyExportCandidateGroupCount).toBe(0);
-    expect(board.memoryBoundary.waitingExportCandidateGroupCount).toBe(2);
+    expect(board.memoryBoundary.readyExportCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.waitingExportCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.foundationalExportCandidateCount).toBe(1);
+    expect(board.memoryBoundary.boardClosureFollowingExportCandidateCount).toBe(1);
+    expect(board.memoryBoundary.independentExportCandidateCount).toBe(1);
+    expect(board.memoryBoundary.dependentExportCandidateCount).toBe(1);
     expect(board.memoryBoundary.roleSummary).toBe(
       "1 governance record candidate is ready now, and 2 packaged output candidates still wait on board closure."
     );
@@ -748,6 +765,10 @@ describe("harness board client", () => {
           "2 export candidate buckets are already tenant-controlled for later explicit export, while 2 buckets still need board closure before tenant export can own the next step.",
         triggerSummary:
           "2 export candidate buckets are waiting only on a later tenant export request, while 2 buckets still need board closure before that request can happen.",
+        sequenceSummary:
+          "1 export candidate group forms the foundational export sequence, and 1 group follows after board closure.",
+        dependencySummary:
+          "1 export candidate group stands independently, while 1 group still depends on the governance history export candidate.",
         nextStepSummary:
           "2 runtime buckets have no promotion step, 2 export candidate buckets are ready for a later tenant export step, and 2 buckets still need board closure before tenant export becomes the next step.",
         actionFamilySummary:
@@ -761,6 +782,10 @@ describe("harness board client", () => {
         boardControlledCandidateCount: 2,
         tenantExportTriggerCount: 2,
         boardClosureTriggerCount: 2,
+        foundationalExportCandidateCount: 1,
+        boardClosureFollowingExportCandidateCount: 1,
+        independentExportCandidateCount: 1,
+        dependentExportCandidateCount: 1,
         operationalItems: expect.arrayContaining([
           expect.objectContaining({
             id: "lane_continuity",
