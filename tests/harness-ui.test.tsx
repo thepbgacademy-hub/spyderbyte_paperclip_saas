@@ -290,14 +290,16 @@ const boardResponse: HarnessBoardResponse = {
         label: "Lane continuity",
         count: 2,
         summary: "Continuity snapshots stay in Wealth Factory runtime as live operational memory.",
-        destination: "wealth_factory_runtime"
+        destination: "wealth_factory_runtime",
+        readiness: "live_runtime_only"
       },
       {
         id: "attention_state",
         label: "Attention state",
         count: 1,
         summary: "Current CEO attention stays in runtime truth until the board resolves it explicitly.",
-        destination: "wealth_factory_runtime"
+        destination: "wealth_factory_runtime",
+        readiness: "live_runtime_only"
       }
     ],
     exportReadyItems: [
@@ -306,21 +308,32 @@ const boardResponse: HarnessBoardResponse = {
         label: "Governance decisions",
         count: 1,
         summary: "Bounded decisions are ready for later tenant-owned board records.",
-        destination: "tenant_record_candidate"
+        destination: "tenant_record_candidate",
+        readiness: "ready_now"
       },
       {
         id: "implemented_actions",
         label: "Implemented actions",
         count: 1,
         summary: "Implemented governance actions are ready for suggested-versus-implemented history export.",
-        destination: "tenant_record_candidate"
+        destination: "tenant_record_candidate",
+        readiness: "ready_now"
+      },
+      {
+        id: "package_governance",
+        label: "Package governance",
+        count: 1,
+        summary: "Package-shaped governance items are ready for later tenant-owned board records.",
+        destination: "tenant_record_candidate",
+        readiness: "after_board_closes"
       },
       {
         id: "package_deliverables",
         label: "Packaged deliverables",
         count: 1,
         summary: "Tenant-facing deliverables are ready to become long-memory business records later.",
-        destination: "tenant_record_candidate"
+        destination: "tenant_record_candidate",
+        readiness: "after_board_closes"
       }
     ]
   }
@@ -924,9 +937,13 @@ describe("harness board UI", () => {
     expect(markup).toContain("Attention state");
     expect(markup).toContain("Governance decisions");
     expect(markup).toContain("Implemented actions");
+    expect(markup).toContain("Package governance");
     expect(markup).toContain("Packaged deliverables");
     expect(markup).toContain("Stays in runtime");
     expect(markup).toContain("Ready for export later");
+    expect(markup).toContain("Live runtime only");
+    expect(markup).toContain("Ready now");
+    expect(markup).toContain("After board closes");
     expect(markup).toContain("Tenant-facing package state");
     expect(markup).toContain("Keep the pricing package readable while the research expansion stays under review.");
     expect(markup).toContain("Deferred approvals: 1");

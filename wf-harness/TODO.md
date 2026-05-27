@@ -167,3 +167,4 @@ This file tracks the new harness subproject only.
 - [x] Surface bounded lane continuity memory on card details so continuity source, latest outcome memory, and latest absorbed-work context stay tenant-visible without replaying raw card events or opening a second notes store.
 - [x] Surface bounded policy/recommendation context on `followThroughItems` so implemented governance actions already carry enough suggested-versus-implemented memory for later export without reconstructing intent from raw decision rows.
 - [x] Surface a bounded `memoryBoundary` read model so the board can distinguish live Wealth Factory runtime memory from later tenant-record/export candidates without turning future export or Obsidian surfaces into live orchestration truth.
+- [x] Surface bounded `memoryBoundary` readiness states so export-candidate memory that is already stable does not get conflated with package-shaped memory that still waits on board closure.

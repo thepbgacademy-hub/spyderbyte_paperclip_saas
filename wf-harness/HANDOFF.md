@@ -280,6 +280,7 @@ The first harness implementation slice is now built and verified:
 - Once mutable board actions carry an `actionToken`, every sibling mutation path for that same control family must honor it too. Leaving legacy `/complete` or `/fresh-cycle` routes tokenless would recreate an implicit bypass around the explicit review seam and reopen the same stale-intent pressure path we are trying to remove.
 - CEO review choices also need mutual exclusion at commit time, not just at read time. If `complete_run` and `start_fresh_cycle` validate against the same old board snapshot but only one of them creates a newer cycle, the older run must stop being completable through that same review token or the orchestrator can commit contradictory outcomes under concurrency.
 - Keep the new `memoryBoundary` seam explicit about what is still live operational runtime truth versus what is only export-ready candidate memory. Continuity snapshots and current attention belong to Wealth Factory runtime, while governance decisions, implemented actions, and packaged outputs may be shown as later tenant-record candidates without turning export surfaces into live orchestration state.
+- Keep `memoryBoundary` explicit about readiness as well as destination. Export-candidate memory that is already stable (`governance_decisions`, `implemented_actions`) should not be conflated with package-shaped memory that still waits on board closure, or later Obsidian/export work will treat assembling outputs as if they were already durable tenant records.
 
 ## Next Step
 

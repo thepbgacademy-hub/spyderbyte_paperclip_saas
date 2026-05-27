@@ -180,16 +180,49 @@ describe("harness board client", () => {
         operationalItems: expect.arrayContaining([
           expect.objectContaining({
             id: "lane_continuity",
-            destination: "wealth_factory_runtime"
+            destination: "wealth_factory_runtime",
+            readiness: "live_runtime_only"
           })
         ]),
         exportReadyItems: expect.arrayContaining([
           expect.objectContaining({
             id: "governance_decisions",
-            destination: "tenant_record_candidate"
+            destination: "tenant_record_candidate",
+            readiness: "ready_now"
           })
         ])
       })
+    );
+  });
+
+  it("fills missing readiness fields when a staggered live payload includes memoryBoundary without the new item readiness seam", async () => {
+    const previewClient = createHarnessBoardClient(
+      fetch,
+      { location: { hostname: "127.0.0.1", search: "" } as Window["location"] }
+    );
+    const fallback = previewClient.getFallback();
+    const partialBoundary = {
+      ...fallback.memoryBoundary,
+      operationalItems: fallback.memoryBoundary.operationalItems.map(({ readiness: _readiness, ...item }) => item),
+      exportReadyItems: fallback.memoryBoundary.exportReadyItems.map(({ readiness: _readiness, ...item }) => item)
+    };
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...fallback,
+        memoryBoundary: partialBoundary
+      })
+    });
+    const client = createHarnessBoardClient(
+      fetchImpl as unknown as typeof fetch,
+      { location: { hostname: "app.spyderbyte.cloud" } as Window["location"] }
+    );
+
+    const board = await client.fetchBoard();
+
+    expect(board.memoryBoundary.operationalItems[0]?.readiness).toBe("live_runtime_only");
+    expect(board.memoryBoundary.exportReadyItems.find((item) => item.id === "package_deliverables")?.readiness).toBe(
+      "after_board_closes"
     );
   });
 
@@ -316,13 +349,15 @@ describe("harness board client", () => {
         operationalItems: expect.arrayContaining([
           expect.objectContaining({
             id: "lane_continuity",
-            destination: "wealth_factory_runtime"
+            destination: "wealth_factory_runtime",
+            readiness: "live_runtime_only"
           })
         ]),
         exportReadyItems: expect.arrayContaining([
           expect.objectContaining({
             id: "governance_decisions",
-            destination: "tenant_record_candidate"
+            destination: "tenant_record_candidate",
+            readiness: "ready_now"
           })
         ])
       })

@@ -1610,19 +1610,22 @@ describe("harness board service", () => {
           expect.objectContaining({
             id: "lane_continuity",
             destination: "wealth_factory_runtime",
-            count: expect.any(Number)
+            count: expect.any(Number),
+            readiness: "live_runtime_only"
           })
         ]),
         exportReadyItems: expect.arrayContaining([
           expect.objectContaining({
             id: "governance_decisions",
             destination: "tenant_record_candidate",
-            count: expect.any(Number)
+            count: expect.any(Number),
+            readiness: "ready_now"
           }),
           expect.objectContaining({
             id: "implemented_actions",
             destination: "tenant_record_candidate",
-            count: expect.any(Number)
+            count: expect.any(Number),
+            readiness: "ready_now"
           })
         ])
       })
@@ -5442,6 +5445,18 @@ describe("harness board service", () => {
         expect.objectContaining({
           action: "packaged_outcome",
           summary: "CEO packaged the final board outcome for the tenant."
+        })
+      ])
+    );
+    expect(hydratedBoard.memoryBoundary.exportReadyItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "package_governance",
+          readiness: "ready_now"
+        }),
+        expect.objectContaining({
+          id: "package_deliverables",
+          readiness: "ready_now"
         })
       ])
     );

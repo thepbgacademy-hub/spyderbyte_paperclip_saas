@@ -328,14 +328,16 @@ const fallbackBoardBase: HarnessBoardResponse = {
         label: "Lane continuity",
         count: 1,
         summary: "Continuity snapshots stay in Wealth Factory runtime as live operational memory.",
-        destination: "wealth_factory_runtime"
+        destination: "wealth_factory_runtime",
+        readiness: "live_runtime_only"
       },
       {
         id: "attention_state",
         label: "Attention state",
         count: 1,
         summary: "Current CEO attention stays in runtime truth until the board resolves it explicitly.",
-        destination: "wealth_factory_runtime"
+        destination: "wealth_factory_runtime",
+        readiness: "live_runtime_only"
       }
     ],
     exportReadyItems: [
@@ -344,28 +346,32 @@ const fallbackBoardBase: HarnessBoardResponse = {
         label: "Governance decisions",
         count: 1,
         summary: "Bounded decisions are ready for later tenant-owned board records.",
-        destination: "tenant_record_candidate"
+        destination: "tenant_record_candidate",
+        readiness: "ready_now"
       },
       {
         id: "implemented_actions",
         label: "Implemented actions",
         count: 1,
         summary: "Implemented governance actions are ready for suggested-versus-implemented history export.",
-        destination: "tenant_record_candidate"
+        destination: "tenant_record_candidate",
+        readiness: "ready_now"
       },
       {
         id: "package_governance",
         label: "Package governance",
         count: 1,
         summary: "Package-shaped governance items are ready for later tenant-owned board records.",
-        destination: "tenant_record_candidate"
+        destination: "tenant_record_candidate",
+        readiness: "after_board_closes"
       },
       {
         id: "package_deliverables",
         label: "Packaged deliverables",
         count: 2,
         summary: "Tenant-facing deliverables are ready to become long-memory business records later.",
-        destination: "tenant_record_candidate"
+        destination: "tenant_record_candidate",
+        readiness: "after_board_closes"
       }
     ]
   },
@@ -505,11 +511,46 @@ type LegacyHarnessBoardResponse = Omit<HarnessBoardResponse, "memoryBoundary"> &
   memoryBoundary?: HarnessBoardResponse["memoryBoundary"] | undefined;
 };
 
+function inferMemoryBoundaryReadiness(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"],
+  board: Pick<HarnessBoardResponse, "completionPackage">
+): HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["readiness"] {
+  if (itemId === "lane_continuity" || itemId === "attention_state") {
+    return "live_runtime_only";
+  }
+
+  if (itemId === "package_governance" || itemId === "package_deliverables") {
+    return board.completionPackage?.hasOpenGovernanceItems ? "after_board_closes" : "ready_now";
+  }
+
+  return "ready_now";
+}
+
+function normalizeMemoryBoundary(
+  memoryBoundary: HarnessBoardResponse["memoryBoundary"],
+  board: Pick<HarnessBoardResponse, "completionPackage">
+): HarnessBoardResponse["memoryBoundary"] {
+  return {
+    ...memoryBoundary,
+    operationalItems: memoryBoundary.operationalItems.map((item) => ({
+      ...item,
+      readiness: item.readiness ?? inferMemoryBoundaryReadiness(item.id, board)
+    })),
+    exportReadyItems: memoryBoundary.exportReadyItems.map((item) => ({
+      ...item,
+      readiness: item.readiness ?? inferMemoryBoundaryReadiness(item.id, board)
+    }))
+  };
+}
+
 function normalizeBoardResponse(
   board: HarnessBoardResponse | LegacyHarnessBoardResponse
 ): HarnessBoardResponse {
   if (board.memoryBoundary) {
-    return board as HarnessBoardResponse;
+    return {
+      ...board,
+      memoryBoundary: normalizeMemoryBoundary(board.memoryBoundary, board)
+    } as HarnessBoardResponse;
   }
 
   return {
@@ -525,14 +566,16 @@ function normalizeBoardResponse(
             card.detailSections.some((section) => section.id === "continuity-memory")
           ).length,
           summary: "Continuity snapshots stay in Wealth Factory runtime as live operational memory.",
-          destination: "wealth_factory_runtime"
+          destination: "wealth_factory_runtime",
+          readiness: "live_runtime_only"
         },
         {
           id: "attention_state",
           label: "Attention state",
           count: board.pendingAttention ? 1 : 0,
           summary: "Current CEO attention stays in runtime truth until the board resolves it explicitly.",
-          destination: "wealth_factory_runtime"
+          destination: "wealth_factory_runtime",
+          readiness: "live_runtime_only"
         }
       ],
       exportReadyItems: [
@@ -541,28 +584,32 @@ function normalizeBoardResponse(
           label: "Governance decisions",
           count: board.recentDecisions.length,
           summary: "Bounded decisions are ready for later tenant-owned board records.",
-          destination: "tenant_record_candidate"
+          destination: "tenant_record_candidate",
+          readiness: "ready_now"
         },
         {
           id: "implemented_actions",
           label: "Implemented actions",
           count: board.followThroughItems.length,
           summary: "Implemented governance actions are ready for suggested-versus-implemented history export.",
-          destination: "tenant_record_candidate"
+          destination: "tenant_record_candidate",
+          readiness: "ready_now"
         },
         {
           id: "package_governance",
           label: "Package governance",
           count: board.completionPackage?.governanceItems.length ?? 0,
           summary: "Package-shaped governance items are ready for later tenant-owned board records.",
-          destination: "tenant_record_candidate"
+          destination: "tenant_record_candidate",
+          readiness: board.completionPackage?.hasOpenGovernanceItems ? "after_board_closes" : "ready_now"
         },
         {
           id: "package_deliverables",
           label: "Packaged deliverables",
           count: board.completionPackage?.deliverables.length ?? 0,
           summary: "Tenant-facing deliverables are ready to become long-memory business records later.",
-          destination: "tenant_record_candidate"
+          destination: "tenant_record_candidate",
+          readiness: board.completionPackage?.hasOpenGovernanceItems ? "after_board_closes" : "ready_now"
         }
       ]
     }

@@ -86,6 +86,11 @@ export type HarnessBoardResponse = {
 
 export type HarnessMemoryBoundaryDestination = "wealth_factory_runtime" | "tenant_record_candidate";
 
+export type HarnessMemoryBoundaryReadiness =
+  | "live_runtime_only"
+  | "ready_now"
+  | "after_board_closes";
+
 export type HarnessMemoryBoundaryItemView = {
   id:
     | "lane_continuity"
@@ -98,6 +103,7 @@ export type HarnessMemoryBoundaryItemView = {
   count: number;
   summary: string;
   destination: HarnessMemoryBoundaryDestination;
+  readiness: HarnessMemoryBoundaryReadiness;
 };
 
 export type HarnessMemoryBoundaryView = {
@@ -3742,14 +3748,16 @@ function buildMemoryBoundaryView(input: {
       label: "Lane continuity",
       count: input.continuity.length,
       summary: "Continuity snapshots stay in Wealth Factory runtime as live operational memory.",
-      destination: "wealth_factory_runtime"
+      destination: "wealth_factory_runtime",
+      readiness: "live_runtime_only"
     },
     {
       id: "attention_state",
       label: "Attention state",
       count: input.hasPendingAttention ? 1 : 0,
       summary: "Current CEO attention stays in runtime truth until the board resolves it explicitly.",
-      destination: "wealth_factory_runtime"
+      destination: "wealth_factory_runtime",
+      readiness: "live_runtime_only"
     }
   ];
 
@@ -3759,32 +3767,39 @@ function buildMemoryBoundaryView(input: {
       label: "Governance decisions",
       count: input.recentDecisions.length,
       summary: "Bounded decisions are ready for later tenant-owned board records.",
-      destination: "tenant_record_candidate"
+      destination: "tenant_record_candidate",
+      readiness: "ready_now"
     },
     {
       id: "implemented_actions",
       label: "Implemented actions",
       count: input.followThroughItems.length,
       summary: "Implemented governance actions are ready for suggested-versus-implemented history export.",
-      destination: "tenant_record_candidate"
+      destination: "tenant_record_candidate",
+      readiness: "ready_now"
     }
   ];
 
   if (input.completionPackage) {
+    const packageReadiness: HarnessMemoryBoundaryReadiness = input.completionPackage.hasOpenGovernanceItems
+      ? "after_board_closes"
+      : "ready_now";
     exportReadyItems.push(
       {
         id: "package_governance",
         label: "Package governance",
         count: input.completionPackage.governanceItems.length,
         summary: "Package-shaped governance items are ready for later tenant-owned board records.",
-        destination: "tenant_record_candidate"
+        destination: "tenant_record_candidate",
+        readiness: packageReadiness
       },
       {
         id: "package_deliverables",
         label: "Packaged deliverables",
         count: input.completionPackage.deliverables.length,
         summary: "Tenant-facing deliverables are ready to become long-memory business records later.",
-        destination: "tenant_record_candidate"
+        destination: "tenant_record_candidate",
+        readiness: packageReadiness
       }
     );
   }

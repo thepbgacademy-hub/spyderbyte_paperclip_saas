@@ -489,6 +489,9 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                 <li key={item.id} style={styles.actionItem}>
                   <p style={styles.actionMeta}>{`${item.count} item${item.count === 1 ? "" : "s"}`}</p>
                   <h3 style={styles.actionHeading}>{item.label}</h3>
+                  <div style={styles.badgeList}>
+                    <span style={styles.badge}>{describeMemoryBoundaryReadiness(item.readiness)}</span>
+                  </div>
                   <p style={styles.actionSummary}>{item.summary}</p>
                 </li>
               ))}
@@ -498,6 +501,24 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       </div>
     </section>
   );
+}
+
+function describeMemoryBoundaryReadiness(
+  readiness: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["readiness"] | undefined
+) {
+  if (!readiness) {
+    return "Readiness pending";
+  }
+  switch (readiness) {
+    case "live_runtime_only":
+      return "Live runtime only";
+    case "ready_now":
+      return "Ready now";
+    case "after_board_closes":
+      return "After board closes";
+    default:
+      return humanizeValue(readiness);
+  }
 }
 
 function getOptionButtonLabel(
