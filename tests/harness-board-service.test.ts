@@ -3957,6 +3957,12 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.independentExportSafeCandidateGroupCount).toBe(1);
     expect(hydrated.memoryBoundary.requiresClosureSnapshotCandidateGroupCount).toBe(0);
     expect(hydrated.memoryBoundary.exportCandidateConcurrencySummary).toContain("concurrency-safe for later independent export");
+    expect(hydrated.memoryBoundary.tenantBusinessContextCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.packageConsumerAudienceCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.exportCandidateSensitivitySummary).toContain("tenant business context");
+    expect(hydrated.memoryBoundary.exportCandidateAudienceSummary).toContain("tenant governance-history readers");
+    expect(hydrated.memoryBoundary.exportCandidateSanitizationSummary).toContain("exported as recorded");
+    expect(hydrated.memoryBoundary.exportCandidateRedactionSummary).toContain("governance-safe redaction");
   });
 
   it("fails closed when approval mutation is invoked without an atomic runner", async () => {

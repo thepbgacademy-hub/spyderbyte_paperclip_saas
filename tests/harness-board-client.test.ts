@@ -561,6 +561,18 @@ describe("harness board client", () => {
     expect(board.memoryBoundary.independentExportSafeCandidateGroupCount).toBe(1);
     expect(board.memoryBoundary.requiresClosureSnapshotCandidateGroupCount).toBe(1);
     expect(board.memoryBoundary.exportCandidateConcurrencySummary).toContain("concurrency-safe for later independent export");
+    expect(board.memoryBoundary.tenantBusinessContextCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.tenantDeliverableContextCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.governanceHistoryAudienceCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.packageConsumerAudienceCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.exportAsRecordedCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.sanitizeBeforePackageExportCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.governanceSafeRedactionCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.packageSafeRedactionCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.exportCandidateSensitivitySummary).toContain("tenant deliverable context");
+    expect(board.memoryBoundary.exportCandidateAudienceSummary).toContain("tenant package consumers");
+    expect(board.memoryBoundary.exportCandidateSanitizationSummary).toContain("sanitization before package export");
+    expect(board.memoryBoundary.exportCandidateRedactionSummary).toContain("package-safe redaction");
     expect(board.memoryBoundary.exportCandidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

@@ -663,9 +663,21 @@ export type HarnessMemoryBoundaryView = {
   dependentExportCandidateCount?: number;
   independentExportSafeCandidateGroupCount?: number;
   requiresClosureSnapshotCandidateGroupCount?: number;
+  tenantBusinessContextCandidateGroupCount?: number;
+  tenantDeliverableContextCandidateGroupCount?: number;
+  governanceHistoryAudienceCandidateGroupCount?: number;
+  packageConsumerAudienceCandidateGroupCount?: number;
+  exportAsRecordedCandidateGroupCount?: number;
+  sanitizeBeforePackageExportCandidateGroupCount?: number;
+  governanceSafeRedactionCandidateGroupCount?: number;
+  packageSafeRedactionCandidateGroupCount?: number;
   sequenceSummary?: string;
   dependencySummary?: string;
   exportCandidateConcurrencySummary?: string;
+  exportCandidateSensitivitySummary?: string;
+  exportCandidateAudienceSummary?: string;
+  exportCandidateSanitizationSummary?: string;
+  exportCandidateRedactionSummary?: string;
   partitions: {
     runtime: HarnessMemoryBoundaryPartitionView;
     governanceHistoryCandidates: HarnessMemoryBoundaryPartitionView;
@@ -5640,6 +5652,30 @@ function buildMemoryBoundaryView(input: {
   const requiresClosureSnapshotCandidateGroupCount = exportCandidates.filter(
     (candidate) => candidate.concurrencyBoundary === "requires_board_closure_snapshot"
   ).length;
+  const tenantBusinessContextCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.exportSensitivity === "tenant_business_context"
+  ).length;
+  const tenantDeliverableContextCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.exportSensitivity === "tenant_deliverable_context"
+  ).length;
+  const governanceHistoryAudienceCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.exportAudienceBoundary === "tenant_governance_history_readers"
+  ).length;
+  const packageConsumerAudienceCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.exportAudienceBoundary === "tenant_package_consumers"
+  ).length;
+  const exportAsRecordedCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.exportSanitizationPolicy === "export_as_recorded"
+  ).length;
+  const sanitizeBeforePackageExportCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.exportSanitizationPolicy === "sanitize_before_package_export"
+  ).length;
+  const governanceSafeRedactionCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.exportRedactionBoundary === "governance_safe_redaction"
+  ).length;
+  const packageSafeRedactionCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.exportRedactionBoundary === "package_safe_redaction"
+  ).length;
 
   return {
     summary:
@@ -5912,6 +5948,14 @@ function buildMemoryBoundaryView(input: {
     dependentExportCandidateCount,
     independentExportSafeCandidateGroupCount,
     requiresClosureSnapshotCandidateGroupCount,
+    tenantBusinessContextCandidateGroupCount,
+    tenantDeliverableContextCandidateGroupCount,
+    governanceHistoryAudienceCandidateGroupCount,
+    packageConsumerAudienceCandidateGroupCount,
+    exportAsRecordedCandidateGroupCount,
+    sanitizeBeforePackageExportCandidateGroupCount,
+    governanceSafeRedactionCandidateGroupCount,
+    packageSafeRedactionCandidateGroupCount,
     sequenceSummary:
       boardClosureFollowingExportCandidateCount > 0
         ? `${foundationalExportCandidateCount} export candidate group${foundationalExportCandidateCount === 1 ? " forms" : "s form"} the foundational export sequence, and ${boardClosureFollowingExportCandidateCount} group${boardClosureFollowingExportCandidateCount === 1 ? " follows" : "s follow"} after board closure.`
@@ -5924,6 +5968,22 @@ function buildMemoryBoundaryView(input: {
       requiresClosureSnapshotCandidateGroupCount > 0
         ? `${independentExportSafeCandidateGroupCount} export candidate group${independentExportSafeCandidateGroupCount === 1 ? " is" : "s are"} concurrency-safe for later independent export, and ${requiresClosureSnapshotCandidateGroupCount} group${requiresClosureSnapshotCandidateGroupCount === 1 ? " still needs" : "s still need"} a board-closure snapshot before export remains concurrency-safe.`
         : `${independentExportSafeCandidateGroupCount} export candidate group${independentExportSafeCandidateGroupCount === 1 ? " is" : "s are"} concurrency-safe for later independent export.`,
+    exportCandidateSensitivitySummary:
+      tenantDeliverableContextCandidateGroupCount > 0
+        ? `${tenantBusinessContextCandidateGroupCount} export candidate group${tenantBusinessContextCandidateGroupCount === 1 ? " carries" : "s carry"} tenant business context, and ${tenantDeliverableContextCandidateGroupCount} group${tenantDeliverableContextCandidateGroupCount === 1 ? " still carries" : "s still carry"} tenant deliverable context.`
+        : `${tenantBusinessContextCandidateGroupCount} export candidate group${tenantBusinessContextCandidateGroupCount === 1 ? " carries" : "s carry"} tenant business context.`,
+    exportCandidateAudienceSummary:
+      packageConsumerAudienceCandidateGroupCount > 0
+        ? `${governanceHistoryAudienceCandidateGroupCount} export candidate group${governanceHistoryAudienceCandidateGroupCount === 1 ? " is aimed" : "s are aimed"} at tenant governance-history readers, and ${packageConsumerAudienceCandidateGroupCount} group${packageConsumerAudienceCandidateGroupCount === 1 ? " still targets" : "s still target"} tenant package consumers.`
+        : `${governanceHistoryAudienceCandidateGroupCount} export candidate group${governanceHistoryAudienceCandidateGroupCount === 1 ? " is aimed" : "s are aimed"} at tenant governance-history readers.`,
+    exportCandidateSanitizationSummary:
+      sanitizeBeforePackageExportCandidateGroupCount > 0
+        ? `${exportAsRecordedCandidateGroupCount} export candidate group${exportAsRecordedCandidateGroupCount === 1 ? " is exported" : "s are exported"} as recorded, and ${sanitizeBeforePackageExportCandidateGroupCount} group${sanitizeBeforePackageExportCandidateGroupCount === 1 ? " still requires" : "s still require"} sanitization before package export.`
+        : `${exportAsRecordedCandidateGroupCount} export candidate group${exportAsRecordedCandidateGroupCount === 1 ? " is exported" : "s are exported"} as recorded.`,
+    exportCandidateRedactionSummary:
+      packageSafeRedactionCandidateGroupCount > 0
+        ? `${governanceSafeRedactionCandidateGroupCount} export candidate group${governanceSafeRedactionCandidateGroupCount === 1 ? " uses" : "s use"} governance-safe redaction, and ${packageSafeRedactionCandidateGroupCount} group${packageSafeRedactionCandidateGroupCount === 1 ? " still requires" : "s still require"} package-safe redaction.`
+        : `${governanceSafeRedactionCandidateGroupCount} export candidate group${governanceSafeRedactionCandidateGroupCount === 1 ? " uses" : "s use"} governance-safe redaction.`,
     partitions: {
       runtime: {
         itemCount: operationalItems.length,

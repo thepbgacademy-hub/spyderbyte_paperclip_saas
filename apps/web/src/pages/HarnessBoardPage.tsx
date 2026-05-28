@@ -819,6 +819,22 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     ?? exportCandidates.filter((candidate) => candidate.concurrencyBoundary === "independent_export_safe").length;
   const requiresClosureSnapshotCandidateGroupCount = memoryBoundary.requiresClosureSnapshotCandidateGroupCount
     ?? exportCandidates.filter((candidate) => candidate.concurrencyBoundary === "requires_board_closure_snapshot").length;
+  const tenantBusinessContextCandidateGroupCount = memoryBoundary.tenantBusinessContextCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportSensitivity === "tenant_business_context").length;
+  const tenantDeliverableContextCandidateGroupCount = memoryBoundary.tenantDeliverableContextCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportSensitivity === "tenant_deliverable_context").length;
+  const governanceHistoryAudienceCandidateGroupCount = memoryBoundary.governanceHistoryAudienceCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportAudienceBoundary === "tenant_governance_history_readers").length;
+  const packageConsumerAudienceCandidateGroupCount = memoryBoundary.packageConsumerAudienceCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportAudienceBoundary === "tenant_package_consumers").length;
+  const exportAsRecordedCandidateGroupCount = memoryBoundary.exportAsRecordedCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportSanitizationPolicy === "export_as_recorded").length;
+  const sanitizeBeforePackageExportCandidateGroupCount = memoryBoundary.sanitizeBeforePackageExportCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportSanitizationPolicy === "sanitize_before_package_export").length;
+  const governanceSafeRedactionCandidateGroupCount = memoryBoundary.governanceSafeRedactionCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportRedactionBoundary === "governance_safe_redaction").length;
+  const packageSafeRedactionCandidateGroupCount = memoryBoundary.packageSafeRedactionCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportRedactionBoundary === "package_safe_redaction").length;
   const exportCandidateSummary = memoryBoundary.exportCandidateSummary
     ?? (waitingExportCandidateGroupCount > 0
       ? `${readyExportCandidateGroupCount} export candidate group${readyExportCandidateGroupCount === 1 ? " is" : "s are"} ready for later tenant export, and ${waitingExportCandidateGroupCount} group${waitingExportCandidateGroupCount === 1 ? " still waits" : "s still wait"} on board closure first.`
@@ -835,6 +851,22 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     ?? (requiresClosureSnapshotCandidateGroupCount > 0
       ? `${independentExportSafeCandidateGroupCount} export candidate group${independentExportSafeCandidateGroupCount === 1 ? " is" : "s are"} concurrency-safe for later independent export, and ${requiresClosureSnapshotCandidateGroupCount} group${requiresClosureSnapshotCandidateGroupCount === 1 ? " still needs" : "s still need"} a board-closure snapshot before export remains concurrency-safe.`
       : `${independentExportSafeCandidateGroupCount} export candidate group${independentExportSafeCandidateGroupCount === 1 ? " is" : "s are"} concurrency-safe for later independent export.`);
+  const exportCandidateSensitivitySummary = memoryBoundary.exportCandidateSensitivitySummary
+    ?? (tenantDeliverableContextCandidateGroupCount > 0
+      ? `${tenantBusinessContextCandidateGroupCount} export candidate group${tenantBusinessContextCandidateGroupCount === 1 ? " carries" : "s carry"} tenant business context, and ${tenantDeliverableContextCandidateGroupCount} group${tenantDeliverableContextCandidateGroupCount === 1 ? " still carries" : "s still carry"} tenant deliverable context.`
+      : `${tenantBusinessContextCandidateGroupCount} export candidate group${tenantBusinessContextCandidateGroupCount === 1 ? " carries" : "s carry"} tenant business context.`);
+  const exportCandidateAudienceSummary = memoryBoundary.exportCandidateAudienceSummary
+    ?? (packageConsumerAudienceCandidateGroupCount > 0
+      ? `${governanceHistoryAudienceCandidateGroupCount} export candidate group${governanceHistoryAudienceCandidateGroupCount === 1 ? " is aimed" : "s are aimed"} at tenant governance-history readers, and ${packageConsumerAudienceCandidateGroupCount} group${packageConsumerAudienceCandidateGroupCount === 1 ? " still targets" : "s still target"} tenant package consumers.`
+      : `${governanceHistoryAudienceCandidateGroupCount} export candidate group${governanceHistoryAudienceCandidateGroupCount === 1 ? " is aimed" : "s are aimed"} at tenant governance-history readers.`);
+  const exportCandidateSanitizationSummary = memoryBoundary.exportCandidateSanitizationSummary
+    ?? (sanitizeBeforePackageExportCandidateGroupCount > 0
+      ? `${exportAsRecordedCandidateGroupCount} export candidate group${exportAsRecordedCandidateGroupCount === 1 ? " is exported" : "s are exported"} as recorded, and ${sanitizeBeforePackageExportCandidateGroupCount} group${sanitizeBeforePackageExportCandidateGroupCount === 1 ? " still requires" : "s still require"} sanitization before package export.`
+      : `${exportAsRecordedCandidateGroupCount} export candidate group${exportAsRecordedCandidateGroupCount === 1 ? " is exported" : "s are exported"} as recorded.`);
+  const exportCandidateRedactionSummary = memoryBoundary.exportCandidateRedactionSummary
+    ?? (packageSafeRedactionCandidateGroupCount > 0
+      ? `${governanceSafeRedactionCandidateGroupCount} export candidate group${governanceSafeRedactionCandidateGroupCount === 1 ? " uses" : "s use"} governance-safe redaction, and ${packageSafeRedactionCandidateGroupCount} group${packageSafeRedactionCandidateGroupCount === 1 ? " still requires" : "s still require"} package-safe redaction.`
+      : `${governanceSafeRedactionCandidateGroupCount} export candidate group${governanceSafeRedactionCandidateGroupCount === 1 ? " uses" : "s use"} governance-safe redaction.`);
 
   return (
     <section style={styles.panel}>
@@ -881,6 +913,10 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <p style={styles.actionSummary}>{sequenceSummary}</p>
       <p style={styles.actionSummary}>{dependencySummary}</p>
       <p style={styles.actionSummary}>{exportCandidateConcurrencySummary}</p>
+      <p style={styles.actionSummary}>{exportCandidateSensitivitySummary}</p>
+      <p style={styles.actionSummary}>{exportCandidateAudienceSummary}</p>
+      <p style={styles.actionSummary}>{exportCandidateSanitizationSummary}</p>
+      <p style={styles.actionSummary}>{exportCandidateRedactionSummary}</p>
       <ul style={styles.actionList}>
         <li style={styles.actionItem}>
           <p style={styles.contractMeta}>Runtime partition</p>

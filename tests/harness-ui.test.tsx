@@ -1729,6 +1729,10 @@ describe("harness board UI", () => {
     expect(markup).toContain("Independent export safe");
     expect(markup).toContain("Requires board-closure snapshot");
     expect(markup).toContain("concurrency-safe for later independent export");
+    expect(markup).toContain("1 export candidate group carries tenant business context, and 1 group still carries tenant deliverable context.");
+    expect(markup).toContain("1 export candidate group is aimed at tenant governance-history readers, and 1 group still targets tenant package consumers.");
+    expect(markup).toContain("1 export candidate group is exported as recorded, and 1 group still requires sanitization before package export.");
+    expect(markup).toContain("1 export candidate group uses governance-safe redaction, and 1 group still requires package-safe redaction.");
     expect(markup).toContain("Runtime only");
     expect(markup).toContain("Governance history record");
     expect(markup).toContain("Package governance record");
