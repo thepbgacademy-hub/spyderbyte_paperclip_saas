@@ -210,9 +210,26 @@ describe("harness HTTP boundary", () => {
       status: "ready",
       exportFormat: "obsidian_markdown_bundle",
       recordTarget: "governance_history_record",
+      bundleId: "bundle-key",
       noteTitle: "Governance history",
       noteFileName: "wf_connect_first_workflow-governance-history.md",
       content: "# Governance history",
+      placement: {
+        targetSystem: "obsidian_vault",
+        vaultFolder: "wealth-factory/governance-history/wf_connect_first_workflow",
+        primaryNotePath: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+        syncStrategy: "append_history_entry",
+        confirmationRequirement: "tenant_export_confirmation"
+      },
+      files: [
+        {
+          path: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+          mediaType: "text/markdown",
+          byteSize: 20,
+          checksum: "abc",
+          content: "# Governance history"
+        }
+      ],
       recordCount: 2,
       disclosureSummary: "Decision summary only",
       redactionSummary: "Governance-safe redaction"
@@ -222,9 +239,26 @@ describe("harness HTTP boundary", () => {
       status: "export_ready",
       exportFormat: "obsidian_markdown_bundle",
       recordTarget: "governance_history_record",
+      bundleId: "bundle-key",
       noteTitle: "Governance history",
       noteFileName: "wf_connect_first_workflow-governance-history.md",
       content: "# Governance history",
+      placement: {
+        targetSystem: "obsidian_vault",
+        vaultFolder: "wealth-factory/governance-history/wf_connect_first_workflow",
+        primaryNotePath: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+        syncStrategy: "append_history_entry",
+        confirmationRequirement: "tenant_export_confirmation"
+      },
+      files: [
+        {
+          path: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+          mediaType: "text/markdown",
+          byteSize: 20,
+          checksum: "abc",
+          content: "# Governance history"
+        }
+      ],
       recordCount: 2,
       disclosureSummary: "Decision summary only",
       redactionSummary: "Governance-safe redaction",

@@ -4140,6 +4140,22 @@ describe("harness board service", () => {
       exportFormat: "obsidian_markdown_bundle",
       recordTarget: "governance_history_record",
       noteFileName: "wf_connect_first_workflow-governance-history.md",
+      bundleId: expect.any(String),
+      placement: expect.objectContaining({
+        targetSystem: "obsidian_vault",
+        vaultFolder: "wealth-factory/governance-history/wf_connect_first_workflow",
+        primaryNotePath: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md"
+      }),
+      files: expect.arrayContaining([
+        expect.objectContaining({
+          path: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+          mediaType: "text/markdown"
+        }),
+        expect.objectContaining({
+          path: "wealth-factory/governance-history/wf_connect_first_workflow/export-manifest.json",
+          mediaType: "application/json"
+        })
+      ]),
       disclosureSummary: "Decision summary only",
       redactionSummary: "Governance-safe redaction"
     });
@@ -4153,7 +4169,17 @@ describe("harness board service", () => {
       candidateId: "governance_history_export",
       status: "export_ready",
       exportFormat: "obsidian_markdown_bundle",
-      noteFileName: "wf_connect_first_workflow-governance-history.md"
+      noteFileName: "wf_connect_first_workflow-governance-history.md",
+      placement: expect.objectContaining({
+        targetSystem: "obsidian_vault",
+        primaryNotePath: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md"
+      }),
+      files: expect.arrayContaining([
+        expect.objectContaining({
+          path: "wealth-factory/governance-history/wf_connect_first_workflow/export-manifest.json",
+          mediaType: "application/json"
+        })
+      ])
     });
   });
 
@@ -4200,6 +4226,94 @@ describe("harness board service", () => {
       candidateId: "governance_history_export",
       actionToken: staleToken!
     })).rejects.toBeInstanceOf(HarnessActionContractConflictError);
+  });
+
+  it("publishes bounded audit events for export preflight, dry-run, and governance-history export without note content", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const audit = vi.fn().mockResolvedValue(undefined);
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      audit,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    const hydrated = await service.listBoardState({ authorization: "Bearer valid" });
+    const actions = hydrated.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "governance_history_export")
+      ?.exportActions ?? [];
+    const preflightAction = actions.find((entry) => entry.actionRoute === "export-preflight");
+    const dryRunAction = actions.find((entry) => entry.actionRoute === "export-dry-run");
+    const exportAction = actions.find((entry) => entry.actionRoute === "governance-history-export");
+    expect(preflightAction).toBeTruthy();
+    expect(dryRunAction).toBeTruthy();
+    expect(exportAction).toBeTruthy();
+    audit.mockClear();
+
+    await service.preflightExportCandidate({
+      authorization: "Bearer valid",
+      runId: hydrated.runId,
+      candidateId: "governance_history_export",
+      actionToken: preflightAction!.actionToken
+    });
+    await service.dryRunExportCandidate({
+      authorization: "Bearer valid",
+      runId: hydrated.runId,
+      candidateId: "governance_history_export",
+      actionToken: dryRunAction!.actionToken
+    });
+    await service.exportGovernanceHistoryCandidate({
+      authorization: "Bearer valid",
+      runId: hydrated.runId,
+      candidateId: "governance_history_export",
+      actionToken: exportAction!.actionToken
+    });
+
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({
+      tenantId: "tenant_123",
+      actorUserId: "user_123",
+      eventType: "harness.export_candidate_preflight_ready",
+      entityType: "harness_export_candidate",
+      metadata: expect.objectContaining({
+        candidateId: "governance_history_export",
+        runId: hydrated.runId,
+        supportsDryRun: true,
+        supportsExport: true
+      })
+    }));
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "harness.export_candidate_dry_run_built",
+      metadata: expect.objectContaining({
+        candidateId: "governance_history_export",
+        bundleId: expect.any(String),
+        primaryNotePath: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+        fileCount: 2
+      })
+    }));
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "harness.governance_history_export_ready",
+      metadata: expect.objectContaining({
+        candidateId: "governance_history_export",
+        idempotencyKey: expect.any(String),
+        fileCount: 2
+      })
+    }));
+    expect(JSON.stringify(audit.mock.calls)).not.toContain("# ");
   });
 
   it("fails closed when approval mutation is invoked without an atomic runner", async () => {

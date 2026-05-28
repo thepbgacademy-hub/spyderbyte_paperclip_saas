@@ -964,14 +964,33 @@ export type HarnessExportPreflightResult = {
   blockerLabel?: string;
 };
 
+export type HarnessExportPackageFile = {
+  path: string;
+  mediaType: "text/markdown" | "application/json";
+  byteSize: number;
+  checksum: string;
+  content: string;
+};
+
+export type HarnessExportPlacementManifest = {
+  targetSystem: "obsidian_vault";
+  vaultFolder: string;
+  primaryNotePath: string;
+  syncStrategy: HarnessMemoryBoundarySyncStrategy;
+  confirmationRequirement: HarnessMemoryBoundaryExportConfirmationRequirement;
+};
+
 export type HarnessExportDryRunResult = {
   candidateId: "governance_history_export";
   status: "ready";
   exportFormat: "obsidian_markdown_bundle";
   recordTarget: "governance_history_record";
+  bundleId: string;
   noteTitle: string;
   noteFileName: string;
   content: string;
+  placement: HarnessExportPlacementManifest;
+  files: HarnessExportPackageFile[];
   recordCount: number;
   disclosureSummary: string;
   redactionSummary: string;
@@ -3776,7 +3795,7 @@ export function createHarnessBoardService(options: {
         assertHarnessActionToken(action.actionToken, request.actionToken);
       }
 
-      return {
+      const result: HarnessExportPreflightResult = {
         candidateId: candidate.id,
         status: candidate.readiness === "ready_now" ? "ready" : "blocked",
         readiness: candidate.readiness,
@@ -3787,6 +3806,24 @@ export function createHarnessBoardService(options: {
         supportsExport: Boolean(candidate.exportActions?.some((entry) => entry.actionRoute === "governance-history-export")),
         ...(candidate.readiness !== "ready_now" ? { blockerLabel: candidate.promotionBlockerLabel } : {})
       };
+      await publishHarnessAuditEvents(options.audit, [
+        createHarnessExportAuditEvent({
+          tenantId: board.access.session.tenantId,
+          actorUserId: board.access.session.userId,
+          runId: board.response.runId,
+          candidateId: candidate.id,
+          eventType: "harness.export_candidate_preflight_ready",
+          metadata: {
+            status: result.status,
+            readiness: result.readiness,
+            supportsDryRun: result.supportsDryRun,
+            supportsExport: result.supportsExport,
+            nextStepLabel: result.nextStepLabel,
+            ...(result.blockerLabel ? { blockerLabel: result.blockerLabel } : {})
+          }
+        })
+      ]);
+      return result;
     },
 
     async dryRunExportCandidate(request: {
@@ -3815,7 +3852,28 @@ export function createHarnessBoardService(options: {
         assertHarnessActionToken(action.actionToken, request.actionToken);
       }
 
-      return buildGovernanceHistoryExportDryRun(board.response, candidate);
+      const result = buildGovernanceHistoryExportDryRun(board.response, candidate);
+      await publishHarnessAuditEvents(options.audit, [
+        createHarnessExportAuditEvent({
+          tenantId: board.access.session.tenantId,
+          actorUserId: board.access.session.userId,
+          runId: board.response.runId,
+          candidateId: candidate.id,
+          eventType: "harness.export_candidate_dry_run_built",
+          metadata: {
+            bundleId: result.bundleId,
+            exportFormat: result.exportFormat,
+            recordTarget: result.recordTarget,
+            noteFileName: result.noteFileName,
+            primaryNotePath: result.placement.primaryNotePath,
+            fileCount: result.files.length,
+            recordCount: result.recordCount,
+            disclosureSummary: result.disclosureSummary,
+            redactionSummary: result.redactionSummary
+          }
+        })
+      ]);
+      return result;
     },
 
     async exportGovernanceHistoryCandidate(request: {
@@ -3845,7 +3903,7 @@ export function createHarnessBoardService(options: {
       }
 
       const dryRun = buildGovernanceHistoryExportDryRun(board.response, candidate);
-      return {
+      const result: HarnessGovernanceHistoryExportResult = {
         ...dryRun,
         status: "export_ready",
         idempotencyKey: createHarnessActionToken([
@@ -3857,6 +3915,27 @@ export function createHarnessBoardService(options: {
         ]),
         summary: "Governance history export is ready as a tenant-safe Obsidian markdown bundle."
       };
+      await publishHarnessAuditEvents(options.audit, [
+        createHarnessExportAuditEvent({
+          tenantId: board.access.session.tenantId,
+          actorUserId: board.access.session.userId,
+          runId: board.response.runId,
+          candidateId: candidate.id,
+          eventType: "harness.governance_history_export_ready",
+          metadata: {
+            bundleId: result.bundleId,
+            idempotencyKey: result.idempotencyKey,
+            exportFormat: result.exportFormat,
+            recordTarget: result.recordTarget,
+            primaryNotePath: result.placement.primaryNotePath,
+            fileCount: result.files.length,
+            recordCount: result.recordCount,
+            disclosureSummary: result.disclosureSummary,
+            redactionSummary: result.redactionSummary
+          }
+        })
+      ]);
+      return result;
     }
   };
 }
@@ -4143,6 +4222,28 @@ function createHarnessAuditEvent(input: {
     entityType: "harness",
     entityId: input.entityId,
     metadata: input.metadata
+  };
+}
+
+function createHarnessExportAuditEvent(input: {
+  tenantId: string;
+  actorUserId: string;
+  runId: string;
+  candidateId: HarnessExportCandidateId;
+  eventType: string;
+  metadata: Record<string, unknown>;
+}): DurableAuditEvent {
+  return {
+    tenantId: input.tenantId,
+    actorUserId: input.actorUserId,
+    eventType: input.eventType,
+    entityType: "harness_export_candidate",
+    entityId: input.candidateId,
+    metadata: {
+      runId: input.runId,
+      candidateId: input.candidateId,
+      ...input.metadata
+    }
   };
 }
 
@@ -7858,7 +7959,9 @@ function buildGovernanceHistoryExportDryRun(
 ): HarnessExportDryRunResult {
   const noteTitle = `${humanizeDeliverableType(board.packageId.replace(/^pkg_/u, "").replace(/_/gu, " "))} governance history`;
   const safeWorkflowId = board.workflowId.replace(/[^a-z0-9_-]+/giu, "-").toLowerCase();
+  const vaultFolder = `wealth-factory/governance-history/${safeWorkflowId}`;
   const noteFileName = `${safeWorkflowId}-governance-history.md`;
+  const primaryNotePath = `${vaultFolder}/${noteFileName}`;
   const decisionLines = board.recentDecisions.map((decision) => (
     `- ${decision.label}${decision.recommendationSummary ? `\n  - Recommendation: ${decision.recommendationSummary}` : ""}${decision.objectionSummary ? `\n  - Objection: ${decision.objectionSummary}` : ""}`
   ));
@@ -7881,18 +7984,80 @@ function buildGovernanceHistoryExportDryRun(
     "## Implemented Follow-Through",
     ...(followThroughLines.length > 0 ? followThroughLines : ["- No implemented follow-through items are currently available."])
   ].join("\n");
+  const bundleId = createHarnessActionToken([
+    "governance-history-bundle",
+    board.runId,
+    candidate.id,
+    candidate.itemIds.join(","),
+    noteFileName
+  ]);
+  const placement: HarnessExportPlacementManifest = {
+    targetSystem: "obsidian_vault",
+    vaultFolder,
+    primaryNotePath,
+    syncStrategy: candidate.syncStrategy,
+    confirmationRequirement: candidate.exportConfirmationRequirement
+  };
+  const manifestContent = JSON.stringify(
+    {
+      bundleId,
+      exportFormat: "obsidian_markdown_bundle",
+      recordTarget: "governance_history_record",
+      runId: board.runId,
+      workflowId: board.workflowId,
+      packageId: board.packageId,
+      candidateId: candidate.id,
+      noteTitle,
+      noteFileName,
+      placement,
+      disclosureSummary: candidate.exportSourceDisclosurePolicyLabel,
+      redactionSummary: candidate.exportRedactionBoundaryLabel,
+      recordCount: Math.max(1, candidate.itemCount)
+    },
+    null,
+    2
+  );
+  const files: HarnessExportPackageFile[] = [
+    buildExportPackageFile({
+      path: primaryNotePath,
+      mediaType: "text/markdown",
+      content
+    }),
+    buildExportPackageFile({
+      path: `${vaultFolder}/export-manifest.json`,
+      mediaType: "application/json",
+      content: manifestContent
+    })
+  ];
 
   return {
     candidateId: "governance_history_export",
     status: "ready",
     exportFormat: "obsidian_markdown_bundle",
     recordTarget: "governance_history_record",
+    bundleId,
     noteTitle,
     noteFileName,
     content,
+    placement,
+    files,
     recordCount: Math.max(1, candidate.itemCount),
     disclosureSummary: candidate.exportSourceDisclosurePolicyLabel,
     redactionSummary: candidate.exportRedactionBoundaryLabel
+  };
+}
+
+function buildExportPackageFile(input: {
+  path: string;
+  mediaType: HarnessExportPackageFile["mediaType"];
+  content: string;
+}): HarnessExportPackageFile {
+  return {
+    path: input.path,
+    mediaType: input.mediaType,
+    byteSize: Buffer.byteLength(input.content, "utf8"),
+    checksum: createHash("sha256").update(input.content).digest("hex"),
+    content: input.content
   };
 }
 
