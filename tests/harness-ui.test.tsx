@@ -1733,6 +1733,10 @@ describe("harness board UI", () => {
     expect(markup).toContain("1 export candidate group is aimed at tenant governance-history readers, and 1 group still targets tenant package consumers.");
     expect(markup).toContain("1 export candidate group is exported as recorded, and 1 group still requires sanitization before package export.");
     expect(markup).toContain("1 export candidate group uses governance-safe redaction, and 1 group still requires package-safe redaction.");
+    expect(markup).toContain("1 export candidate group discloses decision summaries only, and 1 group still discloses closure-snapshot summaries only.");
+    expect(markup).toContain("1 export candidate group uses single-record export requests, and 1 group still uses package-bundle export requests.");
+    expect(markup).toContain("1 export candidate group requires tenant export confirmation, and 1 group still requires board closure before tenant export confirmation.");
+    expect(markup).toContain("1 export candidate group retries the latest record export, and 1 group still reruns after the board-closure snapshot.");
     expect(markup).toContain("Runtime only");
     expect(markup).toContain("Governance history record");
     expect(markup).toContain("Package governance record");

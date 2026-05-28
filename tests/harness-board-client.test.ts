@@ -573,6 +573,18 @@ describe("harness board client", () => {
     expect(board.memoryBoundary.exportCandidateAudienceSummary).toContain("tenant package consumers");
     expect(board.memoryBoundary.exportCandidateSanitizationSummary).toContain("sanitization before package export");
     expect(board.memoryBoundary.exportCandidateRedactionSummary).toContain("package-safe redaction");
+    expect(board.memoryBoundary.decisionSummaryOnlyCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.closureSnapshotSummaryOnlyCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.singleRecordExportRequestCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.packageBundleExportRequestCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.tenantExportConfirmationCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.boardClosureThenTenantExportConfirmationCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.retryLatestRecordExportCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.rerunAfterBoardClosureSnapshotCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.exportCandidateSourceDisclosureSummary).toContain("closure-snapshot summaries only");
+    expect(board.memoryBoundary.exportCandidateRequestShapeSummary).toContain("package-bundle export requests");
+    expect(board.memoryBoundary.exportCandidateConfirmationSummary).toContain("board closure before tenant export confirmation");
+    expect(board.memoryBoundary.exportCandidateRecoveryPathSummary).toContain("reruns after the board-closure snapshot");
     expect(board.memoryBoundary.exportCandidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

@@ -3963,6 +3963,18 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.exportCandidateAudienceSummary).toContain("tenant governance-history readers");
     expect(hydrated.memoryBoundary.exportCandidateSanitizationSummary).toContain("exported as recorded");
     expect(hydrated.memoryBoundary.exportCandidateRedactionSummary).toContain("governance-safe redaction");
+    expect(hydrated.memoryBoundary.decisionSummaryOnlyCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.closureSnapshotSummaryOnlyCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.singleRecordExportRequestCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.packageBundleExportRequestCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.tenantExportConfirmationCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.boardClosureThenTenantExportConfirmationCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.retryLatestRecordExportCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.rerunAfterBoardClosureSnapshotCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.exportCandidateSourceDisclosureSummary).toContain("decision summaries only");
+    expect(hydrated.memoryBoundary.exportCandidateRequestShapeSummary).toContain("single-record export requests");
+    expect(hydrated.memoryBoundary.exportCandidateConfirmationSummary).toContain("tenant export confirmation");
+    expect(hydrated.memoryBoundary.exportCandidateRecoveryPathSummary).toContain("retries the latest record export");
   });
 
   it("fails closed when approval mutation is invoked without an atomic runner", async () => {

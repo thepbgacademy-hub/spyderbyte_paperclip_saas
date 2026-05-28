@@ -494,6 +494,14 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     recoveryPathSummary: "Export recovery-path guidance is pending the latest board state.",
     exportCandidateSummary: "Export candidate grouping is pending the latest board state.",
     exportCandidateConcurrencySummary: "Export candidate concurrency guidance is pending the latest board state.",
+    exportCandidateSensitivitySummary: "Export candidate sensitivity guidance is pending the latest board state.",
+    exportCandidateAudienceSummary: "Export candidate audience guidance is pending the latest board state.",
+    exportCandidateSanitizationSummary: "Export candidate sanitization guidance is pending the latest board state.",
+    exportCandidateRedactionSummary: "Export candidate redaction guidance is pending the latest board state.",
+    exportCandidateSourceDisclosureSummary: "Export candidate source-disclosure guidance is pending the latest board state.",
+    exportCandidateRequestShapeSummary: "Export candidate request-shape guidance is pending the latest board state.",
+    exportCandidateConfirmationSummary: "Export candidate confirmation guidance is pending the latest board state.",
+    exportCandidateRecoveryPathSummary: "Export candidate recovery guidance is pending the latest board state.",
     readyNowCount: 0,
     waitingOnBoardClosureCount: 0,
     governanceReadyCount: 0,
@@ -591,6 +599,22 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     waitingExportCandidateGroupCount: 0,
     independentExportSafeCandidateGroupCount: 0,
     requiresClosureSnapshotCandidateGroupCount: 0,
+    tenantBusinessContextCandidateGroupCount: 0,
+    tenantDeliverableContextCandidateGroupCount: 0,
+    governanceHistoryAudienceCandidateGroupCount: 0,
+    packageConsumerAudienceCandidateGroupCount: 0,
+    exportAsRecordedCandidateGroupCount: 0,
+    sanitizeBeforePackageExportCandidateGroupCount: 0,
+    governanceSafeRedactionCandidateGroupCount: 0,
+    packageSafeRedactionCandidateGroupCount: 0,
+    decisionSummaryOnlyCandidateGroupCount: 0,
+    closureSnapshotSummaryOnlyCandidateGroupCount: 0,
+    singleRecordExportRequestCandidateGroupCount: 0,
+    packageBundleExportRequestCandidateGroupCount: 0,
+    tenantExportConfirmationCandidateGroupCount: 0,
+    boardClosureThenTenantExportConfirmationCandidateGroupCount: 0,
+    retryLatestRecordExportCandidateGroupCount: 0,
+    rerunAfterBoardClosureSnapshotCandidateGroupCount: 0,
     partitions: {
       runtime: { itemCount: 0, summary: "Runtime memory partition is pending the latest board state." },
       governanceHistoryCandidates: {
@@ -835,6 +859,22 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     ?? exportCandidates.filter((candidate) => candidate.exportRedactionBoundary === "governance_safe_redaction").length;
   const packageSafeRedactionCandidateGroupCount = memoryBoundary.packageSafeRedactionCandidateGroupCount
     ?? exportCandidates.filter((candidate) => candidate.exportRedactionBoundary === "package_safe_redaction").length;
+  const decisionSummaryOnlyCandidateGroupCount = memoryBoundary.decisionSummaryOnlyCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportSourceDisclosurePolicy === "decision_summary_only").length;
+  const closureSnapshotSummaryOnlyCandidateGroupCount = memoryBoundary.closureSnapshotSummaryOnlyCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportSourceDisclosurePolicy === "closure_snapshot_summary_only").length;
+  const singleRecordExportRequestCandidateGroupCount = memoryBoundary.singleRecordExportRequestCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportRequestShape === "single_record_export_request").length;
+  const packageBundleExportRequestCandidateGroupCount = memoryBoundary.packageBundleExportRequestCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportRequestShape === "package_bundle_export_request").length;
+  const tenantExportConfirmationCandidateGroupCount = memoryBoundary.tenantExportConfirmationCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportConfirmationRequirement === "tenant_export_confirmation").length;
+  const boardClosureThenTenantExportConfirmationCandidateGroupCount = memoryBoundary.boardClosureThenTenantExportConfirmationCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportConfirmationRequirement === "board_closure_then_tenant_export_confirmation").length;
+  const retryLatestRecordExportCandidateGroupCount = memoryBoundary.retryLatestRecordExportCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportRecoveryPath === "retry_latest_record_export").length;
+  const rerunAfterBoardClosureSnapshotCandidateGroupCount = memoryBoundary.rerunAfterBoardClosureSnapshotCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportRecoveryPath === "rerun_after_board_closure_snapshot").length;
   const exportCandidateSummary = memoryBoundary.exportCandidateSummary
     ?? (waitingExportCandidateGroupCount > 0
       ? `${readyExportCandidateGroupCount} export candidate group${readyExportCandidateGroupCount === 1 ? " is" : "s are"} ready for later tenant export, and ${waitingExportCandidateGroupCount} group${waitingExportCandidateGroupCount === 1 ? " still waits" : "s still wait"} on board closure first.`
@@ -867,6 +907,22 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     ?? (packageSafeRedactionCandidateGroupCount > 0
       ? `${governanceSafeRedactionCandidateGroupCount} export candidate group${governanceSafeRedactionCandidateGroupCount === 1 ? " uses" : "s use"} governance-safe redaction, and ${packageSafeRedactionCandidateGroupCount} group${packageSafeRedactionCandidateGroupCount === 1 ? " still requires" : "s still require"} package-safe redaction.`
       : `${governanceSafeRedactionCandidateGroupCount} export candidate group${governanceSafeRedactionCandidateGroupCount === 1 ? " uses" : "s use"} governance-safe redaction.`);
+  const exportCandidateSourceDisclosureSummary = memoryBoundary.exportCandidateSourceDisclosureSummary
+    ?? (closureSnapshotSummaryOnlyCandidateGroupCount > 0
+      ? `${decisionSummaryOnlyCandidateGroupCount} export candidate group${decisionSummaryOnlyCandidateGroupCount === 1 ? " discloses" : "s disclose"} decision summaries only, and ${closureSnapshotSummaryOnlyCandidateGroupCount} group${closureSnapshotSummaryOnlyCandidateGroupCount === 1 ? " still discloses" : "s still disclose"} closure-snapshot summaries only.`
+      : `${decisionSummaryOnlyCandidateGroupCount} export candidate group${decisionSummaryOnlyCandidateGroupCount === 1 ? " discloses" : "s disclose"} decision summaries only.`);
+  const exportCandidateRequestShapeSummary = memoryBoundary.exportCandidateRequestShapeSummary
+    ?? (packageBundleExportRequestCandidateGroupCount > 0
+      ? `${singleRecordExportRequestCandidateGroupCount} export candidate group${singleRecordExportRequestCandidateGroupCount === 1 ? " uses" : "s use"} single-record export requests, and ${packageBundleExportRequestCandidateGroupCount} group${packageBundleExportRequestCandidateGroupCount === 1 ? " still uses" : "s still use"} package-bundle export requests.`
+      : `${singleRecordExportRequestCandidateGroupCount} export candidate group${singleRecordExportRequestCandidateGroupCount === 1 ? " uses" : "s use"} single-record export requests.`);
+  const exportCandidateConfirmationSummary = memoryBoundary.exportCandidateConfirmationSummary
+    ?? (boardClosureThenTenantExportConfirmationCandidateGroupCount > 0
+      ? `${tenantExportConfirmationCandidateGroupCount} export candidate group${tenantExportConfirmationCandidateGroupCount === 1 ? " requires" : "s require"} tenant export confirmation, and ${boardClosureThenTenantExportConfirmationCandidateGroupCount} group${boardClosureThenTenantExportConfirmationCandidateGroupCount === 1 ? " still requires" : "s still require"} board closure before tenant export confirmation.`
+      : `${tenantExportConfirmationCandidateGroupCount} export candidate group${tenantExportConfirmationCandidateGroupCount === 1 ? " requires" : "s require"} tenant export confirmation.`);
+  const exportCandidateRecoveryPathSummary = memoryBoundary.exportCandidateRecoveryPathSummary
+    ?? (rerunAfterBoardClosureSnapshotCandidateGroupCount > 0
+      ? `${retryLatestRecordExportCandidateGroupCount} export candidate group${retryLatestRecordExportCandidateGroupCount === 1 ? " retries" : "s retry"} the latest record export, and ${rerunAfterBoardClosureSnapshotCandidateGroupCount} group${rerunAfterBoardClosureSnapshotCandidateGroupCount === 1 ? " still reruns" : "s still rerun"} after the board-closure snapshot.`
+      : `${retryLatestRecordExportCandidateGroupCount} export candidate group${retryLatestRecordExportCandidateGroupCount === 1 ? " retries" : "s retry"} the latest record export.`);
 
   return (
     <section style={styles.panel}>
@@ -917,6 +973,10 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <p style={styles.actionSummary}>{exportCandidateAudienceSummary}</p>
       <p style={styles.actionSummary}>{exportCandidateSanitizationSummary}</p>
       <p style={styles.actionSummary}>{exportCandidateRedactionSummary}</p>
+      <p style={styles.actionSummary}>{exportCandidateSourceDisclosureSummary}</p>
+      <p style={styles.actionSummary}>{exportCandidateRequestShapeSummary}</p>
+      <p style={styles.actionSummary}>{exportCandidateConfirmationSummary}</p>
+      <p style={styles.actionSummary}>{exportCandidateRecoveryPathSummary}</p>
       <ul style={styles.actionList}>
         <li style={styles.actionItem}>
           <p style={styles.contractMeta}>Runtime partition</p>

@@ -3637,6 +3637,22 @@ function normalizeMemoryBoundary(
     ?? exportCandidates.filter((candidate) => candidate.exportRedactionBoundary === "governance_safe_redaction").length;
   const packageSafeRedactionCandidateGroupCount = memoryBoundary.packageSafeRedactionCandidateGroupCount
     ?? exportCandidates.filter((candidate) => candidate.exportRedactionBoundary === "package_safe_redaction").length;
+  const decisionSummaryOnlyCandidateGroupCount = memoryBoundary.decisionSummaryOnlyCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportSourceDisclosurePolicy === "decision_summary_only").length;
+  const closureSnapshotSummaryOnlyCandidateGroupCount = memoryBoundary.closureSnapshotSummaryOnlyCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportSourceDisclosurePolicy === "closure_snapshot_summary_only").length;
+  const singleRecordExportRequestCandidateGroupCount = memoryBoundary.singleRecordExportRequestCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportRequestShape === "single_record_export_request").length;
+  const packageBundleExportRequestCandidateGroupCount = memoryBoundary.packageBundleExportRequestCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportRequestShape === "package_bundle_export_request").length;
+  const tenantExportConfirmationCandidateGroupCount = memoryBoundary.tenantExportConfirmationCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportConfirmationRequirement === "tenant_export_confirmation").length;
+  const boardClosureThenTenantExportConfirmationCandidateGroupCount = memoryBoundary.boardClosureThenTenantExportConfirmationCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportConfirmationRequirement === "board_closure_then_tenant_export_confirmation").length;
+  const retryLatestRecordExportCandidateGroupCount = memoryBoundary.retryLatestRecordExportCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportRecoveryPath === "retry_latest_record_export").length;
+  const rerunAfterBoardClosureSnapshotCandidateGroupCount = memoryBoundary.rerunAfterBoardClosureSnapshotCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportRecoveryPath === "rerun_after_board_closure_snapshot").length;
 
   return {
     ...memoryBoundary,
@@ -3953,6 +3969,14 @@ function normalizeMemoryBoundary(
     sanitizeBeforePackageExportCandidateGroupCount,
     governanceSafeRedactionCandidateGroupCount,
     packageSafeRedactionCandidateGroupCount,
+    decisionSummaryOnlyCandidateGroupCount,
+    closureSnapshotSummaryOnlyCandidateGroupCount,
+    singleRecordExportRequestCandidateGroupCount,
+    packageBundleExportRequestCandidateGroupCount,
+    tenantExportConfirmationCandidateGroupCount,
+    boardClosureThenTenantExportConfirmationCandidateGroupCount,
+    retryLatestRecordExportCandidateGroupCount,
+    rerunAfterBoardClosureSnapshotCandidateGroupCount,
     sequenceSummary:
       memoryBoundary.sequenceSummary
       ?? (boardClosureFollowingExportCandidateCount > 0
@@ -3988,6 +4012,26 @@ function normalizeMemoryBoundary(
       ?? (packageSafeRedactionCandidateGroupCount > 0
         ? `${governanceSafeRedactionCandidateGroupCount} export candidate group${governanceSafeRedactionCandidateGroupCount === 1 ? " uses" : "s use"} governance-safe redaction, and ${packageSafeRedactionCandidateGroupCount} group${packageSafeRedactionCandidateGroupCount === 1 ? " still requires" : "s still require"} package-safe redaction.`
         : `${governanceSafeRedactionCandidateGroupCount} export candidate group${governanceSafeRedactionCandidateGroupCount === 1 ? " uses" : "s use"} governance-safe redaction.`),
+    exportCandidateSourceDisclosureSummary:
+      memoryBoundary.exportCandidateSourceDisclosureSummary
+      ?? (closureSnapshotSummaryOnlyCandidateGroupCount > 0
+        ? `${decisionSummaryOnlyCandidateGroupCount} export candidate group${decisionSummaryOnlyCandidateGroupCount === 1 ? " discloses" : "s disclose"} decision summaries only, and ${closureSnapshotSummaryOnlyCandidateGroupCount} group${closureSnapshotSummaryOnlyCandidateGroupCount === 1 ? " still discloses" : "s still disclose"} closure-snapshot summaries only.`
+        : `${decisionSummaryOnlyCandidateGroupCount} export candidate group${decisionSummaryOnlyCandidateGroupCount === 1 ? " discloses" : "s disclose"} decision summaries only.`),
+    exportCandidateRequestShapeSummary:
+      memoryBoundary.exportCandidateRequestShapeSummary
+      ?? (packageBundleExportRequestCandidateGroupCount > 0
+        ? `${singleRecordExportRequestCandidateGroupCount} export candidate group${singleRecordExportRequestCandidateGroupCount === 1 ? " uses" : "s use"} single-record export requests, and ${packageBundleExportRequestCandidateGroupCount} group${packageBundleExportRequestCandidateGroupCount === 1 ? " still uses" : "s still use"} package-bundle export requests.`
+        : `${singleRecordExportRequestCandidateGroupCount} export candidate group${singleRecordExportRequestCandidateGroupCount === 1 ? " uses" : "s use"} single-record export requests.`),
+    exportCandidateConfirmationSummary:
+      memoryBoundary.exportCandidateConfirmationSummary
+      ?? (boardClosureThenTenantExportConfirmationCandidateGroupCount > 0
+        ? `${tenantExportConfirmationCandidateGroupCount} export candidate group${tenantExportConfirmationCandidateGroupCount === 1 ? " requires" : "s require"} tenant export confirmation, and ${boardClosureThenTenantExportConfirmationCandidateGroupCount} group${boardClosureThenTenantExportConfirmationCandidateGroupCount === 1 ? " still requires" : "s still require"} board closure before tenant export confirmation.`
+        : `${tenantExportConfirmationCandidateGroupCount} export candidate group${tenantExportConfirmationCandidateGroupCount === 1 ? " requires" : "s require"} tenant export confirmation.`),
+    exportCandidateRecoveryPathSummary:
+      memoryBoundary.exportCandidateRecoveryPathSummary
+      ?? (rerunAfterBoardClosureSnapshotCandidateGroupCount > 0
+        ? `${retryLatestRecordExportCandidateGroupCount} export candidate group${retryLatestRecordExportCandidateGroupCount === 1 ? " retries" : "s retry"} the latest record export, and ${rerunAfterBoardClosureSnapshotCandidateGroupCount} group${rerunAfterBoardClosureSnapshotCandidateGroupCount === 1 ? " still reruns" : "s still rerun"} after the board-closure snapshot.`
+        : `${retryLatestRecordExportCandidateGroupCount} export candidate group${retryLatestRecordExportCandidateGroupCount === 1 ? " retries" : "s retry"} the latest record export.`),
     partitions: memoryBoundary.partitions ?? {
       runtime: {
         itemCount: operationalItems.length,
