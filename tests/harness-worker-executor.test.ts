@@ -48,6 +48,16 @@ describe("harness worker executor", () => {
       createHarnessCardContinuityRecord({
         cardId: cfoCard.id,
         runId: run.id,
+        continuitySource: "proposal_absorbed",
+        continuitySummary: "Resume the pricing lane from the revised assumptions workbook.",
+        latestResultSummary: "Initial pricing floor is stable.",
+        absorbedWorkItems: ["Re-check discount floor", "Verify competitor anchor notes"]
+      })
+    );
+    await repository.upsertCardContinuity(
+      createHarnessCardContinuityRecord({
+        cardId: cfoCard.id,
+        runId: run.id,
         continuitySummary: "Resume the pricing lane from the revised assumptions workbook.",
         latestResultSummary: "Initial pricing floor is stable."
       })
@@ -138,6 +148,16 @@ describe("harness worker executor", () => {
     await repository.insertRun(run);
     await repository.insertCard(ceoCard);
     await repository.insertCard(cfoCard);
+    await repository.upsertCardContinuity(
+      createHarnessCardContinuityRecord({
+        cardId: cfoCard.id,
+        runId: run.id,
+        continuitySource: "proposal_absorbed",
+        continuitySummary: "Resume the pricing lane from the revised assumptions workbook.",
+        latestResultSummary: "Initial pricing floor is stable.",
+        absorbedWorkItems: ["Re-check discount floor", "Verify competitor anchor notes"]
+      })
+    );
 
     const dispatch = await buildHarnessWorkerDispatch({
       repository,
@@ -170,14 +190,87 @@ describe("harness worker executor", () => {
         providerKind: "openai_api",
         credentialLabel: "Primary OpenAI"
       },
+      outcomeContract: {
+        allowedStates: ["waiting", "done", "blocked", "cancelled"],
+        resultSummaryRequiredStates: ["done"],
+        resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"]
+      },
       laneExecution: expect.objectContaining({
         cardId: cfoCard.id,
+        parentCardId: ceoCard.id,
         persona: "cfo",
         title: "Pressure-test the pricing lane",
         deliverableType: "pricing_review",
-        state: "working"
+        state: "working",
+        continuitySource: "state_transition",
+        latestResultSummary: "Initial pricing floor is stable.",
+        absorbedWorkItems: ["Re-check discount floor", "Verify competitor anchor notes"]
       })
     });
+  });
+
+  it("returns a fresh private outcome contract for each execution envelope", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "approved";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+
+    const dispatch = await buildHarnessWorkerDispatch({
+      repository,
+      tenantId: "tenant-1",
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow"
+    });
+    const firstEnvelope = await buildHarnessWorkerExecutionEnvelope({
+      repository,
+      tenantId: "tenant-1",
+      dispatch,
+      requiredCapabilities: ["text_generation"]
+    });
+    const secondEnvelope = await buildHarnessWorkerExecutionEnvelope({
+      repository,
+      tenantId: "tenant-1",
+      dispatch,
+      requiredCapabilities: ["text_generation"]
+    });
+
+    expect(firstEnvelope).not.toBeNull();
+    expect(secondEnvelope).not.toBeNull();
+    if (!firstEnvelope || !secondEnvelope) {
+      return;
+    }
+
+    const mutableAllowedStates = firstEnvelope.outcomeContract.allowedStates as Array<
+      "waiting" | "done" | "blocked" | "cancelled"
+    >;
+    mutableAllowedStates.pop();
+
+    expect(secondEnvelope.outcomeContract.allowedStates).toEqual(["waiting", "done", "blocked", "cancelled"]);
   });
 
   it("returns no lane execution when all child lanes are terminal or blocked", async () => {

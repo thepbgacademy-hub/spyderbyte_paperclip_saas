@@ -22,12 +22,21 @@ import type { ProviderCapability } from "../packages/package-types.js";
 
 export type HarnessWorkerLaneExecution = {
   cardId: string;
+  parentCardId?: string;
   persona: string;
   title: string;
   deliverableType: string;
   state: HarnessCardRecord["state"];
   resumeFocus?: string;
+  continuitySource?: HarnessCardContinuityRecord["continuitySource"];
   latestResultSummary?: string;
+  absorbedWorkItems?: string[];
+};
+
+export type HarnessWorkerOutcomeContract = {
+  allowedStates: readonly Extract<HarnessCardState, "waiting" | "done" | "blocked" | "cancelled">[];
+  resultSummaryRequiredStates: readonly Extract<HarnessCardState, "done">[];
+  resumeSummaryAllowedStates: readonly Extract<HarnessCardState, "waiting" | "blocked" | "cancelled">[];
 };
 
 export type HarnessWorkerDispatch = {
@@ -44,6 +53,7 @@ export type HarnessWorkerExecutionEnvelope = {
   requiredCapabilities: readonly ProviderCapability[];
   runtimeContext: HarnessRuntimeContext;
   laneExecution: HarnessWorkerLaneExecution;
+  outcomeContract: HarnessWorkerOutcomeContract;
 };
 
 export type HarnessWorkerLaneOutcome = {
@@ -121,6 +131,11 @@ const ACTIONABLE_CARD_PRIORITIES: Readonly<Record<HarnessCardRecord["state"], nu
 };
 
 const NON_EXECUTABLE_RUN_STATES = new Set(["assembling", "done", "failed", "cancelled"]);
+const HARNESS_WORKER_OUTCOME_CONTRACT: HarnessWorkerOutcomeContract = {
+  allowedStates: ["waiting", "done", "blocked", "cancelled"],
+  resultSummaryRequiredStates: ["done"],
+  resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"]
+};
 
 export async function buildHarnessWorkerDispatch(input: {
   repository: HarnessDispatchRepository;
@@ -391,7 +406,7 @@ export async function commitHarnessWorkerLaneOutcome(input: {
 }
 
 export async function buildHarnessWorkerExecutionEnvelope(input: {
-  repository: Pick<HarnessRepository, "getRun">;
+  repository: Pick<HarnessRepository, "getRun" | "getCard" | "getCardContinuity">;
   tenantId: string;
   dispatch: HarnessWorkerDispatch;
   requiredCapabilities: readonly ProviderCapability[];
@@ -404,6 +419,11 @@ export async function buildHarnessWorkerExecutionEnvelope(input: {
   if (!run || run.tenantId !== input.tenantId || run.workflowId !== input.dispatch.workflowId) {
     throw new Error(`Unknown harness run for worker execution envelope: ${input.dispatch.runId}`);
   }
+  const lane = await input.repository.getCard(input.dispatch.laneExecution.cardId);
+  if (!lane || lane.runId !== run.id || lane.persona === "ceo") {
+    throw new Error(`Unknown harness child lane for worker execution envelope: ${input.dispatch.laneExecution.cardId}`);
+  }
+  const continuity = await input.repository.getCardContinuity(lane.id);
 
   return {
     tenantId: input.tenantId,
@@ -411,7 +431,23 @@ export async function buildHarnessWorkerExecutionEnvelope(input: {
     workflowId: run.workflowId,
     requiredCapabilities: [...input.requiredCapabilities],
     runtimeContext: run.runtimeContext,
-    laneExecution: input.dispatch.laneExecution
+    outcomeContract: {
+      allowedStates: [...HARNESS_WORKER_OUTCOME_CONTRACT.allowedStates],
+      resultSummaryRequiredStates: [...HARNESS_WORKER_OUTCOME_CONTRACT.resultSummaryRequiredStates],
+      resumeSummaryAllowedStates: [...HARNESS_WORKER_OUTCOME_CONTRACT.resumeSummaryAllowedStates]
+    },
+    laneExecution: {
+      cardId: lane.id,
+      ...(lane.parentCardId ? { parentCardId: lane.parentCardId } : {}),
+      persona: lane.persona,
+      title: lane.title,
+      deliverableType: lane.deliverableType,
+      state: lane.state,
+      ...(continuity?.continuitySummary ? { resumeFocus: continuity.continuitySummary } : {}),
+      ...(continuity?.continuitySource ? { continuitySource: continuity.continuitySource } : {}),
+      ...(continuity?.latestResultSummary ? { latestResultSummary: continuity.latestResultSummary } : {}),
+      ...(continuity?.absorbedWorkItems?.length ? { absorbedWorkItems: [...continuity.absorbedWorkItems] } : {})
+    }
   };
 }
 

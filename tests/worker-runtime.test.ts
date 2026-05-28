@@ -18,16 +18,34 @@ const { makeHarnessRepository, harnessRepositoryRef } = vi.hoisted(() => {
       createdAt: "2026-05-21T10:00:00.000Z",
       updatedAt: "2026-05-21T10:00:00.000Z"
     }),
-    getCard: vi.fn().mockResolvedValue({
-      id: "card_cfo",
-      runId: "run-1",
-      parentCardId: "card_ceo",
-      persona: "cfo",
-      title: "Pressure-test the pricing lane",
-      deliverableType: "pricing_review",
-      state: "working",
-      createdAt: "2026-05-21T10:01:00.000Z",
-      updatedAt: "2026-05-21T10:04:00.000Z"
+    getCard: vi.fn().mockImplementation(async (cardId: string) => {
+      if (cardId === "card_cmo") {
+        return {
+          id: "card_cmo",
+          runId: "run-1",
+          parentCardId: "card_ceo",
+          persona: "cmo",
+          title: "Prepare launch messaging",
+          deliverableType: "marketing_plan",
+          state: "working",
+          createdAt: "2026-05-21T10:05:00.000Z",
+          updatedAt: "2026-05-21T10:08:00.000Z"
+        };
+      }
+      if (cardId === "card_cfo") {
+        return {
+          id: "card_cfo",
+          runId: "run-1",
+          parentCardId: "card_ceo",
+          persona: "cfo",
+          title: "Pressure-test the pricing lane",
+          deliverableType: "pricing_review",
+          state: "working",
+          createdAt: "2026-05-21T10:01:00.000Z",
+          updatedAt: "2026-05-21T10:04:00.000Z"
+        };
+      }
+      return null;
     }),
     listCardsForRun: vi.fn().mockResolvedValue([
       {
@@ -91,14 +109,30 @@ const { makeHarnessRepository, harnessRepositoryRef } = vi.hoisted(() => {
     })),
     insertEvent: vi.fn().mockResolvedValue(undefined),
     upsertCardContinuity: vi.fn().mockResolvedValue(undefined),
-    getCardContinuity: vi.fn().mockResolvedValue({
-      cardId: "card_cfo",
-      runId: "run-1",
-      continuitySource: "state_transition",
-      continuitySummary: "CFO should continue this active pricing review lane: Pressure-test the pricing lane.",
-      latestResultSummary: "Initial pricing floor is stable.",
-      absorbedWorkItems: [],
-      updatedAt: "2026-05-21T10:03:00.000Z"
+    getCardContinuity: vi.fn().mockImplementation(async (cardId: string) => {
+      if (cardId === "card_cmo") {
+        return {
+          cardId: "card_cmo",
+          runId: "run-1",
+          continuitySource: "state_transition",
+          continuitySummary: "CMO should continue this active marketing plan lane: Prepare launch messaging.",
+          latestResultSummary: null,
+          absorbedWorkItems: [],
+          updatedAt: "2026-05-21T10:07:00.000Z"
+        };
+      }
+      if (cardId === "card_cfo") {
+        return {
+          cardId: "card_cfo",
+          runId: "run-1",
+          continuitySource: "state_transition",
+          continuitySummary: "CFO should continue this active pricing review lane: Pressure-test the pricing lane.",
+          latestResultSummary: "Initial pricing floor is stable.",
+          absorbedWorkItems: ["Re-check discount floor", "Verify competitor anchor notes"],
+          updatedAt: "2026-05-21T10:03:00.000Z"
+        };
+      }
+      return null;
     }),
     listProposalsForRun: vi.fn().mockResolvedValue([]),
     listEventsForRun: vi.fn().mockResolvedValue([]),
@@ -109,7 +143,7 @@ const { makeHarnessRepository, harnessRepositoryRef } = vi.hoisted(() => {
         continuitySource: "resume_override",
         continuitySummary: "Resume the pricing lane from the revised assumptions workbook.",
         latestResultSummary: "Initial pricing floor is stable.",
-        absorbedWorkItems: [],
+        absorbedWorkItems: ["Re-check discount floor", "Verify competitor anchor notes"],
         updatedAt: "2026-05-21T10:03:00.000Z"
       }
     ])
@@ -322,25 +356,35 @@ describe("worker runtime", () => {
       })
     );
     expect(vi.mocked(createPaperclipClient).mock.results.at(-1)?.value.createRun).not.toHaveBeenCalled();
-    expect(onHarnessLaneReady).toHaveBeenCalledWith({
-      tenantId: "tenant-1",
-      runId: "run-1",
-      workflowId: "wf_connect_first_workflow",
-      requiredCapabilities: ["text_generation"],
-      runtimeContext: {
-        providerKind: "openai_api",
-        credentialLabel: "Primary OpenAI"
-      },
-      laneExecution: {
-        cardId: "card_cfo",
-        persona: "cfo",
-        title: "Pressure-test the pricing lane",
-        deliverableType: "pricing_review",
-        state: "working",
-        resumeFocus: "CFO should continue this active pricing review lane: Pressure-test the pricing lane.",
-        latestResultSummary: "Initial pricing floor is stable."
-      }
-    });
+    expect(onHarnessLaneReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        requiredCapabilities: ["text_generation"],
+        runtimeContext: {
+          providerKind: "openai_api",
+          credentialLabel: "Primary OpenAI"
+        },
+        laneExecution: expect.objectContaining({
+          cardId: "card_cfo",
+          parentCardId: "card_ceo",
+          persona: "cfo",
+          title: "Pressure-test the pricing lane",
+          deliverableType: "pricing_review",
+          state: "working",
+          resumeFocus: "CFO should continue this active pricing review lane: Pressure-test the pricing lane.",
+          continuitySource: "state_transition",
+          latestResultSummary: "Initial pricing floor is stable.",
+          absorbedWorkItems: ["Re-check discount floor", "Verify competitor anchor notes"]
+        }),
+        outcomeContract: {
+          allowedStates: ["waiting", "done", "blocked", "cancelled"],
+          resultSummaryRequiredStates: ["done"],
+          resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"]
+        }
+      })
+    );
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
     );
@@ -352,6 +396,8 @@ describe("worker runtime", () => {
     );
     expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"requiredCapabilities\""));
     expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"runtimeContext\""));
+    expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"absorbedWorkItems\""));
+    expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"outcomeContract\""));
 
     await runtime.close();
   });
@@ -1061,24 +1107,31 @@ describe("worker runtime", () => {
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"cardId\":\"card_cmo\"")
     );
-    expect(onHarnessLaneReady).toHaveBeenCalledWith({
-      tenantId: "tenant-1",
-      runId: "run-1",
-      workflowId: "wf_connect_first_workflow",
-      requiredCapabilities: ["text_generation"],
-      runtimeContext: {
-        providerKind: "openai_api",
-        credentialLabel: "Primary OpenAI"
-      },
-      laneExecution: {
-        cardId: "card_cmo",
-        persona: "cmo",
-        title: "Prepare launch messaging",
-        deliverableType: "marketing_plan",
-        state: "working",
-        resumeFocus: "CMO should continue this active marketing plan lane: Prepare launch messaging."
-      }
-    });
+    expect(onHarnessLaneReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        requiredCapabilities: ["text_generation"],
+        runtimeContext: {
+          providerKind: "openai_api",
+          credentialLabel: "Primary OpenAI"
+        },
+        laneExecution: expect.objectContaining({
+          cardId: "card_cmo",
+          persona: "cmo",
+          title: "Prepare launch messaging",
+          deliverableType: "marketing_plan",
+          state: "working",
+          resumeFocus: "CMO should continue this active marketing plan lane: Prepare launch messaging."
+        }),
+        outcomeContract: {
+          allowedStates: ["waiting", "done", "blocked", "cancelled"],
+          resultSummaryRequiredStates: ["done"],
+          resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"]
+        }
+      })
+    );
     const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
     expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith({
       tenantId: "tenant-1",
