@@ -10,6 +10,9 @@ import {
   HarnessRunCompletionConflictError,
   HarnessRunCycleConflictError,
   type HarnessBoardResponse,
+  type HarnessExportCandidateId,
+  type HarnessExportDryRunResult,
+  type HarnessExportPreflightResult,
   type HarnessFreshCycleMode
 } from "../harness/board-service.js";
 import {
@@ -85,6 +88,27 @@ type HarnessApi = {
     actionToken: string;
     mode?: HarnessFreshCycleMode;
   }): Promise<{ runId: string; reopenedProposalCount: number }>;
+  preflightExportCandidate?(request: {
+    authorization: string;
+    cookie?: string;
+    runId: string;
+    candidateId: HarnessExportCandidateId;
+    actionToken: string;
+  }): Promise<HarnessExportPreflightResult>;
+  dryRunExportCandidate?(request: {
+    authorization: string;
+    cookie?: string;
+    runId: string;
+    candidateId: HarnessExportCandidateId;
+    actionToken: string;
+  }): Promise<HarnessExportDryRunResult>;
+  exportGovernanceHistoryCandidate?(request: {
+    authorization: string;
+    cookie?: string;
+    runId: string;
+    candidateId: HarnessExportCandidateId;
+    actionToken: string;
+  }): Promise<import("../harness/board-service.js").HarnessGovernanceHistoryExportResult>;
 };
 
 type RateLimiter = {
@@ -101,6 +125,9 @@ export function createHarnessHttpHandler(options: {
   reviewPendingAttention?: HarnessApi["reviewPendingAttention"];
   resolvePendingAttention?: HarnessApi["resolvePendingAttention"];
   startFreshCycle?: HarnessApi["startFreshCycle"];
+  preflightExportCandidate?: HarnessApi["preflightExportCandidate"];
+  dryRunExportCandidate?: HarnessApi["dryRunExportCandidate"];
+  exportGovernanceHistoryCandidate?: HarnessApi["exportGovernanceHistoryCandidate"];
   rateLimiter: RateLimiter;
   maxBodyBytes?: number;
 }) {
@@ -126,6 +153,7 @@ export function createHarnessHttpHandler(options: {
         /^\/api\/harness\/runs\/[^/]+\/review-attention$/u.test(request.path) ||
         /^\/api\/harness\/runs\/[^/]+\/resolve-attention$/u.test(request.path) ||
         /^\/api\/harness\/runs\/[^/]+\/fresh-cycle$/u.test(request.path) ||
+        /^\/api\/harness\/runs\/[^/]+\/export-candidates\/[^/]+\/(preflight|dry-run|export)$/u.test(request.path) ||
         /^\/api\/harness\/proposals\/[^/]+\/(approve|decision)$/u.test(request.path)
       )
     ) {
@@ -156,6 +184,12 @@ export function createHarnessHttpHandler(options: {
         ? "harness-run-resolve-attention"
       : request.method === "POST" && /^\/api\/harness\/runs\/[^/]+\/fresh-cycle$/u.test(request.path)
         ? "harness-run-fresh-cycle"
+      : request.method === "POST" && /^\/api\/harness\/runs\/[^/]+\/export-candidates\/[^/]+\/preflight$/u.test(request.path)
+        ? "harness-export-preflight"
+      : request.method === "POST" && /^\/api\/harness\/runs\/[^/]+\/export-candidates\/[^/]+\/dry-run$/u.test(request.path)
+        ? "harness-export-dry-run"
+      : request.method === "POST" && /^\/api\/harness\/runs\/[^/]+\/export-candidates\/[^/]+\/export$/u.test(request.path)
+        ? "harness-governance-history-export"
       : request.method === "POST" && /^\/api\/harness\/proposals\/[^/]+\/(approve|decision)$/u.test(request.path)
         ? "harness-proposal-approve"
       : null;
@@ -334,6 +368,64 @@ export function createHarnessHttpHandler(options: {
         }
         const body = await options.startFreshCycle({
           ...freshCycleRequest
+        });
+        assertWealthFactoryResponse(body);
+        return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
+      }
+
+      const exportCandidateMatch = /^\/api\/harness\/runs\/([^/]+)\/export-candidates\/([^/]+)\/(preflight|dry-run|export)$/u.exec(request.path);
+      if (exportCandidateMatch) {
+        const bodyInput = readJsonObject(request.body);
+        const actionToken = readRequiredString(bodyInput?.actionToken);
+        if (!actionToken) {
+          return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
+        }
+        const runId = decodeURIComponent(exportCandidateMatch[1] ?? "");
+        const candidateId = decodeURIComponent(exportCandidateMatch[2] ?? "") as HarnessExportCandidateId;
+        const actionKind = exportCandidateMatch[3];
+        if (candidateId !== "governance_history_export" && candidateId !== "package_bundle_export") {
+          return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
+        }
+
+        if (actionKind === "preflight") {
+          if (!options.preflightExportCandidate) {
+            return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
+          }
+          const body = await options.preflightExportCandidate({
+            authorization: request.headers.authorization ?? "",
+            ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
+            runId,
+            candidateId,
+            actionToken
+          });
+          assertWealthFactoryResponse(body);
+          return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
+        }
+
+        if (actionKind === "dry-run") {
+          if (!options.dryRunExportCandidate) {
+            return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
+          }
+          const body = await options.dryRunExportCandidate({
+            authorization: request.headers.authorization ?? "",
+            ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
+            runId,
+            candidateId,
+            actionToken
+          });
+          assertWealthFactoryResponse(body);
+          return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
+        }
+
+        if (!options.exportGovernanceHistoryCandidate) {
+          return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
+        }
+        const body = await options.exportGovernanceHistoryCandidate({
+          authorization: request.headers.authorization ?? "",
+          ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
+          runId,
+          candidateId,
+          actionToken
         });
         assertWealthFactoryResponse(body);
         return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };

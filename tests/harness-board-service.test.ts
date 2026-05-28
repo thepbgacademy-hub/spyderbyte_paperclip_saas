@@ -6,6 +6,7 @@ import {
   TenantMembershipRequiredError
 } from "../src/db/supabase-repositories.js";
 import {
+  HarnessActionContractConflictError,
   HarnessCardCreationConflictError,
   HarnessCardProgressionConflictError,
   HarnessRunCompletionConflictError,
@@ -3951,7 +3952,21 @@ describe("harness board service", () => {
         concurrencyBoundaryLabel: "Independent export safe",
         recordTargetLabel: "Governance history record",
         promotionAuthorityLabel: "Tenant explicit export",
-        promotionTriggerLabel: "Tenant export request"
+        promotionTriggerLabel: "Tenant export request",
+        exportActions: expect.arrayContaining([
+          expect.objectContaining({
+            actionRoute: "export-preflight",
+            actionLabel: "Run export preflight"
+          }),
+          expect.objectContaining({
+            actionRoute: "export-dry-run",
+            actionLabel: "Preview Obsidian export bundle"
+          }),
+          expect.objectContaining({
+            actionRoute: "governance-history-export",
+            actionLabel: "Build governance history export"
+          })
+        ])
       })
     ]);
     expect(hydrated.memoryBoundary.independentExportSafeCandidateGroupCount).toBe(1);
@@ -4064,6 +4079,127 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.exportCandidateFreshnessSummary).toContain("uses the latest record state");
     expect(hydrated.memoryBoundary.exportCandidateValidationSummary).toContain("validates at record level");
     expect(hydrated.memoryBoundary.exportCandidateCompletenessSummary).toContain("self-contained records");
+  });
+
+  it("runs bounded export preflight, dry-run, and governance-history export from the grouped candidate contract", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const initialBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    const hydrated = await service.listBoardState({ authorization: "Bearer valid" });
+    const candidate = hydrated.memoryBoundary.exportCandidates?.find((entry) => entry.id === "governance_history_export");
+    const preflightAction = candidate?.exportActions?.find((entry) => entry.actionRoute === "export-preflight");
+    const dryRunAction = candidate?.exportActions?.find((entry) => entry.actionRoute === "export-dry-run");
+    const exportAction = candidate?.exportActions?.find((entry) => entry.actionRoute === "governance-history-export");
+
+    expect(initialBoard.memoryBoundary.exportCandidates ?? []).toHaveLength(0);
+    expect(candidate).toBeTruthy();
+    expect(preflightAction).toBeTruthy();
+    expect(dryRunAction).toBeTruthy();
+    expect(exportAction).toBeTruthy();
+
+    await expect(service.preflightExportCandidate({
+      authorization: "Bearer valid",
+      runId: hydrated.runId,
+      candidateId: "governance_history_export",
+      actionToken: preflightAction!.actionToken
+    })).resolves.toMatchObject({
+      candidateId: "governance_history_export",
+      status: "ready",
+      supportsDryRun: true,
+      supportsExport: true
+    });
+
+    await expect(service.dryRunExportCandidate({
+      authorization: "Bearer valid",
+      runId: hydrated.runId,
+      candidateId: "governance_history_export",
+      actionToken: dryRunAction!.actionToken
+    })).resolves.toMatchObject({
+      candidateId: "governance_history_export",
+      status: "ready",
+      exportFormat: "obsidian_markdown_bundle",
+      recordTarget: "governance_history_record",
+      noteFileName: "wf_connect_first_workflow-governance-history.md",
+      disclosureSummary: "Decision summary only",
+      redactionSummary: "Governance-safe redaction"
+    });
+
+    await expect(service.exportGovernanceHistoryCandidate({
+      authorization: "Bearer valid",
+      runId: hydrated.runId,
+      candidateId: "governance_history_export",
+      actionToken: exportAction!.actionToken
+    })).resolves.toMatchObject({
+      candidateId: "governance_history_export",
+      status: "export_ready",
+      exportFormat: "obsidian_markdown_bundle",
+      noteFileName: "wf_connect_first_workflow-governance-history.md"
+    });
+  });
+
+  it("fails closed when a governance-history export token no longer matches the current candidate contract", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    const hydrated = await service.listBoardState({ authorization: "Bearer valid" });
+    const staleToken = hydrated.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "governance_history_export")
+      ?.exportActions
+      ?.find((entry) => entry.actionRoute === "export-preflight")
+      ?.actionToken;
+
+    await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief"
+    }));
+
+    await expect(service.preflightExportCandidate({
+      authorization: "Bearer valid",
+      runId: hydrated.runId,
+      candidateId: "governance_history_export",
+      actionToken: staleToken!
+    })).rejects.toBeInstanceOf(HarnessActionContractConflictError);
   });
 
   it("fails closed when approval mutation is invoked without an atomic runner", async () => {

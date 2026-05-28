@@ -194,6 +194,137 @@ describe("harness HTTP boundary", () => {
     expect(serviceUnavailable.body).toEqual({ code: "service_unavailable" });
   });
 
+  it("routes bounded export preflight, dry-run, and governance-history export through guarded candidate endpoints", async () => {
+    const preflightExportCandidate = vi.fn().mockResolvedValue({
+      candidateId: "governance_history_export",
+      status: "ready",
+      readiness: "ready_now",
+      readinessLabel: "Ready now",
+      summary: "Governance history is ready for bounded tenant export later.",
+      nextStepLabel: "Tenant export available",
+      supportsDryRun: true,
+      supportsExport: true
+    });
+    const dryRunExportCandidate = vi.fn().mockResolvedValue({
+      candidateId: "governance_history_export",
+      status: "ready",
+      exportFormat: "obsidian_markdown_bundle",
+      recordTarget: "governance_history_record",
+      noteTitle: "Governance history",
+      noteFileName: "wf_connect_first_workflow-governance-history.md",
+      content: "# Governance history",
+      recordCount: 2,
+      disclosureSummary: "Decision summary only",
+      redactionSummary: "Governance-safe redaction"
+    });
+    const exportGovernanceHistoryCandidate = vi.fn().mockResolvedValue({
+      candidateId: "governance_history_export",
+      status: "export_ready",
+      exportFormat: "obsidian_markdown_bundle",
+      recordTarget: "governance_history_record",
+      noteTitle: "Governance history",
+      noteFileName: "wf_connect_first_workflow-governance-history.md",
+      content: "# Governance history",
+      recordCount: 2,
+      disclosureSummary: "Decision summary only",
+      redactionSummary: "Governance-safe redaction",
+      idempotencyKey: "export-key",
+      summary: "Governance history export is ready."
+    });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      decideProposal: vi.fn(),
+      completeRun: vi.fn(),
+      preflightExportCandidate,
+      dryRunExportCandidate,
+      exportGovernanceHistoryCandidate,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const requestBase = {
+      method: "POST" as const,
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        cookie: "wf_session=abc",
+        "content-type": "application/json"
+      },
+      body: { actionToken: "candidate-token" },
+      bodyByteLength: JSON.stringify({ actionToken: "candidate-token" }).length,
+      ip: "203.0.113.10"
+    };
+
+    const preflight = await handler({
+      ...requestBase,
+      path: "/api/harness/runs/run_123/export-candidates/governance_history_export/preflight"
+    });
+    const dryRun = await handler({
+      ...requestBase,
+      path: "/api/harness/runs/run_123/export-candidates/governance_history_export/dry-run"
+    });
+    const exported = await handler({
+      ...requestBase,
+      path: "/api/harness/runs/run_123/export-candidates/governance_history_export/export"
+    });
+
+    expect(preflight.status).toBe(200);
+    expect(dryRun.status).toBe(200);
+    expect(exported.status).toBe(200);
+    expect(preflightExportCandidate).toHaveBeenCalledWith({
+      authorization: "Bearer valid",
+      cookie: "wf_session=abc",
+      runId: "run_123",
+      candidateId: "governance_history_export",
+      actionToken: "candidate-token"
+    });
+    expect(dryRunExportCandidate).toHaveBeenCalledWith({
+      authorization: "Bearer valid",
+      cookie: "wf_session=abc",
+      runId: "run_123",
+      candidateId: "governance_history_export",
+      actionToken: "candidate-token"
+    });
+    expect(exportGovernanceHistoryCandidate).toHaveBeenCalledWith({
+      authorization: "Bearer valid",
+      cookie: "wf_session=abc",
+      runId: "run_123",
+      candidateId: "governance_history_export",
+      actionToken: "candidate-token"
+    });
+  });
+
+  it("maps stale export-candidate tokens to stale_contract", async () => {
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      decideProposal: vi.fn(),
+      completeRun: vi.fn(),
+      preflightExportCandidate: vi.fn().mockRejectedValue(new HarnessActionContractConflictError("stale")),
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/export-candidates/governance_history_export/preflight",
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        "content-type": "application/json"
+      },
+      body: { actionToken: "stale-token" },
+      bodyByteLength: JSON.stringify({ actionToken: "stale-token" }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({ code: "stale_contract" });
+  });
+
   it("approves a persisted proposal through the guarded write route", async () => {
     const decideProposal = vi.fn().mockResolvedValue({ status: "approved", cardId: "card_new_1" });
     const handler = createHarnessHttpHandler({

@@ -510,6 +510,7 @@ export type HarnessMemoryBoundaryExportCandidateView = {
   dependsOnCandidateLabels?: string[];
   dependencySummary?: string;
   nextEligibleSummary?: string;
+  exportActions?: HarnessExportCandidateActionView[];
 };
 
 export type HarnessMemoryBoundaryView = {
@@ -804,6 +805,11 @@ export type HarnessActionRequestExampleView = Partial<
   Record<HarnessActionRequestFieldView["name"], string>
 >;
 
+export type HarnessExportCandidateActionRoute =
+  | "export-preflight"
+  | "export-dry-run"
+  | "governance-history-export";
+
 export type HarnessActionOptionView = {
   value: string;
   label: string;
@@ -813,6 +819,16 @@ export type HarnessActionOptionView = {
   requiresConfirmation?: boolean;
   confirmationLabel?: string;
   exampleRequest?: HarnessActionRequestExampleView;
+};
+
+export type HarnessExportCandidateActionView = {
+  actionRoute: HarnessExportCandidateActionRoute;
+  actionPath: string;
+  actionMethod: "POST";
+  actionToken: string;
+  actionLabel: string;
+  actionDescription: string;
+  nextEffectSummary?: string;
 };
 
 export type HarnessPendingAttentionView = {
@@ -932,6 +948,39 @@ export type HarnessFreshCycleDispatch = {
   workflowId: string;
   mode: HarnessFreshCycleMode;
   reopenedProposalCount: number;
+};
+
+export type HarnessExportCandidateId = HarnessMemoryBoundaryExportCandidateView["id"];
+
+export type HarnessExportPreflightResult = {
+  candidateId: HarnessExportCandidateId;
+  status: "ready" | "blocked";
+  readiness: HarnessMemoryBoundaryReadiness;
+  readinessLabel: string;
+  summary: string;
+  nextStepLabel: string;
+  supportsDryRun: boolean;
+  supportsExport: boolean;
+  blockerLabel?: string;
+};
+
+export type HarnessExportDryRunResult = {
+  candidateId: "governance_history_export";
+  status: "ready";
+  exportFormat: "obsidian_markdown_bundle";
+  recordTarget: "governance_history_record";
+  noteTitle: string;
+  noteFileName: string;
+  content: string;
+  recordCount: number;
+  disclosureSummary: string;
+  redactionSummary: string;
+};
+
+export type HarnessGovernanceHistoryExportResult = Omit<HarnessExportDryRunResult, "status"> & {
+  status: "export_ready";
+  idempotencyKey: string;
+  summary: string;
 };
 
 export type HarnessRecentDecisionView = {
@@ -3702,7 +3751,157 @@ export function createHarnessBoardService(options: {
         runId: result.runId,
         reopenedProposalCount: result.reopenedProposalCount
       };
+    },
+
+    async preflightExportCandidate(request: {
+      authorization: string;
+      cookie?: string;
+      runId: string;
+      candidateId: HarnessExportCandidateId;
+      actionToken?: string;
+    }): Promise<HarnessExportPreflightResult> {
+      const board = await loadExportBoardContext({
+        repository: options.repository,
+        authenticate: options.authenticate,
+        requireTenantMember: options.requireTenantMember,
+        requireActivePackageInstall: options.requireActivePackageInstall,
+        workflowRegistry: options.workflowRegistry,
+        authorization: request.authorization,
+        ...(request.cookie ? { cookie: request.cookie } : {}),
+        runId: request.runId
+      });
+      const candidate = findExportCandidateOrThrow(board.response.memoryBoundary.exportCandidates, request.candidateId);
+      const action = findExportActionOrThrow(candidate, "export-preflight");
+      if (request.actionToken) {
+        assertHarnessActionToken(action.actionToken, request.actionToken);
+      }
+
+      return {
+        candidateId: candidate.id,
+        status: candidate.readiness === "ready_now" ? "ready" : "blocked",
+        readiness: candidate.readiness,
+        readinessLabel: candidate.readinessLabel,
+        summary: candidate.summary,
+        nextStepLabel: candidate.promotionNextStepLabel,
+        supportsDryRun: Boolean(candidate.exportActions?.some((entry) => entry.actionRoute === "export-dry-run")),
+        supportsExport: Boolean(candidate.exportActions?.some((entry) => entry.actionRoute === "governance-history-export")),
+        ...(candidate.readiness !== "ready_now" ? { blockerLabel: candidate.promotionBlockerLabel } : {})
+      };
+    },
+
+    async dryRunExportCandidate(request: {
+      authorization: string;
+      cookie?: string;
+      runId: string;
+      candidateId: HarnessExportCandidateId;
+      actionToken?: string;
+    }): Promise<HarnessExportDryRunResult> {
+      const board = await loadExportBoardContext({
+        repository: options.repository,
+        authenticate: options.authenticate,
+        requireTenantMember: options.requireTenantMember,
+        requireActivePackageInstall: options.requireActivePackageInstall,
+        workflowRegistry: options.workflowRegistry,
+        authorization: request.authorization,
+        ...(request.cookie ? { cookie: request.cookie } : {}),
+        runId: request.runId
+      });
+      const candidate = findExportCandidateOrThrow(board.response.memoryBoundary.exportCandidates, request.candidateId);
+      if (candidate.id !== "governance_history_export") {
+        throw new HarnessRunCompletionConflictError("Harness export dry-run only supports governance history candidates");
+      }
+      const action = findExportActionOrThrow(candidate, "export-dry-run");
+      if (request.actionToken) {
+        assertHarnessActionToken(action.actionToken, request.actionToken);
+      }
+
+      return buildGovernanceHistoryExportDryRun(board.response, candidate);
+    },
+
+    async exportGovernanceHistoryCandidate(request: {
+      authorization: string;
+      cookie?: string;
+      runId: string;
+      candidateId: HarnessExportCandidateId;
+      actionToken?: string;
+    }): Promise<HarnessGovernanceHistoryExportResult> {
+      const board = await loadExportBoardContext({
+        repository: options.repository,
+        authenticate: options.authenticate,
+        requireTenantMember: options.requireTenantMember,
+        requireActivePackageInstall: options.requireActivePackageInstall,
+        workflowRegistry: options.workflowRegistry,
+        authorization: request.authorization,
+        ...(request.cookie ? { cookie: request.cookie } : {}),
+        runId: request.runId
+      });
+      const candidate = findExportCandidateOrThrow(board.response.memoryBoundary.exportCandidates, request.candidateId);
+      if (candidate.id !== "governance_history_export") {
+        throw new HarnessRunCompletionConflictError("Harness export action only supports governance history candidates");
+      }
+      const action = findExportActionOrThrow(candidate, "governance-history-export");
+      if (request.actionToken) {
+        assertHarnessActionToken(action.actionToken, request.actionToken);
+      }
+
+      const dryRun = buildGovernanceHistoryExportDryRun(board.response, candidate);
+      return {
+        ...dryRun,
+        status: "export_ready",
+        idempotencyKey: createHarnessActionToken([
+          "governance-history-export",
+          board.response.runId,
+          candidate.id,
+          candidate.itemIds.join(","),
+          dryRun.noteFileName
+        ]),
+        summary: "Governance history export is ready as a tenant-safe Obsidian markdown bundle."
+      };
     }
+  };
+}
+
+async function loadExportBoardContext(input: {
+  repository: HarnessRepository;
+  authenticate(input: { authorization: string; cookie?: string }): Promise<ApiSession | null>;
+  requireTenantMember(input: { tenantId: string; userId: string }): Promise<void>;
+  requireActivePackageInstall(input: { tenantId: string; packageId: string }): Promise<void>;
+  workflowRegistry: HarnessWorkflowRegistry;
+  authorization: string;
+  cookie?: string;
+  runId: string;
+}) {
+  const access = await authorizeHarnessRequest({
+    authenticate: input.authenticate,
+    requireTenantMember: input.requireTenantMember,
+    requireActivePackageInstall: input.requireActivePackageInstall,
+    workflowRegistry: input.workflowRegistry,
+    authorization: input.authorization,
+    ...(input.cookie ? { cookie: input.cookie } : {})
+  });
+  const run = await input.repository.getRun(input.runId);
+  if (!run || run.tenantId !== access.session.tenantId) {
+    throw new ApiAuthError();
+  }
+  const [cards, continuity, events, decisions, proposals] = await Promise.all([
+    input.repository.listCardsForRun(run.id),
+    input.repository.listCardContinuityForRun(run.id),
+    input.repository.listEventsForRun(run.id),
+    input.repository.listDecisionsForRun(run.id),
+    input.repository.listProposalsForRun(run.id)
+  ]);
+
+  return {
+    access,
+    run,
+    response: buildHarnessBoardResponse({
+      run,
+      cards,
+      continuity,
+      events,
+      decisions,
+      proposals
+    })
   };
 }
 
@@ -4339,11 +4538,13 @@ function buildHarnessBoardResponse(input: {
     events: input.events
   });
   const memoryBoundary = buildMemoryBoundaryView({
+    runId: input.run.id,
     continuity: input.continuity,
     hasPendingAttention: Boolean(pendingAttention),
     recentDecisions,
     followThroughItems,
-    completionPackage
+    completionPackage,
+    decisionRecords: input.decisions
   });
   const sortedPendingProposals = input.proposals
     .filter((proposal) => proposal.status === "proposed" || proposal.status === "deferred")
@@ -4413,11 +4614,13 @@ function buildHarnessBoardResponse(input: {
 }
 
 function buildMemoryBoundaryView(input: {
+  runId: string;
   continuity: readonly HarnessCardContinuityRecord[];
   hasPendingAttention: boolean;
   recentDecisions: readonly HarnessRecentDecisionView[];
   followThroughItems: readonly HarnessFollowThroughView[];
   completionPackage: HarnessCompletionPackageView | undefined;
+  decisionRecords: readonly HarnessBoardDecisionRecord[];
 }): HarnessMemoryBoundaryView {
   const isGovernanceExportReadyItem = (
     item: HarnessMemoryBoundaryItemView
@@ -5620,7 +5823,19 @@ function buildMemoryBoundaryView(input: {
       dependsOnCandidateIds: [],
       dependsOnCandidateLabels: [],
       dependencySummary:
-        "This governance history candidate can promote independently once the tenant requests export."
+        "This governance history candidate can promote independently once the tenant requests export.",
+      exportActions: buildExportCandidateActions({
+        runId: input.runId,
+        candidateId: "governance_history_export",
+        decisions: input.decisionRecords,
+        candidate: {
+          id: "governance_history_export",
+          readiness: representative.readiness,
+          promotionState: representative.promotionState,
+          promotionNextStep: representative.promotionNextStep,
+          itemIds: governanceHistoryCandidateItems.map((item) => item.id)
+        }
+      })
     });
   }
 
@@ -5729,6 +5944,18 @@ function buildMemoryBoundaryView(input: {
         representative.readiness === "after_board_closes"
           ? "This package bundle candidate still waits on board closure and later follows the governance history export candidate."
           : "This package bundle candidate follows the governance history export candidate once the tenant reaches export time.",
+      exportActions: buildExportCandidateActions({
+        runId: input.runId,
+        candidateId: "package_bundle_export",
+        decisions: input.decisionRecords,
+        candidate: {
+          id: "package_bundle_export",
+          readiness: representative.readiness,
+          promotionState: representative.promotionState,
+          promotionNextStep: representative.promotionNextStep,
+          itemIds: packageBundleCandidateItems.map((item) => item.id)
+        }
+      }),
       ...(representative.nextEligibleSummary ? { nextEligibleSummary: representative.nextEligibleSummary } : {})
     });
   }
@@ -7491,6 +7718,72 @@ function comparePendingProposalQueue(left: HarnessSubCardProposal, right: Harnes
   return left.id.localeCompare(right.id);
 }
 
+function buildExportCandidateActions(input: {
+  runId: string;
+  candidateId: HarnessExportCandidateId;
+  decisions: readonly HarnessBoardDecisionRecord[];
+  candidate: {
+    id: HarnessExportCandidateId;
+    readiness: HarnessMemoryBoundaryReadiness;
+    promotionState: HarnessMemoryBoundaryPromotionState;
+    promotionNextStep: HarnessMemoryBoundaryPromotionNextStep;
+    itemIds: readonly string[];
+  };
+}): HarnessExportCandidateActionView[] {
+  const contentVersion = input.decisions
+    .slice(0, 8)
+    .map((decision) => `${decision.id}:${decision.createdAt}`)
+    .join(",");
+  const baseParts = [
+    input.runId,
+    input.candidate.id,
+    input.candidate.readiness,
+    input.candidate.promotionState,
+    input.candidate.promotionNextStep,
+    input.candidate.itemIds.join(","),
+    contentVersion
+  ] as const;
+  const actions: HarnessExportCandidateActionView[] = [
+    {
+      actionRoute: "export-preflight",
+      actionPath: `/api/harness/runs/${encodeURIComponent(input.runId)}/export-candidates/${encodeURIComponent(input.candidateId)}/preflight`,
+      actionMethod: "POST",
+      actionToken: createHarnessActionToken(["export-preflight", ...baseParts]),
+      actionLabel: "Run export preflight",
+      actionDescription: "Validate the current export candidate against the live board contract before any dry-run or tenant-facing export bundle is produced.",
+      nextEffectSummary:
+        input.candidate.readiness === "ready_now"
+          ? "This candidate can be checked for a tenant-safe export without changing live runtime state."
+          : "This candidate will report its current blocker without widening into a live export write path."
+    }
+  ];
+
+  if (input.candidate.id === "governance_history_export" && input.candidate.readiness === "ready_now") {
+    actions.push(
+      {
+        actionRoute: "export-dry-run",
+        actionPath: `/api/harness/runs/${encodeURIComponent(input.runId)}/export-candidates/${encodeURIComponent(input.candidateId)}/dry-run`,
+        actionMethod: "POST",
+        actionToken: createHarnessActionToken(["export-dry-run", ...baseParts]),
+        actionLabel: "Preview Obsidian export bundle",
+        actionDescription: "Render the tenant-safe governance-history markdown bundle without writing it anywhere yet.",
+        nextEffectSummary: "This returns the exact bounded note content and metadata that a later tenant export would use."
+      },
+      {
+        actionRoute: "governance-history-export",
+        actionPath: `/api/harness/runs/${encodeURIComponent(input.runId)}/export-candidates/${encodeURIComponent(input.candidateId)}/export`,
+        actionMethod: "POST",
+        actionToken: createHarnessActionToken(["governance-history-export", ...baseParts]),
+        actionLabel: "Build governance history export",
+        actionDescription: "Produce the first real Obsidian-facing governance-history export bundle from the current board contract.",
+        nextEffectSummary: "This returns a tenant-safe markdown bundle for later vault placement without turning Obsidian into live runtime state."
+      }
+    );
+  }
+
+  return actions;
+}
+
 function createHarnessActionToken(parts: readonly string[]) {
   return createHash("sha256")
     .update(parts.join("|"))
@@ -7535,6 +7828,72 @@ function assertHarnessActionToken(expectedToken: string, providedToken: string |
   if (!providedToken || providedToken !== expectedToken) {
     throw new HarnessActionContractConflictError("Harness action token no longer matches the current board contract");
   }
+}
+
+function findExportCandidateOrThrow(
+  candidates: readonly HarnessMemoryBoundaryExportCandidateView[] | undefined,
+  candidateId: HarnessExportCandidateId
+) {
+  const candidate = candidates?.find((entry) => entry.id === candidateId) ?? null;
+  if (!candidate) {
+    throw new HarnessRunCompletionConflictError("Harness export candidate is no longer available on this board");
+  }
+  return candidate;
+}
+
+function findExportActionOrThrow(
+  candidate: HarnessMemoryBoundaryExportCandidateView,
+  actionRoute: HarnessExportCandidateActionRoute
+) {
+  const action = candidate.exportActions?.find((entry) => entry.actionRoute === actionRoute) ?? null;
+  if (!action) {
+    throw new HarnessRunCompletionConflictError("Harness export action is not available for the current candidate contract");
+  }
+  return action;
+}
+
+function buildGovernanceHistoryExportDryRun(
+  board: HarnessBoardResponse,
+  candidate: HarnessMemoryBoundaryExportCandidateView
+): HarnessExportDryRunResult {
+  const noteTitle = `${humanizeDeliverableType(board.packageId.replace(/^pkg_/u, "").replace(/_/gu, " "))} governance history`;
+  const safeWorkflowId = board.workflowId.replace(/[^a-z0-9_-]+/giu, "-").toLowerCase();
+  const noteFileName = `${safeWorkflowId}-governance-history.md`;
+  const decisionLines = board.recentDecisions.map((decision) => (
+    `- ${decision.label}${decision.recommendationSummary ? `\n  - Recommendation: ${decision.recommendationSummary}` : ""}${decision.objectionSummary ? `\n  - Objection: ${decision.objectionSummary}` : ""}`
+  ));
+  const followThroughLines = board.followThroughItems.map((item) => (
+    `- ${item.summary}${item.policyReasonLabel ? `\n  - Policy reason: ${item.policyReasonLabel}` : ""}${item.resolutionLabel ? `\n  - Resolution: ${item.resolutionLabel}` : ""}`
+  ));
+  const content = [
+    `# ${noteTitle}`,
+    "",
+    `- Workflow: ${board.workflowId}`,
+    `- Package: ${board.packageId}`,
+    `- Candidate: ${candidate.label}`,
+    `- Readiness: ${candidate.readinessLabel}`,
+    `- Disclosure: ${candidate.exportSourceDisclosurePolicyLabel}`,
+    `- Redaction: ${candidate.exportRedactionBoundaryLabel}`,
+    "",
+    "## Governance Decisions",
+    ...(decisionLines.length > 0 ? decisionLines : ["- No recent governance decisions are currently available."]),
+    "",
+    "## Implemented Follow-Through",
+    ...(followThroughLines.length > 0 ? followThroughLines : ["- No implemented follow-through items are currently available."])
+  ].join("\n");
+
+  return {
+    candidateId: "governance_history_export",
+    status: "ready",
+    exportFormat: "obsidian_markdown_bundle",
+    recordTarget: "governance_history_record",
+    noteTitle,
+    noteFileName,
+    content,
+    recordCount: Math.max(1, candidate.itemCount),
+    disclosureSummary: candidate.exportSourceDisclosurePolicyLabel,
+    redactionSummary: candidate.exportRedactionBoundaryLabel
+  };
 }
 
 function formatAttentionActivityLabel(input: {

@@ -813,6 +813,11 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
             exportDependencyPolicyLabel: candidate.exportDependencyPolicyLabel ?? "Independent export candidate",
             dependsOnCandidateIds: candidate.dependsOnCandidateIds ?? [],
             dependsOnCandidateLabels: candidate.dependsOnCandidateLabels ?? [],
+            exportActions: candidate.exportActions ?? buildFallbackExportCandidateActions({
+              runId: board.runId,
+              candidateId: "governance_history_export",
+              readiness: candidate.readiness
+            }),
             dependencySummary:
               candidate.dependencySummary
               ?? "This governance history candidate can promote independently once the tenant requests export."
@@ -908,6 +913,11 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
               candidate.exportDependencyPolicyLabel ?? "Depends on governance history export",
             dependsOnCandidateIds: candidate.dependsOnCandidateIds ?? ["governance_history_export"],
             dependsOnCandidateLabels: candidate.dependsOnCandidateLabels ?? ["Governance history export"],
+            exportActions: candidate.exportActions ?? buildFallbackExportCandidateActions({
+              runId: board.runId,
+              candidateId: "package_bundle_export",
+              readiness: candidate.readiness
+            }),
             dependencySummary:
               candidate.dependencySummary
               ?? (candidate.readiness === "after_board_closes"
@@ -1328,6 +1338,20 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
               {candidate.dependsOnCandidateLabels && candidate.dependsOnCandidateLabels.length > 0 ? (
                 <p style={styles.actionSummary}>{`Depends on: ${candidate.dependsOnCandidateLabels.join(", ")}`}</p>
               ) : null}
+              {candidate.exportActions && candidate.exportActions.length > 0 ? (
+                <div style={{ display: "grid", gap: "0.35rem" }}>
+                  <p style={styles.contractMeta}>Available export actions</p>
+                  {candidate.exportActions.map((action) => (
+                    <div key={`${candidate.id}:${action.actionRoute}`} style={{ display: "grid", gap: "0.2rem" }}>
+                      <p style={styles.actionHeading}>{action.actionLabel}</p>
+                      <p style={styles.contractMeta}>{`Action family: ${formatActionRoute(action.actionRoute)}`}</p>
+                      <p style={styles.actionSummary}>{action.actionDescription}</p>
+                      <p style={styles.optionBody}>{`${action.actionMethod} ${action.actionPath}`}</p>
+                      {action.nextEffectSummary ? <p style={styles.actionSummary}>{action.nextEffectSummary}</p> : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               {candidate.nextEligibleSummary ? <p style={styles.actionSummary}>{candidate.nextEligibleSummary}</p> : null}
             </li>
           ))}
@@ -1415,6 +1439,48 @@ function describeMemoryBoundaryReadiness(
     default:
       return humanizeValue(readiness);
   }
+}
+
+function buildFallbackExportCandidateActions(input: {
+  runId: string;
+  candidateId: NonNullable<HarnessBoardResponse["memoryBoundary"]["exportCandidates"]>[number]["id"];
+  readiness: HarnessBoardResponse["memoryBoundary"]["exportReadyItems"][number]["readiness"];
+}) {
+  const encodedRunId = encodeURIComponent(input.runId);
+  const encodedCandidateId = encodeURIComponent(input.candidateId);
+  const actions: NonNullable<NonNullable<HarnessBoardResponse["memoryBoundary"]["exportCandidates"]>[number]["exportActions"]> = [
+    {
+      actionRoute: "export-preflight",
+      actionPath: `/api/harness/runs/${encodedRunId}/export-candidates/${encodedCandidateId}/preflight`,
+      actionMethod: "POST",
+      actionToken: `preview-${input.candidateId}-preflight`,
+      actionLabel: "Run export preflight",
+      actionDescription: "Validate the current export candidate against the live board contract before any dry-run or tenant-facing export bundle is produced."
+    }
+  ];
+
+  if (input.candidateId === "governance_history_export" && input.readiness === "ready_now") {
+    actions.push(
+      {
+        actionRoute: "export-dry-run",
+        actionPath: `/api/harness/runs/${encodedRunId}/export-candidates/${encodedCandidateId}/dry-run`,
+        actionMethod: "POST",
+        actionToken: `preview-${input.candidateId}-dry-run`,
+        actionLabel: "Preview Obsidian export bundle",
+        actionDescription: "Render the tenant-safe governance-history markdown bundle without writing it anywhere yet."
+      },
+      {
+        actionRoute: "governance-history-export",
+        actionPath: `/api/harness/runs/${encodedRunId}/export-candidates/${encodedCandidateId}/export`,
+        actionMethod: "POST",
+        actionToken: `preview-${input.candidateId}-export`,
+        actionLabel: "Build governance history export",
+        actionDescription: "Produce the first real Obsidian-facing governance-history export bundle from the current board contract."
+      }
+    );
+  }
+
+  return actions;
 }
 
 function deriveMemoryBoundaryExportCandidates(
@@ -2317,7 +2383,13 @@ function renderActionConstraintSummary(input: { allowedValues: readonly string[]
   return <p style={styles.contractMeta}>{`${input.label}: ${input.allowedValues.join(", ")}`}</p>;
 }
 
-function formatActionRoute(route: HarnessBoardResponse["pendingApprovals"][number]["actionRoute"] | NonNullable<NonNullable<HarnessBoardResponse["pendingAttention"]>["actionRoute"]> | undefined) {
+function formatActionRoute(
+  route:
+    | HarnessBoardResponse["pendingApprovals"][number]["actionRoute"]
+    | NonNullable<NonNullable<HarnessBoardResponse["pendingAttention"]>["actionRoute"]>
+    | NonNullable<NonNullable<HarnessBoardResponse["memoryBoundary"]["exportCandidates"]>[number]["exportActions"]>[number]["actionRoute"]
+    | undefined
+) {
   if (!route) {
     return null;
   }

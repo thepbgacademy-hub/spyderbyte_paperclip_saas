@@ -1674,6 +1674,13 @@ describe("harness board UI", () => {
     expect(markup).toContain("Export candidate groups");
     expect(markup).toContain("Governance history export");
     expect(markup).toContain("Package bundle export");
+    expect(markup).toContain("Available export actions");
+    expect(markup).toContain("Run export preflight");
+    expect(markup).toContain("Preview Obsidian export bundle");
+    expect(markup).toContain("Build governance history export");
+    expect(markup).toContain("POST /api/harness/runs/run_ui_test_1/export-candidates/governance_history_export/preflight");
+    expect(markup).toContain("POST /api/harness/runs/run_ui_test_1/export-candidates/governance_history_export/dry-run");
+    expect(markup).toContain("POST /api/harness/runs/run_ui_test_1/export-candidates/governance_history_export/export");
     expect(markup).toContain("Foundational export sequence");
     expect(markup).toContain("Board-closure-following sequence");
     expect(markup).toContain("Independent export candidate");

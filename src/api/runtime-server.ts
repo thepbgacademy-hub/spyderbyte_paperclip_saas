@@ -303,6 +303,9 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
     reviewPendingAttention: harnessBoardApi.reviewPendingAttention,
     resolvePendingAttention: harnessBoardApi.resolvePendingAttention,
     startFreshCycle: harnessBoardApi.startFreshCycle,
+    preflightExportCandidate: harnessBoardApi.preflightExportCandidate,
+    dryRunExportCandidate: harnessBoardApi.dryRunExportCandidate,
+    exportGovernanceHistoryCandidate: harnessBoardApi.exportGovernanceHistoryCandidate,
     rateLimiter: createPostgresFixedWindowRateLimiter({ runner: transactionRunner, limit: 120, windowMs: 60_000 })
   });
   const healthHandler = createHealthHttpHandler({
