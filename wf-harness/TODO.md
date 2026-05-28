@@ -59,9 +59,9 @@ This file tracks the new harness subproject only.
 - [x] Add harness-specific audit publishing beyond the persisted card-event trail.
 - [ ] Expand the dashboard visual system once the additional Hermes/Obsidian reference screenshots are reviewed.
 - [ ] Design the Obsidian long-memory integration so board records, decisions, and company history can live in tenant-owned knowledge space without becoming live runtime state.
-- [ ] Add an explicit unsafe-artifact-id guard before any future disk-backed artifact retrieval or local blob-staging seam is introduced.
+- [x] Add an explicit unsafe-artifact-id guard before any future disk-backed artifact retrieval or local blob-staging seam is introduced.
   - [x] Confirm the current artifact seam is still in-memory and tenant-scoped, so `artifactId` does not yet resolve into filesystem paths or direct disk reads.
-  - [ ] Require future artifact retrieval to validate artifact ids against a strict allowlist format, reject separators and traversal encodings, and verify the resolved path stays under the intended artifact root before touching disk.
+  - [x] Require future artifact retrieval to validate artifact ids against a strict allowlist format, reject separators and traversal encodings, and verify the resolved path stays under the intended artifact root before touching disk.
 - [ ] Keep live board failure handling contract-driven as the board becomes more interactive.
   - [x] Preserve bounded harness HTTP failure codes in the browser client instead of flattening them into one generic board error.
   - [x] Extend the live page to surface action-family-aware recovery guidance for proposal review, CEO review, lane resume/unblock, and throttled live-board loads instead of flattening everything into one generic failure string.

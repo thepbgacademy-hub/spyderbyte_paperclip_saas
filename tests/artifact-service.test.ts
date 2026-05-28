@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { createArtifactService } from "../src/artifacts/artifact-service.js";
+import path from "node:path";
+
+import { createArtifactService, resolveArtifactStoragePath, validateArtifactId } from "../src/artifacts/artifact-service.js";
 
 describe("temporary artifact service", () => {
   it("creates authenticated tenant-scoped download records with 24 hour default TTL", () => {
@@ -70,5 +72,35 @@ describe("temporary artifact service", () => {
     const metadata = service.getMetadata("tenant-1", artifact.id);
     metadata.tenantId = "tenant-2";
     expect(service.getMetadata("tenant-1", artifact.id).tenantId).toBe("tenant-1");
+  });
+
+  it("rejects unsafe artifact ids before availability checks or download link creation", () => {
+    const service = createArtifactService({ now: () => new Date("2026-05-10T00:00:00.000Z") });
+
+    expect(() =>
+      service.createDownloadLink({ tenantId: "tenant-1", userId: "user-1", artifactId: "../artifact-1" })
+    ).toThrow("Artifact id is invalid");
+    expect(() => service.getMetadata("tenant-1", "artifact-%2fescape")).toThrow("Artifact id is invalid");
+    expect(() => validateArtifactId("artifact..1")).toThrow("Artifact id is invalid");
+    expect(validateArtifactId("artifact-1")).toBe("artifact-1");
+  });
+
+  it("resolves future artifact storage paths under the configured root only", () => {
+    const artifactRoot = path.resolve("C:/wf-artifacts");
+
+    expect(
+      resolveArtifactStoragePath({
+        artifactRoot,
+        artifactId: "artifact-1",
+        extension: "json"
+      })
+    ).toBe(path.join(artifactRoot, "artifact-1.json"));
+
+    expect(() =>
+      resolveArtifactStoragePath({
+        artifactRoot,
+        artifactId: "..%2fartifact-1"
+      })
+    ).toThrow("Artifact id is invalid");
   });
 });

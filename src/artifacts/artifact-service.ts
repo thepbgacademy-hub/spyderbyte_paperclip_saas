@@ -1,5 +1,8 @@
+import path from "node:path";
+
 export type ArtifactType = "pdf" | "slide_deck" | "image" | "video" | "document";
 export type PurgeStatus = "retained" | "purged";
+const ARTIFACT_ID_PATTERN = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/;
 
 export type CreateArtifactInput = {
   tenantId: string;
@@ -28,6 +31,29 @@ export type ArtifactAuditEvent = {
   actorUserId?: string;
 };
 
+export function validateArtifactId(artifactId: string): string {
+  if (!ARTIFACT_ID_PATTERN.test(artifactId)) {
+    throw new Error("Artifact id is invalid");
+  }
+  return artifactId;
+}
+
+export function resolveArtifactStoragePath(input: {
+  artifactRoot: string;
+  artifactId: string;
+  extension?: string;
+}): string {
+  const artifactId = validateArtifactId(input.artifactId);
+  const artifactRoot = path.resolve(input.artifactRoot);
+  const filename = input.extension ? `${artifactId}.${input.extension}` : artifactId;
+  const resolvedPath = path.resolve(artifactRoot, filename);
+  const normalizedRoot = artifactRoot.endsWith(path.sep) ? artifactRoot : `${artifactRoot}${path.sep}`;
+  if (resolvedPath !== artifactRoot && !resolvedPath.startsWith(normalizedRoot)) {
+    throw new Error("Artifact storage path escapes the configured artifact root");
+  }
+  return resolvedPath;
+}
+
 export function createArtifactService(
   options: { now?: () => Date; ttlHours?: number; maxArtifactBytes?: number; maxTenantBytes?: number } = {}
 ) {
@@ -40,6 +66,7 @@ export function createArtifactService(
   let nextId = 1;
 
   function findAvailable(tenantId: string, artifactId: string): ArtifactMetadata {
+    validateArtifactId(artifactId);
     const artifact = artifacts.get(artifactId);
     if (!artifact || artifact.tenantId !== tenantId || !artifact.blobRetained) {
       throw new Error("Artifact is not available");
@@ -102,6 +129,7 @@ export function createArtifactService(
     },
 
     getMetadata(tenantId: string, artifactId: string): ArtifactMetadata {
+      validateArtifactId(artifactId);
       const artifact = artifacts.get(artifactId);
       if (!artifact || artifact.tenantId !== tenantId) {
         throw new Error("Artifact is not available");
