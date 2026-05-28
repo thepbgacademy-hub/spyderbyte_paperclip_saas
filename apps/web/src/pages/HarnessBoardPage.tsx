@@ -517,6 +517,11 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     exportCandidatePathSummary: "Export candidate path guidance is pending the latest board state.",
     exportCandidateBlockerSummary: "Export candidate blocker guidance is pending the latest board state.",
     exportCandidateTriggerSummary: "Export candidate trigger guidance is pending the latest board state.",
+    exportCandidateAssemblySummary: "Export candidate assembly guidance is pending the latest board state.",
+    exportCandidatePhaseSummary: "Export candidate phase guidance is pending the latest board state.",
+    exportCandidateMutabilitySummary: "Export candidate mutability guidance is pending the latest board state.",
+    exportCandidateScopeSummary: "Export candidate scope guidance is pending the latest board state.",
+    exportCandidateIdentitySummary: "Export candidate identity guidance is pending the latest board state.",
     readyNowCount: 0,
     waitingOnBoardClosureCount: 0,
     governanceReadyCount: 0,
@@ -659,6 +664,16 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     boardClosureRequiredCandidateGroupCount: 0,
     tenantExportRequestCandidateGroupCount: 0,
     boardClosureTriggerCandidateGroupCount: 0,
+    standaloneExportRecordCandidateGroupCount: 0,
+    packageRecordSetCandidateGroupCount: 0,
+    phaseOneExportCandidateGroupCount: 0,
+    phaseTwoExportCandidateGroupCount: 0,
+    appendOnlyHistoryCandidateGroupCount: 0,
+    replaceableSnapshotCandidateGroupCount: 0,
+    singleRecordExportScopeCandidateGroupCount: 0,
+    packageRecordSetExportScopeCandidateGroupCount: 0,
+    stableIdentityCandidateGroupCount: 0,
+    closureFinalizedIdentityCandidateGroupCount: 0,
     partitions: {
       runtime: { itemCount: 0, summary: "Runtime memory partition is pending the latest board state." },
       governanceHistoryCandidates: {
@@ -977,6 +992,26 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     ?? exportCandidates.filter((candidate) => candidate.promotionTrigger === "tenant_export_request").length;
   const boardClosureTriggerCandidateGroupCount = memoryBoundary.boardClosureTriggerCandidateGroupCount
     ?? exportCandidates.filter((candidate) => candidate.promotionTrigger === "board_closure").length;
+  const standaloneExportRecordCandidateGroupCount = memoryBoundary.standaloneExportRecordCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.assemblyShape === "standalone_export_record").length;
+  const packageRecordSetCandidateGroupCount = memoryBoundary.packageRecordSetCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.assemblyShape === "package_record_set").length;
+  const phaseOneExportCandidateGroupCount = memoryBoundary.phaseOneExportCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.promotionPhase === "phase_one_governance_history").length;
+  const phaseTwoExportCandidateGroupCount = memoryBoundary.phaseTwoExportCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.promotionPhase === "phase_two_package_export").length;
+  const appendOnlyHistoryCandidateGroupCount = memoryBoundary.appendOnlyHistoryCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.promotionMutability === "append_only_history").length;
+  const replaceableSnapshotCandidateGroupCount = memoryBoundary.replaceableSnapshotCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.promotionMutability === "replaceable_until_board_closure").length;
+  const singleRecordExportScopeCandidateGroupCount = memoryBoundary.singleRecordExportScopeCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.promotionScope === "single_record_export").length;
+  const packageRecordSetExportScopeCandidateGroupCount = memoryBoundary.packageRecordSetExportScopeCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.promotionScope === "package_record_set_export").length;
+  const stableIdentityCandidateGroupCount = memoryBoundary.stableIdentityCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.identityStability === "stable_record_identity").length;
+  const closureFinalizedIdentityCandidateGroupCount = memoryBoundary.closureFinalizedIdentityCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.identityStability === "finalized_after_board_closure").length;
   const exportCandidateSummary = memoryBoundary.exportCandidateSummary
     ?? (waitingExportCandidateGroupCount > 0
       ? `${readyExportCandidateGroupCount} export candidate group${readyExportCandidateGroupCount === 1 ? " is" : "s are"} ready for later tenant export, and ${waitingExportCandidateGroupCount} group${waitingExportCandidateGroupCount === 1 ? " still waits" : "s still wait"} on board closure first.`
@@ -1083,6 +1118,26 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     ?? (boardClosureTriggerCandidateGroupCount > 0
       ? `${tenantExportRequestCandidateGroupCount} export candidate group${tenantExportRequestCandidateGroupCount === 1 ? " waits" : "s wait"} on a later tenant export request, and ${boardClosureTriggerCandidateGroupCount} group${boardClosureTriggerCandidateGroupCount === 1 ? " still waits" : "s still wait"} on board closure first.`
       : `${tenantExportRequestCandidateGroupCount} export candidate group${tenantExportRequestCandidateGroupCount === 1 ? " waits" : "s wait"} on a later tenant export request.`);
+  const exportCandidateAssemblySummary = memoryBoundary.exportCandidateAssemblySummary
+    ?? (packageRecordSetCandidateGroupCount > 0
+      ? `${standaloneExportRecordCandidateGroupCount} export candidate group${standaloneExportRecordCandidateGroupCount === 1 ? " assembles" : "s assemble"} as a standalone export record, and ${packageRecordSetCandidateGroupCount} group${packageRecordSetCandidateGroupCount === 1 ? " still assembles" : "s still assemble"} as a package record set.`
+      : `${standaloneExportRecordCandidateGroupCount} export candidate group${standaloneExportRecordCandidateGroupCount === 1 ? " assembles" : "s assemble"} as a standalone export record.`);
+  const exportCandidatePhaseSummary = memoryBoundary.exportCandidatePhaseSummary
+    ?? (phaseTwoExportCandidateGroupCount > 0
+      ? `${phaseOneExportCandidateGroupCount} export candidate group${phaseOneExportCandidateGroupCount === 1 ? " stays" : "s stay"} in phase-one governance export, and ${phaseTwoExportCandidateGroupCount} group${phaseTwoExportCandidateGroupCount === 1 ? " still stays" : "s still stay"} in phase-two package export.`
+      : `${phaseOneExportCandidateGroupCount} export candidate group${phaseOneExportCandidateGroupCount === 1 ? " stays" : "s stay"} in phase-one governance export.`);
+  const exportCandidateMutabilitySummary = memoryBoundary.exportCandidateMutabilitySummary
+    ?? (replaceableSnapshotCandidateGroupCount > 0
+      ? `${appendOnlyHistoryCandidateGroupCount} export candidate group${appendOnlyHistoryCandidateGroupCount === 1 ? " stays" : "s stay"} append-only history, and ${replaceableSnapshotCandidateGroupCount} group${replaceableSnapshotCandidateGroupCount === 1 ? " still stays" : "s still stay"} replaceable until board closure.`
+      : `${appendOnlyHistoryCandidateGroupCount} export candidate group${appendOnlyHistoryCandidateGroupCount === 1 ? " stays" : "s stay"} append-only history.`);
+  const exportCandidateScopeSummary = memoryBoundary.exportCandidateScopeSummary
+    ?? (packageRecordSetExportScopeCandidateGroupCount > 0
+      ? `${singleRecordExportScopeCandidateGroupCount} export candidate group${singleRecordExportScopeCandidateGroupCount === 1 ? " keeps" : "s keep"} a single-record export scope, and ${packageRecordSetExportScopeCandidateGroupCount} group${packageRecordSetExportScopeCandidateGroupCount === 1 ? " still keeps" : "s still keep"} a package record-set export scope.`
+      : `${singleRecordExportScopeCandidateGroupCount} export candidate group${singleRecordExportScopeCandidateGroupCount === 1 ? " keeps" : "s keep"} a single-record export scope.`);
+  const exportCandidateIdentitySummary = memoryBoundary.exportCandidateIdentitySummary
+    ?? (closureFinalizedIdentityCandidateGroupCount > 0
+      ? `${stableIdentityCandidateGroupCount} export candidate group${stableIdentityCandidateGroupCount === 1 ? " already has" : "s already have"} stable record identity, and ${closureFinalizedIdentityCandidateGroupCount} group${closureFinalizedIdentityCandidateGroupCount === 1 ? " still finalizes" : "s still finalize"} identity after board closure.`
+      : `${stableIdentityCandidateGroupCount} export candidate group${stableIdentityCandidateGroupCount === 1 ? " already has" : "s already have"} stable record identity.`);
 
   return (
     <section style={styles.panel}>
@@ -1152,6 +1207,11 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <p style={styles.actionSummary}>{exportCandidatePathSummary}</p>
       <p style={styles.actionSummary}>{exportCandidateBlockerSummary}</p>
       <p style={styles.actionSummary}>{exportCandidateTriggerSummary}</p>
+      <p style={styles.actionSummary}>{exportCandidateAssemblySummary}</p>
+      <p style={styles.actionSummary}>{exportCandidatePhaseSummary}</p>
+      <p style={styles.actionSummary}>{exportCandidateMutabilitySummary}</p>
+      <p style={styles.actionSummary}>{exportCandidateScopeSummary}</p>
+      <p style={styles.actionSummary}>{exportCandidateIdentitySummary}</p>
       <ul style={styles.actionList}>
         <li style={styles.actionItem}>
           <p style={styles.contractMeta}>Runtime partition</p>

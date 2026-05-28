@@ -708,6 +708,16 @@ export type HarnessMemoryBoundaryView = {
   boardClosureRequiredCandidateGroupCount?: number;
   tenantExportRequestCandidateGroupCount?: number;
   boardClosureTriggerCandidateGroupCount?: number;
+  standaloneExportRecordCandidateGroupCount?: number;
+  packageRecordSetCandidateGroupCount?: number;
+  phaseOneExportCandidateGroupCount?: number;
+  phaseTwoExportCandidateGroupCount?: number;
+  appendOnlyHistoryCandidateGroupCount?: number;
+  replaceableSnapshotCandidateGroupCount?: number;
+  singleRecordExportScopeCandidateGroupCount?: number;
+  packageRecordSetExportScopeCandidateGroupCount?: number;
+  stableIdentityCandidateGroupCount?: number;
+  closureFinalizedIdentityCandidateGroupCount?: number;
   sequenceSummary?: string;
   dependencySummary?: string;
   exportCandidateConcurrencySummary?: string;
@@ -734,6 +744,11 @@ export type HarnessMemoryBoundaryView = {
   exportCandidatePathSummary?: string;
   exportCandidateBlockerSummary?: string;
   exportCandidateTriggerSummary?: string;
+  exportCandidateAssemblySummary?: string;
+  exportCandidatePhaseSummary?: string;
+  exportCandidateMutabilitySummary?: string;
+  exportCandidateScopeSummary?: string;
+  exportCandidateIdentitySummary?: string;
   partitions: {
     runtime: HarnessMemoryBoundaryPartitionView;
     governanceHistoryCandidates: HarnessMemoryBoundaryPartitionView;
@@ -5843,6 +5858,36 @@ function buildMemoryBoundaryView(input: {
   const boardClosureTriggerCandidateGroupCount = exportCandidates.filter(
     (candidate) => candidate.promotionTrigger === "board_closure"
   ).length;
+  const standaloneExportRecordCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.assemblyShape === "standalone_export_record"
+  ).length;
+  const packageRecordSetCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.assemblyShape === "package_record_set"
+  ).length;
+  const phaseOneExportCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.promotionPhase === "phase_one_governance_history"
+  ).length;
+  const phaseTwoExportCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.promotionPhase === "phase_two_package_export"
+  ).length;
+  const appendOnlyHistoryCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.promotionMutability === "append_only_history"
+  ).length;
+  const replaceableSnapshotCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.promotionMutability === "replaceable_until_board_closure"
+  ).length;
+  const singleRecordExportScopeCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.promotionScope === "single_record_export"
+  ).length;
+  const packageRecordSetExportScopeCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.promotionScope === "package_record_set_export"
+  ).length;
+  const stableIdentityCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.identityStability === "stable_record_identity"
+  ).length;
+  const closureFinalizedIdentityCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.identityStability === "finalized_after_board_closure"
+  ).length;
 
   return {
     summary:
@@ -6160,6 +6205,16 @@ function buildMemoryBoundaryView(input: {
     boardClosureRequiredCandidateGroupCount,
     tenantExportRequestCandidateGroupCount,
     boardClosureTriggerCandidateGroupCount,
+    standaloneExportRecordCandidateGroupCount,
+    packageRecordSetCandidateGroupCount,
+    phaseOneExportCandidateGroupCount,
+    phaseTwoExportCandidateGroupCount,
+    appendOnlyHistoryCandidateGroupCount,
+    replaceableSnapshotCandidateGroupCount,
+    singleRecordExportScopeCandidateGroupCount,
+    packageRecordSetExportScopeCandidateGroupCount,
+    stableIdentityCandidateGroupCount,
+    closureFinalizedIdentityCandidateGroupCount,
     sequenceSummary:
       boardClosureFollowingExportCandidateCount > 0
         ? `${foundationalExportCandidateCount} export candidate group${foundationalExportCandidateCount === 1 ? " forms" : "s form"} the foundational export sequence, and ${boardClosureFollowingExportCandidateCount} group${boardClosureFollowingExportCandidateCount === 1 ? " follows" : "s follow"} after board closure.`
@@ -6262,6 +6317,26 @@ function buildMemoryBoundaryView(input: {
       boardClosureTriggerCandidateGroupCount > 0
         ? `${tenantExportRequestCandidateGroupCount} export candidate group${tenantExportRequestCandidateGroupCount === 1 ? " waits" : "s wait"} on a later tenant export request, and ${boardClosureTriggerCandidateGroupCount} group${boardClosureTriggerCandidateGroupCount === 1 ? " still waits" : "s still wait"} on board closure first.`
         : `${tenantExportRequestCandidateGroupCount} export candidate group${tenantExportRequestCandidateGroupCount === 1 ? " waits" : "s wait"} on a later tenant export request.`,
+    exportCandidateAssemblySummary:
+      packageRecordSetCandidateGroupCount > 0
+        ? `${standaloneExportRecordCandidateGroupCount} export candidate group${standaloneExportRecordCandidateGroupCount === 1 ? " assembles" : "s assemble"} as a standalone export record, and ${packageRecordSetCandidateGroupCount} group${packageRecordSetCandidateGroupCount === 1 ? " still assembles" : "s still assemble"} as a package record set.`
+        : `${standaloneExportRecordCandidateGroupCount} export candidate group${standaloneExportRecordCandidateGroupCount === 1 ? " assembles" : "s assemble"} as a standalone export record.`,
+    exportCandidatePhaseSummary:
+      phaseTwoExportCandidateGroupCount > 0
+        ? `${phaseOneExportCandidateGroupCount} export candidate group${phaseOneExportCandidateGroupCount === 1 ? " stays" : "s stay"} in phase-one governance export, and ${phaseTwoExportCandidateGroupCount} group${phaseTwoExportCandidateGroupCount === 1 ? " still stays" : "s still stay"} in phase-two package export.`
+        : `${phaseOneExportCandidateGroupCount} export candidate group${phaseOneExportCandidateGroupCount === 1 ? " stays" : "s stay"} in phase-one governance export.`,
+    exportCandidateMutabilitySummary:
+      replaceableSnapshotCandidateGroupCount > 0
+        ? `${appendOnlyHistoryCandidateGroupCount} export candidate group${appendOnlyHistoryCandidateGroupCount === 1 ? " stays" : "s stay"} append-only history, and ${replaceableSnapshotCandidateGroupCount} group${replaceableSnapshotCandidateGroupCount === 1 ? " still stays" : "s still stay"} replaceable until board closure.`
+        : `${appendOnlyHistoryCandidateGroupCount} export candidate group${appendOnlyHistoryCandidateGroupCount === 1 ? " stays" : "s stay"} append-only history.`,
+    exportCandidateScopeSummary:
+      packageRecordSetExportScopeCandidateGroupCount > 0
+        ? `${singleRecordExportScopeCandidateGroupCount} export candidate group${singleRecordExportScopeCandidateGroupCount === 1 ? " keeps" : "s keep"} a single-record export scope, and ${packageRecordSetExportScopeCandidateGroupCount} group${packageRecordSetExportScopeCandidateGroupCount === 1 ? " still keeps" : "s still keep"} a package record-set export scope.`
+        : `${singleRecordExportScopeCandidateGroupCount} export candidate group${singleRecordExportScopeCandidateGroupCount === 1 ? " keeps" : "s keep"} a single-record export scope.`,
+    exportCandidateIdentitySummary:
+      closureFinalizedIdentityCandidateGroupCount > 0
+        ? `${stableIdentityCandidateGroupCount} export candidate group${stableIdentityCandidateGroupCount === 1 ? " already has" : "s already have"} stable record identity, and ${closureFinalizedIdentityCandidateGroupCount} group${closureFinalizedIdentityCandidateGroupCount === 1 ? " still finalizes" : "s still finalize"} identity after board closure.`
+        : `${stableIdentityCandidateGroupCount} export candidate group${stableIdentityCandidateGroupCount === 1 ? " already has" : "s already have"} stable record identity.`,
     partitions: {
       runtime: {
         itemCount: operationalItems.length,

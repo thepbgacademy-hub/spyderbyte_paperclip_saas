@@ -1752,6 +1752,11 @@ describe("harness board UI", () => {
     expect(markup).toContain("1 export candidate group follows the ready-for-explicit-export path, and 1 group still follows the after-board-closure-then-export path.");
     expect(markup).toContain("1 export candidate group has no promotion blocker, and 1 group still needs board closure as the blocker boundary.");
     expect(markup).toContain("1 export candidate group waits on a later tenant export request, and 1 group still waits on board closure first.");
+    expect(markup).toContain("1 export candidate group assembles as a standalone export record, and 1 group still assembles as a package record set.");
+    expect(markup).toContain("1 export candidate group stays in phase-one governance export, and 1 group still stays in phase-two package export.");
+    expect(markup).toContain("1 export candidate group stays append-only history, and 1 group still stays replaceable until board closure.");
+    expect(markup).toContain("1 export candidate group keeps a single-record export scope, and 1 group still keeps a package record-set export scope.");
+    expect(markup).toContain("1 export candidate group already has stable record identity, and 1 group still finalizes identity after board closure.");
     expect(markup).toContain("Runtime only");
     expect(markup).toContain("Governance history record");
     expect(markup).toContain("Package governance record");

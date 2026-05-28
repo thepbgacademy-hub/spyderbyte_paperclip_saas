@@ -4000,6 +4000,16 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.boardClosureRequiredCandidateGroupCount).toBe(0);
     expect(hydrated.memoryBoundary.tenantExportRequestCandidateGroupCount).toBe(1);
     expect(hydrated.memoryBoundary.boardClosureTriggerCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.standaloneExportRecordCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.packageRecordSetCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.phaseOneExportCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.phaseTwoExportCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.appendOnlyHistoryCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.replaceableSnapshotCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.singleRecordExportScopeCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.packageRecordSetExportScopeCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.stableIdentityCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.closureFinalizedIdentityCandidateGroupCount).toBe(0);
     expect(hydrated.memoryBoundary.exportCandidateSourceDisclosureSummary).toContain("decision summaries only");
     expect(hydrated.memoryBoundary.exportCandidateRequestShapeSummary).toContain("single-record export requests");
     expect(hydrated.memoryBoundary.exportCandidateConfirmationSummary).toContain("tenant export confirmation");
@@ -4019,6 +4029,11 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.exportCandidatePathSummary).toContain("ready-for-explicit-export path");
     expect(hydrated.memoryBoundary.exportCandidateBlockerSummary).toContain("no promotion blocker");
     expect(hydrated.memoryBoundary.exportCandidateTriggerSummary).toContain("later tenant export request");
+    expect(hydrated.memoryBoundary.exportCandidateAssemblySummary).toContain("standalone export record");
+    expect(hydrated.memoryBoundary.exportCandidatePhaseSummary).toContain("phase-one governance export");
+    expect(hydrated.memoryBoundary.exportCandidateMutabilitySummary).toContain("append-only history");
+    expect(hydrated.memoryBoundary.exportCandidateScopeSummary).toContain("single-record export scope");
+    expect(hydrated.memoryBoundary.exportCandidateIdentitySummary).toContain("stable record identity");
   });
 
   it("fails closed when approval mutation is invoked without an atomic runner", async () => {

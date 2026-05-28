@@ -610,6 +610,16 @@ describe("harness board client", () => {
     expect(board.memoryBoundary.boardClosureRequiredCandidateGroupCount).toBe(1);
     expect(board.memoryBoundary.tenantExportRequestCandidateGroupCount).toBe(1);
     expect(board.memoryBoundary.boardClosureTriggerCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.standaloneExportRecordCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.packageRecordSetCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.phaseOneExportCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.phaseTwoExportCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.appendOnlyHistoryCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.replaceableSnapshotCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.singleRecordExportScopeCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.packageRecordSetExportScopeCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.stableIdentityCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.closureFinalizedIdentityCandidateGroupCount).toBe(1);
     expect(board.memoryBoundary.exportCandidateSourceDisclosureSummary).toContain("closure-snapshot summaries only");
     expect(board.memoryBoundary.exportCandidateRequestShapeSummary).toContain("package-bundle export requests");
     expect(board.memoryBoundary.exportCandidateConfirmationSummary).toContain("board closure before tenant export confirmation");
@@ -629,6 +639,11 @@ describe("harness board client", () => {
     expect(board.memoryBoundary.exportCandidatePathSummary).toContain("after-board-closure-then-export path");
     expect(board.memoryBoundary.exportCandidateBlockerSummary).toContain("board closure as the blocker boundary");
     expect(board.memoryBoundary.exportCandidateTriggerSummary).toContain("still waits on board closure first");
+    expect(board.memoryBoundary.exportCandidateAssemblySummary).toContain("package record set");
+    expect(board.memoryBoundary.exportCandidatePhaseSummary).toContain("phase-two package export");
+    expect(board.memoryBoundary.exportCandidateMutabilitySummary).toContain("replaceable until board closure");
+    expect(board.memoryBoundary.exportCandidateScopeSummary).toContain("package record-set export scope");
+    expect(board.memoryBoundary.exportCandidateIdentitySummary).toContain("identity after board closure");
     expect(board.memoryBoundary.exportCandidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
