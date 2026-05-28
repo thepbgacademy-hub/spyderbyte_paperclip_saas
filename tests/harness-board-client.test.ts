@@ -600,6 +600,16 @@ describe("harness board client", () => {
     expect(board.memoryBoundary.packageBundleRecordCandidateGroupCount).toBe(1);
     expect(board.memoryBoundary.tenantExplicitExportAuthorityCandidateGroupCount).toBe(1);
     expect(board.memoryBoundary.boardClosureThenTenantExportAuthorityCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.explicitExportLaterCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.afterBoardClosesThenExportCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.recentDecisionsSourceCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.completionPackageSurfaceCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.readyForExplicitExportCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.afterBoardClosureThenExportCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.noPromotionBlockerCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.boardClosureRequiredCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.tenantExportRequestCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.boardClosureTriggerCandidateGroupCount).toBe(1);
     expect(board.memoryBoundary.exportCandidateSourceDisclosureSummary).toContain("closure-snapshot summaries only");
     expect(board.memoryBoundary.exportCandidateRequestShapeSummary).toContain("package-bundle export requests");
     expect(board.memoryBoundary.exportCandidateConfirmationSummary).toContain("board closure before tenant export confirmation");
@@ -614,6 +624,11 @@ describe("harness board client", () => {
     expect(board.memoryBoundary.exportCandidateOwnershipSummary).toContain("tenant-owned later");
     expect(board.memoryBoundary.exportCandidateRecordTargetSummary).toContain("package bundle export records");
     expect(board.memoryBoundary.exportCandidateAuthoritySummary).toContain("board closure before tenant export owns the next move");
+    expect(board.memoryBoundary.exportCandidateEligibilitySummary).toContain("eligible only after board closure");
+    expect(board.memoryBoundary.exportCandidateSourceSurfaceSummary).toContain("completion package bundle");
+    expect(board.memoryBoundary.exportCandidatePathSummary).toContain("after-board-closure-then-export path");
+    expect(board.memoryBoundary.exportCandidateBlockerSummary).toContain("board closure as the blocker boundary");
+    expect(board.memoryBoundary.exportCandidateTriggerSummary).toContain("still waits on board closure first");
     expect(board.memoryBoundary.exportCandidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

@@ -698,6 +698,16 @@ export type HarnessMemoryBoundaryView = {
   packageBundleRecordCandidateGroupCount?: number;
   tenantExplicitExportAuthorityCandidateGroupCount?: number;
   boardClosureThenTenantExportAuthorityCandidateGroupCount?: number;
+  explicitExportLaterCandidateGroupCount?: number;
+  afterBoardClosesThenExportCandidateGroupCount?: number;
+  recentDecisionsSourceCandidateGroupCount?: number;
+  completionPackageSurfaceCandidateGroupCount?: number;
+  readyForExplicitExportCandidateGroupCount?: number;
+  afterBoardClosureThenExportCandidateGroupCount?: number;
+  noPromotionBlockerCandidateGroupCount?: number;
+  boardClosureRequiredCandidateGroupCount?: number;
+  tenantExportRequestCandidateGroupCount?: number;
+  boardClosureTriggerCandidateGroupCount?: number;
   sequenceSummary?: string;
   dependencySummary?: string;
   exportCandidateConcurrencySummary?: string;
@@ -719,6 +729,11 @@ export type HarnessMemoryBoundaryView = {
   exportCandidateOwnershipSummary?: string;
   exportCandidateRecordTargetSummary?: string;
   exportCandidateAuthoritySummary?: string;
+  exportCandidateEligibilitySummary?: string;
+  exportCandidateSourceSurfaceSummary?: string;
+  exportCandidatePathSummary?: string;
+  exportCandidateBlockerSummary?: string;
+  exportCandidateTriggerSummary?: string;
   partitions: {
     runtime: HarnessMemoryBoundaryPartitionView;
     governanceHistoryCandidates: HarnessMemoryBoundaryPartitionView;
@@ -5798,6 +5813,36 @@ function buildMemoryBoundaryView(input: {
   const boardClosureThenTenantExportAuthorityCandidateGroupCount = exportCandidates.filter(
     (candidate) => candidate.promotionAuthority === "board_closure_then_tenant_export"
   ).length;
+  const explicitExportLaterCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.eligibilityRule === "explicit_export_later"
+  ).length;
+  const afterBoardClosesThenExportCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.eligibilityRule === "after_board_closes_then_export"
+  ).length;
+  const recentDecisionsSourceCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.sourceSurface === "recent_decisions"
+  ).length;
+  const completionPackageSurfaceCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.sourceSurface === "completion_package_deliverables"
+  ).length;
+  const readyForExplicitExportCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.promotionPath === "ready_for_explicit_export"
+  ).length;
+  const afterBoardClosureThenExportCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.promotionPath === "after_board_closure_then_export"
+  ).length;
+  const noPromotionBlockerCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.promotionBlocker === "none_ready_now"
+  ).length;
+  const boardClosureRequiredCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.promotionBlocker === "board_closure_required"
+  ).length;
+  const tenantExportRequestCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.promotionTrigger === "tenant_export_request"
+  ).length;
+  const boardClosureTriggerCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.promotionTrigger === "board_closure"
+  ).length;
 
   return {
     summary:
@@ -6105,6 +6150,16 @@ function buildMemoryBoundaryView(input: {
     packageBundleRecordCandidateGroupCount,
     tenantExplicitExportAuthorityCandidateGroupCount,
     boardClosureThenTenantExportAuthorityCandidateGroupCount,
+    explicitExportLaterCandidateGroupCount,
+    afterBoardClosesThenExportCandidateGroupCount,
+    recentDecisionsSourceCandidateGroupCount,
+    completionPackageSurfaceCandidateGroupCount,
+    readyForExplicitExportCandidateGroupCount,
+    afterBoardClosureThenExportCandidateGroupCount,
+    noPromotionBlockerCandidateGroupCount,
+    boardClosureRequiredCandidateGroupCount,
+    tenantExportRequestCandidateGroupCount,
+    boardClosureTriggerCandidateGroupCount,
     sequenceSummary:
       boardClosureFollowingExportCandidateCount > 0
         ? `${foundationalExportCandidateCount} export candidate group${foundationalExportCandidateCount === 1 ? " forms" : "s form"} the foundational export sequence, and ${boardClosureFollowingExportCandidateCount} group${boardClosureFollowingExportCandidateCount === 1 ? " follows" : "s follow"} after board closure.`
@@ -6187,6 +6242,26 @@ function buildMemoryBoundaryView(input: {
       boardClosureThenTenantExportAuthorityCandidateGroupCount > 0
         ? `${tenantExplicitExportAuthorityCandidateGroupCount} export candidate group${tenantExplicitExportAuthorityCandidateGroupCount === 1 ? " is" : "s are"} tenant-controlled for later explicit export, and ${boardClosureThenTenantExportAuthorityCandidateGroupCount} group${boardClosureThenTenantExportAuthorityCandidateGroupCount === 1 ? " still needs" : "s still need"} board closure before tenant export owns the next move.`
         : `${tenantExplicitExportAuthorityCandidateGroupCount} export candidate group${tenantExplicitExportAuthorityCandidateGroupCount === 1 ? " is" : "s are"} tenant-controlled for later explicit export.`,
+    exportCandidateEligibilitySummary:
+      afterBoardClosesThenExportCandidateGroupCount > 0
+        ? `${explicitExportLaterCandidateGroupCount} export candidate group${explicitExportLaterCandidateGroupCount === 1 ? " is" : "s are"} eligible for later explicit export, and ${afterBoardClosesThenExportCandidateGroupCount} group${afterBoardClosesThenExportCandidateGroupCount === 1 ? " still becomes" : "s still become"} eligible only after board closure.`
+        : `${explicitExportLaterCandidateGroupCount} export candidate group${explicitExportLaterCandidateGroupCount === 1 ? " is" : "s are"} eligible for later explicit export.`,
+    exportCandidateSourceSurfaceSummary:
+      completionPackageSurfaceCandidateGroupCount > 0
+        ? `${recentDecisionsSourceCandidateGroupCount} export candidate group${recentDecisionsSourceCandidateGroupCount === 1 ? " comes" : "s come"} from recent decisions, and ${completionPackageSurfaceCandidateGroupCount} group${completionPackageSurfaceCandidateGroupCount === 1 ? " still comes" : "s still come"} from the completion package bundle.`
+        : `${recentDecisionsSourceCandidateGroupCount} export candidate group${recentDecisionsSourceCandidateGroupCount === 1 ? " comes" : "s come"} from recent decisions.`,
+    exportCandidatePathSummary:
+      afterBoardClosureThenExportCandidateGroupCount > 0
+        ? `${readyForExplicitExportCandidateGroupCount} export candidate group${readyForExplicitExportCandidateGroupCount === 1 ? " follows" : "s follow"} the ready-for-explicit-export path, and ${afterBoardClosureThenExportCandidateGroupCount} group${afterBoardClosureThenExportCandidateGroupCount === 1 ? " still follows" : "s still follow"} the after-board-closure-then-export path.`
+        : `${readyForExplicitExportCandidateGroupCount} export candidate group${readyForExplicitExportCandidateGroupCount === 1 ? " follows" : "s follow"} the ready-for-explicit-export path.`,
+    exportCandidateBlockerSummary:
+      boardClosureRequiredCandidateGroupCount > 0
+        ? `${noPromotionBlockerCandidateGroupCount} export candidate group${noPromotionBlockerCandidateGroupCount === 1 ? " has" : "s have"} no promotion blocker, and ${boardClosureRequiredCandidateGroupCount} group${boardClosureRequiredCandidateGroupCount === 1 ? " still needs" : "s still need"} board closure as the blocker boundary.`
+        : `${noPromotionBlockerCandidateGroupCount} export candidate group${noPromotionBlockerCandidateGroupCount === 1 ? " has" : "s have"} no promotion blocker.`,
+    exportCandidateTriggerSummary:
+      boardClosureTriggerCandidateGroupCount > 0
+        ? `${tenantExportRequestCandidateGroupCount} export candidate group${tenantExportRequestCandidateGroupCount === 1 ? " waits" : "s wait"} on a later tenant export request, and ${boardClosureTriggerCandidateGroupCount} group${boardClosureTriggerCandidateGroupCount === 1 ? " still waits" : "s still wait"} on board closure first.`
+        : `${tenantExportRequestCandidateGroupCount} export candidate group${tenantExportRequestCandidateGroupCount === 1 ? " waits" : "s wait"} on a later tenant export request.`,
     partitions: {
       runtime: {
         itemCount: operationalItems.length,

@@ -3990,6 +3990,16 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.packageBundleRecordCandidateGroupCount).toBe(0);
     expect(hydrated.memoryBoundary.tenantExplicitExportAuthorityCandidateGroupCount).toBe(1);
     expect(hydrated.memoryBoundary.boardClosureThenTenantExportAuthorityCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.explicitExportLaterCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.afterBoardClosesThenExportCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.recentDecisionsSourceCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.completionPackageSurfaceCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.readyForExplicitExportCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.afterBoardClosureThenExportCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.noPromotionBlockerCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.boardClosureRequiredCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.tenantExportRequestCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.boardClosureTriggerCandidateGroupCount).toBe(0);
     expect(hydrated.memoryBoundary.exportCandidateSourceDisclosureSummary).toContain("decision summaries only");
     expect(hydrated.memoryBoundary.exportCandidateRequestShapeSummary).toContain("single-record export requests");
     expect(hydrated.memoryBoundary.exportCandidateConfirmationSummary).toContain("tenant export confirmation");
@@ -4004,6 +4014,11 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.exportCandidateOwnershipSummary).toContain("tenant-owned later");
     expect(hydrated.memoryBoundary.exportCandidateRecordTargetSummary).toContain("governance history records");
     expect(hydrated.memoryBoundary.exportCandidateAuthoritySummary).toContain("tenant-controlled for later explicit export");
+    expect(hydrated.memoryBoundary.exportCandidateEligibilitySummary).toContain("eligible for later explicit export");
+    expect(hydrated.memoryBoundary.exportCandidateSourceSurfaceSummary).toContain("recent decisions");
+    expect(hydrated.memoryBoundary.exportCandidatePathSummary).toContain("ready-for-explicit-export path");
+    expect(hydrated.memoryBoundary.exportCandidateBlockerSummary).toContain("no promotion blocker");
+    expect(hydrated.memoryBoundary.exportCandidateTriggerSummary).toContain("later tenant export request");
   });
 
   it("fails closed when approval mutation is invoked without an atomic runner", async () => {
