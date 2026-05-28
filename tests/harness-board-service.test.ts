@@ -4042,10 +4042,22 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.freshClosureSnapshotReplayCandidateGroupCount).toBe(0);
     expect(hydrated.memoryBoundary.appendOrUpsertConflictCandidateGroupCount).toBe(1);
     expect(hydrated.memoryBoundary.replaceLatestClosureSnapshotCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.recordLevelAtomicCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.closureBundleAtomicCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.decisionHistoryDerivedCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.boardClosureSnapshotDerivedCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.appendNewRevisionCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.replaceClosureBundleRevisionCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.latestRecordStateCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.latestBoardClosureSnapshotCandidateGroupCount).toBe(0);
     expect(hydrated.memoryBoundary.exportCandidatePayloadShapeSummary).toContain("governance history record payloads");
     expect(hydrated.memoryBoundary.exportCandidateIdempotencySummary).toContain("deterministic upsert");
     expect(hydrated.memoryBoundary.exportCandidateReplaySafetySummary).toContain("replay-safe");
     expect(hydrated.memoryBoundary.exportCandidateConflictPolicySummary).toContain("append-or-upsert conflict handling");
+    expect(hydrated.memoryBoundary.exportCandidateAtomicitySummary).toContain("record-level atomic exports");
+    expect(hydrated.memoryBoundary.exportCandidateDerivationSummary).toContain("derived from decision history");
+    expect(hydrated.memoryBoundary.exportCandidateRevisionSummary).toContain("appends as new revisions");
+    expect(hydrated.memoryBoundary.exportCandidateFreshnessSummary).toContain("uses the latest record state");
   });
 
   it("fails closed when approval mutation is invoked without an atomic runner", async () => {

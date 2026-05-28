@@ -526,6 +526,10 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     exportCandidateIdempotencySummary: "Export candidate idempotency guidance is pending the latest board state.",
     exportCandidateReplaySafetySummary: "Export candidate replay-safety guidance is pending the latest board state.",
     exportCandidateConflictPolicySummary: "Export candidate conflict-policy guidance is pending the latest board state.",
+    exportCandidateAtomicitySummary: "Export candidate atomicity guidance is pending the latest board state.",
+    exportCandidateDerivationSummary: "Export candidate derivation guidance is pending the latest board state.",
+    exportCandidateRevisionSummary: "Export candidate revision guidance is pending the latest board state.",
+    exportCandidateFreshnessSummary: "Export candidate freshness guidance is pending the latest board state.",
     readyNowCount: 0,
     waitingOnBoardClosureCount: 0,
     governanceReadyCount: 0,
@@ -686,6 +690,14 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     freshClosureSnapshotReplayCandidateGroupCount: 0,
     appendOrUpsertConflictCandidateGroupCount: 0,
     replaceLatestClosureSnapshotCandidateGroupCount: 0,
+    recordLevelAtomicCandidateGroupCount: 0,
+    closureBundleAtomicCandidateGroupCount: 0,
+    decisionHistoryDerivedCandidateGroupCount: 0,
+    boardClosureSnapshotDerivedCandidateGroupCount: 0,
+    appendNewRevisionCandidateGroupCount: 0,
+    replaceClosureBundleRevisionCandidateGroupCount: 0,
+    latestRecordStateCandidateGroupCount: 0,
+    latestBoardClosureSnapshotCandidateGroupCount: 0,
     partitions: {
       runtime: { itemCount: 0, summary: "Runtime memory partition is pending the latest board state." },
       governanceHistoryCandidates: {
@@ -1228,6 +1240,10 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <p style={styles.actionSummary}>{memoryBoundary.exportCandidateIdempotencySummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.exportCandidateReplaySafetySummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.exportCandidateConflictPolicySummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.exportCandidateAtomicitySummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.exportCandidateDerivationSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.exportCandidateRevisionSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.exportCandidateFreshnessSummary}</p>
       <ul style={styles.actionList}>
         <li style={styles.actionItem}>
           <p style={styles.contractMeta}>Runtime partition</p>

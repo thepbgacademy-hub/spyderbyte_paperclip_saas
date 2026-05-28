@@ -726,6 +726,14 @@ export type HarnessMemoryBoundaryView = {
   freshClosureSnapshotReplayCandidateGroupCount?: number;
   appendOrUpsertConflictCandidateGroupCount?: number;
   replaceLatestClosureSnapshotCandidateGroupCount?: number;
+  recordLevelAtomicCandidateGroupCount?: number;
+  closureBundleAtomicCandidateGroupCount?: number;
+  decisionHistoryDerivedCandidateGroupCount?: number;
+  boardClosureSnapshotDerivedCandidateGroupCount?: number;
+  appendNewRevisionCandidateGroupCount?: number;
+  replaceClosureBundleRevisionCandidateGroupCount?: number;
+  latestRecordStateCandidateGroupCount?: number;
+  latestBoardClosureSnapshotCandidateGroupCount?: number;
   sequenceSummary?: string;
   dependencySummary?: string;
   exportCandidateConcurrencySummary?: string;
@@ -761,6 +769,10 @@ export type HarnessMemoryBoundaryView = {
   exportCandidateIdempotencySummary?: string;
   exportCandidateReplaySafetySummary?: string;
   exportCandidateConflictPolicySummary?: string;
+  exportCandidateAtomicitySummary?: string;
+  exportCandidateDerivationSummary?: string;
+  exportCandidateRevisionSummary?: string;
+  exportCandidateFreshnessSummary?: string;
   partitions: {
     runtime: HarnessMemoryBoundaryPartitionView;
     governanceHistoryCandidates: HarnessMemoryBoundaryPartitionView;
@@ -5924,6 +5936,30 @@ function buildMemoryBoundaryView(input: {
   const replaceLatestClosureSnapshotCandidateGroupCount = exportCandidates.filter(
     (candidate) => candidate.conflictPolicy === "replace_latest_closure_snapshot"
   ).length;
+  const recordLevelAtomicCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.exportAtomicity === "record_level_atomic"
+  ).length;
+  const closureBundleAtomicCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.exportAtomicity === "closure_bundle_atomic"
+  ).length;
+  const decisionHistoryDerivedCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.exportDerivationBasis === "decision_history_derived"
+  ).length;
+  const boardClosureSnapshotDerivedCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.exportDerivationBasis === "board_closure_snapshot_derived"
+  ).length;
+  const appendNewRevisionCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.exportRevisionPolicy === "append_new_revision"
+  ).length;
+  const replaceClosureBundleRevisionCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.exportRevisionPolicy === "replace_closure_bundle_revision"
+  ).length;
+  const latestRecordStateCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.exportFreshnessSource === "latest_record_state"
+  ).length;
+  const latestBoardClosureSnapshotCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.exportFreshnessSource === "latest_board_closure_snapshot"
+  ).length;
 
   return {
     summary:
@@ -6259,6 +6295,14 @@ function buildMemoryBoundaryView(input: {
     freshClosureSnapshotReplayCandidateGroupCount,
     appendOrUpsertConflictCandidateGroupCount,
     replaceLatestClosureSnapshotCandidateGroupCount,
+    recordLevelAtomicCandidateGroupCount,
+    closureBundleAtomicCandidateGroupCount,
+    decisionHistoryDerivedCandidateGroupCount,
+    boardClosureSnapshotDerivedCandidateGroupCount,
+    appendNewRevisionCandidateGroupCount,
+    replaceClosureBundleRevisionCandidateGroupCount,
+    latestRecordStateCandidateGroupCount,
+    latestBoardClosureSnapshotCandidateGroupCount,
     sequenceSummary:
       boardClosureFollowingExportCandidateCount > 0
         ? `${foundationalExportCandidateCount} export candidate group${foundationalExportCandidateCount === 1 ? " forms" : "s form"} the foundational export sequence, and ${boardClosureFollowingExportCandidateCount} group${boardClosureFollowingExportCandidateCount === 1 ? " follows" : "s follow"} after board closure.`
@@ -6397,6 +6441,22 @@ function buildMemoryBoundaryView(input: {
       replaceLatestClosureSnapshotCandidateGroupCount > 0
         ? `${appendOrUpsertConflictCandidateGroupCount} export candidate group${appendOrUpsertConflictCandidateGroupCount === 1 ? " uses" : "s use"} append-or-upsert conflict handling, and ${replaceLatestClosureSnapshotCandidateGroupCount} group${replaceLatestClosureSnapshotCandidateGroupCount === 1 ? " still replaces" : "s still replace"} the latest board-closure snapshot on conflict.`
         : `${appendOrUpsertConflictCandidateGroupCount} export candidate group${appendOrUpsertConflictCandidateGroupCount === 1 ? " uses" : "s use"} append-or-upsert conflict handling.`,
+    exportCandidateAtomicitySummary:
+      closureBundleAtomicCandidateGroupCount > 0
+        ? `${recordLevelAtomicCandidateGroupCount} export candidate group${recordLevelAtomicCandidateGroupCount === 1 ? " commits" : "s commit"} as record-level atomic exports, and ${closureBundleAtomicCandidateGroupCount} group${closureBundleAtomicCandidateGroupCount === 1 ? " still depends" : "s still depend"} on closure-bundle atomic export.`
+        : `${recordLevelAtomicCandidateGroupCount} export candidate group${recordLevelAtomicCandidateGroupCount === 1 ? " commits" : "s commit"} as record-level atomic exports.`,
+    exportCandidateDerivationSummary:
+      boardClosureSnapshotDerivedCandidateGroupCount > 0
+        ? `${decisionHistoryDerivedCandidateGroupCount} export candidate group${decisionHistoryDerivedCandidateGroupCount === 1 ? " is" : "s are"} derived from decision history, and ${boardClosureSnapshotDerivedCandidateGroupCount} group${boardClosureSnapshotDerivedCandidateGroupCount === 1 ? " is" : "s are"} derived from the board-closure snapshot.`
+        : `${decisionHistoryDerivedCandidateGroupCount} export candidate group${decisionHistoryDerivedCandidateGroupCount === 1 ? " is" : "s are"} derived from decision history.`,
+    exportCandidateRevisionSummary:
+      replaceClosureBundleRevisionCandidateGroupCount > 0
+        ? `${appendNewRevisionCandidateGroupCount} export candidate group${appendNewRevisionCandidateGroupCount === 1 ? " appends" : "s append"} as new revisions, and ${replaceClosureBundleRevisionCandidateGroupCount} group${replaceClosureBundleRevisionCandidateGroupCount === 1 ? " still replaces" : "s still replace"} the current closure-bundle revision.`
+        : `${appendNewRevisionCandidateGroupCount} export candidate group${appendNewRevisionCandidateGroupCount === 1 ? " appends" : "s append"} as new revisions.`,
+    exportCandidateFreshnessSummary:
+      latestBoardClosureSnapshotCandidateGroupCount > 0
+        ? `${latestRecordStateCandidateGroupCount} export candidate group${latestRecordStateCandidateGroupCount === 1 ? " uses" : "s use"} the latest record state, and ${latestBoardClosureSnapshotCandidateGroupCount} group${latestBoardClosureSnapshotCandidateGroupCount === 1 ? " still depends" : "s still depend"} on the latest board-closure snapshot.`
+        : `${latestRecordStateCandidateGroupCount} export candidate group${latestRecordStateCandidateGroupCount === 1 ? " uses" : "s use"} the latest record state.`,
     partitions: {
       runtime: {
         itemCount: operationalItems.length,

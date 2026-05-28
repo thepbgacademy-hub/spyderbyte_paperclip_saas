@@ -652,10 +652,22 @@ describe("harness board client", () => {
     expect(board.memoryBoundary.freshClosureSnapshotReplayCandidateGroupCount).toBe(1);
     expect(board.memoryBoundary.appendOrUpsertConflictCandidateGroupCount).toBe(1);
     expect(board.memoryBoundary.replaceLatestClosureSnapshotCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.recordLevelAtomicCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.closureBundleAtomicCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.decisionHistoryDerivedCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.boardClosureSnapshotDerivedCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.appendNewRevisionCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.replaceClosureBundleRevisionCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.latestRecordStateCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.latestBoardClosureSnapshotCandidateGroupCount).toBe(1);
     expect(board.memoryBoundary.exportCandidatePayloadShapeSummary).toContain("package snapshot bundle payloads");
     expect(board.memoryBoundary.exportCandidateIdempotencySummary).toContain("board-closure snapshot-once idempotency");
     expect(board.memoryBoundary.exportCandidateReplaySafetySummary).toContain("fresh board-closure snapshot before replay");
     expect(board.memoryBoundary.exportCandidateConflictPolicySummary).toContain("latest board-closure snapshot on conflict");
+    expect(board.memoryBoundary.exportCandidateAtomicitySummary).toContain("closure-bundle atomic export");
+    expect(board.memoryBoundary.exportCandidateDerivationSummary).toContain("derived from the board-closure snapshot");
+    expect(board.memoryBoundary.exportCandidateRevisionSummary).toContain("current closure-bundle revision");
+    expect(board.memoryBoundary.exportCandidateFreshnessSummary).toContain("latest board-closure snapshot");
     expect(board.memoryBoundary.exportCandidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
