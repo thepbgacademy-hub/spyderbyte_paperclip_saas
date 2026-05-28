@@ -3948,11 +3948,15 @@ describe("harness board service", () => {
         promotionScopeLabel: "Single-record export",
         identityStabilityLabel: "Stable record identity",
         auditBackingLabel: "Decision-ledger-backed",
+        concurrencyBoundaryLabel: "Independent export safe",
         recordTargetLabel: "Governance history record",
         promotionAuthorityLabel: "Tenant explicit export",
         promotionTriggerLabel: "Tenant export request"
       })
     ]);
+    expect(hydrated.memoryBoundary.independentExportSafeCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.requiresClosureSnapshotCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.exportCandidateConcurrencySummary).toContain("concurrency-safe for later independent export");
   });
 
   it("fails closed when approval mutation is invoked without an atomic runner", async () => {

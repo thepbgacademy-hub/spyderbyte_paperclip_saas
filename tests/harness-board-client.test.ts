@@ -558,6 +558,9 @@ describe("harness board client", () => {
     expect(board.memoryBoundary.boardClosureFollowingExportCandidateCount).toBe(1);
     expect(board.memoryBoundary.independentExportCandidateCount).toBe(1);
     expect(board.memoryBoundary.dependentExportCandidateCount).toBe(1);
+    expect(board.memoryBoundary.independentExportSafeCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.requiresClosureSnapshotCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.exportCandidateConcurrencySummary).toContain("concurrency-safe for later independent export");
     expect(board.memoryBoundary.exportCandidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -590,6 +593,7 @@ describe("harness board client", () => {
           promotionScopeLabel: "Single-record export",
           identityStabilityLabel: "Stable record identity",
           auditBackingLabel: "Decision-ledger-backed",
+          concurrencyBoundaryLabel: "Independent export safe",
           recordTargetLabel: "Governance history record",
           promotionAuthorityLabel: "Tenant explicit export",
           promotionTriggerLabel: "Tenant export request"
@@ -624,6 +628,7 @@ describe("harness board client", () => {
           promotionScopeLabel: "Package record-set export",
           identityStabilityLabel: "Finalized after board closure",
           auditBackingLabel: "Package-closure-backed",
+          concurrencyBoundaryLabel: "Requires board-closure snapshot",
           recordTargetLabel: "Package bundle export records",
           promotionAuthorityLabel: "Board closure, then tenant export",
           promotionTriggerLabel: "Board closure",

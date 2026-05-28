@@ -493,6 +493,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     confirmationSummary: "Export confirmation guidance is pending the latest board state.",
     recoveryPathSummary: "Export recovery-path guidance is pending the latest board state.",
     exportCandidateSummary: "Export candidate grouping is pending the latest board state.",
+    exportCandidateConcurrencySummary: "Export candidate concurrency guidance is pending the latest board state.",
     readyNowCount: 0,
     waitingOnBoardClosureCount: 0,
     governanceReadyCount: 0,
@@ -588,6 +589,8 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     exportCandidateGroupCount: 0,
     readyExportCandidateGroupCount: 0,
     waitingExportCandidateGroupCount: 0,
+    independentExportSafeCandidateGroupCount: 0,
+    requiresClosureSnapshotCandidateGroupCount: 0,
     partitions: {
       runtime: { itemCount: 0, summary: "Runtime memory partition is pending the latest board state." },
       governanceHistoryCandidates: {
@@ -689,6 +692,8 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
             identityStabilityLabel: candidate.identityStabilityLabel ?? "Stable record identity",
             auditBacking: candidate.auditBacking ?? "decision_ledger_backed",
             auditBackingLabel: candidate.auditBackingLabel ?? "Decision-ledger-backed",
+            concurrencyBoundary: candidate.concurrencyBoundary ?? "independent_export_safe",
+            concurrencyBoundaryLabel: candidate.concurrencyBoundaryLabel ?? "Independent export safe",
             exportSequence: candidate.exportSequence ?? "foundational_first",
             exportSequenceLabel: candidate.exportSequenceLabel ?? "Foundational export sequence",
             exportDependencyPolicy: candidate.exportDependencyPolicy ?? "independent_candidate",
@@ -776,6 +781,12 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
               ?? (candidate.readiness === "ready_now" ? "Stable record identity" : "Finalized after board closure"),
             auditBacking: candidate.auditBacking ?? "package_closure_backed",
             auditBackingLabel: candidate.auditBackingLabel ?? "Package-closure-backed",
+            concurrencyBoundary:
+              candidate.concurrencyBoundary
+              ?? (candidate.readiness === "ready_now" ? "independent_export_safe" : "requires_board_closure_snapshot"),
+            concurrencyBoundaryLabel:
+              candidate.concurrencyBoundaryLabel
+              ?? (candidate.readiness === "ready_now" ? "Independent export safe" : "Requires board-closure snapshot"),
             exportSequence: candidate.exportSequence ?? "board_closure_following",
             exportSequenceLabel: candidate.exportSequenceLabel ?? "Board-closure-following sequence",
             exportDependencyPolicy:
@@ -804,6 +815,10 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     ?? exportCandidates.filter((candidate) => candidate.exportDependencyPolicy === "independent_candidate").length;
   const dependentExportCandidateCount = memoryBoundary.dependentExportCandidateCount
     ?? exportCandidates.filter((candidate) => candidate.exportDependencyPolicy === "depends_on_governance_history_export").length;
+  const independentExportSafeCandidateGroupCount = memoryBoundary.independentExportSafeCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.concurrencyBoundary === "independent_export_safe").length;
+  const requiresClosureSnapshotCandidateGroupCount = memoryBoundary.requiresClosureSnapshotCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.concurrencyBoundary === "requires_board_closure_snapshot").length;
   const exportCandidateSummary = memoryBoundary.exportCandidateSummary
     ?? (waitingExportCandidateGroupCount > 0
       ? `${readyExportCandidateGroupCount} export candidate group${readyExportCandidateGroupCount === 1 ? " is" : "s are"} ready for later tenant export, and ${waitingExportCandidateGroupCount} group${waitingExportCandidateGroupCount === 1 ? " still waits" : "s still wait"} on board closure first.`
@@ -816,6 +831,10 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     ?? (dependentExportCandidateCount > 0
       ? `${independentExportCandidateCount} export candidate group${independentExportCandidateCount === 1 ? " stands" : "s stand"} independently, while ${dependentExportCandidateCount} group${dependentExportCandidateCount === 1 ? " still depends" : "s still depend"} on the governance history export candidate.`
       : `${independentExportCandidateCount} export candidate group${independentExportCandidateCount === 1 ? " stands" : "s stand"} independently. No grouped export candidates currently depend on governance history export.`);
+  const exportCandidateConcurrencySummary = memoryBoundary.exportCandidateConcurrencySummary
+    ?? (requiresClosureSnapshotCandidateGroupCount > 0
+      ? `${independentExportSafeCandidateGroupCount} export candidate group${independentExportSafeCandidateGroupCount === 1 ? " is" : "s are"} concurrency-safe for later independent export, and ${requiresClosureSnapshotCandidateGroupCount} group${requiresClosureSnapshotCandidateGroupCount === 1 ? " still needs" : "s still need"} a board-closure snapshot before export remains concurrency-safe.`
+      : `${independentExportSafeCandidateGroupCount} export candidate group${independentExportSafeCandidateGroupCount === 1 ? " is" : "s are"} concurrency-safe for later independent export.`);
 
   return (
     <section style={styles.panel}>
@@ -861,6 +880,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <p style={styles.actionSummary}>{exportCandidateSummary}</p>
       <p style={styles.actionSummary}>{sequenceSummary}</p>
       <p style={styles.actionSummary}>{dependencySummary}</p>
+      <p style={styles.actionSummary}>{exportCandidateConcurrencySummary}</p>
       <ul style={styles.actionList}>
         <li style={styles.actionItem}>
           <p style={styles.contractMeta}>Runtime partition</p>
@@ -907,6 +927,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                 <span style={styles.badge}>{candidate.promotionScopeLabel}</span>
                 <span style={styles.badge}>{candidate.identityStabilityLabel}</span>
                 <span style={styles.badge}>{candidate.auditBackingLabel}</span>
+                <span style={styles.badge}>{candidate.concurrencyBoundaryLabel}</span>
                 <span style={styles.badge}>{candidate.memoryPlacementLabel}</span>
                 <span style={styles.badge}>{candidate.syncStrategyLabel}</span>
                 <span style={styles.badge}>{candidate.exportRequestShapeLabel}</span>
@@ -1100,6 +1121,8 @@ function deriveMemoryBoundaryExportCandidates(
       identityStabilityLabel: "Stable record identity",
       auditBacking: "decision_ledger_backed",
       auditBackingLabel: "Decision-ledger-backed",
+      concurrencyBoundary: "independent_export_safe",
+      concurrencyBoundaryLabel: "Independent export safe",
       memoryPlacement: representative.memoryPlacement,
       memoryPlacementLabel: representative.memoryPlacementLabel,
       syncStrategy: representative.syncStrategy,
@@ -1203,6 +1226,8 @@ function deriveMemoryBoundaryExportCandidates(
       identityStabilityLabel: representative.identityStabilityLabel,
       auditBacking: "package_closure_backed",
       auditBackingLabel: "Package-closure-backed",
+      concurrencyBoundary: representative.concurrencyBoundary,
+      concurrencyBoundaryLabel: representative.concurrencyBoundaryLabel,
       memoryPlacement: representative.memoryPlacement,
       memoryPlacementLabel: representative.memoryPlacementLabel,
       syncStrategy: representative.syncStrategy,

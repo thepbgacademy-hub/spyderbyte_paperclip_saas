@@ -460,6 +460,8 @@ export type HarnessMemoryBoundaryExportCandidateView = {
   identityStabilityLabel: string;
   auditBacking: HarnessMemoryBoundaryAuditBacking;
   auditBackingLabel: string;
+  concurrencyBoundary: HarnessMemoryBoundaryConcurrencyBoundary;
+  concurrencyBoundaryLabel: string;
   memoryPlacement: HarnessMemoryBoundaryMemoryPlacement;
   memoryPlacementLabel: string;
   syncStrategy: HarnessMemoryBoundarySyncStrategy;
@@ -659,8 +661,11 @@ export type HarnessMemoryBoundaryView = {
   boardClosureFollowingExportCandidateCount?: number;
   independentExportCandidateCount?: number;
   dependentExportCandidateCount?: number;
+  independentExportSafeCandidateGroupCount?: number;
+  requiresClosureSnapshotCandidateGroupCount?: number;
   sequenceSummary?: string;
   dependencySummary?: string;
+  exportCandidateConcurrencySummary?: string;
   partitions: {
     runtime: HarnessMemoryBoundaryPartitionView;
     governanceHistoryCandidates: HarnessMemoryBoundaryPartitionView;
@@ -5453,6 +5458,8 @@ function buildMemoryBoundaryView(input: {
       identityStabilityLabel: humanizeMemoryBoundaryIdentityStability("stable_record_identity"),
       auditBacking: "decision_ledger_backed",
       auditBackingLabel: humanizeMemoryBoundaryAuditBacking("decision_ledger_backed"),
+      concurrencyBoundary: "independent_export_safe",
+      concurrencyBoundaryLabel: humanizeMemoryBoundaryConcurrencyBoundary("independent_export_safe"),
       memoryPlacement: representative.memoryPlacement,
       memoryPlacementLabel: representative.memoryPlacementLabel,
       syncStrategy: representative.syncStrategy,
@@ -5557,6 +5564,8 @@ function buildMemoryBoundaryView(input: {
       identityStabilityLabel: representative.identityStabilityLabel,
       auditBacking: "package_closure_backed",
       auditBackingLabel: humanizeMemoryBoundaryAuditBacking("package_closure_backed"),
+      concurrencyBoundary: representative.concurrencyBoundary,
+      concurrencyBoundaryLabel: representative.concurrencyBoundaryLabel,
       memoryPlacement: representative.memoryPlacement,
       memoryPlacementLabel: representative.memoryPlacementLabel,
       syncStrategy: representative.syncStrategy,
@@ -5624,6 +5633,12 @@ function buildMemoryBoundaryView(input: {
   ).length;
   const dependentExportCandidateCount = exportCandidates.filter(
     (candidate) => candidate.exportDependencyPolicy === "depends_on_governance_history_export"
+  ).length;
+  const independentExportSafeCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.concurrencyBoundary === "independent_export_safe"
+  ).length;
+  const requiresClosureSnapshotCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.concurrencyBoundary === "requires_board_closure_snapshot"
   ).length;
 
   return {
@@ -5895,6 +5910,8 @@ function buildMemoryBoundaryView(input: {
     boardClosureFollowingExportCandidateCount,
     independentExportCandidateCount,
     dependentExportCandidateCount,
+    independentExportSafeCandidateGroupCount,
+    requiresClosureSnapshotCandidateGroupCount,
     sequenceSummary:
       boardClosureFollowingExportCandidateCount > 0
         ? `${foundationalExportCandidateCount} export candidate group${foundationalExportCandidateCount === 1 ? " forms" : "s form"} the foundational export sequence, and ${boardClosureFollowingExportCandidateCount} group${boardClosureFollowingExportCandidateCount === 1 ? " follows" : "s follow"} after board closure.`
@@ -5903,6 +5920,10 @@ function buildMemoryBoundaryView(input: {
       dependentExportCandidateCount > 0
         ? `${independentExportCandidateCount} export candidate group${independentExportCandidateCount === 1 ? " stands" : "s stand"} independently, while ${dependentExportCandidateCount} group${dependentExportCandidateCount === 1 ? " still depends" : "s still depend"} on the governance history export candidate.`
         : `${independentExportCandidateCount} export candidate group${independentExportCandidateCount === 1 ? " stands" : "s stand"} independently. No grouped export candidates currently depend on governance history export.`,
+    exportCandidateConcurrencySummary:
+      requiresClosureSnapshotCandidateGroupCount > 0
+        ? `${independentExportSafeCandidateGroupCount} export candidate group${independentExportSafeCandidateGroupCount === 1 ? " is" : "s are"} concurrency-safe for later independent export, and ${requiresClosureSnapshotCandidateGroupCount} group${requiresClosureSnapshotCandidateGroupCount === 1 ? " still needs" : "s still need"} a board-closure snapshot before export remains concurrency-safe.`
+        : `${independentExportSafeCandidateGroupCount} export candidate group${independentExportSafeCandidateGroupCount === 1 ? " is" : "s are"} concurrency-safe for later independent export.`,
     partitions: {
       runtime: {
         itemCount: operationalItems.length,

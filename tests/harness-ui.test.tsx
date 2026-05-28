@@ -1726,6 +1726,9 @@ describe("harness board UI", () => {
     expect(markup).toContain("Finalized after board closure");
     expect(markup).toContain("Decision-ledger-backed");
     expect(markup).toContain("Package-closure-backed");
+    expect(markup).toContain("Independent export safe");
+    expect(markup).toContain("Requires board-closure snapshot");
+    expect(markup).toContain("concurrency-safe for later independent export");
     expect(markup).toContain("Runtime only");
     expect(markup).toContain("Governance history record");
     expect(markup).toContain("Package governance record");
