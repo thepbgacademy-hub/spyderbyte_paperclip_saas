@@ -452,6 +452,14 @@ export type HarnessMemoryBoundaryExportCandidateView = {
   assemblyShapeLabel: string;
   promotionPhase: HarnessMemoryBoundaryPromotionPhase;
   promotionPhaseLabel: string;
+  promotionMutability: HarnessMemoryBoundaryPromotionMutability;
+  promotionMutabilityLabel: string;
+  promotionScope: HarnessMemoryBoundaryPromotionScope;
+  promotionScopeLabel: string;
+  identityStability: HarnessMemoryBoundaryIdentityStability;
+  identityStabilityLabel: string;
+  auditBacking: HarnessMemoryBoundaryAuditBacking;
+  auditBackingLabel: string;
   memoryPlacement: HarnessMemoryBoundaryMemoryPlacement;
   memoryPlacementLabel: string;
   syncStrategy: HarnessMemoryBoundarySyncStrategy;
@@ -5437,6 +5445,14 @@ function buildMemoryBoundaryView(input: {
       assemblyShapeLabel: humanizeMemoryBoundaryAssemblyShape("standalone_export_record"),
       promotionPhase: "phase_one_governance_history",
       promotionPhaseLabel: humanizeMemoryBoundaryPromotionPhase("phase_one_governance_history"),
+      promotionMutability: "append_only_history",
+      promotionMutabilityLabel: humanizeMemoryBoundaryPromotionMutability("append_only_history"),
+      promotionScope: "single_record_export",
+      promotionScopeLabel: humanizeMemoryBoundaryPromotionScope("single_record_export"),
+      identityStability: "stable_record_identity",
+      identityStabilityLabel: humanizeMemoryBoundaryIdentityStability("stable_record_identity"),
+      auditBacking: "decision_ledger_backed",
+      auditBackingLabel: humanizeMemoryBoundaryAuditBacking("decision_ledger_backed"),
       memoryPlacement: representative.memoryPlacement,
       memoryPlacementLabel: representative.memoryPlacementLabel,
       syncStrategy: representative.syncStrategy,
@@ -5533,6 +5549,14 @@ function buildMemoryBoundaryView(input: {
       assemblyShapeLabel: humanizeMemoryBoundaryAssemblyShape("package_record_set"),
       promotionPhase: "phase_two_package_export",
       promotionPhaseLabel: humanizeMemoryBoundaryPromotionPhase("phase_two_package_export"),
+      promotionMutability: representative.promotionMutability,
+      promotionMutabilityLabel: representative.promotionMutabilityLabel,
+      promotionScope: "package_record_set_export",
+      promotionScopeLabel: humanizeMemoryBoundaryPromotionScope("package_record_set_export"),
+      identityStability: representative.identityStability,
+      identityStabilityLabel: representative.identityStabilityLabel,
+      auditBacking: "package_closure_backed",
+      auditBackingLabel: humanizeMemoryBoundaryAuditBacking("package_closure_backed"),
       memoryPlacement: representative.memoryPlacement,
       memoryPlacementLabel: representative.memoryPlacementLabel,
       syncStrategy: representative.syncStrategy,

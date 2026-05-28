@@ -3944,6 +3944,10 @@ describe("harness board service", () => {
         candidateClassLabel: "Governance history",
         durabilityConditionLabel: "Stable when recorded",
         ownershipBoundaryLabel: "Tenant-owned later",
+        promotionMutabilityLabel: "Append-only history",
+        promotionScopeLabel: "Single-record export",
+        identityStabilityLabel: "Stable record identity",
+        auditBackingLabel: "Decision-ledger-backed",
         recordTargetLabel: "Governance history record",
         promotionAuthorityLabel: "Tenant explicit export",
         promotionTriggerLabel: "Tenant export request"

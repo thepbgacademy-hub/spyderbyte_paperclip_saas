@@ -681,6 +681,14 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
             assemblyShapeLabel: candidate.assemblyShapeLabel ?? "Standalone export record",
             promotionPhase: candidate.promotionPhase ?? "phase_one_governance_history",
             promotionPhaseLabel: candidate.promotionPhaseLabel ?? "Phase-one export",
+            promotionMutability: candidate.promotionMutability ?? "append_only_history",
+            promotionMutabilityLabel: candidate.promotionMutabilityLabel ?? "Append-only history",
+            promotionScope: candidate.promotionScope ?? "single_record_export",
+            promotionScopeLabel: candidate.promotionScopeLabel ?? "Single-record export",
+            identityStability: candidate.identityStability ?? "stable_record_identity",
+            identityStabilityLabel: candidate.identityStabilityLabel ?? "Stable record identity",
+            auditBacking: candidate.auditBacking ?? "decision_ledger_backed",
+            auditBackingLabel: candidate.auditBackingLabel ?? "Decision-ledger-backed",
             exportSequence: candidate.exportSequence ?? "foundational_first",
             exportSequenceLabel: candidate.exportSequenceLabel ?? "Foundational export sequence",
             exportDependencyPolicy: candidate.exportDependencyPolicy ?? "independent_candidate",
@@ -752,6 +760,22 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
             assemblyShapeLabel: candidate.assemblyShapeLabel ?? "Package record set",
             promotionPhase: candidate.promotionPhase ?? "phase_two_package_export",
             promotionPhaseLabel: candidate.promotionPhaseLabel ?? "Phase-two package export",
+            promotionMutability:
+              candidate.promotionMutability
+              ?? (candidate.readiness === "ready_now" ? "stable_snapshot" : "replaceable_until_board_closure"),
+            promotionMutabilityLabel:
+              candidate.promotionMutabilityLabel
+              ?? (candidate.readiness === "ready_now" ? "Stable snapshot" : "Replaceable until board closure"),
+            promotionScope: candidate.promotionScope ?? "package_record_set_export",
+            promotionScopeLabel: candidate.promotionScopeLabel ?? "Package record-set export",
+            identityStability:
+              candidate.identityStability
+              ?? (candidate.readiness === "ready_now" ? "stable_record_identity" : "finalized_after_board_closure"),
+            identityStabilityLabel:
+              candidate.identityStabilityLabel
+              ?? (candidate.readiness === "ready_now" ? "Stable record identity" : "Finalized after board closure"),
+            auditBacking: candidate.auditBacking ?? "package_closure_backed",
+            auditBackingLabel: candidate.auditBackingLabel ?? "Package-closure-backed",
             exportSequence: candidate.exportSequence ?? "board_closure_following",
             exportSequenceLabel: candidate.exportSequenceLabel ?? "Board-closure-following sequence",
             exportDependencyPolicy:
@@ -879,6 +903,10 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                 <span style={styles.badge}>{candidate.promotionActionFamilyLabel}</span>
                 <span style={styles.badge}>{candidate.assemblyShapeLabel}</span>
                 <span style={styles.badge}>{candidate.promotionPhaseLabel}</span>
+                <span style={styles.badge}>{candidate.promotionMutabilityLabel}</span>
+                <span style={styles.badge}>{candidate.promotionScopeLabel}</span>
+                <span style={styles.badge}>{candidate.identityStabilityLabel}</span>
+                <span style={styles.badge}>{candidate.auditBackingLabel}</span>
                 <span style={styles.badge}>{candidate.memoryPlacementLabel}</span>
                 <span style={styles.badge}>{candidate.syncStrategyLabel}</span>
                 <span style={styles.badge}>{candidate.exportRequestShapeLabel}</span>
@@ -1064,6 +1092,14 @@ function deriveMemoryBoundaryExportCandidates(
       assemblyShapeLabel: "Standalone export record",
       promotionPhase: "phase_one_governance_history",
       promotionPhaseLabel: "Phase-one export",
+      promotionMutability: "append_only_history",
+      promotionMutabilityLabel: "Append-only history",
+      promotionScope: "single_record_export",
+      promotionScopeLabel: "Single-record export",
+      identityStability: "stable_record_identity",
+      identityStabilityLabel: "Stable record identity",
+      auditBacking: "decision_ledger_backed",
+      auditBackingLabel: "Decision-ledger-backed",
       memoryPlacement: representative.memoryPlacement,
       memoryPlacementLabel: representative.memoryPlacementLabel,
       syncStrategy: representative.syncStrategy,
@@ -1159,6 +1195,14 @@ function deriveMemoryBoundaryExportCandidates(
       assemblyShapeLabel: "Package record set",
       promotionPhase: "phase_two_package_export",
       promotionPhaseLabel: "Phase-two package export",
+      promotionMutability: representative.promotionMutability,
+      promotionMutabilityLabel: representative.promotionMutabilityLabel,
+      promotionScope: "package_record_set_export",
+      promotionScopeLabel: "Package record-set export",
+      identityStability: representative.identityStability,
+      identityStabilityLabel: representative.identityStabilityLabel,
+      auditBacking: "package_closure_backed",
+      auditBackingLabel: "Package-closure-backed",
       memoryPlacement: representative.memoryPlacement,
       memoryPlacementLabel: representative.memoryPlacementLabel,
       syncStrategy: representative.syncStrategy,

@@ -1718,6 +1718,14 @@ describe("harness board UI", () => {
     expect(markup).toContain("Never promotes");
     expect(markup).toContain("Ready for explicit export");
     expect(markup).toContain("After board closure, then export");
+    expect(markup).toContain("Append-only history");
+    expect(markup).toContain("Replaceable until board closure");
+    expect(markup).toContain("Single-record export");
+    expect(markup).toContain("Package record-set export");
+    expect(markup).toContain("Stable record identity");
+    expect(markup).toContain("Finalized after board closure");
+    expect(markup).toContain("Decision-ledger-backed");
+    expect(markup).toContain("Package-closure-backed");
     expect(markup).toContain("Runtime only");
     expect(markup).toContain("Governance history record");
     expect(markup).toContain("Package governance record");
