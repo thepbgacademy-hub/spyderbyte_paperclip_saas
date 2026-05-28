@@ -660,6 +660,10 @@ describe("harness board client", () => {
     expect(board.memoryBoundary.replaceClosureBundleRevisionCandidateGroupCount).toBe(1);
     expect(board.memoryBoundary.latestRecordStateCandidateGroupCount).toBe(1);
     expect(board.memoryBoundary.latestBoardClosureSnapshotCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.recordLevelValidationCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.closureBundleValidationCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.selfContainedRecordCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.boardClosureCompleteBundleCandidateGroupCount).toBe(1);
     expect(board.memoryBoundary.exportCandidatePayloadShapeSummary).toContain("package snapshot bundle payloads");
     expect(board.memoryBoundary.exportCandidateIdempotencySummary).toContain("board-closure snapshot-once idempotency");
     expect(board.memoryBoundary.exportCandidateReplaySafetySummary).toContain("fresh board-closure snapshot before replay");
@@ -668,6 +672,8 @@ describe("harness board client", () => {
     expect(board.memoryBoundary.exportCandidateDerivationSummary).toContain("derived from the board-closure snapshot");
     expect(board.memoryBoundary.exportCandidateRevisionSummary).toContain("current closure-bundle revision");
     expect(board.memoryBoundary.exportCandidateFreshnessSummary).toContain("latest board-closure snapshot");
+    expect(board.memoryBoundary.exportCandidateValidationSummary).toContain("closure-bundle level");
+    expect(board.memoryBoundary.exportCandidateCompletenessSummary).toContain("board-closure bundles");
     expect(board.memoryBoundary.exportCandidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

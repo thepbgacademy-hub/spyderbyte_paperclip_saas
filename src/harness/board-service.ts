@@ -734,6 +734,10 @@ export type HarnessMemoryBoundaryView = {
   replaceClosureBundleRevisionCandidateGroupCount?: number;
   latestRecordStateCandidateGroupCount?: number;
   latestBoardClosureSnapshotCandidateGroupCount?: number;
+  recordLevelValidationCandidateGroupCount?: number;
+  closureBundleValidationCandidateGroupCount?: number;
+  selfContainedRecordCandidateGroupCount?: number;
+  boardClosureCompleteBundleCandidateGroupCount?: number;
   sequenceSummary?: string;
   dependencySummary?: string;
   exportCandidateConcurrencySummary?: string;
@@ -773,6 +777,8 @@ export type HarnessMemoryBoundaryView = {
   exportCandidateDerivationSummary?: string;
   exportCandidateRevisionSummary?: string;
   exportCandidateFreshnessSummary?: string;
+  exportCandidateValidationSummary?: string;
+  exportCandidateCompletenessSummary?: string;
   partitions: {
     runtime: HarnessMemoryBoundaryPartitionView;
     governanceHistoryCandidates: HarnessMemoryBoundaryPartitionView;
@@ -5960,6 +5966,18 @@ function buildMemoryBoundaryView(input: {
   const latestBoardClosureSnapshotCandidateGroupCount = exportCandidates.filter(
     (candidate) => candidate.exportFreshnessSource === "latest_board_closure_snapshot"
   ).length;
+  const recordLevelValidationCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.exportValidationBoundary === "record_level_validation"
+  ).length;
+  const closureBundleValidationCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.exportValidationBoundary === "closure_bundle_validation"
+  ).length;
+  const selfContainedRecordCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.exportCompletenessRule === "self_contained_record"
+  ).length;
+  const boardClosureCompleteBundleCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.exportCompletenessRule === "board_closure_complete_bundle"
+  ).length;
 
   return {
     summary:
@@ -6303,6 +6321,10 @@ function buildMemoryBoundaryView(input: {
     replaceClosureBundleRevisionCandidateGroupCount,
     latestRecordStateCandidateGroupCount,
     latestBoardClosureSnapshotCandidateGroupCount,
+    recordLevelValidationCandidateGroupCount,
+    closureBundleValidationCandidateGroupCount,
+    selfContainedRecordCandidateGroupCount,
+    boardClosureCompleteBundleCandidateGroupCount,
     sequenceSummary:
       boardClosureFollowingExportCandidateCount > 0
         ? `${foundationalExportCandidateCount} export candidate group${foundationalExportCandidateCount === 1 ? " forms" : "s form"} the foundational export sequence, and ${boardClosureFollowingExportCandidateCount} group${boardClosureFollowingExportCandidateCount === 1 ? " follows" : "s follow"} after board closure.`
@@ -6457,6 +6479,14 @@ function buildMemoryBoundaryView(input: {
       latestBoardClosureSnapshotCandidateGroupCount > 0
         ? `${latestRecordStateCandidateGroupCount} export candidate group${latestRecordStateCandidateGroupCount === 1 ? " uses" : "s use"} the latest record state, and ${latestBoardClosureSnapshotCandidateGroupCount} group${latestBoardClosureSnapshotCandidateGroupCount === 1 ? " still depends" : "s still depend"} on the latest board-closure snapshot.`
         : `${latestRecordStateCandidateGroupCount} export candidate group${latestRecordStateCandidateGroupCount === 1 ? " uses" : "s use"} the latest record state.`,
+    exportCandidateValidationSummary:
+      closureBundleValidationCandidateGroupCount > 0
+        ? `${recordLevelValidationCandidateGroupCount} export candidate group${recordLevelValidationCandidateGroupCount === 1 ? " validates" : "s validate"} at record level, and ${closureBundleValidationCandidateGroupCount} group${closureBundleValidationCandidateGroupCount === 1 ? " still validates" : "s still validate"} at closure-bundle level.`
+        : `${recordLevelValidationCandidateGroupCount} export candidate group${recordLevelValidationCandidateGroupCount === 1 ? " validates" : "s validate"} at record level.`,
+    exportCandidateCompletenessSummary:
+      boardClosureCompleteBundleCandidateGroupCount > 0
+        ? `${selfContainedRecordCandidateGroupCount} export candidate group${selfContainedRecordCandidateGroupCount === 1 ? " is" : "s are"} self-contained records, and ${boardClosureCompleteBundleCandidateGroupCount} group${boardClosureCompleteBundleCandidateGroupCount === 1 ? " still completes" : "s still complete"} as board-closure bundles.`
+        : `${selfContainedRecordCandidateGroupCount} export candidate group${selfContainedRecordCandidateGroupCount === 1 ? " is" : "s are"} self-contained records.`,
     partitions: {
       runtime: {
         itemCount: operationalItems.length,

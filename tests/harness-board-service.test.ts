@@ -4050,6 +4050,10 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.replaceClosureBundleRevisionCandidateGroupCount).toBe(0);
     expect(hydrated.memoryBoundary.latestRecordStateCandidateGroupCount).toBe(1);
     expect(hydrated.memoryBoundary.latestBoardClosureSnapshotCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.recordLevelValidationCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.closureBundleValidationCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.selfContainedRecordCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.boardClosureCompleteBundleCandidateGroupCount).toBe(0);
     expect(hydrated.memoryBoundary.exportCandidatePayloadShapeSummary).toContain("governance history record payloads");
     expect(hydrated.memoryBoundary.exportCandidateIdempotencySummary).toContain("deterministic upsert");
     expect(hydrated.memoryBoundary.exportCandidateReplaySafetySummary).toContain("replay-safe");
@@ -4058,6 +4062,8 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.exportCandidateDerivationSummary).toContain("derived from decision history");
     expect(hydrated.memoryBoundary.exportCandidateRevisionSummary).toContain("appends as new revisions");
     expect(hydrated.memoryBoundary.exportCandidateFreshnessSummary).toContain("uses the latest record state");
+    expect(hydrated.memoryBoundary.exportCandidateValidationSummary).toContain("validates at record level");
+    expect(hydrated.memoryBoundary.exportCandidateCompletenessSummary).toContain("self-contained records");
   });
 
   it("fails closed when approval mutation is invoked without an atomic runner", async () => {

@@ -530,6 +530,8 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     exportCandidateDerivationSummary: "Export candidate derivation guidance is pending the latest board state.",
     exportCandidateRevisionSummary: "Export candidate revision guidance is pending the latest board state.",
     exportCandidateFreshnessSummary: "Export candidate freshness guidance is pending the latest board state.",
+    exportCandidateValidationSummary: "Export candidate validation guidance is pending the latest board state.",
+    exportCandidateCompletenessSummary: "Export candidate completeness guidance is pending the latest board state.",
     readyNowCount: 0,
     waitingOnBoardClosureCount: 0,
     governanceReadyCount: 0,
@@ -698,6 +700,10 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
     replaceClosureBundleRevisionCandidateGroupCount: 0,
     latestRecordStateCandidateGroupCount: 0,
     latestBoardClosureSnapshotCandidateGroupCount: 0,
+    recordLevelValidationCandidateGroupCount: 0,
+    closureBundleValidationCandidateGroupCount: 0,
+    selfContainedRecordCandidateGroupCount: 0,
+    boardClosureCompleteBundleCandidateGroupCount: 0,
     partitions: {
       runtime: { itemCount: 0, summary: "Runtime memory partition is pending the latest board state." },
       governanceHistoryCandidates: {
@@ -1244,6 +1250,8 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <p style={styles.actionSummary}>{memoryBoundary.exportCandidateDerivationSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.exportCandidateRevisionSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.exportCandidateFreshnessSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.exportCandidateValidationSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.exportCandidateCompletenessSummary}</p>
       <ul style={styles.actionList}>
         <li style={styles.actionItem}>
           <p style={styles.contractMeta}>Runtime partition</p>

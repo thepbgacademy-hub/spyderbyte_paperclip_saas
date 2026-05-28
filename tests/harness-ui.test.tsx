@@ -403,6 +403,10 @@ const boardResponse: HarnessBoardResponse = {
       "1 export candidate group appends as new revisions, and 1 group still replaces the current closure-bundle revision.",
     exportCandidateFreshnessSummary:
       "1 export candidate group uses the latest record state, and 1 group still depends on the latest board-closure snapshot.",
+    exportCandidateValidationSummary:
+      "1 export candidate group validates at record level, and 1 group still validates at closure-bundle level.",
+    exportCandidateCompletenessSummary:
+      "1 export candidate group is a self-contained record, and 1 group still completes as board-closure bundles.",
     noPromotionScopeCount: 2,
     singleRecordExportScopeCount: 2,
     packageRecordSetExportScopeCount: 2,
@@ -1781,6 +1785,8 @@ describe("harness board UI", () => {
     expect(markup).toContain("1 export candidate group is derived from decision history, and 1 group is derived from the board-closure snapshot.");
     expect(markup).toContain("1 export candidate group appends as new revisions, and 1 group still replaces the current closure-bundle revision.");
     expect(markup).toContain("1 export candidate group uses the latest record state, and 1 group still depends on the latest board-closure snapshot.");
+    expect(markup).toContain("1 export candidate group validates at record level, and 1 group still validates at closure-bundle level.");
+    expect(markup).toContain("1 export candidate group is a self-contained record, and 1 group still completes as board-closure bundles.");
     expect(markup).toContain("Runtime only");
     expect(markup).toContain("Governance history record");
     expect(markup).toContain("Package governance record");

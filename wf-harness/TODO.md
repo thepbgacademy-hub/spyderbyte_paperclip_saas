@@ -87,6 +87,7 @@ This file tracks the new harness subproject only.
 - [ ] Decide which board-memory records should stay purely operational in Wealth Factory versus which ones should later export into tenant-owned Obsidian as long-memory business records.
 - [x] Keep grouped export-candidate write semantics contract-owned too, so payload shape, idempotency, replay safety, and conflict policy no longer need to be reconstructed from member buckets during later export work.
 - [x] Keep grouped export-candidate preparation semantics contract-owned too, so atomicity, derivation basis, revision policy, and freshness source no longer need to be reconstructed from member buckets during later export work.
+- [x] Keep grouped export-candidate validation and completeness posture contract-owned too, so validation boundary and completeness rule no longer need to be reconstructed from member buckets during later export work.
 - [ ] Decide whether the widened derived `completionPackage` should stay a read model or graduate into a persisted packaged-output artifact in a later slice.
 - [x] Keep `resolve-attention` and later action-family branches covered wherever the board contract is consumed, so `review-attention` does not become the only richly rendered control path.
 - [x] Add explicit packaging policy for how recommendations, objections, and deferred governance items should shape the tenant-facing final handoff.
