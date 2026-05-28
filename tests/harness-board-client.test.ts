@@ -581,10 +581,25 @@ describe("harness board client", () => {
     expect(board.memoryBoundary.boardClosureThenTenantExportConfirmationCandidateGroupCount).toBe(1);
     expect(board.memoryBoundary.retryLatestRecordExportCandidateGroupCount).toBe(1);
     expect(board.memoryBoundary.rerunAfterBoardClosureSnapshotCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.governanceHistoryNoteCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.packageRecordFolderCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.appendHistoryEntryCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.replacePackageSnapshotAfterClosureCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.readyForTenantExportCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.awaitingBoardClosureCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.tenantExportAvailableNextStepCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.boardClosureThenTenantExportNextStepCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.tenantExportActionFamilyCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.boardClosureActionFamilyCandidateGroupCount).toBe(1);
     expect(board.memoryBoundary.exportCandidateSourceDisclosureSummary).toContain("closure-snapshot summaries only");
     expect(board.memoryBoundary.exportCandidateRequestShapeSummary).toContain("package-bundle export requests");
     expect(board.memoryBoundary.exportCandidateConfirmationSummary).toContain("board closure before tenant export confirmation");
     expect(board.memoryBoundary.exportCandidateRecoveryPathSummary).toContain("reruns after the board-closure snapshot");
+    expect(board.memoryBoundary.exportCandidatePlacementSummary).toContain("package record folders");
+    expect(board.memoryBoundary.exportCandidateSyncStrategySummary).toContain("package snapshots after board closure");
+    expect(board.memoryBoundary.exportCandidateStateSummary).toContain("still awaiting board closure");
+    expect(board.memoryBoundary.exportCandidateNextStepSummary).toContain("board closure before tenant export becomes the next step");
+    expect(board.memoryBoundary.exportCandidateActionFamilySummary).toContain("board-closure-first family");
     expect(board.memoryBoundary.exportCandidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

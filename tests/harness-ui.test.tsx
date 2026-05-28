@@ -1737,6 +1737,11 @@ describe("harness board UI", () => {
     expect(markup).toContain("1 export candidate group uses single-record export requests, and 1 group still uses package-bundle export requests.");
     expect(markup).toContain("1 export candidate group requires tenant export confirmation, and 1 group still requires board closure before tenant export confirmation.");
     expect(markup).toContain("1 export candidate group retries the latest record export, and 1 group still reruns after the board-closure snapshot.");
+    expect(markup).toContain("1 export candidate group lands as governance history notes, and 1 group still lands in package record folders.");
+    expect(markup).toContain("1 export candidate group appends history entries, and 1 group still replaces package snapshots after board closure.");
+    expect(markup).toContain("1 export candidate group is ready for tenant export later, and 1 group is still awaiting board closure.");
+    expect(markup).toContain("1 export candidate group is ready for a later tenant export step, and 1 group still needs board closure before tenant export becomes the next step.");
+    expect(markup).toContain("1 export candidate group sits in the tenant export family, and 1 group remains in the board-closure-first family.");
     expect(markup).toContain("Runtime only");
     expect(markup).toContain("Governance history record");
     expect(markup).toContain("Package governance record");

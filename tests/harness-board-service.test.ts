@@ -3971,10 +3971,25 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.boardClosureThenTenantExportConfirmationCandidateGroupCount).toBe(0);
     expect(hydrated.memoryBoundary.retryLatestRecordExportCandidateGroupCount).toBe(1);
     expect(hydrated.memoryBoundary.rerunAfterBoardClosureSnapshotCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.governanceHistoryNoteCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.packageRecordFolderCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.appendHistoryEntryCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.replacePackageSnapshotAfterClosureCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.readyForTenantExportCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.awaitingBoardClosureCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.tenantExportAvailableNextStepCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.boardClosureThenTenantExportNextStepCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.tenantExportActionFamilyCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.boardClosureActionFamilyCandidateGroupCount).toBe(0);
     expect(hydrated.memoryBoundary.exportCandidateSourceDisclosureSummary).toContain("decision summaries only");
     expect(hydrated.memoryBoundary.exportCandidateRequestShapeSummary).toContain("single-record export requests");
     expect(hydrated.memoryBoundary.exportCandidateConfirmationSummary).toContain("tenant export confirmation");
     expect(hydrated.memoryBoundary.exportCandidateRecoveryPathSummary).toContain("retries the latest record export");
+    expect(hydrated.memoryBoundary.exportCandidatePlacementSummary).toContain("governance history notes");
+    expect(hydrated.memoryBoundary.exportCandidateSyncStrategySummary).toContain("appends history entries");
+    expect(hydrated.memoryBoundary.exportCandidateStateSummary).toContain("ready for tenant export later");
+    expect(hydrated.memoryBoundary.exportCandidateNextStepSummary).toContain("ready for a later tenant export step");
+    expect(hydrated.memoryBoundary.exportCandidateActionFamilySummary).toContain("tenant export family");
   });
 
   it("fails closed when approval mutation is invoked without an atomic runner", async () => {

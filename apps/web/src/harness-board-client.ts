@@ -3653,6 +3653,26 @@ function normalizeMemoryBoundary(
     ?? exportCandidates.filter((candidate) => candidate.exportRecoveryPath === "retry_latest_record_export").length;
   const rerunAfterBoardClosureSnapshotCandidateGroupCount = memoryBoundary.rerunAfterBoardClosureSnapshotCandidateGroupCount
     ?? exportCandidates.filter((candidate) => candidate.exportRecoveryPath === "rerun_after_board_closure_snapshot").length;
+  const governanceHistoryNoteCandidateGroupCount = memoryBoundary.governanceHistoryNoteCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.memoryPlacement === "governance_history_note").length;
+  const packageRecordFolderCandidateGroupCount = memoryBoundary.packageRecordFolderCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.memoryPlacement === "package_record_folder").length;
+  const appendHistoryEntryCandidateGroupCount = memoryBoundary.appendHistoryEntryCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.syncStrategy === "append_history_entry").length;
+  const replacePackageSnapshotAfterClosureCandidateGroupCount = memoryBoundary.replacePackageSnapshotAfterClosureCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.syncStrategy === "replace_package_snapshot_after_board_closure").length;
+  const readyForTenantExportCandidateGroupCount = memoryBoundary.readyForTenantExportCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.promotionState === "ready_for_tenant_export").length;
+  const awaitingBoardClosureCandidateGroupCount = memoryBoundary.awaitingBoardClosureCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.promotionState === "awaiting_board_closure").length;
+  const tenantExportAvailableNextStepCandidateGroupCount = memoryBoundary.tenantExportAvailableNextStepCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.promotionNextStep === "tenant_export_available").length;
+  const boardClosureThenTenantExportNextStepCandidateGroupCount = memoryBoundary.boardClosureThenTenantExportNextStepCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.promotionNextStep === "board_closure_then_tenant_export").length;
+  const tenantExportActionFamilyCandidateGroupCount = memoryBoundary.tenantExportActionFamilyCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.promotionActionFamily === "tenant_export_candidate").length;
+  const boardClosureActionFamilyCandidateGroupCount = memoryBoundary.boardClosureActionFamilyCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.promotionActionFamily === "board_closure_before_export").length;
 
   return {
     ...memoryBoundary,
@@ -3977,6 +3997,16 @@ function normalizeMemoryBoundary(
     boardClosureThenTenantExportConfirmationCandidateGroupCount,
     retryLatestRecordExportCandidateGroupCount,
     rerunAfterBoardClosureSnapshotCandidateGroupCount,
+    governanceHistoryNoteCandidateGroupCount,
+    packageRecordFolderCandidateGroupCount,
+    appendHistoryEntryCandidateGroupCount,
+    replacePackageSnapshotAfterClosureCandidateGroupCount,
+    readyForTenantExportCandidateGroupCount,
+    awaitingBoardClosureCandidateGroupCount,
+    tenantExportAvailableNextStepCandidateGroupCount,
+    boardClosureThenTenantExportNextStepCandidateGroupCount,
+    tenantExportActionFamilyCandidateGroupCount,
+    boardClosureActionFamilyCandidateGroupCount,
     sequenceSummary:
       memoryBoundary.sequenceSummary
       ?? (boardClosureFollowingExportCandidateCount > 0
@@ -4032,6 +4062,31 @@ function normalizeMemoryBoundary(
       ?? (rerunAfterBoardClosureSnapshotCandidateGroupCount > 0
         ? `${retryLatestRecordExportCandidateGroupCount} export candidate group${retryLatestRecordExportCandidateGroupCount === 1 ? " retries" : "s retry"} the latest record export, and ${rerunAfterBoardClosureSnapshotCandidateGroupCount} group${rerunAfterBoardClosureSnapshotCandidateGroupCount === 1 ? " still reruns" : "s still rerun"} after the board-closure snapshot.`
         : `${retryLatestRecordExportCandidateGroupCount} export candidate group${retryLatestRecordExportCandidateGroupCount === 1 ? " retries" : "s retry"} the latest record export.`),
+    exportCandidatePlacementSummary:
+      memoryBoundary.exportCandidatePlacementSummary
+      ?? (packageRecordFolderCandidateGroupCount > 0
+        ? `${governanceHistoryNoteCandidateGroupCount} export candidate group${governanceHistoryNoteCandidateGroupCount === 1 ? " lands" : "s land"} as governance history notes, and ${packageRecordFolderCandidateGroupCount} group${packageRecordFolderCandidateGroupCount === 1 ? " still lands" : "s still land"} in package record folders.`
+        : `${governanceHistoryNoteCandidateGroupCount} export candidate group${governanceHistoryNoteCandidateGroupCount === 1 ? " lands" : "s land"} as governance history notes.`),
+    exportCandidateSyncStrategySummary:
+      memoryBoundary.exportCandidateSyncStrategySummary
+      ?? (replacePackageSnapshotAfterClosureCandidateGroupCount > 0
+        ? `${appendHistoryEntryCandidateGroupCount} export candidate group${appendHistoryEntryCandidateGroupCount === 1 ? " appends" : "s append"} history entries, and ${replacePackageSnapshotAfterClosureCandidateGroupCount} group${replacePackageSnapshotAfterClosureCandidateGroupCount === 1 ? " still replaces" : "s still replace"} package snapshots after board closure.`
+        : `${appendHistoryEntryCandidateGroupCount} export candidate group${appendHistoryEntryCandidateGroupCount === 1 ? " appends" : "s append"} history entries.`),
+    exportCandidateStateSummary:
+      memoryBoundary.exportCandidateStateSummary
+      ?? (awaitingBoardClosureCandidateGroupCount > 0
+        ? `${readyForTenantExportCandidateGroupCount} export candidate group${readyForTenantExportCandidateGroupCount === 1 ? " is" : "s are"} ready for tenant export later, and ${awaitingBoardClosureCandidateGroupCount} group${awaitingBoardClosureCandidateGroupCount === 1 ? " is" : "s are"} still awaiting board closure.`
+        : `${readyForTenantExportCandidateGroupCount} export candidate group${readyForTenantExportCandidateGroupCount === 1 ? " is" : "s are"} ready for tenant export later.`),
+    exportCandidateNextStepSummary:
+      memoryBoundary.exportCandidateNextStepSummary
+      ?? (boardClosureThenTenantExportNextStepCandidateGroupCount > 0
+        ? `${tenantExportAvailableNextStepCandidateGroupCount} export candidate group${tenantExportAvailableNextStepCandidateGroupCount === 1 ? " is" : "s are"} ready for a later tenant export step, and ${boardClosureThenTenantExportNextStepCandidateGroupCount} group${boardClosureThenTenantExportNextStepCandidateGroupCount === 1 ? " still needs" : "s still need"} board closure before tenant export becomes the next step.`
+        : `${tenantExportAvailableNextStepCandidateGroupCount} export candidate group${tenantExportAvailableNextStepCandidateGroupCount === 1 ? " is" : "s are"} ready for a later tenant export step.`),
+    exportCandidateActionFamilySummary:
+      memoryBoundary.exportCandidateActionFamilySummary
+      ?? (boardClosureActionFamilyCandidateGroupCount > 0
+        ? `${tenantExportActionFamilyCandidateGroupCount} export candidate group${tenantExportActionFamilyCandidateGroupCount === 1 ? " sits" : "s sit"} in the tenant export family, and ${boardClosureActionFamilyCandidateGroupCount} group${boardClosureActionFamilyCandidateGroupCount === 1 ? " remains" : "s remain"} in the board-closure-first family.`
+        : `${tenantExportActionFamilyCandidateGroupCount} export candidate group${tenantExportActionFamilyCandidateGroupCount === 1 ? " sits" : "s sit"} in the tenant export family.`),
     partitions: memoryBoundary.partitions ?? {
       runtime: {
         itemCount: operationalItems.length,
