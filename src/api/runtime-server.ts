@@ -121,7 +121,12 @@ function parseRedirectOrigin(value: string): string {
   return url.origin;
 }
 
-export function createDashboardRuntime(options: { env: RuntimeEnv; auth: RuntimeAuth; workflowQueueEnqueuer?: WorkflowRunEnqueuer }) {
+export function createDashboardRuntime(options: {
+  env: RuntimeEnv;
+  auth: RuntimeAuth;
+  workflowQueueEnqueuer?: WorkflowRunEnqueuer;
+  onGovernanceHistoryExportReady?: Parameters<typeof createHarnessBoardService>[0]["onGovernanceHistoryExportReady"];
+}) {
   const pool = createPgPool({
     connectionString: options.env.supabaseDbUrl,
     ...(options.env.supabaseDbSsl ? { sslMode: options.env.supabaseDbSsl } : {})
@@ -281,6 +286,11 @@ export function createDashboardRuntime(options: { env: RuntimeEnv; auth: Runtime
               idempotencyKey: `${dispatch.tenantId}:${dispatch.workflowId}:${dispatch.runId}`
             });
           }
+        }
+      : {}),
+    ...(options.onGovernanceHistoryExportReady
+      ? {
+          onGovernanceHistoryExportReady: options.onGovernanceHistoryExportReady
         }
       : {}),
     runAtomically: async (work) =>

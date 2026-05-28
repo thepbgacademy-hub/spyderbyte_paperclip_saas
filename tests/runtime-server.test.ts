@@ -643,6 +643,63 @@ describe("runtime server", () => {
     await runtime.close();
   });
 
+  it("passes the private governance-history export-ready hook through to the board service seam", async () => {
+    const onGovernanceHistoryExportReady = vi.fn().mockResolvedValue(undefined);
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() },
+      onGovernanceHistoryExportReady
+    });
+
+    const boardServiceOptions = vi.mocked(createHarnessBoardService).mock.calls.at(-1)?.[0];
+    expect(boardServiceOptions?.onGovernanceHistoryExportReady).toEqual(expect.any(Function));
+
+    await boardServiceOptions?.onGovernanceHistoryExportReady?.({
+      tenantId: "tenant_123",
+      userId: "user_123",
+      runId: "run_123",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      candidateId: "governance_history_export",
+      bundleId: "bundle_123",
+      exportFormat: "obsidian_markdown_bundle",
+      recordTarget: "governance_history_record",
+      idempotencyKey: "idempotency_123",
+      noteTitle: "Governance history",
+      noteFileName: "wf_connect_first_workflow-governance-history.md",
+      placement: {
+        targetSystem: "obsidian_vault",
+        vaultFolder: "wealth-factory/governance-history/wf_connect_first_workflow",
+        primaryNotePath: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+        syncStrategy: "append_history_entry",
+        confirmationRequirement: "tenant_export_confirmation"
+      },
+      files: [
+        {
+          path: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+          mediaType: "text/markdown",
+          byteSize: 20,
+          checksum: "abc",
+          content: "# Governance history"
+        }
+      ],
+      recordCount: 2,
+      disclosureSummary: "Decision summary only",
+      redactionSummary: "Governance-safe redaction"
+    });
+
+    expect(onGovernanceHistoryExportReady).toHaveBeenCalledOnce();
+
+    await runtime.close();
+  });
+
   it("wires provider credential registration to the runtime vault path", async () => {
     const { createProviderCredentialService } = await import("../src/secrets/provider-credential-service.js");
     const { createSecretService } = await import("../src/secrets/secret-service.js");

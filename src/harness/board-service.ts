@@ -949,6 +949,25 @@ export type HarnessFreshCycleDispatch = {
   mode: HarnessFreshCycleMode;
   reopenedProposalCount: number;
 };
+export type HarnessGovernanceHistoryExportReadyDispatch = {
+  tenantId: string;
+  userId: string;
+  runId: string;
+  workflowId: string;
+  packageId: string;
+  candidateId: "governance_history_export";
+  bundleId: string;
+  exportFormat: "obsidian_markdown_bundle";
+  recordTarget: "governance_history_record";
+  idempotencyKey: string;
+  noteTitle: string;
+  noteFileName: string;
+  placement: HarnessExportPlacementManifest;
+  files: HarnessExportPackageFile[];
+  recordCount: number;
+  disclosureSummary: string;
+  redactionSummary: string;
+};
 
 export type HarnessExportCandidateId = HarnessMemoryBoundaryExportCandidateView["id"];
 
@@ -1067,6 +1086,7 @@ export function createHarnessBoardService(options: {
   audit?: HarnessAudit;
   onResolvedAttentionDispatch?: (dispatch: HarnessResolvedAttentionDispatch) => Promise<void> | void;
   onFreshCycleDispatch?: (dispatch: HarnessFreshCycleDispatch) => Promise<void> | void;
+  onGovernanceHistoryExportReady?: (dispatch: HarnessGovernanceHistoryExportReadyDispatch) => Promise<void> | void;
 }) {
   const runtime = createHarnessRuntime();
 
@@ -3915,6 +3935,25 @@ export function createHarnessBoardService(options: {
         ]),
         summary: "Governance history export is ready as a tenant-safe Obsidian markdown bundle."
       };
+      await options.onGovernanceHistoryExportReady?.({
+        tenantId: board.access.session.tenantId,
+        userId: board.access.session.userId,
+        runId: board.response.runId,
+        workflowId: board.response.workflowId,
+        packageId: board.response.packageId,
+        candidateId: result.candidateId,
+        bundleId: result.bundleId,
+        exportFormat: result.exportFormat,
+        recordTarget: result.recordTarget,
+        idempotencyKey: result.idempotencyKey,
+        noteTitle: result.noteTitle,
+        noteFileName: result.noteFileName,
+        placement: cloneHarnessExportPlacementManifest(result.placement),
+        files: result.files.map(cloneHarnessExportPackageFile),
+        recordCount: result.recordCount,
+        disclosureSummary: result.disclosureSummary,
+        redactionSummary: result.redactionSummary
+      });
       await publishHarnessAuditEvents(options.audit, [
         createHarnessExportAuditEvent({
           tenantId: board.access.session.tenantId,
@@ -8058,6 +8097,28 @@ function buildExportPackageFile(input: {
     byteSize: Buffer.byteLength(input.content, "utf8"),
     checksum: createHash("sha256").update(input.content).digest("hex"),
     content: input.content
+  };
+}
+
+function cloneHarnessExportPlacementManifest(
+  placement: HarnessExportPlacementManifest
+): HarnessExportPlacementManifest {
+  return {
+    targetSystem: placement.targetSystem,
+    vaultFolder: placement.vaultFolder,
+    primaryNotePath: placement.primaryNotePath,
+    syncStrategy: placement.syncStrategy,
+    confirmationRequirement: placement.confirmationRequirement
+  };
+}
+
+function cloneHarnessExportPackageFile(file: HarnessExportPackageFile): HarnessExportPackageFile {
+  return {
+    path: file.path,
+    mediaType: file.mediaType,
+    byteSize: file.byteSize,
+    checksum: file.checksum,
+    content: file.content
   };
 }
 

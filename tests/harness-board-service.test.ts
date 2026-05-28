@@ -9,6 +9,7 @@ import {
   HarnessActionContractConflictError,
   HarnessCardCreationConflictError,
   HarnessCardProgressionConflictError,
+  type HarnessGovernanceHistoryExportReadyDispatch,
   HarnessRunCompletionConflictError,
   createHarnessBoardService
 } from "../src/harness/board-service.js";
@@ -4314,6 +4315,67 @@ describe("harness board service", () => {
       })
     }));
     expect(JSON.stringify(audit.mock.calls)).not.toContain("# ");
+  });
+
+  it("dispatches a cloned private governance-history export-ready envelope", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const onGovernanceHistoryExportReady = vi.fn().mockImplementation(async (dispatch: HarnessGovernanceHistoryExportReadyDispatch) => {
+      dispatch.placement.primaryNotePath = "mutated-path.md";
+      dispatch.files[0]!.path = "mutated-file.md";
+      dispatch.files[0]!.content = "mutated";
+    });
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      }),
+      onGovernanceHistoryExportReady
+    });
+
+    await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    const hydrated = await service.listBoardState({ authorization: "Bearer valid" });
+    const exportAction = hydrated.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "governance_history_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "governance-history-export");
+    expect(exportAction).toBeTruthy();
+
+    const result = await service.exportGovernanceHistoryCandidate({
+      authorization: "Bearer valid",
+      runId: hydrated.runId,
+      candidateId: "governance_history_export",
+      actionToken: exportAction!.actionToken
+    });
+
+    expect(onGovernanceHistoryExportReady).toHaveBeenCalledWith(expect.objectContaining({
+      tenantId: "tenant_123",
+      userId: "user_123",
+      runId: hydrated.runId,
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      candidateId: "governance_history_export",
+      bundleId: expect.any(String),
+      idempotencyKey: expect.any(String)
+    }));
+    expect(result.placement.primaryNotePath).toBe(
+      "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md"
+    );
+    expect(result.files[0]?.path).toBe(
+      "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md"
+    );
+    expect(result.files[0]?.content).toContain("# Bib Connect governance history");
   });
 
   it("fails closed when approval mutation is invoked without an atomic runner", async () => {
