@@ -422,14 +422,22 @@ export type HarnessMemoryBoundaryExportCandidateView = {
   summary: string;
   readiness: HarnessMemoryBoundaryReadiness;
   readinessLabel: string;
+  eligibilityRule: HarnessMemoryBoundaryEligibilityRule;
+  eligibilityRuleLabel: string;
+  sourceSurface: HarnessMemoryBoundarySourceSurface;
+  sourceSurfaceLabel: string;
   candidateClass: HarnessMemoryBoundaryCandidateClass;
   candidateClassLabel: string;
   durabilityCondition: HarnessMemoryBoundaryDurabilityCondition;
   durabilityConditionLabel: string;
   ownershipBoundary: HarnessMemoryBoundaryOwnershipBoundary;
   ownershipBoundaryLabel: string;
+  promotionPath: HarnessMemoryBoundaryPromotionPath;
+  promotionPathLabel: string;
   recordTarget: HarnessMemoryBoundaryRecordTarget;
   recordTargetLabel: string;
+  promotionBlocker: HarnessMemoryBoundaryPromotionBlocker;
+  promotionBlockerLabel: string;
   promotionAuthority: HarnessMemoryBoundaryPromotionAuthority;
   promotionAuthorityLabel: string;
   promotionTrigger: HarnessMemoryBoundaryPromotionTrigger;
@@ -440,6 +448,10 @@ export type HarnessMemoryBoundaryExportCandidateView = {
   promotionNextStepLabel: string;
   promotionActionFamily: HarnessMemoryBoundaryPromotionActionFamily;
   promotionActionFamilyLabel: string;
+  assemblyShape: HarnessMemoryBoundaryAssemblyShape;
+  assemblyShapeLabel: string;
+  promotionPhase: HarnessMemoryBoundaryPromotionPhase;
+  promotionPhaseLabel: string;
   memoryPlacement: HarnessMemoryBoundaryMemoryPlacement;
   memoryPlacementLabel: string;
   syncStrategy: HarnessMemoryBoundarySyncStrategy;
@@ -5395,14 +5407,22 @@ function buildMemoryBoundaryView(input: {
         `${governanceHistoryCandidateItems.length} governance histor${governanceHistoryCandidateItems.length === 1 ? "y bucket is" : "y buckets are"} grouped into one later tenant export candidate that appends governance history notes.`,
       readiness: representative.readiness,
       readinessLabel: representative.readinessLabel,
+      eligibilityRule: "explicit_export_later",
+      eligibilityRuleLabel: humanizeMemoryBoundaryEligibilityRule("explicit_export_later"),
+      sourceSurface: "recent_decisions",
+      sourceSurfaceLabel: humanizeMemoryBoundarySourceSurface("recent_decisions"),
       candidateClass: "governance_history",
       candidateClassLabel: humanizeMemoryBoundaryCandidateClass("governance_history"),
       durabilityCondition: "stable_when_recorded",
       durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition("stable_when_recorded"),
       ownershipBoundary: "tenant_owned_later",
       ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("tenant_owned_later"),
+      promotionPath: "ready_for_explicit_export",
+      promotionPathLabel: humanizeMemoryBoundaryPromotionPath("ready_for_explicit_export"),
       recordTarget: "governance_history_record",
       recordTargetLabel: humanizeMemoryBoundaryRecordTarget("governance_history_record"),
+      promotionBlocker: "none_ready_now",
+      promotionBlockerLabel: humanizeMemoryBoundaryPromotionBlocker("none_ready_now"),
       promotionAuthority: "tenant_explicit_export",
       promotionAuthorityLabel: humanizeMemoryBoundaryPromotionAuthority("tenant_explicit_export"),
       promotionTrigger: "tenant_export_request",
@@ -5413,6 +5433,10 @@ function buildMemoryBoundaryView(input: {
       promotionNextStepLabel: representative.promotionNextStepLabel,
       promotionActionFamily: representative.promotionActionFamily,
       promotionActionFamilyLabel: representative.promotionActionFamilyLabel,
+      assemblyShape: "standalone_export_record",
+      assemblyShapeLabel: humanizeMemoryBoundaryAssemblyShape("standalone_export_record"),
+      promotionPhase: "phase_one_governance_history",
+      promotionPhaseLabel: humanizeMemoryBoundaryPromotionPhase("phase_one_governance_history"),
       memoryPlacement: representative.memoryPlacement,
       memoryPlacementLabel: representative.memoryPlacementLabel,
       syncStrategy: representative.syncStrategy,
@@ -5479,14 +5503,22 @@ function buildMemoryBoundaryView(input: {
           : `${packageBundleCandidateItems.length} packaged-output bucket${packageBundleCandidateItems.length === 1 ? " is" : "s are"} grouped into one later tenant export candidate for the package bundle.`,
       readiness: representative.readiness,
       readinessLabel: representative.readinessLabel,
+      eligibilityRule: "after_board_closes_then_export",
+      eligibilityRuleLabel: humanizeMemoryBoundaryEligibilityRule("after_board_closes_then_export"),
+      sourceSurface: "completion_package_deliverables",
+      sourceSurfaceLabel: "Completion package bundle",
       candidateClass: "packaged_output",
       candidateClassLabel: humanizeMemoryBoundaryCandidateClass("packaged_output"),
       durabilityCondition: "stable_after_board_closure",
       durabilityConditionLabel: humanizeMemoryBoundaryDurabilityCondition("stable_after_board_closure"),
       ownershipBoundary: "tenant_owned_later",
       ownershipBoundaryLabel: humanizeMemoryBoundaryOwnershipBoundary("tenant_owned_later"),
+      promotionPath: "after_board_closure_then_export",
+      promotionPathLabel: humanizeMemoryBoundaryPromotionPath("after_board_closure_then_export"),
       recordTarget: "package_deliverable_record",
       recordTargetLabel: "Package bundle export records",
+      promotionBlocker: "board_closure_required",
+      promotionBlockerLabel: humanizeMemoryBoundaryPromotionBlocker("board_closure_required"),
       promotionAuthority: "board_closure_then_tenant_export",
       promotionAuthorityLabel: humanizeMemoryBoundaryPromotionAuthority("board_closure_then_tenant_export"),
       promotionTrigger: "board_closure",
@@ -5497,6 +5529,10 @@ function buildMemoryBoundaryView(input: {
       promotionNextStepLabel: representative.promotionNextStepLabel,
       promotionActionFamily: representative.promotionActionFamily,
       promotionActionFamilyLabel: representative.promotionActionFamilyLabel,
+      assemblyShape: "package_record_set",
+      assemblyShapeLabel: humanizeMemoryBoundaryAssemblyShape("package_record_set"),
+      promotionPhase: "phase_two_package_export",
+      promotionPhaseLabel: humanizeMemoryBoundaryPromotionPhase("phase_two_package_export"),
       memoryPlacement: representative.memoryPlacement,
       memoryPlacementLabel: representative.memoryPlacementLabel,
       syncStrategy: representative.syncStrategy,

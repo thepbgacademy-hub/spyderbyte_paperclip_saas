@@ -624,14 +624,22 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       candidate.id === "governance_history_export"
         ? {
             ...candidate,
+            eligibilityRule: candidate.eligibilityRule ?? "explicit_export_later",
+            eligibilityRuleLabel: candidate.eligibilityRuleLabel ?? "Explicit export later",
+            sourceSurface: candidate.sourceSurface ?? "recent_decisions",
+            sourceSurfaceLabel: candidate.sourceSurfaceLabel ?? "Recent decisions",
             candidateClass: candidate.candidateClass ?? "governance_history",
             candidateClassLabel: candidate.candidateClassLabel ?? "Governance history",
             durabilityCondition: candidate.durabilityCondition ?? "stable_when_recorded",
             durabilityConditionLabel: candidate.durabilityConditionLabel ?? "Stable when recorded",
             ownershipBoundary: candidate.ownershipBoundary ?? "tenant_owned_later",
             ownershipBoundaryLabel: candidate.ownershipBoundaryLabel ?? "Tenant-owned later",
+            promotionPath: candidate.promotionPath ?? "ready_for_explicit_export",
+            promotionPathLabel: candidate.promotionPathLabel ?? "Ready for explicit export",
             recordTarget: candidate.recordTarget ?? "governance_history_record",
             recordTargetLabel: candidate.recordTargetLabel ?? "Governance history record",
+            promotionBlocker: candidate.promotionBlocker ?? "none_ready_now",
+            promotionBlockerLabel: candidate.promotionBlockerLabel ?? "No promotion blocker",
             promotionAuthority: candidate.promotionAuthority ?? "tenant_explicit_export",
             promotionAuthorityLabel: candidate.promotionAuthorityLabel ?? "Tenant explicit export",
             promotionTrigger: candidate.promotionTrigger ?? "tenant_export_request",
@@ -669,6 +677,10 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
               candidate.exportSourceDisclosurePolicy ?? "decision_summary_only",
             exportSourceDisclosurePolicyLabel:
               candidate.exportSourceDisclosurePolicyLabel ?? "Decision summary only",
+            assemblyShape: candidate.assemblyShape ?? "standalone_export_record",
+            assemblyShapeLabel: candidate.assemblyShapeLabel ?? "Standalone export record",
+            promotionPhase: candidate.promotionPhase ?? "phase_one_governance_history",
+            promotionPhaseLabel: candidate.promotionPhaseLabel ?? "Phase-one export",
             exportSequence: candidate.exportSequence ?? "foundational_first",
             exportSequenceLabel: candidate.exportSequenceLabel ?? "Foundational export sequence",
             exportDependencyPolicy: candidate.exportDependencyPolicy ?? "independent_candidate",
@@ -681,14 +693,22 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
           }
         : {
             ...candidate,
+            eligibilityRule: candidate.eligibilityRule ?? "after_board_closes_then_export",
+            eligibilityRuleLabel: candidate.eligibilityRuleLabel ?? "After board closes, then export",
+            sourceSurface: candidate.sourceSurface ?? "completion_package_deliverables",
+            sourceSurfaceLabel: candidate.sourceSurfaceLabel ?? "Completion package bundle",
             candidateClass: candidate.candidateClass ?? "packaged_output",
             candidateClassLabel: candidate.candidateClassLabel ?? "Packaged output",
             durabilityCondition: candidate.durabilityCondition ?? "stable_after_board_closure",
             durabilityConditionLabel: candidate.durabilityConditionLabel ?? "Stable after board closure",
             ownershipBoundary: candidate.ownershipBoundary ?? "tenant_owned_later",
             ownershipBoundaryLabel: candidate.ownershipBoundaryLabel ?? "Tenant-owned later",
+            promotionPath: candidate.promotionPath ?? "after_board_closure_then_export",
+            promotionPathLabel: candidate.promotionPathLabel ?? "After board closure, then export",
             recordTarget: candidate.recordTarget ?? "package_deliverable_record",
             recordTargetLabel: candidate.recordTargetLabel ?? "Package bundle export records",
+            promotionBlocker: candidate.promotionBlocker ?? "board_closure_required",
+            promotionBlockerLabel: candidate.promotionBlockerLabel ?? "Board closure required",
             promotionAuthority: candidate.promotionAuthority ?? "board_closure_then_tenant_export",
             promotionAuthorityLabel:
               candidate.promotionAuthorityLabel ?? "Board closure, then tenant export",
@@ -728,6 +748,10 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
               candidate.exportSourceDisclosurePolicy ?? "closure_snapshot_summary_only",
             exportSourceDisclosurePolicyLabel:
               candidate.exportSourceDisclosurePolicyLabel ?? "Closure snapshot summary only",
+            assemblyShape: candidate.assemblyShape ?? "package_record_set",
+            assemblyShapeLabel: candidate.assemblyShapeLabel ?? "Package record set",
+            promotionPhase: candidate.promotionPhase ?? "phase_two_package_export",
+            promotionPhaseLabel: candidate.promotionPhaseLabel ?? "Phase-two package export",
             exportSequence: candidate.exportSequence ?? "board_closure_following",
             exportSequenceLabel: candidate.exportSequenceLabel ?? "Board-closure-following sequence",
             exportDependencyPolicy:
@@ -840,15 +864,21 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
               <h3 style={styles.actionHeading}>{candidate.label}</h3>
               <div style={styles.badgeList}>
                 <span style={styles.badge}>{candidate.readinessLabel}</span>
+                <span style={styles.badge}>{candidate.eligibilityRuleLabel}</span>
+                <span style={styles.badge}>{candidate.sourceSurfaceLabel}</span>
                 <span style={styles.badge}>{candidate.candidateClassLabel}</span>
                 <span style={styles.badge}>{candidate.durabilityConditionLabel}</span>
                 <span style={styles.badge}>{candidate.ownershipBoundaryLabel}</span>
+                <span style={styles.badge}>{candidate.promotionPathLabel}</span>
                 <span style={styles.badge}>{candidate.recordTargetLabel}</span>
+                <span style={styles.badge}>{candidate.promotionBlockerLabel}</span>
                 <span style={styles.badge}>{candidate.promotionAuthorityLabel}</span>
                 <span style={styles.badge}>{candidate.promotionTriggerLabel}</span>
                 <span style={styles.badge}>{candidate.promotionStateLabel}</span>
                 <span style={styles.badge}>{candidate.promotionNextStepLabel}</span>
                 <span style={styles.badge}>{candidate.promotionActionFamilyLabel}</span>
+                <span style={styles.badge}>{candidate.assemblyShapeLabel}</span>
+                <span style={styles.badge}>{candidate.promotionPhaseLabel}</span>
                 <span style={styles.badge}>{candidate.memoryPlacementLabel}</span>
                 <span style={styles.badge}>{candidate.syncStrategyLabel}</span>
                 <span style={styles.badge}>{candidate.exportRequestShapeLabel}</span>
@@ -1004,14 +1034,22 @@ function deriveMemoryBoundaryExportCandidates(
         `${governanceItems.length} governance histor${governanceItems.length === 1 ? "y bucket is" : "y buckets are"} grouped into one later tenant export candidate that appends governance history notes.`,
       readiness: representative.readiness,
       readinessLabel: representative.readinessLabel,
+      eligibilityRule: "explicit_export_later",
+      eligibilityRuleLabel: "Explicit export later",
+      sourceSurface: "recent_decisions",
+      sourceSurfaceLabel: "Recent decisions",
       candidateClass: "governance_history",
       candidateClassLabel: "Governance history",
       durabilityCondition: "stable_when_recorded",
       durabilityConditionLabel: "Stable when recorded",
       ownershipBoundary: "tenant_owned_later",
       ownershipBoundaryLabel: "Tenant-owned later",
+      promotionPath: "ready_for_explicit_export",
+      promotionPathLabel: "Ready for explicit export",
       recordTarget: "governance_history_record",
       recordTargetLabel: "Governance history record",
+      promotionBlocker: "none_ready_now",
+      promotionBlockerLabel: "No promotion blocker",
       promotionAuthority: "tenant_explicit_export",
       promotionAuthorityLabel: "Tenant explicit export",
       promotionTrigger: "tenant_export_request",
@@ -1022,6 +1060,10 @@ function deriveMemoryBoundaryExportCandidates(
       promotionNextStepLabel: representative.promotionNextStepLabel,
       promotionActionFamily: representative.promotionActionFamily,
       promotionActionFamilyLabel: representative.promotionActionFamilyLabel,
+      assemblyShape: "standalone_export_record",
+      assemblyShapeLabel: "Standalone export record",
+      promotionPhase: "phase_one_governance_history",
+      promotionPhaseLabel: "Phase-one export",
       memoryPlacement: representative.memoryPlacement,
       memoryPlacementLabel: representative.memoryPlacementLabel,
       syncStrategy: representative.syncStrategy,
@@ -1087,14 +1129,22 @@ function deriveMemoryBoundaryExportCandidates(
           : `${packageItems.length} packaged-output bucket${packageItems.length === 1 ? " is" : "s are"} grouped into one later tenant export candidate for the package bundle.`,
       readiness: representative.readiness,
       readinessLabel: representative.readinessLabel,
+      eligibilityRule: "after_board_closes_then_export",
+      eligibilityRuleLabel: "After board closes, then export",
+      sourceSurface: "completion_package_deliverables",
+      sourceSurfaceLabel: "Completion package bundle",
       candidateClass: "packaged_output",
       candidateClassLabel: "Packaged output",
       durabilityCondition: "stable_after_board_closure",
       durabilityConditionLabel: "Stable after board closure",
       ownershipBoundary: "tenant_owned_later",
       ownershipBoundaryLabel: "Tenant-owned later",
+      promotionPath: "after_board_closure_then_export",
+      promotionPathLabel: "After board closure, then export",
       recordTarget: "package_deliverable_record",
       recordTargetLabel: "Package bundle export records",
+      promotionBlocker: "board_closure_required",
+      promotionBlockerLabel: "Board closure required",
       promotionAuthority: "board_closure_then_tenant_export",
       promotionAuthorityLabel: "Board closure, then tenant export",
       promotionTrigger: "board_closure",
@@ -1105,6 +1155,10 @@ function deriveMemoryBoundaryExportCandidates(
       promotionNextStepLabel: representative.promotionNextStepLabel,
       promotionActionFamily: representative.promotionActionFamily,
       promotionActionFamilyLabel: representative.promotionActionFamilyLabel,
+      assemblyShape: "package_record_set",
+      assemblyShapeLabel: "Package record set",
+      promotionPhase: "phase_two_package_export",
+      promotionPhaseLabel: "Phase-two package export",
       memoryPlacement: representative.memoryPlacement,
       memoryPlacementLabel: representative.memoryPlacementLabel,
       syncStrategy: representative.syncStrategy,
