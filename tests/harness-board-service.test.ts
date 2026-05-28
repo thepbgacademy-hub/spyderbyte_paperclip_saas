@@ -3981,6 +3981,15 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.boardClosureThenTenantExportNextStepCandidateGroupCount).toBe(0);
     expect(hydrated.memoryBoundary.tenantExportActionFamilyCandidateGroupCount).toBe(1);
     expect(hydrated.memoryBoundary.boardClosureActionFamilyCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.governanceHistoryCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.packagedOutputCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.stableWhenRecordedCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.stableAfterBoardClosureCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.tenantOwnedLaterCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.governanceHistoryRecordCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.packageBundleRecordCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.tenantExplicitExportAuthorityCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.boardClosureThenTenantExportAuthorityCandidateGroupCount).toBe(0);
     expect(hydrated.memoryBoundary.exportCandidateSourceDisclosureSummary).toContain("decision summaries only");
     expect(hydrated.memoryBoundary.exportCandidateRequestShapeSummary).toContain("single-record export requests");
     expect(hydrated.memoryBoundary.exportCandidateConfirmationSummary).toContain("tenant export confirmation");
@@ -3990,6 +3999,11 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.exportCandidateStateSummary).toContain("ready for tenant export later");
     expect(hydrated.memoryBoundary.exportCandidateNextStepSummary).toContain("ready for a later tenant export step");
     expect(hydrated.memoryBoundary.exportCandidateActionFamilySummary).toContain("tenant export family");
+    expect(hydrated.memoryBoundary.exportCandidateClassSummary).toContain("governance history");
+    expect(hydrated.memoryBoundary.exportCandidateDurabilitySummary).toContain("stable when recorded");
+    expect(hydrated.memoryBoundary.exportCandidateOwnershipSummary).toContain("tenant-owned later");
+    expect(hydrated.memoryBoundary.exportCandidateRecordTargetSummary).toContain("governance history records");
+    expect(hydrated.memoryBoundary.exportCandidateAuthoritySummary).toContain("tenant-controlled for later explicit export");
   });
 
   it("fails closed when approval mutation is invoked without an atomic runner", async () => {

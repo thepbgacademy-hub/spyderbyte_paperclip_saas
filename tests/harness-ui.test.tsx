@@ -1742,6 +1742,11 @@ describe("harness board UI", () => {
     expect(markup).toContain("1 export candidate group is ready for tenant export later, and 1 group is still awaiting board closure.");
     expect(markup).toContain("1 export candidate group is ready for a later tenant export step, and 1 group still needs board closure before tenant export becomes the next step.");
     expect(markup).toContain("1 export candidate group sits in the tenant export family, and 1 group remains in the board-closure-first family.");
+    expect(markup).toContain("1 export candidate group stays in governance history, and 1 group still stays in packaged output.");
+    expect(markup).toContain("1 export candidate group is stable when recorded, and 1 group still stays stable after board closure.");
+    expect(markup).toContain("2 export candidate groups remain tenant-owned later.");
+    expect(markup).toContain("1 export candidate group becomes governance history records, and 1 group still becomes package bundle export records.");
+    expect(markup).toContain("1 export candidate group is tenant-controlled for later explicit export, and 1 group still needs board closure before tenant export owns the next move.");
     expect(markup).toContain("Runtime only");
     expect(markup).toContain("Governance history record");
     expect(markup).toContain("Package governance record");

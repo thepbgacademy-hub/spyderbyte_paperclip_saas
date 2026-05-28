@@ -591,6 +591,15 @@ describe("harness board client", () => {
     expect(board.memoryBoundary.boardClosureThenTenantExportNextStepCandidateGroupCount).toBe(1);
     expect(board.memoryBoundary.tenantExportActionFamilyCandidateGroupCount).toBe(1);
     expect(board.memoryBoundary.boardClosureActionFamilyCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.governanceHistoryCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.packagedOutputCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.stableWhenRecordedCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.stableAfterBoardClosureCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.tenantOwnedLaterCandidateGroupCount).toBe(2);
+    expect(board.memoryBoundary.governanceHistoryRecordCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.packageBundleRecordCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.tenantExplicitExportAuthorityCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.boardClosureThenTenantExportAuthorityCandidateGroupCount).toBe(1);
     expect(board.memoryBoundary.exportCandidateSourceDisclosureSummary).toContain("closure-snapshot summaries only");
     expect(board.memoryBoundary.exportCandidateRequestShapeSummary).toContain("package-bundle export requests");
     expect(board.memoryBoundary.exportCandidateConfirmationSummary).toContain("board closure before tenant export confirmation");
@@ -600,6 +609,11 @@ describe("harness board client", () => {
     expect(board.memoryBoundary.exportCandidateStateSummary).toContain("still awaiting board closure");
     expect(board.memoryBoundary.exportCandidateNextStepSummary).toContain("board closure before tenant export becomes the next step");
     expect(board.memoryBoundary.exportCandidateActionFamilySummary).toContain("board-closure-first family");
+    expect(board.memoryBoundary.exportCandidateClassSummary).toContain("packaged output");
+    expect(board.memoryBoundary.exportCandidateDurabilitySummary).toContain("stable after board closure");
+    expect(board.memoryBoundary.exportCandidateOwnershipSummary).toContain("tenant-owned later");
+    expect(board.memoryBoundary.exportCandidateRecordTargetSummary).toContain("package bundle export records");
+    expect(board.memoryBoundary.exportCandidateAuthoritySummary).toContain("board closure before tenant export owns the next move");
     expect(board.memoryBoundary.exportCandidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
