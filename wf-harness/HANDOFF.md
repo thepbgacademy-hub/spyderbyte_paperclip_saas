@@ -45,6 +45,7 @@ The first harness implementation slice is now built and verified:
 - governance-backlog attention should point at its first bounded queue target too: when the board is waiting on proposal review instead of a direct mutation seam, surface the first pending proposal as tenant-safe target metadata so the CEO queue path stays concrete under concurrency instead of reading like a generic backlog warning
 - grouped export candidates should own write semantics too: once governance-history and package-bundle export candidates exist, payload shape, idempotency, replay safety, conflict handling, and atomicity should travel on the grouped candidate contract instead of being recomputed later from member buckets
 - grouped export candidates should own preparation semantics too: derivation basis, revision policy, freshness source, validation boundary, and completeness rule should travel on the grouped candidate contract instead of being recomputed later from member buckets
+- grouped export candidates should own grouped write-safety semantics too: payload shape, idempotency, replay safety, and conflict policy should surface as grouped board truth instead of forcing later export work to reopen member buckets just to recover write posture
 
 ## External References
 

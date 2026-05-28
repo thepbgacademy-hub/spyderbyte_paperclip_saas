@@ -3731,6 +3731,22 @@ function normalizeMemoryBoundary(
     ?? exportCandidates.filter((candidate) => candidate.identityStability === "stable_record_identity").length;
   const closureFinalizedIdentityCandidateGroupCount = memoryBoundary.closureFinalizedIdentityCandidateGroupCount
     ?? exportCandidates.filter((candidate) => candidate.identityStability === "finalized_after_board_closure").length;
+  const governanceHistoryPayloadCandidateGroupCount = memoryBoundary.governanceHistoryPayloadCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportPayloadShape === "governance_history_record").length;
+  const packageSnapshotBundleCandidateGroupCount = memoryBoundary.packageSnapshotBundleCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.exportPayloadShape === "package_snapshot_bundle").length;
+  const deterministicUpsertCandidateGroupCount = memoryBoundary.deterministicUpsertCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.idempotencyPolicy === "deterministic_upsert").length;
+  const boardClosureSnapshotOnceCandidateGroupCount = memoryBoundary.boardClosureSnapshotOnceCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.idempotencyPolicy === "board_closure_snapshot_once").length;
+  const replaySafeCandidateGroupCount = memoryBoundary.replaySafeCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.replaySafety === "replay_safe").length;
+  const freshClosureSnapshotReplayCandidateGroupCount = memoryBoundary.freshClosureSnapshotReplayCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.replaySafety === "requires_fresh_board_closure_snapshot").length;
+  const appendOrUpsertConflictCandidateGroupCount = memoryBoundary.appendOrUpsertConflictCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.conflictPolicy === "append_or_upsert").length;
+  const replaceLatestClosureSnapshotCandidateGroupCount = memoryBoundary.replaceLatestClosureSnapshotCandidateGroupCount
+    ?? exportCandidates.filter((candidate) => candidate.conflictPolicy === "replace_latest_closure_snapshot").length;
 
   return {
     ...memoryBoundary,
@@ -4094,6 +4110,14 @@ function normalizeMemoryBoundary(
     packageRecordSetExportScopeCandidateGroupCount,
     stableIdentityCandidateGroupCount,
     closureFinalizedIdentityCandidateGroupCount,
+    governanceHistoryPayloadCandidateGroupCount,
+    packageSnapshotBundleCandidateGroupCount,
+    deterministicUpsertCandidateGroupCount,
+    boardClosureSnapshotOnceCandidateGroupCount,
+    replaySafeCandidateGroupCount,
+    freshClosureSnapshotReplayCandidateGroupCount,
+    appendOrUpsertConflictCandidateGroupCount,
+    replaceLatestClosureSnapshotCandidateGroupCount,
     sequenceSummary:
       memoryBoundary.sequenceSummary
       ?? (boardClosureFollowingExportCandidateCount > 0
@@ -4247,6 +4271,26 @@ function normalizeMemoryBoundary(
       ?? (closureFinalizedIdentityCandidateGroupCount > 0
         ? `${stableIdentityCandidateGroupCount} export candidate group${stableIdentityCandidateGroupCount === 1 ? " already has" : "s already have"} stable record identity, and ${closureFinalizedIdentityCandidateGroupCount} group${closureFinalizedIdentityCandidateGroupCount === 1 ? " still finalizes" : "s still finalize"} identity after board closure.`
         : `${stableIdentityCandidateGroupCount} export candidate group${stableIdentityCandidateGroupCount === 1 ? " already has" : "s already have"} stable record identity.`),
+    exportCandidatePayloadShapeSummary:
+      memoryBoundary.exportCandidatePayloadShapeSummary
+      ?? (packageSnapshotBundleCandidateGroupCount > 0
+        ? `${governanceHistoryPayloadCandidateGroupCount} export candidate group${governanceHistoryPayloadCandidateGroupCount === 1 ? " uses" : "s use"} governance history record payloads, and ${packageSnapshotBundleCandidateGroupCount} group${packageSnapshotBundleCandidateGroupCount === 1 ? " still uses" : "s still use"} package snapshot bundle payloads.`
+        : `${governanceHistoryPayloadCandidateGroupCount} export candidate group${governanceHistoryPayloadCandidateGroupCount === 1 ? " uses" : "s use"} governance history record payloads.`),
+    exportCandidateIdempotencySummary:
+      memoryBoundary.exportCandidateIdempotencySummary
+      ?? (boardClosureSnapshotOnceCandidateGroupCount > 0
+        ? `${deterministicUpsertCandidateGroupCount} export candidate group${deterministicUpsertCandidateGroupCount === 1 ? " uses" : "s use"} deterministic upsert, and ${boardClosureSnapshotOnceCandidateGroupCount} group${boardClosureSnapshotOnceCandidateGroupCount === 1 ? " still depends" : "s still depend"} on board-closure snapshot-once idempotency.`
+        : `${deterministicUpsertCandidateGroupCount} export candidate group${deterministicUpsertCandidateGroupCount === 1 ? " uses" : "s use"} deterministic upsert.`),
+    exportCandidateReplaySafetySummary:
+      memoryBoundary.exportCandidateReplaySafetySummary
+      ?? (freshClosureSnapshotReplayCandidateGroupCount > 0
+        ? `${replaySafeCandidateGroupCount} export candidate group${replaySafeCandidateGroupCount === 1 ? " is" : "s are"} replay-safe, and ${freshClosureSnapshotReplayCandidateGroupCount} group${freshClosureSnapshotReplayCandidateGroupCount === 1 ? " still requires" : "s still require"} a fresh board-closure snapshot before replay.`
+        : `${replaySafeCandidateGroupCount} export candidate group${replaySafeCandidateGroupCount === 1 ? " is" : "s are"} replay-safe.`),
+    exportCandidateConflictPolicySummary:
+      memoryBoundary.exportCandidateConflictPolicySummary
+      ?? (replaceLatestClosureSnapshotCandidateGroupCount > 0
+        ? `${appendOrUpsertConflictCandidateGroupCount} export candidate group${appendOrUpsertConflictCandidateGroupCount === 1 ? " uses" : "s use"} append-or-upsert conflict handling, and ${replaceLatestClosureSnapshotCandidateGroupCount} group${replaceLatestClosureSnapshotCandidateGroupCount === 1 ? " still replaces" : "s still replace"} the latest board-closure snapshot on conflict.`
+        : `${appendOrUpsertConflictCandidateGroupCount} export candidate group${appendOrUpsertConflictCandidateGroupCount === 1 ? " uses" : "s use"} append-or-upsert conflict handling.`),
     partitions: memoryBoundary.partitions ?? {
       runtime: {
         itemCount: operationalItems.length,

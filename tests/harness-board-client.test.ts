@@ -644,6 +644,18 @@ describe("harness board client", () => {
     expect(board.memoryBoundary.exportCandidateMutabilitySummary).toContain("replaceable until board closure");
     expect(board.memoryBoundary.exportCandidateScopeSummary).toContain("package record-set export scope");
     expect(board.memoryBoundary.exportCandidateIdentitySummary).toContain("identity after board closure");
+    expect(board.memoryBoundary.governanceHistoryPayloadCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.packageSnapshotBundleCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.deterministicUpsertCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.boardClosureSnapshotOnceCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.replaySafeCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.freshClosureSnapshotReplayCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.appendOrUpsertConflictCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.replaceLatestClosureSnapshotCandidateGroupCount).toBe(1);
+    expect(board.memoryBoundary.exportCandidatePayloadShapeSummary).toContain("package snapshot bundle payloads");
+    expect(board.memoryBoundary.exportCandidateIdempotencySummary).toContain("board-closure snapshot-once idempotency");
+    expect(board.memoryBoundary.exportCandidateReplaySafetySummary).toContain("fresh board-closure snapshot before replay");
+    expect(board.memoryBoundary.exportCandidateConflictPolicySummary).toContain("latest board-closure snapshot on conflict");
     expect(board.memoryBoundary.exportCandidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

@@ -387,6 +387,14 @@ const boardResponse: HarnessBoardResponse = {
       "2 runtime buckets have no export confirmation, 2 export candidate buckets require tenant export confirmation, and 2 buckets still require board closure before tenant export confirmation.",
     recoveryPathSummary:
       "2 runtime buckets are runtime only, 2 export candidate buckets retry the latest record export, and 2 buckets still rerun after the board-closure snapshot.",
+    exportCandidatePayloadShapeSummary:
+      "1 export candidate group uses governance history record payloads, and 1 group still uses package snapshot bundle payloads.",
+    exportCandidateIdempotencySummary:
+      "1 export candidate group uses deterministic upsert, and 1 group still depends on board-closure snapshot-once idempotency.",
+    exportCandidateReplaySafetySummary:
+      "1 export candidate group is replay-safe, and 1 group still requires a fresh board-closure snapshot before replay.",
+    exportCandidateConflictPolicySummary:
+      "1 export candidate group uses append-or-upsert conflict handling, and 1 group still replaces the latest board-closure snapshot on conflict.",
     noPromotionScopeCount: 2,
     singleRecordExportScopeCount: 2,
     packageRecordSetExportScopeCount: 2,
@@ -1757,6 +1765,10 @@ describe("harness board UI", () => {
     expect(markup).toContain("1 export candidate group stays append-only history, and 1 group still stays replaceable until board closure.");
     expect(markup).toContain("1 export candidate group keeps a single-record export scope, and 1 group still keeps a package record-set export scope.");
     expect(markup).toContain("1 export candidate group already has stable record identity, and 1 group still finalizes identity after board closure.");
+    expect(markup).toContain("1 export candidate group uses governance history record payloads, and 1 group still uses package snapshot bundle payloads.");
+    expect(markup).toContain("1 export candidate group uses deterministic upsert, and 1 group still depends on board-closure snapshot-once idempotency.");
+    expect(markup).toContain("1 export candidate group is replay-safe, and 1 group still requires a fresh board-closure snapshot before replay.");
+    expect(markup).toContain("1 export candidate group uses append-or-upsert conflict handling, and 1 group still replaces the latest board-closure snapshot on conflict.");
     expect(markup).toContain("Runtime only");
     expect(markup).toContain("Governance history record");
     expect(markup).toContain("Package governance record");

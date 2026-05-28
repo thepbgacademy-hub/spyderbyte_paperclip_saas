@@ -4034,6 +4034,18 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.exportCandidateMutabilitySummary).toContain("append-only history");
     expect(hydrated.memoryBoundary.exportCandidateScopeSummary).toContain("single-record export scope");
     expect(hydrated.memoryBoundary.exportCandidateIdentitySummary).toContain("stable record identity");
+    expect(hydrated.memoryBoundary.governanceHistoryPayloadCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.packageSnapshotBundleCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.deterministicUpsertCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.boardClosureSnapshotOnceCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.replaySafeCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.freshClosureSnapshotReplayCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.appendOrUpsertConflictCandidateGroupCount).toBe(1);
+    expect(hydrated.memoryBoundary.replaceLatestClosureSnapshotCandidateGroupCount).toBe(0);
+    expect(hydrated.memoryBoundary.exportCandidatePayloadShapeSummary).toContain("governance history record payloads");
+    expect(hydrated.memoryBoundary.exportCandidateIdempotencySummary).toContain("deterministic upsert");
+    expect(hydrated.memoryBoundary.exportCandidateReplaySafetySummary).toContain("replay-safe");
+    expect(hydrated.memoryBoundary.exportCandidateConflictPolicySummary).toContain("append-or-upsert conflict handling");
   });
 
   it("fails closed when approval mutation is invoked without an atomic runner", async () => {
