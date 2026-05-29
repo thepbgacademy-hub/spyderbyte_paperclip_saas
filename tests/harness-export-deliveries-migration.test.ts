@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const migration = readFileSync("supabase/migrations/0021_wf_harness_export_deliveries.sql", "utf8");
+const rlsMigration = readFileSync("supabase/migrations/0022_wf_harness_export_deliveries_rls.sql", "utf8");
 const helper = readFileSync("scripts/apply-wfpc-migration.mjs", "utf8");
 
 describe("harness export deliveries migration", () => {
@@ -19,6 +20,7 @@ describe("harness export deliveries migration", () => {
 
   it("is included in the live migration helper readiness path", () => {
     expect(helper).toMatch(/0021_wf_harness_export_deliveries\.sql/i);
+    expect(helper).toMatch(/0022_wf_harness_export_deliveries_rls\.sql/i);
     expect(helper).toMatch(/has_placement_manifest/i);
     expect(helper).toMatch(/has_files/i);
     expect(helper).toMatch(/has_idempotency_key/i);
@@ -26,5 +28,14 @@ describe("harness export deliveries migration", () => {
     expect(helper).toMatch(/has_files_check/i);
     expect(helper).toMatch(/has_idempotency_index/i);
     expect(helper).toMatch(/Harness export deliveries migration did not produce the required schema shape/i);
+    expect(helper).toMatch(/has_rls/i);
+    expect(helper).toMatch(/has_member_read_policy/i);
+    expect(helper).toMatch(/Harness export deliveries RLS migration did not produce the required policy shape/i);
+  });
+
+  it("keeps the delivery ledger tenant-scoped with RLS", () => {
+    expect(rlsMigration).toMatch(/alter table wfpc\.harness_export_deliveries enable row level security/i);
+    expect(rlsMigration).toMatch(/members can read harness export deliveries/i);
+    expect(rlsMigration).toMatch(/wfpc_private\.is_tenant_member\(tenant_id\)/i);
   });
 });

@@ -24,6 +24,7 @@ const laneHandoffMigration = readFileSync("supabase/migrations/0018_wf_harness_l
 const cardContinuityMigration = readFileSync("supabase/migrations/0019_wf_harness_card_continuity.sql", "utf8");
 const cardContinuitySourceMigration = readFileSync("supabase/migrations/0020_wf_harness_card_continuity_source.sql", "utf8");
 const exportDeliveriesMigration = readFileSync("supabase/migrations/0021_wf_harness_export_deliveries.sql", "utf8");
+const exportDeliveriesRlsMigration = readFileSync("supabase/migrations/0022_wf_harness_export_deliveries_rls.sql", "utf8");
 const execFileAsync = promisify(execFile);
 
 const HARNESS_POSTGRES_IMAGE = "postgres:16-alpine";
@@ -1268,6 +1269,7 @@ async function resetHarnessProofDatabase(client: Client) {
   await client.query(cardContinuityMigration);
   await client.query(cardContinuitySourceMigration);
   await client.query(exportDeliveriesMigration);
+  await client.query(exportDeliveriesRlsMigration);
 }
 
 async function seedHarnessProofPrerequisites(client: Client, tenantId: string) {

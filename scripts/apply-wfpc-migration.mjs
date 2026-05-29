@@ -583,6 +583,35 @@ try {
       throw new Error("Harness export deliveries migration did not produce the required schema shape");
     }
   }
+  const queryHarnessExportDeliveryRlsReady = () =>
+    client.query(
+      `select
+        exists (
+          select 1
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+          where n.nspname = 'wfpc'
+            and c.relname = 'harness_export_deliveries'
+            and c.relrowsecurity
+        ) as has_rls,
+        exists (
+          select 1
+          from pg_policies
+          where schemaname = 'wfpc'
+            and tablename = 'harness_export_deliveries'
+            and policyname = 'members can read harness export deliveries'
+        ) as has_member_read_policy`
+    );
+  let harnessExportDeliveryRlsExisting = await queryHarnessExportDeliveryRlsReady();
+  let harnessExportDeliveryRlsReady = Object.values(harnessExportDeliveryRlsExisting.rows[0] ?? {}).every(Boolean);
+  if (!harnessExportDeliveryRlsReady) {
+    await client.query(readFileSync("supabase/migrations/0022_wf_harness_export_deliveries_rls.sql", "utf8"));
+    harnessExportDeliveryRlsExisting = await queryHarnessExportDeliveryRlsReady();
+    harnessExportDeliveryRlsReady = Object.values(harnessExportDeliveryRlsExisting.rows[0] ?? {}).every(Boolean);
+    if (!harnessExportDeliveryRlsReady) {
+      throw new Error("Harness export deliveries RLS migration did not produce the required policy shape");
+    }
+  }
   const { rows } = await client.query(
     "select table_schema, table_name from information_schema.tables where table_schema = 'wfpc' order by table_name"
   );
@@ -612,7 +641,8 @@ try {
           !harnessBoardMemoryReady ||
           !harnessLaneHandoffReady ||
           !harnessCardContinuityReady ||
-          !harnessExportDeliveryReady,
+          !harnessExportDeliveryReady ||
+          !harnessExportDeliveryRlsReady,
         tableCount: rows.length,
         tables: rows.map((row) => row.table_name)
       },
