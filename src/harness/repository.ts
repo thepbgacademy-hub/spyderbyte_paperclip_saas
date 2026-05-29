@@ -13,6 +13,7 @@ import type {
   HarnessCardContinuityRecord,
   HarnessCardEventRecord,
   HarnessCardRecord,
+  HarnessExportDeliveryOutcomeUpdate,
   HarnessCardState,
   HarnessExportDeliveryRecord,
   HarnessRunRecord,
@@ -43,7 +44,9 @@ export interface HarnessRepository {
   listCardContinuityForRun(runId: string): Promise<HarnessCardContinuityRecord[]>;
   insertDecision(decision: HarnessBoardDecisionRecord): Promise<void>;
   listDecisionsForRun(runId: string): Promise<HarnessBoardDecisionRecord[]>;
+  getExportDeliveryByIdempotencyKey(idempotencyKey: string): Promise<HarnessExportDeliveryRecord | null>;
   upsertExportDelivery(record: HarnessExportDeliveryRecord): Promise<HarnessExportDeliveryRecord>;
+  recordExportDeliveryOutcome(input: HarnessExportDeliveryOutcomeUpdate): Promise<HarnessExportDeliveryRecord | null>;
   listExportDeliveriesForRun(runId: string): Promise<HarnessExportDeliveryRecord[]>;
   insertProposal(proposal: HarnessSubCardProposal): Promise<void>;
   getProposal(proposalId: string): Promise<HarnessSubCardProposal | null>;
@@ -266,17 +269,74 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
         .map((decision) => ({ ...decision }));
     },
 
+    async getExportDeliveryByIdempotencyKey(idempotencyKey) {
+      const record = exportDeliveries.get(idempotencyKey);
+      return record
+        ? {
+            ...record,
+            files: record.files.map((file) => ({ ...file })),
+            deliveryReceipt: { ...record.deliveryReceipt }
+          }
+        : null;
+    },
+
     async upsertExportDelivery(record) {
       const existing = exportDeliveries.get(record.idempotencyKey);
       const persisted: HarnessExportDeliveryRecord = {
-        ...(existing ?? { id: record.id, createdAt: record.createdAt }),
+        ...(existing ?? {
+          id: record.id,
+          createdAt: record.createdAt,
+          status: record.status,
+          attemptCount: record.attemptCount,
+          lastAttemptedAt: record.lastAttemptedAt,
+          deliveredAt: record.deliveredAt,
+          writerKind: record.writerKind,
+          deliveryReceipt: { ...record.deliveryReceipt },
+          lastErrorCode: record.lastErrorCode,
+          lastErrorMessage: record.lastErrorMessage
+        }),
         ...record,
+        status: existing?.status ?? record.status,
+        attemptCount: existing?.attemptCount ?? record.attemptCount,
+        lastAttemptedAt: existing?.lastAttemptedAt ?? record.lastAttemptedAt,
+        deliveredAt: existing?.deliveredAt ?? record.deliveredAt,
+        writerKind: existing?.writerKind ?? record.writerKind,
+        deliveryReceipt: { ...(existing?.deliveryReceipt ?? record.deliveryReceipt) },
+        lastErrorCode: existing?.lastErrorCode ?? record.lastErrorCode,
+        lastErrorMessage: existing?.lastErrorMessage ?? record.lastErrorMessage,
         files: record.files.map((file) => ({ ...file }))
       };
       exportDeliveries.set(record.idempotencyKey, persisted);
       return {
         ...persisted,
-        files: persisted.files.map((file) => ({ ...file }))
+        files: persisted.files.map((file) => ({ ...file })),
+        deliveryReceipt: { ...persisted.deliveryReceipt }
+      };
+    },
+
+    async recordExportDeliveryOutcome(input) {
+      const existing = exportDeliveries.get(input.idempotencyKey);
+      if (!existing) {
+        return null;
+      }
+
+      const updated: HarnessExportDeliveryRecord = {
+        ...existing,
+        status: input.status,
+        writerKind: input.writerKind,
+        deliveryReceipt: { ...input.deliveryReceipt },
+        attemptCount: input.attemptCount,
+        lastAttemptedAt: input.lastAttemptedAt,
+        deliveredAt: input.deliveredAt,
+        lastErrorCode: input.lastErrorCode,
+        lastErrorMessage: input.lastErrorMessage,
+        updatedAt: input.updatedAt
+      };
+      exportDeliveries.set(input.idempotencyKey, updated);
+      return {
+        ...updated,
+        files: updated.files.map((file) => ({ ...file })),
+        deliveryReceipt: { ...updated.deliveryReceipt }
       };
     },
 
@@ -286,7 +346,8 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
         .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
         .map((record) => ({
           ...record,
-          files: record.files.map((file) => ({ ...file }))
+          files: record.files.map((file) => ({ ...file })),
+          deliveryReceipt: { ...record.deliveryReceipt }
         }));
     },
 
@@ -616,14 +677,29 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
       return result.rows.map(mapHarnessBoardDecisionRow).filter((decision): decision is HarnessBoardDecisionRecord => decision !== null);
     },
 
+    async getExportDeliveryByIdempotencyKey(idempotencyKey) {
+      const result = await client.query(
+        `select id, run_id, tenant_id, workflow_id, package_id, candidate_id, status, export_format, record_target,
+                bundle_id, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
+                disclosure_summary, redaction_summary, attempt_count, last_attempted_at, delivered_at, writer_kind,
+                delivery_receipt, last_error_code, last_error_message, created_at, updated_at
+           from wfpc.harness_export_deliveries
+          where idempotency_key = $1
+          limit 1`,
+        [idempotencyKey]
+      );
+      return result.rows[0] ? mapHarnessExportDeliveryRow(result.rows[0]) : null;
+    },
+
     async upsertExportDelivery(record) {
       const result = await client.query(
         `insert into wfpc.harness_export_deliveries (
             id, run_id, tenant_id, workflow_id, package_id, candidate_id, status, export_format, record_target,
             bundle_id, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
-            disclosure_summary, redaction_summary, created_at, updated_at
+            disclosure_summary, redaction_summary, attempt_count, last_attempted_at, delivered_at, writer_kind,
+            delivery_receipt, last_error_code, last_error_message, created_at, updated_at
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15::jsonb, $16, $17, $18, $19::timestamptz, $20::timestamptz)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15::jsonb, $16, $17, $18, $19, $20::timestamptz, $21::timestamptz, $22, $23::jsonb, $24, $25, $26::timestamptz, $27::timestamptz)
           on conflict (idempotency_key) do update set
             bundle_id = excluded.bundle_id,
             note_title = excluded.note_title,
@@ -636,7 +712,8 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
             updated_at = excluded.updated_at
           returning id, run_id, tenant_id, workflow_id, package_id, candidate_id, status, export_format, record_target,
                     bundle_id, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
-                    disclosure_summary, redaction_summary, created_at, updated_at`,
+                    disclosure_summary, redaction_summary, attempt_count, last_attempted_at, delivered_at, writer_kind,
+                    delivery_receipt, last_error_code, last_error_message, created_at, updated_at`,
         [
           record.id,
           record.runId,
@@ -662,6 +739,13 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
           record.recordCount,
           record.disclosureSummary,
           record.redactionSummary,
+          record.attemptCount,
+          record.lastAttemptedAt,
+          record.deliveredAt,
+          record.writerKind,
+          JSON.stringify(record.deliveryReceipt),
+          record.lastErrorCode,
+          record.lastErrorMessage,
           record.createdAt,
           record.updatedAt
         ]
@@ -669,11 +753,45 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
       return mapHarnessExportDeliveryRow(result.rows[0]);
     },
 
+    async recordExportDeliveryOutcome(input) {
+      const result = await client.query(
+        `update wfpc.harness_export_deliveries
+            set status = $1,
+                writer_kind = $2,
+                delivery_receipt = $3::jsonb,
+                attempt_count = $4,
+                last_attempted_at = $5::timestamptz,
+                delivered_at = $6::timestamptz,
+                last_error_code = $7,
+                last_error_message = $8,
+                updated_at = $9::timestamptz
+          where idempotency_key = $10
+          returning id, run_id, tenant_id, workflow_id, package_id, candidate_id, status, export_format, record_target,
+                    bundle_id, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
+                    disclosure_summary, redaction_summary, attempt_count, last_attempted_at, delivered_at, writer_kind,
+                    delivery_receipt, last_error_code, last_error_message, created_at, updated_at`,
+        [
+          input.status,
+          input.writerKind,
+          JSON.stringify(input.deliveryReceipt),
+          input.attemptCount,
+          input.lastAttemptedAt,
+          input.deliveredAt,
+          input.lastErrorCode,
+          input.lastErrorMessage,
+          input.updatedAt,
+          input.idempotencyKey
+        ]
+      );
+      return result.rows[0] ? mapHarnessExportDeliveryRow(result.rows[0]) : null;
+    },
+
     async listExportDeliveriesForRun(runId) {
       const result = await client.query(
         `select id, run_id, tenant_id, workflow_id, package_id, candidate_id, status, export_format, record_target,
                 bundle_id, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
-                disclosure_summary, redaction_summary, created_at, updated_at
+                disclosure_summary, redaction_summary, attempt_count, last_attempted_at, delivered_at, writer_kind,
+                delivery_receipt, last_error_code, last_error_message, created_at, updated_at
            from wfpc.harness_export_deliveries
           where run_id = $1
           order by created_at desc`,
@@ -834,6 +952,7 @@ function mapHarnessExportDeliveryRow(row: unknown): HarnessExportDeliveryRecord 
   const record = asRecord(row);
   const placement = asRecord(record.placement_manifest);
   const files = Array.isArray(record.files) ? record.files : [];
+  const deliveryReceipt = asRecord(record.delivery_receipt);
   return {
     id: String(record.id),
     runId: String(record.run_id),
@@ -841,7 +960,7 @@ function mapHarnessExportDeliveryRow(row: unknown): HarnessExportDeliveryRecord 
     workflowId: String(record.workflow_id),
     packageId: String(record.package_id),
     candidateId: "governance_history_export",
-    status: "export_ready",
+    status: String(record.status ?? "export_ready") as HarnessExportDeliveryRecord["status"],
     exportFormat: "obsidian_markdown_bundle",
     recordTarget: "governance_history_record",
     bundleId: String(record.bundle_id),
@@ -866,6 +985,13 @@ function mapHarnessExportDeliveryRow(row: unknown): HarnessExportDeliveryRecord 
     recordCount: Number(record.record_count ?? 0),
     disclosureSummary: String(record.disclosure_summary ?? ""),
     redactionSummary: String(record.redaction_summary ?? ""),
+    attemptCount: Number(record.attempt_count ?? 0),
+    lastAttemptedAt: typeof record.last_attempted_at === "string" ? record.last_attempted_at : null,
+    deliveredAt: typeof record.delivered_at === "string" ? record.delivered_at : null,
+    writerKind: typeof record.writer_kind === "string" ? (record.writer_kind as "obsidian_filesystem") : null,
+    deliveryReceipt,
+    lastErrorCode: typeof record.last_error_code === "string" ? record.last_error_code : null,
+    lastErrorMessage: typeof record.last_error_message === "string" ? record.last_error_message : null,
     createdAt: String(record.created_at),
     updatedAt: String(record.updated_at)
   };

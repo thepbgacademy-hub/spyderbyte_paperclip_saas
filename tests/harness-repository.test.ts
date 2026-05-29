@@ -25,6 +25,7 @@ const cardContinuityMigration = readFileSync("supabase/migrations/0019_wf_harnes
 const cardContinuitySourceMigration = readFileSync("supabase/migrations/0020_wf_harness_card_continuity_source.sql", "utf8");
 const exportDeliveriesMigration = readFileSync("supabase/migrations/0021_wf_harness_export_deliveries.sql", "utf8");
 const exportDeliveriesRlsMigration = readFileSync("supabase/migrations/0022_wf_harness_export_deliveries_rls.sql", "utf8");
+const exportDeliveryResultsMigration = readFileSync("supabase/migrations/0023_wf_harness_export_delivery_results.sql", "utf8");
 const execFileAsync = promisify(execFile);
 
 const HARNESS_POSTGRES_IMAGE = "postgres:16-alpine";
@@ -263,6 +264,13 @@ describe("harness persistence records", () => {
       recordCount: 2,
       disclosureSummary: "Decision summary only",
       redactionSummary: "Governance-safe redaction",
+      attemptCount: 0,
+      lastAttemptedAt: null,
+      deliveredAt: null,
+      writerKind: null,
+      deliveryReceipt: {},
+      lastErrorCode: null,
+      lastErrorMessage: null,
       createdAt: "2026-05-29T00:00:00.000Z",
       updatedAt: "2026-05-29T00:00:00.000Z"
     });
@@ -288,12 +296,41 @@ describe("harness persistence records", () => {
     expect(secondWrite.createdAt).toBe(firstWrite.createdAt);
     expect(secondWrite.bundleId).toBe("bundle_456");
 
+    const delivered = await repository.recordExportDeliveryOutcome({
+      idempotencyKey: "governance_history_export:run_123",
+      status: "delivered",
+      writerKind: "obsidian_filesystem",
+      deliveryReceipt: {
+        primaryNotePath:
+          "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+        writtenFileCount: 2
+      },
+      attemptCount: 1,
+      lastAttemptedAt: "2026-05-29T01:00:00.000Z",
+      deliveredAt: "2026-05-29T01:00:01.000Z",
+      lastErrorCode: null,
+      lastErrorMessage: null,
+      updatedAt: "2026-05-29T01:00:01.000Z"
+    });
+
+    expect(delivered).toEqual(
+      expect.objectContaining({
+        status: "delivered",
+        writerKind: "obsidian_filesystem",
+        attemptCount: 1,
+        deliveredAt: "2026-05-29T01:00:01.000Z"
+      })
+    );
+
     await expect(repository.listExportDeliveriesForRun(run.id)).resolves.toEqual([
       expect.objectContaining({
         id: firstWrite.id,
         runId: run.id,
         bundleId: "bundle_456",
         recordCount: 3,
+        status: "delivered",
+        writerKind: "obsidian_filesystem",
+        attemptCount: 1,
         files: [
           expect.objectContaining({
             path: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md"
@@ -1109,6 +1146,13 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
           recordCount: 2,
           disclosureSummary: "Decision summary only",
           redactionSummary: "Governance-safe redaction",
+          attemptCount: 0,
+          lastAttemptedAt: null,
+          deliveredAt: null,
+          writerKind: null,
+          deliveryReceipt: {},
+          lastErrorCode: null,
+          lastErrorMessage: null,
           createdAt: "2026-05-29T00:00:00.000Z",
           updatedAt: "2026-05-29T00:00:00.000Z"
         });
@@ -1124,6 +1168,31 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
         expect(secondWrite.createdAt).toBe(firstWrite.createdAt);
         expect(secondWrite.bundleId).toBe("bundle_pg_2");
 
+        const delivered = await repository.recordExportDeliveryOutcome({
+          idempotencyKey: `${run.id}:governance_history_export`,
+          status: "delivered",
+          writerKind: "obsidian_filesystem",
+          deliveryReceipt: {
+            primaryNotePath:
+              "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+            writtenFileCount: 2
+          },
+          attemptCount: 1,
+          lastAttemptedAt: "2026-05-29T01:00:00.000Z",
+          deliveredAt: "2026-05-29T01:00:01.000Z",
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          updatedAt: "2026-05-29T01:00:01.000Z"
+        });
+
+        expect(delivered).toEqual(
+          expect.objectContaining({
+            status: "delivered",
+            writerKind: "obsidian_filesystem",
+            attemptCount: 1
+          })
+        );
+
         await expect(repository.listExportDeliveriesForRun(run.id)).resolves.toEqual([
           expect.objectContaining({
             id: firstWrite.id,
@@ -1133,6 +1202,9 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
             packageId: run.packageId,
             bundleId: "bundle_pg_2",
             recordCount: 3,
+            status: "delivered",
+            writerKind: "obsidian_filesystem",
+            attemptCount: 1,
             files: [
               expect.objectContaining({
                 path: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
@@ -1270,6 +1342,7 @@ async function resetHarnessProofDatabase(client: Client) {
   await client.query(cardContinuitySourceMigration);
   await client.query(exportDeliveriesMigration);
   await client.query(exportDeliveriesRlsMigration);
+  await client.query(exportDeliveryResultsMigration);
 }
 
 async function seedHarnessProofPrerequisites(client: Client, tenantId: string) {

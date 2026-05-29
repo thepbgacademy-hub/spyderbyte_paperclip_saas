@@ -1282,6 +1282,7 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <div style={{ display: "grid", gap: "0.55rem" }}>
         <p style={styles.contractMeta}>Export candidate groups</p>
         <p style={styles.actionSummary}>{`${exportCandidateGroupCount} grouped export candidate${exportCandidateGroupCount === 1 ? "" : "s"} are currently visible in the board contract.`}</p>
+        <p style={styles.actionSummary}>{memoryBoundary.deliverySummary}</p>
         <ul style={styles.actionList}>
           {exportCandidates.map((candidate) => (
             <li key={candidate.id} style={styles.actionItem}>
@@ -1333,6 +1334,28 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                 {candidate.exportDependencyPolicyLabel ? <span style={styles.badge}>{candidate.exportDependencyPolicyLabel}</span> : null}
               </div>
               <p style={styles.actionSummary}>{candidate.summary}</p>
+              {candidate.latestDelivery ? (
+                <div style={{ display: "grid", gap: "0.2rem" }}>
+                  <p style={styles.contractMeta}>{`Delivery posture: ${candidate.latestDelivery.statusLabel}`}</p>
+                  <p style={styles.actionSummary}>{candidate.latestDelivery.summary}</p>
+                  <p style={styles.optionBody}>{`Attempts: ${candidate.latestDelivery.attemptCount}`}</p>
+                  {candidate.latestDelivery.writerKindLabel ? (
+                    <p style={styles.optionBody}>{`Writer: ${candidate.latestDelivery.writerKindLabel}`}</p>
+                  ) : null}
+                  {candidate.latestDelivery.primaryNotePath ? (
+                    <p style={styles.optionBody}>{`Primary note: ${candidate.latestDelivery.primaryNotePath}`}</p>
+                  ) : null}
+                  {candidate.latestDelivery.deliveredAtLabel ? (
+                    <p style={styles.optionBody}>{`Delivered: ${candidate.latestDelivery.deliveredAtLabel}`}</p>
+                  ) : null}
+                  {candidate.latestDelivery.lastAttemptedAtLabel ? (
+                    <p style={styles.optionBody}>{`Last attempted: ${candidate.latestDelivery.lastAttemptedAtLabel}`}</p>
+                  ) : null}
+                  {candidate.latestDelivery.lastErrorMessage ? (
+                    <p style={styles.actionSummary}>{`Last delivery error: ${candidate.latestDelivery.lastErrorMessage}`}</p>
+                  ) : null}
+                </div>
+              ) : null}
               {candidate.dependencySummary ? <p style={styles.actionSummary}>{candidate.dependencySummary}</p> : null}
               <p style={styles.optionBody}>{`Grouped buckets: ${candidate.itemLabels.join(", ")}`}</p>
               {candidate.dependsOnCandidateLabels && candidate.dependsOnCandidateLabels.length > 0 ? (

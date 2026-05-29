@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import path from "node:path";
 
 import { createAppShellHandler } from "./app-shell.js";
 import type { ApiSession } from "./dashboard-api.js";
@@ -19,6 +20,10 @@ import {
 } from "../paperclip/secret-sync.js";
 import { createHarnessBoardService, type HarnessGovernanceHistoryExportReadyDispatch } from "../harness/board-service.js";
 import { createPostgresHarnessRepository } from "../harness/repository.js";
+import {
+  createFilesystemGovernanceHistoryExportWriter,
+  type GovernanceHistoryExportWriter
+} from "../obsidian/governance-history-export-writer.js";
 import { assertAllowedOrigin, createSecurityHeaders } from "../security/cors.js";
 import { createPostgresFixedWindowRateLimiter } from "../security/postgres-rate-limit.js";
 import { createEncryptedSecretVault } from "../secrets/encrypted-vault.js";
@@ -48,6 +53,7 @@ export type RuntimeEnv = {
   googleDriveClientSecret?: string;
   dropboxClientId?: string;
   dropboxClientSecret?: string;
+  obsidianExportRoot?: string;
 };
 
 export type RuntimeAuth = {
@@ -91,6 +97,13 @@ export function loadRuntimeEnv(source: NodeJS.ProcessEnv = process.env): Runtime
     }
     storageOAuthRedirectOrigin = redirectOrigin;
   }
+  let obsidianExportRoot: string | undefined;
+  if (source.WF_OBSIDIAN_EXPORT_ROOT) {
+    if (!path.isAbsolute(source.WF_OBSIDIAN_EXPORT_ROOT)) {
+      throw new RuntimeEnvError("WF_OBSIDIAN_EXPORT_ROOT must be an absolute path");
+    }
+    obsidianExportRoot = path.resolve(source.WF_OBSIDIAN_EXPORT_ROOT);
+  }
 
   return {
     supabaseDbUrl,
@@ -105,7 +118,8 @@ export function loadRuntimeEnv(source: NodeJS.ProcessEnv = process.env): Runtime
     ...(source.GOOGLE_DRIVE_CLIENT_ID ? { googleDriveClientId: source.GOOGLE_DRIVE_CLIENT_ID } : {}),
     ...(source.GOOGLE_DRIVE_CLIENT_SECRET ? { googleDriveClientSecret: source.GOOGLE_DRIVE_CLIENT_SECRET } : {}),
     ...(source.DROPBOX_CLIENT_ID ? { dropboxClientId: source.DROPBOX_CLIENT_ID } : {}),
-    ...(source.DROPBOX_CLIENT_SECRET ? { dropboxClientSecret: source.DROPBOX_CLIENT_SECRET } : {})
+    ...(source.DROPBOX_CLIENT_SECRET ? { dropboxClientSecret: source.DROPBOX_CLIENT_SECRET } : {}),
+    ...(obsidianExportRoot ? { obsidianExportRoot } : {})
   };
 }
 
@@ -127,6 +141,7 @@ export function createDashboardRuntime(options: {
   auth: RuntimeAuth;
   workflowQueueEnqueuer?: WorkflowRunEnqueuer;
   onGovernanceHistoryExportReady?: Parameters<typeof createHarnessBoardService>[0]["onGovernanceHistoryExportReady"];
+  governanceHistoryExportWriter?: GovernanceHistoryExportWriter;
 }) {
   const pool = createPgPool({
     connectionString: options.env.supabaseDbUrl,
@@ -245,9 +260,19 @@ export function createDashboardRuntime(options: {
     listStorageConnectors: repositories.listStorageConnectors,
     getPlatformLoad: repositories.getPlatformLoad
   });
+  const governanceHistoryExportWriter =
+    options.governanceHistoryExportWriter ??
+    (options.env.obsidianExportRoot
+      ? createFilesystemGovernanceHistoryExportWriter({ exportRoot: options.env.obsidianExportRoot })
+      : undefined);
   const onGovernanceHistoryExportReady = async (dispatch: HarnessGovernanceHistoryExportReadyDispatch) => {
     const now = new Date().toISOString();
-    await harnessRepository.upsertExportDelivery({
+    const existing = await harnessRepository.getExportDeliveryByIdempotencyKey(dispatch.idempotencyKey);
+    if (existing?.status === "delivered") {
+      return;
+    }
+
+    const exportDelivery = await harnessRepository.upsertExportDelivery({
       id: randomUUID(),
       runId: dispatch.runId,
       tenantId: dispatch.tenantId,
@@ -270,9 +295,81 @@ export function createDashboardRuntime(options: {
       recordCount: dispatch.recordCount,
       disclosureSummary: dispatch.disclosureSummary,
       redactionSummary: dispatch.redactionSummary,
+      attemptCount: existing?.attemptCount ?? 0,
+      lastAttemptedAt: existing?.lastAttemptedAt ?? null,
+      deliveredAt: existing?.deliveredAt ?? null,
+      writerKind: existing?.writerKind ?? null,
+      deliveryReceipt: existing?.deliveryReceipt ?? {},
+      lastErrorCode: existing?.lastErrorCode ?? null,
+      lastErrorMessage: existing?.lastErrorMessage ?? null,
       createdAt: now,
       updatedAt: now
     });
+
+    if (governanceHistoryExportWriter && exportDelivery.status !== "delivered") {
+      const attemptedAt = new Date().toISOString();
+      try {
+        const delivered = await governanceHistoryExportWriter.write(dispatch);
+        await harnessRepository.recordExportDeliveryOutcome({
+          idempotencyKey: dispatch.idempotencyKey,
+          status: "delivered",
+          writerKind: delivered.writerKind,
+          deliveryReceipt: { ...delivered.receipt },
+          attemptCount: exportDelivery.attemptCount + 1,
+          lastAttemptedAt: attemptedAt,
+          deliveredAt: delivered.deliveredAt,
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          updatedAt: delivered.deliveredAt
+        });
+        await audit({
+          tenantId: dispatch.tenantId,
+          actorUserId: dispatch.userId,
+          eventType: "harness.governance_history_export_delivered",
+          entityType: "harness_export_delivery",
+          metadata: {
+            runId: dispatch.runId,
+            workflowId: dispatch.workflowId,
+            candidateId: dispatch.candidateId,
+            bundleId: dispatch.bundleId,
+            idempotencyKey: dispatch.idempotencyKey,
+            writerKind: delivered.writerKind,
+            writtenFileCount: delivered.receipt.writtenFileCount,
+            primaryNotePath: delivered.receipt.primaryNotePath
+          }
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown governance history export delivery failure";
+        await harnessRepository.recordExportDeliveryOutcome({
+          idempotencyKey: dispatch.idempotencyKey,
+          status: "delivery_failed",
+          writerKind: "obsidian_filesystem",
+          deliveryReceipt: {},
+          attemptCount: exportDelivery.attemptCount + 1,
+          lastAttemptedAt: attemptedAt,
+          deliveredAt: null,
+          lastErrorCode: "writer_failed",
+          lastErrorMessage: message.slice(0, 240),
+          updatedAt: attemptedAt
+        });
+        await audit({
+          tenantId: dispatch.tenantId,
+          actorUserId: dispatch.userId,
+          eventType: "harness.governance_history_export_delivery_failed",
+          entityType: "harness_export_delivery",
+          metadata: {
+            runId: dispatch.runId,
+            workflowId: dispatch.workflowId,
+            candidateId: dispatch.candidateId,
+            bundleId: dispatch.bundleId,
+            idempotencyKey: dispatch.idempotencyKey,
+            errorCode: "writer_failed",
+            errorMessage: message.slice(0, 240)
+          }
+        });
+      }
+    }
+
     await options.onGovernanceHistoryExportReady?.(dispatch);
   };
   const harnessBoardApi = createHarnessBoardService({

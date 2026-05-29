@@ -6,6 +6,7 @@ import type {
   HarnessCardContinuityRecord,
   HarnessCardEventRecord,
   HarnessCardRecord,
+  HarnessExportDeliveryRecord,
   HarnessRunRecord
 } from "./types.js";
 import { createHarnessBoardDecisionRecord, createHarnessCardContinuityRecord, createHarnessCardEventRecord } from "./types.js";
@@ -510,12 +511,14 @@ export type HarnessMemoryBoundaryExportCandidateView = {
   dependsOnCandidateLabels?: string[];
   dependencySummary?: string;
   nextEligibleSummary?: string;
+  latestDelivery?: HarnessExportCandidateDeliveryView;
   exportActions?: HarnessExportCandidateActionView[];
 };
 
 export type HarnessMemoryBoundaryView = {
   summary: string;
   exportSummary: string;
+  deliverySummary: string;
   readyNowCount: number;
   waitingOnBoardClosureCount: number;
   governanceReadyCount: number;
@@ -658,6 +661,9 @@ export type HarnessMemoryBoundaryView = {
   exportCandidateGroupCount?: number;
   readyExportCandidateGroupCount?: number;
   waitingExportCandidateGroupCount?: number;
+  exportReadyDeliveryCandidateGroupCount?: number;
+  deliveredCandidateGroupCount?: number;
+  failedDeliveryCandidateGroupCount?: number;
   foundationalExportCandidateCount?: number;
   boardClosureFollowingExportCandidateCount?: number;
   independentExportCandidateCount?: number;
@@ -971,6 +977,24 @@ export type HarnessGovernanceHistoryExportReadyDispatch = {
 
 export type HarnessExportCandidateId = HarnessMemoryBoundaryExportCandidateView["id"];
 
+export type HarnessExportCandidateDeliveryStatus =
+  | "export_ready"
+  | "delivered"
+  | "delivery_failed";
+
+export type HarnessExportCandidateDeliveryView = {
+  status: HarnessExportCandidateDeliveryStatus;
+  statusLabel: string;
+  summary: string;
+  attemptCount: number;
+  lastAttemptedAtLabel?: string;
+  deliveredAtLabel?: string;
+  writerKindLabel?: string;
+  primaryNotePath?: string;
+  lastErrorCode?: string;
+  lastErrorMessage?: string;
+};
+
 export type HarnessExportPreflightResult = {
   candidateId: HarnessExportCandidateId;
   status: "ready" | "blocked";
@@ -980,6 +1004,7 @@ export type HarnessExportPreflightResult = {
   nextStepLabel: string;
   supportsDryRun: boolean;
   supportsExport: boolean;
+  latestDelivery?: HarnessExportCandidateDeliveryView;
   blockerLabel?: string;
 };
 
@@ -1019,6 +1044,7 @@ export type HarnessGovernanceHistoryExportResult = Omit<HarnessExportDryRunResul
   status: "export_ready";
   idempotencyKey: string;
   summary: string;
+  latestDelivery: HarnessExportCandidateDeliveryView;
 };
 
 export type HarnessRecentDecisionView = {
@@ -1108,15 +1134,16 @@ export function createHarnessBoardService(options: {
         ...(options.runAtomically ? { runAtomically: options.runAtomically } : {})
       });
 
-      const [cards, continuity, events, decisions] = await Promise.all([
+      const [cards, continuity, events, decisions, exportDeliveries] = await Promise.all([
         options.repository.listCardsForRun(run.id),
         options.repository.listCardContinuityForRun(run.id),
         options.repository.listEventsForRun(run.id),
-        options.repository.listDecisionsForRun(run.id)
+        options.repository.listDecisionsForRun(run.id),
+        options.repository.listExportDeliveriesForRun(run.id)
       ]);
       const proposals = await options.repository.listProposalsForRun(run.id);
 
-      return buildHarnessBoardResponse({ run, cards, continuity, events, decisions, proposals });
+      return buildHarnessBoardResponse({ run, cards, continuity, events, decisions, proposals, exportDeliveries });
     },
 
     async createTopLevelChildCard(request: {
@@ -3824,6 +3851,7 @@ export function createHarnessBoardService(options: {
         nextStepLabel: candidate.promotionNextStepLabel,
         supportsDryRun: Boolean(candidate.exportActions?.some((entry) => entry.actionRoute === "export-dry-run")),
         supportsExport: Boolean(candidate.exportActions?.some((entry) => entry.actionRoute === "governance-history-export")),
+        ...(candidate.latestDelivery ? { latestDelivery: candidate.latestDelivery } : {}),
         ...(candidate.readiness !== "ready_now" ? { blockerLabel: candidate.promotionBlockerLabel } : {})
       };
       await publishHarnessAuditEvents(options.audit, [
@@ -3933,7 +3961,14 @@ export function createHarnessBoardService(options: {
           candidate.itemIds.join(","),
           dryRun.noteFileName
         ]),
-        summary: "Governance history export is ready as a tenant-safe Obsidian markdown bundle."
+        summary: "Governance history export is ready as a tenant-safe Obsidian markdown bundle.",
+        latestDelivery: {
+          status: "export_ready",
+          statusLabel: humanizeExportDeliveryStatus("export_ready"),
+          summary: "The governance history bundle is export-ready and waiting for bounded delivery through the configured tenant-safe writer seam.",
+          attemptCount: (candidate.latestDelivery?.attemptCount ?? 0) + 1,
+          lastAttemptedAtLabel: "just now"
+        }
       };
       await options.onGovernanceHistoryExportReady?.({
         tenantId: board.access.session.tenantId,
@@ -4001,12 +4036,13 @@ async function loadExportBoardContext(input: {
   if (!run || run.tenantId !== access.session.tenantId) {
     throw new ApiAuthError();
   }
-  const [cards, continuity, events, decisions, proposals] = await Promise.all([
+  const [cards, continuity, events, decisions, proposals, exportDeliveries] = await Promise.all([
     input.repository.listCardsForRun(run.id),
     input.repository.listCardContinuityForRun(run.id),
     input.repository.listEventsForRun(run.id),
     input.repository.listDecisionsForRun(run.id),
-    input.repository.listProposalsForRun(run.id)
+    input.repository.listProposalsForRun(run.id),
+    input.repository.listExportDeliveriesForRun(run.id)
   ]);
 
   return {
@@ -4018,7 +4054,8 @@ async function loadExportBoardContext(input: {
       continuity,
       events,
       decisions,
-      proposals
+      proposals,
+      exportDeliveries
     })
   };
 }
@@ -4621,6 +4658,7 @@ function buildHarnessBoardResponse(input: {
   events: readonly HarnessCardEventRecord[];
   decisions: readonly HarnessBoardDecisionRecord[];
   proposals: readonly HarnessSubCardProposal[];
+  exportDeliveries?: readonly HarnessExportDeliveryRecord[];
 }): HarnessBoardResponse {
   const eventsByCardId = new Map<string, HarnessCardEventRecord[]>();
   const activityByCardId = new Map<string, HarnessBoardActivityItem[]>();
@@ -4684,7 +4722,8 @@ function buildHarnessBoardResponse(input: {
     recentDecisions,
     followThroughItems,
     completionPackage,
-    decisionRecords: input.decisions
+    decisionRecords: input.decisions,
+    exportDeliveries: input.exportDeliveries ?? []
   });
   const sortedPendingProposals = input.proposals
     .filter((proposal) => proposal.status === "proposed" || proposal.status === "deferred")
@@ -4761,6 +4800,7 @@ function buildMemoryBoundaryView(input: {
   followThroughItems: readonly HarnessFollowThroughView[];
   completionPackage: HarnessCompletionPackageView | undefined;
   decisionRecords: readonly HarnessBoardDecisionRecord[];
+  exportDeliveries: readonly HarnessExportDeliveryRecord[];
 }): HarnessMemoryBoundaryView {
   const isGovernanceExportReadyItem = (
     item: HarnessMemoryBoundaryItemView
@@ -5862,6 +5902,17 @@ function buildMemoryBoundaryView(input: {
     (item): item is HarnessMemoryBoundaryItemView & { id: "package_governance" | "package_deliverables" } =>
       item.count > 0 && isPackageExportReadyItem(item)
   );
+  const latestExportDeliveryRecordByCandidateId = new Map<HarnessExportCandidateId, HarnessExportDeliveryRecord>();
+  for (const delivery of input.exportDeliveries ?? []) {
+    const existing = latestExportDeliveryRecordByCandidateId.get(delivery.candidateId);
+    if (!existing || delivery.updatedAt > existing.updatedAt) {
+      latestExportDeliveryRecordByCandidateId.set(delivery.candidateId, delivery);
+    }
+  }
+  const latestExportDeliveryByCandidateId = new Map<HarnessExportCandidateId, HarnessExportCandidateDeliveryView>();
+  for (const [candidateId, delivery] of latestExportDeliveryRecordByCandidateId.entries()) {
+    latestExportDeliveryByCandidateId.set(candidateId, toExportCandidateDeliveryView(delivery));
+  }
   const exportCandidates: HarnessMemoryBoundaryExportCandidateView[] = [];
 
   if (governanceHistoryCandidateItems.length > 0) {
@@ -5964,6 +6015,9 @@ function buildMemoryBoundaryView(input: {
       dependsOnCandidateLabels: [],
       dependencySummary:
         "This governance history candidate can promote independently once the tenant requests export.",
+      ...(latestExportDeliveryByCandidateId.get("governance_history_export")
+        ? { latestDelivery: latestExportDeliveryByCandidateId.get("governance_history_export")! }
+        : {}),
       exportActions: buildExportCandidateActions({
         runId: input.runId,
         candidateId: "governance_history_export",
@@ -6084,6 +6138,9 @@ function buildMemoryBoundaryView(input: {
         representative.readiness === "after_board_closes"
           ? "This package bundle candidate still waits on board closure and later follows the governance history export candidate."
           : "This package bundle candidate follows the governance history export candidate once the tenant reaches export time.",
+      ...(latestExportDeliveryByCandidateId.get("package_bundle_export")
+        ? { latestDelivery: latestExportDeliveryByCandidateId.get("package_bundle_export")! }
+        : {}),
       exportActions: buildExportCandidateActions({
         runId: input.runId,
         candidateId: "package_bundle_export",
@@ -6102,6 +6159,15 @@ function buildMemoryBoundaryView(input: {
   const exportCandidateGroupCount = exportCandidates.length;
   const readyExportCandidateGroupCount = exportCandidates.filter((candidate) => candidate.readiness === "ready_now").length;
   const waitingExportCandidateGroupCount = exportCandidates.filter((candidate) => candidate.readiness === "after_board_closes").length;
+  const exportReadyDeliveryCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.latestDelivery?.status === "export_ready"
+  ).length;
+  const deliveredCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.latestDelivery?.status === "delivered"
+  ).length;
+  const failedDeliveryCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.latestDelivery?.status === "delivery_failed"
+  ).length;
   const foundationalExportCandidateCount = exportCandidates.filter(
     (candidate) => candidate.exportSequence === "foundational_first"
   ).length;
@@ -6355,6 +6421,14 @@ function buildMemoryBoundaryView(input: {
         : waitingOnBoardClosureCount === 0
         ? `${readyNowCount} export candidate${readyNowCount === 1 ? "" : "s"} ${readyNowCount === 1 ? "is" : "are"} ready now. No export candidates are waiting on board closure.`
         : "Export readiness will become visible once the board produces tenant-record candidates.",
+    deliverySummary:
+      failedDeliveryCandidateGroupCount > 0
+        ? `${deliveredCandidateGroupCount} export candidate group${deliveredCandidateGroupCount === 1 ? " is" : "s are"} already delivered, ${exportReadyDeliveryCandidateGroupCount} group${exportReadyDeliveryCandidateGroupCount === 1 ? " is" : "s are"} export-ready but not delivered yet, and ${failedDeliveryCandidateGroupCount} group${failedDeliveryCandidateGroupCount === 1 ? " last failed" : " last failed"} delivery and can be replayed safely.`
+        : exportReadyDeliveryCandidateGroupCount > 0
+        ? `${deliveredCandidateGroupCount} export candidate group${deliveredCandidateGroupCount === 1 ? " is" : "s are"} already delivered, and ${exportReadyDeliveryCandidateGroupCount} group${exportReadyDeliveryCandidateGroupCount === 1 ? " is" : "s are"} export-ready but not delivered yet.`
+        : deliveredCandidateGroupCount > 0
+        ? `${deliveredCandidateGroupCount} export candidate group${deliveredCandidateGroupCount === 1 ? " is" : "s are"} already delivered. No grouped export deliveries are currently pending replay.`
+        : "No grouped export deliveries have been attempted yet.",
     readyNowCount,
     waitingOnBoardClosureCount,
     governanceReadyCount,
@@ -6611,6 +6685,9 @@ function buildMemoryBoundaryView(input: {
     exportCandidateGroupCount,
     readyExportCandidateGroupCount,
     waitingExportCandidateGroupCount,
+    exportReadyDeliveryCandidateGroupCount,
+    deliveredCandidateGroupCount,
+    failedDeliveryCandidateGroupCount,
     foundationalExportCandidateCount,
     boardClosureFollowingExportCandidateCount,
     independentExportCandidateCount,
@@ -6875,6 +6952,54 @@ function buildMemoryBoundaryView(input: {
     exportReadyItems,
     exportCandidates
   };
+}
+
+function toExportCandidateDeliveryView(
+  delivery: HarnessExportDeliveryRecord
+): HarnessExportCandidateDeliveryView {
+  const primaryNotePath =
+    typeof delivery.deliveryReceipt.primaryNotePath === "string" && delivery.deliveryReceipt.primaryNotePath.length > 0
+      ? delivery.deliveryReceipt.primaryNotePath
+      : delivery.primaryNotePath;
+  return {
+    status: delivery.status,
+    statusLabel: humanizeExportDeliveryStatus(delivery.status),
+    summary:
+      delivery.status === "delivered"
+        ? "The latest governance history bundle was delivered through the bounded tenant-safe writer seam."
+        : delivery.status === "delivery_failed"
+        ? "The latest governance history delivery failed and can be replayed safely through the same bounded export action."
+        : "The latest governance history bundle is export-ready and waiting for bounded delivery.",
+    attemptCount: delivery.attemptCount,
+    ...(delivery.lastAttemptedAt ? { lastAttemptedAtLabel: formatBoardTimestamp(delivery.lastAttemptedAt) } : {}),
+    ...(delivery.deliveredAt ? { deliveredAtLabel: formatBoardTimestamp(delivery.deliveredAt) } : {}),
+    ...(delivery.writerKind ? { writerKindLabel: humanizeExportDeliveryWriterKind(delivery.writerKind) } : {}),
+    ...(primaryNotePath ? { primaryNotePath } : {}),
+    ...(delivery.lastErrorCode ? { lastErrorCode: delivery.lastErrorCode } : {}),
+    ...(delivery.lastErrorMessage ? { lastErrorMessage: delivery.lastErrorMessage } : {})
+  };
+}
+
+function humanizeExportDeliveryStatus(status: HarnessExportCandidateDeliveryStatus) {
+  switch (status) {
+    case "export_ready":
+      return "Export ready";
+    case "delivered":
+      return "Delivered";
+    case "delivery_failed":
+      return "Delivery failed";
+    default:
+      return humanizeLabel(status);
+  }
+}
+
+function humanizeExportDeliveryWriterKind(writerKind: NonNullable<HarnessExportDeliveryRecord["writerKind"]>) {
+  switch (writerKind) {
+    case "obsidian_filesystem":
+      return "Obsidian filesystem";
+    default:
+      return humanizeLabel(writerKind);
+  }
 }
 
 function humanizeMemoryBoundaryReadiness(readiness: HarnessMemoryBoundaryReadiness) {

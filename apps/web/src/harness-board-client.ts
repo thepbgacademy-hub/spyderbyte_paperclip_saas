@@ -323,6 +323,7 @@ const fallbackBoardBase: HarnessBoardResponse = {
     summary:
       "Wealth Factory runtime keeps bounded operational lane memory live while governance and package records stay ready for later tenant-owned export.",
     exportSummary: "2 export candidates are ready now, and 2 still wait for board closure.",
+    deliverySummary: "No grouped export deliveries have been attempted yet.",
     ownershipSummary:
       "2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later.",
     promotionSummary:
@@ -3779,6 +3780,7 @@ function normalizeMemoryBoundary(
       ?? (waitingOnBoardClosureCount > 0
         ? `${readyNowCount} export candidate${readyNowCount === 1 ? "" : "s"} ${readyNowCount === 1 ? "is" : "are"} ready now, and ${waitingOnBoardClosureCount} ${waitingOnBoardClosureCount === 1 ? "still waits" : "still wait"} for board closure.`
         : `${readyNowCount} export candidate${readyNowCount === 1 ? "" : "s"} ${readyNowCount === 1 ? "is" : "are"} ready now. No export candidates are waiting on board closure.`),
+    deliverySummary: memoryBoundary.deliverySummary ?? "No grouped export deliveries have been attempted yet.",
     readyNowCount,
     waitingOnBoardClosureCount,
     governanceReadyCount,
@@ -4934,6 +4936,7 @@ function normalizeBoardResponse(
         waitingOnBoardClosureCount > 0
           ? `${readyNowCount} export candidate${readyNowCount === 1 ? "" : "s"} ${readyNowCount === 1 ? "is" : "are"} ready now, and ${waitingOnBoardClosureCount} ${waitingOnBoardClosureCount === 1 ? "still waits" : "still wait"} for board closure.`
           : `${readyNowCount} export candidate${readyNowCount === 1 ? "" : "s"} ${readyNowCount === 1 ? "is" : "are"} ready now. No export candidates are waiting on board closure.`,
+      deliverySummary: "No grouped export deliveries have been attempted yet.",
       readyNowCount,
       waitingOnBoardClosureCount,
       governanceReadyCount,

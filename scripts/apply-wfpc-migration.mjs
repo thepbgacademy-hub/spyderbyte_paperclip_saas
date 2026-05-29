@@ -612,6 +612,53 @@ try {
       throw new Error("Harness export deliveries RLS migration did not produce the required policy shape");
     }
   }
+  const queryHarnessExportDeliveryResultsReady = () =>
+    client.query(
+      `select
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'harness_export_deliveries'
+            and column_name = 'attempt_count'
+        ) as has_attempt_count,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'harness_export_deliveries'
+            and column_name = 'delivery_receipt'
+        ) as has_delivery_receipt,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'harness_export_deliveries'
+            and column_name = 'writer_kind'
+        ) as has_writer_kind,
+        exists (
+          select 1
+          from pg_constraint
+          where conrelid = to_regclass('wfpc.harness_export_deliveries')
+            and pg_get_constraintdef(oid) like '%delivery_failed%'
+        ) as has_status_widening,
+        exists (
+          select 1
+          from pg_constraint
+          where conrelid = to_regclass('wfpc.harness_export_deliveries')
+            and pg_get_constraintdef(oid) like '%jsonb_typeof(delivery_receipt)%'
+        ) as has_delivery_receipt_check`
+    );
+  let harnessExportDeliveryResultsExisting = await queryHarnessExportDeliveryResultsReady();
+  let harnessExportDeliveryResultsReady = Object.values(harnessExportDeliveryResultsExisting.rows[0] ?? {}).every(Boolean);
+  if (!harnessExportDeliveryResultsReady) {
+    await client.query(readFileSync("supabase/migrations/0023_wf_harness_export_delivery_results.sql", "utf8"));
+    harnessExportDeliveryResultsExisting = await queryHarnessExportDeliveryResultsReady();
+    harnessExportDeliveryResultsReady = Object.values(harnessExportDeliveryResultsExisting.rows[0] ?? {}).every(Boolean);
+    if (!harnessExportDeliveryResultsReady) {
+      throw new Error("Harness export delivery results migration did not produce the required schema shape");
+    }
+  }
   const { rows } = await client.query(
     "select table_schema, table_name from information_schema.tables where table_schema = 'wfpc' order by table_name"
   );
@@ -642,7 +689,8 @@ try {
           !harnessLaneHandoffReady ||
           !harnessCardContinuityReady ||
           !harnessExportDeliveryReady ||
-          !harnessExportDeliveryRlsReady,
+          !harnessExportDeliveryRlsReady ||
+          !harnessExportDeliveryResultsReady,
         tableCount: rows.length,
         tables: rows.map((row) => row.table_name)
       },

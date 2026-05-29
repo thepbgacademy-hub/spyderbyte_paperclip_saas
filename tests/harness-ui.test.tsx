@@ -285,6 +285,7 @@ const boardResponse: HarnessBoardResponse = {
   memoryBoundary: {
     summary: "Wealth Factory runtime keeps bounded operational lane memory live while governance and package records stay ready for later tenant-owned export.",
     exportSummary: "2 export candidates are ready now, and 2 still wait for board closure.",
+    deliverySummary: "No grouped export deliveries have been attempted yet.",
     roleSummary: "2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure.",
     ownershipSummary:
       "2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later.",

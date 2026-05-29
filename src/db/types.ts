@@ -197,7 +197,7 @@ export type HarnessExportDeliveryRow = {
   workflowId: string;
   packageId: string;
   candidateId: "governance_history_export";
-  status: "export_ready";
+  status: "export_ready" | "delivered" | "delivery_failed";
   exportFormat: "obsidian_markdown_bundle";
   recordTarget: "governance_history_record";
   bundleId: string;
@@ -209,6 +209,13 @@ export type HarnessExportDeliveryRow = {
   recordCount: number;
   disclosureSummary: string;
   redactionSummary: string;
+  attemptCount: number;
+  lastAttemptedAt: string | null;
+  deliveredAt: string | null;
+  writerKind: string | null;
+  deliveryReceipt: unknown;
+  lastErrorCode: string | null;
+  lastErrorMessage: string | null;
   createdAt: string;
   updatedAt: string;
 };
