@@ -190,6 +190,29 @@ export type ArtifactMetadataRow = {
   exportStatus: "not_exported" | "exported";
 };
 
+export type HarnessExportDeliveryRow = {
+  id: string;
+  runId: string;
+  tenantId: string;
+  workflowId: string;
+  packageId: string;
+  candidateId: "governance_history_export";
+  status: "export_ready";
+  exportFormat: "obsidian_markdown_bundle";
+  recordTarget: "governance_history_record";
+  bundleId: string;
+  idempotencyKey: string;
+  noteTitle: string;
+  noteFileName: string;
+  placementManifest: unknown;
+  files: unknown;
+  recordCount: number;
+  disclosureSummary: string;
+  redactionSummary: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type StorageConnectorRow = {
   id: string;
   tenantId: string;

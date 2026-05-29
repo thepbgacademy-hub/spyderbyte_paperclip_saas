@@ -518,6 +518,71 @@ try {
       throw new Error("Harness card continuity migration did not produce the required schema shape");
     }
   }
+  const queryHarnessExportDeliveryReady = async () =>
+    client.query(
+      `select
+        exists (
+          select 1
+          from information_schema.tables
+          where table_schema = 'wfpc'
+            and table_name = 'harness_export_deliveries'
+        ) as has_table,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'harness_export_deliveries'
+            and column_name = 'placement_manifest'
+        ) as has_placement_manifest,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'harness_export_deliveries'
+            and column_name = 'files'
+        ) as has_files,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'harness_export_deliveries'
+            and column_name = 'idempotency_key'
+        ) as has_idempotency_key,
+        exists (
+          select 1
+          from pg_constraint
+          where conrelid = to_regclass('wfpc.harness_export_deliveries')
+            and pg_get_constraintdef(oid) like '%jsonb_typeof(placement_manifest)%'
+        ) as has_placement_manifest_check,
+        exists (
+          select 1
+          from pg_constraint
+          where conrelid = to_regclass('wfpc.harness_export_deliveries')
+            and pg_get_constraintdef(oid) like '%jsonb_typeof(files)%'
+        ) as has_files_check,
+        exists (
+          select 1
+          from pg_indexes
+          where schemaname = 'wfpc'
+            and indexname = 'harness_export_deliveries_idempotency_key_idx'
+        ) as has_idempotency_index,
+        exists (
+          select 1
+          from pg_indexes
+          where schemaname = 'wfpc'
+            and indexname = 'harness_export_deliveries_run_created_at_idx'
+        ) as has_run_created_index`
+    );
+  let harnessExportDeliveryExisting = await queryHarnessExportDeliveryReady();
+  let harnessExportDeliveryReady = Object.values(harnessExportDeliveryExisting.rows[0] ?? {}).every(Boolean);
+  if (!harnessExportDeliveryReady) {
+    await client.query(readFileSync("supabase/migrations/0021_wf_harness_export_deliveries.sql", "utf8"));
+    harnessExportDeliveryExisting = await queryHarnessExportDeliveryReady();
+    harnessExportDeliveryReady = Object.values(harnessExportDeliveryExisting.rows[0] ?? {}).every(Boolean);
+    if (!harnessExportDeliveryReady) {
+      throw new Error("Harness export deliveries migration did not produce the required schema shape");
+    }
+  }
   const { rows } = await client.query(
     "select table_schema, table_name from information_schema.tables where table_schema = 'wfpc' order by table_name"
   );
@@ -546,7 +611,8 @@ try {
           !harnessBoardDecisionReady ||
           !harnessBoardMemoryReady ||
           !harnessLaneHandoffReady ||
-          !harnessCardContinuityReady,
+          !harnessCardContinuityReady ||
+          !harnessExportDeliveryReady,
         tableCount: rows.length,
         tables: rows.map((row) => row.table_name)
       },

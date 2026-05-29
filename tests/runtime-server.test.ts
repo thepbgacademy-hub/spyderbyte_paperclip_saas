@@ -8,14 +8,61 @@ import { createDurableAuditSink } from "../src/audit/durable-audit.js";
 import { createHarnessBoardService } from "../src/harness/board-service.js";
 
 const TEST_SUPABASE_DB_URL = "postgresql://postgres.tenant:placeholder-password@db.invalid:5432/postgres";
+const defaultExportDeliveryRow = {
+  id: "export_delivery_1",
+  run_id: "run_123",
+  tenant_id: "tenant_123",
+  workflow_id: "wf_connect_first_workflow",
+  package_id: "pkg_bib_connect",
+  candidate_id: "governance_history_export",
+  status: "export_ready",
+  export_format: "obsidian_markdown_bundle",
+  record_target: "governance_history_record",
+  bundle_id: "bundle_123",
+  idempotency_key: "idempotency_123",
+  note_title: "Governance history",
+  note_file_name: "wf_connect_first_workflow-governance-history.md",
+  placement_manifest: {
+    targetSystem: "obsidian_vault",
+    vaultFolder: "wealth-factory/governance-history/wf_connect_first_workflow",
+    primaryNotePath:
+      "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+    syncStrategy: "append_history_entry",
+    confirmationRequirement: "tenant_export_confirmation"
+  },
+  files: [
+    {
+      path: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+      mediaType: "text/markdown",
+      byteSize: 20,
+      checksum: "abc",
+      content: "# Governance history"
+    }
+  ],
+  record_count: 2,
+  disclosure_summary: "Decision summary only",
+  redaction_summary: "Governance-safe redaction",
+  created_at: "2026-05-29T00:00:00.000Z",
+  updated_at: "2026-05-29T00:00:00.000Z"
+};
+
+function createMockDbQuery() {
+  return vi.fn(async (sql: string) => {
+    if (sql.includes("harness_export_deliveries")) {
+      return { rows: [defaultExportDeliveryRow] };
+    }
+
+    return { rows: [] };
+  });
+}
 
 vi.mock("../src/db/postgres-client.js", () => ({
   createPgPool: vi.fn(() => ({
-    query: vi.fn(),
+    query: createMockDbQuery(),
     connect: vi.fn(),
     end: vi.fn().mockResolvedValue(undefined)
   })),
-  createPgPoolQueryClient: vi.fn(() => ({ query: vi.fn() })),
+  createPgPoolQueryClient: vi.fn(() => ({ query: createMockDbQuery() })),
   createPgTransactionRunner: vi.fn(() => ({ withTransaction: vi.fn() }))
 }));
 

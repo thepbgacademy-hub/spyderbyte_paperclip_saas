@@ -116,6 +116,41 @@ export interface HarnessBoardDecisionRecord {
   createdAt: string;
 }
 
+export interface HarnessExportPackageFileRecord {
+  path: string;
+  mediaType: "text/markdown" | "application/json";
+  byteSize: number;
+  checksum: string;
+  content: string;
+}
+
+export interface HarnessExportDeliveryRecord {
+  id: string;
+  runId: string;
+  tenantId: string;
+  workflowId: string;
+  packageId: string;
+  candidateId: "governance_history_export";
+  status: "export_ready";
+  exportFormat: "obsidian_markdown_bundle";
+  recordTarget: "governance_history_record";
+  bundleId: string;
+  idempotencyKey: string;
+  noteTitle: string;
+  noteFileName: string;
+  placementTargetSystem: "obsidian_vault";
+  vaultFolder: string;
+  primaryNotePath: string;
+  syncStrategy: string;
+  confirmationRequirement: string;
+  files: HarnessExportPackageFileRecord[];
+  recordCount: number;
+  disclosureSummary: string;
+  redactionSummary: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const HARNESS_CARD_STATES = [
   "queued",
   "planning",

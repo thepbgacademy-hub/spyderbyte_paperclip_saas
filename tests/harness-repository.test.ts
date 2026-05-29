@@ -23,6 +23,7 @@ const boardMemoryMigration = readFileSync("supabase/migrations/0017_wf_harness_b
 const laneHandoffMigration = readFileSync("supabase/migrations/0018_wf_harness_lane_handoff.sql", "utf8");
 const cardContinuityMigration = readFileSync("supabase/migrations/0019_wf_harness_card_continuity.sql", "utf8");
 const cardContinuitySourceMigration = readFileSync("supabase/migrations/0020_wf_harness_card_continuity_source.sql", "utf8");
+const exportDeliveriesMigration = readFileSync("supabase/migrations/0021_wf_harness_export_deliveries.sql", "utf8");
 const execFileAsync = promisify(execFile);
 
 const HARNESS_POSTGRES_IMAGE = "postgres:16-alpine";
@@ -212,6 +213,96 @@ describe("harness persistence records", () => {
 
     await expect(repository.getCardContinuity(card.id)).resolves.toEqual(continuity);
     await expect(repository.listCardContinuityForRun(run.id)).resolves.toEqual([continuity]);
+  });
+
+  it("stores export-ready governance-history delivery bundles in the minimal in-memory repository", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-123",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+
+    await repository.insertRun(run);
+
+    const firstWrite = await repository.upsertExportDelivery({
+      id: "export_delivery_1",
+      runId: run.id,
+      tenantId: run.tenantId,
+      workflowId: run.workflowId,
+      packageId: run.packageId,
+      candidateId: "governance_history_export",
+      status: "export_ready",
+      exportFormat: "obsidian_markdown_bundle",
+      recordTarget: "governance_history_record",
+      bundleId: "bundle_123",
+      idempotencyKey: "governance_history_export:run_123",
+      noteTitle: "Governance history",
+      noteFileName: "wf_connect_first_workflow-governance-history.md",
+      placementTargetSystem: "obsidian_vault",
+      vaultFolder: "wealth-factory/governance-history/wf_connect_first_workflow",
+      primaryNotePath:
+        "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+      syncStrategy: "append_history_entry",
+      confirmationRequirement: "tenant_export_confirmation",
+      files: [
+        {
+          path: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+          mediaType: "text/markdown",
+          byteSize: 20,
+          checksum: "abc123",
+          content: "# Governance history"
+        }
+      ],
+      recordCount: 2,
+      disclosureSummary: "Decision summary only",
+      redactionSummary: "Governance-safe redaction",
+      createdAt: "2026-05-29T00:00:00.000Z",
+      updatedAt: "2026-05-29T00:00:00.000Z"
+    });
+
+    const secondWrite = await repository.upsertExportDelivery({
+      ...firstWrite,
+      bundleId: "bundle_456",
+      recordCount: 3,
+      files: [
+        ...firstWrite.files,
+        {
+          path: "wealth-factory/governance-history/wf_connect_first_workflow/manifest.json",
+          mediaType: "application/json",
+          byteSize: 42,
+          checksum: "def456",
+          content: "{\"ok\":true}"
+        }
+      ],
+      updatedAt: "2026-05-29T01:00:00.000Z"
+    });
+
+    expect(secondWrite.id).toBe(firstWrite.id);
+    expect(secondWrite.createdAt).toBe(firstWrite.createdAt);
+    expect(secondWrite.bundleId).toBe("bundle_456");
+
+    await expect(repository.listExportDeliveriesForRun(run.id)).resolves.toEqual([
+      expect.objectContaining({
+        id: firstWrite.id,
+        runId: run.id,
+        bundleId: "bundle_456",
+        recordCount: 3,
+        files: [
+          expect.objectContaining({
+            path: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md"
+          }),
+          expect.objectContaining({
+            path: "wealth-factory/governance-history/wf_connect_first_workflow/manifest.json"
+          })
+        ]
+      })
+    ]);
   });
 
   it("updates lane ownership in the in-memory repository without changing the card state", async () => {
@@ -944,6 +1035,119 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
         await client.end();
       }
     },
+      120_000
+  );
+
+  it(
+    "round-trips harness export delivery bundles through the real Postgres repository mapping",
+    async () => {
+      const database = requireDisposableHarnessDatabase();
+      const client = new Client({ connectionString: database.connectionString });
+      const tenantId = "8beea757-39c8-4d97-a7ca-1c62172501d5";
+
+      try {
+        await client.connect();
+        await resetHarnessProofDatabase(client);
+        await seedHarnessProofPrerequisites(client, tenantId);
+
+        const repository = createPostgresHarnessRepository({
+          query: async (sql: string, values: readonly unknown[]) => {
+            const result = await client.query(sql, [...values]);
+            return { rows: result.rows };
+          }
+        });
+
+        const run = createHarnessRunRecord({
+          tenantId,
+          workflowId: "wf_connect_first_workflow",
+          packageId: "pkg_bib_connect",
+          orchestratorPersona: "ceo",
+          runtimeContext: {
+            providerKind: "openai_api",
+            credentialLabel: "Primary OpenAI"
+          }
+        });
+        await repository.insertRun(run);
+
+        const firstWrite = await repository.upsertExportDelivery({
+          id: "export_delivery_pg_1",
+          runId: run.id,
+          tenantId,
+          workflowId: run.workflowId,
+          packageId: run.packageId,
+          candidateId: "governance_history_export",
+          status: "export_ready",
+          exportFormat: "obsidian_markdown_bundle",
+          recordTarget: "governance_history_record",
+          bundleId: "bundle_pg_1",
+          idempotencyKey: `${run.id}:governance_history_export`,
+          noteTitle: "Governance history",
+          noteFileName: "wf_connect_first_workflow-governance-history.md",
+          placementTargetSystem: "obsidian_vault",
+          vaultFolder: "wealth-factory/governance-history/wf_connect_first_workflow",
+          primaryNotePath:
+            "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+          syncStrategy: "append_history_entry",
+          confirmationRequirement: "tenant_export_confirmation",
+          files: [
+            {
+              path: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+              mediaType: "text/markdown",
+              byteSize: 20,
+              checksum: "abc123",
+              content: "# Governance history"
+            },
+            {
+              path: "wealth-factory/governance-history/wf_connect_first_workflow/manifest.json",
+              mediaType: "application/json",
+              byteSize: 42,
+              checksum: "def456",
+              content: "{\"ok\":true}"
+            }
+          ],
+          recordCount: 2,
+          disclosureSummary: "Decision summary only",
+          redactionSummary: "Governance-safe redaction",
+          createdAt: "2026-05-29T00:00:00.000Z",
+          updatedAt: "2026-05-29T00:00:00.000Z"
+        });
+
+        const secondWrite = await repository.upsertExportDelivery({
+          ...firstWrite,
+          bundleId: "bundle_pg_2",
+          recordCount: 3,
+          updatedAt: "2026-05-29T01:00:00.000Z"
+        });
+
+        expect(secondWrite.id).toBe(firstWrite.id);
+        expect(secondWrite.createdAt).toBe(firstWrite.createdAt);
+        expect(secondWrite.bundleId).toBe("bundle_pg_2");
+
+        await expect(repository.listExportDeliveriesForRun(run.id)).resolves.toEqual([
+          expect.objectContaining({
+            id: firstWrite.id,
+            runId: run.id,
+            tenantId,
+            workflowId: run.workflowId,
+            packageId: run.packageId,
+            bundleId: "bundle_pg_2",
+            recordCount: 3,
+            files: [
+              expect.objectContaining({
+                path: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+                mediaType: "text/markdown"
+              }),
+              expect.objectContaining({
+                path: "wealth-factory/governance-history/wf_connect_first_workflow/manifest.json",
+                mediaType: "application/json"
+              })
+            ]
+          })
+        ]);
+      } finally {
+        await client.end();
+      }
+    },
     120_000
   );
 });
@@ -1063,6 +1267,7 @@ async function resetHarnessProofDatabase(client: Client) {
   await client.query(laneHandoffMigration);
   await client.query(cardContinuityMigration);
   await client.query(cardContinuitySourceMigration);
+  await client.query(exportDeliveriesMigration);
 }
 
 async function seedHarnessProofPrerequisites(client: Client, tenantId: string) {

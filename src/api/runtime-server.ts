@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 
 import { createAppShellHandler } from "./app-shell.js";
@@ -16,7 +17,7 @@ import {
   createPaperclipSecretBindingRepository,
   createPaperclipSecretProjectionService
 } from "../paperclip/secret-sync.js";
-import { createHarnessBoardService } from "../harness/board-service.js";
+import { createHarnessBoardService, type HarnessGovernanceHistoryExportReadyDispatch } from "../harness/board-service.js";
 import { createPostgresHarnessRepository } from "../harness/repository.js";
 import { assertAllowedOrigin, createSecurityHeaders } from "../security/cors.js";
 import { createPostgresFixedWindowRateLimiter } from "../security/postgres-rate-limit.js";
@@ -244,6 +245,36 @@ export function createDashboardRuntime(options: {
     listStorageConnectors: repositories.listStorageConnectors,
     getPlatformLoad: repositories.getPlatformLoad
   });
+  const onGovernanceHistoryExportReady = async (dispatch: HarnessGovernanceHistoryExportReadyDispatch) => {
+    const now = new Date().toISOString();
+    await harnessRepository.upsertExportDelivery({
+      id: randomUUID(),
+      runId: dispatch.runId,
+      tenantId: dispatch.tenantId,
+      workflowId: dispatch.workflowId,
+      packageId: dispatch.packageId,
+      candidateId: dispatch.candidateId,
+      status: "export_ready",
+      exportFormat: dispatch.exportFormat,
+      recordTarget: dispatch.recordTarget,
+      bundleId: dispatch.bundleId,
+      idempotencyKey: dispatch.idempotencyKey,
+      noteTitle: dispatch.noteTitle,
+      noteFileName: dispatch.noteFileName,
+      placementTargetSystem: dispatch.placement.targetSystem,
+      vaultFolder: dispatch.placement.vaultFolder,
+      primaryNotePath: dispatch.placement.primaryNotePath,
+      syncStrategy: dispatch.placement.syncStrategy,
+      confirmationRequirement: dispatch.placement.confirmationRequirement,
+      files: dispatch.files.map((file) => ({ ...file })),
+      recordCount: dispatch.recordCount,
+      disclosureSummary: dispatch.disclosureSummary,
+      redactionSummary: dispatch.redactionSummary,
+      createdAt: now,
+      updatedAt: now
+    });
+    await options.onGovernanceHistoryExportReady?.(dispatch);
+  };
   const harnessBoardApi = createHarnessBoardService({
     authenticate: options.auth.authenticate,
     requireTenantMember: repositories.requireTenantMember,
@@ -288,11 +319,7 @@ export function createDashboardRuntime(options: {
           }
         }
       : {}),
-    ...(options.onGovernanceHistoryExportReady
-      ? {
-          onGovernanceHistoryExportReady: options.onGovernanceHistoryExportReady
-        }
-      : {}),
+    onGovernanceHistoryExportReady,
     runAtomically: async (work) =>
       transactionRunner.withTransaction(async (transaction) =>
         work(createPostgresHarnessRepository(transaction))

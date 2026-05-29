@@ -14,6 +14,7 @@ import type {
   HarnessCardEventRecord,
   HarnessCardRecord,
   HarnessCardState,
+  HarnessExportDeliveryRecord,
   HarnessRunRecord,
   HarnessRunState
 } from "./types.js";
@@ -42,6 +43,8 @@ export interface HarnessRepository {
   listCardContinuityForRun(runId: string): Promise<HarnessCardContinuityRecord[]>;
   insertDecision(decision: HarnessBoardDecisionRecord): Promise<void>;
   listDecisionsForRun(runId: string): Promise<HarnessBoardDecisionRecord[]>;
+  upsertExportDelivery(record: HarnessExportDeliveryRecord): Promise<HarnessExportDeliveryRecord>;
+  listExportDeliveriesForRun(runId: string): Promise<HarnessExportDeliveryRecord[]>;
   insertProposal(proposal: HarnessSubCardProposal): Promise<void>;
   getProposal(proposalId: string): Promise<HarnessSubCardProposal | null>;
   listProposalsForRun(runId: string): Promise<HarnessSubCardProposal[]>;
@@ -64,6 +67,7 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
   const events = new Map<string, HarnessCardEventRecord[]>();
   const continuity = new Map<string, HarnessCardContinuityRecord>();
   const decisions = new Map<string, HarnessBoardDecisionRecord[]>();
+  const exportDeliveries = new Map<string, HarnessExportDeliveryRecord>();
   const proposals = new Map<string, HarnessSubCardProposal>();
 
   return {
@@ -260,6 +264,30 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
       return [...(decisions.get(runId) ?? [])]
         .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
         .map((decision) => ({ ...decision }));
+    },
+
+    async upsertExportDelivery(record) {
+      const existing = exportDeliveries.get(record.idempotencyKey);
+      const persisted: HarnessExportDeliveryRecord = {
+        ...(existing ?? { id: record.id, createdAt: record.createdAt }),
+        ...record,
+        files: record.files.map((file) => ({ ...file }))
+      };
+      exportDeliveries.set(record.idempotencyKey, persisted);
+      return {
+        ...persisted,
+        files: persisted.files.map((file) => ({ ...file }))
+      };
+    },
+
+    async listExportDeliveriesForRun(runId) {
+      return [...exportDeliveries.values()]
+        .filter((record) => record.runId === runId)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+        .map((record) => ({
+          ...record,
+          files: record.files.map((file) => ({ ...file }))
+        }));
     },
 
     async insertProposal(proposal) {
@@ -588,6 +616,72 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
       return result.rows.map(mapHarnessBoardDecisionRow).filter((decision): decision is HarnessBoardDecisionRecord => decision !== null);
     },
 
+    async upsertExportDelivery(record) {
+      const result = await client.query(
+        `insert into wfpc.harness_export_deliveries (
+            id, run_id, tenant_id, workflow_id, package_id, candidate_id, status, export_format, record_target,
+            bundle_id, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
+            disclosure_summary, redaction_summary, created_at, updated_at
+          )
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15::jsonb, $16, $17, $18, $19::timestamptz, $20::timestamptz)
+          on conflict (idempotency_key) do update set
+            bundle_id = excluded.bundle_id,
+            note_title = excluded.note_title,
+            note_file_name = excluded.note_file_name,
+            placement_manifest = excluded.placement_manifest,
+            files = excluded.files,
+            record_count = excluded.record_count,
+            disclosure_summary = excluded.disclosure_summary,
+            redaction_summary = excluded.redaction_summary,
+            updated_at = excluded.updated_at
+          returning id, run_id, tenant_id, workflow_id, package_id, candidate_id, status, export_format, record_target,
+                    bundle_id, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
+                    disclosure_summary, redaction_summary, created_at, updated_at`,
+        [
+          record.id,
+          record.runId,
+          record.tenantId,
+          record.workflowId,
+          record.packageId,
+          record.candidateId,
+          record.status,
+          record.exportFormat,
+          record.recordTarget,
+          record.bundleId,
+          record.idempotencyKey,
+          record.noteTitle,
+          record.noteFileName,
+          JSON.stringify({
+            targetSystem: record.placementTargetSystem,
+            vaultFolder: record.vaultFolder,
+            primaryNotePath: record.primaryNotePath,
+            syncStrategy: record.syncStrategy,
+            confirmationRequirement: record.confirmationRequirement
+          }),
+          JSON.stringify(record.files),
+          record.recordCount,
+          record.disclosureSummary,
+          record.redactionSummary,
+          record.createdAt,
+          record.updatedAt
+        ]
+      );
+      return mapHarnessExportDeliveryRow(result.rows[0]);
+    },
+
+    async listExportDeliveriesForRun(runId) {
+      const result = await client.query(
+        `select id, run_id, tenant_id, workflow_id, package_id, candidate_id, status, export_format, record_target,
+                bundle_id, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
+                disclosure_summary, redaction_summary, created_at, updated_at
+           from wfpc.harness_export_deliveries
+          where run_id = $1
+          order by created_at desc`,
+        [runId]
+      );
+      return result.rows.map(mapHarnessExportDeliveryRow);
+    },
+
     async insertProposal(proposal) {
       await client.query(
         `insert into wfpc.harness_subcard_proposals
@@ -733,6 +827,47 @@ export function toHarnessBoardDecisionRow(record: HarnessBoardDecisionRecord): H
     recommendationSummary: record.recommendationSummary,
     objectionSummary: record.objectionSummary,
     createdAt: record.createdAt
+  };
+}
+
+function mapHarnessExportDeliveryRow(row: unknown): HarnessExportDeliveryRecord {
+  const record = asRecord(row);
+  const placement = asRecord(record.placement_manifest);
+  const files = Array.isArray(record.files) ? record.files : [];
+  return {
+    id: String(record.id),
+    runId: String(record.run_id),
+    tenantId: String(record.tenant_id),
+    workflowId: String(record.workflow_id),
+    packageId: String(record.package_id),
+    candidateId: "governance_history_export",
+    status: "export_ready",
+    exportFormat: "obsidian_markdown_bundle",
+    recordTarget: "governance_history_record",
+    bundleId: String(record.bundle_id),
+    idempotencyKey: String(record.idempotency_key),
+    noteTitle: String(record.note_title),
+    noteFileName: String(record.note_file_name),
+    placementTargetSystem: "obsidian_vault",
+    vaultFolder: String(placement.vaultFolder ?? ""),
+    primaryNotePath: String(placement.primaryNotePath ?? ""),
+    syncStrategy: String(placement.syncStrategy ?? ""),
+    confirmationRequirement: String(placement.confirmationRequirement ?? ""),
+    files: files.map((file) => {
+      const entry = asRecord(file);
+      return {
+        path: String(entry.path ?? ""),
+        mediaType: String(entry.mediaType ?? "text/markdown") as "text/markdown" | "application/json",
+        byteSize: Number(entry.byteSize ?? 0),
+        checksum: String(entry.checksum ?? ""),
+        content: String(entry.content ?? "")
+      };
+    }),
+    recordCount: Number(record.record_count ?? 0),
+    disclosureSummary: String(record.disclosure_summary ?? ""),
+    redactionSummary: String(record.redaction_summary ?? ""),
+    createdAt: String(record.created_at),
+    updatedAt: String(record.updated_at)
   };
 }
 
