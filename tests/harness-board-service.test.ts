@@ -4378,6 +4378,188 @@ describe("harness board service", () => {
     expect(result.files[0]?.content).toContain("# Bib Connect governance history");
   });
 
+  it("surfaces a bounded governance-history delivery replay action when the latest delivery is export-ready or failed", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    await repository.upsertExportDelivery({
+      id: "delivery_replay_test_1",
+      runId: board.runId,
+      tenantId: "tenant_123",
+      workflowId: board.workflowId,
+      packageId: board.packageId,
+      candidateId: "governance_history_export",
+      status: "delivery_failed",
+      exportFormat: "obsidian_markdown_bundle",
+      recordTarget: "governance_history_record",
+      bundleId: "bundle_replay_test_1",
+      idempotencyKey: "idempotency_replay_test_1",
+      noteTitle: "Governance history",
+      noteFileName: "wf_connect_first_workflow-governance-history.md",
+      placementTargetSystem: "obsidian_vault",
+      vaultFolder: "wealth-factory/governance-history/wf_connect_first_workflow",
+      primaryNotePath: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+      syncStrategy: "append_history_entry",
+      confirmationRequirement: "tenant_export_confirmation",
+      files: [
+        {
+          path: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+          mediaType: "text/markdown",
+          byteSize: 20,
+          checksum: "abc",
+          content: "# Governance history"
+        }
+      ],
+      recordCount: 2,
+      disclosureSummary: "Decision summary only",
+      redactionSummary: "Governance-safe redaction",
+      attemptCount: 1,
+      lastAttemptedAt: "2026-05-29T01:00:00.000Z",
+      deliveredAt: null,
+      writerKind: "obsidian_filesystem",
+      deliveryReceipt: {},
+      lastErrorCode: "writer_failed",
+      lastErrorMessage: "Disk was temporarily unavailable",
+      createdAt: "2026-05-29T01:00:00.000Z",
+      updatedAt: "2026-05-29T01:00:00.000Z"
+    });
+
+    const hydrated = await service.listBoardState({ authorization: "Bearer valid" });
+    const candidate = hydrated.memoryBoundary.exportCandidates?.find((entry) => entry.id === "governance_history_export");
+    const replayAction = candidate?.exportActions?.find((entry) => entry.actionRoute === "governance-history-export-replay");
+
+    expect(replayAction).toBeTruthy();
+    expect(replayAction).toEqual(expect.objectContaining({
+      actionLabel: "Replay governance history delivery"
+    }));
+  });
+
+  it("replays the persisted governance-history delivery bundle through the private export-ready seam", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const onGovernanceHistoryExportReady = vi.fn().mockImplementation(async (dispatch: HarnessGovernanceHistoryExportReadyDispatch) => {
+      dispatch.files[0]!.content = "mutated";
+    });
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      }),
+      onGovernanceHistoryExportReady
+    });
+
+    await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    await repository.upsertExportDelivery({
+      id: "delivery_replay_test_2",
+      runId: board.runId,
+      tenantId: "tenant_123",
+      workflowId: board.workflowId,
+      packageId: board.packageId,
+      candidateId: "governance_history_export",
+      status: "delivery_failed",
+      exportFormat: "obsidian_markdown_bundle",
+      recordTarget: "governance_history_record",
+      bundleId: "bundle_replay_test_2",
+      idempotencyKey: "idempotency_replay_test_2",
+      noteTitle: "Governance history",
+      noteFileName: "wf_connect_first_workflow-governance-history.md",
+      placementTargetSystem: "obsidian_vault",
+      vaultFolder: "wealth-factory/governance-history/wf_connect_first_workflow",
+      primaryNotePath: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+      syncStrategy: "append_history_entry",
+      confirmationRequirement: "tenant_export_confirmation",
+      files: [
+        {
+          path: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+          mediaType: "text/markdown",
+          byteSize: 20,
+          checksum: "abc",
+          content: "# Governance history"
+        }
+      ],
+      recordCount: 2,
+      disclosureSummary: "Decision summary only",
+      redactionSummary: "Governance-safe redaction",
+      attemptCount: 1,
+      lastAttemptedAt: "2026-05-29T01:00:00.000Z",
+      deliveredAt: null,
+      writerKind: "obsidian_filesystem",
+      deliveryReceipt: {},
+      lastErrorCode: "writer_failed",
+      lastErrorMessage: "Disk was temporarily unavailable",
+      createdAt: "2026-05-29T01:00:00.000Z",
+      updatedAt: "2026-05-29T01:00:00.000Z"
+    });
+
+    const hydrated = await service.listBoardState({ authorization: "Bearer valid" });
+    const replayAction = hydrated.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "governance_history_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "governance-history-export-replay");
+    expect(replayAction).toBeTruthy();
+
+    await expect(service.replayGovernanceHistoryDeliveryCandidate({
+      authorization: "Bearer valid",
+      runId: hydrated.runId,
+      candidateId: "governance_history_export",
+      actionToken: replayAction!.actionToken
+    })).resolves.toMatchObject({
+      candidateId: "governance_history_export",
+      status: "delivery_replayed",
+      idempotencyKey: "idempotency_replay_test_2",
+      latestDelivery: {
+        status: "export_ready"
+      }
+    });
+
+    expect(onGovernanceHistoryExportReady).toHaveBeenCalledWith(expect.objectContaining({
+      idempotencyKey: "idempotency_replay_test_2",
+      bundleId: "bundle_replay_test_2"
+    }));
+    await expect(repository.listExportDeliveriesForRun(hydrated.runId)).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        idempotencyKey: "idempotency_replay_test_2",
+        files: expect.arrayContaining([
+          expect.objectContaining({
+            content: "# Governance history"
+          })
+        ])
+      })
+    ]));
+  });
+
   it("fails closed when approval mutation is invoked without an atomic runner", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({

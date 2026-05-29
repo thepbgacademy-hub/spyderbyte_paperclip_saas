@@ -265,6 +265,19 @@ describe("harness HTTP boundary", () => {
       idempotencyKey: "export-key",
       summary: "Governance history export is ready."
     });
+    const replayGovernanceHistoryDeliveryCandidate = vi.fn().mockResolvedValue({
+      candidateId: "governance_history_export",
+      status: "delivery_replayed",
+      idempotencyKey: "export-key",
+      summary: "Governance history delivery replay has been re-queued through the bounded tenant-safe writer seam.",
+      latestDelivery: {
+        status: "export_ready",
+        statusLabel: "Export ready",
+        summary: "The governance history bundle is export-ready and waiting for bounded delivery through the configured tenant-safe writer seam.",
+        attemptCount: 3,
+        lastAttemptedAtLabel: "just now"
+      }
+    });
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
       listBoardState: vi.fn(),
@@ -275,6 +288,7 @@ describe("harness HTTP boundary", () => {
       preflightExportCandidate,
       dryRunExportCandidate,
       exportGovernanceHistoryCandidate,
+      replayGovernanceHistoryDeliveryCandidate,
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
     });
 
@@ -303,10 +317,15 @@ describe("harness HTTP boundary", () => {
       ...requestBase,
       path: "/api/harness/runs/run_123/export-candidates/governance_history_export/export"
     });
+    const replayed = await handler({
+      ...requestBase,
+      path: "/api/harness/runs/run_123/export-candidates/governance_history_export/delivery-replay"
+    });
 
     expect(preflight.status).toBe(200);
     expect(dryRun.status).toBe(200);
     expect(exported.status).toBe(200);
+    expect(replayed.status).toBe(200);
     expect(preflightExportCandidate).toHaveBeenCalledWith({
       authorization: "Bearer valid",
       cookie: "wf_session=abc",
@@ -322,6 +341,13 @@ describe("harness HTTP boundary", () => {
       actionToken: "candidate-token"
     });
     expect(exportGovernanceHistoryCandidate).toHaveBeenCalledWith({
+      authorization: "Bearer valid",
+      cookie: "wf_session=abc",
+      runId: "run_123",
+      candidateId: "governance_history_export",
+      actionToken: "candidate-token"
+    });
+    expect(replayGovernanceHistoryDeliveryCandidate).toHaveBeenCalledWith({
       authorization: "Bearer valid",
       cookie: "wf_session=abc",
       runId: "run_123",

@@ -1546,6 +1546,70 @@ describe("harness board UI", () => {
     expect(markup).not.toContain("token");
   });
 
+  it("renders bounded governance-history delivery replay actions from the board contract", () => {
+    const exportCandidates = [
+      {
+        id: "governance_history_export",
+        label: "Governance history export",
+        itemCount: 2,
+        itemIds: ["governance_decisions", "implemented_actions"],
+        itemLabels: ["Governance decisions", "Implemented follow-through"],
+        summary: "Governance history is ready for bounded tenant export later.",
+        readiness: "ready_now",
+        readinessLabel: "Ready now",
+        latestDelivery: {
+          status: "delivery_failed" as const,
+          statusLabel: "Delivery failed",
+          summary: "The last governance history delivery attempt failed inside the bounded tenant-safe writer seam.",
+          attemptCount: 2,
+          lastAttemptedAtLabel: "May 29, 2026 01:00",
+          writerKindLabel: "Obsidian filesystem writer",
+          primaryNotePath:
+            "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+          lastErrorCode: "writer_failed",
+          lastErrorMessage: "Disk was temporarily unavailable."
+        },
+        exportActions: [
+          {
+            actionRoute: "export-preflight" as const,
+            actionPath: "/api/harness/runs/run_ui_test_1/export-candidates/governance_history_export/preflight",
+            actionMethod: "POST" as const,
+            actionToken: "preview-governance-history-export-preflight",
+            actionLabel: "Run export preflight",
+            actionDescription: "Validate the current export candidate against the live board contract before any dry-run or tenant-facing export bundle is produced."
+          },
+          {
+            actionRoute: "governance-history-export-replay" as const,
+            actionPath: "/api/harness/runs/run_ui_test_1/export-candidates/governance_history_export/delivery-replay",
+            actionMethod: "POST" as const,
+            actionToken: "preview-governance-history-export-replay",
+            actionLabel: "Replay governance history delivery",
+            actionDescription: "Re-dispatch the persisted tenant-safe governance-history bundle through the bounded private writer seam.",
+            nextEffectSummary: "This reuses the stored export-ready bundle instead of rebuilding a new tenant package."
+          }
+        ]
+      }
+    ] as NonNullable<HarnessBoardResponse["memoryBoundary"]["exportCandidates"]>;
+
+    const markup = renderToStaticMarkup(
+      <HarnessBoardPage
+        initialBoard={{
+          ...boardResponse,
+          memoryBoundary: {
+            ...boardResponse.memoryBoundary,
+            exportCandidates: exportCandidates ?? []
+          }
+        }}
+        initialControlMode="live"
+      />
+    );
+
+    expect(markup).toContain("Replay governance history delivery");
+    expect(markup).toContain("Action family: governance history export replay");
+    expect(markup).toContain("Last delivery error: Disk was temporarily unavailable.");
+    expect(markup).toContain("/api/harness/runs/run_ui_test_1/export-candidates/governance_history_export/delivery-replay");
+  });
+
   it("renders a simple drawer with only high-level details", () => {
     const markup = renderToStaticMarkup(
       <HarnessCardDrawer card={cards[0]!} open onClose={() => undefined} />

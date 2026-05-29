@@ -109,6 +109,13 @@ type HarnessApi = {
     candidateId: HarnessExportCandidateId;
     actionToken: string;
   }): Promise<import("../harness/board-service.js").HarnessGovernanceHistoryExportResult>;
+  replayGovernanceHistoryDeliveryCandidate?(request: {
+    authorization: string;
+    cookie?: string;
+    runId: string;
+    candidateId: HarnessExportCandidateId;
+    actionToken: string;
+  }): Promise<import("../harness/board-service.js").HarnessGovernanceHistoryDeliveryReplayResult>;
 };
 
 type RateLimiter = {
@@ -128,6 +135,7 @@ export function createHarnessHttpHandler(options: {
   preflightExportCandidate?: HarnessApi["preflightExportCandidate"];
   dryRunExportCandidate?: HarnessApi["dryRunExportCandidate"];
   exportGovernanceHistoryCandidate?: HarnessApi["exportGovernanceHistoryCandidate"];
+  replayGovernanceHistoryDeliveryCandidate?: HarnessApi["replayGovernanceHistoryDeliveryCandidate"];
   rateLimiter: RateLimiter;
   maxBodyBytes?: number;
 }) {
@@ -153,7 +161,7 @@ export function createHarnessHttpHandler(options: {
         /^\/api\/harness\/runs\/[^/]+\/review-attention$/u.test(request.path) ||
         /^\/api\/harness\/runs\/[^/]+\/resolve-attention$/u.test(request.path) ||
         /^\/api\/harness\/runs\/[^/]+\/fresh-cycle$/u.test(request.path) ||
-        /^\/api\/harness\/runs\/[^/]+\/export-candidates\/[^/]+\/(preflight|dry-run|export)$/u.test(request.path) ||
+        /^\/api\/harness\/runs\/[^/]+\/export-candidates\/[^/]+\/(preflight|dry-run|export|delivery-replay)$/u.test(request.path) ||
         /^\/api\/harness\/proposals\/[^/]+\/(approve|decision)$/u.test(request.path)
       )
     ) {
@@ -190,6 +198,8 @@ export function createHarnessHttpHandler(options: {
         ? "harness-export-dry-run"
       : request.method === "POST" && /^\/api\/harness\/runs\/[^/]+\/export-candidates\/[^/]+\/export$/u.test(request.path)
         ? "harness-governance-history-export"
+      : request.method === "POST" && /^\/api\/harness\/runs\/[^/]+\/export-candidates\/[^/]+\/delivery-replay$/u.test(request.path)
+        ? "harness-governance-history-export-replay"
       : request.method === "POST" && /^\/api\/harness\/proposals\/[^/]+\/(approve|decision)$/u.test(request.path)
         ? "harness-proposal-approve"
       : null;
@@ -373,7 +383,7 @@ export function createHarnessHttpHandler(options: {
         return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
       }
 
-      const exportCandidateMatch = /^\/api\/harness\/runs\/([^/]+)\/export-candidates\/([^/]+)\/(preflight|dry-run|export)$/u.exec(request.path);
+      const exportCandidateMatch = /^\/api\/harness\/runs\/([^/]+)\/export-candidates\/([^/]+)\/(preflight|dry-run|export|delivery-replay)$/u.exec(request.path);
       if (exportCandidateMatch) {
         const bodyInput = readJsonObject(request.body);
         const actionToken = readRequiredString(bodyInput?.actionToken);
@@ -407,6 +417,21 @@ export function createHarnessHttpHandler(options: {
             return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
           }
           const body = await options.dryRunExportCandidate({
+            authorization: request.headers.authorization ?? "",
+            ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
+            runId,
+            candidateId,
+            actionToken
+          });
+          assertWealthFactoryResponse(body);
+          return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
+        }
+
+        if (actionKind === "delivery-replay") {
+          if (!options.replayGovernanceHistoryDeliveryCandidate) {
+            return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
+          }
+          const body = await options.replayGovernanceHistoryDeliveryCandidate({
             authorization: request.headers.authorization ?? "",
             ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
             runId,

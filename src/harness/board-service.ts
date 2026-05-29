@@ -814,7 +814,8 @@ export type HarnessActionRequestExampleView = Partial<
 export type HarnessExportCandidateActionRoute =
   | "export-preflight"
   | "export-dry-run"
-  | "governance-history-export";
+  | "governance-history-export"
+  | "governance-history-export-replay";
 
 export type HarnessActionOptionView = {
   value: string;
@@ -1004,6 +1005,7 @@ export type HarnessExportPreflightResult = {
   nextStepLabel: string;
   supportsDryRun: boolean;
   supportsExport: boolean;
+  supportsReplay: boolean;
   latestDelivery?: HarnessExportCandidateDeliveryView;
   blockerLabel?: string;
 };
@@ -1042,6 +1044,14 @@ export type HarnessExportDryRunResult = {
 
 export type HarnessGovernanceHistoryExportResult = Omit<HarnessExportDryRunResult, "status"> & {
   status: "export_ready";
+  idempotencyKey: string;
+  summary: string;
+  latestDelivery: HarnessExportCandidateDeliveryView;
+};
+
+export type HarnessGovernanceHistoryDeliveryReplayResult = {
+  candidateId: "governance_history_export";
+  status: "delivery_replayed";
   idempotencyKey: string;
   summary: string;
   latestDelivery: HarnessExportCandidateDeliveryView;
@@ -3851,6 +3861,7 @@ export function createHarnessBoardService(options: {
         nextStepLabel: candidate.promotionNextStepLabel,
         supportsDryRun: Boolean(candidate.exportActions?.some((entry) => entry.actionRoute === "export-dry-run")),
         supportsExport: Boolean(candidate.exportActions?.some((entry) => entry.actionRoute === "governance-history-export")),
+        supportsReplay: Boolean(candidate.exportActions?.some((entry) => entry.actionRoute === "governance-history-export-replay")),
         ...(candidate.latestDelivery ? { latestDelivery: candidate.latestDelivery } : {}),
         ...(candidate.readiness !== "ready_now" ? { blockerLabel: candidate.promotionBlockerLabel } : {})
       };
@@ -3866,6 +3877,7 @@ export function createHarnessBoardService(options: {
             readiness: result.readiness,
             supportsDryRun: result.supportsDryRun,
             supportsExport: result.supportsExport,
+            supportsReplay: result.supportsReplay,
             nextStepLabel: result.nextStepLabel,
             ...(result.blockerLabel ? { blockerLabel: result.blockerLabel } : {})
           }
@@ -4010,6 +4022,101 @@ export function createHarnessBoardService(options: {
         })
       ]);
       return result;
+    },
+
+    async replayGovernanceHistoryDeliveryCandidate(request: {
+      authorization: string;
+      cookie?: string;
+      runId: string;
+      candidateId: HarnessExportCandidateId;
+      actionToken?: string;
+    }): Promise<HarnessGovernanceHistoryDeliveryReplayResult> {
+      const board = await loadExportBoardContext({
+        repository: options.repository,
+        authenticate: options.authenticate,
+        requireTenantMember: options.requireTenantMember,
+        requireActivePackageInstall: options.requireActivePackageInstall,
+        workflowRegistry: options.workflowRegistry,
+        authorization: request.authorization,
+        ...(request.cookie ? { cookie: request.cookie } : {}),
+        runId: request.runId
+      });
+      const candidate = findExportCandidateOrThrow(board.response.memoryBoundary.exportCandidates, request.candidateId);
+      if (candidate.id !== "governance_history_export") {
+        throw new HarnessRunCompletionConflictError("Harness delivery replay only supports governance history candidates");
+      }
+      const action = findExportActionOrThrow(candidate, "governance-history-export-replay");
+      if (request.actionToken) {
+        assertHarnessActionToken(action.actionToken, request.actionToken);
+      }
+      const exportDelivery = findLatestExportDeliveryRecordOrThrow(board.exportDeliveries, candidate.id);
+      if (exportDelivery.status === "delivered") {
+        throw new HarnessRunCompletionConflictError("Harness governance history delivery is already complete");
+      }
+
+      await options.onGovernanceHistoryExportReady?.({
+        tenantId: board.access.session.tenantId,
+        userId: board.access.session.userId,
+        runId: board.response.runId,
+        workflowId: board.response.workflowId,
+        packageId: board.response.packageId,
+        candidateId: "governance_history_export",
+        bundleId: exportDelivery.bundleId,
+        exportFormat: exportDelivery.exportFormat,
+        recordTarget: exportDelivery.recordTarget,
+        idempotencyKey: exportDelivery.idempotencyKey,
+        noteTitle: exportDelivery.noteTitle,
+        noteFileName: exportDelivery.noteFileName,
+        placement: {
+          targetSystem: exportDelivery.placementTargetSystem as "obsidian_vault",
+          vaultFolder: exportDelivery.vaultFolder,
+          primaryNotePath: exportDelivery.primaryNotePath,
+          syncStrategy: exportDelivery.syncStrategy as HarnessMemoryBoundarySyncStrategy,
+          confirmationRequirement:
+            exportDelivery.confirmationRequirement as HarnessMemoryBoundaryExportConfirmationRequirement
+        },
+        files: exportDelivery.files.map(cloneHarnessExportPackageFile),
+        recordCount: exportDelivery.recordCount,
+        disclosureSummary: exportDelivery.disclosureSummary,
+        redactionSummary: exportDelivery.redactionSummary
+      });
+
+      const latestDelivery: HarnessExportCandidateDeliveryView = {
+        status: "export_ready",
+        statusLabel: humanizeExportDeliveryStatus("export_ready"),
+        summary: "The governance history bundle was replayed back into the bounded tenant-safe writer seam and is waiting for delivery.",
+        attemptCount: exportDelivery.attemptCount + 1,
+        lastAttemptedAtLabel: "just now",
+        ...(exportDelivery.writerKind ? { writerKindLabel: humanizeExportDeliveryWriterKind(exportDelivery.writerKind) } : {}),
+        ...(exportDelivery.primaryNotePath ? { primaryNotePath: exportDelivery.primaryNotePath } : {})
+      };
+
+      await publishHarnessAuditEvents(options.audit, [
+        createHarnessExportAuditEvent({
+          tenantId: board.access.session.tenantId,
+          actorUserId: board.access.session.userId,
+          runId: board.response.runId,
+          candidateId: candidate.id,
+          eventType: "harness.governance_history_export_delivery_replay_requested",
+          metadata: {
+            bundleId: exportDelivery.bundleId,
+            idempotencyKey: exportDelivery.idempotencyKey,
+            previousStatus: exportDelivery.status,
+            attemptCount: exportDelivery.attemptCount,
+            primaryNotePath: exportDelivery.primaryNotePath,
+            fileCount: exportDelivery.files.length,
+            recordCount: exportDelivery.recordCount
+          }
+        })
+      ]);
+
+      return {
+        candidateId: "governance_history_export",
+        status: "delivery_replayed",
+        idempotencyKey: exportDelivery.idempotencyKey,
+        summary: "Governance history delivery replay has been re-queued through the bounded tenant-safe writer seam.",
+        latestDelivery
+      };
     }
   };
 }
@@ -4048,6 +4155,7 @@ async function loadExportBoardContext(input: {
   return {
     access,
     run,
+    exportDeliveries,
     response: buildHarnessBoardResponse({
       run,
       cards,
@@ -6027,7 +6135,10 @@ function buildMemoryBoundaryView(input: {
           readiness: representative.readiness,
           promotionState: representative.promotionState,
           promotionNextStep: representative.promotionNextStep,
-          itemIds: governanceHistoryCandidateItems.map((item) => item.id)
+          itemIds: governanceHistoryCandidateItems.map((item) => item.id),
+          ...(latestExportDeliveryByCandidateId.get("governance_history_export")
+            ? { latestDelivery: latestExportDeliveryByCandidateId.get("governance_history_export")! }
+            : {})
         }
       })
     });
@@ -6150,7 +6261,10 @@ function buildMemoryBoundaryView(input: {
           readiness: representative.readiness,
           promotionState: representative.promotionState,
           promotionNextStep: representative.promotionNextStep,
-          itemIds: packageBundleCandidateItems.map((item) => item.id)
+          itemIds: packageBundleCandidateItems.map((item) => item.id),
+          ...(latestExportDeliveryByCandidateId.get("package_bundle_export")
+            ? { latestDelivery: latestExportDeliveryByCandidateId.get("package_bundle_export")! }
+            : {})
         }
       }),
       ...(representative.nextEligibleSummary ? { nextEligibleSummary: representative.nextEligibleSummary } : {})
@@ -7993,6 +8107,7 @@ function buildExportCandidateActions(input: {
     promotionState: HarnessMemoryBoundaryPromotionState;
     promotionNextStep: HarnessMemoryBoundaryPromotionNextStep;
     itemIds: readonly string[];
+    latestDelivery?: HarnessExportCandidateDeliveryView;
   };
 }): HarnessExportCandidateActionView[] {
   const contentVersion = input.decisions
@@ -8006,7 +8121,12 @@ function buildExportCandidateActions(input: {
     input.candidate.promotionState,
     input.candidate.promotionNextStep,
     input.candidate.itemIds.join(","),
-    contentVersion
+    contentVersion,
+    input.candidate.latestDelivery?.status ?? "",
+    String(input.candidate.latestDelivery?.attemptCount ?? 0),
+    input.candidate.latestDelivery?.lastAttemptedAtLabel ?? "",
+    input.candidate.latestDelivery?.deliveredAtLabel ?? "",
+    input.candidate.latestDelivery?.lastErrorMessage ?? ""
   ] as const;
   const actions: HarnessExportCandidateActionView[] = [
     {
@@ -8044,6 +8164,27 @@ function buildExportCandidateActions(input: {
         nextEffectSummary: "This returns a tenant-safe markdown bundle for later vault placement without turning Obsidian into live runtime state."
       }
     );
+
+    if (input.candidate.latestDelivery && input.candidate.latestDelivery.status !== "delivered") {
+      actions.push({
+        actionRoute: "governance-history-export-replay",
+        actionPath: `/api/harness/runs/${encodeURIComponent(input.runId)}/export-candidates/${encodeURIComponent(input.candidateId)}/delivery-replay`,
+        actionMethod: "POST",
+        actionToken: createHarnessActionToken(["governance-history-export-replay", ...baseParts]),
+        actionLabel:
+          input.candidate.latestDelivery.status === "delivery_failed"
+            ? "Replay governance history delivery"
+            : "Deliver governance history export",
+        actionDescription:
+          input.candidate.latestDelivery.status === "delivery_failed"
+            ? "Re-dispatch the persisted tenant-safe governance-history bundle through the bounded private writer seam."
+            : "Dispatch the persisted tenant-safe governance-history bundle through the bounded private writer seam.",
+        nextEffectSummary:
+          input.candidate.latestDelivery.status === "delivery_failed"
+            ? "This reuses the stored export-ready bundle instead of rebuilding a new tenant package."
+            : "This uses the existing export-ready bundle and attempts bounded delivery without rebuilding it."
+      });
+    }
   }
 
   return actions;
@@ -8115,6 +8256,19 @@ function findExportActionOrThrow(
     throw new HarnessRunCompletionConflictError("Harness export action is not available for the current candidate contract");
   }
   return action;
+}
+
+function findLatestExportDeliveryRecordOrThrow(
+  deliveries: readonly HarnessExportDeliveryRecord[],
+  candidateId: HarnessExportCandidateId
+) {
+  const latest = deliveries
+    .filter((delivery) => delivery.candidateId === candidateId)
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0] ?? null;
+  if (!latest) {
+    throw new HarnessRunCompletionConflictError("Harness export delivery bundle is no longer available for replay");
+  }
+  return latest;
 }
 
 function buildGovernanceHistoryExportDryRun(

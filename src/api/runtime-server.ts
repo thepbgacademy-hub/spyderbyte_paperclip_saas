@@ -440,6 +440,7 @@ export function createDashboardRuntime(options: {
     preflightExportCandidate: harnessBoardApi.preflightExportCandidate,
     dryRunExportCandidate: harnessBoardApi.dryRunExportCandidate,
     exportGovernanceHistoryCandidate: harnessBoardApi.exportGovernanceHistoryCandidate,
+    replayGovernanceHistoryDeliveryCandidate: harnessBoardApi.replayGovernanceHistoryDeliveryCandidate,
     rateLimiter: createPostgresFixedWindowRateLimiter({ runner: transactionRunner, limit: 120, windowMs: 60_000 })
   });
   const healthHandler = createHealthHttpHandler({
