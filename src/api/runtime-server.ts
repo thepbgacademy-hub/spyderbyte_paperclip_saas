@@ -18,12 +18,20 @@ import {
   createPaperclipSecretBindingRepository,
   createPaperclipSecretProjectionService
 } from "../paperclip/secret-sync.js";
-import { createHarnessBoardService, type HarnessGovernanceHistoryExportReadyDispatch } from "../harness/board-service.js";
+import {
+  createHarnessBoardService,
+  type HarnessGovernanceHistoryExportReadyDispatch,
+  type HarnessPackageBundleExportReadyDispatch
+} from "../harness/board-service.js";
 import { createPostgresHarnessRepository } from "../harness/repository.js";
 import {
   createFilesystemGovernanceHistoryExportWriter,
   type GovernanceHistoryExportWriter
 } from "../obsidian/governance-history-export-writer.js";
+import {
+  createFilesystemPackageBundleExportWriter,
+  type PackageBundleExportWriter
+} from "../obsidian/package-bundle-export-writer.js";
 import { assertAllowedOrigin, createSecurityHeaders } from "../security/cors.js";
 import { createPostgresFixedWindowRateLimiter } from "../security/postgres-rate-limit.js";
 import { createEncryptedSecretVault } from "../secrets/encrypted-vault.js";
@@ -142,6 +150,8 @@ export function createDashboardRuntime(options: {
   workflowQueueEnqueuer?: WorkflowRunEnqueuer;
   onGovernanceHistoryExportReady?: Parameters<typeof createHarnessBoardService>[0]["onGovernanceHistoryExportReady"];
   governanceHistoryExportWriter?: GovernanceHistoryExportWriter;
+  onPackageBundleExportReady?: Parameters<typeof createHarnessBoardService>[0]["onPackageBundleExportReady"];
+  packageBundleExportWriter?: PackageBundleExportWriter;
 }) {
   const pool = createPgPool({
     connectionString: options.env.supabaseDbUrl,
@@ -265,6 +275,11 @@ export function createDashboardRuntime(options: {
     (options.env.obsidianExportRoot
       ? createFilesystemGovernanceHistoryExportWriter({ exportRoot: options.env.obsidianExportRoot })
       : undefined);
+  const packageBundleExportWriter =
+    options.packageBundleExportWriter ??
+    (options.env.obsidianExportRoot
+      ? createFilesystemPackageBundleExportWriter({ exportRoot: options.env.obsidianExportRoot })
+      : undefined);
   const onGovernanceHistoryExportReady = async (dispatch: HarnessGovernanceHistoryExportReadyDispatch) => {
     const now = new Date().toISOString();
     const existing = await harnessRepository.getExportDeliveryByIdempotencyKey(dispatch.idempotencyKey);
@@ -372,6 +387,113 @@ export function createDashboardRuntime(options: {
 
     await options.onGovernanceHistoryExportReady?.(dispatch);
   };
+  const onPackageBundleExportReady = async (dispatch: HarnessPackageBundleExportReadyDispatch) => {
+    const now = new Date().toISOString();
+    const existing = await harnessRepository.getExportDeliveryByIdempotencyKey(dispatch.idempotencyKey);
+    if (existing?.status === "delivered") {
+      return;
+    }
+
+    const exportDelivery = await harnessRepository.upsertExportDelivery({
+      id: randomUUID(),
+      runId: dispatch.runId,
+      tenantId: dispatch.tenantId,
+      workflowId: dispatch.workflowId,
+      packageId: dispatch.packageId,
+      candidateId: dispatch.candidateId,
+      status: "export_ready",
+      exportFormat: dispatch.exportFormat,
+      recordTarget: dispatch.recordTarget,
+      bundleId: dispatch.bundleId,
+      idempotencyKey: dispatch.idempotencyKey,
+      noteTitle: dispatch.noteTitle,
+      noteFileName: dispatch.noteFileName,
+      placementTargetSystem: dispatch.placement.targetSystem,
+      vaultFolder: dispatch.placement.vaultFolder,
+      primaryNotePath: dispatch.placement.primaryNotePath,
+      syncStrategy: dispatch.placement.syncStrategy,
+      confirmationRequirement: dispatch.placement.confirmationRequirement,
+      files: dispatch.files.map((file) => ({ ...file })),
+      recordCount: dispatch.recordCount,
+      disclosureSummary: dispatch.disclosureSummary,
+      redactionSummary: dispatch.redactionSummary,
+      attemptCount: existing?.attemptCount ?? 0,
+      lastAttemptedAt: existing?.lastAttemptedAt ?? null,
+      deliveredAt: existing?.deliveredAt ?? null,
+      writerKind: existing?.writerKind ?? null,
+      deliveryReceipt: existing?.deliveryReceipt ?? {},
+      lastErrorCode: existing?.lastErrorCode ?? null,
+      lastErrorMessage: existing?.lastErrorMessage ?? null,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    if (packageBundleExportWriter && exportDelivery.status !== "delivered") {
+      const attemptedAt = new Date().toISOString();
+      try {
+        const delivered = await packageBundleExportWriter.write(dispatch);
+        await harnessRepository.recordExportDeliveryOutcome({
+          idempotencyKey: dispatch.idempotencyKey,
+          status: "delivered",
+          writerKind: delivered.writerKind,
+          deliveryReceipt: { ...delivered.receipt },
+          attemptCount: exportDelivery.attemptCount + 1,
+          lastAttemptedAt: attemptedAt,
+          deliveredAt: delivered.deliveredAt,
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          updatedAt: delivered.deliveredAt
+        });
+        await audit({
+          tenantId: dispatch.tenantId,
+          actorUserId: dispatch.userId,
+          eventType: "harness.package_bundle_export_delivered",
+          entityType: "harness_export_delivery",
+          metadata: {
+            runId: dispatch.runId,
+            workflowId: dispatch.workflowId,
+            candidateId: dispatch.candidateId,
+            bundleId: dispatch.bundleId,
+            idempotencyKey: dispatch.idempotencyKey,
+            writerKind: delivered.writerKind,
+            writtenFileCount: delivered.receipt.writtenFileCount,
+            primaryNotePath: delivered.receipt.primaryNotePath
+          }
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown package bundle export delivery failure";
+        await harnessRepository.recordExportDeliveryOutcome({
+          idempotencyKey: dispatch.idempotencyKey,
+          status: "delivery_failed",
+          writerKind: "obsidian_filesystem",
+          deliveryReceipt: {},
+          attemptCount: exportDelivery.attemptCount + 1,
+          lastAttemptedAt: attemptedAt,
+          deliveredAt: null,
+          lastErrorCode: "writer_failed",
+          lastErrorMessage: message.slice(0, 240),
+          updatedAt: attemptedAt
+        });
+        await audit({
+          tenantId: dispatch.tenantId,
+          actorUserId: dispatch.userId,
+          eventType: "harness.package_bundle_export_delivery_failed",
+          entityType: "harness_export_delivery",
+          metadata: {
+            runId: dispatch.runId,
+            workflowId: dispatch.workflowId,
+            candidateId: dispatch.candidateId,
+            bundleId: dispatch.bundleId,
+            idempotencyKey: dispatch.idempotencyKey,
+            errorCode: "writer_failed",
+            errorMessage: message.slice(0, 240)
+          }
+        });
+      }
+    }
+
+    await options.onPackageBundleExportReady?.(dispatch);
+  };
   const harnessBoardApi = createHarnessBoardService({
     authenticate: options.auth.authenticate,
     requireTenantMember: repositories.requireTenantMember,
@@ -417,6 +539,7 @@ export function createDashboardRuntime(options: {
         }
       : {}),
     onGovernanceHistoryExportReady,
+    onPackageBundleExportReady,
     runAtomically: async (work) =>
       transactionRunner.withTransaction(async (transaction) =>
         work(createPostgresHarnessRepository(transaction))
@@ -440,7 +563,9 @@ export function createDashboardRuntime(options: {
     preflightExportCandidate: harnessBoardApi.preflightExportCandidate,
     dryRunExportCandidate: harnessBoardApi.dryRunExportCandidate,
     exportGovernanceHistoryCandidate: harnessBoardApi.exportGovernanceHistoryCandidate,
+    exportPackageBundleCandidate: harnessBoardApi.exportPackageBundleCandidate,
     replayGovernanceHistoryDeliveryCandidate: harnessBoardApi.replayGovernanceHistoryDeliveryCandidate,
+    replayPackageBundleDeliveryCandidate: harnessBoardApi.replayPackageBundleDeliveryCandidate,
     rateLimiter: createPostgresFixedWindowRateLimiter({ runner: transactionRunner, limit: 120, windowMs: 60_000 })
   });
   const healthHandler = createHealthHttpHandler({

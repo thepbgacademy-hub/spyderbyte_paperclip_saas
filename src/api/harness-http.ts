@@ -109,6 +109,13 @@ type HarnessApi = {
     candidateId: HarnessExportCandidateId;
     actionToken: string;
   }): Promise<import("../harness/board-service.js").HarnessGovernanceHistoryExportResult>;
+  exportPackageBundleCandidate?(request: {
+    authorization: string;
+    cookie?: string;
+    runId: string;
+    candidateId: HarnessExportCandidateId;
+    actionToken: string;
+  }): Promise<import("../harness/board-service.js").HarnessPackageBundleExportResult>;
   replayGovernanceHistoryDeliveryCandidate?(request: {
     authorization: string;
     cookie?: string;
@@ -116,6 +123,13 @@ type HarnessApi = {
     candidateId: HarnessExportCandidateId;
     actionToken: string;
   }): Promise<import("../harness/board-service.js").HarnessGovernanceHistoryDeliveryReplayResult>;
+  replayPackageBundleDeliveryCandidate?(request: {
+    authorization: string;
+    cookie?: string;
+    runId: string;
+    candidateId: HarnessExportCandidateId;
+    actionToken: string;
+  }): Promise<import("../harness/board-service.js").HarnessPackageBundleDeliveryReplayResult>;
 };
 
 type RateLimiter = {
@@ -135,7 +149,9 @@ export function createHarnessHttpHandler(options: {
   preflightExportCandidate?: HarnessApi["preflightExportCandidate"];
   dryRunExportCandidate?: HarnessApi["dryRunExportCandidate"];
   exportGovernanceHistoryCandidate?: HarnessApi["exportGovernanceHistoryCandidate"];
+  exportPackageBundleCandidate?: HarnessApi["exportPackageBundleCandidate"];
   replayGovernanceHistoryDeliveryCandidate?: HarnessApi["replayGovernanceHistoryDeliveryCandidate"];
+  replayPackageBundleDeliveryCandidate?: HarnessApi["replayPackageBundleDeliveryCandidate"];
   rateLimiter: RateLimiter;
   maxBodyBytes?: number;
 }) {
@@ -428,10 +444,13 @@ export function createHarnessHttpHandler(options: {
         }
 
         if (actionKind === "delivery-replay") {
-          if (!options.replayGovernanceHistoryDeliveryCandidate) {
+          const replayHandler = candidateId === "governance_history_export"
+            ? options.replayGovernanceHistoryDeliveryCandidate
+            : options.replayPackageBundleDeliveryCandidate;
+          if (!replayHandler) {
             return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
           }
-          const body = await options.replayGovernanceHistoryDeliveryCandidate({
+          const body = await replayHandler({
             authorization: request.headers.authorization ?? "",
             ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
             runId,
@@ -442,10 +461,13 @@ export function createHarnessHttpHandler(options: {
           return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
         }
 
-        if (!options.exportGovernanceHistoryCandidate) {
+        const exportHandler = candidateId === "governance_history_export"
+          ? options.exportGovernanceHistoryCandidate
+          : options.exportPackageBundleCandidate;
+        if (!exportHandler) {
           return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
         }
-        const body = await options.exportGovernanceHistoryCandidate({
+        const body = await exportHandler({
           authorization: request.headers.authorization ?? "",
           ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
           runId,

@@ -659,6 +659,36 @@ try {
       throw new Error("Harness export delivery results migration did not produce the required schema shape");
     }
   }
+  const queryHarnessExportDeliveryPackageBundleReady = () =>
+    client.query(
+      `select
+        exists (
+          select 1
+          from pg_constraint
+          where conrelid = to_regclass('wfpc.harness_export_deliveries')
+            and pg_get_constraintdef(oid) like '%package_bundle_export%'
+        ) as has_package_bundle_candidate,
+        exists (
+          select 1
+          from pg_constraint
+          where conrelid = to_regclass('wfpc.harness_export_deliveries')
+            and pg_get_constraintdef(oid) like '%package_deliverable_record%'
+        ) as has_package_bundle_record_target`
+    );
+  let harnessExportDeliveryPackageBundleExisting = await queryHarnessExportDeliveryPackageBundleReady();
+  let harnessExportDeliveryPackageBundleReady = Object.values(
+    harnessExportDeliveryPackageBundleExisting.rows[0] ?? {}
+  ).every(Boolean);
+  if (!harnessExportDeliveryPackageBundleReady) {
+    await client.query(readFileSync("supabase/migrations/0024_wf_harness_export_delivery_package_bundle.sql", "utf8"));
+    harnessExportDeliveryPackageBundleExisting = await queryHarnessExportDeliveryPackageBundleReady();
+    harnessExportDeliveryPackageBundleReady = Object.values(
+      harnessExportDeliveryPackageBundleExisting.rows[0] ?? {}
+    ).every(Boolean);
+    if (!harnessExportDeliveryPackageBundleReady) {
+      throw new Error("Harness export delivery package-bundle widening did not produce the required schema shape");
+    }
+  }
   const { rows } = await client.query(
     "select table_schema, table_name from information_schema.tables where table_schema = 'wfpc' order by table_name"
   );

@@ -844,6 +844,63 @@ describe("runtime server", () => {
     await runtime.close();
   });
 
+  it("passes the private package-bundle export-ready hook through to the board service seam", async () => {
+    resetMockExportDeliveryRow();
+    const onPackageBundleExportReady = vi.fn().mockResolvedValue(undefined);
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() },
+      onPackageBundleExportReady
+    });
+
+    const boardServiceOptions = vi.mocked(createHarnessBoardService).mock.calls.at(-1)?.[0];
+    expect(boardServiceOptions?.onPackageBundleExportReady).toEqual(expect.any(Function));
+
+    await boardServiceOptions?.onPackageBundleExportReady?.({
+      tenantId: "tenant_123",
+      userId: "user_123",
+      runId: "run_123",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      candidateId: "package_bundle_export",
+      bundleId: "bundle_package_123",
+      exportFormat: "obsidian_markdown_bundle",
+      recordTarget: "package_deliverable_record",
+      idempotencyKey: "package_idempotency_123",
+      noteTitle: "Package bundle",
+      noteFileName: "wf_connect_first_workflow-package-bundle.md",
+      placement: {
+        targetSystem: "obsidian_vault",
+        vaultFolder: "wealth-factory/package-bundles/wf_connect_first_workflow",
+        primaryNotePath: "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
+        syncStrategy: "replace_package_snapshot_after_board_closure",
+        confirmationRequirement: "board_closure_then_tenant_export_confirmation"
+      },
+      files: [
+        {
+          path: "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
+          mediaType: "text/markdown",
+          byteSize: 20,
+          checksum: "abc",
+          content: "# Package bundle"
+        }
+      ],
+      recordCount: 3,
+      disclosureSummary: "Closure snapshot summary only",
+      redactionSummary: "Package-safe redaction"
+    });
+
+    expect(onPackageBundleExportReady).toHaveBeenCalledOnce();
+    await runtime.close();
+  });
+
   it("delivers governance-history export bundles through the injected writer and records delivery success", async () => {
     resetMockExportDeliveryRow();
     const governanceHistoryExportWriter = {
@@ -919,6 +976,83 @@ describe("runtime server", () => {
     expect(governanceHistoryExportWriter.write).toHaveBeenCalledOnce();
     expect(query).toHaveBeenCalledWith(expect.stringContaining("update wfpc.harness_export_deliveries"), expect.any(Array));
 
+    await runtime.close();
+  });
+
+  it("delivers package-bundle export bundles through the injected writer and records delivery success", async () => {
+    resetMockExportDeliveryRow();
+    const packageBundleExportWriter = {
+      write: vi.fn().mockResolvedValue({
+        writerKind: "obsidian_filesystem",
+        deliveredAt: "2026-05-30T01:00:01.000Z",
+        receipt: {
+          primaryNotePath:
+            "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
+          manifestPath: "wealth-factory/package-bundles/wf_connect_first_workflow/export-manifest.json",
+          writtenFileCount: 4
+        }
+      })
+    };
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() },
+      packageBundleExportWriter
+    });
+
+    const { createPgPoolQueryClient } = await import("../src/db/postgres-client.js");
+    const query = vi.mocked(createPgPoolQueryClient).mock.results.at(-1)?.value.query;
+    const boardServiceOptions = vi.mocked(createHarnessBoardService).mock.calls.at(-1)?.[0];
+    await boardServiceOptions?.onPackageBundleExportReady?.({
+      tenantId: "tenant_123",
+      userId: "user_123",
+      runId: "run_123",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      candidateId: "package_bundle_export",
+      bundleId: "bundle_package_123",
+      exportFormat: "obsidian_markdown_bundle",
+      recordTarget: "package_deliverable_record",
+      idempotencyKey: "package_idempotency_123",
+      noteTitle: "Package bundle",
+      noteFileName: "wf_connect_first_workflow-package-bundle.md",
+      placement: {
+        targetSystem: "obsidian_vault",
+        vaultFolder: "wealth-factory/package-bundles/wf_connect_first_workflow",
+        primaryNotePath:
+          "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
+        syncStrategy: "replace_package_snapshot_after_board_closure",
+        confirmationRequirement: "board_closure_then_tenant_export_confirmation"
+      },
+      files: [
+        {
+          path: "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
+          mediaType: "text/markdown",
+          byteSize: 20,
+          checksum: "abc",
+          content: "# Package bundle"
+        },
+        {
+          path: "wealth-factory/package-bundles/wf_connect_first_workflow/export-manifest.json",
+          mediaType: "application/json",
+          byteSize: 42,
+          checksum: "def",
+          content: "{\"ok\":true}"
+        }
+      ],
+      recordCount: 3,
+      disclosureSummary: "Closure snapshot summary only",
+      redactionSummary: "Package-safe redaction"
+    });
+
+    expect(packageBundleExportWriter.write).toHaveBeenCalledOnce();
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("update wfpc.harness_export_deliveries"), expect.any(Array));
     await runtime.close();
   });
 

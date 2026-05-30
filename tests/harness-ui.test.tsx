@@ -1610,6 +1610,61 @@ describe("harness board UI", () => {
     expect(markup).toContain("/api/harness/runs/run_ui_test_1/export-candidates/governance_history_export/delivery-replay");
   });
 
+  it("renders bounded package-bundle delivery replay actions from the board contract", () => {
+    const exportCandidates = [
+      {
+        id: "package_bundle_export",
+        label: "Package bundle export",
+        itemCount: 2,
+        itemIds: ["package_governance", "package_deliverables"],
+        itemLabels: ["Package governance", "Packaged deliverables"],
+        summary: "Package bundle export is ready for bounded tenant delivery.",
+        readiness: "ready_now",
+        readinessLabel: "Ready now",
+        latestDelivery: {
+          status: "delivery_failed" as const,
+          statusLabel: "Delivery failed",
+          summary: "The last package bundle delivery attempt failed inside the bounded tenant-safe writer seam.",
+          attemptCount: 1,
+          lastAttemptedAtLabel: "May 30, 2026 01:00",
+          writerKindLabel: "Obsidian filesystem writer",
+          primaryNotePath:
+            "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
+          lastErrorCode: "writer_failed",
+          lastErrorMessage: "Disk was temporarily unavailable."
+        },
+        exportActions: [
+          {
+            actionRoute: "package-bundle-export-replay" as const,
+            actionPath: "/api/harness/runs/run_ui_test_1/export-candidates/package_bundle_export/delivery-replay",
+            actionMethod: "POST" as const,
+            actionToken: "preview-package-bundle-export-replay",
+            actionLabel: "Replay package bundle delivery",
+            actionDescription: "Re-dispatch the persisted tenant-safe package bundle through the bounded private writer seam.",
+            nextEffectSummary: "This reuses the stored package bundle instead of rebuilding a new tenant package."
+          }
+        ]
+      }
+    ] as NonNullable<HarnessBoardResponse["memoryBoundary"]["exportCandidates"]>;
+
+    const markup = renderToStaticMarkup(
+      <HarnessBoardPage
+        initialBoard={{
+          ...boardResponse,
+          memoryBoundary: {
+            ...boardResponse.memoryBoundary,
+            exportCandidates
+          }
+        }}
+        initialControlMode="live"
+      />
+    );
+
+    expect(markup).toContain("Replay package bundle delivery");
+    expect(markup).toContain("Action family: package bundle export replay");
+    expect(markup).toContain("/api/harness/runs/run_ui_test_1/export-candidates/package_bundle_export/delivery-replay");
+  });
+
   it("renders a simple drawer with only high-level details", () => {
     const markup = renderToStaticMarkup(
       <HarnessCardDrawer card={cards[0]!} open onClose={() => undefined} />

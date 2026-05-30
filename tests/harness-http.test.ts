@@ -356,6 +356,147 @@ describe("harness HTTP boundary", () => {
     });
   });
 
+  it("routes bounded package-bundle export and replay through guarded candidate endpoints", async () => {
+    const dryRunExportCandidate = vi.fn().mockResolvedValue({
+      candidateId: "package_bundle_export",
+      status: "ready",
+      exportFormat: "obsidian_markdown_bundle",
+      recordTarget: "package_deliverable_record",
+      bundleId: "bundle-package",
+      noteTitle: "Package bundle",
+      noteFileName: "wf_connect_first_workflow-package-bundle.md",
+      content: "# Package bundle",
+      placement: {
+        targetSystem: "obsidian_vault",
+        vaultFolder: "wealth-factory/package-bundles/wf_connect_first_workflow",
+        primaryNotePath: "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
+        syncStrategy: "replace_package_snapshot_after_board_closure",
+        confirmationRequirement: "board_closure_then_tenant_export_confirmation"
+      },
+      files: [
+        {
+          path: "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
+          mediaType: "text/markdown",
+          byteSize: 20,
+          checksum: "abc",
+          content: "# Package bundle"
+        }
+      ],
+      recordCount: 3,
+      disclosureSummary: "Closure snapshot summary only",
+      redactionSummary: "Package-safe redaction"
+    });
+    const exportPackageBundleCandidate = vi.fn().mockResolvedValue({
+      candidateId: "package_bundle_export",
+      status: "export_ready",
+      exportFormat: "obsidian_markdown_bundle",
+      recordTarget: "package_deliverable_record",
+      bundleId: "bundle-package",
+      noteTitle: "Package bundle",
+      noteFileName: "wf_connect_first_workflow-package-bundle.md",
+      content: "# Package bundle",
+      placement: {
+        targetSystem: "obsidian_vault",
+        vaultFolder: "wealth-factory/package-bundles/wf_connect_first_workflow",
+        primaryNotePath: "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
+        syncStrategy: "replace_package_snapshot_after_board_closure",
+        confirmationRequirement: "board_closure_then_tenant_export_confirmation"
+      },
+      files: [
+        {
+          path: "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
+          mediaType: "text/markdown",
+          byteSize: 20,
+          checksum: "abc",
+          content: "# Package bundle"
+        }
+      ],
+      recordCount: 3,
+      disclosureSummary: "Closure snapshot summary only",
+      redactionSummary: "Package-safe redaction",
+      idempotencyKey: "package-export-key",
+      summary: "Package bundle export is ready."
+    });
+    const replayPackageBundleDeliveryCandidate = vi.fn().mockResolvedValue({
+      candidateId: "package_bundle_export",
+      status: "delivery_replayed",
+      idempotencyKey: "package-export-key",
+      summary: "Package bundle delivery replay has been re-queued through the bounded tenant-safe writer seam.",
+      latestDelivery: {
+        status: "export_ready",
+        statusLabel: "Export ready",
+        summary: "The package bundle is export-ready and waiting for bounded delivery through the configured tenant-safe writer seam.",
+        attemptCount: 2,
+        lastAttemptedAtLabel: "just now"
+      }
+    });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      decideProposal: vi.fn(),
+      completeRun: vi.fn(),
+      preflightExportCandidate: vi.fn().mockResolvedValue({
+        candidateId: "package_bundle_export",
+        status: "ready",
+        readiness: "ready_now",
+        readinessLabel: "Ready now",
+        summary: "Package bundle is ready for bounded tenant export later.",
+        nextStepLabel: "Tenant export available",
+        supportsDryRun: true,
+        supportsExport: true,
+        supportsReplay: false
+      }),
+      dryRunExportCandidate,
+      exportPackageBundleCandidate,
+      replayPackageBundleDeliveryCandidate,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const requestBase = {
+      method: "POST" as const,
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        cookie: "wf_session=abc",
+        "content-type": "application/json"
+      },
+      body: { actionToken: "candidate-token" },
+      bodyByteLength: JSON.stringify({ actionToken: "candidate-token" }).length,
+      ip: "203.0.113.10"
+    };
+
+    const dryRun = await handler({
+      ...requestBase,
+      path: "/api/harness/runs/run_123/export-candidates/package_bundle_export/dry-run"
+    });
+    const exported = await handler({
+      ...requestBase,
+      path: "/api/harness/runs/run_123/export-candidates/package_bundle_export/export"
+    });
+    const replayed = await handler({
+      ...requestBase,
+      path: "/api/harness/runs/run_123/export-candidates/package_bundle_export/delivery-replay"
+    });
+
+    expect(dryRun.status).toBe(200);
+    expect(exported.status).toBe(200);
+    expect(replayed.status).toBe(200);
+    expect(dryRunExportCandidate).toHaveBeenCalledWith(expect.objectContaining({
+      runId: "run_123",
+      candidateId: "package_bundle_export"
+    }));
+    expect(exportPackageBundleCandidate).toHaveBeenCalledWith(expect.objectContaining({
+      runId: "run_123",
+      candidateId: "package_bundle_export"
+    }));
+    expect(replayPackageBundleDeliveryCandidate).toHaveBeenCalledWith(expect.objectContaining({
+      runId: "run_123",
+      candidateId: "package_bundle_export"
+    }));
+  });
+
   it("maps stale export-candidate tokens to stale_contract", async () => {
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],

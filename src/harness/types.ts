@@ -130,10 +130,10 @@ export interface HarnessExportDeliveryRecord {
   tenantId: string;
   workflowId: string;
   packageId: string;
-  candidateId: "governance_history_export";
+  candidateId: "governance_history_export" | "package_bundle_export";
   status: "export_ready" | "delivered" | "delivery_failed";
   exportFormat: "obsidian_markdown_bundle";
-  recordTarget: "governance_history_record";
+  recordTarget: "governance_history_record" | "package_deliverable_record";
   bundleId: string;
   idempotencyKey: string;
   noteTitle: string;

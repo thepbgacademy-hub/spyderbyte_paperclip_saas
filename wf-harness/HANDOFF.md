@@ -49,6 +49,9 @@ The first harness implementation slice is now built and verified:
 - grouped export candidates should own grouped write-safety semantics too: payload shape, idempotency, replay safety, and conflict policy should surface as grouped board truth instead of forcing later export work to reopen member buckets just to recover write posture
 - grouped export candidates should own grouped preparation semantics too: atomicity, derivation basis, revision policy, and freshness source should surface as grouped board truth instead of forcing later export work to reopen member buckets just to recover export preparation posture
 - grouped export candidates should own grouped validation and completeness posture too: validation boundary and completeness rule should surface as grouped board truth instead of forcing later export work to reopen member buckets just to recover grouped export readiness rules
+- grouped export execution now has two bounded candidates, not one: governance-history export and package-bundle export should both reuse the same private harness delivery ledger, stale-token export contract, and tenant-safe writer seams instead of growing separate ad hoc delivery paths
+- package-bundle export must stay board-closure-gated and delivery-ledger-backed: if the board is not closed, `package_bundle_export` may preflight but must not dry-run/export/replay through a writable seam
+- public export posture should stay content-free even as package delivery widens: board state, HTTP responses, and audit metadata may surface bounded delivery status, paths, counts, and retry posture, but package bodies must stay in private dispatch/writer seams and the harness-owned export ledger
 
 ## External References
 

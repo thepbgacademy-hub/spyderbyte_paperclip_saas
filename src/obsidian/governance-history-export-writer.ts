@@ -17,7 +17,7 @@ export type GovernanceHistoryExportWriter = {
   write(dispatch: HarnessGovernanceHistoryExportReadyDispatch): Promise<GovernanceHistoryExportWriterResult>;
 };
 
-export function resolveGovernanceHistoryExportPath(input: {
+export function resolveObsidianExportPath(input: {
   exportRoot: string;
   relativePath: string;
 }): string {
@@ -34,11 +34,13 @@ export function resolveGovernanceHistoryExportPath(input: {
   return resolvedPath;
 }
 
+export const resolveGovernanceHistoryExportPath = resolveObsidianExportPath;
+
 export function createFilesystemGovernanceHistoryExportWriter(input: { exportRoot: string }): GovernanceHistoryExportWriter {
   return {
     async write(dispatch) {
       for (const file of dispatch.files) {
-        const resolvedPath = resolveGovernanceHistoryExportPath({
+        const resolvedPath = resolveObsidianExportPath({
           exportRoot: input.exportRoot,
           relativePath: file.path
         });

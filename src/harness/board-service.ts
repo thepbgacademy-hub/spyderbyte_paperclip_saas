@@ -815,7 +815,9 @@ export type HarnessExportCandidateActionRoute =
   | "export-preflight"
   | "export-dry-run"
   | "governance-history-export"
-  | "governance-history-export-replay";
+  | "governance-history-export-replay"
+  | "package-bundle-export"
+  | "package-bundle-export-replay";
 
 export type HarnessActionOptionView = {
   value: string;
@@ -976,6 +978,26 @@ export type HarnessGovernanceHistoryExportReadyDispatch = {
   redactionSummary: string;
 };
 
+export type HarnessPackageBundleExportReadyDispatch = {
+  tenantId: string;
+  userId: string;
+  runId: string;
+  workflowId: string;
+  packageId: string;
+  candidateId: "package_bundle_export";
+  bundleId: string;
+  exportFormat: "obsidian_markdown_bundle";
+  recordTarget: "package_deliverable_record";
+  idempotencyKey: string;
+  noteTitle: string;
+  noteFileName: string;
+  placement: HarnessExportPlacementManifest;
+  files: HarnessExportPackageFile[];
+  recordCount: number;
+  disclosureSummary: string;
+  redactionSummary: string;
+};
+
 export type HarnessExportCandidateId = HarnessMemoryBoundaryExportCandidateView["id"];
 
 export type HarnessExportCandidateDeliveryStatus =
@@ -1027,10 +1049,10 @@ export type HarnessExportPlacementManifest = {
 };
 
 export type HarnessExportDryRunResult = {
-  candidateId: "governance_history_export";
+  candidateId: "governance_history_export" | "package_bundle_export";
   status: "ready";
   exportFormat: "obsidian_markdown_bundle";
-  recordTarget: "governance_history_record";
+  recordTarget: "governance_history_record" | "package_deliverable_record";
   bundleId: string;
   noteTitle: string;
   noteFileName: string;
@@ -1043,6 +1065,17 @@ export type HarnessExportDryRunResult = {
 };
 
 export type HarnessGovernanceHistoryExportResult = Omit<HarnessExportDryRunResult, "status"> & {
+  candidateId: "governance_history_export";
+  recordTarget: "governance_history_record";
+  status: "export_ready";
+  idempotencyKey: string;
+  summary: string;
+  latestDelivery: HarnessExportCandidateDeliveryView;
+};
+
+export type HarnessPackageBundleExportResult = Omit<HarnessExportDryRunResult, "status"> & {
+  candidateId: "package_bundle_export";
+  recordTarget: "package_deliverable_record";
   status: "export_ready";
   idempotencyKey: string;
   summary: string;
@@ -1051,6 +1084,14 @@ export type HarnessGovernanceHistoryExportResult = Omit<HarnessExportDryRunResul
 
 export type HarnessGovernanceHistoryDeliveryReplayResult = {
   candidateId: "governance_history_export";
+  status: "delivery_replayed";
+  idempotencyKey: string;
+  summary: string;
+  latestDelivery: HarnessExportCandidateDeliveryView;
+};
+
+export type HarnessPackageBundleDeliveryReplayResult = {
+  candidateId: "package_bundle_export";
   status: "delivery_replayed";
   idempotencyKey: string;
   summary: string;
@@ -1123,6 +1164,7 @@ export function createHarnessBoardService(options: {
   onResolvedAttentionDispatch?: (dispatch: HarnessResolvedAttentionDispatch) => Promise<void> | void;
   onFreshCycleDispatch?: (dispatch: HarnessFreshCycleDispatch) => Promise<void> | void;
   onGovernanceHistoryExportReady?: (dispatch: HarnessGovernanceHistoryExportReadyDispatch) => Promise<void> | void;
+  onPackageBundleExportReady?: (dispatch: HarnessPackageBundleExportReadyDispatch) => Promise<void> | void;
 }) {
   const runtime = createHarnessRuntime();
 
@@ -3860,8 +3902,12 @@ export function createHarnessBoardService(options: {
         summary: candidate.summary,
         nextStepLabel: candidate.promotionNextStepLabel,
         supportsDryRun: Boolean(candidate.exportActions?.some((entry) => entry.actionRoute === "export-dry-run")),
-        supportsExport: Boolean(candidate.exportActions?.some((entry) => entry.actionRoute === "governance-history-export")),
-        supportsReplay: Boolean(candidate.exportActions?.some((entry) => entry.actionRoute === "governance-history-export-replay")),
+        supportsExport: Boolean(candidate.exportActions?.some((entry) => (
+          entry.actionRoute === "governance-history-export" || entry.actionRoute === "package-bundle-export"
+        ))),
+        supportsReplay: Boolean(candidate.exportActions?.some((entry) => (
+          entry.actionRoute === "governance-history-export-replay" || entry.actionRoute === "package-bundle-export-replay"
+        ))),
         ...(candidate.latestDelivery ? { latestDelivery: candidate.latestDelivery } : {}),
         ...(candidate.readiness !== "ready_now" ? { blockerLabel: candidate.promotionBlockerLabel } : {})
       };
@@ -3904,15 +3950,18 @@ export function createHarnessBoardService(options: {
         runId: request.runId
       });
       const candidate = findExportCandidateOrThrow(board.response.memoryBoundary.exportCandidates, request.candidateId);
-      if (candidate.id !== "governance_history_export") {
-        throw new HarnessRunCompletionConflictError("Harness export dry-run only supports governance history candidates");
-      }
       const action = findExportActionOrThrow(candidate, "export-dry-run");
       if (request.actionToken) {
         assertHarnessActionToken(action.actionToken, request.actionToken);
       }
 
-      const result = buildGovernanceHistoryExportDryRun(board.response, candidate);
+      const result = candidate.id === "governance_history_export"
+        ? buildGovernanceHistoryExportDryRun(board.response, candidate)
+        : candidate.id === "package_bundle_export"
+          ? buildPackageBundleExportDryRun(board.response, candidate)
+          : (() => {
+              throw new HarnessRunCompletionConflictError("Harness export dry-run only supports grouped export candidates");
+            })();
       await publishHarnessAuditEvents(options.audit, [
         createHarnessExportAuditEvent({
           tenantId: board.access.session.tenantId,
@@ -3965,6 +4014,8 @@ export function createHarnessBoardService(options: {
       const dryRun = buildGovernanceHistoryExportDryRun(board.response, candidate);
       const result: HarnessGovernanceHistoryExportResult = {
         ...dryRun,
+        candidateId: "governance_history_export",
+        recordTarget: "governance_history_record",
         status: "export_ready",
         idempotencyKey: createHarnessActionToken([
           "governance-history-export",
@@ -4024,6 +4075,96 @@ export function createHarnessBoardService(options: {
       return result;
     },
 
+    async exportPackageBundleCandidate(request: {
+      authorization: string;
+      cookie?: string;
+      runId: string;
+      candidateId: HarnessExportCandidateId;
+      actionToken?: string;
+    }): Promise<HarnessPackageBundleExportResult> {
+      const board = await loadExportBoardContext({
+        repository: options.repository,
+        authenticate: options.authenticate,
+        requireTenantMember: options.requireTenantMember,
+        requireActivePackageInstall: options.requireActivePackageInstall,
+        workflowRegistry: options.workflowRegistry,
+        authorization: request.authorization,
+        ...(request.cookie ? { cookie: request.cookie } : {}),
+        runId: request.runId
+      });
+      const candidate = findExportCandidateOrThrow(board.response.memoryBoundary.exportCandidates, request.candidateId);
+      if (candidate.id !== "package_bundle_export") {
+        throw new HarnessRunCompletionConflictError("Harness export action only supports package bundle candidates");
+      }
+      const action = findExportActionOrThrow(candidate, "package-bundle-export");
+      if (request.actionToken) {
+        assertHarnessActionToken(action.actionToken, request.actionToken);
+      }
+
+      const dryRun = buildPackageBundleExportDryRun(board.response, candidate);
+      const result: HarnessPackageBundleExportResult = {
+        ...dryRun,
+        candidateId: "package_bundle_export",
+        recordTarget: "package_deliverable_record",
+        status: "export_ready",
+        idempotencyKey: createHarnessActionToken([
+          "package-bundle-export",
+          board.response.runId,
+          candidate.id,
+          candidate.itemIds.join(","),
+          dryRun.noteFileName
+        ]),
+        summary: "Package bundle export is ready as a tenant-safe Obsidian markdown bundle.",
+        latestDelivery: {
+          status: "export_ready",
+          statusLabel: humanizeExportDeliveryStatus("export_ready"),
+          summary: "The package bundle is export-ready and waiting for bounded delivery through the configured tenant-safe writer seam.",
+          attemptCount: (candidate.latestDelivery?.attemptCount ?? 0) + 1,
+          lastAttemptedAtLabel: "just now"
+        }
+      };
+      await options.onPackageBundleExportReady?.({
+        tenantId: board.access.session.tenantId,
+        userId: board.access.session.userId,
+        runId: board.response.runId,
+        workflowId: board.response.workflowId,
+        packageId: board.response.packageId,
+        candidateId: result.candidateId,
+        bundleId: result.bundleId,
+        exportFormat: result.exportFormat,
+        recordTarget: result.recordTarget,
+        idempotencyKey: result.idempotencyKey,
+        noteTitle: result.noteTitle,
+        noteFileName: result.noteFileName,
+        placement: cloneHarnessExportPlacementManifest(result.placement),
+        files: result.files.map(cloneHarnessExportPackageFile),
+        recordCount: result.recordCount,
+        disclosureSummary: result.disclosureSummary,
+        redactionSummary: result.redactionSummary
+      });
+      await publishHarnessAuditEvents(options.audit, [
+        createHarnessExportAuditEvent({
+          tenantId: board.access.session.tenantId,
+          actorUserId: board.access.session.userId,
+          runId: board.response.runId,
+          candidateId: candidate.id,
+          eventType: "harness.package_bundle_export_ready",
+          metadata: {
+            bundleId: result.bundleId,
+            idempotencyKey: result.idempotencyKey,
+            exportFormat: result.exportFormat,
+            recordTarget: result.recordTarget,
+            primaryNotePath: result.placement.primaryNotePath,
+            fileCount: result.files.length,
+            recordCount: result.recordCount,
+            disclosureSummary: result.disclosureSummary,
+            redactionSummary: result.redactionSummary
+          }
+        })
+      ]);
+      return result;
+    },
+
     async replayGovernanceHistoryDeliveryCandidate(request: {
       authorization: string;
       cookie?: string;
@@ -4063,7 +4204,7 @@ export function createHarnessBoardService(options: {
         candidateId: "governance_history_export",
         bundleId: exportDelivery.bundleId,
         exportFormat: exportDelivery.exportFormat,
-        recordTarget: exportDelivery.recordTarget,
+        recordTarget: "governance_history_record",
         idempotencyKey: exportDelivery.idempotencyKey,
         noteTitle: exportDelivery.noteTitle,
         noteFileName: exportDelivery.noteFileName,
@@ -4115,6 +4256,101 @@ export function createHarnessBoardService(options: {
         status: "delivery_replayed",
         idempotencyKey: exportDelivery.idempotencyKey,
         summary: "Governance history delivery replay has been re-queued through the bounded tenant-safe writer seam.",
+        latestDelivery
+      };
+    },
+
+    async replayPackageBundleDeliveryCandidate(request: {
+      authorization: string;
+      cookie?: string;
+      runId: string;
+      candidateId: HarnessExportCandidateId;
+      actionToken?: string;
+    }): Promise<HarnessPackageBundleDeliveryReplayResult> {
+      const board = await loadExportBoardContext({
+        repository: options.repository,
+        authenticate: options.authenticate,
+        requireTenantMember: options.requireTenantMember,
+        requireActivePackageInstall: options.requireActivePackageInstall,
+        workflowRegistry: options.workflowRegistry,
+        authorization: request.authorization,
+        ...(request.cookie ? { cookie: request.cookie } : {}),
+        runId: request.runId
+      });
+      const candidate = findExportCandidateOrThrow(board.response.memoryBoundary.exportCandidates, request.candidateId);
+      if (candidate.id !== "package_bundle_export") {
+        throw new HarnessRunCompletionConflictError("Harness delivery replay only supports package bundle candidates");
+      }
+      const action = findExportActionOrThrow(candidate, "package-bundle-export-replay");
+      if (request.actionToken) {
+        assertHarnessActionToken(action.actionToken, request.actionToken);
+      }
+      const exportDelivery = findLatestExportDeliveryRecordOrThrow(board.exportDeliveries, candidate.id);
+      if (exportDelivery.status === "delivered") {
+        throw new HarnessRunCompletionConflictError("Harness package bundle delivery is already complete");
+      }
+
+      await options.onPackageBundleExportReady?.({
+        tenantId: board.access.session.tenantId,
+        userId: board.access.session.userId,
+        runId: board.response.runId,
+        workflowId: board.response.workflowId,
+        packageId: board.response.packageId,
+        candidateId: "package_bundle_export",
+        bundleId: exportDelivery.bundleId,
+        exportFormat: exportDelivery.exportFormat,
+        recordTarget: "package_deliverable_record",
+        idempotencyKey: exportDelivery.idempotencyKey,
+        noteTitle: exportDelivery.noteTitle,
+        noteFileName: exportDelivery.noteFileName,
+        placement: {
+          targetSystem: exportDelivery.placementTargetSystem as "obsidian_vault",
+          vaultFolder: exportDelivery.vaultFolder,
+          primaryNotePath: exportDelivery.primaryNotePath,
+          syncStrategy: exportDelivery.syncStrategy as HarnessMemoryBoundarySyncStrategy,
+          confirmationRequirement:
+            exportDelivery.confirmationRequirement as HarnessMemoryBoundaryExportConfirmationRequirement
+        },
+        files: exportDelivery.files.map(cloneHarnessExportPackageFile),
+        recordCount: exportDelivery.recordCount,
+        disclosureSummary: exportDelivery.disclosureSummary,
+        redactionSummary: exportDelivery.redactionSummary
+      });
+
+      const latestDelivery: HarnessExportCandidateDeliveryView = {
+        status: "export_ready",
+        statusLabel: humanizeExportDeliveryStatus("export_ready"),
+        summary: "The package bundle was replayed back into the bounded tenant-safe writer seam and is waiting for delivery.",
+        attemptCount: exportDelivery.attemptCount + 1,
+        lastAttemptedAtLabel: "just now",
+        ...(exportDelivery.writerKind ? { writerKindLabel: humanizeExportDeliveryWriterKind(exportDelivery.writerKind) } : {}),
+        ...(exportDelivery.primaryNotePath ? { primaryNotePath: exportDelivery.primaryNotePath } : {})
+      };
+
+      await publishHarnessAuditEvents(options.audit, [
+        createHarnessExportAuditEvent({
+          tenantId: board.access.session.tenantId,
+          actorUserId: board.access.session.userId,
+          runId: board.response.runId,
+          candidateId: candidate.id,
+          eventType: "harness.package_bundle_export_delivery_replay_requested",
+          metadata: {
+            bundleId: exportDelivery.bundleId,
+            idempotencyKey: exportDelivery.idempotencyKey,
+            previousStatus: exportDelivery.status,
+            attemptCount: exportDelivery.attemptCount,
+            primaryNotePath: exportDelivery.primaryNotePath,
+            fileCount: exportDelivery.files.length,
+            recordCount: exportDelivery.recordCount
+          }
+        })
+      ]);
+
+      return {
+        candidateId: "package_bundle_export",
+        status: "delivery_replayed",
+        idempotencyKey: exportDelivery.idempotencyKey,
+        summary: "Package bundle delivery replay has been re-queued through the bounded tenant-safe writer seam.",
         latestDelivery
       };
     }
@@ -8187,6 +8423,50 @@ function buildExportCandidateActions(input: {
     }
   }
 
+  if (input.candidate.id === "package_bundle_export" && input.candidate.readiness === "ready_now") {
+    actions.push(
+      {
+        actionRoute: "export-dry-run",
+        actionPath: `/api/harness/runs/${encodeURIComponent(input.runId)}/export-candidates/${encodeURIComponent(input.candidateId)}/dry-run`,
+        actionMethod: "POST",
+        actionToken: createHarnessActionToken(["export-dry-run", ...baseParts]),
+        actionLabel: "Preview package bundle export",
+        actionDescription: "Render the tenant-safe package-bundle export without writing it anywhere yet.",
+        nextEffectSummary: "This returns the exact bounded package bundle that a later tenant export would deliver."
+      },
+      {
+        actionRoute: "package-bundle-export",
+        actionPath: `/api/harness/runs/${encodeURIComponent(input.runId)}/export-candidates/${encodeURIComponent(input.candidateId)}/export`,
+        actionMethod: "POST",
+        actionToken: createHarnessActionToken(["package-bundle-export", ...baseParts]),
+        actionLabel: "Build package bundle export",
+        actionDescription: "Produce the first real Obsidian-facing package bundle export from the current closed-board contract.",
+        nextEffectSummary: "This returns a tenant-safe package bundle for later vault placement without turning Obsidian into live runtime state."
+      }
+    );
+
+    if (input.candidate.latestDelivery && input.candidate.latestDelivery.status !== "delivered") {
+      actions.push({
+        actionRoute: "package-bundle-export-replay",
+        actionPath: `/api/harness/runs/${encodeURIComponent(input.runId)}/export-candidates/${encodeURIComponent(input.candidateId)}/delivery-replay`,
+        actionMethod: "POST",
+        actionToken: createHarnessActionToken(["package-bundle-export-replay", ...baseParts]),
+        actionLabel:
+          input.candidate.latestDelivery.status === "delivery_failed"
+            ? "Replay package bundle delivery"
+            : "Deliver package bundle export",
+        actionDescription:
+          input.candidate.latestDelivery.status === "delivery_failed"
+            ? "Re-dispatch the persisted tenant-safe package bundle through the bounded private writer seam."
+            : "Dispatch the persisted tenant-safe package bundle through the bounded private writer seam.",
+        nextEffectSummary:
+          input.candidate.latestDelivery.status === "delivery_failed"
+            ? "This reuses the stored package bundle instead of rebuilding a new tenant package."
+            : "This uses the existing export-ready bundle and attempts bounded delivery without rebuilding it."
+      });
+    }
+  }
+
   return actions;
 }
 
@@ -8360,6 +8640,132 @@ function buildGovernanceHistoryExportDryRun(
     placement,
     files,
     recordCount: Math.max(1, candidate.itemCount),
+    disclosureSummary: candidate.exportSourceDisclosurePolicyLabel,
+    redactionSummary: candidate.exportRedactionBoundaryLabel
+  };
+}
+
+function buildPackageBundleExportDryRun(
+  board: HarnessBoardResponse,
+  candidate: HarnessMemoryBoundaryExportCandidateView
+): HarnessExportDryRunResult {
+  const completionPackage = board.completionPackage;
+  if (!completionPackage || completionPackage.hasOpenGovernanceItems) {
+    throw new HarnessRunCompletionConflictError("Harness package bundle export is not ready before board closure");
+  }
+
+  const safeWorkflowId = board.workflowId.replace(/[^a-z0-9_-]+/giu, "-").toLowerCase();
+  const vaultFolder = `wealth-factory/package-bundles/${safeWorkflowId}`;
+  const noteTitle = `${humanizeDeliverableType(board.packageId.replace(/^pkg_/u, "").replace(/_/gu, " "))} package bundle`;
+  const noteFileName = `${safeWorkflowId}-package-bundle.md`;
+  const primaryNotePath = `${vaultFolder}/${noteFileName}`;
+  const deliverablesFilePath = `${vaultFolder}/${safeWorkflowId}-deliverables.md`;
+  const governanceFilePath = `${vaultFolder}/${safeWorkflowId}-governance.md`;
+  const deliverableLines = completionPackage.deliverables.map((deliverable) => (
+    `- ${deliverable.title} (${deliverable.persona}, ${deliverable.deliverableLabel})\n  - Outcome: ${deliverable.outcome}`
+  ));
+  const governanceLines = completionPackage.governanceItems.map((item) => (
+    `- ${item.persona} ${item.deliverableLabel} (${item.statusLabel})${item.policyReasonLabel ? `\n  - Policy reason: ${item.policyReasonLabel}` : ""}${item.recommendationSummary ? `\n  - Recommendation: ${item.recommendationSummary}` : ""}${item.objectionSummary ? `\n  - Objection: ${item.objectionSummary}` : ""}`
+  ));
+  const content = [
+    `# ${noteTitle}`,
+    "",
+    `- Workflow: ${board.workflowId}`,
+    `- Package: ${board.packageId}`,
+    `- Candidate: ${candidate.label}`,
+    `- Readiness: ${candidate.readinessLabel}`,
+    `- Disclosure: ${candidate.exportSourceDisclosurePolicyLabel}`,
+    `- Redaction: ${candidate.exportRedactionBoundaryLabel}`,
+    `- Deliverables: ${completionPackage.deliverables.length}`,
+    `- Governance items: ${completionPackage.governanceItems.length}`,
+    "",
+    "## Summary",
+    completionPackage.summary ?? "Closed-board deliverables are ready to promote into a tenant-owned package bundle.",
+    ...(completionPackage.packageNote ? ["", "## Package Note", completionPackage.packageNote] : []),
+    "",
+    "## Package Files",
+    `- Primary note: ${noteFileName}`,
+    `- Deliverables detail: ${safeWorkflowId}-deliverables.md`,
+    `- Governance detail: ${safeWorkflowId}-governance.md`
+  ].join("\n");
+  const deliverablesContent = [
+    `# ${noteTitle} deliverables`,
+    "",
+    ...(deliverableLines.length > 0 ? deliverableLines : ["- No deliverables were packaged in this closed-board export bundle."])
+  ].join("\n");
+  const governanceContent = [
+    `# ${noteTitle} governance`,
+    "",
+    ...(governanceLines.length > 0 ? governanceLines : ["- No governance items were carried into this closed-board export bundle."])
+  ].join("\n");
+  const bundleId = createHarnessActionToken([
+    "package-bundle",
+    board.runId,
+    candidate.id,
+    candidate.itemIds.join(","),
+    noteFileName
+  ]);
+  const placement: HarnessExportPlacementManifest = {
+    targetSystem: "obsidian_vault",
+    vaultFolder,
+    primaryNotePath,
+    syncStrategy: candidate.syncStrategy,
+    confirmationRequirement: candidate.exportConfirmationRequirement
+  };
+  const manifestContent = JSON.stringify(
+    {
+      bundleId,
+      exportFormat: "obsidian_markdown_bundle",
+      recordTarget: "package_deliverable_record",
+      runId: board.runId,
+      workflowId: board.workflowId,
+      packageId: board.packageId,
+      candidateId: candidate.id,
+      noteTitle,
+      noteFileName,
+      placement,
+      disclosureSummary: candidate.exportSourceDisclosurePolicyLabel,
+      redactionSummary: candidate.exportRedactionBoundaryLabel,
+      recordCount: Math.max(1, completionPackage.deliverables.length + completionPackage.governanceItems.length)
+    },
+    null,
+    2
+  );
+  const files: HarnessExportPackageFile[] = [
+    buildExportPackageFile({
+      path: primaryNotePath,
+      mediaType: "text/markdown",
+      content
+    }),
+    buildExportPackageFile({
+      path: deliverablesFilePath,
+      mediaType: "text/markdown",
+      content: deliverablesContent
+    }),
+    buildExportPackageFile({
+      path: governanceFilePath,
+      mediaType: "text/markdown",
+      content: governanceContent
+    }),
+    buildExportPackageFile({
+      path: `${vaultFolder}/export-manifest.json`,
+      mediaType: "application/json",
+      content: manifestContent
+    })
+  ];
+
+  return {
+    candidateId: "package_bundle_export",
+    status: "ready",
+    exportFormat: "obsidian_markdown_bundle",
+    recordTarget: "package_deliverable_record",
+    bundleId,
+    noteTitle,
+    noteFileName,
+    content,
+    placement,
+    files,
+    recordCount: Math.max(1, completionPackage.deliverables.length + completionPackage.governanceItems.length),
     disclosureSummary: candidate.exportSourceDisclosurePolicyLabel,
     redactionSummary: candidate.exportRedactionBoundaryLabel
   };
