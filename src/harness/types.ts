@@ -124,6 +124,14 @@ export interface HarnessExportPackageFileRecord {
   content: string;
 }
 
+export interface HarnessExportDeliveryReceipt {
+  primaryNotePath?: string;
+  manifestPath?: string | null;
+  writtenFileCount?: number;
+  writtenPaths?: string[];
+  lastAttemptedPath?: string;
+}
+
 export interface HarnessExportDeliveryRecord {
   id: string;
   runId: string;
@@ -152,7 +160,7 @@ export interface HarnessExportDeliveryRecord {
   lastAttemptedAt: string | null;
   deliveredAt: string | null;
   writerKind: null | "obsidian_filesystem";
-  deliveryReceipt: Record<string, unknown>;
+  deliveryReceipt: HarnessExportDeliveryReceipt;
   lastErrorCode: string | null;
   lastErrorMessage: string | null;
   createdAt: string;
@@ -164,7 +172,7 @@ export interface HarnessExportDeliveryOutcomeUpdate {
   expectedLastAttemptedAt: string;
   status: "delivered" | "delivery_failed";
   writerKind: null | "obsidian_filesystem";
-  deliveryReceipt: Record<string, unknown>;
+  deliveryReceipt: HarnessExportDeliveryReceipt;
   attemptCount: number;
   lastAttemptedAt: string;
   deliveredAt: string | null;

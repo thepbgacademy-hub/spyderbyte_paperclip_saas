@@ -187,6 +187,8 @@ The first harness implementation slice is now built and verified:
 - Hardened private writer failure handling so governance-history and package-bundle writers now preserve bounded partial receipts (written count plus last attempted relative path) for recovery without leaking note bodies or export-root internals into public board/API/audit surfaces.
 - Hardened private writer receipts one step further so governance-history and package-bundle writers now also preserve the successfully written relative paths on both success and partial failure. Recovery/support can now reason about actual filesystem progress without leaking vault roots or replaying note bodies into public surfaces.
 - Collapsed governance-history and package-bundle runtime delivery onto one shared bounded executor inside `runtime-server.ts`, so claim, outcome, and audit handling now stay aligned across both export families instead of drifting between duplicated code paths.
+- Closed the next runtime proof gap on that shared executor. `package_bundle_export` now has the same stale-claim interleaving coverage as governance history, proving a late package-bundle writer callback cannot overwrite a newer recovered delivery outcome after claim ownership has moved.
+- Tightened the export-delivery ledger contract itself by treating `deliveryReceipt` as a bounded typed shape instead of an ad hoc JSON blob. Runtime, repository, and board-facing consumers now agree on the allowed receipt fields for primary note path, manifest path, written count, written paths, and partial last-attempted path.
 
 ## Sharp Edges Logged
 

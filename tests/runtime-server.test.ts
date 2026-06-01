@@ -6,7 +6,11 @@ import { createRuntimeSessionAuth, createRuntimeSessionToken } from "../src/api/
 import { createDashboardRuntime, createNodeRequestListener, loadRuntimeEnv } from "../src/api/runtime-server.js";
 import { createDurableAuditSink } from "../src/audit/durable-audit.js";
 import { createPgPoolQueryClient } from "../src/db/postgres-client.js";
-import { createHarnessBoardService, type HarnessGovernanceHistoryExportReadyDispatch } from "../src/harness/board-service.js";
+import {
+  createHarnessBoardService,
+  type HarnessGovernanceHistoryExportReadyDispatch,
+  type HarnessPackageBundleExportReadyDispatch
+} from "../src/harness/board-service.js";
 
 const TEST_SUPABASE_DB_URL = "postgresql://postgres.tenant:placeholder-password@db.invalid:5432/postgres";
 type MockExportDeliveryRow = {
@@ -15,10 +19,10 @@ type MockExportDeliveryRow = {
   tenant_id: string;
   workflow_id: string;
   package_id: string;
-  candidate_id: "governance_history_export";
+  candidate_id: "governance_history_export" | "package_bundle_export";
   status: "export_ready" | "delivery_in_progress" | "delivered" | "delivery_failed";
   export_format: "obsidian_markdown_bundle";
-  record_target: "governance_history_record";
+  record_target: "governance_history_record" | "package_deliverable_record";
   bundle_id: string;
   bundle_revision: string;
   idempotency_key: string;
@@ -1395,6 +1399,182 @@ describe("runtime server", () => {
         primaryNotePath:
           "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
         manifestPath: "wealth-factory/governance-history/wf_connect_first_workflow/manifest.json",
+        writtenFileCount: 2
+      }
+    });
+    expect(audit).toHaveBeenCalledTimes(1);
+
+    await runtime.close();
+  });
+
+  it("does not let a late package-bundle writer callback overwrite a newer recovered claim outcome", async () => {
+    const staleAttemptAt = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    resetMockExportDeliveryRow({
+      candidate_id: "package_bundle_export",
+      status: "delivery_in_progress",
+      record_target: "package_deliverable_record",
+      bundle_id: "bundle_package_123",
+      bundle_revision: "bundle_package_revision_123",
+      idempotency_key: "package_idempotency_123",
+      note_title: "Package bundle",
+      note_file_name: "wf_connect_first_workflow-package-bundle.md",
+      placement_manifest: {
+        targetSystem: "obsidian_vault",
+        vaultFolder: "wealth-factory/package-bundles/wf_connect_first_workflow",
+        primaryNotePath:
+          "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
+        syncStrategy: "replace_package_snapshot_after_board_closure",
+        confirmationRequirement: "board_closure_then_tenant_export_confirmation"
+      },
+      disclosure_summary: "Closure snapshot summary only",
+      redaction_summary: "Package-safe redaction",
+      attempt_count: 2,
+      last_attempted_at: staleAttemptAt,
+      writer_kind: "obsidian_filesystem"
+    });
+
+    type PackageBundleWriterResolution = {
+      writerKind: "obsidian_filesystem";
+      deliveredAt: string;
+      receipt: {
+        primaryNotePath: string;
+        manifestPath: string | null;
+        writtenFileCount: number;
+        writtenPaths: string[];
+      };
+    };
+    let resolveFirstWrite: ((value: PackageBundleWriterResolution) => void) | null = null;
+    let signalFirstWriteStarted: (() => void) | null = null;
+    const firstWritePending = new Promise<PackageBundleWriterResolution>((resolve) => {
+      resolveFirstWrite = resolve;
+    });
+    const firstWriteObserved = new Promise<void>((resolve) => {
+      signalFirstWriteStarted = resolve;
+    });
+    const packageBundleExportWriter = {
+      write: vi
+        .fn()
+        .mockImplementationOnce(async () => {
+          signalFirstWriteStarted?.();
+          return firstWritePending;
+        })
+        .mockResolvedValueOnce({
+          writerKind: "obsidian_filesystem",
+          deliveredAt: "2026-06-01T02:15:00.000Z",
+          receipt: {
+            primaryNotePath:
+              "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
+            manifestPath: "wealth-factory/package-bundles/wf_connect_first_workflow/export-manifest.json",
+            writtenFileCount: 2,
+            writtenPaths: [
+              "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
+              "wealth-factory/package-bundles/wf_connect_first_workflow/export-manifest.json"
+            ]
+          }
+        })
+    };
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() },
+      packageBundleExportWriter
+    });
+
+    const audit = vi.mocked(createDurableAuditSink).mock.results.at(-1)?.value;
+    const boardServiceOptions = vi.mocked(createHarnessBoardService).mock.calls.at(-1)?.[0];
+    const dispatch: HarnessPackageBundleExportReadyDispatch = {
+      tenantId: "tenant_123",
+      userId: "user_123",
+      runId: "run_123",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      candidateId: "package_bundle_export" as const,
+      bundleId: "bundle_package_123",
+      bundleRevision: "bundle_package_revision_123",
+      exportFormat: "obsidian_markdown_bundle" as const,
+      recordTarget: "package_deliverable_record" as const,
+      idempotencyKey: "package_idempotency_123",
+      noteTitle: "Package bundle",
+      noteFileName: "wf_connect_first_workflow-package-bundle.md",
+      placement: {
+        targetSystem: "obsidian_vault" as const,
+        vaultFolder: "wealth-factory/package-bundles/wf_connect_first_workflow",
+        primaryNotePath:
+          "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
+        syncStrategy: "replace_package_snapshot_after_board_closure" as const,
+        confirmationRequirement: "board_closure_then_tenant_export_confirmation" as const
+      },
+      files: [
+        {
+          path: "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
+          mediaType: "text/markdown" as const,
+          byteSize: 20,
+          checksum: "abc",
+          content: "# Package bundle"
+        }
+      ],
+      recordCount: 3,
+      disclosureSummary: "Closure snapshot summary only",
+      redactionSummary: "Package-safe redaction"
+    };
+
+    const firstDispatch = boardServiceOptions?.onPackageBundleExportReady?.(dispatch);
+    await firstWriteObserved;
+
+    mockExportDeliveryRow = {
+      ...mockExportDeliveryRow,
+      last_attempted_at: new Date(Date.parse(mockExportDeliveryRow.last_attempted_at ?? staleAttemptAt) - 20 * 60 * 1000).toISOString()
+    };
+
+    await boardServiceOptions?.onPackageBundleExportReady?.(dispatch);
+
+    expect(mockExportDeliveryRow).toMatchObject({
+      status: "delivered",
+      attempt_count: 4,
+      delivered_at: "2026-06-01T02:15:00.000Z",
+      delivery_receipt: {
+        primaryNotePath:
+          "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
+        manifestPath: "wealth-factory/package-bundles/wf_connect_first_workflow/export-manifest.json",
+        writtenFileCount: 2
+      }
+    });
+
+    const releaseFirstWrite: (value: PackageBundleWriterResolution) => void =
+      resolveFirstWrite ??
+      (() => {
+        throw new Error("expected the first package-bundle writer to start before release");
+      });
+    releaseFirstWrite({
+      writerKind: "obsidian_filesystem",
+      deliveredAt: "2026-06-01T02:00:00.000Z",
+      receipt: {
+        primaryNotePath:
+          "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
+        manifestPath: null,
+        writtenFileCount: 1,
+        writtenPaths: [
+          "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md"
+        ]
+      }
+    });
+    await firstDispatch;
+
+    expect(packageBundleExportWriter.write).toHaveBeenCalledTimes(2);
+    expect(mockExportDeliveryRow).toMatchObject({
+      status: "delivered",
+      attempt_count: 4,
+      delivered_at: "2026-06-01T02:15:00.000Z",
+      delivery_receipt: {
+        primaryNotePath:
+          "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
+        manifestPath: "wealth-factory/package-bundles/wf_connect_first_workflow/export-manifest.json",
         writtenFileCount: 2
       }
     });

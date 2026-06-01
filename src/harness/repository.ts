@@ -14,6 +14,7 @@ import type {
   HarnessCardEventRecord,
   HarnessCardRecord,
   HarnessExportDeliveryAttemptClaim,
+  HarnessExportDeliveryReceipt,
   HarnessExportDeliveryOutcomeUpdate,
   HarnessCardState,
   HarnessExportDeliveryRecord,
@@ -1032,7 +1033,26 @@ function mapHarnessExportDeliveryRow(row: unknown): HarnessExportDeliveryRecord 
   const record = asRecord(row);
   const placement = asRecord(record.placement_manifest);
   const files = Array.isArray(record.files) ? record.files : [];
-  const deliveryReceipt = asRecord(record.delivery_receipt);
+  const rawDeliveryReceipt = asRecord(record.delivery_receipt);
+  const deliveryReceipt: HarnessExportDeliveryReceipt = {
+    ...(typeof rawDeliveryReceipt.primaryNotePath === "string" && rawDeliveryReceipt.primaryNotePath.length > 0
+      ? { primaryNotePath: rawDeliveryReceipt.primaryNotePath }
+      : {}),
+    ...(typeof rawDeliveryReceipt.manifestPath === "string"
+      ? { manifestPath: rawDeliveryReceipt.manifestPath }
+      : rawDeliveryReceipt.manifestPath === null
+      ? { manifestPath: null }
+      : {}),
+    ...(typeof rawDeliveryReceipt.writtenFileCount === "number" && Number.isFinite(rawDeliveryReceipt.writtenFileCount)
+      ? { writtenFileCount: rawDeliveryReceipt.writtenFileCount }
+      : {}),
+    ...(Array.isArray(rawDeliveryReceipt.writtenPaths)
+      ? { writtenPaths: rawDeliveryReceipt.writtenPaths.filter((value): value is string => typeof value === "string") }
+      : {}),
+    ...(typeof rawDeliveryReceipt.lastAttemptedPath === "string" && rawDeliveryReceipt.lastAttemptedPath.length > 0
+      ? { lastAttemptedPath: rawDeliveryReceipt.lastAttemptedPath }
+      : {})
+  };
   return {
     id: String(record.id),
     runId: String(record.run_id),

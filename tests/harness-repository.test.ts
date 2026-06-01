@@ -323,7 +323,11 @@ describe("harness persistence records", () => {
       deliveryReceipt: {
         primaryNotePath:
           "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
-        writtenFileCount: 2
+        writtenFileCount: 2,
+        writtenPaths: [
+          "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+          "wealth-factory/governance-history/wf_connect_first_workflow/manifest.json"
+        ]
       },
       attemptCount: 1,
       lastAttemptedAt: "2026-05-29T01:00:00.000Z",
@@ -338,7 +342,13 @@ describe("harness persistence records", () => {
         status: "delivered",
         writerKind: "obsidian_filesystem",
         attemptCount: 1,
-        deliveredAt: "2026-05-29T01:00:01.000Z"
+        deliveredAt: "2026-05-29T01:00:01.000Z",
+        deliveryReceipt: expect.objectContaining({
+          writtenPaths: [
+            "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+            "wealth-factory/governance-history/wf_connect_first_workflow/manifest.json"
+          ]
+        })
       })
     );
 
