@@ -34,6 +34,7 @@ describe("governance history export writer", () => {
       packageId: "pkg_bib_connect",
       candidateId: "governance_history_export",
       bundleId: "bundle_123",
+      bundleRevision: "bundle_revision_123",
       exportFormat: "obsidian_markdown_bundle",
       recordTarget: "governance_history_record",
       idempotencyKey: "idempotency_123",

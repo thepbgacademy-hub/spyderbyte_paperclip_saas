@@ -713,6 +713,39 @@ try {
       throw new Error("Harness export delivery claim migration did not produce the required schema shape");
     }
   }
+  const queryHarnessExportDeliveryBundleRevisionReady = async () =>
+    client.query(
+      `select
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'harness_export_deliveries'
+            and column_name = 'bundle_revision'
+        ) as has_bundle_revision,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'harness_export_deliveries'
+            and column_name = 'bundle_revision'
+            and is_nullable = 'NO'
+        ) as has_non_nullable_bundle_revision`
+    );
+  let harnessExportDeliveryBundleRevisionExisting = await queryHarnessExportDeliveryBundleRevisionReady();
+  let harnessExportDeliveryBundleRevisionReady = Object.values(
+    harnessExportDeliveryBundleRevisionExisting.rows[0] ?? {}
+  ).every(Boolean);
+  if (!harnessExportDeliveryBundleRevisionReady) {
+    await client.query(readFileSync("supabase/migrations/0026_wf_harness_export_delivery_bundle_revision.sql", "utf8"));
+    harnessExportDeliveryBundleRevisionExisting = await queryHarnessExportDeliveryBundleRevisionReady();
+    harnessExportDeliveryBundleRevisionReady = Object.values(
+      harnessExportDeliveryBundleRevisionExisting.rows[0] ?? {}
+    ).every(Boolean);
+    if (!harnessExportDeliveryBundleRevisionReady) {
+      throw new Error("Harness export delivery bundle-revision migration did not produce the required schema shape");
+    }
+  }
   const { rows } = await client.query(
     "select table_schema, table_name from information_schema.tables where table_schema = 'wfpc' order by table_name"
   );

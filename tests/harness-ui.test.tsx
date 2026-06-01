@@ -1562,6 +1562,9 @@ describe("harness board UI", () => {
           statusLabel: "Delivery failed",
           summary: "The last governance history delivery attempt failed inside the bounded tenant-safe writer seam.",
           attemptCount: 2,
+          contractFreshness: "current_bundle" as const,
+          contractFreshnessLabel: "Current bundle",
+          contractFreshnessSummary: "The latest stored delivery bundle still matches the current export contract.",
           lastAttemptedAtLabel: "May 29, 2026 01:00",
           writerKindLabel: "Obsidian filesystem writer",
           primaryNotePath:
@@ -1606,6 +1609,7 @@ describe("harness board UI", () => {
 
     expect(markup).toContain("Replay governance history delivery");
     expect(markup).toContain("Action family: governance history export replay");
+    expect(markup).toContain("Delivery freshness: Current bundle");
     expect(markup).toContain("Last delivery error: Disk was temporarily unavailable.");
     expect(markup).toContain("/api/harness/runs/run_ui_test_1/export-candidates/governance_history_export/delivery-replay");
   });
@@ -1626,6 +1630,9 @@ describe("harness board UI", () => {
           statusLabel: "Delivery failed",
           summary: "The last package bundle delivery attempt failed inside the bounded tenant-safe writer seam.",
           attemptCount: 1,
+          contractFreshness: "current_bundle" as const,
+          contractFreshnessLabel: "Current bundle",
+          contractFreshnessSummary: "The latest stored delivery bundle still matches the current export contract.",
           lastAttemptedAtLabel: "May 30, 2026 01:00",
           writerKindLabel: "Obsidian filesystem writer",
           primaryNotePath:
@@ -1681,6 +1688,9 @@ describe("harness board UI", () => {
           statusLabel: "Delivery in progress",
           summary: "The latest tenant-safe export bundle is currently being delivered through the bounded private writer seam.",
           attemptCount: 2,
+          contractFreshness: "current_bundle" as const,
+          contractFreshnessLabel: "Current bundle",
+          contractFreshnessSummary: "The latest stored delivery bundle still matches the current export contract.",
           lastAttemptedAtLabel: "Jun 1, 2026 00:05",
           writerKindLabel: "Obsidian filesystem"
         },

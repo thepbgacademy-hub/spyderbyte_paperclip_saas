@@ -290,6 +290,7 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
           createdAt: record.createdAt,
           status: record.status,
           attemptCount: record.attemptCount,
+          bundleRevision: record.bundleRevision,
           lastAttemptedAt: record.lastAttemptedAt,
           deliveredAt: record.deliveredAt,
           writerKind: record.writerKind,
@@ -708,7 +709,7 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
     async getExportDeliveryByIdempotencyKey(idempotencyKey) {
       const result = await client.query(
         `select id, run_id, tenant_id, workflow_id, package_id, candidate_id, status, export_format, record_target,
-                bundle_id, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
+                bundle_id, bundle_revision, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
                 disclosure_summary, redaction_summary, attempt_count, last_attempted_at, delivered_at, writer_kind,
                 delivery_receipt, last_error_code, last_error_message, created_at, updated_at
            from wfpc.harness_export_deliveries
@@ -723,13 +724,14 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
       const result = await client.query(
         `insert into wfpc.harness_export_deliveries (
             id, run_id, tenant_id, workflow_id, package_id, candidate_id, status, export_format, record_target,
-            bundle_id, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
+            bundle_id, bundle_revision, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
             disclosure_summary, redaction_summary, attempt_count, last_attempted_at, delivered_at, writer_kind,
             delivery_receipt, last_error_code, last_error_message, created_at, updated_at
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15::jsonb, $16, $17, $18, $19, $20::timestamptz, $21::timestamptz, $22, $23::jsonb, $24, $25, $26::timestamptz, $27::timestamptz)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::jsonb, $16::jsonb, $17, $18, $19, $20, $21::timestamptz, $22::timestamptz, $23, $24::jsonb, $25, $26, $27::timestamptz, $28::timestamptz)
           on conflict (idempotency_key) do update set
             bundle_id = excluded.bundle_id,
+            bundle_revision = excluded.bundle_revision,
             note_title = excluded.note_title,
             note_file_name = excluded.note_file_name,
             placement_manifest = excluded.placement_manifest,
@@ -739,7 +741,7 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
             redaction_summary = excluded.redaction_summary,
             updated_at = excluded.updated_at
           returning id, run_id, tenant_id, workflow_id, package_id, candidate_id, status, export_format, record_target,
-                    bundle_id, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
+                    bundle_id, bundle_revision, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
                     disclosure_summary, redaction_summary, attempt_count, last_attempted_at, delivered_at, writer_kind,
                     delivery_receipt, last_error_code, last_error_message, created_at, updated_at`,
         [
@@ -753,6 +755,7 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
           record.exportFormat,
           record.recordTarget,
           record.bundleId,
+          record.bundleRevision,
           record.idempotencyKey,
           record.noteTitle,
           record.noteFileName,
@@ -796,7 +799,7 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
           where idempotency_key = $1
             and status in ('export_ready', 'delivery_failed')
           returning id, run_id, tenant_id, workflow_id, package_id, candidate_id, status, export_format, record_target,
-                    bundle_id, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
+                    bundle_id, bundle_revision, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
                     disclosure_summary, redaction_summary, attempt_count, last_attempted_at, delivered_at, writer_kind,
                     delivery_receipt, last_error_code, last_error_message, created_at, updated_at`,
         [input.idempotencyKey, input.writerKind, input.claimedAt, input.updatedAt]
@@ -818,7 +821,7 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
                 updated_at = $9::timestamptz
           where idempotency_key = $10
           returning id, run_id, tenant_id, workflow_id, package_id, candidate_id, status, export_format, record_target,
-                    bundle_id, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
+                    bundle_id, bundle_revision, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
                     disclosure_summary, redaction_summary, attempt_count, last_attempted_at, delivered_at, writer_kind,
                     delivery_receipt, last_error_code, last_error_message, created_at, updated_at`,
         [
@@ -840,7 +843,7 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
     async listExportDeliveriesForRun(runId) {
       const result = await client.query(
         `select id, run_id, tenant_id, workflow_id, package_id, candidate_id, status, export_format, record_target,
-                bundle_id, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
+                bundle_id, bundle_revision, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
                 disclosure_summary, redaction_summary, attempt_count, last_attempted_at, delivered_at, writer_kind,
                 delivery_receipt, last_error_code, last_error_message, created_at, updated_at
            from wfpc.harness_export_deliveries
@@ -1013,9 +1016,10 @@ function mapHarnessExportDeliveryRow(row: unknown): HarnessExportDeliveryRecord 
     candidateId: String(record.candidate_id ?? "governance_history_export") as HarnessExportDeliveryRecord["candidateId"],
     status: String(record.status ?? "export_ready") as HarnessExportDeliveryRecord["status"],
     exportFormat: "obsidian_markdown_bundle",
-    recordTarget: String(record.record_target ?? "governance_history_record") as HarnessExportDeliveryRecord["recordTarget"],
-    bundleId: String(record.bundle_id),
-    idempotencyKey: String(record.idempotency_key),
+      recordTarget: String(record.record_target ?? "governance_history_record") as HarnessExportDeliveryRecord["recordTarget"],
+      bundleId: String(record.bundle_id),
+      bundleRevision: String(record.bundle_revision ?? record.bundle_id ?? ""),
+      idempotencyKey: String(record.idempotency_key),
     noteTitle: String(record.note_title),
     noteFileName: String(record.note_file_name),
     placementTargetSystem: "obsidian_vault",

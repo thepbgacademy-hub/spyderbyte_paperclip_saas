@@ -135,6 +135,7 @@ export interface HarnessExportDeliveryRecord {
   exportFormat: "obsidian_markdown_bundle";
   recordTarget: "governance_history_record" | "package_deliverable_record";
   bundleId: string;
+  bundleRevision: string;
   idempotencyKey: string;
   noteTitle: string;
   noteFileName: string;

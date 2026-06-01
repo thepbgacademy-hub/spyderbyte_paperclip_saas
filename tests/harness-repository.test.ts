@@ -27,6 +27,7 @@ const exportDeliveriesMigration = readFileSync("supabase/migrations/0021_wf_harn
 const exportDeliveriesRlsMigration = readFileSync("supabase/migrations/0022_wf_harness_export_deliveries_rls.sql", "utf8");
 const exportDeliveryResultsMigration = readFileSync("supabase/migrations/0023_wf_harness_export_delivery_results.sql", "utf8");
 const exportDeliveryClaimsMigration = readFileSync("supabase/migrations/0025_wf_harness_export_delivery_claims.sql", "utf8");
+const exportDeliveryBundleRevisionMigration = readFileSync("supabase/migrations/0026_wf_harness_export_delivery_bundle_revision.sql", "utf8");
 const execFileAsync = promisify(execFile);
 
 const HARNESS_POSTGRES_IMAGE = "postgres:16-alpine";
@@ -244,6 +245,7 @@ describe("harness persistence records", () => {
       exportFormat: "obsidian_markdown_bundle",
       recordTarget: "governance_history_record",
       bundleId: "bundle_123",
+      bundleRevision: "bundle_revision_123",
       idempotencyKey: "governance_history_export:run_123",
       noteTitle: "Governance history",
       noteFileName: "wf_connect_first_workflow-governance-history.md",
@@ -279,6 +281,7 @@ describe("harness persistence records", () => {
     const secondWrite = await repository.upsertExportDelivery({
       ...firstWrite,
       bundleId: "bundle_456",
+      bundleRevision: "bundle_revision_456",
       recordCount: 3,
       files: [
         ...firstWrite.files,
@@ -296,6 +299,7 @@ describe("harness persistence records", () => {
     expect(secondWrite.id).toBe(firstWrite.id);
     expect(secondWrite.createdAt).toBe(firstWrite.createdAt);
     expect(secondWrite.bundleId).toBe("bundle_456");
+    expect(secondWrite.bundleRevision).toBe("bundle_revision_456");
 
     const delivered = await repository.recordExportDeliveryOutcome({
       idempotencyKey: "governance_history_export:run_123",
@@ -328,6 +332,7 @@ describe("harness persistence records", () => {
         id: firstWrite.id,
         runId: run.id,
         bundleId: "bundle_456",
+        bundleRevision: "bundle_revision_456",
         recordCount: 3,
         status: "delivered",
         writerKind: "obsidian_filesystem",
@@ -369,6 +374,7 @@ describe("harness persistence records", () => {
       exportFormat: "obsidian_markdown_bundle",
       recordTarget: "governance_history_record",
       bundleId: "bundle_claim_1",
+      bundleRevision: "bundle_claim_revision_1",
       idempotencyKey: "governance_history_export:claim",
       noteTitle: "Governance history",
       noteFileName: "wf_connect_first_workflow-governance-history.md",
@@ -1192,6 +1198,7 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
           exportFormat: "obsidian_markdown_bundle",
           recordTarget: "governance_history_record",
           bundleId: "bundle_pg_1",
+          bundleRevision: "bundle_pg_revision_1",
           idempotencyKey: `${run.id}:governance_history_export`,
           noteTitle: "Governance history",
           noteFileName: "wf_connect_first_workflow-governance-history.md",
@@ -1234,6 +1241,7 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
         const secondWrite = await repository.upsertExportDelivery({
           ...firstWrite,
           bundleId: "bundle_pg_2",
+          bundleRevision: "bundle_pg_revision_2",
           recordCount: 3,
           updatedAt: "2026-05-29T01:00:00.000Z"
         });
@@ -1241,6 +1249,7 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
         expect(secondWrite.id).toBe(firstWrite.id);
         expect(secondWrite.createdAt).toBe(firstWrite.createdAt);
         expect(secondWrite.bundleId).toBe("bundle_pg_2");
+        expect(secondWrite.bundleRevision).toBe("bundle_pg_revision_2");
 
         const delivered = await repository.recordExportDeliveryOutcome({
           idempotencyKey: `${run.id}:governance_history_export`,
@@ -1275,6 +1284,7 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
             workflowId: run.workflowId,
             packageId: run.packageId,
             bundleId: "bundle_pg_2",
+            bundleRevision: "bundle_pg_revision_2",
             recordCount: 3,
             status: "delivered",
             writerKind: "obsidian_filesystem",
@@ -1339,6 +1349,7 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
           exportFormat: "obsidian_markdown_bundle",
           recordTarget: "governance_history_record",
           bundleId: "bundle_pg_claim_1",
+          bundleRevision: "bundle_pg_claim_revision_1",
           idempotencyKey: `${run.id}:governance_history_claim`,
           noteTitle: "Governance history",
           noteFileName: "wf_connect_first_workflow-governance-history.md",
@@ -1531,6 +1542,7 @@ async function resetHarnessProofDatabase(client: Client) {
   await client.query(exportDeliveriesRlsMigration);
   await client.query(exportDeliveryResultsMigration);
   await client.query(exportDeliveryClaimsMigration);
+  await client.query(exportDeliveryBundleRevisionMigration);
 }
 
 async function seedHarnessProofPrerequisites(client: Client, tenantId: string) {

@@ -19,6 +19,7 @@ type MockExportDeliveryRow = {
   export_format: "obsidian_markdown_bundle";
   record_target: "governance_history_record";
   bundle_id: string;
+  bundle_revision: string;
   idempotency_key: string;
   note_title: string;
   note_file_name: string;
@@ -49,6 +50,7 @@ const defaultExportDeliveryRow: MockExportDeliveryRow = {
   export_format: "obsidian_markdown_bundle",
   record_target: "governance_history_record",
   bundle_id: "bundle_123",
+  bundle_revision: "bundle_revision_123",
   idempotency_key: "idempotency_123",
   note_title: "Governance history",
   note_file_name: "wf_connect_first_workflow-governance-history.md",
@@ -834,6 +836,7 @@ describe("runtime server", () => {
       packageId: "pkg_bib_connect",
       candidateId: "governance_history_export",
       bundleId: "bundle_123",
+      bundleRevision: "bundle_revision_123",
       exportFormat: "obsidian_markdown_bundle",
       recordTarget: "governance_history_record",
       idempotencyKey: "idempotency_123",
@@ -892,6 +895,7 @@ describe("runtime server", () => {
       packageId: "pkg_bib_connect",
       candidateId: "package_bundle_export",
       bundleId: "bundle_package_123",
+      bundleRevision: "bundle_package_revision_123",
       exportFormat: "obsidian_markdown_bundle",
       recordTarget: "package_deliverable_record",
       idempotencyKey: "package_idempotency_123",
@@ -960,6 +964,7 @@ describe("runtime server", () => {
       packageId: "pkg_bib_connect",
       candidateId: "governance_history_export",
       bundleId: "bundle_123",
+      bundleRevision: "bundle_revision_123",
       exportFormat: "obsidian_markdown_bundle",
       recordTarget: "governance_history_record",
       idempotencyKey: "idempotency_123",
@@ -1038,6 +1043,7 @@ describe("runtime server", () => {
       packageId: "pkg_bib_connect",
       candidateId: "package_bundle_export",
       bundleId: "bundle_package_123",
+      bundleRevision: "bundle_package_revision_123",
       exportFormat: "obsidian_markdown_bundle",
       recordTarget: "package_deliverable_record",
       idempotencyKey: "package_idempotency_123",
@@ -1109,6 +1115,7 @@ describe("runtime server", () => {
       packageId: "pkg_bib_connect",
       candidateId: "governance_history_export",
       bundleId: "bundle_123",
+      bundleRevision: "bundle_revision_123",
       exportFormat: "obsidian_markdown_bundle",
       recordTarget: "governance_history_record",
       idempotencyKey: "idempotency_123",

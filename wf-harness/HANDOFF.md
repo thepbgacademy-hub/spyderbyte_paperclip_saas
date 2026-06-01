@@ -52,6 +52,7 @@ The first harness implementation slice is now built and verified:
 - grouped export execution now has two bounded candidates, not one: governance-history export and package-bundle export should both reuse the same private harness delivery ledger, stale-token export contract, and tenant-safe writer seams instead of growing separate ad hoc delivery paths
 - package-bundle export must stay board-closure-gated and delivery-ledger-backed: if the board is not closed, `package_bundle_export` may preflight but must not dry-run/export/replay through a writable seam
 - public export posture should stay content-free even as package delivery widens: board state, HTTP responses, and audit metadata may surface bounded delivery status, paths, counts, and retry posture, but package bodies must stay in private dispatch/writer seams and the harness-owned export ledger
+- persisted export delivery must stay freshness-aware too: the harness-owned delivery ledger should record bundle revision explicitly, grouped export candidates should surface whether the latest stored delivery still matches the current export contract, and replay must stay suppressed when a stored failed bundle is stale
 
 ## External References
 
@@ -177,6 +178,7 @@ The first harness implementation slice is now built and verified:
 - Deepened the private claimed-lane execution envelope so worker hooks now receive bounded parent-card identity, continuity discriminator/items, and an explicit outcome contract without widening the public `wealth_factory_harness_lane_dispatch` payload. Private worker context is now rehydrated from durable lane/continuity state instead of being smuggled through public dispatch telemetry.
 - Re-ran the tenant/secret scans and updated the harness security report at `wf-harness/audit/2026-05-21/security-report.md`.
 - Cleared the final repo-specific reviewer pass on code correctness after tightening the wording around what this test seam does and does not prove.
+- Persisted explicit `bundleRevision` on harness export deliveries, widened the delivery-ledger migration/helper contract to require a non-null revision column, and surfaced grouped export-delivery freshness (`current_bundle` vs `stale_bundle`) back through the board contract so replay now fails closed when stored delivery no longer matches the current export package.
 
 ## Sharp Edges Logged
 

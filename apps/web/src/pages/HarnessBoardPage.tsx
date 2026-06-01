@@ -1337,7 +1337,9 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
               {candidate.latestDelivery ? (
                 <div style={{ display: "grid", gap: "0.2rem" }}>
                   <p style={styles.contractMeta}>{`Delivery posture: ${candidate.latestDelivery.statusLabel}`}</p>
+                  <p style={styles.contractMeta}>{`Delivery freshness: ${candidate.latestDelivery.contractFreshnessLabel}`}</p>
                   <p style={styles.actionSummary}>{candidate.latestDelivery.summary}</p>
+                  <p style={styles.actionSummary}>{candidate.latestDelivery.contractFreshnessSummary}</p>
                   <p style={styles.optionBody}>{`Attempts: ${candidate.latestDelivery.attemptCount}`}</p>
                   {candidate.latestDelivery.writerKindLabel ? (
                     <p style={styles.optionBody}>{`Writer: ${candidate.latestDelivery.writerKindLabel}`}</p>

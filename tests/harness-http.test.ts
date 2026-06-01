@@ -211,6 +211,7 @@ describe("harness HTTP boundary", () => {
       exportFormat: "obsidian_markdown_bundle",
       recordTarget: "governance_history_record",
       bundleId: "bundle-key",
+      bundleRevision: "bundle-revision-key",
       noteTitle: "Governance history",
       noteFileName: "wf_connect_first_workflow-governance-history.md",
       content: "# Governance history",
@@ -240,6 +241,7 @@ describe("harness HTTP boundary", () => {
       exportFormat: "obsidian_markdown_bundle",
       recordTarget: "governance_history_record",
       bundleId: "bundle-key",
+      bundleRevision: "bundle-revision-key",
       noteTitle: "Governance history",
       noteFileName: "wf_connect_first_workflow-governance-history.md",
       content: "# Governance history",
@@ -275,6 +277,9 @@ describe("harness HTTP boundary", () => {
         statusLabel: "Export ready",
         summary: "The governance history bundle is export-ready and waiting for bounded delivery through the configured tenant-safe writer seam.",
         attemptCount: 3,
+        contractFreshness: "current_bundle",
+        contractFreshnessLabel: "Current bundle",
+        contractFreshnessSummary: "The latest stored delivery bundle still matches the current export contract.",
         lastAttemptedAtLabel: "just now"
       }
     });
@@ -363,6 +368,7 @@ describe("harness HTTP boundary", () => {
       exportFormat: "obsidian_markdown_bundle",
       recordTarget: "package_deliverable_record",
       bundleId: "bundle-package",
+      bundleRevision: "bundle-package-revision",
       noteTitle: "Package bundle",
       noteFileName: "wf_connect_first_workflow-package-bundle.md",
       content: "# Package bundle",
@@ -392,6 +398,7 @@ describe("harness HTTP boundary", () => {
       exportFormat: "obsidian_markdown_bundle",
       recordTarget: "package_deliverable_record",
       bundleId: "bundle-package",
+      bundleRevision: "bundle-package-revision",
       noteTitle: "Package bundle",
       noteFileName: "wf_connect_first_workflow-package-bundle.md",
       content: "# Package bundle",
@@ -427,6 +434,9 @@ describe("harness HTTP boundary", () => {
         statusLabel: "Export ready",
         summary: "The package bundle is export-ready and waiting for bounded delivery through the configured tenant-safe writer seam.",
         attemptCount: 2,
+        contractFreshness: "current_bundle",
+        contractFreshnessLabel: "Current bundle",
+        contractFreshnessSummary: "The latest stored delivery bundle still matches the current export contract.",
         lastAttemptedAtLabel: "just now"
       }
     });

@@ -966,6 +966,7 @@ export type HarnessGovernanceHistoryExportReadyDispatch = {
   packageId: string;
   candidateId: "governance_history_export";
   bundleId: string;
+  bundleRevision: string;
   exportFormat: "obsidian_markdown_bundle";
   recordTarget: "governance_history_record";
   idempotencyKey: string;
@@ -986,6 +987,7 @@ export type HarnessPackageBundleExportReadyDispatch = {
   packageId: string;
   candidateId: "package_bundle_export";
   bundleId: string;
+  bundleRevision: string;
   exportFormat: "obsidian_markdown_bundle";
   recordTarget: "package_deliverable_record";
   idempotencyKey: string;
@@ -1011,6 +1013,9 @@ export type HarnessExportCandidateDeliveryView = {
   statusLabel: string;
   summary: string;
   attemptCount: number;
+  contractFreshness: "current_bundle" | "stale_bundle";
+  contractFreshnessLabel: string;
+  contractFreshnessSummary: string;
   lastAttemptedAtLabel?: string;
   deliveredAtLabel?: string;
   writerKindLabel?: string;
@@ -1055,6 +1060,7 @@ export type HarnessExportDryRunResult = {
   exportFormat: "obsidian_markdown_bundle";
   recordTarget: "governance_history_record" | "package_deliverable_record";
   bundleId: string;
+  bundleRevision: string;
   noteTitle: string;
   noteFileName: string;
   content: string;
@@ -4029,7 +4035,10 @@ export function createHarnessBoardService(options: {
           status: "export_ready",
           statusLabel: humanizeExportDeliveryStatus("export_ready"),
           summary: "The governance history bundle is export-ready and waiting for bounded delivery through the configured tenant-safe writer seam.",
-          attemptCount: 0
+          attemptCount: 0,
+          contractFreshness: "current_bundle",
+          contractFreshnessLabel: "Current bundle",
+          contractFreshnessSummary: "The latest stored delivery bundle still matches the current export contract."
         }
       };
       await options.onGovernanceHistoryExportReady?.({
@@ -4040,6 +4049,7 @@ export function createHarnessBoardService(options: {
         packageId: board.response.packageId,
         candidateId: result.candidateId,
         bundleId: result.bundleId,
+        bundleRevision: result.bundleRevision,
         exportFormat: result.exportFormat,
         recordTarget: result.recordTarget,
         idempotencyKey: result.idempotencyKey,
@@ -4117,7 +4127,10 @@ export function createHarnessBoardService(options: {
           status: "export_ready",
           statusLabel: humanizeExportDeliveryStatus("export_ready"),
           summary: "The package bundle is export-ready and waiting for bounded delivery through the configured tenant-safe writer seam.",
-          attemptCount: 0
+          attemptCount: 0,
+          contractFreshness: "current_bundle",
+          contractFreshnessLabel: "Current bundle",
+          contractFreshnessSummary: "The latest stored delivery bundle still matches the current export contract."
         }
       };
       await options.onPackageBundleExportReady?.({
@@ -4128,6 +4141,7 @@ export function createHarnessBoardService(options: {
         packageId: board.response.packageId,
         candidateId: result.candidateId,
         bundleId: result.bundleId,
+        bundleRevision: result.bundleRevision,
         exportFormat: result.exportFormat,
         recordTarget: result.recordTarget,
         idempotencyKey: result.idempotencyKey,
@@ -4206,6 +4220,7 @@ export function createHarnessBoardService(options: {
         packageId: board.response.packageId,
         candidateId: "governance_history_export",
         bundleId: exportDelivery.bundleId,
+        bundleRevision: exportDelivery.bundleRevision,
         exportFormat: exportDelivery.exportFormat,
         recordTarget: "governance_history_record",
         idempotencyKey: exportDelivery.idempotencyKey,
@@ -4230,6 +4245,9 @@ export function createHarnessBoardService(options: {
         statusLabel: humanizeExportDeliveryStatus("export_ready"),
         summary: "The governance history bundle was replayed back into the bounded tenant-safe writer seam and is waiting for delivery.",
         attemptCount: exportDelivery.attemptCount,
+        contractFreshness: "current_bundle",
+        contractFreshnessLabel: "Current bundle",
+        contractFreshnessSummary: "The replayed delivery bundle still matches the current export contract.",
         ...(exportDelivery.writerKind ? { writerKindLabel: humanizeExportDeliveryWriterKind(exportDelivery.writerKind) } : {}),
         ...(exportDelivery.primaryNotePath ? { primaryNotePath: exportDelivery.primaryNotePath } : {})
       };
@@ -4306,6 +4324,7 @@ export function createHarnessBoardService(options: {
         packageId: board.response.packageId,
         candidateId: "package_bundle_export",
         bundleId: exportDelivery.bundleId,
+        bundleRevision: exportDelivery.bundleRevision,
         exportFormat: exportDelivery.exportFormat,
         recordTarget: "package_deliverable_record",
         idempotencyKey: exportDelivery.idempotencyKey,
@@ -4330,6 +4349,9 @@ export function createHarnessBoardService(options: {
         statusLabel: humanizeExportDeliveryStatus("export_ready"),
         summary: "The package bundle was replayed back into the bounded tenant-safe writer seam and is waiting for delivery.",
         attemptCount: exportDelivery.attemptCount,
+        contractFreshness: "current_bundle",
+        contractFreshnessLabel: "Current bundle",
+        contractFreshnessSummary: "The replayed delivery bundle still matches the current export contract.",
         ...(exportDelivery.writerKind ? { writerKindLabel: humanizeExportDeliveryWriterKind(exportDelivery.writerKind) } : {}),
         ...(exportDelivery.primaryNotePath ? { primaryNotePath: exportDelivery.primaryNotePath } : {})
       };
@@ -5068,6 +5090,8 @@ function buildHarnessBoardResponse(input: {
   });
   const memoryBoundary = buildMemoryBoundaryView({
     runId: input.run.id,
+    workflowId: input.run.workflowId,
+    packageId: input.run.packageId,
     continuity: input.continuity,
     hasPendingAttention: Boolean(pendingAttention),
     recentDecisions,
@@ -5145,6 +5169,8 @@ function buildHarnessBoardResponse(input: {
 
 function buildMemoryBoundaryView(input: {
   runId: string;
+  workflowId: string;
+  packageId: string;
   continuity: readonly HarnessCardContinuityRecord[];
   hasPendingAttention: boolean;
   recentDecisions: readonly HarnessRecentDecisionView[];
@@ -6260,15 +6286,11 @@ function buildMemoryBoundaryView(input: {
       latestExportDeliveryRecordByCandidateId.set(delivery.candidateId, delivery);
     }
   }
-  const latestExportDeliveryByCandidateId = new Map<HarnessExportCandidateId, HarnessExportCandidateDeliveryView>();
-  for (const [candidateId, delivery] of latestExportDeliveryRecordByCandidateId.entries()) {
-    latestExportDeliveryByCandidateId.set(candidateId, toExportCandidateDeliveryView(delivery));
-  }
   const exportCandidates: HarnessMemoryBoundaryExportCandidateView[] = [];
 
   if (governanceHistoryCandidateItems.length > 0) {
     const representative = governanceHistoryCandidateItems[0]!;
-    exportCandidates.push({
+    const governanceCandidateBase: HarnessMemoryBoundaryExportCandidateView = {
       id: "governance_history_export",
       label: "Governance history export",
       itemCount: governanceHistoryCandidateItems.length,
@@ -6365,10 +6387,22 @@ function buildMemoryBoundaryView(input: {
       dependsOnCandidateIds: [],
       dependsOnCandidateLabels: [],
       dependencySummary:
-        "This governance history candidate can promote independently once the tenant requests export.",
-      ...(latestExportDeliveryByCandidateId.get("governance_history_export")
-        ? { latestDelivery: latestExportDeliveryByCandidateId.get("governance_history_export")! }
-        : {}),
+        "This governance history candidate can promote independently once the tenant requests export."
+    };
+    const currentGovernanceDryRun =
+      representative.readiness === "ready_now"
+        ? buildGovernanceHistoryExportDryRun(input as unknown as HarnessBoardResponse, governanceCandidateBase)
+        : null;
+    const latestGovernanceDelivery =
+      latestExportDeliveryRecordByCandidateId.get("governance_history_export")
+        ? toExportCandidateDeliveryView(
+            latestExportDeliveryRecordByCandidateId.get("governance_history_export")!,
+            currentGovernanceDryRun?.bundleId
+          )
+        : undefined;
+    exportCandidates.push({
+      ...governanceCandidateBase,
+      ...(latestGovernanceDelivery ? { latestDelivery: latestGovernanceDelivery } : {}),
       exportActions: buildExportCandidateActions({
         runId: input.runId,
         candidateId: "governance_history_export",
@@ -6379,9 +6413,7 @@ function buildMemoryBoundaryView(input: {
           promotionState: representative.promotionState,
           promotionNextStep: representative.promotionNextStep,
           itemIds: governanceHistoryCandidateItems.map((item) => item.id),
-          ...(latestExportDeliveryByCandidateId.get("governance_history_export")
-            ? { latestDelivery: latestExportDeliveryByCandidateId.get("governance_history_export")! }
-            : {})
+          ...(latestGovernanceDelivery ? { latestDelivery: latestGovernanceDelivery } : {})
         }
       })
     });
@@ -6390,6 +6422,27 @@ function buildMemoryBoundaryView(input: {
   if (packageBundleCandidateItems.length > 0) {
     const representative = packageBundleCandidateItems.find((item) => item.readiness === "after_board_closes")
       ?? packageBundleCandidateItems[0]!;
+    const currentPackageDryRun =
+      representative.readiness === "ready_now"
+        ? buildPackageBundleExportDryRun(input as unknown as HarnessBoardResponse, {
+            id: "package_bundle_export",
+            label: "Package bundle export",
+            itemCount: packageBundleCandidateItems.length,
+            readiness: representative.readiness,
+            readinessLabel: representative.readinessLabel,
+            syncStrategy: representative.syncStrategy,
+            exportConfirmationRequirement: representative.exportConfirmationRequirement,
+            exportSourceDisclosurePolicyLabel: representative.exportSourceDisclosurePolicyLabel,
+            exportRedactionBoundaryLabel: representative.exportRedactionBoundaryLabel
+          } as HarnessMemoryBoundaryExportCandidateView)
+        : null;
+    const latestPackageDelivery =
+      latestExportDeliveryRecordByCandidateId.get("package_bundle_export")
+        ? toExportCandidateDeliveryView(
+            latestExportDeliveryRecordByCandidateId.get("package_bundle_export")!,
+            currentPackageDryRun?.bundleId
+          )
+        : undefined;
     exportCandidates.push({
       id: "package_bundle_export",
       label: "Package bundle export",
@@ -6492,9 +6545,7 @@ function buildMemoryBoundaryView(input: {
         representative.readiness === "after_board_closes"
           ? "This package bundle candidate still waits on board closure and later follows the governance history export candidate."
           : "This package bundle candidate follows the governance history export candidate once the tenant reaches export time.",
-      ...(latestExportDeliveryByCandidateId.get("package_bundle_export")
-        ? { latestDelivery: latestExportDeliveryByCandidateId.get("package_bundle_export")! }
-        : {}),
+      ...(latestPackageDelivery ? { latestDelivery: latestPackageDelivery } : {}),
       exportActions: buildExportCandidateActions({
         runId: input.runId,
         candidateId: "package_bundle_export",
@@ -6505,9 +6556,7 @@ function buildMemoryBoundaryView(input: {
           promotionState: representative.promotionState,
           promotionNextStep: representative.promotionNextStep,
           itemIds: packageBundleCandidateItems.map((item) => item.id),
-          ...(latestExportDeliveryByCandidateId.get("package_bundle_export")
-            ? { latestDelivery: latestExportDeliveryByCandidateId.get("package_bundle_export")! }
-            : {})
+          ...(latestPackageDelivery ? { latestDelivery: latestPackageDelivery } : {})
         }
       }),
       ...(representative.nextEligibleSummary ? { nextEligibleSummary: representative.nextEligibleSummary } : {})
@@ -7317,17 +7366,22 @@ function buildMemoryBoundaryView(input: {
 }
 
 function toExportCandidateDeliveryView(
-  delivery: HarnessExportDeliveryRecord
+  delivery: HarnessExportDeliveryRecord,
+  currentBundleId?: string
 ): HarnessExportCandidateDeliveryView {
   const primaryNotePath =
     typeof delivery.deliveryReceipt.primaryNotePath === "string" && delivery.deliveryReceipt.primaryNotePath.length > 0
       ? delivery.deliveryReceipt.primaryNotePath
       : delivery.primaryNotePath;
+  const contractFreshness =
+    currentBundleId && delivery.bundleId !== currentBundleId ? "stale_bundle" : "current_bundle";
   return {
     status: delivery.status,
     statusLabel: humanizeExportDeliveryStatus(delivery.status),
     summary:
-      delivery.status === "delivered"
+      contractFreshness === "stale_bundle"
+        ? "The latest stored export bundle belongs to an older revision and should be rebuilt before any bounded delivery replay."
+        : delivery.status === "delivered"
         ? "The latest tenant-safe export bundle was delivered through the bounded private writer seam."
         : delivery.status === "delivery_failed"
         ? "The latest tenant-safe export delivery failed and can be replayed safely through the same bounded export action."
@@ -7335,6 +7389,12 @@ function toExportCandidateDeliveryView(
         ? "The latest tenant-safe export bundle is currently being delivered through the bounded private writer seam."
         : "The latest tenant-safe export bundle is export-ready and waiting for bounded delivery.",
     attemptCount: delivery.attemptCount,
+    contractFreshness,
+    contractFreshnessLabel: humanizeExportDeliveryContractFreshness(contractFreshness),
+    contractFreshnessSummary:
+      contractFreshness === "stale_bundle"
+        ? "The stored delivery bundle no longer matches the current export contract. Build a fresh export bundle before replaying delivery."
+        : "The latest stored delivery bundle still matches the current export contract.",
     ...(delivery.lastAttemptedAt ? { lastAttemptedAtLabel: formatBoardTimestamp(delivery.lastAttemptedAt) } : {}),
     ...(delivery.deliveredAt ? { deliveredAtLabel: formatBoardTimestamp(delivery.deliveredAt) } : {}),
     ...(delivery.writerKind ? { writerKindLabel: humanizeExportDeliveryWriterKind(delivery.writerKind) } : {}),
@@ -7356,6 +7416,17 @@ function humanizeExportDeliveryStatus(status: HarnessExportCandidateDeliveryStat
       return "Delivery failed";
     default:
       return humanizeLabel(status);
+  }
+}
+
+function humanizeExportDeliveryContractFreshness(freshness: HarnessExportCandidateDeliveryView["contractFreshness"]) {
+  switch (freshness) {
+    case "current_bundle":
+      return "Current bundle";
+    case "stale_bundle":
+      return "Stale bundle";
+    default:
+      return humanizeLabel(freshness);
   }
 }
 
@@ -8421,7 +8492,8 @@ function buildExportCandidateActions(input: {
     if (
       input.candidate.latestDelivery &&
       input.candidate.latestDelivery.status !== "delivered" &&
-      input.candidate.latestDelivery.status !== "delivery_in_progress"
+      input.candidate.latestDelivery.status !== "delivery_in_progress" &&
+      input.candidate.latestDelivery.contractFreshness !== "stale_bundle"
     ) {
       actions.push({
         actionRoute: "governance-history-export-replay",
@@ -8469,7 +8541,8 @@ function buildExportCandidateActions(input: {
     if (
       input.candidate.latestDelivery &&
       input.candidate.latestDelivery.status !== "delivered" &&
-      input.candidate.latestDelivery.status !== "delivery_in_progress"
+      input.candidate.latestDelivery.status !== "delivery_in_progress" &&
+      input.candidate.latestDelivery.contractFreshness !== "stale_bundle"
     ) {
       actions.push({
         actionRoute: "package-bundle-export-replay",
@@ -8685,6 +8758,7 @@ function buildGovernanceHistoryExportDryRun(
     exportFormat: "obsidian_markdown_bundle",
     recordTarget: "governance_history_record",
     bundleId,
+    bundleRevision,
     noteTitle,
     noteFileName,
     content,
@@ -8825,6 +8899,7 @@ function buildPackageBundleExportDryRun(
     exportFormat: "obsidian_markdown_bundle",
     recordTarget: "package_deliverable_record",
     bundleId,
+    bundleRevision,
     noteTitle,
     noteFileName,
     content,

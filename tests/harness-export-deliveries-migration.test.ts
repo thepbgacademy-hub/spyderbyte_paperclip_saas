@@ -5,6 +5,7 @@ const migration = readFileSync("supabase/migrations/0021_wf_harness_export_deliv
 const rlsMigration = readFileSync("supabase/migrations/0022_wf_harness_export_deliveries_rls.sql", "utf8");
 const packageBundleMigration = readFileSync("supabase/migrations/0024_wf_harness_export_delivery_package_bundle.sql", "utf8");
 const claimMigration = readFileSync("supabase/migrations/0025_wf_harness_export_delivery_claims.sql", "utf8");
+const bundleRevisionMigration = readFileSync("supabase/migrations/0026_wf_harness_export_delivery_bundle_revision.sql", "utf8");
 const helper = readFileSync("scripts/apply-wfpc-migration.mjs", "utf8");
 
 describe("harness export deliveries migration", () => {
@@ -25,6 +26,7 @@ describe("harness export deliveries migration", () => {
     expect(helper).toMatch(/0022_wf_harness_export_deliveries_rls\.sql/i);
     expect(helper).toMatch(/0024_wf_harness_export_delivery_package_bundle\.sql/i);
     expect(helper).toMatch(/0025_wf_harness_export_delivery_claims\.sql/i);
+    expect(helper).toMatch(/0026_wf_harness_export_delivery_bundle_revision\.sql/i);
     expect(helper).toMatch(/has_placement_manifest/i);
     expect(helper).toMatch(/has_files/i);
     expect(helper).toMatch(/has_idempotency_key/i);
@@ -40,6 +42,9 @@ describe("harness export deliveries migration", () => {
     expect(helper).toMatch(/Harness export delivery package-bundle widening did not produce the required schema shape/i);
     expect(helper).toMatch(/has_delivery_in_progress_status/i);
     expect(helper).toMatch(/Harness export delivery claim migration did not produce the required schema shape/i);
+    expect(helper).toMatch(/has_bundle_revision/i);
+    expect(helper).toMatch(/has_non_nullable_bundle_revision/i);
+    expect(helper).toMatch(/Harness export delivery bundle-revision migration did not produce the required schema shape/i);
   });
 
   it("keeps the delivery ledger tenant-scoped with RLS", () => {
@@ -55,5 +60,11 @@ describe("harness export deliveries migration", () => {
 
   it("widens the delivery ledger for in-progress delivery claims", () => {
     expect(claimMigration).toMatch(/status in \('export_ready', 'delivery_in_progress', 'delivered', 'delivery_failed'\)/i);
+  });
+
+  it("widens the delivery ledger for non-null bundle revisions", () => {
+    expect(bundleRevisionMigration).toMatch(/add column if not exists bundle_revision text/i);
+    expect(bundleRevisionMigration).toMatch(/set bundle_revision = coalesce\(nullif\(bundle_revision, ''\), bundle_id\)/i);
+    expect(bundleRevisionMigration).toMatch(/alter column bundle_revision set not null/i);
   });
 });

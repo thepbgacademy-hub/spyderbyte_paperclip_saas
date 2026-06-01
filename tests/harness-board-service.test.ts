@@ -4368,6 +4368,7 @@ describe("harness board service", () => {
       packageId: "pkg_bib_connect",
       candidateId: "governance_history_export",
       bundleId: expect.any(String),
+      bundleRevision: expect.any(String),
       idempotencyKey: expect.any(String)
     }));
     expect(result.placement.primaryNotePath).toBe(
@@ -4443,8 +4444,10 @@ describe("harness board service", () => {
     });
 
     expect(secondExport.bundleId).not.toBe(firstExport.bundleId);
+    expect(secondExport.bundleRevision).not.toBe(firstExport.bundleRevision);
     expect(secondExport.idempotencyKey).not.toBe(firstExport.idempotencyKey);
     expect(secondExport.latestDelivery.attemptCount).toBe(0);
+    expect(secondExport.latestDelivery.contractFreshness).toBe("current_bundle");
   });
 
   it("surfaces a bounded governance-history delivery replay action when the latest delivery is export-ready or failed", async () => {
@@ -4471,6 +4474,16 @@ describe("harness board service", () => {
       deliverableType: "pricing_review"
     }));
     const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const dryRunAction = board.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "governance_history_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "export-dry-run");
+    expect(dryRunAction).toBeTruthy();
+    const dryRun = await service.dryRunExportCandidate({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      candidateId: "governance_history_export",
+      actionToken: dryRunAction!.actionToken
+    });
     await repository.upsertExportDelivery({
       id: "delivery_replay_test_1",
       runId: board.runId,
@@ -4479,29 +4492,22 @@ describe("harness board service", () => {
       packageId: board.packageId,
       candidateId: "governance_history_export",
       status: "delivery_failed",
-      exportFormat: "obsidian_markdown_bundle",
+      exportFormat: dryRun.exportFormat,
       recordTarget: "governance_history_record",
-      bundleId: "bundle_replay_test_1",
+      bundleId: dryRun.bundleId,
+      bundleRevision: dryRun.bundleRevision,
       idempotencyKey: "idempotency_replay_test_1",
-      noteTitle: "Governance history",
-      noteFileName: "wf_connect_first_workflow-governance-history.md",
-      placementTargetSystem: "obsidian_vault",
-      vaultFolder: "wealth-factory/governance-history/wf_connect_first_workflow",
-      primaryNotePath: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
-      syncStrategy: "append_history_entry",
-      confirmationRequirement: "tenant_export_confirmation",
-      files: [
-        {
-          path: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
-          mediaType: "text/markdown",
-          byteSize: 20,
-          checksum: "abc",
-          content: "# Governance history"
-        }
-      ],
-      recordCount: 2,
-      disclosureSummary: "Decision summary only",
-      redactionSummary: "Governance-safe redaction",
+      noteTitle: dryRun.noteTitle,
+      noteFileName: dryRun.noteFileName,
+      placementTargetSystem: dryRun.placement.targetSystem,
+      vaultFolder: dryRun.placement.vaultFolder,
+      primaryNotePath: dryRun.placement.primaryNotePath,
+      syncStrategy: dryRun.placement.syncStrategy,
+      confirmationRequirement: dryRun.placement.confirmationRequirement,
+      files: dryRun.files,
+      recordCount: dryRun.recordCount,
+      disclosureSummary: dryRun.disclosureSummary,
+      redactionSummary: dryRun.redactionSummary,
       attemptCount: 1,
       lastAttemptedAt: "2026-05-29T01:00:00.000Z",
       deliveredAt: null,
@@ -4520,6 +4526,9 @@ describe("harness board service", () => {
     expect(replayAction).toBeTruthy();
     expect(replayAction).toEqual(expect.objectContaining({
       actionLabel: "Replay governance history delivery"
+    }));
+    expect(candidate?.latestDelivery).toEqual(expect.objectContaining({
+      contractFreshness: "current_bundle"
     }));
   });
 
@@ -4558,6 +4567,7 @@ describe("harness board service", () => {
       exportFormat: "obsidian_markdown_bundle",
       recordTarget: "governance_history_record",
       bundleId: "bundle_in_progress_test_1",
+      bundleRevision: "bundle_in_progress_revision_1",
       idempotencyKey: "idempotency_in_progress_test_1",
       noteTitle: "Governance history",
       noteFileName: "wf_connect_first_workflow-governance-history.md",
@@ -4586,7 +4596,8 @@ describe("harness board service", () => {
 
     expect(candidate?.latestDelivery).toEqual(expect.objectContaining({
       status: "delivery_in_progress",
-      statusLabel: "Delivery in progress"
+      statusLabel: "Delivery in progress",
+      contractFreshness: "stale_bundle"
     }));
     expect(candidate?.exportActions?.find((entry) => entry.actionRoute === "governance-history-export-replay")).toBeUndefined();
     expect(candidate?.exportActions?.find((entry) => entry.actionRoute === "governance-history-export")).toBeUndefined();
@@ -4641,6 +4652,7 @@ describe("harness board service", () => {
       exportFormat: dryRun.exportFormat,
       recordTarget: "governance_history_record",
       bundleId: dryRun.bundleId,
+      bundleRevision: dryRun.bundleRevision,
       idempotencyKey: "idempotency_replay_test_2",
       noteTitle: dryRun.noteTitle,
       noteFileName: dryRun.noteFileName,
@@ -4686,7 +4698,8 @@ describe("harness board service", () => {
 
     expect(onGovernanceHistoryExportReady).toHaveBeenCalledWith(expect.objectContaining({
       idempotencyKey: "idempotency_replay_test_2",
-      bundleId: dryRun.bundleId
+      bundleId: dryRun.bundleId,
+      bundleRevision: dryRun.bundleRevision
     }));
     await expect(repository.listExportDeliveriesForRun(hydrated.runId)).resolves.toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -4746,6 +4759,7 @@ describe("harness board service", () => {
       exportFormat: firstExport.exportFormat,
       recordTarget: firstExport.recordTarget,
       bundleId: firstExport.bundleId,
+      bundleRevision: firstExport.bundleRevision,
       idempotencyKey: firstExport.idempotencyKey,
       noteTitle: firstExport.noteTitle,
       noteFileName: firstExport.noteFileName,
@@ -4782,17 +4796,19 @@ describe("harness board service", () => {
     }));
 
     const refreshedBoard = await service.listBoardState({ authorization: "Bearer valid" });
-    const replayAction = refreshedBoard.memoryBoundary.exportCandidates
-      ?.find((entry) => entry.id === "governance_history_export")
-      ?.exportActions?.find((entry) => entry.actionRoute === "governance-history-export-replay");
-    expect(replayAction).toBeTruthy();
+    const replayCandidate = refreshedBoard.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "governance_history_export");
+    const replayAction = replayCandidate?.exportActions?.find((entry) => entry.actionRoute === "governance-history-export-replay");
+    expect(replayCandidate?.latestDelivery).toEqual(expect.objectContaining({
+      contractFreshness: "stale_bundle"
+    }));
+    expect(replayAction).toBeUndefined();
 
     await expect(service.replayGovernanceHistoryDeliveryCandidate({
       authorization: "Bearer valid",
       runId: refreshedBoard.runId,
-      candidateId: "governance_history_export",
-      actionToken: replayAction!.actionToken
-    })).rejects.toThrow("Harness governance history delivery replay is stale against the current export contract");
+      candidateId: "governance_history_export"
+    })).rejects.toThrow("Harness export action is not available for the current candidate contract");
   });
 
   it("runs bounded package-bundle dry-run and export from the grouped candidate contract after board closure", async () => {
@@ -4887,6 +4903,7 @@ describe("harness board service", () => {
     expect(onPackageBundleExportReady).toHaveBeenCalledWith(expect.objectContaining({
       candidateId: "package_bundle_export",
       bundleId: expect.any(String),
+      bundleRevision: expect.any(String),
       recordTarget: "package_deliverable_record"
     }));
   });
@@ -4956,6 +4973,7 @@ describe("harness board service", () => {
       exportFormat: dryRun.exportFormat,
       recordTarget: "package_deliverable_record",
       bundleId: dryRun.bundleId,
+      bundleRevision: dryRun.bundleRevision,
       idempotencyKey: "idempotency_package_replay_test_1",
       noteTitle: dryRun.noteTitle,
       noteFileName: dryRun.noteFileName,
@@ -4998,7 +5016,8 @@ describe("harness board service", () => {
 
     expect(onPackageBundleExportReady).toHaveBeenCalledWith(expect.objectContaining({
       candidateId: "package_bundle_export",
-      idempotencyKey: "idempotency_package_replay_test_1"
+      idempotencyKey: "idempotency_package_replay_test_1",
+      bundleRevision: dryRun.bundleRevision
     }));
   });
 
@@ -5066,6 +5085,7 @@ describe("harness board service", () => {
       exportFormat: firstExport.exportFormat,
       recordTarget: firstExport.recordTarget,
       bundleId: "stale_bundle_package_revision_1",
+      bundleRevision: "stale_bundle_package_revision_1",
       idempotencyKey: firstExport.idempotencyKey,
       noteTitle: firstExport.noteTitle,
       noteFileName: firstExport.noteFileName,
@@ -5089,17 +5109,19 @@ describe("harness board service", () => {
       updatedAt: "2026-06-01T00:15:00.000Z"
     });
     const refreshedBoard = await service.listBoardState({ authorization: "Bearer valid" });
-    const replayAction = refreshedBoard.memoryBoundary.exportCandidates
-      ?.find((entry) => entry.id === "package_bundle_export")
-      ?.exportActions?.find((entry) => entry.actionRoute === "package-bundle-export-replay");
-    expect(replayAction).toBeTruthy();
+    const replayCandidate = refreshedBoard.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "package_bundle_export");
+    const replayAction = replayCandidate?.exportActions?.find((entry) => entry.actionRoute === "package-bundle-export-replay");
+    expect(replayCandidate?.latestDelivery).toEqual(expect.objectContaining({
+      contractFreshness: "stale_bundle"
+    }));
+    expect(replayAction).toBeUndefined();
 
     await expect(service.replayPackageBundleDeliveryCandidate({
       authorization: "Bearer valid",
       runId: refreshedBoard.runId,
-      candidateId: "package_bundle_export",
-      actionToken: replayAction!.actionToken
-    })).rejects.toThrow("Harness package bundle delivery replay is stale against the current export contract");
+      candidateId: "package_bundle_export"
+    })).rejects.toThrow("Harness export action is not available for the current candidate contract");
   });
 
   it("fails closed when approval mutation is invoked without an atomic runner", async () => {
