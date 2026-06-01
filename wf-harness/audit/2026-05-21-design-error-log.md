@@ -28,6 +28,7 @@ Capture design-stage mistakes, false assumptions, and pressure-test lessons so t
 
 1. The first board cut looked polished but was still a static demo. Reviewer feedback correctly forced the board route and page off fixtures and onto a tenant-scoped persisted path.
 2. Harness HTTP cannot collapse all failures into `401 unauthorized`; internal failures must stay distinguishable from auth failures or operators will chase the wrong problem.
+3. Denied governance cannot stay an implicit export side effect. The closed-board export contract now has to say directly that denied governance remains part of the existing governance-history and package-bundle tenant record surfaces, even after that denial falls out of the bounded recent-decision slice.
 3. `WF_HARNESS_ENABLED_WORKFLOW_IDS` is not meaningful until a live runtime path actually consumes it. Configuration alone is not progress.
 4. Persisted run/card/event tables are only valuable if the slice really writes and reads them. Repository scaffolding without a live caller is false comfort.
 5. The intentional E2E fail step can poison the pass step if a dummy server is not fully cleaned up. A stray Python listener on `127.0.0.1:5173` produced false directory-listing failures until it was killed.

@@ -139,6 +139,7 @@ export interface HarnessCompletionPackageSnapshot {
   status: "assembling" | "done";
   summary?: string;
   deferredApprovalCount: number;
+  deniedApprovalCount: number;
   hasOpenGovernanceItems: boolean;
   packageNote?: string;
   recommendations: string[];

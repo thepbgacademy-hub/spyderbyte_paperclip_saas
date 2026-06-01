@@ -1080,6 +1080,7 @@ const fallbackBoardBase: HarnessBoardResponse = {
     status: "assembling",
     summary: "The current board package is almost ready, with one bounded governance question still shaping the handoff.",
     deferredApprovalCount: 1,
+    deniedApprovalCount: 0,
     hasOpenGovernanceItems: true,
     packageNote: "Keep the pricing handoff readable while the research expansion stays under review.",
     recommendations: [

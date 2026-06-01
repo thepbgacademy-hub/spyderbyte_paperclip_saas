@@ -809,6 +809,7 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
             status: record.status,
             summary: record.summary,
             deferredApprovalCount: record.deferredApprovalCount,
+            deniedApprovalCount: record.deniedApprovalCount,
             hasOpenGovernanceItems: record.hasOpenGovernanceItems,
             packageNote: record.packageNote,
             recommendations: record.recommendations,
@@ -1191,6 +1192,7 @@ function mapHarnessCompletionPackageSnapshotRow(row: unknown): HarnessCompletion
     status: snapshot.status === "assembling" ? "assembling" : "done",
     ...(typeof snapshot.summary === "string" ? { summary: snapshot.summary } : {}),
     deferredApprovalCount: Number(snapshot.deferredApprovalCount ?? 0),
+    deniedApprovalCount: Number(snapshot.deniedApprovalCount ?? 0),
     hasOpenGovernanceItems: Boolean(snapshot.hasOpenGovernanceItems),
     ...(typeof snapshot.packageNote === "string" ? { packageNote: snapshot.packageNote } : {}),
     recommendations: Array.isArray(snapshot.recommendations)

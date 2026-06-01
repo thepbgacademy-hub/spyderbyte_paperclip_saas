@@ -2227,6 +2227,7 @@ describe("harness board service", () => {
     expect(completedBoard.completionPackage).toEqual(
       expect.objectContaining({
         deferredApprovalCount: 0,
+        deniedApprovalCount: 0,
         hasOpenGovernanceItems: false,
         objections: [],
         governanceItems: []
@@ -7111,6 +7112,7 @@ describe("harness board service", () => {
       expect.objectContaining({
         status: "done",
         deferredApprovalCount: 0,
+        deniedApprovalCount: 0,
         hasOpenGovernanceItems: false,
         packageNote: "The board outcome includes clear next-step recommendations for the tenant-facing handoff.",
         recommendations: expect.arrayContaining(["Package only completed lanes into the tenant-facing board outcome."]),
@@ -7342,6 +7344,7 @@ describe("harness board service", () => {
       expect.objectContaining({
         status: "done",
         deferredApprovalCount: 1,
+        deniedApprovalCount: 1,
         hasOpenGovernanceItems: true,
         packageNote: "The board is packaging completed work while keeping deferred follow-up requests visible for later CEO review.",
         recommendations: expect.arrayContaining([
@@ -7650,6 +7653,7 @@ describe("harness board service", () => {
     expect(completedBoard.completionPackage).toEqual(
       expect.objectContaining({
         deferredApprovalCount: 0,
+        deniedApprovalCount: 1,
         hasOpenGovernanceItems: true,
         packageNote: "The board outcome keeps denied governance requests visible so the tenant can see where the CEO held the workflow boundary.",
         governanceItems: [
@@ -7660,6 +7664,134 @@ describe("harness board service", () => {
         ]
       })
     );
+  });
+
+  it("keeps denied governance exportable through the existing closed-board candidates even when it falls outside the recent decision slice", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "done",
+      resultSummary: "Pricing floor is stable enough for launch."
+    });
+
+    await repository.insertProposal({
+      id: "proposal_denied_export_visibility_1",
+      runId: board.runId,
+      parentCardId: created.cardId,
+      requestedByCardId: created.cardId,
+      requestedByPersona: "cfo",
+      persona: "cto",
+      title: "Open an extra technical review lane",
+      deliverableType: "technical_review",
+      status: "denied"
+    });
+    await repository.insertDecision({
+      id: "decision_denied_export_visibility_1",
+      runId: board.runId,
+      tenantId: "tenant_123",
+      actorUserId: "user_123",
+      decisionKind: "proposal_denied",
+      cardId: created.cardId,
+      proposalId: "proposal_denied_export_visibility_1",
+      targetCardId: null,
+      persona: "cto",
+      deliverableType: "technical_review",
+      policyReason: "scope_guardrail",
+      resolution: null,
+      decisionNote: "Keep this denied governance item out of raw recent-decision dependency checks.",
+      recommendationSummary:
+        "Keep this technical review work inside the current approved package boundary unless the CEO deliberately widens scope.",
+      objectionSummary: "Do not widen this run beyond the approved technical review workflow boundary.",
+      createdAt: "2026-05-01T00:00:00.000Z"
+    });
+
+    for (let index = 1; index <= 8; index += 1) {
+      await repository.insertDecision({
+        id: `decision_newer_lane_opened_${index}`,
+        runId: board.runId,
+        tenantId: "tenant_123",
+        actorUserId: "user_123",
+        decisionKind: "lane_opened",
+        cardId: created.cardId,
+        proposalId: null,
+        targetCardId: created.cardId,
+        persona: index % 2 === 0 ? "researcher" : "cfo",
+        deliverableType: index % 2 === 0 ? "research_brief" : "pricing_review",
+        policyReason: "created_new_lane",
+        resolution: null,
+        decisionNote: null,
+        recommendationSummary: null,
+        objectionSummary: null,
+        createdAt: `2026-05-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`
+      });
+    }
+
+    await service.completeRun({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      completionSummary: "The CEO packaged the final business-facing outcome."
+    });
+
+    const completedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(completedBoard.recentDecisions).toHaveLength(8);
+    expect(completedBoard.recentDecisions.some((decision) => decision.label.includes("Denied"))).toBe(false);
+
+    const candidate = completedBoard.memoryBoundary.exportCandidates?.find((entry) => entry.id === "governance_history_export");
+    const dryRunAction = candidate?.exportActions?.find((entry) => entry.actionRoute === "export-dry-run");
+    expect(candidate).toEqual(
+      expect.objectContaining({
+        governanceItemCount: 1,
+        deniedGovernanceItemCount: 1,
+        deferredGovernanceItemCount: 0,
+        governanceExportDisposition: "included_in_existing_candidates",
+        governanceExportDispositionLabel: "Included in governance history and package exports"
+      })
+    );
+    expect(dryRunAction).toBeTruthy();
+
+    const dryRun = await service.dryRunExportCandidate({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      candidateId: "governance_history_export",
+      actionToken: dryRunAction!.actionToken
+    });
+
+    expect(dryRun.governanceItemCount).toBe(1);
+    expect(dryRun.deniedGovernanceItemCount).toBe(1);
+    expect(dryRun.deferredGovernanceItemCount).toBe(0);
+    expect(dryRun.governanceExportDisposition).toBe("included_in_existing_candidates");
+    expect(dryRun.governanceExportDispositionLabel).toBe("Included in governance history and package exports");
+    expect(dryRun.content).toContain("## Governance Holds");
+    expect(dryRun.content).toContain("Denied by the CEO");
+    expect(dryRun.content).toContain("CTO Technical Review (Denied by the CEO)");
   });
 
   it("derives package-level recommendations and objections from the full governance set, not only the visible slice", async () => {

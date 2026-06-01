@@ -253,6 +253,7 @@ const boardResponse: HarnessBoardResponse = {
     status: "assembling",
     summary: "The current package is nearly ready with one bounded governance item still shaping the handoff.",
     deferredApprovalCount: 1,
+    deniedApprovalCount: 0,
     hasOpenGovernanceItems: true,
     packageNote: "Keep the pricing package readable while the research expansion stays under review.",
     recommendations: [

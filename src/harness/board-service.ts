@@ -477,6 +477,11 @@ export type HarnessMemoryBoundaryExportCandidateView = {
   exportConfirmationRequirementLabel: string;
   exportRecoveryPath: HarnessMemoryBoundaryExportRecoveryPath;
   exportRecoveryPathLabel: string;
+  governanceItemCount?: number;
+  deferredGovernanceItemCount?: number;
+  deniedGovernanceItemCount?: number;
+  governanceExportDisposition?: "included_in_existing_candidates";
+  governanceExportDispositionLabel?: string;
   exportPayloadShape: HarnessMemoryBoundaryExportPayloadShape;
   exportPayloadShapeLabel: string;
   idempotencyPolicy: HarnessMemoryBoundaryIdempotencyPolicy;
@@ -1049,6 +1054,11 @@ export type HarnessExportDryRunResult = {
   recordCount: number;
   disclosureSummary: string;
   redactionSummary: string;
+  governanceItemCount?: number;
+  deferredGovernanceItemCount?: number;
+  deniedGovernanceItemCount?: number;
+  governanceExportDisposition?: "included_in_existing_candidates";
+  governanceExportDispositionLabel?: string;
 };
 
 export type HarnessGovernanceHistoryExportResult = Omit<HarnessExportDryRunResult, "status"> & {
@@ -6370,6 +6380,9 @@ function buildMemoryBoundaryView(input: {
 
   if (governanceHistoryCandidateItems.length > 0) {
     const representative = governanceHistoryCandidateItems[0]!;
+    const governanceItemCount = input.completionPackage?.governanceItems.length ?? 0;
+    const deferredGovernanceItemCount = input.completionPackage?.deferredApprovalCount ?? 0;
+    const deniedGovernanceItemCount = input.completionPackage?.deniedApprovalCount ?? 0;
     const governanceCandidateBase: HarnessMemoryBoundaryExportCandidateView = {
       id: "governance_history_export",
       label: "Governance history export",
@@ -6430,6 +6443,15 @@ function buildMemoryBoundaryView(input: {
       exportConfirmationRequirementLabel: representative.exportConfirmationRequirementLabel,
       exportRecoveryPath: representative.exportRecoveryPath,
       exportRecoveryPathLabel: representative.exportRecoveryPathLabel,
+      ...(governanceItemCount > 0
+        ? {
+            governanceItemCount,
+            deferredGovernanceItemCount,
+            deniedGovernanceItemCount,
+            governanceExportDisposition: "included_in_existing_candidates" as const,
+            governanceExportDispositionLabel: "Included in governance history and package exports"
+          }
+        : {}),
       exportPayloadShape: representative.exportPayloadShape,
       exportPayloadShapeLabel: representative.exportPayloadShapeLabel,
       idempotencyPolicy: representative.idempotencyPolicy,
@@ -6503,6 +6525,9 @@ function buildMemoryBoundaryView(input: {
   if (packageBundleCandidateItems.length > 0) {
     const representative = packageBundleCandidateItems.find((item) => item.readiness === "after_board_closes")
       ?? packageBundleCandidateItems[0]!;
+    const governanceItemCount = input.completionPackage?.governanceItems.length ?? 0;
+    const deferredGovernanceItemCount = input.completionPackage?.deferredApprovalCount ?? 0;
+    const deniedGovernanceItemCount = input.completionPackage?.deniedApprovalCount ?? 0;
     const currentPackageDryRun =
       representative.readiness === "ready_now"
         ? buildPackageBundleExportDryRun(input as unknown as HarnessBoardResponse, {
@@ -6586,6 +6611,15 @@ function buildMemoryBoundaryView(input: {
       exportConfirmationRequirementLabel: representative.exportConfirmationRequirementLabel,
       exportRecoveryPath: representative.exportRecoveryPath,
       exportRecoveryPathLabel: representative.exportRecoveryPathLabel,
+      ...(governanceItemCount > 0
+        ? {
+            governanceItemCount,
+            deferredGovernanceItemCount,
+            deniedGovernanceItemCount,
+            governanceExportDisposition: "included_in_existing_candidates" as const,
+            governanceExportDispositionLabel: "Included in governance history and package exports"
+          }
+        : {}),
       exportPayloadShape: representative.exportPayloadShape,
       exportPayloadShapeLabel: representative.exportPayloadShapeLabel,
       idempotencyPolicy: representative.idempotencyPolicy,
@@ -8589,7 +8623,7 @@ function buildExportCandidateActions(input: {
         actionMethod: "POST",
         actionToken: createHarnessActionToken(["governance-history-export", ...baseParts]),
         actionLabel: "Build governance history export",
-        actionDescription: "Produce the first real Obsidian-facing governance-history export bundle from the current board contract.",
+        actionDescription: "Produce the first real Obsidian-facing governance-history export bundle from the current board contract, including bounded denied or deferred governance items when the closed-board package carries them.",
         nextEffectSummary: "This returns a tenant-safe markdown bundle for later vault placement without turning Obsidian into live runtime state."
       }
     );
@@ -8651,7 +8685,7 @@ function buildExportCandidateActions(input: {
         actionMethod: "POST",
         actionToken: createHarnessActionToken(["package-bundle-export", ...baseParts]),
         actionLabel: "Build package bundle export",
-        actionDescription: "Produce the first real Obsidian-facing package bundle export from the current closed-board contract.",
+        actionDescription: "Produce the first real Obsidian-facing package bundle export from the current closed-board contract, keeping denied governance inside the existing package-governance surface instead of branching into a separate export path.",
         nextEffectSummary: "This returns a tenant-safe package bundle for later vault placement without turning Obsidian into live runtime state."
       });
     }
@@ -8801,7 +8835,13 @@ function buildGovernanceHistoryExportDryRun(
   const followThroughLines = board.followThroughItems.map((item) => (
     `- ${item.summary}${item.policyReasonLabel ? `\n  - Policy reason: ${item.policyReasonLabel}` : ""}${item.resolutionLabel ? `\n  - Resolution: ${item.resolutionLabel}` : ""}`
   ));
-  const recordCount = Math.max(1, board.recentDecisions.length + board.followThroughItems.length);
+  const governanceItems = board.completionPackage?.governanceItems ?? [];
+  const governanceLines = governanceItems.map((item) => (
+    `- ${item.persona} ${item.deliverableLabel} (${item.statusLabel})${item.policyReasonLabel ? `\n  - Policy reason: ${item.policyReasonLabel}` : ""}${item.recommendationSummary ? `\n  - Recommendation: ${item.recommendationSummary}` : ""}${item.objectionSummary ? `\n  - Objection: ${item.objectionSummary}` : ""}${item.nextReviewTrigger ? `\n  - Next review: ${item.nextReviewTrigger}` : ""}`
+  ));
+  const deferredGovernanceItemCount = governanceItems.filter((item) => item.statusLabel === "Deferred for later CEO review").length;
+  const deniedGovernanceItemCount = governanceItems.filter((item) => item.statusLabel === "Denied by the CEO").length;
+  const recordCount = Math.max(1, board.recentDecisions.length + board.followThroughItems.length + governanceItems.length);
   const content = [
     `# ${noteTitle}`,
     "",
@@ -8816,7 +8856,14 @@ function buildGovernanceHistoryExportDryRun(
     ...(decisionLines.length > 0 ? decisionLines : ["- No recent governance decisions are currently available."]),
     "",
     "## Implemented Follow-Through",
-    ...(followThroughLines.length > 0 ? followThroughLines : ["- No implemented follow-through items are currently available."])
+    ...(followThroughLines.length > 0 ? followThroughLines : ["- No implemented follow-through items are currently available."]),
+    ...(governanceLines.length > 0
+      ? [
+          "",
+          "## Governance Holds",
+          ...governanceLines
+        ]
+      : [])
   ].join("\n");
   const placement: HarnessExportPlacementManifest = {
     targetSystem: "obsidian_vault",
@@ -8864,7 +8911,11 @@ function buildGovernanceHistoryExportDryRun(
       placement,
       disclosureSummary: candidate.exportSourceDisclosurePolicyLabel,
       redactionSummary: candidate.exportRedactionBoundaryLabel,
-      recordCount
+      recordCount,
+      governanceItemCount: governanceItems.length,
+      deferredGovernanceItemCount,
+      deniedGovernanceItemCount,
+      governanceExportDisposition: "included_in_existing_candidates"
     },
     null,
     2
@@ -8892,7 +8943,16 @@ function buildGovernanceHistoryExportDryRun(
     files,
     recordCount,
     disclosureSummary: candidate.exportSourceDisclosurePolicyLabel,
-    redactionSummary: candidate.exportRedactionBoundaryLabel
+    redactionSummary: candidate.exportRedactionBoundaryLabel,
+    ...(governanceItems.length > 0
+      ? {
+          governanceItemCount: governanceItems.length,
+          deferredGovernanceItemCount,
+          deniedGovernanceItemCount,
+          governanceExportDisposition: "included_in_existing_candidates",
+          governanceExportDispositionLabel: "Included in governance history and package exports"
+        }
+      : {})
   };
 }
 
@@ -8918,6 +8978,8 @@ function buildPackageBundleExportDryRun(
   const governanceLines = completionPackage.governanceItems.map((item) => (
     `- ${item.persona} ${item.deliverableLabel} (${item.statusLabel})${item.policyReasonLabel ? `\n  - Policy reason: ${item.policyReasonLabel}` : ""}${item.recommendationSummary ? `\n  - Recommendation: ${item.recommendationSummary}` : ""}${item.objectionSummary ? `\n  - Objection: ${item.objectionSummary}` : ""}`
   ));
+  const deferredGovernanceItemCount = completionPackage.governanceItems.filter((item) => item.statusLabel === "Deferred for later CEO review").length;
+  const deniedGovernanceItemCount = completionPackage.governanceItems.filter((item) => item.statusLabel === "Denied by the CEO").length;
   const content = [
     `# ${noteTitle}`,
     "",
@@ -9005,7 +9067,11 @@ function buildPackageBundleExportDryRun(
       placement,
       disclosureSummary: candidate.exportSourceDisclosurePolicyLabel,
       redactionSummary: candidate.exportRedactionBoundaryLabel,
-      recordCount: Math.max(1, completionPackage.deliverables.length + completionPackage.governanceItems.length)
+      recordCount: Math.max(1, completionPackage.deliverables.length + completionPackage.governanceItems.length),
+      governanceItemCount: completionPackage.governanceItems.length,
+      deferredGovernanceItemCount,
+      deniedGovernanceItemCount,
+      governanceExportDisposition: "included_in_existing_candidates"
     },
     null,
     2
@@ -9033,7 +9099,16 @@ function buildPackageBundleExportDryRun(
     files,
     recordCount: Math.max(1, completionPackage.deliverables.length + completionPackage.governanceItems.length),
     disclosureSummary: candidate.exportSourceDisclosurePolicyLabel,
-    redactionSummary: candidate.exportRedactionBoundaryLabel
+    redactionSummary: candidate.exportRedactionBoundaryLabel,
+    ...(completionPackage.governanceItems.length > 0
+      ? {
+          governanceItemCount: completionPackage.governanceItems.length,
+          deferredGovernanceItemCount,
+          deniedGovernanceItemCount,
+          governanceExportDisposition: "included_in_existing_candidates",
+          governanceExportDispositionLabel: "Included in governance history and package exports"
+        }
+      : {})
   };
 }
 
@@ -9330,6 +9405,7 @@ function buildCompletionPackage(input: {
     status: input.run.state,
     ...(summary ? { summary } : {}),
     deferredApprovalCount,
+    deniedApprovalCount,
     hasOpenGovernanceItems,
     ...(packageNote ? { packageNote } : {}),
     recommendations,
@@ -9344,6 +9420,7 @@ function toCompletionPackageView(record: HarnessCompletionPackageSnapshotRecord)
     status: record.status,
     ...(record.summary ? { summary: record.summary } : {}),
     deferredApprovalCount: record.deferredApprovalCount,
+    deniedApprovalCount: record.deniedApprovalCount,
     hasOpenGovernanceItems: record.hasOpenGovernanceItems,
     ...(record.packageNote ? { packageNote: record.packageNote } : {}),
     recommendations: [...record.recommendations],

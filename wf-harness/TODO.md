@@ -91,7 +91,7 @@ This file tracks the new harness subproject only.
 - [x] Decide whether the widened derived `completionPackage` should stay a read model or graduate into a persisted packaged-output artifact in a later slice.
 - [x] Keep `resolve-attention` and later action-family branches covered wherever the board contract is consumed, so `review-attention` does not become the only richly rendered control path.
 - [x] Add explicit packaging policy for how recommendations, objections, and deferred governance items should shape the tenant-facing final handoff.
-- [ ] Decide whether denied governance items should remain derived read-model packaging only or become exportable board-memory artifacts later.
+- [x] Decide whether denied governance items should remain derived read-model packaging only or become exportable board-memory artifacts later.
 - [x] Decide whether completed-lane runs should reject or boundedly reopen new follow-on proposals instead of falling back to generic lane-creation rules.
 - [x] Decide whether a future explicit "start a fresh board cycle" command should reopen follow-on work from `completed_lanes_only` deferrals instead of keeping that recovery path manual.
 - [x] Deepen the fresh-cycle policy so the CEO can choose between reopening only deferred follow-on work versus starting a completely clean board cycle when no follow-through should carry forward.
@@ -100,6 +100,7 @@ This file tracks the new harness subproject only.
   - [x] Add a bounded continuity-source discriminator so runtime memory stays self-describing before any later Obsidian export seam exists.
   - [ ] Decide whether the current continuity trio (`continuitySummary`, `latestResultSummary`, `absorbedWorkItems`) is the final bounded runtime-memory shape before any Obsidian export seam is added.
   - [x] Keep the refinement policy explicit in implementation: bounded changes to the same deliverable should stay in-lane, while broader directional changes should open a new lane or fresh cycle without losing institutional memory.
+  - [x] Keep denied governance exportable only through the existing `governance_history_export` and `package_bundle_export` families, so tenant long memory gets the bounded board outcome without growing a third denial-only export path.
 - [ ] Deepen the worker-side harness execution seam beyond the current single-lane dispatch payload and into real orchestrator/child execution behavior without reopening the old Paperclip-style hotspot model.
   - [x] Require a durable worker claim/start boundary so harness-enabled jobs now move exactly one `approved` lane to `working` before dispatch and stay quiet when the claim race is lost.
   - [x] Keep raw `queued` child lanes fail-closed in the worker slice so execution still respects the CEO approval boundary until a later bounded promotion path exists.
