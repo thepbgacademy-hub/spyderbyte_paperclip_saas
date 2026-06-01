@@ -14,6 +14,7 @@ import {
   createHarnessBoardService
 } from "../src/harness/board-service.js";
 import { createInMemoryHarnessRepository } from "../src/harness/repository.js";
+import { createHarnessBoardDecisionRecord } from "../src/harness/types.js";
 import { createHarnessWorkflowRegistry } from "../src/wealthfactory/workflow-registry.js";
 
 
@@ -4378,6 +4379,74 @@ describe("harness board service", () => {
     expect(result.files[0]?.content).toContain("# Bib Connect governance history");
   });
 
+  it("issues a fresh governance-history bundle revision and idempotency key when export content changes", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    const initialBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const initialExportAction = initialBoard.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "governance_history_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "governance-history-export");
+    expect(initialExportAction).toBeTruthy();
+
+    const firstExport = await service.exportGovernanceHistoryCandidate({
+      authorization: "Bearer valid",
+      runId: initialBoard.runId,
+      candidateId: "governance_history_export",
+      actionToken: initialExportAction!.actionToken
+    });
+
+    await repository.insertDecision(createHarnessBoardDecisionRecord({
+      runId: initialBoard.runId,
+      tenantId: "tenant_123",
+      actorUserId: "user_123",
+      decisionKind: "proposal_deferred",
+      cardId: created.cardId,
+      persona: "researcher",
+      deliverableType: "research_brief",
+      policyReason: "lane_cap",
+      decisionNote: "Keep this note inside runtime only.",
+      recommendationSummary: "Wait for the current pricing lane to close before opening more research work.",
+      objectionSummary: "Do not widen the current run while the pricing lane is still active."
+    }));
+
+    const refreshedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const refreshedExportAction = refreshedBoard.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "governance_history_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "governance-history-export");
+    expect(refreshedExportAction).toBeTruthy();
+
+    const secondExport = await service.exportGovernanceHistoryCandidate({
+      authorization: "Bearer valid",
+      runId: refreshedBoard.runId,
+      candidateId: "governance_history_export",
+      actionToken: refreshedExportAction!.actionToken
+    });
+
+    expect(secondExport.bundleId).not.toBe(firstExport.bundleId);
+    expect(secondExport.idempotencyKey).not.toBe(firstExport.idempotencyKey);
+    expect(secondExport.latestDelivery.attemptCount).toBe(0);
+  });
+
   it("surfaces a bounded governance-history delivery replay action when the latest delivery is export-ready or failed", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
@@ -4551,6 +4620,16 @@ describe("harness board service", () => {
       deliverableType: "pricing_review"
     }));
     const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const dryRunAction = board.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "governance_history_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "export-dry-run");
+    expect(dryRunAction).toBeTruthy();
+    const dryRun = await service.dryRunExportCandidate({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      candidateId: "governance_history_export",
+      actionToken: dryRunAction!.actionToken
+    });
     await repository.upsertExportDelivery({
       id: "delivery_replay_test_2",
       runId: board.runId,
@@ -4559,29 +4638,21 @@ describe("harness board service", () => {
       packageId: board.packageId,
       candidateId: "governance_history_export",
       status: "delivery_failed",
-      exportFormat: "obsidian_markdown_bundle",
+      exportFormat: dryRun.exportFormat,
       recordTarget: "governance_history_record",
-      bundleId: "bundle_replay_test_2",
+      bundleId: dryRun.bundleId,
       idempotencyKey: "idempotency_replay_test_2",
-      noteTitle: "Governance history",
-      noteFileName: "wf_connect_first_workflow-governance-history.md",
-      placementTargetSystem: "obsidian_vault",
-      vaultFolder: "wealth-factory/governance-history/wf_connect_first_workflow",
-      primaryNotePath: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
-      syncStrategy: "append_history_entry",
-      confirmationRequirement: "tenant_export_confirmation",
-      files: [
-        {
-          path: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
-          mediaType: "text/markdown",
-          byteSize: 20,
-          checksum: "abc",
-          content: "# Governance history"
-        }
-      ],
-      recordCount: 2,
-      disclosureSummary: "Decision summary only",
-      redactionSummary: "Governance-safe redaction",
+      noteTitle: dryRun.noteTitle,
+      noteFileName: dryRun.noteFileName,
+      placementTargetSystem: dryRun.placement.targetSystem,
+      vaultFolder: dryRun.placement.vaultFolder,
+      primaryNotePath: dryRun.placement.primaryNotePath,
+      syncStrategy: dryRun.placement.syncStrategy,
+      confirmationRequirement: dryRun.placement.confirmationRequirement,
+      files: dryRun.files,
+      recordCount: dryRun.recordCount,
+      disclosureSummary: dryRun.disclosureSummary,
+      redactionSummary: dryRun.redactionSummary,
       attemptCount: 1,
       lastAttemptedAt: "2026-05-29T01:00:00.000Z",
       deliveredAt: null,
@@ -4615,18 +4686,113 @@ describe("harness board service", () => {
 
     expect(onGovernanceHistoryExportReady).toHaveBeenCalledWith(expect.objectContaining({
       idempotencyKey: "idempotency_replay_test_2",
-      bundleId: "bundle_replay_test_2"
+      bundleId: dryRun.bundleId
     }));
     await expect(repository.listExportDeliveriesForRun(hydrated.runId)).resolves.toEqual(expect.arrayContaining([
       expect.objectContaining({
         idempotencyKey: "idempotency_replay_test_2",
         files: expect.arrayContaining([
           expect.objectContaining({
-            content: "# Governance history"
+            content: expect.stringContaining("# Bib Connect governance history")
           })
         ])
       })
     ]));
+  });
+
+  it("fails closed when a governance-history replay targets a stale stored bundle revision", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const exportAction = board.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "governance_history_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "governance-history-export");
+    expect(exportAction).toBeTruthy();
+
+    const firstExport = await service.exportGovernanceHistoryCandidate({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      candidateId: "governance_history_export",
+      actionToken: exportAction!.actionToken
+    });
+    await repository.upsertExportDelivery({
+      id: "delivery_replay_stale_governance_1",
+      runId: board.runId,
+      tenantId: "tenant_123",
+      workflowId: board.workflowId,
+      packageId: board.packageId,
+      candidateId: "governance_history_export",
+      status: "delivery_failed",
+      exportFormat: firstExport.exportFormat,
+      recordTarget: firstExport.recordTarget,
+      bundleId: firstExport.bundleId,
+      idempotencyKey: firstExport.idempotencyKey,
+      noteTitle: firstExport.noteTitle,
+      noteFileName: firstExport.noteFileName,
+      placementTargetSystem: firstExport.placement.targetSystem,
+      vaultFolder: firstExport.placement.vaultFolder,
+      primaryNotePath: firstExport.placement.primaryNotePath,
+      syncStrategy: firstExport.placement.syncStrategy,
+      confirmationRequirement: firstExport.placement.confirmationRequirement,
+      files: firstExport.files,
+      recordCount: firstExport.recordCount,
+      disclosureSummary: firstExport.disclosureSummary,
+      redactionSummary: firstExport.redactionSummary,
+      attemptCount: 1,
+      lastAttemptedAt: "2026-06-01T00:05:00.000Z",
+      deliveredAt: null,
+      writerKind: "obsidian_filesystem",
+      deliveryReceipt: {},
+      lastErrorCode: "writer_failed",
+      lastErrorMessage: "Disk was temporarily unavailable",
+      createdAt: "2026-06-01T00:05:00.000Z",
+      updatedAt: "2026-06-01T00:05:00.000Z"
+    });
+    await repository.insertDecision(createHarnessBoardDecisionRecord({
+      runId: board.runId,
+      tenantId: "tenant_123",
+      actorUserId: "user_123",
+      decisionKind: "proposal_deferred",
+      cardId: created.cardId,
+      persona: "researcher",
+      deliverableType: "research_brief",
+      policyReason: "lane_cap",
+      recommendationSummary: "Wait for the current pricing lane to close before opening more research work.",
+      objectionSummary: "Do not widen the current run while the pricing lane is still active."
+    }));
+
+    const refreshedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const replayAction = refreshedBoard.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "governance_history_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "governance-history-export-replay");
+    expect(replayAction).toBeTruthy();
+
+    await expect(service.replayGovernanceHistoryDeliveryCandidate({
+      authorization: "Bearer valid",
+      runId: refreshedBoard.runId,
+      candidateId: "governance_history_export",
+      actionToken: replayAction!.actionToken
+    })).rejects.toThrow("Harness governance history delivery replay is stale against the current export contract");
   });
 
   it("runs bounded package-bundle dry-run and export from the grouped candidate contract after board closure", async () => {
@@ -4769,6 +4935,16 @@ describe("harness board service", () => {
     });
 
     const hydrated = await service.listBoardState({ authorization: "Bearer valid" });
+    const dryRunAction = hydrated.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "package_bundle_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "export-dry-run");
+    expect(dryRunAction).toBeTruthy();
+    const dryRun = await service.dryRunExportCandidate({
+      authorization: "Bearer valid",
+      runId: hydrated.runId,
+      candidateId: "package_bundle_export",
+      actionToken: dryRunAction!.actionToken
+    });
     await repository.upsertExportDelivery({
       id: "delivery_package_replay_test_1",
       runId: hydrated.runId,
@@ -4777,29 +4953,21 @@ describe("harness board service", () => {
       packageId: hydrated.packageId,
       candidateId: "package_bundle_export",
       status: "delivery_failed",
-      exportFormat: "obsidian_markdown_bundle",
+      exportFormat: dryRun.exportFormat,
       recordTarget: "package_deliverable_record",
-      bundleId: "bundle_package_replay_test_1",
+      bundleId: dryRun.bundleId,
       idempotencyKey: "idempotency_package_replay_test_1",
-      noteTitle: "Package bundle",
-      noteFileName: "wf_connect_first_workflow-package-bundle.md",
-      placementTargetSystem: "obsidian_vault",
-      vaultFolder: "wealth-factory/package-bundles/wf_connect_first_workflow",
-      primaryNotePath: "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
-      syncStrategy: "replace_package_snapshot_after_board_closure",
-      confirmationRequirement: "board_closure_then_tenant_export_confirmation",
-      files: [
-        {
-          path: "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
-          mediaType: "text/markdown",
-          byteSize: 20,
-          checksum: "abc",
-          content: "# Package bundle"
-        }
-      ],
-      recordCount: 3,
-      disclosureSummary: "Closure snapshot summary only",
-      redactionSummary: "Package-safe redaction",
+      noteTitle: dryRun.noteTitle,
+      noteFileName: dryRun.noteFileName,
+      placementTargetSystem: dryRun.placement.targetSystem,
+      vaultFolder: dryRun.placement.vaultFolder,
+      primaryNotePath: dryRun.placement.primaryNotePath,
+      syncStrategy: dryRun.placement.syncStrategy,
+      confirmationRequirement: dryRun.placement.confirmationRequirement,
+      files: dryRun.files,
+      recordCount: dryRun.recordCount,
+      disclosureSummary: dryRun.disclosureSummary,
+      redactionSummary: dryRun.redactionSummary,
       attemptCount: 1,
       lastAttemptedAt: "2026-05-30T01:00:00.000Z",
       deliveredAt: null,
@@ -4832,6 +5000,106 @@ describe("harness board service", () => {
       candidateId: "package_bundle_export",
       idempotencyKey: "idempotency_package_replay_test_1"
     }));
+  });
+
+  it("fails closed when a package-bundle replay targets a stale stored bundle revision", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "done",
+      resultSummary: "Pricing floor is stable enough for launch."
+    });
+    await service.completeRun({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      completionSummary: "The CEO packaged the final business-facing outcome."
+    });
+
+    const completedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const exportAction = completedBoard.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "package_bundle_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "package-bundle-export");
+    expect(exportAction).toBeTruthy();
+
+    const firstExport = await service.exportPackageBundleCandidate({
+      authorization: "Bearer valid",
+      runId: completedBoard.runId,
+      candidateId: "package_bundle_export",
+      actionToken: exportAction!.actionToken
+    });
+    await repository.upsertExportDelivery({
+      id: "delivery_replay_stale_package_1",
+      runId: completedBoard.runId,
+      tenantId: "tenant_123",
+      workflowId: completedBoard.workflowId,
+      packageId: completedBoard.packageId,
+      candidateId: "package_bundle_export",
+      status: "delivery_failed",
+      exportFormat: firstExport.exportFormat,
+      recordTarget: firstExport.recordTarget,
+      bundleId: "stale_bundle_package_revision_1",
+      idempotencyKey: firstExport.idempotencyKey,
+      noteTitle: firstExport.noteTitle,
+      noteFileName: firstExport.noteFileName,
+      placementTargetSystem: firstExport.placement.targetSystem,
+      vaultFolder: firstExport.placement.vaultFolder,
+      primaryNotePath: firstExport.placement.primaryNotePath,
+      syncStrategy: firstExport.placement.syncStrategy,
+      confirmationRequirement: firstExport.placement.confirmationRequirement,
+      files: firstExport.files,
+      recordCount: firstExport.recordCount,
+      disclosureSummary: firstExport.disclosureSummary,
+      redactionSummary: firstExport.redactionSummary,
+      attemptCount: 1,
+      lastAttemptedAt: "2026-06-01T00:15:00.000Z",
+      deliveredAt: null,
+      writerKind: "obsidian_filesystem",
+      deliveryReceipt: {},
+      lastErrorCode: "writer_failed",
+      lastErrorMessage: "Disk was temporarily unavailable",
+      createdAt: "2026-06-01T00:15:00.000Z",
+      updatedAt: "2026-06-01T00:15:00.000Z"
+    });
+    const refreshedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const replayAction = refreshedBoard.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "package_bundle_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "package-bundle-export-replay");
+    expect(replayAction).toBeTruthy();
+
+    await expect(service.replayPackageBundleDeliveryCandidate({
+      authorization: "Bearer valid",
+      runId: refreshedBoard.runId,
+      candidateId: "package_bundle_export",
+      actionToken: replayAction!.actionToken
+    })).rejects.toThrow("Harness package bundle delivery replay is stale against the current export contract");
   });
 
   it("fails closed when approval mutation is invoked without an atomic runner", async () => {

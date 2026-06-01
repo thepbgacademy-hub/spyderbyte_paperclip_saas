@@ -4022,15 +4022,14 @@ export function createHarnessBoardService(options: {
           "governance-history-export",
           board.response.runId,
           candidate.id,
-          candidate.itemIds.join(","),
-          dryRun.noteFileName
+          dryRun.bundleId
         ]),
         summary: "Governance history export is ready as a tenant-safe Obsidian markdown bundle.",
         latestDelivery: {
           status: "export_ready",
           statusLabel: humanizeExportDeliveryStatus("export_ready"),
           summary: "The governance history bundle is export-ready and waiting for bounded delivery through the configured tenant-safe writer seam.",
-          attemptCount: candidate.latestDelivery?.attemptCount ?? 0
+          attemptCount: 0
         }
       };
       await options.onGovernanceHistoryExportReady?.({
@@ -4111,15 +4110,14 @@ export function createHarnessBoardService(options: {
           "package-bundle-export",
           board.response.runId,
           candidate.id,
-          candidate.itemIds.join(","),
-          dryRun.noteFileName
+          dryRun.bundleId
         ]),
         summary: "Package bundle export is ready as a tenant-safe Obsidian markdown bundle.",
         latestDelivery: {
           status: "export_ready",
           statusLabel: humanizeExportDeliveryStatus("export_ready"),
           summary: "The package bundle is export-ready and waiting for bounded delivery through the configured tenant-safe writer seam.",
-          attemptCount: candidate.latestDelivery?.attemptCount ?? 0
+          attemptCount: 0
         }
       };
       await options.onPackageBundleExportReady?.({
@@ -4193,6 +4191,12 @@ export function createHarnessBoardService(options: {
       if (exportDelivery.status === "delivered") {
         throw new HarnessRunCompletionConflictError("Harness governance history delivery is already complete");
       }
+      const currentDryRun = buildGovernanceHistoryExportDryRun(board.response, candidate);
+      assertExportReplayBundleCurrent({
+        candidateLabel: "governance history",
+        currentBundleId: currentDryRun.bundleId,
+        exportDelivery
+      });
 
       await options.onGovernanceHistoryExportReady?.({
         tenantId: board.access.session.tenantId,
@@ -4287,6 +4291,12 @@ export function createHarnessBoardService(options: {
       if (exportDelivery.status === "delivered") {
         throw new HarnessRunCompletionConflictError("Harness package bundle delivery is already complete");
       }
+      const currentDryRun = buildPackageBundleExportDryRun(board.response, candidate);
+      assertExportReplayBundleCurrent({
+        candidateLabel: "package bundle",
+        currentBundleId: currentDryRun.bundleId,
+        exportDelivery
+      });
 
       await options.onPackageBundleExportReady?.({
         tenantId: board.access.session.tenantId,
@@ -8566,6 +8576,18 @@ function findLatestExportDeliveryRecordOrThrow(
   return latest;
 }
 
+function assertExportReplayBundleCurrent(input: {
+  candidateLabel: string;
+  currentBundleId: string;
+  exportDelivery: HarnessExportDeliveryRecord;
+}) {
+  if (input.exportDelivery.bundleId !== input.currentBundleId) {
+    throw new HarnessRunCompletionConflictError(
+      `Harness ${input.candidateLabel} delivery replay is stale against the current export contract; build a fresh export bundle instead`
+    );
+  }
+}
+
 function buildGovernanceHistoryExportDryRun(
   board: HarnessBoardResponse,
   candidate: HarnessMemoryBoundaryExportCandidateView
@@ -8597,13 +8619,6 @@ function buildGovernanceHistoryExportDryRun(
     "## Implemented Follow-Through",
     ...(followThroughLines.length > 0 ? followThroughLines : ["- No implemented follow-through items are currently available."])
   ].join("\n");
-  const bundleId = createHarnessActionToken([
-    "governance-history-bundle",
-    board.runId,
-    candidate.id,
-    candidate.itemIds.join(","),
-    noteFileName
-  ]);
   const placement: HarnessExportPlacementManifest = {
     targetSystem: "obsidian_vault",
     vaultFolder,
@@ -8611,9 +8626,34 @@ function buildGovernanceHistoryExportDryRun(
     syncStrategy: candidate.syncStrategy,
     confirmationRequirement: candidate.exportConfirmationRequirement
   };
+  const payloadFiles: HarnessExportPackageFile[] = [
+    buildExportPackageFile({
+      path: primaryNotePath,
+      mediaType: "text/markdown",
+      content
+    })
+  ];
+  const bundleRevision = createExportBundleRevision({
+    runId: board.runId,
+    candidateId: candidate.id,
+    noteTitle,
+    noteFileName,
+    placement,
+    recordCount: Math.max(1, candidate.itemCount),
+    disclosureSummary: candidate.exportSourceDisclosurePolicyLabel,
+    redactionSummary: candidate.exportRedactionBoundaryLabel,
+    files: payloadFiles
+  });
+  const bundleId = createHarnessActionToken([
+    "governance-history-bundle",
+    board.runId,
+    candidate.id,
+    bundleRevision
+  ]);
   const manifestContent = JSON.stringify(
     {
       bundleId,
+      bundleRevision,
       exportFormat: "obsidian_markdown_bundle",
       recordTarget: "governance_history_record",
       runId: board.runId,
@@ -8631,11 +8671,7 @@ function buildGovernanceHistoryExportDryRun(
     2
   );
   const files: HarnessExportPackageFile[] = [
-    buildExportPackageFile({
-      path: primaryNotePath,
-      mediaType: "text/markdown",
-      content
-    }),
+    ...payloadFiles,
     buildExportPackageFile({
       path: `${vaultFolder}/export-manifest.json`,
       mediaType: "application/json",
@@ -8713,13 +8749,6 @@ function buildPackageBundleExportDryRun(
     "",
     ...(governanceLines.length > 0 ? governanceLines : ["- No governance items were carried into this closed-board export bundle."])
   ].join("\n");
-  const bundleId = createHarnessActionToken([
-    "package-bundle",
-    board.runId,
-    candidate.id,
-    candidate.itemIds.join(","),
-    noteFileName
-  ]);
   const placement: HarnessExportPlacementManifest = {
     targetSystem: "obsidian_vault",
     vaultFolder,
@@ -8727,9 +8756,44 @@ function buildPackageBundleExportDryRun(
     syncStrategy: candidate.syncStrategy,
     confirmationRequirement: candidate.exportConfirmationRequirement
   };
+  const payloadFiles: HarnessExportPackageFile[] = [
+    buildExportPackageFile({
+      path: primaryNotePath,
+      mediaType: "text/markdown",
+      content
+    }),
+    buildExportPackageFile({
+      path: deliverablesFilePath,
+      mediaType: "text/markdown",
+      content: deliverablesContent
+    }),
+    buildExportPackageFile({
+      path: governanceFilePath,
+      mediaType: "text/markdown",
+      content: governanceContent
+    })
+  ];
+  const bundleRevision = createExportBundleRevision({
+    runId: board.runId,
+    candidateId: candidate.id,
+    noteTitle,
+    noteFileName,
+    placement,
+    recordCount: Math.max(1, completionPackage.deliverables.length + completionPackage.governanceItems.length),
+    disclosureSummary: candidate.exportSourceDisclosurePolicyLabel,
+    redactionSummary: candidate.exportRedactionBoundaryLabel,
+    files: payloadFiles
+  });
+  const bundleId = createHarnessActionToken([
+    "package-bundle",
+    board.runId,
+    candidate.id,
+    bundleRevision
+  ]);
   const manifestContent = JSON.stringify(
     {
       bundleId,
+      bundleRevision,
       exportFormat: "obsidian_markdown_bundle",
       recordTarget: "package_deliverable_record",
       runId: board.runId,
@@ -8747,21 +8811,7 @@ function buildPackageBundleExportDryRun(
     2
   );
   const files: HarnessExportPackageFile[] = [
-    buildExportPackageFile({
-      path: primaryNotePath,
-      mediaType: "text/markdown",
-      content
-    }),
-    buildExportPackageFile({
-      path: deliverablesFilePath,
-      mediaType: "text/markdown",
-      content: deliverablesContent
-    }),
-    buildExportPackageFile({
-      path: governanceFilePath,
-      mediaType: "text/markdown",
-      content: governanceContent
-    }),
+    ...payloadFiles,
     buildExportPackageFile({
       path: `${vaultFolder}/export-manifest.json`,
       mediaType: "application/json",
@@ -8820,6 +8870,38 @@ function cloneHarnessExportPackageFile(file: HarnessExportPackageFile): HarnessE
     checksum: file.checksum,
     content: file.content
   };
+}
+
+function createExportBundleRevision(input: {
+  runId: string;
+  candidateId: HarnessExportCandidateId;
+  noteTitle: string;
+  noteFileName: string;
+  placement: HarnessExportPlacementManifest;
+  recordCount: number;
+  disclosureSummary: string;
+  redactionSummary: string;
+  files: readonly HarnessExportPackageFile[];
+}) {
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        runId: input.runId,
+        candidateId: input.candidateId,
+        noteTitle: input.noteTitle,
+        noteFileName: input.noteFileName,
+        placement: input.placement,
+        recordCount: input.recordCount,
+        disclosureSummary: input.disclosureSummary,
+        redactionSummary: input.redactionSummary,
+        files: input.files.map((file) => ({
+          path: file.path,
+          mediaType: file.mediaType,
+          checksum: file.checksum
+        }))
+      })
+    )
+    .digest("hex");
 }
 
 function formatAttentionActivityLabel(input: {
