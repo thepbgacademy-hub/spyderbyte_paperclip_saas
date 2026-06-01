@@ -74,6 +74,10 @@ describe("governance history export writer", () => {
     expect(result.receipt.primaryNotePath).toBe(
       "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md"
     );
+    expect(result.receipt.writtenPaths).toEqual([
+      "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+      "wealth-factory/governance-history/wf_connect_first_workflow/manifest.json"
+    ]);
 
     await expect(
       readFile(
@@ -150,7 +154,8 @@ describe("governance history export writer", () => {
     await expect(writePromise).rejects.toMatchObject({
       partialReceipt: {
         writtenFileCount: 1,
-        lastAttemptedPath: blockedNotePath
+        lastAttemptedPath: blockedNotePath,
+        writtenPaths: ["wealth-factory/governance-history/wf_connect_first_workflow/summary.md"]
       }
     });
 

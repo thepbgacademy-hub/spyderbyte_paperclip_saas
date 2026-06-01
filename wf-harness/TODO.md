@@ -235,3 +235,5 @@ This file tracks the new harness subproject only.
 - [x] Require governance-history delivery to complete before `package_bundle_export` becomes writable or replayable, so board closure alone does not let package delivery outrun its foundational export dependency.
 - [x] Keep export delivery outcome recording compare-and-set from the claimed writer state, so late or duplicate runtime callbacks cannot overwrite a newer ledger truth after claim ownership shifts.
 - [x] Preserve bounded partial-writer receipts for governance-history and package-bundle delivery failures, so support replay can recover from partial disk writes without leaking note bodies or filesystem roots.
+- [x] Keep export writer receipts verified and bounded by returning the successfully written relative file paths on both success and partial failure, so delivery recovery can reason about actual filesystem progress without leaking vault roots or raw note bodies.
+- [x] Keep governance-history and package-bundle runtime delivery on one shared bounded execution seam, so claim, outcome, and audit logic cannot silently drift between the two candidate families under pressure.

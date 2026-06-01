@@ -8,6 +8,7 @@ type ObsidianExportDispatchFile = HarnessGovernanceHistoryExportReadyDispatch["f
 export type ObsidianExportPartialReceipt = {
   writtenFileCount: number;
   lastAttemptedPath: string;
+  writtenPaths: string[];
 };
 
 export class ObsidianExportWriteError extends Error {
@@ -32,6 +33,7 @@ export type GovernanceHistoryExportWriterResult = {
     primaryNotePath: string;
     manifestPath: string | null;
     writtenFileCount: number;
+    writtenPaths: string[];
   };
 };
 
@@ -61,11 +63,12 @@ export const resolveGovernanceHistoryExportPath = resolveObsidianExportPath;
 export async function writeObsidianExportFiles(input: {
   exportRoot: string;
   files: readonly ObsidianExportDispatchFile[];
-}): Promise<{ manifestPath: string | null; writtenFileCount: number }> {
+}): Promise<{ manifestPath: string | null; writtenFileCount: number; writtenPaths: string[] }> {
   const manifestFile = input.files.find((file) => file.mediaType === "application/json") ?? null;
   const orderedFiles =
     manifestFile === null ? input.files : [...input.files.filter((file) => file !== manifestFile), manifestFile];
   let writtenFileCount = 0;
+  const writtenPaths: string[] = [];
 
   for (const file of orderedFiles) {
     try {
@@ -76,11 +79,13 @@ export async function writeObsidianExportFiles(input: {
       await mkdir(path.dirname(resolvedPath), { recursive: true });
       await writeFile(resolvedPath, file.content, "utf8");
       writtenFileCount += 1;
+      writtenPaths.push(file.path);
     } catch (error) {
       throw new ObsidianExportWriteError({
         partialReceipt: {
           writtenFileCount,
-          lastAttemptedPath: file.path
+          lastAttemptedPath: file.path,
+          writtenPaths: [...writtenPaths]
         },
         cause: error
       });
@@ -89,7 +94,8 @@ export async function writeObsidianExportFiles(input: {
 
   return {
     manifestPath: manifestFile?.path ?? null,
-    writtenFileCount
+    writtenFileCount,
+    writtenPaths
   };
 }
 
@@ -107,7 +113,8 @@ export function createFilesystemGovernanceHistoryExportWriter(input: { exportRoo
         receipt: {
           primaryNotePath: dispatch.placement.primaryNotePath,
           manifestPath: writeResult.manifestPath,
-          writtenFileCount: writeResult.writtenFileCount
+          writtenFileCount: writeResult.writtenFileCount,
+          writtenPaths: writeResult.writtenPaths
         }
       };
     }

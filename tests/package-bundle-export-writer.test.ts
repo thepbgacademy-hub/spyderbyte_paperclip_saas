@@ -72,6 +72,10 @@ describe("package bundle export writer", () => {
     expect(result.receipt.primaryNotePath).toBe(
       "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md"
     );
+    expect(result.receipt.writtenPaths).toEqual([
+      "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
+      "wealth-factory/package-bundles/wf_connect_first_workflow/export-manifest.json"
+    ]);
 
     await expect(
       readFile(
@@ -148,7 +152,8 @@ describe("package bundle export writer", () => {
     await expect(writePromise).rejects.toMatchObject({
       partialReceipt: {
         writtenFileCount: 1,
-        lastAttemptedPath: blockedNotePath
+        lastAttemptedPath: blockedNotePath,
+        writtenPaths: ["wealth-factory/package-bundles/wf_connect_first_workflow/summary.md"]
       }
     });
 

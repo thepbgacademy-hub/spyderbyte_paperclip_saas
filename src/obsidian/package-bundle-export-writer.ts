@@ -8,6 +8,7 @@ export type PackageBundleExportWriterResult = {
     primaryNotePath: string;
     manifestPath: string | null;
     writtenFileCount: number;
+    writtenPaths: string[];
   };
 };
 
@@ -29,7 +30,8 @@ export function createFilesystemPackageBundleExportWriter(input: { exportRoot: s
         receipt: {
           primaryNotePath: dispatch.placement.primaryNotePath,
           manifestPath: writeResult.manifestPath,
-          writtenFileCount: writeResult.writtenFileCount
+          writtenFileCount: writeResult.writtenFileCount,
+          writtenPaths: writeResult.writtenPaths
         }
       };
     }

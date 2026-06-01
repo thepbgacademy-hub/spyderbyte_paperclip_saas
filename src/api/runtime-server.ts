@@ -76,6 +76,68 @@ function coerceExportWriterFailure(error: unknown): {
     receipt
   };
 }
+
+type ExportReadyDispatch = HarnessGovernanceHistoryExportReadyDispatch | HarnessPackageBundleExportReadyDispatch;
+
+type ExportWriterSuccessReceipt = {
+  primaryNotePath: string;
+  manifestPath: string | null;
+  writtenFileCount: number;
+  writtenPaths: string[];
+};
+
+type ExportWriterSuccess = {
+  writerKind: "obsidian_filesystem";
+  deliveredAt: string;
+  receipt: ExportWriterSuccessReceipt;
+};
+
+type ExportReadyWriter<TDispatch extends ExportReadyDispatch> = {
+  write(dispatch: TDispatch): Promise<ExportWriterSuccess>;
+};
+
+function toExportDeliveryUpsertInput(input: {
+  dispatch: ExportReadyDispatch;
+  existing: Awaited<ReturnType<ReturnType<typeof createPostgresHarnessRepository>["getExportDeliveryByIdempotencyKey"]>>;
+  now: string;
+  id: string;
+}) {
+  const { dispatch, existing, now, id } = input;
+  return {
+    id,
+    runId: dispatch.runId,
+    tenantId: dispatch.tenantId,
+    workflowId: dispatch.workflowId,
+    packageId: dispatch.packageId,
+    candidateId: dispatch.candidateId,
+    status: "export_ready" as const,
+    exportFormat: dispatch.exportFormat,
+    recordTarget: dispatch.recordTarget,
+    bundleId: dispatch.bundleId,
+    bundleRevision: dispatch.bundleRevision,
+    idempotencyKey: dispatch.idempotencyKey,
+    noteTitle: dispatch.noteTitle,
+    noteFileName: dispatch.noteFileName,
+    placementTargetSystem: dispatch.placement.targetSystem,
+    vaultFolder: dispatch.placement.vaultFolder,
+    primaryNotePath: dispatch.placement.primaryNotePath,
+    syncStrategy: dispatch.placement.syncStrategy,
+    confirmationRequirement: dispatch.placement.confirmationRequirement,
+    files: dispatch.files.map((file) => ({ ...file })),
+    recordCount: dispatch.recordCount,
+    disclosureSummary: dispatch.disclosureSummary,
+    redactionSummary: dispatch.redactionSummary,
+    attemptCount: existing?.attemptCount ?? 0,
+    lastAttemptedAt: existing?.lastAttemptedAt ?? null,
+    deliveredAt: existing?.deliveredAt ?? null,
+    writerKind: existing?.writerKind ?? null,
+    deliveryReceipt: existing?.deliveryReceipt ?? {},
+    lastErrorCode: existing?.lastErrorCode ?? null,
+    lastErrorMessage: existing?.lastErrorMessage ?? null,
+    createdAt: now,
+    updatedAt: now
+  };
+}
 import { createSecretService } from "../secrets/secret-service.js";
 import { createStorageOAuthService, STORAGE_OAUTH_PROVIDER_CONFIGS } from "../storage/storage-oauth-service.js";
 import { createPostgresOAuthStateStore } from "../storage/postgres-oauth-state-store.js";
@@ -318,49 +380,29 @@ export function createDashboardRuntime(options: {
     (options.env.obsidianExportRoot
       ? createFilesystemPackageBundleExportWriter({ exportRoot: options.env.obsidianExportRoot })
       : undefined);
-    const onGovernanceHistoryExportReady = async (dispatch: HarnessGovernanceHistoryExportReadyDispatch) => {
+  const createExportReadyHandler = <TDispatch extends ExportReadyDispatch>(input: {
+    writer: ExportReadyWriter<TDispatch> | undefined;
+    onReady: ((dispatch: TDispatch) => void | Promise<void>) | undefined;
+    deliveredEventType: string;
+    failedEventType: string;
+  }) => {
+    return async (dispatch: TDispatch) => {
       const now = new Date().toISOString();
       const existing = await harnessRepository.getExportDeliveryByIdempotencyKey(dispatch.idempotencyKey);
       if (existing?.status === "delivered") {
         return;
-    }
+      }
 
-    const exportDelivery = await harnessRepository.upsertExportDelivery({
-      id: randomUUID(),
-      runId: dispatch.runId,
-      tenantId: dispatch.tenantId,
-      workflowId: dispatch.workflowId,
-      packageId: dispatch.packageId,
-      candidateId: dispatch.candidateId,
-      status: "export_ready",
-      exportFormat: dispatch.exportFormat,
-      recordTarget: dispatch.recordTarget,
-      bundleId: dispatch.bundleId,
-      bundleRevision: dispatch.bundleRevision,
-      idempotencyKey: dispatch.idempotencyKey,
-      noteTitle: dispatch.noteTitle,
-      noteFileName: dispatch.noteFileName,
-      placementTargetSystem: dispatch.placement.targetSystem,
-      vaultFolder: dispatch.placement.vaultFolder,
-      primaryNotePath: dispatch.placement.primaryNotePath,
-      syncStrategy: dispatch.placement.syncStrategy,
-      confirmationRequirement: dispatch.placement.confirmationRequirement,
-      files: dispatch.files.map((file) => ({ ...file })),
-      recordCount: dispatch.recordCount,
-      disclosureSummary: dispatch.disclosureSummary,
-      redactionSummary: dispatch.redactionSummary,
-      attemptCount: existing?.attemptCount ?? 0,
-      lastAttemptedAt: existing?.lastAttemptedAt ?? null,
-      deliveredAt: existing?.deliveredAt ?? null,
-      writerKind: existing?.writerKind ?? null,
-      deliveryReceipt: existing?.deliveryReceipt ?? {},
-      lastErrorCode: existing?.lastErrorCode ?? null,
-      lastErrorMessage: existing?.lastErrorMessage ?? null,
-      createdAt: now,
-      updatedAt: now
-    });
+      const exportDelivery = await harnessRepository.upsertExportDelivery(
+        toExportDeliveryUpsertInput({
+          dispatch,
+          existing,
+          now,
+          id: randomUUID()
+        })
+      );
 
-      if (governanceHistoryExportWriter && exportDelivery.status !== "delivered") {
+      if (input.writer && exportDelivery.status !== "delivered") {
         const attemptedAt = new Date().toISOString();
         const claimed = await harnessRepository.claimExportDeliveryAttempt({
           idempotencyKey: dispatch.idempotencyKey,
@@ -371,8 +413,9 @@ export function createDashboardRuntime(options: {
         if (!claimed) {
           return;
         }
+
         try {
-          const delivered = await governanceHistoryExportWriter.write(dispatch);
+          const delivered = await input.writer.write(dispatch);
           const recorded = await harnessRepository.recordExportDeliveryOutcome({
             idempotencyKey: dispatch.idempotencyKey,
             expectedLastAttemptedAt: claimed.lastAttemptedAt ?? attemptedAt,
@@ -390,7 +433,7 @@ export function createDashboardRuntime(options: {
             await audit({
               tenantId: dispatch.tenantId,
               actorUserId: dispatch.userId,
-              eventType: "harness.governance_history_export_delivered",
+              eventType: input.deliveredEventType,
               entityType: "harness_export_delivery",
               metadata: {
                 runId: dispatch.runId,
@@ -404,8 +447,8 @@ export function createDashboardRuntime(options: {
               }
             });
           }
-      } catch (error) {
-        const failure = coerceExportWriterFailure(error);
+        } catch (error) {
+          const failure = coerceExportWriterFailure(error);
           const recorded = await harnessRepository.recordExportDeliveryOutcome({
             idempotencyKey: dispatch.idempotencyKey,
             expectedLastAttemptedAt: claimed.lastAttemptedAt ?? attemptedAt,
@@ -423,7 +466,7 @@ export function createDashboardRuntime(options: {
             await audit({
               tenantId: dispatch.tenantId,
               actorUserId: dispatch.userId,
-              eventType: "harness.governance_history_export_delivery_failed",
+              eventType: input.failedEventType,
               entityType: "harness_export_delivery",
               metadata: {
                 runId: dispatch.runId,
@@ -436,134 +479,24 @@ export function createDashboardRuntime(options: {
               }
             });
           }
-      }
-    }
-
-    await options.onGovernanceHistoryExportReady?.(dispatch);
-  };
-    const onPackageBundleExportReady = async (dispatch: HarnessPackageBundleExportReadyDispatch) => {
-      const now = new Date().toISOString();
-      const existing = await harnessRepository.getExportDeliveryByIdempotencyKey(dispatch.idempotencyKey);
-      if (existing?.status === "delivered") {
-        return;
-    }
-
-    const exportDelivery = await harnessRepository.upsertExportDelivery({
-      id: randomUUID(),
-      runId: dispatch.runId,
-      tenantId: dispatch.tenantId,
-      workflowId: dispatch.workflowId,
-      packageId: dispatch.packageId,
-      candidateId: dispatch.candidateId,
-      status: "export_ready",
-      exportFormat: dispatch.exportFormat,
-      recordTarget: dispatch.recordTarget,
-      bundleId: dispatch.bundleId,
-      bundleRevision: dispatch.bundleRevision,
-      idempotencyKey: dispatch.idempotencyKey,
-      noteTitle: dispatch.noteTitle,
-      noteFileName: dispatch.noteFileName,
-      placementTargetSystem: dispatch.placement.targetSystem,
-      vaultFolder: dispatch.placement.vaultFolder,
-      primaryNotePath: dispatch.placement.primaryNotePath,
-      syncStrategy: dispatch.placement.syncStrategy,
-      confirmationRequirement: dispatch.placement.confirmationRequirement,
-      files: dispatch.files.map((file) => ({ ...file })),
-      recordCount: dispatch.recordCount,
-      disclosureSummary: dispatch.disclosureSummary,
-      redactionSummary: dispatch.redactionSummary,
-      attemptCount: existing?.attemptCount ?? 0,
-      lastAttemptedAt: existing?.lastAttemptedAt ?? null,
-      deliveredAt: existing?.deliveredAt ?? null,
-      writerKind: existing?.writerKind ?? null,
-      deliveryReceipt: existing?.deliveryReceipt ?? {},
-      lastErrorCode: existing?.lastErrorCode ?? null,
-      lastErrorMessage: existing?.lastErrorMessage ?? null,
-      createdAt: now,
-      updatedAt: now
-    });
-
-      if (packageBundleExportWriter && exportDelivery.status !== "delivered") {
-        const attemptedAt = new Date().toISOString();
-        const claimed = await harnessRepository.claimExportDeliveryAttempt({
-          idempotencyKey: dispatch.idempotencyKey,
-          writerKind: "obsidian_filesystem",
-          claimedAt: attemptedAt,
-          updatedAt: attemptedAt
-        });
-        if (!claimed) {
-          return;
         }
-        try {
-          const delivered = await packageBundleExportWriter.write(dispatch);
-          const recorded = await harnessRepository.recordExportDeliveryOutcome({
-            idempotencyKey: dispatch.idempotencyKey,
-            expectedLastAttemptedAt: claimed.lastAttemptedAt ?? attemptedAt,
-            status: "delivered",
-            writerKind: delivered.writerKind,
-            deliveryReceipt: { ...delivered.receipt },
-            attemptCount: claimed.attemptCount,
-            lastAttemptedAt: attemptedAt,
-            deliveredAt: delivered.deliveredAt,
-            lastErrorCode: null,
-            lastErrorMessage: null,
-            updatedAt: delivered.deliveredAt
-          });
-          if (recorded) {
-            await audit({
-              tenantId: dispatch.tenantId,
-              actorUserId: dispatch.userId,
-              eventType: "harness.package_bundle_export_delivered",
-              entityType: "harness_export_delivery",
-              metadata: {
-                runId: dispatch.runId,
-                workflowId: dispatch.workflowId,
-                candidateId: dispatch.candidateId,
-                bundleId: dispatch.bundleId,
-                idempotencyKey: dispatch.idempotencyKey,
-                writerKind: delivered.writerKind,
-                writtenFileCount: delivered.receipt.writtenFileCount,
-                primaryNotePath: delivered.receipt.primaryNotePath
-              }
-            });
-          }
-      } catch (error) {
-        const failure = coerceExportWriterFailure(error);
-          const recorded = await harnessRepository.recordExportDeliveryOutcome({
-            idempotencyKey: dispatch.idempotencyKey,
-            expectedLastAttemptedAt: claimed.lastAttemptedAt ?? attemptedAt,
-            status: "delivery_failed",
-            writerKind: "obsidian_filesystem",
-            deliveryReceipt: failure.receipt,
-            attemptCount: claimed.attemptCount,
-            lastAttemptedAt: attemptedAt,
-            deliveredAt: null,
-            lastErrorCode: failure.code,
-            lastErrorMessage: failure.message.slice(0, 240),
-            updatedAt: attemptedAt
-          });
-          if (recorded) {
-            await audit({
-              tenantId: dispatch.tenantId,
-              actorUserId: dispatch.userId,
-              eventType: "harness.package_bundle_export_delivery_failed",
-              entityType: "harness_export_delivery",
-              metadata: {
-                runId: dispatch.runId,
-                workflowId: dispatch.workflowId,
-                candidateId: dispatch.candidateId,
-                bundleId: dispatch.bundleId,
-                idempotencyKey: dispatch.idempotencyKey,
-                errorCode: failure.code,
-                errorMessage: failure.message.slice(0, 240)
-              }
-            });
-          }
       }
-    }
 
-    await options.onPackageBundleExportReady?.(dispatch);
+      await input.onReady?.(dispatch);
+    };
   };
+  const onGovernanceHistoryExportReady = createExportReadyHandler({
+    writer: governanceHistoryExportWriter,
+    onReady: options.onGovernanceHistoryExportReady,
+    deliveredEventType: "harness.governance_history_export_delivered",
+    failedEventType: "harness.governance_history_export_delivery_failed"
+  });
+  const onPackageBundleExportReady = createExportReadyHandler({
+    writer: packageBundleExportWriter,
+    onReady: options.onPackageBundleExportReady,
+    deliveredEventType: "harness.package_bundle_export_delivered",
+    failedEventType: "harness.package_bundle_export_delivery_failed"
+  });
   const harnessBoardApi = createHarnessBoardService({
     authenticate: options.auth.authenticate,
     requireTenantMember: repositories.requireTenantMember,

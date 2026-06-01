@@ -185,6 +185,8 @@ The first harness implementation slice is now built and verified:
 - Hardened export delivery claiming with a bounded lease-recovery rule: stale `delivery_in_progress` ledger rows can now be reclaimed after the lease window, but delivery outcomes still compare-and-set only from the claimed state so duplicate or late writer callbacks cannot overwrite later delivery truth.
 - Hardened the package export dependency seam so `package_bundle_export` now stays blocked until the current governance-history bundle is actually delivered for the same run, rather than allowing board closure alone to imply delivery readiness.
 - Hardened private writer failure handling so governance-history and package-bundle writers now preserve bounded partial receipts (written count plus last attempted relative path) for recovery without leaking note bodies or export-root internals into public board/API/audit surfaces.
+- Hardened private writer receipts one step further so governance-history and package-bundle writers now also preserve the successfully written relative paths on both success and partial failure. Recovery/support can now reason about actual filesystem progress without leaking vault roots or replaying note bodies into public surfaces.
+- Collapsed governance-history and package-bundle runtime delivery onto one shared bounded executor inside `runtime-server.ts`, so claim, outcome, and audit handling now stay aligned across both export families instead of drifting between duplicated code paths.
 
 ## Sharp Edges Logged
 
