@@ -6,6 +6,8 @@ import type {
   HarnessCardContinuityRecord,
   HarnessCardEventRecord,
   HarnessCardRecord,
+  HarnessCompletionPackageSnapshot,
+  HarnessCompletionPackageSnapshotRecord,
   HarnessExportDeliveryRecord,
   HarnessRunRecord
 } from "./types.js";
@@ -912,32 +914,7 @@ export type HarnessPendingApprovalView = {
   targetSummary?: string;
 };
 
-export type HarnessCompletionPackageView = {
-  status: "assembling" | "done";
-  summary?: string;
-  deferredApprovalCount: number;
-  hasOpenGovernanceItems: boolean;
-  packageNote?: string;
-  recommendations: string[];
-  objections: string[];
-  governanceItems: Array<{
-    proposalId: string;
-    statusLabel: string;
-    persona: string;
-    deliverableLabel: string;
-    policyReasonLabel?: string;
-    recommendationSummary?: string;
-    objectionSummary?: string;
-    nextReviewTrigger?: string;
-  }>;
-  deliverables: Array<{
-    cardId: string;
-    persona: string;
-    title: string;
-    deliverableLabel: string;
-    outcome: string;
-  }>;
-};
+export type HarnessCompletionPackageView = HarnessCompletionPackageSnapshot;
 
 export type HarnessFreshCycleMode = "reopen_deferred" | "clean";
 export type HarnessAttentionReviewDecision = "complete_run" | "start_fresh_cycle";
@@ -1195,16 +1172,26 @@ export function createHarnessBoardService(options: {
         ...(options.runAtomically ? { runAtomically: options.runAtomically } : {})
       });
 
-      const [cards, continuity, events, decisions, exportDeliveries] = await Promise.all([
+      const [cards, continuity, events, decisions, exportDeliveries, completionPackageSnapshot] = await Promise.all([
         options.repository.listCardsForRun(run.id),
         options.repository.listCardContinuityForRun(run.id),
         options.repository.listEventsForRun(run.id),
         options.repository.listDecisionsForRun(run.id),
-        options.repository.listExportDeliveriesForRun(run.id)
+        options.repository.listExportDeliveriesForRun(run.id),
+        options.repository.getCompletionPackageSnapshot(run.id)
       ]);
       const proposals = await options.repository.listProposalsForRun(run.id);
 
-      return buildHarnessBoardResponse({ run, cards, continuity, events, decisions, proposals, exportDeliveries });
+      return buildHarnessBoardResponse({
+        run,
+        cards,
+        continuity,
+        events,
+        decisions,
+        proposals,
+        exportDeliveries,
+        ...(completionPackageSnapshot ? { completionPackageSnapshot } : {})
+      });
     },
 
     async createTopLevelChildCard(request: {
@@ -3296,18 +3283,17 @@ export function createHarnessBoardService(options: {
           card: ceoCard,
           resultSummary: trimmedCompletionSummary
         });
-        await repository.insertDecision(
-          createHarnessBoardDecisionRecord({
-            runId: run.id,
-            tenantId: access.session.tenantId,
-            actorUserId: access.session.userId,
-            decisionKind: "run_completed",
-            cardId: ceoCard.id,
-            persona: ceoCard.persona,
-            policyReason: "completed_lanes_only",
-            recommendationSummary: "Package only completed lanes into the tenant-facing board outcome."
-          })
-        );
+        const completionDecision = createHarnessBoardDecisionRecord({
+          runId: run.id,
+          tenantId: access.session.tenantId,
+          actorUserId: access.session.userId,
+          decisionKind: "run_completed",
+          cardId: ceoCard.id,
+          persona: ceoCard.persona,
+          policyReason: "completed_lanes_only",
+          recommendationSummary: "Package only completed lanes into the tenant-facing board outcome."
+        });
+        await repository.insertDecision(completionDecision);
         const completedRun = await repository.updateRunState({
           runId: run.id,
           state: "done"
@@ -3315,6 +3301,35 @@ export function createHarnessBoardService(options: {
         if (!completedRun) {
           throw new HarnessRunCompletionConflictError("Harness run completion conflicted");
         }
+        const [completionContinuity, completionDecisions] = await Promise.all([
+          repository.listCardContinuityForRun(run.id),
+          repository.listDecisionsForRun(run.id)
+        ]);
+        const latestResultSummaryByCardId = new Map<string, string>();
+        for (const continuityRecord of completionContinuity) {
+          if (continuityRecord.latestResultSummary) {
+            latestResultSummaryByCardId.set(continuityRecord.cardId, continuityRecord.latestResultSummary);
+          }
+        }
+        const completionPackage = buildCompletionPackage({
+          run: completedRun,
+          cards,
+          latestResultSummaryByCardId,
+          proposals,
+          decisions: completionDecisions
+        });
+        if (!completionPackage) {
+          throw new HarnessRunCompletionConflictError("Harness completion package could not be persisted");
+        }
+        await repository.upsertCompletionPackageSnapshot({
+          runId: completedRun.id,
+          tenantId: completedRun.tenantId,
+          workflowId: completedRun.workflowId,
+          packageId: completedRun.packageId,
+          ...completionPackage,
+          createdAt: completedRun.updatedAt,
+          updatedAt: completedRun.updatedAt
+        });
 
         return {
           runId: completedRun.id,
@@ -5072,6 +5087,7 @@ function buildHarnessBoardResponse(input: {
   decisions: readonly HarnessBoardDecisionRecord[];
   proposals: readonly HarnessSubCardProposal[];
   exportDeliveries?: readonly HarnessExportDeliveryRecord[];
+  completionPackageSnapshot?: HarnessCompletionPackageSnapshotRecord;
 }): HarnessBoardResponse {
   const eventsByCardId = new Map<string, HarnessCardEventRecord[]>();
   const activityByCardId = new Map<string, HarnessBoardActivityItem[]>();
@@ -5109,13 +5125,16 @@ function buildHarnessBoardResponse(input: {
   );
 
   const columns = createBoardColumns(cards);
-  const completionPackage = buildCompletionPackage({
-    run: input.run,
-    cards: input.cards,
-    latestResultSummaryByCardId,
-    proposals: input.proposals,
-    decisions: input.decisions
-  });
+  const completionPackage =
+    input.completionPackageSnapshot
+      ? toCompletionPackageView(input.completionPackageSnapshot)
+      : buildCompletionPackage({
+          run: input.run,
+          cards: input.cards,
+          latestResultSummaryByCardId,
+          proposals: input.proposals,
+          decisions: input.decisions
+        });
   const recentDecisions = input.decisions.slice(0, 8).map(toRecentDecisionView);
   const followThroughItems = input.decisions
     .filter(isFollowThroughDecision)
@@ -9296,6 +9315,20 @@ function buildCompletionPackage(input: {
     objections,
     governanceItems,
     deliverables
+  };
+}
+
+function toCompletionPackageView(record: HarnessCompletionPackageSnapshotRecord): HarnessCompletionPackageView {
+  return {
+    status: record.status,
+    ...(record.summary ? { summary: record.summary } : {}),
+    deferredApprovalCount: record.deferredApprovalCount,
+    hasOpenGovernanceItems: record.hasOpenGovernanceItems,
+    ...(record.packageNote ? { packageNote: record.packageNote } : {}),
+    recommendations: [...record.recommendations],
+    objections: [...record.objections],
+    governanceItems: record.governanceItems.map((item) => ({ ...item })),
+    deliverables: record.deliverables.map((item) => ({ ...item }))
   };
 }
 

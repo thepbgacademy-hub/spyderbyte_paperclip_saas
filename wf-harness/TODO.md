@@ -88,7 +88,7 @@ This file tracks the new harness subproject only.
 - [x] Keep grouped export-candidate write semantics contract-owned too, so payload shape, idempotency, replay safety, and conflict policy no longer need to be reconstructed from member buckets during later export work.
 - [x] Keep grouped export-candidate preparation semantics contract-owned too, so atomicity, derivation basis, revision policy, and freshness source no longer need to be reconstructed from member buckets during later export work.
 - [x] Keep grouped export-candidate validation and completeness posture contract-owned too, so validation boundary and completeness rule no longer need to be reconstructed from member buckets during later export work.
-- [ ] Decide whether the widened derived `completionPackage` should stay a read model or graduate into a persisted packaged-output artifact in a later slice.
+- [x] Decide whether the widened derived `completionPackage` should stay a read model or graduate into a persisted packaged-output artifact in a later slice.
 - [x] Keep `resolve-attention` and later action-family branches covered wherever the board contract is consumed, so `review-attention` does not become the only richly rendered control path.
 - [x] Add explicit packaging policy for how recommendations, objections, and deferred governance items should shape the tenant-facing final handoff.
 - [ ] Decide whether denied governance items should remain derived read-model packaging only or become exportable board-memory artifacts later.
@@ -239,3 +239,6 @@ This file tracks the new harness subproject only.
 - [x] Keep governance-history and package-bundle runtime delivery on one shared bounded execution seam, so claim, outcome, and audit logic cannot silently drift between the two candidate families under pressure.
 - [x] Prove stale-claim recovery symmetry for `package_bundle_export` at the runtime seam, so a late package-bundle writer callback cannot overwrite a newer recovered claim outcome after delivery ownership has moved.
 - [x] Keep harness export-delivery receipts typed as a bounded contract across runtime, repository, and board reads, so recovery logic stops depending on ad hoc JSON blobs for note-path, manifest, written-count, and partial-progress truth.
+- [x] Persist the closed-board `completionPackage` as a bounded harness-owned snapshot so package export and completed-board reads stop depending on a fresh derived rebuild after closure.
+- [x] Rehydrate completed-board package reads from the persisted `completionPackage` snapshot so late proposal/decision noise cannot rewrite the already-closed tenant-facing package surface.
+- [x] Freeze `package_bundle_export` against the persisted `completionPackage` snapshot so package delivery remains revision-aware but no longer depends on mutable post-closure governance reads.

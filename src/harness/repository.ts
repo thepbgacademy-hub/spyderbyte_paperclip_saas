@@ -13,6 +13,7 @@ import type {
   HarnessCardContinuityRecord,
   HarnessCardEventRecord,
   HarnessCardRecord,
+  HarnessCompletionPackageSnapshotRecord,
   HarnessExportDeliveryAttemptClaim,
   HarnessExportDeliveryReceipt,
   HarnessExportDeliveryOutcomeUpdate,
@@ -47,6 +48,8 @@ export interface HarnessRepository {
   listCardContinuityForRun(runId: string): Promise<HarnessCardContinuityRecord[]>;
   insertDecision(decision: HarnessBoardDecisionRecord): Promise<void>;
   listDecisionsForRun(runId: string): Promise<HarnessBoardDecisionRecord[]>;
+  upsertCompletionPackageSnapshot(record: HarnessCompletionPackageSnapshotRecord): Promise<HarnessCompletionPackageSnapshotRecord>;
+  getCompletionPackageSnapshot(runId: string): Promise<HarnessCompletionPackageSnapshotRecord | null>;
   getExportDeliveryByIdempotencyKey(idempotencyKey: string): Promise<HarnessExportDeliveryRecord | null>;
   upsertExportDelivery(record: HarnessExportDeliveryRecord): Promise<HarnessExportDeliveryRecord>;
   claimExportDeliveryAttempt(input: HarnessExportDeliveryAttemptClaim): Promise<HarnessExportDeliveryRecord | null>;
@@ -74,6 +77,7 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
   const events = new Map<string, HarnessCardEventRecord[]>();
   const continuity = new Map<string, HarnessCardContinuityRecord>();
   const decisions = new Map<string, HarnessBoardDecisionRecord[]>();
+  const completionPackageSnapshots = new Map<string, HarnessCompletionPackageSnapshotRecord>();
   const exportDeliveries = new Map<string, HarnessExportDeliveryRecord>();
   const proposals = new Map<string, HarnessSubCardProposal>();
 
@@ -271,6 +275,39 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
       return [...(decisions.get(runId) ?? [])]
         .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
         .map((decision) => ({ ...decision }));
+    },
+
+    async upsertCompletionPackageSnapshot(record) {
+      const existing = completionPackageSnapshots.get(record.runId);
+      const nextRecord: HarnessCompletionPackageSnapshotRecord = {
+        ...record,
+        createdAt: existing?.createdAt ?? record.createdAt,
+        recommendations: [...record.recommendations],
+        objections: [...record.objections],
+        governanceItems: record.governanceItems.map((item) => ({ ...item })),
+        deliverables: record.deliverables.map((item) => ({ ...item }))
+      };
+      completionPackageSnapshots.set(record.runId, nextRecord);
+      return {
+        ...nextRecord,
+        recommendations: [...nextRecord.recommendations],
+        objections: [...nextRecord.objections],
+        governanceItems: nextRecord.governanceItems.map((item) => ({ ...item })),
+        deliverables: nextRecord.deliverables.map((item) => ({ ...item }))
+      };
+    },
+
+    async getCompletionPackageSnapshot(runId) {
+      const record = completionPackageSnapshots.get(runId);
+      return record
+        ? {
+            ...record,
+            recommendations: [...record.recommendations],
+            objections: [...record.objections],
+            governanceItems: record.governanceItems.map((item) => ({ ...item })),
+            deliverables: record.deliverables.map((item) => ({ ...item }))
+          }
+        : null;
     },
 
     async getExportDeliveryByIdempotencyKey(idempotencyKey) {
@@ -723,6 +760,49 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
       return result.rows.map(mapHarnessBoardDecisionRow).filter((decision): decision is HarnessBoardDecisionRecord => decision !== null);
     },
 
+    async upsertCompletionPackageSnapshot(record) {
+      const result = await client.query(
+        `insert into wfpc.harness_completion_package_snapshots
+          (run_id, tenant_id, workflow_id, package_id, snapshot_payload, created_at, updated_at)
+         values ($1, $2, $3, $4, $5::jsonb, $6::timestamptz, $7::timestamptz)
+         on conflict (run_id) do update
+           set snapshot_payload = excluded.snapshot_payload,
+               updated_at = excluded.updated_at
+         returning run_id, tenant_id, workflow_id, package_id, snapshot_payload, created_at, updated_at`,
+        [
+          record.runId,
+          record.tenantId,
+          record.workflowId,
+          record.packageId,
+          JSON.stringify({
+            status: record.status,
+            summary: record.summary,
+            deferredApprovalCount: record.deferredApprovalCount,
+            hasOpenGovernanceItems: record.hasOpenGovernanceItems,
+            packageNote: record.packageNote,
+            recommendations: record.recommendations,
+            objections: record.objections,
+            governanceItems: record.governanceItems,
+            deliverables: record.deliverables
+          }),
+          record.createdAt,
+          record.updatedAt
+        ]
+      );
+      return mapHarnessCompletionPackageSnapshotRow(result.rows[0])!;
+    },
+
+    async getCompletionPackageSnapshot(runId) {
+      const result = await client.query(
+        `select run_id, tenant_id, workflow_id, package_id, snapshot_payload, created_at, updated_at
+         from wfpc.harness_completion_package_snapshots
+         where run_id = $1
+         limit 1`,
+        [runId]
+      );
+      return result.rows[0] ? mapHarnessCompletionPackageSnapshotRow(result.rows[0]) : null;
+    },
+
     async getExportDeliveryByIdempotencyKey(idempotencyKey) {
       const result = await client.query(
         `select id, run_id, tenant_id, workflow_id, package_id, candidate_id, status, export_format, record_target,
@@ -1026,6 +1106,63 @@ export function toHarnessBoardDecisionRow(record: HarnessBoardDecisionRecord): H
     recommendationSummary: record.recommendationSummary,
     objectionSummary: record.objectionSummary,
     createdAt: record.createdAt
+  };
+}
+
+function mapHarnessCompletionPackageSnapshotRow(row: unknown): HarnessCompletionPackageSnapshotRecord | null {
+  const record = asRecord(row);
+  if (!record.run_id || !record.tenant_id || !record.workflow_id || !record.package_id) {
+    return null;
+  }
+
+  const snapshot = asRecord(record.snapshot_payload);
+  return {
+    runId: String(record.run_id),
+    tenantId: String(record.tenant_id),
+    workflowId: String(record.workflow_id),
+    packageId: String(record.package_id),
+    status: snapshot.status === "assembling" ? "assembling" : "done",
+    ...(typeof snapshot.summary === "string" ? { summary: snapshot.summary } : {}),
+    deferredApprovalCount: Number(snapshot.deferredApprovalCount ?? 0),
+    hasOpenGovernanceItems: Boolean(snapshot.hasOpenGovernanceItems),
+    ...(typeof snapshot.packageNote === "string" ? { packageNote: snapshot.packageNote } : {}),
+    recommendations: Array.isArray(snapshot.recommendations)
+      ? snapshot.recommendations.filter((item): item is string => typeof item === "string")
+      : [],
+    objections: Array.isArray(snapshot.objections)
+      ? snapshot.objections.filter((item): item is string => typeof item === "string")
+      : [],
+    governanceItems: Array.isArray(snapshot.governanceItems)
+      ? snapshot.governanceItems.map((item) => {
+          const entry = asRecord(item);
+          return {
+            proposalId: String(entry.proposalId ?? ""),
+            statusLabel: String(entry.statusLabel ?? ""),
+            persona: String(entry.persona ?? ""),
+            deliverableLabel: String(entry.deliverableLabel ?? ""),
+            ...(typeof entry.policyReasonLabel === "string" ? { policyReasonLabel: entry.policyReasonLabel } : {}),
+            ...(typeof entry.recommendationSummary === "string"
+              ? { recommendationSummary: entry.recommendationSummary }
+              : {}),
+            ...(typeof entry.objectionSummary === "string" ? { objectionSummary: entry.objectionSummary } : {}),
+            ...(typeof entry.nextReviewTrigger === "string" ? { nextReviewTrigger: entry.nextReviewTrigger } : {})
+          };
+        })
+      : [],
+    deliverables: Array.isArray(snapshot.deliverables)
+      ? snapshot.deliverables.map((item) => {
+          const entry = asRecord(item);
+          return {
+            cardId: String(entry.cardId ?? ""),
+            persona: String(entry.persona ?? ""),
+            title: String(entry.title ?? ""),
+            deliverableLabel: String(entry.deliverableLabel ?? ""),
+            outcome: String(entry.outcome ?? "")
+          };
+        })
+      : [],
+    createdAt: asIsoTimestamp(record.created_at) ?? "",
+    updatedAt: asIsoTimestamp(record.updated_at) ?? ""
   };
 }
 

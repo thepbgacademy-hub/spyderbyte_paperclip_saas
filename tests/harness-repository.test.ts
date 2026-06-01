@@ -28,6 +28,7 @@ const exportDeliveriesRlsMigration = readFileSync("supabase/migrations/0022_wf_h
 const exportDeliveryResultsMigration = readFileSync("supabase/migrations/0023_wf_harness_export_delivery_results.sql", "utf8");
 const exportDeliveryClaimsMigration = readFileSync("supabase/migrations/0025_wf_harness_export_delivery_claims.sql", "utf8");
 const exportDeliveryBundleRevisionMigration = readFileSync("supabase/migrations/0026_wf_harness_export_delivery_bundle_revision.sql", "utf8");
+const completionPackageSnapshotsMigration = readFileSync("supabase/migrations/0027_wf_harness_completion_package_snapshots.sql", "utf8");
 const execFileAsync = promisify(execFile);
 
 const HARNESS_POSTGRES_IMAGE = "postgres:16-alpine";
@@ -372,6 +373,76 @@ describe("harness persistence records", () => {
         ]
       })
     ]);
+  });
+
+  it("stores bounded completion-package snapshots in the minimal in-memory repository", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-123",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+
+    await repository.insertRun(run);
+    await repository.upsertCompletionPackageSnapshot({
+      runId: run.id,
+      tenantId: run.tenantId,
+      workflowId: run.workflowId,
+      packageId: run.packageId,
+      status: "done",
+      summary: "The CEO packaged the final business-facing outcome.",
+      deferredApprovalCount: 1,
+      hasOpenGovernanceItems: true,
+      packageNote: "The board is packaging completed work while keeping deferred follow-up requests visible for later CEO review.",
+      recommendations: ["Package only completed lanes into the tenant-facing board outcome."],
+      objections: ["Hold this research brief request until the active lane count drops."],
+      governanceItems: [
+        {
+          proposalId: "proposal_completion_deferred_1",
+          statusLabel: "Deferred for later CEO review",
+          persona: "RESEARCHER",
+          deliverableLabel: "Research Brief",
+          policyReasonLabel: "Lane cap protection",
+          recommendationSummary: "Finish or close one active lane before reopening this research brief request.",
+          objectionSummary: "Hold this research brief request until the active lane count drops.",
+          nextReviewTrigger: "Review again when one of the active child lanes closes."
+        }
+      ],
+      deliverables: [
+        {
+          cardId: "card_done_1",
+          persona: "CFO",
+          title: "Pressure-test the pricing lane",
+          deliverableLabel: "Pricing Review",
+          outcome: "Pricing floor is stable enough for launch."
+        }
+      ],
+      createdAt: "2026-06-01T00:00:00.000Z",
+      updatedAt: "2026-06-01T00:00:00.000Z"
+    });
+
+    await expect(repository.getCompletionPackageSnapshot(run.id)).resolves.toEqual(
+      expect.objectContaining({
+        runId: run.id,
+        status: "done",
+        summary: "The CEO packaged the final business-facing outcome.",
+        governanceItems: [
+          expect.objectContaining({
+            proposalId: "proposal_completion_deferred_1"
+          })
+        ],
+        deliverables: [
+          expect.objectContaining({
+            cardId: "card_done_1"
+          })
+        ]
+      })
+    );
   });
 
   it("claims governance-history delivery attempts exactly once in the minimal in-memory repository", async () => {
@@ -1603,6 +1674,79 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
     },
     120_000
   );
+  it(
+    "stores bounded completion-package snapshots in the real Postgres repository",
+    async () => {
+      const database = requireDisposableHarnessDatabase();
+      const client = new Client({ connectionString: database.connectionString });
+      await client.connect();
+
+      try {
+        const repository = createPostgresHarnessRepository({
+          query: async (sql: string, values: readonly unknown[]) => {
+            const result = await client.query(sql, [...values]);
+            return { rows: result.rows };
+          }
+        });
+        const tenantId = randomUUID();
+        const run = createHarnessRunRecord({
+          tenantId,
+          workflowId: "wf_connect_first_workflow",
+          packageId: "pkg_bib_connect",
+          orchestratorPersona: "ceo",
+          runtimeContext: {
+            providerKind: "openai_api",
+            credentialLabel: "Primary OpenAI"
+          }
+        });
+
+        await resetHarnessProofDatabase(client);
+        await seedHarnessProofPrerequisites(client, tenantId);
+        await client.query(completionPackageSnapshotsMigration);
+        await repository.insertRun(run);
+        await repository.upsertCompletionPackageSnapshot({
+          runId: run.id,
+          tenantId: run.tenantId,
+          workflowId: run.workflowId,
+          packageId: run.packageId,
+          status: "done",
+          summary: "The CEO packaged the final business-facing outcome.",
+          deferredApprovalCount: 0,
+          hasOpenGovernanceItems: false,
+          packageNote: "Closed-board deliverables are ready to promote into a tenant-owned package bundle.",
+          recommendations: ["Package only completed lanes into the tenant-facing board outcome."],
+          objections: [],
+          governanceItems: [],
+          deliverables: [
+            {
+              cardId: "card_done_pg_1",
+              persona: "CFO",
+              title: "Pressure-test the pricing lane",
+              deliverableLabel: "Pricing Review",
+              outcome: "Pricing floor is stable enough for launch."
+            }
+          ],
+          createdAt: "2026-06-01T00:00:00.000Z",
+          updatedAt: "2026-06-01T00:00:00.000Z"
+        });
+
+        await expect(repository.getCompletionPackageSnapshot(run.id)).resolves.toEqual(
+          expect.objectContaining({
+            runId: run.id,
+            status: "done",
+            deliverables: [
+              expect.objectContaining({
+                cardId: "card_done_pg_1"
+              })
+            ]
+          })
+        );
+      } finally {
+        await client.end();
+      }
+    },
+    120_000
+  );
 });
 
 function hasDockerRuntime() {
@@ -1662,7 +1806,7 @@ async function startDisposableHarnessDatabase(): Promise<DisposableHarnessDataba
 }
 
 async function waitForHarnessDatabase(connectionString: string) {
-  const deadline = Date.now() + 120_000;
+  const deadline = Date.now() + 240_000;
   while (Date.now() < deadline) {
     const client = new Client({ connectionString });
     try {
@@ -1744,6 +1888,7 @@ async function resetHarnessProofDatabase(client: Client) {
   await client.query(exportDeliveryResultsMigration);
   await client.query(exportDeliveryClaimsMigration);
   await client.query(exportDeliveryBundleRevisionMigration);
+  await client.query(completionPackageSnapshotsMigration);
 }
 
 async function seedHarnessProofPrerequisites(client: Client, tenantId: string) {

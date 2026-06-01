@@ -746,6 +746,59 @@ try {
       throw new Error("Harness export delivery bundle-revision migration did not produce the required schema shape");
     }
   }
+  const queryHarnessCompletionPackageSnapshotsReady = async () =>
+    client.query(
+      `select
+        exists (
+          select 1
+          from information_schema.tables
+          where table_schema = 'wfpc'
+            and table_name = 'harness_completion_package_snapshots'
+        ) as has_completion_package_snapshots,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'harness_completion_package_snapshots'
+            and column_name = 'snapshot_payload'
+            and is_nullable = 'NO'
+        ) as has_completion_package_snapshot_payload,
+        exists (
+          select 1
+          from pg_constraint
+          where conrelid = to_regclass('wfpc.harness_completion_package_snapshots')
+            and pg_get_constraintdef(oid) like '%jsonb_typeof(snapshot_payload) = ''object''%'
+        ) as has_completion_package_snapshot_check,
+        exists (
+          select 1
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+          where n.nspname = 'wfpc'
+            and c.relname = 'harness_completion_package_snapshots'
+            and c.relrowsecurity
+        ) as has_completion_package_snapshot_rls,
+        exists (
+          select 1
+          from pg_policies
+          where schemaname = 'wfpc'
+            and tablename = 'harness_completion_package_snapshots'
+            and policyname = 'members can read harness completion package snapshots'
+        ) as has_completion_package_snapshot_policy`
+    );
+  let harnessCompletionPackageSnapshotsExisting = await queryHarnessCompletionPackageSnapshotsReady();
+  let harnessCompletionPackageSnapshotsReady = Object.values(
+    harnessCompletionPackageSnapshotsExisting.rows[0] ?? {}
+  ).every(Boolean);
+  if (!harnessCompletionPackageSnapshotsReady) {
+    await client.query(readFileSync("supabase/migrations/0027_wf_harness_completion_package_snapshots.sql", "utf8"));
+    harnessCompletionPackageSnapshotsExisting = await queryHarnessCompletionPackageSnapshotsReady();
+    harnessCompletionPackageSnapshotsReady = Object.values(
+      harnessCompletionPackageSnapshotsExisting.rows[0] ?? {}
+    ).every(Boolean);
+    if (!harnessCompletionPackageSnapshotsReady) {
+      throw new Error("Harness completion package snapshot migration did not produce the required schema shape");
+    }
+  }
   const { rows } = await client.query(
     "select table_schema, table_name from information_schema.tables where table_schema = 'wfpc' order by table_name"
   );
@@ -779,7 +832,8 @@ try {
           !harnessExportDeliveryRlsReady ||
           !harnessExportDeliveryResultsReady ||
           !harnessExportDeliveryPackageBundleReady ||
-          !harnessExportDeliveryClaimsReady,
+          !harnessExportDeliveryClaimsReady ||
+          !harnessCompletionPackageSnapshotsReady,
         tableCount: rows.length,
         tables: rows.map((row) => row.table_name)
       },

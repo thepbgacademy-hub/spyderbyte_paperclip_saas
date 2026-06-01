@@ -7379,6 +7379,92 @@ describe("harness board service", () => {
     );
     expect(JSON.stringify(completedBoard.completionPackage)).not.toContain("This note should not surface directly.");
     expect(JSON.stringify(completedBoard.completionPackage)).not.toContain("Another note that should stay out of the package.");
+    await expect(repository.getCompletionPackageSnapshot(board.runId)).resolves.toEqual(
+      expect.objectContaining(completedBoard.completionPackage ?? {})
+    );
+  });
+
+  it("keeps the persisted completion package immutable after the board closes", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "done",
+      resultSummary: "Pricing floor is stable enough for launch."
+    });
+
+    await service.completeRun({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      completionSummary: "The CEO packaged the final business-facing outcome."
+    });
+
+    const completedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const persistedSnapshot = await repository.getCompletionPackageSnapshot(board.runId);
+
+    await repository.insertProposal({
+      id: "proposal_post_completion_noise_1",
+      runId: board.runId,
+      parentCardId: created.cardId,
+      requestedByCardId: created.cardId,
+      requestedByPersona: "cfo",
+      persona: "cto",
+      title: "Open an extra technical review lane",
+      deliverableType: "technical_review",
+      status: "denied"
+    });
+    await repository.insertDecision({
+      id: "decision_post_completion_noise_1",
+      runId: board.runId,
+      tenantId: "tenant_123",
+      actorUserId: "user_123",
+      decisionKind: "proposal_denied",
+      cardId: created.cardId,
+      proposalId: "proposal_post_completion_noise_1",
+      targetCardId: null,
+      persona: "cto",
+      deliverableType: "technical_review",
+      policyReason: "scope_guardrail",
+      resolution: null,
+      decisionNote: "Should stay out of the persisted closed-board package.",
+      recommendationSummary: "Do not mutate the closed-board package snapshot.",
+      objectionSummary: "This late governance noise should not rewrite the package export surface.",
+      createdAt: new Date().toISOString()
+    });
+
+    const hydratedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(hydratedBoard.completionPackage).toEqual(completedBoard.completionPackage);
+    await expect(repository.getCompletionPackageSnapshot(board.runId)).resolves.toEqual(
+      expect.objectContaining(persistedSnapshot ?? {})
+    );
+    expect(JSON.stringify(hydratedBoard.completionPackage)).not.toContain("Open an extra technical review lane");
   });
 
   it("keeps denied-only governance items visible in the completion package", async () => {

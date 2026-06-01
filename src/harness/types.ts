@@ -116,6 +116,46 @@ export interface HarnessBoardDecisionRecord {
   createdAt: string;
 }
 
+export interface HarnessCompletionPackageGovernanceItem {
+  proposalId: string;
+  statusLabel: string;
+  persona: string;
+  deliverableLabel: string;
+  policyReasonLabel?: string;
+  recommendationSummary?: string;
+  objectionSummary?: string;
+  nextReviewTrigger?: string;
+}
+
+export interface HarnessCompletionPackageDeliverable {
+  cardId: string;
+  persona: string;
+  title: string;
+  deliverableLabel: string;
+  outcome: string;
+}
+
+export interface HarnessCompletionPackageSnapshot {
+  status: "assembling" | "done";
+  summary?: string;
+  deferredApprovalCount: number;
+  hasOpenGovernanceItems: boolean;
+  packageNote?: string;
+  recommendations: string[];
+  objections: string[];
+  governanceItems: HarnessCompletionPackageGovernanceItem[];
+  deliverables: HarnessCompletionPackageDeliverable[];
+}
+
+export interface HarnessCompletionPackageSnapshotRecord extends HarnessCompletionPackageSnapshot {
+  runId: string;
+  tenantId: string;
+  workflowId: string;
+  packageId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface HarnessExportPackageFileRecord {
   path: string;
   mediaType: "text/markdown" | "application/json";

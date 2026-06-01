@@ -148,6 +148,16 @@ export type HarnessBoardDecisionRow = {
   createdAt: string;
 };
 
+export type HarnessCompletionPackageSnapshotRow = {
+  runId: string;
+  tenantId: string;
+  workflowId: string;
+  packageId: string;
+  snapshotPayload: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type SecretReferenceRow = {
   id: string;
   tenantId: string;
