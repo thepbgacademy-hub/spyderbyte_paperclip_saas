@@ -131,7 +131,7 @@ export interface HarnessExportDeliveryRecord {
   workflowId: string;
   packageId: string;
   candidateId: "governance_history_export" | "package_bundle_export";
-  status: "export_ready" | "delivered" | "delivery_failed";
+  status: "export_ready" | "delivery_in_progress" | "delivered" | "delivery_failed";
   exportFormat: "obsidian_markdown_bundle";
   recordTarget: "governance_history_record" | "package_deliverable_record";
   bundleId: string;
@@ -168,6 +168,13 @@ export interface HarnessExportDeliveryOutcomeUpdate {
   deliveredAt: string | null;
   lastErrorCode: string | null;
   lastErrorMessage: string | null;
+  updatedAt: string;
+}
+
+export interface HarnessExportDeliveryAttemptClaim {
+  idempotencyKey: string;
+  writerKind: null | "obsidian_filesystem";
+  claimedAt: string;
   updatedAt: string;
 }
 

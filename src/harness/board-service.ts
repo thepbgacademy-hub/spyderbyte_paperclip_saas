@@ -1002,6 +1002,7 @@ export type HarnessExportCandidateId = HarnessMemoryBoundaryExportCandidateView[
 
 export type HarnessExportCandidateDeliveryStatus =
   | "export_ready"
+  | "delivery_in_progress"
   | "delivered"
   | "delivery_failed";
 
@@ -4029,8 +4030,7 @@ export function createHarnessBoardService(options: {
           status: "export_ready",
           statusLabel: humanizeExportDeliveryStatus("export_ready"),
           summary: "The governance history bundle is export-ready and waiting for bounded delivery through the configured tenant-safe writer seam.",
-          attemptCount: (candidate.latestDelivery?.attemptCount ?? 0) + 1,
-          lastAttemptedAtLabel: "just now"
+          attemptCount: candidate.latestDelivery?.attemptCount ?? 0
         }
       };
       await options.onGovernanceHistoryExportReady?.({
@@ -4119,8 +4119,7 @@ export function createHarnessBoardService(options: {
           status: "export_ready",
           statusLabel: humanizeExportDeliveryStatus("export_ready"),
           summary: "The package bundle is export-ready and waiting for bounded delivery through the configured tenant-safe writer seam.",
-          attemptCount: (candidate.latestDelivery?.attemptCount ?? 0) + 1,
-          lastAttemptedAtLabel: "just now"
+          attemptCount: candidate.latestDelivery?.attemptCount ?? 0
         }
       };
       await options.onPackageBundleExportReady?.({
@@ -4226,8 +4225,7 @@ export function createHarnessBoardService(options: {
         status: "export_ready",
         statusLabel: humanizeExportDeliveryStatus("export_ready"),
         summary: "The governance history bundle was replayed back into the bounded tenant-safe writer seam and is waiting for delivery.",
-        attemptCount: exportDelivery.attemptCount + 1,
-        lastAttemptedAtLabel: "just now",
+        attemptCount: exportDelivery.attemptCount,
         ...(exportDelivery.writerKind ? { writerKindLabel: humanizeExportDeliveryWriterKind(exportDelivery.writerKind) } : {}),
         ...(exportDelivery.primaryNotePath ? { primaryNotePath: exportDelivery.primaryNotePath } : {})
       };
@@ -4321,8 +4319,7 @@ export function createHarnessBoardService(options: {
         status: "export_ready",
         statusLabel: humanizeExportDeliveryStatus("export_ready"),
         summary: "The package bundle was replayed back into the bounded tenant-safe writer seam and is waiting for delivery.",
-        attemptCount: exportDelivery.attemptCount + 1,
-        lastAttemptedAtLabel: "just now",
+        attemptCount: exportDelivery.attemptCount,
         ...(exportDelivery.writerKind ? { writerKindLabel: humanizeExportDeliveryWriterKind(exportDelivery.writerKind) } : {}),
         ...(exportDelivery.primaryNotePath ? { primaryNotePath: exportDelivery.primaryNotePath } : {})
       };
@@ -6518,6 +6515,9 @@ function buildMemoryBoundaryView(input: {
   const failedDeliveryCandidateGroupCount = exportCandidates.filter(
     (candidate) => candidate.latestDelivery?.status === "delivery_failed"
   ).length;
+  const inProgressDeliveryCandidateGroupCount = exportCandidates.filter(
+    (candidate) => candidate.latestDelivery?.status === "delivery_in_progress"
+  ).length;
   const foundationalExportCandidateCount = exportCandidates.filter(
     (candidate) => candidate.exportSequence === "foundational_first"
   ).length;
@@ -6773,7 +6773,9 @@ function buildMemoryBoundaryView(input: {
         : "Export readiness will become visible once the board produces tenant-record candidates.",
     deliverySummary:
       failedDeliveryCandidateGroupCount > 0
-        ? `${deliveredCandidateGroupCount} export candidate group${deliveredCandidateGroupCount === 1 ? " is" : "s are"} already delivered, ${exportReadyDeliveryCandidateGroupCount} group${exportReadyDeliveryCandidateGroupCount === 1 ? " is" : "s are"} export-ready but not delivered yet, and ${failedDeliveryCandidateGroupCount} group${failedDeliveryCandidateGroupCount === 1 ? " last failed" : " last failed"} delivery and can be replayed safely.`
+        ? `${deliveredCandidateGroupCount} export candidate group${deliveredCandidateGroupCount === 1 ? " is" : "s are"} already delivered, ${exportReadyDeliveryCandidateGroupCount} group${exportReadyDeliveryCandidateGroupCount === 1 ? " is" : "s are"} export-ready but not delivered yet${inProgressDeliveryCandidateGroupCount > 0 ? `, and ${inProgressDeliveryCandidateGroupCount} group${inProgressDeliveryCandidateGroupCount === 1 ? " is" : "s are"} currently delivering` : ""}, and ${failedDeliveryCandidateGroupCount} group${failedDeliveryCandidateGroupCount === 1 ? " last failed" : " last failed"} delivery and can be replayed safely.`
+        : inProgressDeliveryCandidateGroupCount > 0
+        ? `${deliveredCandidateGroupCount} export candidate group${deliveredCandidateGroupCount === 1 ? " is" : "s are"} already delivered, ${exportReadyDeliveryCandidateGroupCount} group${exportReadyDeliveryCandidateGroupCount === 1 ? " is" : "s are"} export-ready but not delivered yet, and ${inProgressDeliveryCandidateGroupCount} group${inProgressDeliveryCandidateGroupCount === 1 ? " is" : "s are"} currently delivering.`
         : exportReadyDeliveryCandidateGroupCount > 0
         ? `${deliveredCandidateGroupCount} export candidate group${deliveredCandidateGroupCount === 1 ? " is" : "s are"} already delivered, and ${exportReadyDeliveryCandidateGroupCount} group${exportReadyDeliveryCandidateGroupCount === 1 ? " is" : "s are"} export-ready but not delivered yet.`
         : deliveredCandidateGroupCount > 0
@@ -7316,10 +7318,12 @@ function toExportCandidateDeliveryView(
     statusLabel: humanizeExportDeliveryStatus(delivery.status),
     summary:
       delivery.status === "delivered"
-        ? "The latest governance history bundle was delivered through the bounded tenant-safe writer seam."
+        ? "The latest tenant-safe export bundle was delivered through the bounded private writer seam."
         : delivery.status === "delivery_failed"
-        ? "The latest governance history delivery failed and can be replayed safely through the same bounded export action."
-        : "The latest governance history bundle is export-ready and waiting for bounded delivery.",
+        ? "The latest tenant-safe export delivery failed and can be replayed safely through the same bounded export action."
+        : delivery.status === "delivery_in_progress"
+        ? "The latest tenant-safe export bundle is currently being delivered through the bounded private writer seam."
+        : "The latest tenant-safe export bundle is export-ready and waiting for bounded delivery.",
     attemptCount: delivery.attemptCount,
     ...(delivery.lastAttemptedAt ? { lastAttemptedAtLabel: formatBoardTimestamp(delivery.lastAttemptedAt) } : {}),
     ...(delivery.deliveredAt ? { deliveredAtLabel: formatBoardTimestamp(delivery.deliveredAt) } : {}),
@@ -7336,6 +7340,8 @@ function humanizeExportDeliveryStatus(status: HarnessExportCandidateDeliveryStat
       return "Export ready";
     case "delivered":
       return "Delivered";
+    case "delivery_in_progress":
+      return "Delivery in progress";
     case "delivery_failed":
       return "Delivery failed";
     default:
@@ -8378,8 +8384,9 @@ function buildExportCandidateActions(input: {
           : "This candidate will report its current blocker without widening into a live export write path."
     }
   ];
+  const deliveryInProgress = input.candidate.latestDelivery?.status === "delivery_in_progress";
 
-  if (input.candidate.id === "governance_history_export" && input.candidate.readiness === "ready_now") {
+  if (input.candidate.id === "governance_history_export" && input.candidate.readiness === "ready_now" && !deliveryInProgress) {
     actions.push(
       {
         actionRoute: "export-dry-run",
@@ -8401,7 +8408,11 @@ function buildExportCandidateActions(input: {
       }
     );
 
-    if (input.candidate.latestDelivery && input.candidate.latestDelivery.status !== "delivered") {
+    if (
+      input.candidate.latestDelivery &&
+      input.candidate.latestDelivery.status !== "delivered" &&
+      input.candidate.latestDelivery.status !== "delivery_in_progress"
+    ) {
       actions.push({
         actionRoute: "governance-history-export-replay",
         actionPath: `/api/harness/runs/${encodeURIComponent(input.runId)}/export-candidates/${encodeURIComponent(input.candidateId)}/delivery-replay`,
@@ -8423,7 +8434,7 @@ function buildExportCandidateActions(input: {
     }
   }
 
-  if (input.candidate.id === "package_bundle_export" && input.candidate.readiness === "ready_now") {
+  if (input.candidate.id === "package_bundle_export" && input.candidate.readiness === "ready_now" && !deliveryInProgress) {
     actions.push(
       {
         actionRoute: "export-dry-run",
@@ -8445,7 +8456,11 @@ function buildExportCandidateActions(input: {
       }
     );
 
-    if (input.candidate.latestDelivery && input.candidate.latestDelivery.status !== "delivered") {
+    if (
+      input.candidate.latestDelivery &&
+      input.candidate.latestDelivery.status !== "delivered" &&
+      input.candidate.latestDelivery.status !== "delivery_in_progress"
+    ) {
       actions.push({
         actionRoute: "package-bundle-export-replay",
         actionPath: `/api/harness/runs/${encodeURIComponent(input.runId)}/export-candidates/${encodeURIComponent(input.candidateId)}/delivery-replay`,

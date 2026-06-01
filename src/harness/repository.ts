@@ -13,6 +13,7 @@ import type {
   HarnessCardContinuityRecord,
   HarnessCardEventRecord,
   HarnessCardRecord,
+  HarnessExportDeliveryAttemptClaim,
   HarnessExportDeliveryOutcomeUpdate,
   HarnessCardState,
   HarnessExportDeliveryRecord,
@@ -46,6 +47,7 @@ export interface HarnessRepository {
   listDecisionsForRun(runId: string): Promise<HarnessBoardDecisionRecord[]>;
   getExportDeliveryByIdempotencyKey(idempotencyKey: string): Promise<HarnessExportDeliveryRecord | null>;
   upsertExportDelivery(record: HarnessExportDeliveryRecord): Promise<HarnessExportDeliveryRecord>;
+  claimExportDeliveryAttempt(input: HarnessExportDeliveryAttemptClaim): Promise<HarnessExportDeliveryRecord | null>;
   recordExportDeliveryOutcome(input: HarnessExportDeliveryOutcomeUpdate): Promise<HarnessExportDeliveryRecord | null>;
   listExportDeliveriesForRun(runId: string): Promise<HarnessExportDeliveryRecord[]>;
   insertProposal(proposal: HarnessSubCardProposal): Promise<void>;
@@ -311,6 +313,32 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
         ...persisted,
         files: persisted.files.map((file) => ({ ...file })),
         deliveryReceipt: { ...persisted.deliveryReceipt }
+      };
+    },
+
+    async claimExportDeliveryAttempt(input) {
+      const existing = exportDeliveries.get(input.idempotencyKey);
+      if (!existing || (existing.status !== "export_ready" && existing.status !== "delivery_failed")) {
+        return null;
+      }
+
+      const claimed: HarnessExportDeliveryRecord = {
+        ...existing,
+        status: "delivery_in_progress",
+        writerKind: input.writerKind,
+        deliveryReceipt: {},
+        attemptCount: existing.attemptCount + 1,
+        lastAttemptedAt: input.claimedAt,
+        deliveredAt: null,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        updatedAt: input.updatedAt
+      };
+      exportDeliveries.set(input.idempotencyKey, claimed);
+      return {
+        ...claimed,
+        files: claimed.files.map((file) => ({ ...file })),
+        deliveryReceipt: { ...claimed.deliveryReceipt }
       };
     },
 
@@ -753,6 +781,29 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
       return mapHarnessExportDeliveryRow(result.rows[0]);
     },
 
+    async claimExportDeliveryAttempt(input) {
+      const result = await client.query(
+        `update wfpc.harness_export_deliveries
+            set status = 'delivery_in_progress',
+                writer_kind = $2,
+                delivery_receipt = '{}'::jsonb,
+                attempt_count = attempt_count + 1,
+                last_attempted_at = $3::timestamptz,
+                delivered_at = null,
+                last_error_code = null,
+                last_error_message = null,
+                updated_at = $4::timestamptz
+          where idempotency_key = $1
+            and status in ('export_ready', 'delivery_failed')
+          returning id, run_id, tenant_id, workflow_id, package_id, candidate_id, status, export_format, record_target,
+                    bundle_id, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
+                    disclosure_summary, redaction_summary, attempt_count, last_attempted_at, delivered_at, writer_kind,
+                    delivery_receipt, last_error_code, last_error_message, created_at, updated_at`,
+        [input.idempotencyKey, input.writerKind, input.claimedAt, input.updatedAt]
+      );
+      return result.rows[0] ? mapHarnessExportDeliveryRow(result.rows[0]) : null;
+    },
+
     async recordExportDeliveryOutcome(input) {
       const result = await client.query(
         `update wfpc.harness_export_deliveries
@@ -986,19 +1037,29 @@ function mapHarnessExportDeliveryRow(row: unknown): HarnessExportDeliveryRecord 
     disclosureSummary: String(record.disclosure_summary ?? ""),
     redactionSummary: String(record.redaction_summary ?? ""),
     attemptCount: Number(record.attempt_count ?? 0),
-    lastAttemptedAt: typeof record.last_attempted_at === "string" ? record.last_attempted_at : null,
-    deliveredAt: typeof record.delivered_at === "string" ? record.delivered_at : null,
+    lastAttemptedAt: asIsoTimestamp(record.last_attempted_at),
+    deliveredAt: asIsoTimestamp(record.delivered_at),
     writerKind: typeof record.writer_kind === "string" ? (record.writer_kind as "obsidian_filesystem") : null,
     deliveryReceipt,
     lastErrorCode: typeof record.last_error_code === "string" ? record.last_error_code : null,
     lastErrorMessage: typeof record.last_error_message === "string" ? record.last_error_message : null,
-    createdAt: String(record.created_at),
-    updatedAt: String(record.updated_at)
+    createdAt: asIsoTimestamp(record.created_at) ?? "",
+    updatedAt: asIsoTimestamp(record.updated_at) ?? ""
   };
 }
 
 function asRecord(row: unknown): Record<string, unknown> {
   return row && typeof row === "object" ? (row as Record<string, unknown>) : {};
+}
+
+function asIsoTimestamp(value: unknown): string | null {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  return null;
 }
 
 function mapHarnessRunRow(row: unknown): HarnessRunRecord | null {

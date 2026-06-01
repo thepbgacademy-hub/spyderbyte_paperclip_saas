@@ -1665,6 +1665,56 @@ describe("harness board UI", () => {
     expect(markup).toContain("/api/harness/runs/run_ui_test_1/export-candidates/package_bundle_export/delivery-replay");
   });
 
+  it("does not render delivery replay controls while a governance-history export is already in progress", () => {
+    const exportCandidates = [
+      {
+        id: "governance_history_export",
+        label: "Governance history export",
+        itemCount: 2,
+        itemIds: ["governance_decisions", "implemented_actions"],
+        itemLabels: ["Governance decisions", "Implemented follow-through"],
+        summary: "Governance history is ready for bounded tenant export later.",
+        readiness: "ready_now",
+        readinessLabel: "Ready now",
+        latestDelivery: {
+          status: "delivery_in_progress" as const,
+          statusLabel: "Delivery in progress",
+          summary: "The latest tenant-safe export bundle is currently being delivered through the bounded private writer seam.",
+          attemptCount: 2,
+          lastAttemptedAtLabel: "Jun 1, 2026 00:05",
+          writerKindLabel: "Obsidian filesystem"
+        },
+        exportActions: [
+          {
+            actionRoute: "export-preflight" as const,
+            actionPath: "/api/harness/runs/run_ui_test_1/export-candidates/governance_history_export/preflight",
+            actionMethod: "POST" as const,
+            actionToken: "preview-governance-history-export-preflight",
+            actionLabel: "Run export preflight",
+            actionDescription: "Validate the current export candidate against the live board contract before any dry-run or tenant-facing export bundle is produced."
+          }
+        ]
+      }
+    ] as NonNullable<HarnessBoardResponse["memoryBoundary"]["exportCandidates"]>;
+
+    const markup = renderToStaticMarkup(
+      <HarnessBoardPage
+        initialBoard={{
+          ...boardResponse,
+          memoryBoundary: {
+            ...boardResponse.memoryBoundary,
+            exportCandidates
+          }
+        }}
+        initialControlMode="live"
+      />
+    );
+
+    expect(markup).toContain("Delivery in progress");
+    expect(markup).not.toContain("Replay governance history delivery");
+    expect(markup).not.toContain("Build governance history export");
+  });
+
   it("renders a simple drawer with only high-level details", () => {
     const markup = renderToStaticMarkup(
       <HarnessCardDrawer card={cards[0]!} open onClose={() => undefined} />

@@ -689,6 +689,30 @@ try {
       throw new Error("Harness export delivery package-bundle widening did not produce the required schema shape");
     }
   }
+  const queryHarnessExportDeliveryClaimsReady = () =>
+    client.query(
+      `select
+        exists (
+          select 1
+          from pg_constraint
+          where conrelid = to_regclass('wfpc.harness_export_deliveries')
+            and pg_get_constraintdef(oid) like '%delivery_in_progress%'
+        ) as has_delivery_in_progress_status`
+    );
+  let harnessExportDeliveryClaimsExisting = await queryHarnessExportDeliveryClaimsReady();
+  let harnessExportDeliveryClaimsReady = Object.values(
+    harnessExportDeliveryClaimsExisting.rows[0] ?? {}
+  ).every(Boolean);
+  if (!harnessExportDeliveryClaimsReady) {
+    await client.query(readFileSync("supabase/migrations/0025_wf_harness_export_delivery_claims.sql", "utf8"));
+    harnessExportDeliveryClaimsExisting = await queryHarnessExportDeliveryClaimsReady();
+    harnessExportDeliveryClaimsReady = Object.values(
+      harnessExportDeliveryClaimsExisting.rows[0] ?? {}
+    ).every(Boolean);
+    if (!harnessExportDeliveryClaimsReady) {
+      throw new Error("Harness export delivery claim migration did not produce the required schema shape");
+    }
+  }
   const { rows } = await client.query(
     "select table_schema, table_name from information_schema.tables where table_schema = 'wfpc' order by table_name"
   );
@@ -720,7 +744,9 @@ try {
           !harnessCardContinuityReady ||
           !harnessExportDeliveryReady ||
           !harnessExportDeliveryRlsReady ||
-          !harnessExportDeliveryResultsReady,
+          !harnessExportDeliveryResultsReady ||
+          !harnessExportDeliveryPackageBundleReady ||
+          !harnessExportDeliveryClaimsReady,
         tableCount: rows.length,
         tables: rows.map((row) => row.table_name)
       },

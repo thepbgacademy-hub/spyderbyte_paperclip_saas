@@ -15,7 +15,7 @@ type MockExportDeliveryRow = {
   workflow_id: string;
   package_id: string;
   candidate_id: "governance_history_export";
-  status: "export_ready" | "delivered" | "delivery_failed";
+  status: "export_ready" | "delivery_in_progress" | "delivered" | "delivery_failed";
   export_format: "obsidian_markdown_bundle";
   record_target: "governance_history_record";
   bundle_id: string;
@@ -103,6 +103,27 @@ function createMockDbQuery() {
     }
 
     if (sql.includes("update wfpc.harness_export_deliveries")) {
+      if (sql.includes("status = 'delivery_in_progress'")) {
+        if (mockExportDeliveryRow.status !== "export_ready" && mockExportDeliveryRow.status !== "delivery_failed") {
+          return { rows: [] };
+        }
+        mockExportDeliveryRow = {
+          ...mockExportDeliveryRow,
+          status: "delivery_in_progress",
+          writer_kind:
+            values[1] === null || values[1] === undefined
+              ? null
+              : (String(values[1]) as NonNullable<MockExportDeliveryRow["writer_kind"]>),
+          delivery_receipt: {},
+          attempt_count: mockExportDeliveryRow.attempt_count + 1,
+          last_attempted_at: values[2] === null || values[2] === undefined ? null : String(values[2]),
+          delivered_at: null,
+          last_error_code: null,
+          last_error_message: null,
+          updated_at: values[3] === null || values[3] === undefined ? mockExportDeliveryRow.updated_at : String(values[3])
+        };
+        return { rows: [mockExportDeliveryRow] };
+      }
       mockExportDeliveryRow = {
         ...mockExportDeliveryRow,
         status: (values[0] ?? mockExportDeliveryRow.status) as MockExportDeliveryRow["status"],
@@ -1053,6 +1074,69 @@ describe("runtime server", () => {
 
     expect(packageBundleExportWriter.write).toHaveBeenCalledOnce();
     expect(query).toHaveBeenCalledWith(expect.stringContaining("update wfpc.harness_export_deliveries"), expect.any(Array));
+    await runtime.close();
+  });
+
+  it("skips duplicate governance-history delivery when the bundle is already in progress", async () => {
+    resetMockExportDeliveryRow({
+      status: "delivery_in_progress",
+      attempt_count: 2,
+      last_attempted_at: "2026-05-29T01:00:00.000Z",
+      writer_kind: "obsidian_filesystem"
+    });
+    const governanceHistoryExportWriter = {
+      write: vi.fn()
+    };
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() },
+      governanceHistoryExportWriter
+    });
+
+    const boardServiceOptions = vi.mocked(createHarnessBoardService).mock.calls.at(-1)?.[0];
+    await boardServiceOptions?.onGovernanceHistoryExportReady?.({
+      tenantId: "tenant_123",
+      userId: "user_123",
+      runId: "run_123",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      candidateId: "governance_history_export",
+      bundleId: "bundle_123",
+      exportFormat: "obsidian_markdown_bundle",
+      recordTarget: "governance_history_record",
+      idempotencyKey: "idempotency_123",
+      noteTitle: "Governance history",
+      noteFileName: "wf_connect_first_workflow-governance-history.md",
+      placement: {
+        targetSystem: "obsidian_vault",
+        vaultFolder: "wealth-factory/governance-history/wf_connect_first_workflow",
+        primaryNotePath:
+          "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+        syncStrategy: "append_history_entry",
+        confirmationRequirement: "tenant_export_confirmation"
+      },
+      files: [
+        {
+          path: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+          mediaType: "text/markdown",
+          byteSize: 20,
+          checksum: "abc",
+          content: "# Governance history"
+        }
+      ],
+      recordCount: 2,
+      disclosureSummary: "Decision summary only",
+      redactionSummary: "Governance-safe redaction"
+    });
+
+    expect(governanceHistoryExportWriter.write).not.toHaveBeenCalled();
     await runtime.close();
   });
 

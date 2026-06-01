@@ -280,11 +280,11 @@ export function createDashboardRuntime(options: {
     (options.env.obsidianExportRoot
       ? createFilesystemPackageBundleExportWriter({ exportRoot: options.env.obsidianExportRoot })
       : undefined);
-  const onGovernanceHistoryExportReady = async (dispatch: HarnessGovernanceHistoryExportReadyDispatch) => {
-    const now = new Date().toISOString();
-    const existing = await harnessRepository.getExportDeliveryByIdempotencyKey(dispatch.idempotencyKey);
-    if (existing?.status === "delivered") {
-      return;
+    const onGovernanceHistoryExportReady = async (dispatch: HarnessGovernanceHistoryExportReadyDispatch) => {
+      const now = new Date().toISOString();
+      const existing = await harnessRepository.getExportDeliveryByIdempotencyKey(dispatch.idempotencyKey);
+      if (existing?.status === "delivered") {
+        return;
     }
 
     const exportDelivery = await harnessRepository.upsertExportDelivery({
@@ -321,21 +321,30 @@ export function createDashboardRuntime(options: {
       updatedAt: now
     });
 
-    if (governanceHistoryExportWriter && exportDelivery.status !== "delivered") {
-      const attemptedAt = new Date().toISOString();
-      try {
-        const delivered = await governanceHistoryExportWriter.write(dispatch);
-        await harnessRepository.recordExportDeliveryOutcome({
+      if (governanceHistoryExportWriter && exportDelivery.status !== "delivered") {
+        const attemptedAt = new Date().toISOString();
+        const claimed = await harnessRepository.claimExportDeliveryAttempt({
           idempotencyKey: dispatch.idempotencyKey,
-          status: "delivered",
-          writerKind: delivered.writerKind,
-          deliveryReceipt: { ...delivered.receipt },
-          attemptCount: exportDelivery.attemptCount + 1,
-          lastAttemptedAt: attemptedAt,
-          deliveredAt: delivered.deliveredAt,
-          lastErrorCode: null,
-          lastErrorMessage: null,
-          updatedAt: delivered.deliveredAt
+          writerKind: "obsidian_filesystem",
+          claimedAt: attemptedAt,
+          updatedAt: attemptedAt
+        });
+        if (!claimed) {
+          return;
+        }
+        try {
+          const delivered = await governanceHistoryExportWriter.write(dispatch);
+          await harnessRepository.recordExportDeliveryOutcome({
+            idempotencyKey: dispatch.idempotencyKey,
+            status: "delivered",
+            writerKind: delivered.writerKind,
+            deliveryReceipt: { ...delivered.receipt },
+            attemptCount: claimed.attemptCount,
+            lastAttemptedAt: attemptedAt,
+            deliveredAt: delivered.deliveredAt,
+            lastErrorCode: null,
+            lastErrorMessage: null,
+            updatedAt: delivered.deliveredAt
         });
         await audit({
           tenantId: dispatch.tenantId,
@@ -355,17 +364,17 @@ export function createDashboardRuntime(options: {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown governance history export delivery failure";
-        await harnessRepository.recordExportDeliveryOutcome({
-          idempotencyKey: dispatch.idempotencyKey,
-          status: "delivery_failed",
-          writerKind: "obsidian_filesystem",
-          deliveryReceipt: {},
-          attemptCount: exportDelivery.attemptCount + 1,
-          lastAttemptedAt: attemptedAt,
-          deliveredAt: null,
-          lastErrorCode: "writer_failed",
-          lastErrorMessage: message.slice(0, 240),
-          updatedAt: attemptedAt
+          await harnessRepository.recordExportDeliveryOutcome({
+            idempotencyKey: dispatch.idempotencyKey,
+            status: "delivery_failed",
+            writerKind: "obsidian_filesystem",
+            deliveryReceipt: {},
+            attemptCount: claimed.attemptCount,
+            lastAttemptedAt: attemptedAt,
+            deliveredAt: null,
+            lastErrorCode: "writer_failed",
+            lastErrorMessage: message.slice(0, 240),
+            updatedAt: attemptedAt
         });
         await audit({
           tenantId: dispatch.tenantId,
@@ -387,11 +396,11 @@ export function createDashboardRuntime(options: {
 
     await options.onGovernanceHistoryExportReady?.(dispatch);
   };
-  const onPackageBundleExportReady = async (dispatch: HarnessPackageBundleExportReadyDispatch) => {
-    const now = new Date().toISOString();
-    const existing = await harnessRepository.getExportDeliveryByIdempotencyKey(dispatch.idempotencyKey);
-    if (existing?.status === "delivered") {
-      return;
+    const onPackageBundleExportReady = async (dispatch: HarnessPackageBundleExportReadyDispatch) => {
+      const now = new Date().toISOString();
+      const existing = await harnessRepository.getExportDeliveryByIdempotencyKey(dispatch.idempotencyKey);
+      if (existing?.status === "delivered") {
+        return;
     }
 
     const exportDelivery = await harnessRepository.upsertExportDelivery({
@@ -428,21 +437,30 @@ export function createDashboardRuntime(options: {
       updatedAt: now
     });
 
-    if (packageBundleExportWriter && exportDelivery.status !== "delivered") {
-      const attemptedAt = new Date().toISOString();
-      try {
-        const delivered = await packageBundleExportWriter.write(dispatch);
-        await harnessRepository.recordExportDeliveryOutcome({
+      if (packageBundleExportWriter && exportDelivery.status !== "delivered") {
+        const attemptedAt = new Date().toISOString();
+        const claimed = await harnessRepository.claimExportDeliveryAttempt({
           idempotencyKey: dispatch.idempotencyKey,
-          status: "delivered",
-          writerKind: delivered.writerKind,
-          deliveryReceipt: { ...delivered.receipt },
-          attemptCount: exportDelivery.attemptCount + 1,
-          lastAttemptedAt: attemptedAt,
-          deliveredAt: delivered.deliveredAt,
-          lastErrorCode: null,
-          lastErrorMessage: null,
-          updatedAt: delivered.deliveredAt
+          writerKind: "obsidian_filesystem",
+          claimedAt: attemptedAt,
+          updatedAt: attemptedAt
+        });
+        if (!claimed) {
+          return;
+        }
+        try {
+          const delivered = await packageBundleExportWriter.write(dispatch);
+          await harnessRepository.recordExportDeliveryOutcome({
+            idempotencyKey: dispatch.idempotencyKey,
+            status: "delivered",
+            writerKind: delivered.writerKind,
+            deliveryReceipt: { ...delivered.receipt },
+            attemptCount: claimed.attemptCount,
+            lastAttemptedAt: attemptedAt,
+            deliveredAt: delivered.deliveredAt,
+            lastErrorCode: null,
+            lastErrorMessage: null,
+            updatedAt: delivered.deliveredAt
         });
         await audit({
           tenantId: dispatch.tenantId,
@@ -462,17 +480,17 @@ export function createDashboardRuntime(options: {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown package bundle export delivery failure";
-        await harnessRepository.recordExportDeliveryOutcome({
-          idempotencyKey: dispatch.idempotencyKey,
-          status: "delivery_failed",
-          writerKind: "obsidian_filesystem",
-          deliveryReceipt: {},
-          attemptCount: exportDelivery.attemptCount + 1,
-          lastAttemptedAt: attemptedAt,
-          deliveredAt: null,
-          lastErrorCode: "writer_failed",
-          lastErrorMessage: message.slice(0, 240),
-          updatedAt: attemptedAt
+          await harnessRepository.recordExportDeliveryOutcome({
+            idempotencyKey: dispatch.idempotencyKey,
+            status: "delivery_failed",
+            writerKind: "obsidian_filesystem",
+            deliveryReceipt: {},
+            attemptCount: claimed.attemptCount,
+            lastAttemptedAt: attemptedAt,
+            deliveredAt: null,
+            lastErrorCode: "writer_failed",
+            lastErrorMessage: message.slice(0, 240),
+            updatedAt: attemptedAt
         });
         await audit({
           tenantId: dispatch.tenantId,

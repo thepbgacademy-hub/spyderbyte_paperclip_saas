@@ -26,6 +26,7 @@ const cardContinuitySourceMigration = readFileSync("supabase/migrations/0020_wf_
 const exportDeliveriesMigration = readFileSync("supabase/migrations/0021_wf_harness_export_deliveries.sql", "utf8");
 const exportDeliveriesRlsMigration = readFileSync("supabase/migrations/0022_wf_harness_export_deliveries_rls.sql", "utf8");
 const exportDeliveryResultsMigration = readFileSync("supabase/migrations/0023_wf_harness_export_delivery_results.sql", "utf8");
+const exportDeliveryClaimsMigration = readFileSync("supabase/migrations/0025_wf_harness_export_delivery_claims.sql", "utf8");
 const execFileAsync = promisify(execFile);
 
 const HARNESS_POSTGRES_IMAGE = "postgres:16-alpine";
@@ -341,6 +342,79 @@ describe("harness persistence records", () => {
         ]
       })
     ]);
+  });
+
+  it("claims governance-history delivery attempts exactly once in the minimal in-memory repository", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-123",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+
+    await repository.insertRun(run);
+    await repository.upsertExportDelivery({
+      id: "export_delivery_claim_1",
+      runId: run.id,
+      tenantId: run.tenantId,
+      workflowId: run.workflowId,
+      packageId: run.packageId,
+      candidateId: "governance_history_export",
+      status: "export_ready",
+      exportFormat: "obsidian_markdown_bundle",
+      recordTarget: "governance_history_record",
+      bundleId: "bundle_claim_1",
+      idempotencyKey: "governance_history_export:claim",
+      noteTitle: "Governance history",
+      noteFileName: "wf_connect_first_workflow-governance-history.md",
+      placementTargetSystem: "obsidian_vault",
+      vaultFolder: "wealth-factory/governance-history/wf_connect_first_workflow",
+      primaryNotePath:
+        "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+      syncStrategy: "append_history_entry",
+      confirmationRequirement: "tenant_export_confirmation",
+      files: [],
+      recordCount: 2,
+      disclosureSummary: "Decision summary only",
+      redactionSummary: "Governance-safe redaction",
+      attemptCount: 0,
+      lastAttemptedAt: null,
+      deliveredAt: null,
+      writerKind: null,
+      deliveryReceipt: {},
+      lastErrorCode: null,
+      lastErrorMessage: null,
+      createdAt: "2026-06-01T00:00:00.000Z",
+      updatedAt: "2026-06-01T00:00:00.000Z"
+    });
+
+    const claimed = await repository.claimExportDeliveryAttempt({
+      idempotencyKey: "governance_history_export:claim",
+      writerKind: "obsidian_filesystem",
+      claimedAt: "2026-06-01T00:05:00.000Z",
+      updatedAt: "2026-06-01T00:05:00.000Z"
+    });
+    const duplicateClaim = await repository.claimExportDeliveryAttempt({
+      idempotencyKey: "governance_history_export:claim",
+      writerKind: "obsidian_filesystem",
+      claimedAt: "2026-06-01T00:06:00.000Z",
+      updatedAt: "2026-06-01T00:06:00.000Z"
+    });
+
+    expect(claimed).toEqual(
+      expect.objectContaining({
+        status: "delivery_in_progress",
+        attemptCount: 1,
+        writerKind: "obsidian_filesystem",
+        lastAttemptedAt: "2026-06-01T00:05:00.000Z"
+      })
+    );
+    expect(duplicateClaim).toBeNull();
   });
 
   it("updates lane ownership in the in-memory repository without changing the card state", async () => {
@@ -1108,7 +1182,7 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
         await repository.insertRun(run);
 
         const firstWrite = await repository.upsertExportDelivery({
-          id: "export_delivery_pg_1",
+          id: "11111111-1111-4111-8111-111111111111",
           runId: run.id,
           tenantId,
           workflowId: run.workflowId,
@@ -1223,6 +1297,100 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
     },
     120_000
   );
+
+  it(
+    "claims harness export delivery attempts exactly once through the real Postgres repository mapping",
+    async () => {
+      const database = requireDisposableHarnessDatabase();
+      const client = new Client({ connectionString: database.connectionString });
+      const tenantId = "8beea757-39c8-4d97-a7ca-1c62172501d5";
+
+      try {
+        await client.connect();
+        await resetHarnessProofDatabase(client);
+        await seedHarnessProofPrerequisites(client, tenantId);
+
+        const repository = createPostgresHarnessRepository({
+          query: async (sql: string, values: readonly unknown[]) => {
+            const result = await client.query(sql, [...values]);
+            return { rows: result.rows };
+          }
+        });
+
+        const run = createHarnessRunRecord({
+          tenantId,
+          workflowId: "wf_connect_first_workflow",
+          packageId: "pkg_bib_connect",
+          orchestratorPersona: "ceo",
+          runtimeContext: {
+            providerKind: "openai_api",
+            credentialLabel: "Primary OpenAI"
+          }
+        });
+        await repository.insertRun(run);
+        await repository.upsertExportDelivery({
+          id: "22222222-2222-4222-8222-222222222222",
+          runId: run.id,
+          tenantId,
+          workflowId: run.workflowId,
+          packageId: run.packageId,
+          candidateId: "governance_history_export",
+          status: "export_ready",
+          exportFormat: "obsidian_markdown_bundle",
+          recordTarget: "governance_history_record",
+          bundleId: "bundle_pg_claim_1",
+          idempotencyKey: `${run.id}:governance_history_claim`,
+          noteTitle: "Governance history",
+          noteFileName: "wf_connect_first_workflow-governance-history.md",
+          placementTargetSystem: "obsidian_vault",
+          vaultFolder: "wealth-factory/governance-history/wf_connect_first_workflow",
+          primaryNotePath:
+            "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+          syncStrategy: "append_history_entry",
+          confirmationRequirement: "tenant_export_confirmation",
+          files: [],
+          recordCount: 2,
+          disclosureSummary: "Decision summary only",
+          redactionSummary: "Governance-safe redaction",
+          attemptCount: 0,
+          lastAttemptedAt: null,
+          deliveredAt: null,
+          writerKind: null,
+          deliveryReceipt: {},
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          createdAt: "2026-06-01T00:00:00.000Z",
+          updatedAt: "2026-06-01T00:00:00.000Z"
+        });
+
+        const claimed = await repository.claimExportDeliveryAttempt({
+          idempotencyKey: `${run.id}:governance_history_claim`,
+          writerKind: "obsidian_filesystem",
+          claimedAt: "2026-06-01T00:05:00.000Z",
+          updatedAt: "2026-06-01T00:05:00.000Z"
+        });
+        const duplicateClaim = await repository.claimExportDeliveryAttempt({
+          idempotencyKey: `${run.id}:governance_history_claim`,
+          writerKind: "obsidian_filesystem",
+          claimedAt: "2026-06-01T00:06:00.000Z",
+          updatedAt: "2026-06-01T00:06:00.000Z"
+        });
+
+        expect(claimed).toEqual(
+          expect.objectContaining({
+            status: "delivery_in_progress",
+            attemptCount: 1,
+            writerKind: "obsidian_filesystem",
+            lastAttemptedAt: "2026-06-01T00:05:00.000Z"
+          })
+        );
+        expect(duplicateClaim).toBeNull();
+      } finally {
+        await client.end();
+      }
+    },
+    120_000
+  );
 });
 
 function hasDockerRuntime() {
@@ -1320,7 +1488,26 @@ function requireDisposableHarnessDatabase() {
 
 async function resetHarnessProofDatabase(client: Client) {
   await client.query("drop schema if exists wfpc cascade");
+  await client.query("drop schema if exists wfpc_private cascade");
   await client.query("create schema if not exists wfpc");
+  await client.query("create schema if not exists wfpc_private");
+  await client.query(`
+    do $$
+    begin
+      if not exists (select 1 from pg_roles where rolname = 'authenticated') then
+        create role authenticated;
+      end if;
+    end $$;
+  `);
+  await client.query(`
+    create or replace function wfpc_private.is_tenant_member(input_tenant_id uuid)
+    returns boolean
+    language sql
+    stable
+    as $$
+      select true;
+    $$;
+  `);
   await client.query(
     `create table if not exists wfpc.tenants (
       id uuid primary key,
@@ -1343,6 +1530,7 @@ async function resetHarnessProofDatabase(client: Client) {
   await client.query(exportDeliveriesMigration);
   await client.query(exportDeliveriesRlsMigration);
   await client.query(exportDeliveryResultsMigration);
+  await client.query(exportDeliveryClaimsMigration);
 }
 
 async function seedHarnessProofPrerequisites(client: Client, tenantId: string) {
