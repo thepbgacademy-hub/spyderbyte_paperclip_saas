@@ -301,8 +301,23 @@ describe("harness persistence records", () => {
     expect(secondWrite.bundleId).toBe("bundle_456");
     expect(secondWrite.bundleRevision).toBe("bundle_revision_456");
 
+    const claimed = await repository.claimExportDeliveryAttempt({
+      idempotencyKey: "governance_history_export:run_123",
+      writerKind: "obsidian_filesystem",
+      claimedAt: "2026-05-29T01:00:00.000Z",
+      updatedAt: "2026-05-29T01:00:00.000Z"
+    });
+
+    expect(claimed).toEqual(
+      expect.objectContaining({
+        status: "delivery_in_progress",
+        attemptCount: 1
+      })
+    );
+
     const delivered = await repository.recordExportDeliveryOutcome({
       idempotencyKey: "governance_history_export:run_123",
+      expectedLastAttemptedAt: "2026-05-29T01:00:00.000Z",
       status: "delivered",
       writerKind: "obsidian_filesystem",
       deliveryReceipt: {
@@ -421,6 +436,112 @@ describe("harness persistence records", () => {
       })
     );
     expect(duplicateClaim).toBeNull();
+  });
+
+  it("can recover a stale in-progress governance-history delivery claim in the minimal in-memory repository", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-123",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+
+    await repository.insertRun(run);
+    await repository.upsertExportDelivery({
+      id: "export_delivery_claim_recover_1",
+      runId: run.id,
+      tenantId: run.tenantId,
+      workflowId: run.workflowId,
+      packageId: run.packageId,
+      candidateId: "governance_history_export",
+      status: "delivery_in_progress",
+      exportFormat: "obsidian_markdown_bundle",
+      recordTarget: "governance_history_record",
+      bundleId: "bundle_claim_recover_1",
+      bundleRevision: "bundle_claim_recover_revision_1",
+      idempotencyKey: "governance_history_export:recover",
+      noteTitle: "Governance history",
+      noteFileName: "wf_connect_first_workflow-governance-history.md",
+      placementTargetSystem: "obsidian_vault",
+      vaultFolder: "wealth-factory/governance-history/wf_connect_first_workflow",
+      primaryNotePath:
+        "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+      syncStrategy: "append_history_entry",
+      confirmationRequirement: "tenant_export_confirmation",
+      files: [],
+      recordCount: 2,
+      disclosureSummary: "Decision summary only",
+      redactionSummary: "Governance-safe redaction",
+      attemptCount: 1,
+      lastAttemptedAt: "2026-06-01T00:00:00.000Z",
+      deliveredAt: null,
+      writerKind: "obsidian_filesystem",
+      deliveryReceipt: {},
+      lastErrorCode: null,
+      lastErrorMessage: null,
+      createdAt: "2026-06-01T00:00:00.000Z",
+      updatedAt: "2026-06-01T00:00:00.000Z"
+    });
+
+    const recoveredClaim = await repository.claimExportDeliveryAttempt({
+      idempotencyKey: "governance_history_export:recover",
+      writerKind: "obsidian_filesystem",
+      claimedAt: "2026-06-01T00:15:00.000Z",
+      updatedAt: "2026-06-01T00:15:00.000Z"
+    });
+
+    expect(recoveredClaim).toEqual(
+      expect.objectContaining({
+        status: "delivery_in_progress",
+        attemptCount: 2,
+        lastAttemptedAt: "2026-06-01T00:15:00.000Z"
+      })
+    );
+
+    await expect(
+      repository.recordExportDeliveryOutcome({
+        idempotencyKey: "governance_history_export:recover",
+        expectedLastAttemptedAt: "2026-06-01T00:00:00.000Z",
+        status: "delivery_failed",
+        writerKind: "obsidian_filesystem",
+        deliveryReceipt: {},
+        attemptCount: 1,
+        lastAttemptedAt: "2026-06-01T00:00:00.000Z",
+        deliveredAt: null,
+        lastErrorCode: "late_writer",
+        lastErrorMessage: "The stale writer returned after the claim was recovered.",
+        updatedAt: "2026-06-01T00:16:00.000Z"
+      })
+    ).resolves.toBeNull();
+
+    await expect(
+      repository.recordExportDeliveryOutcome({
+        idempotencyKey: "governance_history_export:recover",
+        expectedLastAttemptedAt: "2026-06-01T00:15:00.000Z",
+        status: "delivered",
+        writerKind: "obsidian_filesystem",
+        deliveryReceipt: {
+          writtenFileCount: 2
+        },
+        attemptCount: 2,
+        lastAttemptedAt: "2026-06-01T00:15:00.000Z",
+        deliveredAt: "2026-06-01T00:15:01.000Z",
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        updatedAt: "2026-06-01T00:15:01.000Z"
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        status: "delivered",
+        attemptCount: 2,
+        lastAttemptedAt: "2026-06-01T00:15:00.000Z"
+      })
+    );
   });
 
   it("updates lane ownership in the in-memory repository without changing the card state", async () => {
@@ -1251,8 +1372,23 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
         expect(secondWrite.bundleId).toBe("bundle_pg_2");
         expect(secondWrite.bundleRevision).toBe("bundle_pg_revision_2");
 
+        const claimed = await repository.claimExportDeliveryAttempt({
+          idempotencyKey: `${run.id}:governance_history_export`,
+          writerKind: "obsidian_filesystem",
+          claimedAt: "2026-05-29T01:00:00.000Z",
+          updatedAt: "2026-05-29T01:00:00.000Z"
+        });
+
+        expect(claimed).toEqual(
+          expect.objectContaining({
+            status: "delivery_in_progress",
+            attemptCount: 1
+          })
+        );
+
         const delivered = await repository.recordExportDeliveryOutcome({
           idempotencyKey: `${run.id}:governance_history_export`,
+          expectedLastAttemptedAt: "2026-05-29T01:00:00.000Z",
           status: "delivered",
           writerKind: "obsidian_filesystem",
           deliveryReceipt: {
@@ -1396,6 +1532,61 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
           })
         );
         expect(duplicateClaim).toBeNull();
+
+        const recoveredClaim = await repository.claimExportDeliveryAttempt({
+          idempotencyKey: `${run.id}:governance_history_claim`,
+          writerKind: "obsidian_filesystem",
+          claimedAt: "2026-06-01T00:20:00.000Z",
+          updatedAt: "2026-06-01T00:20:00.000Z"
+        });
+
+        expect(recoveredClaim).toEqual(
+          expect.objectContaining({
+            status: "delivery_in_progress",
+            attemptCount: 2,
+            lastAttemptedAt: "2026-06-01T00:20:00.000Z"
+          })
+        );
+
+        await expect(
+          repository.recordExportDeliveryOutcome({
+            idempotencyKey: `${run.id}:governance_history_claim`,
+            expectedLastAttemptedAt: "2026-06-01T00:05:00.000Z",
+            status: "delivery_failed",
+            writerKind: "obsidian_filesystem",
+            deliveryReceipt: {},
+            attemptCount: 1,
+            lastAttemptedAt: "2026-06-01T00:05:00.000Z",
+            deliveredAt: null,
+            lastErrorCode: "late_writer",
+            lastErrorMessage: "The stale writer returned after the claim was recovered.",
+            updatedAt: "2026-06-01T00:20:30.000Z"
+          })
+        ).resolves.toBeNull();
+
+        await expect(
+          repository.recordExportDeliveryOutcome({
+            idempotencyKey: `${run.id}:governance_history_claim`,
+            expectedLastAttemptedAt: "2026-06-01T00:20:00.000Z",
+            status: "delivered",
+            writerKind: "obsidian_filesystem",
+            deliveryReceipt: {
+              writtenFileCount: 2
+            },
+            attemptCount: 2,
+            lastAttemptedAt: "2026-06-01T00:20:00.000Z",
+            deliveredAt: "2026-06-01T00:20:01.000Z",
+            lastErrorCode: null,
+            lastErrorMessage: null,
+            updatedAt: "2026-06-01T00:20:01.000Z"
+          })
+        ).resolves.toEqual(
+          expect.objectContaining({
+            status: "delivered",
+            attemptCount: 2,
+            lastAttemptedAt: "2026-06-01T00:20:00.000Z"
+          })
+        );
       } finally {
         await client.end();
       }

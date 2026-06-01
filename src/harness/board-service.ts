@@ -11,6 +11,7 @@ import type {
 } from "./types.js";
 import { createHarnessBoardDecisionRecord, createHarnessCardContinuityRecord, createHarnessCardEventRecord } from "./types.js";
 import {
+  isHarnessExportDeliveryClaimExpired,
   isHarnessCardState,
   isHarnessChildPersona,
   isHarnessDeliverableType,
@@ -1013,6 +1014,7 @@ export type HarnessExportCandidateDeliveryView = {
   statusLabel: string;
   summary: string;
   attemptCount: number;
+  claimRecoverySupported?: boolean;
   contractFreshness: "current_bundle" | "stale_bundle";
   contractFreshnessLabel: string;
   contractFreshnessSummary: string;
@@ -3903,7 +3905,17 @@ export function createHarnessBoardService(options: {
 
       const result: HarnessExportPreflightResult = {
         candidateId: candidate.id,
-        status: candidate.readiness === "ready_now" ? "ready" : "blocked",
+        status:
+          candidate.readiness === "ready_now" &&
+          (
+            candidate.id !== "package_bundle_export" ||
+            isGovernanceHistoryExportDependencySatisfied(
+              board.response.memoryBoundary.exportCandidates?.find((entry) => entry.id === "governance_history_export")
+                ?.latestDelivery
+            )
+          )
+            ? "ready"
+            : "blocked",
         readiness: candidate.readiness,
         readinessLabel: candidate.readinessLabel,
         summary: candidate.summary,
@@ -3916,7 +3928,17 @@ export function createHarnessBoardService(options: {
           entry.actionRoute === "governance-history-export-replay" || entry.actionRoute === "package-bundle-export-replay"
         ))),
         ...(candidate.latestDelivery ? { latestDelivery: candidate.latestDelivery } : {}),
-        ...(candidate.readiness !== "ready_now" ? { blockerLabel: candidate.promotionBlockerLabel } : {})
+        ...(
+          candidate.readiness !== "ready_now"
+            ? { blockerLabel: candidate.promotionBlockerLabel }
+            : candidate.id === "package_bundle_export" &&
+              !isGovernanceHistoryExportDependencySatisfied(
+                board.response.memoryBoundary.exportCandidates?.find((entry) => entry.id === "governance_history_export")
+                  ?.latestDelivery
+              )
+            ? { blockerLabel: "Governance history delivery must complete first" }
+            : {}
+        )
       };
       await publishHarnessAuditEvents(options.audit, [
         createHarnessExportAuditEvent({
@@ -4104,6 +4126,15 @@ export function createHarnessBoardService(options: {
       const candidate = findExportCandidateOrThrow(board.response.memoryBoundary.exportCandidates, request.candidateId);
       if (candidate.id !== "package_bundle_export") {
         throw new HarnessRunCompletionConflictError("Harness export action only supports package bundle candidates");
+      }
+      const governanceHistoryCandidate = findExportCandidateOrThrow(
+        board.response.memoryBoundary.exportCandidates,
+        "governance_history_export"
+      );
+      if (!isGovernanceHistoryExportDependencySatisfied(governanceHistoryCandidate.latestDelivery)) {
+        throw new HarnessRunCompletionConflictError(
+          "Harness package bundle export is not available until governance history delivery completes for the current bundle"
+        );
       }
       const action = findExportActionOrThrow(candidate, "package-bundle-export");
       if (request.actionToken) {
@@ -4300,6 +4331,15 @@ export function createHarnessBoardService(options: {
       const candidate = findExportCandidateOrThrow(board.response.memoryBoundary.exportCandidates, request.candidateId);
       if (candidate.id !== "package_bundle_export") {
         throw new HarnessRunCompletionConflictError("Harness delivery replay only supports package bundle candidates");
+      }
+      const governanceHistoryCandidate = findExportCandidateOrThrow(
+        board.response.memoryBoundary.exportCandidates,
+        "governance_history_export"
+      );
+      if (!isGovernanceHistoryExportDependencySatisfied(governanceHistoryCandidate.latestDelivery)) {
+        throw new HarnessRunCompletionConflictError(
+          "Harness package bundle delivery replay is not available until governance history delivery completes for the current bundle"
+        );
       }
       const action = findExportActionOrThrow(candidate, "package-bundle-export-replay");
       if (request.actionToken) {
@@ -6287,6 +6327,7 @@ function buildMemoryBoundaryView(input: {
     }
   }
   const exportCandidates: HarnessMemoryBoundaryExportCandidateView[] = [];
+  let latestGovernanceDelivery: HarnessExportCandidateDeliveryView | undefined;
 
   if (governanceHistoryCandidateItems.length > 0) {
     const representative = governanceHistoryCandidateItems[0]!;
@@ -6393,7 +6434,7 @@ function buildMemoryBoundaryView(input: {
       representative.readiness === "ready_now"
         ? buildGovernanceHistoryExportDryRun(input as unknown as HarnessBoardResponse, governanceCandidateBase)
         : null;
-    const latestGovernanceDelivery =
+    latestGovernanceDelivery =
       latestExportDeliveryRecordByCandidateId.get("governance_history_export")
         ? toExportCandidateDeliveryView(
             latestExportDeliveryRecordByCandidateId.get("governance_history_export")!,
@@ -6407,6 +6448,7 @@ function buildMemoryBoundaryView(input: {
         runId: input.runId,
         candidateId: "governance_history_export",
         decisions: input.decisionRecords,
+        governanceHistoryDependencySatisfied: true,
         candidate: {
           id: "governance_history_export",
           readiness: representative.readiness,
@@ -6550,6 +6592,7 @@ function buildMemoryBoundaryView(input: {
         runId: input.runId,
         candidateId: "package_bundle_export",
         decisions: input.decisionRecords,
+        governanceHistoryDependencySatisfied: isGovernanceHistoryExportDependencySatisfied(latestGovernanceDelivery),
         candidate: {
           id: "package_bundle_export",
           readiness: representative.readiness,
@@ -7373,6 +7416,10 @@ function toExportCandidateDeliveryView(
     typeof delivery.deliveryReceipt.primaryNotePath === "string" && delivery.deliveryReceipt.primaryNotePath.length > 0
       ? delivery.deliveryReceipt.primaryNotePath
       : delivery.primaryNotePath;
+  const claimRecoverySupported = isHarnessExportDeliveryClaimExpired({
+    status: delivery.status,
+    lastAttemptedAt: delivery.lastAttemptedAt
+  });
   const contractFreshness =
     currentBundleId && delivery.bundleId !== currentBundleId ? "stale_bundle" : "current_bundle";
   return {
@@ -7386,9 +7433,12 @@ function toExportCandidateDeliveryView(
         : delivery.status === "delivery_failed"
         ? "The latest tenant-safe export delivery failed and can be replayed safely through the same bounded export action."
         : delivery.status === "delivery_in_progress"
-        ? "The latest tenant-safe export bundle is currently being delivered through the bounded private writer seam."
+        ? claimRecoverySupported
+          ? "The latest tenant-safe export delivery claim looks stale and can be recovered through the same bounded delivery action."
+          : "The latest tenant-safe export bundle is currently being delivered through the bounded private writer seam."
         : "The latest tenant-safe export bundle is export-ready and waiting for bounded delivery.",
     attemptCount: delivery.attemptCount,
+    ...(claimRecoverySupported ? { claimRecoverySupported } : {}),
     contractFreshness,
     contractFreshnessLabel: humanizeExportDeliveryContractFreshness(contractFreshness),
     contractFreshnessSummary:
@@ -7437,6 +7487,16 @@ function humanizeExportDeliveryWriterKind(writerKind: NonNullable<HarnessExportD
     default:
       return humanizeLabel(writerKind);
   }
+}
+
+function isGovernanceHistoryExportDependencySatisfied(
+  governanceHistoryDelivery: HarnessExportCandidateDeliveryView | undefined
+): boolean {
+  return Boolean(
+    governanceHistoryDelivery &&
+      governanceHistoryDelivery.status === "delivered" &&
+      governanceHistoryDelivery.contractFreshness === "current_bundle"
+  );
 }
 
 function humanizeMemoryBoundaryReadiness(readiness: HarnessMemoryBoundaryReadiness) {
@@ -8424,6 +8484,7 @@ function buildExportCandidateActions(input: {
   runId: string;
   candidateId: HarnessExportCandidateId;
   decisions: readonly HarnessBoardDecisionRecord[];
+  governanceHistoryDependencySatisfied?: boolean;
   candidate: {
     id: HarnessExportCandidateId;
     readiness: HarnessMemoryBoundaryReadiness;
@@ -8466,8 +8527,13 @@ function buildExportCandidateActions(input: {
     }
   ];
   const deliveryInProgress = input.candidate.latestDelivery?.status === "delivery_in_progress";
+  const claimRecoverySupported = input.candidate.latestDelivery?.claimRecoverySupported === true;
 
-  if (input.candidate.id === "governance_history_export" && input.candidate.readiness === "ready_now" && !deliveryInProgress) {
+  if (
+    input.candidate.id === "governance_history_export" &&
+    input.candidate.readiness === "ready_now" &&
+    (!deliveryInProgress || claimRecoverySupported)
+  ) {
     actions.push(
       {
         actionRoute: "export-dry-run",
@@ -8492,7 +8558,7 @@ function buildExportCandidateActions(input: {
     if (
       input.candidate.latestDelivery &&
       input.candidate.latestDelivery.status !== "delivered" &&
-      input.candidate.latestDelivery.status !== "delivery_in_progress" &&
+      (input.candidate.latestDelivery.status !== "delivery_in_progress" || claimRecoverySupported) &&
       input.candidate.latestDelivery.contractFreshness !== "stale_bundle"
     ) {
       actions.push({
@@ -8501,22 +8567,32 @@ function buildExportCandidateActions(input: {
         actionMethod: "POST",
         actionToken: createHarnessActionToken(["governance-history-export-replay", ...baseParts]),
         actionLabel:
-          input.candidate.latestDelivery.status === "delivery_failed"
+          claimRecoverySupported
+            ? "Recover governance history delivery"
+            : input.candidate.latestDelivery.status === "delivery_failed"
             ? "Replay governance history delivery"
             : "Deliver governance history export",
         actionDescription:
-          input.candidate.latestDelivery.status === "delivery_failed"
+          claimRecoverySupported
+            ? "Recover a stale in-progress governance history delivery claim through the same bounded private writer seam."
+            : input.candidate.latestDelivery.status === "delivery_failed"
             ? "Re-dispatch the persisted tenant-safe governance-history bundle through the bounded private writer seam."
             : "Dispatch the persisted tenant-safe governance-history bundle through the bounded private writer seam.",
         nextEffectSummary:
-          input.candidate.latestDelivery.status === "delivery_failed"
+          claimRecoverySupported
+            ? "This reclaims a stale delivery attempt and reuses the current export-ready bundle without rebuilding it."
+            : input.candidate.latestDelivery.status === "delivery_failed"
             ? "This reuses the stored export-ready bundle instead of rebuilding a new tenant package."
             : "This uses the existing export-ready bundle and attempts bounded delivery without rebuilding it."
       });
     }
   }
 
-  if (input.candidate.id === "package_bundle_export" && input.candidate.readiness === "ready_now" && !deliveryInProgress) {
+  if (
+    input.candidate.id === "package_bundle_export" &&
+    input.candidate.readiness === "ready_now" &&
+    (!deliveryInProgress || claimRecoverySupported)
+  ) {
     actions.push(
       {
         actionRoute: "export-dry-run",
@@ -8526,8 +8602,11 @@ function buildExportCandidateActions(input: {
         actionLabel: "Preview package bundle export",
         actionDescription: "Render the tenant-safe package-bundle export without writing it anywhere yet.",
         nextEffectSummary: "This returns the exact bounded package bundle that a later tenant export would deliver."
-      },
-      {
+      }
+    );
+
+    if (input.governanceHistoryDependencySatisfied) {
+      actions.push({
         actionRoute: "package-bundle-export",
         actionPath: `/api/harness/runs/${encodeURIComponent(input.runId)}/export-candidates/${encodeURIComponent(input.candidateId)}/export`,
         actionMethod: "POST",
@@ -8535,13 +8614,14 @@ function buildExportCandidateActions(input: {
         actionLabel: "Build package bundle export",
         actionDescription: "Produce the first real Obsidian-facing package bundle export from the current closed-board contract.",
         nextEffectSummary: "This returns a tenant-safe package bundle for later vault placement without turning Obsidian into live runtime state."
-      }
-    );
+      });
+    }
 
     if (
+      input.governanceHistoryDependencySatisfied &&
       input.candidate.latestDelivery &&
       input.candidate.latestDelivery.status !== "delivered" &&
-      input.candidate.latestDelivery.status !== "delivery_in_progress" &&
+      (input.candidate.latestDelivery.status !== "delivery_in_progress" || claimRecoverySupported) &&
       input.candidate.latestDelivery.contractFreshness !== "stale_bundle"
     ) {
       actions.push({
@@ -8550,15 +8630,21 @@ function buildExportCandidateActions(input: {
         actionMethod: "POST",
         actionToken: createHarnessActionToken(["package-bundle-export-replay", ...baseParts]),
         actionLabel:
-          input.candidate.latestDelivery.status === "delivery_failed"
+          claimRecoverySupported
+            ? "Recover package bundle delivery"
+            : input.candidate.latestDelivery.status === "delivery_failed"
             ? "Replay package bundle delivery"
             : "Deliver package bundle export",
         actionDescription:
-          input.candidate.latestDelivery.status === "delivery_failed"
+          claimRecoverySupported
+            ? "Recover a stale in-progress package bundle delivery claim through the same bounded private writer seam."
+            : input.candidate.latestDelivery.status === "delivery_failed"
             ? "Re-dispatch the persisted tenant-safe package bundle through the bounded private writer seam."
             : "Dispatch the persisted tenant-safe package bundle through the bounded private writer seam.",
         nextEffectSummary:
-          input.candidate.latestDelivery.status === "delivery_failed"
+          claimRecoverySupported
+            ? "This reclaims a stale delivery attempt and reuses the current export-ready package bundle without rebuilding it."
+            : input.candidate.latestDelivery.status === "delivery_failed"
             ? "This reuses the stored package bundle instead of rebuilding a new tenant package."
             : "This uses the existing export-ready bundle and attempts bounded delivery without rebuilding it."
       });

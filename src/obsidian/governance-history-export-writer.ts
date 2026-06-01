@@ -3,6 +3,28 @@ import { mkdir, writeFile } from "node:fs/promises";
 
 import type { HarnessGovernanceHistoryExportReadyDispatch } from "../harness/board-service.js";
 
+type ObsidianExportDispatchFile = HarnessGovernanceHistoryExportReadyDispatch["files"][number];
+
+export type ObsidianExportPartialReceipt = {
+  writtenFileCount: number;
+  lastAttemptedPath: string;
+};
+
+export class ObsidianExportWriteError extends Error {
+  readonly partialReceipt: ObsidianExportPartialReceipt;
+  override readonly cause: unknown;
+
+  constructor(input: { partialReceipt: ObsidianExportPartialReceipt; cause: unknown }) {
+    const { partialReceipt, cause } = input;
+    super(
+      `Obsidian export failed after writing ${partialReceipt.writtenFileCount} file(s); last attempted path: ${partialReceipt.lastAttemptedPath}`
+    );
+    this.name = "ObsidianExportWriteError";
+    this.partialReceipt = partialReceipt;
+    this.cause = cause;
+  }
+}
+
 export type GovernanceHistoryExportWriterResult = {
   writerKind: "obsidian_filesystem";
   deliveredAt: string;
@@ -36,25 +58,56 @@ export function resolveObsidianExportPath(input: {
 
 export const resolveGovernanceHistoryExportPath = resolveObsidianExportPath;
 
+export async function writeObsidianExportFiles(input: {
+  exportRoot: string;
+  files: readonly ObsidianExportDispatchFile[];
+}): Promise<{ manifestPath: string | null; writtenFileCount: number }> {
+  const manifestFile = input.files.find((file) => file.mediaType === "application/json") ?? null;
+  const orderedFiles =
+    manifestFile === null ? input.files : [...input.files.filter((file) => file !== manifestFile), manifestFile];
+  let writtenFileCount = 0;
+
+  for (const file of orderedFiles) {
+    try {
+      const resolvedPath = resolveObsidianExportPath({
+        exportRoot: input.exportRoot,
+        relativePath: file.path
+      });
+      await mkdir(path.dirname(resolvedPath), { recursive: true });
+      await writeFile(resolvedPath, file.content, "utf8");
+      writtenFileCount += 1;
+    } catch (error) {
+      throw new ObsidianExportWriteError({
+        partialReceipt: {
+          writtenFileCount,
+          lastAttemptedPath: file.path
+        },
+        cause: error
+      });
+    }
+  }
+
+  return {
+    manifestPath: manifestFile?.path ?? null,
+    writtenFileCount
+  };
+}
+
 export function createFilesystemGovernanceHistoryExportWriter(input: { exportRoot: string }): GovernanceHistoryExportWriter {
   return {
     async write(dispatch) {
-      for (const file of dispatch.files) {
-        const resolvedPath = resolveObsidianExportPath({
-          exportRoot: input.exportRoot,
-          relativePath: file.path
-        });
-        await mkdir(path.dirname(resolvedPath), { recursive: true });
-        await writeFile(resolvedPath, file.content, "utf8");
-      }
+      const writeResult = await writeObsidianExportFiles({
+        exportRoot: input.exportRoot,
+        files: dispatch.files
+      });
 
       return {
         writerKind: "obsidian_filesystem",
         deliveredAt: new Date().toISOString(),
         receipt: {
           primaryNotePath: dispatch.placement.primaryNotePath,
-          manifestPath: dispatch.files.find((file) => file.mediaType === "application/json")?.path ?? null,
-          writtenFileCount: dispatch.files.length
+          manifestPath: writeResult.manifestPath,
+          writtenFileCount: writeResult.writtenFileCount
         }
       };
     }

@@ -4600,7 +4600,7 @@ describe("harness board service", () => {
       contractFreshness: "stale_bundle"
     }));
     expect(candidate?.exportActions?.find((entry) => entry.actionRoute === "governance-history-export-replay")).toBeUndefined();
-    expect(candidate?.exportActions?.find((entry) => entry.actionRoute === "governance-history-export")).toBeUndefined();
+    expect(candidate?.exportActions?.find((entry) => entry.actionRoute === "governance-history-export")).toBeTruthy();
   });
 
   it("replays the persisted governance-history delivery bundle through the private export-ready seam", async () => {
@@ -4855,7 +4855,56 @@ describe("harness board service", () => {
     });
 
     const hydrated = await service.listBoardState({ authorization: "Bearer valid" });
-    const candidate = hydrated.memoryBoundary.exportCandidates?.find((entry) => entry.id === "package_bundle_export");
+    const governanceExportAction = hydrated.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "governance_history_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "governance-history-export");
+    expect(governanceExportAction).toBeTruthy();
+    const governanceExport = await service.exportGovernanceHistoryCandidate({
+      authorization: "Bearer valid",
+      runId: hydrated.runId,
+      candidateId: "governance_history_export",
+      actionToken: governanceExportAction!.actionToken
+    });
+    await repository.upsertExportDelivery({
+      id: "delivery_governance_dependency_test_1",
+      runId: hydrated.runId,
+      tenantId: "tenant_123",
+      workflowId: hydrated.workflowId,
+      packageId: hydrated.packageId,
+      candidateId: "governance_history_export",
+      status: "delivered",
+      exportFormat: governanceExport.exportFormat,
+      recordTarget: governanceExport.recordTarget,
+      bundleId: governanceExport.bundleId,
+      bundleRevision: governanceExport.bundleRevision,
+      idempotencyKey: governanceExport.idempotencyKey,
+      noteTitle: governanceExport.noteTitle,
+      noteFileName: governanceExport.noteFileName,
+      placementTargetSystem: governanceExport.placement.targetSystem,
+      vaultFolder: governanceExport.placement.vaultFolder,
+      primaryNotePath: governanceExport.placement.primaryNotePath,
+      syncStrategy: governanceExport.placement.syncStrategy,
+      confirmationRequirement: governanceExport.placement.confirmationRequirement,
+      files: governanceExport.files,
+      recordCount: governanceExport.recordCount,
+      disclosureSummary: governanceExport.disclosureSummary,
+      redactionSummary: governanceExport.redactionSummary,
+      attemptCount: 1,
+      lastAttemptedAt: "2026-06-01T00:10:00.000Z",
+      deliveredAt: "2026-06-01T00:10:01.000Z",
+      writerKind: "obsidian_filesystem",
+      deliveryReceipt: {
+        primaryNotePath: governanceExport.placement.primaryNotePath,
+        writtenFileCount: governanceExport.files.length
+      },
+      lastErrorCode: null,
+      lastErrorMessage: null,
+      createdAt: "2026-06-01T00:10:00.000Z",
+      updatedAt: "2026-06-01T00:10:01.000Z"
+    });
+
+    const exportReadyBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const candidate = exportReadyBoard.memoryBoundary.exportCandidates?.find((entry) => entry.id === "package_bundle_export");
     const dryRunAction = candidate?.exportActions?.find((entry) => entry.actionRoute === "export-dry-run");
     const exportAction = candidate?.exportActions?.find((entry) => entry.actionRoute === "package-bundle-export");
     expect(candidate?.readiness).toBe("ready_now");
@@ -4908,6 +4957,74 @@ describe("harness board service", () => {
     }));
   });
 
+  it("keeps package-bundle export blocked until governance history delivery completes for the current bundle", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "done",
+      resultSummary: "Pricing floor is stable enough for launch."
+    });
+    await service.completeRun({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      completionSummary: "The CEO packaged the final business-facing outcome."
+    });
+
+    const completedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const packageCandidate = completedBoard.memoryBoundary.exportCandidates?.find((entry) => entry.id === "package_bundle_export");
+    expect(packageCandidate?.exportActions?.find((entry) => entry.actionRoute === "package-bundle-export")).toBeUndefined();
+
+    const packagePreflightToken =
+      packageCandidate?.exportActions?.find((entry) => entry.actionRoute === "export-preflight")?.actionToken;
+
+    await expect(service.preflightExportCandidate({
+      authorization: "Bearer valid",
+      runId: completedBoard.runId,
+      candidateId: "package_bundle_export",
+      ...(packagePreflightToken ? { actionToken: packagePreflightToken } : {})
+    })).resolves.toMatchObject({
+      candidateId: "package_bundle_export",
+      status: "blocked",
+      blockerLabel: "Governance history delivery must complete first",
+      supportsDryRun: true,
+      supportsExport: false
+    });
+
+    await expect(service.exportPackageBundleCandidate({
+      authorization: "Bearer valid",
+      runId: completedBoard.runId,
+      candidateId: "package_bundle_export"
+    })).rejects.toThrow("Harness package bundle export is not available until governance history delivery completes for the current bundle");
+  });
+
   it("replays the persisted package-bundle delivery bundle through the private export-ready seam", async () => {
     const repository = createInMemoryHarnessRepository();
     const onPackageBundleExportReady = vi.fn().mockResolvedValue(undefined);
@@ -4952,22 +5069,71 @@ describe("harness board service", () => {
     });
 
     const hydrated = await service.listBoardState({ authorization: "Bearer valid" });
-    const dryRunAction = hydrated.memoryBoundary.exportCandidates
+    const governanceExportAction = hydrated.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "governance_history_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "governance-history-export");
+    expect(governanceExportAction).toBeTruthy();
+    const governanceExport = await service.exportGovernanceHistoryCandidate({
+      authorization: "Bearer valid",
+      runId: hydrated.runId,
+      candidateId: "governance_history_export",
+      actionToken: governanceExportAction!.actionToken
+    });
+    await repository.upsertExportDelivery({
+      id: "delivery_governance_dependency_test_2",
+      runId: hydrated.runId,
+      tenantId: "tenant_123",
+      workflowId: hydrated.workflowId,
+      packageId: hydrated.packageId,
+      candidateId: "governance_history_export",
+      status: "delivered",
+      exportFormat: governanceExport.exportFormat,
+      recordTarget: governanceExport.recordTarget,
+      bundleId: governanceExport.bundleId,
+      bundleRevision: governanceExport.bundleRevision,
+      idempotencyKey: governanceExport.idempotencyKey,
+      noteTitle: governanceExport.noteTitle,
+      noteFileName: governanceExport.noteFileName,
+      placementTargetSystem: governanceExport.placement.targetSystem,
+      vaultFolder: governanceExport.placement.vaultFolder,
+      primaryNotePath: governanceExport.placement.primaryNotePath,
+      syncStrategy: governanceExport.placement.syncStrategy,
+      confirmationRequirement: governanceExport.placement.confirmationRequirement,
+      files: governanceExport.files,
+      recordCount: governanceExport.recordCount,
+      disclosureSummary: governanceExport.disclosureSummary,
+      redactionSummary: governanceExport.redactionSummary,
+      attemptCount: 1,
+      lastAttemptedAt: "2026-06-01T00:10:00.000Z",
+      deliveredAt: "2026-06-01T00:10:01.000Z",
+      writerKind: "obsidian_filesystem",
+      deliveryReceipt: {
+        primaryNotePath: governanceExport.placement.primaryNotePath,
+        writtenFileCount: governanceExport.files.length
+      },
+      lastErrorCode: null,
+      lastErrorMessage: null,
+      createdAt: "2026-06-01T00:10:00.000Z",
+      updatedAt: "2026-06-01T00:10:01.000Z"
+    });
+
+    const deliveryReadyBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const dryRunAction = deliveryReadyBoard.memoryBoundary.exportCandidates
       ?.find((entry) => entry.id === "package_bundle_export")
       ?.exportActions?.find((entry) => entry.actionRoute === "export-dry-run");
     expect(dryRunAction).toBeTruthy();
     const dryRun = await service.dryRunExportCandidate({
       authorization: "Bearer valid",
-      runId: hydrated.runId,
+      runId: deliveryReadyBoard.runId,
       candidateId: "package_bundle_export",
       actionToken: dryRunAction!.actionToken
     });
     await repository.upsertExportDelivery({
       id: "delivery_package_replay_test_1",
-      runId: hydrated.runId,
+      runId: deliveryReadyBoard.runId,
       tenantId: "tenant_123",
-      workflowId: hydrated.workflowId,
-      packageId: hydrated.packageId,
+      workflowId: deliveryReadyBoard.workflowId,
+      packageId: deliveryReadyBoard.packageId,
       candidateId: "package_bundle_export",
       status: "delivery_failed",
       exportFormat: dryRun.exportFormat,
@@ -5063,23 +5229,71 @@ describe("harness board service", () => {
     });
 
     const completedBoard = await service.listBoardState({ authorization: "Bearer valid" });
-    const exportAction = completedBoard.memoryBoundary.exportCandidates
+    const governanceExportAction = completedBoard.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "governance_history_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "governance-history-export");
+    expect(governanceExportAction).toBeTruthy();
+    const governanceExport = await service.exportGovernanceHistoryCandidate({
+      authorization: "Bearer valid",
+      runId: completedBoard.runId,
+      candidateId: "governance_history_export",
+      actionToken: governanceExportAction!.actionToken
+    });
+    await repository.upsertExportDelivery({
+      id: "delivery_governance_dependency_test_3",
+      runId: completedBoard.runId,
+      tenantId: "tenant_123",
+      workflowId: completedBoard.workflowId,
+      packageId: completedBoard.packageId,
+      candidateId: "governance_history_export",
+      status: "delivered",
+      exportFormat: governanceExport.exportFormat,
+      recordTarget: governanceExport.recordTarget,
+      bundleId: governanceExport.bundleId,
+      bundleRevision: governanceExport.bundleRevision,
+      idempotencyKey: governanceExport.idempotencyKey,
+      noteTitle: governanceExport.noteTitle,
+      noteFileName: governanceExport.noteFileName,
+      placementTargetSystem: governanceExport.placement.targetSystem,
+      vaultFolder: governanceExport.placement.vaultFolder,
+      primaryNotePath: governanceExport.placement.primaryNotePath,
+      syncStrategy: governanceExport.placement.syncStrategy,
+      confirmationRequirement: governanceExport.placement.confirmationRequirement,
+      files: governanceExport.files,
+      recordCount: governanceExport.recordCount,
+      disclosureSummary: governanceExport.disclosureSummary,
+      redactionSummary: governanceExport.redactionSummary,
+      attemptCount: 1,
+      lastAttemptedAt: "2026-06-01T00:10:00.000Z",
+      deliveredAt: "2026-06-01T00:10:01.000Z",
+      writerKind: "obsidian_filesystem",
+      deliveryReceipt: {
+        primaryNotePath: governanceExport.placement.primaryNotePath,
+        writtenFileCount: governanceExport.files.length
+      },
+      lastErrorCode: null,
+      lastErrorMessage: null,
+      createdAt: "2026-06-01T00:10:00.000Z",
+      updatedAt: "2026-06-01T00:10:01.000Z"
+    });
+    const dependencyReadyBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const exportAction = dependencyReadyBoard.memoryBoundary.exportCandidates
       ?.find((entry) => entry.id === "package_bundle_export")
       ?.exportActions?.find((entry) => entry.actionRoute === "package-bundle-export");
     expect(exportAction).toBeTruthy();
 
     const firstExport = await service.exportPackageBundleCandidate({
       authorization: "Bearer valid",
-      runId: completedBoard.runId,
+      runId: dependencyReadyBoard.runId,
       candidateId: "package_bundle_export",
       actionToken: exportAction!.actionToken
     });
     await repository.upsertExportDelivery({
       id: "delivery_replay_stale_package_1",
-      runId: completedBoard.runId,
+      runId: dependencyReadyBoard.runId,
       tenantId: "tenant_123",
-      workflowId: completedBoard.workflowId,
-      packageId: completedBoard.packageId,
+      workflowId: dependencyReadyBoard.workflowId,
+      packageId: dependencyReadyBoard.packageId,
       candidateId: "package_bundle_export",
       status: "delivery_failed",
       exportFormat: firstExport.exportFormat,

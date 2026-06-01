@@ -20,6 +20,7 @@ import type {
   HarnessRunRecord,
   HarnessRunState
 } from "./types.js";
+import { isHarnessExportDeliveryClaimExpired } from "./types.js";
 
 export interface HarnessRepository {
   insertRun(run: HarnessRunRecord): Promise<void>;
@@ -319,7 +320,18 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
 
     async claimExportDeliveryAttempt(input) {
       const existing = exportDeliveries.get(input.idempotencyKey);
-      if (!existing || (existing.status !== "export_ready" && existing.status !== "delivery_failed")) {
+      if (
+        !existing ||
+        (
+          existing.status !== "export_ready" &&
+          existing.status !== "delivery_failed" &&
+          !isHarnessExportDeliveryClaimExpired({
+            status: existing.status,
+            lastAttemptedAt: existing.lastAttemptedAt,
+            now: Date.parse(input.claimedAt)
+          })
+        )
+      ) {
         return null;
       }
 
@@ -345,7 +357,11 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
 
     async recordExportDeliveryOutcome(input) {
       const existing = exportDeliveries.get(input.idempotencyKey);
-      if (!existing) {
+      if (
+        !existing ||
+        existing.status !== "delivery_in_progress" ||
+        existing.lastAttemptedAt !== input.expectedLastAttemptedAt
+      ) {
         return null;
       }
 
@@ -797,7 +813,14 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
                 last_error_message = null,
                 updated_at = $4::timestamptz
           where idempotency_key = $1
-            and status in ('export_ready', 'delivery_failed')
+            and (
+              status in ('export_ready', 'delivery_failed')
+              or (
+                status = 'delivery_in_progress'
+                and last_attempted_at is not null
+                and last_attempted_at <= ($3::timestamptz - interval '10 minutes')
+              )
+            )
           returning id, run_id, tenant_id, workflow_id, package_id, candidate_id, status, export_format, record_target,
                     bundle_id, bundle_revision, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
                     disclosure_summary, redaction_summary, attempt_count, last_attempted_at, delivered_at, writer_kind,
@@ -820,6 +843,8 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
                 last_error_message = $8,
                 updated_at = $9::timestamptz
           where idempotency_key = $10
+            and status = 'delivery_in_progress'
+            and last_attempted_at = $11::timestamptz
           returning id, run_id, tenant_id, workflow_id, package_id, candidate_id, status, export_format, record_target,
                     bundle_id, bundle_revision, idempotency_key, note_title, note_file_name, placement_manifest, files, record_count,
                     disclosure_summary, redaction_summary, attempt_count, last_attempted_at, delivered_at, writer_kind,
@@ -834,7 +859,8 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
           input.lastErrorCode,
           input.lastErrorMessage,
           input.updatedAt,
-          input.idempotencyKey
+          input.idempotencyKey,
+          input.expectedLastAttemptedAt
         ]
       );
       return result.rows[0] ? mapHarnessExportDeliveryRow(result.rows[0]) : null;

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createRuntimeSessionAuth, createRuntimeSessionToken } from "../src/api/runtime-auth.js";
 import { createDashboardRuntime, createNodeRequestListener, loadRuntimeEnv } from "../src/api/runtime-server.js";
 import { createDurableAuditSink } from "../src/audit/durable-audit.js";
+import { createPgPoolQueryClient } from "../src/db/postgres-client.js";
 import { createHarnessBoardService } from "../src/harness/board-service.js";
 
 const TEST_SUPABASE_DB_URL = "postgresql://postgres.tenant:placeholder-password@db.invalid:5432/postgres";
@@ -106,7 +107,21 @@ function createMockDbQuery() {
 
     if (sql.includes("update wfpc.harness_export_deliveries")) {
       if (sql.includes("status = 'delivery_in_progress'")) {
-        if (mockExportDeliveryRow.status !== "export_ready" && mockExportDeliveryRow.status !== "delivery_failed") {
+        const claimedAt = values[2] === null || values[2] === undefined ? null : Date.parse(String(values[2]));
+        const existingAttemptedAt =
+          mockExportDeliveryRow.last_attempted_at === null ? null : Date.parse(mockExportDeliveryRow.last_attempted_at);
+        const staleInProgress =
+          mockExportDeliveryRow.status === "delivery_in_progress" &&
+          claimedAt !== null &&
+          existingAttemptedAt !== null &&
+          Number.isFinite(claimedAt) &&
+          Number.isFinite(existingAttemptedAt) &&
+          claimedAt - existingAttemptedAt >= 10 * 60 * 1000;
+        if (
+          mockExportDeliveryRow.status !== "export_ready" &&
+          mockExportDeliveryRow.status !== "delivery_failed" &&
+          !staleInProgress
+        ) {
           return { rows: [] };
         }
         mockExportDeliveryRow = {
@@ -125,6 +140,13 @@ function createMockDbQuery() {
           updated_at: values[3] === null || values[3] === undefined ? mockExportDeliveryRow.updated_at : String(values[3])
         };
         return { rows: [mockExportDeliveryRow] };
+      }
+      if (mockExportDeliveryRow.status !== "delivery_in_progress") {
+        return { rows: [] };
+      }
+      const expectedAttemptedAt = values[10] === null || values[10] === undefined ? null : String(values[10]);
+      if (mockExportDeliveryRow.last_attempted_at !== expectedAttemptedAt) {
+        return { rows: [] };
       }
       mockExportDeliveryRow = {
         ...mockExportDeliveryRow,
@@ -1084,10 +1106,11 @@ describe("runtime server", () => {
   });
 
   it("skips duplicate governance-history delivery when the bundle is already in progress", async () => {
+    const recentAttemptAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     resetMockExportDeliveryRow({
       status: "delivery_in_progress",
       attempt_count: 2,
-      last_attempted_at: "2026-05-29T01:00:00.000Z",
+      last_attempted_at: recentAttemptAt,
       writer_kind: "obsidian_filesystem"
     });
     const governanceHistoryExportWriter = {
@@ -1144,6 +1167,165 @@ describe("runtime server", () => {
     });
 
     expect(governanceHistoryExportWriter.write).not.toHaveBeenCalled();
+    await runtime.close();
+  });
+
+  it("recovers a stale governance-history delivery claim when the latest attempt is older than the lease window", async () => {
+    const staleAttemptAt = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    resetMockExportDeliveryRow({
+      status: "delivery_in_progress",
+      attempt_count: 2,
+      last_attempted_at: staleAttemptAt,
+      writer_kind: "obsidian_filesystem"
+    });
+    const governanceHistoryExportWriter = {
+      write: vi.fn().mockResolvedValue({
+        writerKind: "obsidian_filesystem",
+        deliveredAt: "2026-06-01T01:00:00.000Z",
+        receipt: {
+          primaryNotePath:
+            "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+          manifestPath: null,
+          writtenFileCount: 1
+        }
+      })
+    };
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() },
+      governanceHistoryExportWriter
+    });
+
+    const boardServiceOptions = vi.mocked(createHarnessBoardService).mock.calls.at(-1)?.[0];
+    await boardServiceOptions?.onGovernanceHistoryExportReady?.({
+      tenantId: "tenant_123",
+      userId: "user_123",
+      runId: "run_123",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      candidateId: "governance_history_export",
+      bundleId: "bundle_123",
+      bundleRevision: "bundle_revision_123",
+      exportFormat: "obsidian_markdown_bundle",
+      recordTarget: "governance_history_record",
+      idempotencyKey: "idempotency_123",
+      noteTitle: "Governance history",
+      noteFileName: "wf_connect_first_workflow-governance-history.md",
+      placement: {
+        targetSystem: "obsidian_vault",
+        vaultFolder: "wealth-factory/governance-history/wf_connect_first_workflow",
+        primaryNotePath:
+          "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+        syncStrategy: "append_history_entry",
+        confirmationRequirement: "tenant_export_confirmation"
+      },
+      files: [
+        {
+          path: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+          mediaType: "text/markdown",
+          byteSize: 20,
+          checksum: "abc",
+          content: "# Governance history"
+        }
+      ],
+      recordCount: 2,
+      disclosureSummary: "Decision summary only",
+      redactionSummary: "Governance-safe redaction"
+    });
+
+    expect(governanceHistoryExportWriter.write).toHaveBeenCalledOnce();
+    await runtime.close();
+  });
+
+  it("records bounded partial failure receipt details when governance-history delivery fails mid-write", async () => {
+    resetMockExportDeliveryRow();
+    const governanceHistoryExportWriter = {
+      write: vi.fn().mockRejectedValue(Object.assign(new Error("disk write blocked"), {
+        partialReceipt: {
+          writtenFileCount: 1,
+          lastAttemptedPath:
+            "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md"
+        }
+      }))
+    };
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() },
+      governanceHistoryExportWriter
+    });
+
+    const boardServiceOptions = vi.mocked(createHarnessBoardService).mock.calls.at(-1)?.[0];
+    await boardServiceOptions?.onGovernanceHistoryExportReady?.({
+      tenantId: "tenant_123",
+      userId: "user_123",
+      runId: "run_123",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      candidateId: "governance_history_export",
+      bundleId: "bundle_123",
+      bundleRevision: "bundle_revision_123",
+      exportFormat: "obsidian_markdown_bundle",
+      recordTarget: "governance_history_record",
+      idempotencyKey: "idempotency_123",
+      noteTitle: "Governance history",
+      noteFileName: "wf_connect_first_workflow-governance-history.md",
+      placement: {
+        targetSystem: "obsidian_vault",
+        vaultFolder: "wealth-factory/governance-history/wf_connect_first_workflow",
+        primaryNotePath:
+          "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+        syncStrategy: "append_history_entry",
+        confirmationRequirement: "tenant_export_confirmation"
+      },
+      files: [
+        {
+          path: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+          mediaType: "text/markdown",
+          byteSize: 20,
+          checksum: "abc",
+          content: "# Governance history"
+        }
+      ],
+      recordCount: 2,
+      disclosureSummary: "Decision summary only",
+      redactionSummary: "Governance-safe redaction"
+    });
+
+    const query = vi.mocked(createPgPoolQueryClient).mock.results.at(-1)?.value.query;
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining("delivery_receipt = $3::jsonb"),
+      expect.arrayContaining([
+        "delivery_failed",
+        "obsidian_filesystem",
+        JSON.stringify({
+          writtenFileCount: 1,
+          lastAttemptedPath:
+            "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md"
+        }),
+        expect.any(Number),
+        expect.any(String),
+        null,
+        "writer_partial_failure",
+        "disk write blocked",
+        expect.any(String),
+        "idempotency_123",
+        expect.any(String)
+      ])
+    );
     await runtime.close();
   });
 

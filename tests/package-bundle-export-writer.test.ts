@@ -4,10 +4,8 @@ import { tmpdir } from "node:os";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import {
-  createFilesystemGovernanceHistoryExportWriter,
-  resolveGovernanceHistoryExportPath
-} from "../src/obsidian/governance-history-export-writer.js";
+import { createFilesystemPackageBundleExportWriter } from "../src/obsidian/package-bundle-export-writer.js";
+import { resolveGovernanceHistoryExportPath } from "../src/obsidian/governance-history-export-writer.js";
 
 const tempRoots: string[] = [];
 
@@ -20,11 +18,11 @@ afterEach(async () => {
   }
 });
 
-describe("governance history export writer", () => {
+describe("package bundle export writer", () => {
   it("writes export-ready bundle files under the configured Obsidian root", async () => {
     const exportRoot = await mkdtemp(path.join(tmpdir(), "wf-obsidian-export-"));
     tempRoots.push(exportRoot);
-    const writer = createFilesystemGovernanceHistoryExportWriter({ exportRoot });
+    const writer = createFilesystemPackageBundleExportWriter({ exportRoot });
 
     const result = await writer.write({
       tenantId: "tenant_123",
@@ -32,32 +30,32 @@ describe("governance history export writer", () => {
       runId: "run_123",
       workflowId: "wf_connect_first_workflow",
       packageId: "pkg_bib_connect",
-      candidateId: "governance_history_export",
+      candidateId: "package_bundle_export",
       bundleId: "bundle_123",
       bundleRevision: "bundle_revision_123",
       exportFormat: "obsidian_markdown_bundle",
-      recordTarget: "governance_history_record",
+      recordTarget: "package_deliverable_record",
       idempotencyKey: "idempotency_123",
-      noteTitle: "Governance history",
-      noteFileName: "wf_connect_first_workflow-governance-history.md",
+      noteTitle: "Package bundle",
+      noteFileName: "wf_connect_first_workflow-package-bundle.md",
       placement: {
         targetSystem: "obsidian_vault",
-        vaultFolder: "wealth-factory/governance-history/wf_connect_first_workflow",
+        vaultFolder: "wealth-factory/package-bundles/wf_connect_first_workflow",
         primaryNotePath:
-          "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+          "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
         syncStrategy: "append_history_entry",
         confirmationRequirement: "tenant_export_confirmation"
       },
       files: [
         {
-          path: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+          path: "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md",
           mediaType: "text/markdown",
-          byteSize: 20,
+          byteSize: 18,
           checksum: "abc123",
-          content: "# Governance history"
+          content: "# Package bundle"
         },
         {
-          path: "wealth-factory/governance-history/wf_connect_first_workflow/manifest.json",
+          path: "wealth-factory/package-bundles/wf_connect_first_workflow/export-manifest.json",
           mediaType: "application/json",
           byteSize: 42,
           checksum: "def456",
@@ -72,7 +70,7 @@ describe("governance history export writer", () => {
     expect(result.writerKind).toBe("obsidian_filesystem");
     expect(result.receipt.writtenFileCount).toBe(2);
     expect(result.receipt.primaryNotePath).toBe(
-      "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md"
+      "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md"
     );
 
     await expect(
@@ -80,21 +78,21 @@ describe("governance history export writer", () => {
         path.join(
           exportRoot,
           "wealth-factory",
-          "governance-history",
+          "package-bundles",
           "wf_connect_first_workflow",
-          "wf_connect_first_workflow-governance-history.md"
+          "wf_connect_first_workflow-package-bundle.md"
         ),
         "utf8"
       )
-    ).resolves.toBe("# Governance history");
+    ).resolves.toBe("# Package bundle");
   });
 
   it("writes the manifest last and surfaces a bounded partial receipt when a non-manifest file fails", async () => {
     const exportRoot = await mkdtemp(path.join(tmpdir(), "wf-obsidian-export-"));
     tempRoots.push(exportRoot);
-    const writer = createFilesystemGovernanceHistoryExportWriter({ exportRoot });
+    const writer = createFilesystemPackageBundleExportWriter({ exportRoot });
     const blockedNotePath =
-      "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md";
+      "wealth-factory/package-bundles/wf_connect_first_workflow/wf_connect_first_workflow-package-bundle.md";
 
     await mkdir(path.join(exportRoot, blockedNotePath), { recursive: true });
 
@@ -104,31 +102,31 @@ describe("governance history export writer", () => {
       runId: "run_123",
       workflowId: "wf_connect_first_workflow",
       packageId: "pkg_bib_connect",
-      candidateId: "governance_history_export",
+      candidateId: "package_bundle_export",
       bundleId: "bundle_123",
       bundleRevision: "bundle_revision_123",
       exportFormat: "obsidian_markdown_bundle",
-      recordTarget: "governance_history_record",
+      recordTarget: "package_deliverable_record",
       idempotencyKey: "idempotency_123",
-      noteTitle: "Governance history",
-      noteFileName: "wf_connect_first_workflow-governance-history.md",
+      noteTitle: "Package bundle",
+      noteFileName: "wf_connect_first_workflow-package-bundle.md",
       placement: {
         targetSystem: "obsidian_vault",
-        vaultFolder: "wealth-factory/governance-history/wf_connect_first_workflow",
+        vaultFolder: "wealth-factory/package-bundles/wf_connect_first_workflow",
         primaryNotePath: blockedNotePath,
         syncStrategy: "append_history_entry",
         confirmationRequirement: "tenant_export_confirmation"
       },
       files: [
         {
-          path: "wealth-factory/governance-history/wf_connect_first_workflow/manifest.json",
+          path: "wealth-factory/package-bundles/wf_connect_first_workflow/export-manifest.json",
           mediaType: "application/json",
           byteSize: 42,
           checksum: "def456",
           content: "{\"ok\":true}"
         },
         {
-          path: "wealth-factory/governance-history/wf_connect_first_workflow/summary.md",
+          path: "wealth-factory/package-bundles/wf_connect_first_workflow/summary.md",
           mediaType: "text/markdown",
           byteSize: 18,
           checksum: "ghi789",
@@ -137,9 +135,9 @@ describe("governance history export writer", () => {
         {
           path: blockedNotePath,
           mediaType: "text/markdown",
-          byteSize: 20,
+          byteSize: 18,
           checksum: "abc123",
-          content: "# Governance history"
+          content: "# Package bundle"
         }
       ],
       recordCount: 2,
@@ -163,10 +161,10 @@ describe("governance history export writer", () => {
     expect(writeError?.message).not.toContain(exportRoot);
 
     await expect(
-      readFile(path.join(exportRoot, "wealth-factory", "governance-history", "wf_connect_first_workflow", "summary.md"), "utf8")
+      readFile(path.join(exportRoot, "wealth-factory", "package-bundles", "wf_connect_first_workflow", "summary.md"), "utf8")
     ).resolves.toBe("# Summary");
     await expect(
-      access(path.join(exportRoot, "wealth-factory", "governance-history", "wf_connect_first_workflow", "manifest.json"))
+      access(path.join(exportRoot, "wealth-factory", "package-bundles", "wf_connect_first_workflow", "export-manifest.json"))
     ).rejects.toThrow();
   });
 

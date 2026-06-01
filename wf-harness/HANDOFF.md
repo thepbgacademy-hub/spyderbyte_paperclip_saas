@@ -53,6 +53,9 @@ The first harness implementation slice is now built and verified:
 - package-bundle export must stay board-closure-gated and delivery-ledger-backed: if the board is not closed, `package_bundle_export` may preflight but must not dry-run/export/replay through a writable seam
 - public export posture should stay content-free even as package delivery widens: board state, HTTP responses, and audit metadata may surface bounded delivery status, paths, counts, and retry posture, but package bodies must stay in private dispatch/writer seams and the harness-owned export ledger
 - persisted export delivery must stay freshness-aware too: the harness-owned delivery ledger should record bundle revision explicitly, grouped export candidates should surface whether the latest stored delivery still matches the current export contract, and replay must stay suppressed when a stored failed bundle is stale
+- persisted export delivery must stay dependency-aware too: `package_bundle_export` may only preflight/export/replay once the current governance-history bundle is actually delivered for the same run, rather than treating board closure alone as sufficient
+- persisted export delivery claims must stay recoverable but bounded: a stale `delivery_in_progress` claim may be reclaimed only after the explicit lease window expires, and outcome recording must still compare-and-set against the claimed state instead of trusting best-effort writer order
+- private writer failures must preserve bounded partial-receipt truth: if a governance-history or package-bundle writer fails after some files land, the runtime seam should persist only counts and attempted paths needed for recovery, never note bodies or export-root leakage
 
 ## External References
 
@@ -179,6 +182,9 @@ The first harness implementation slice is now built and verified:
 - Re-ran the tenant/secret scans and updated the harness security report at `wf-harness/audit/2026-05-21/security-report.md`.
 - Cleared the final repo-specific reviewer pass on code correctness after tightening the wording around what this test seam does and does not prove.
 - Persisted explicit `bundleRevision` on harness export deliveries, widened the delivery-ledger migration/helper contract to require a non-null revision column, and surfaced grouped export-delivery freshness (`current_bundle` vs `stale_bundle`) back through the board contract so replay now fails closed when stored delivery no longer matches the current export package.
+- Hardened export delivery claiming with a bounded lease-recovery rule: stale `delivery_in_progress` ledger rows can now be reclaimed after the lease window, but delivery outcomes still compare-and-set only from the claimed state so duplicate or late writer callbacks cannot overwrite later delivery truth.
+- Hardened the package export dependency seam so `package_bundle_export` now stays blocked until the current governance-history bundle is actually delivered for the same run, rather than allowing board closure alone to imply delivery readiness.
+- Hardened private writer failure handling so governance-history and package-bundle writers now preserve bounded partial receipts (written count plus last attempted relative path) for recovery without leaking note bodies or export-root internals into public board/API/audit surfaces.
 
 ## Sharp Edges Logged
 

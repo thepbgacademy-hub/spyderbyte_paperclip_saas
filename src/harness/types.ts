@@ -161,6 +161,7 @@ export interface HarnessExportDeliveryRecord {
 
 export interface HarnessExportDeliveryOutcomeUpdate {
   idempotencyKey: string;
+  expectedLastAttemptedAt: string;
   status: "delivered" | "delivery_failed";
   writerKind: null | "obsidian_filesystem";
   deliveryReceipt: Record<string, unknown>;
@@ -177,6 +178,26 @@ export interface HarnessExportDeliveryAttemptClaim {
   writerKind: null | "obsidian_filesystem";
   claimedAt: string;
   updatedAt: string;
+}
+
+export const HARNESS_EXPORT_DELIVERY_LEASE_MS = 10 * 60 * 1000;
+
+export function isHarnessExportDeliveryClaimExpired(input: {
+  status: HarnessExportDeliveryRecord["status"];
+  lastAttemptedAt: string | null;
+  now?: number;
+}): boolean {
+  if (input.status !== "delivery_in_progress" || !input.lastAttemptedAt) {
+    return false;
+  }
+
+  const attemptedAt = Date.parse(input.lastAttemptedAt);
+  if (!Number.isFinite(attemptedAt)) {
+    return false;
+  }
+
+  const now = input.now ?? Date.now();
+  return now - attemptedAt >= HARNESS_EXPORT_DELIVERY_LEASE_MS;
 }
 
 export const HARNESS_CARD_STATES = [
