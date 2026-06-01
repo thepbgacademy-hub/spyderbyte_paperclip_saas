@@ -14,6 +14,7 @@ import type {
   HarnessCardEventRecord,
   HarnessCardRecord,
   HarnessCompletionPackageSnapshotRecord,
+  HarnessGovernanceHistorySnapshotRecord,
   HarnessExportDeliveryAttemptClaim,
   HarnessExportDeliveryReceipt,
   HarnessExportDeliveryOutcomeUpdate,
@@ -50,6 +51,8 @@ export interface HarnessRepository {
   listDecisionsForRun(runId: string): Promise<HarnessBoardDecisionRecord[]>;
   upsertCompletionPackageSnapshot(record: HarnessCompletionPackageSnapshotRecord): Promise<HarnessCompletionPackageSnapshotRecord>;
   getCompletionPackageSnapshot(runId: string): Promise<HarnessCompletionPackageSnapshotRecord | null>;
+  upsertGovernanceHistorySnapshot(record: HarnessGovernanceHistorySnapshotRecord): Promise<HarnessGovernanceHistorySnapshotRecord>;
+  getGovernanceHistorySnapshot(runId: string): Promise<HarnessGovernanceHistorySnapshotRecord | null>;
   getExportDeliveryByIdempotencyKey(idempotencyKey: string): Promise<HarnessExportDeliveryRecord | null>;
   upsertExportDelivery(record: HarnessExportDeliveryRecord): Promise<HarnessExportDeliveryRecord>;
   claimExportDeliveryAttempt(input: HarnessExportDeliveryAttemptClaim): Promise<HarnessExportDeliveryRecord | null>;
@@ -78,6 +81,7 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
   const continuity = new Map<string, HarnessCardContinuityRecord>();
   const decisions = new Map<string, HarnessBoardDecisionRecord[]>();
   const completionPackageSnapshots = new Map<string, HarnessCompletionPackageSnapshotRecord>();
+  const governanceHistorySnapshots = new Map<string, HarnessGovernanceHistorySnapshotRecord>();
   const exportDeliveries = new Map<string, HarnessExportDeliveryRecord>();
   const proposals = new Map<string, HarnessSubCardProposal>();
 
@@ -306,6 +310,33 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
             objections: [...record.objections],
             governanceItems: record.governanceItems.map((item) => ({ ...item })),
             deliverables: record.deliverables.map((item) => ({ ...item }))
+          }
+        : null;
+    },
+
+    async upsertGovernanceHistorySnapshot(record) {
+      const existing = governanceHistorySnapshots.get(record.runId);
+      const nextRecord: HarnessGovernanceHistorySnapshotRecord = {
+        ...record,
+        createdAt: existing?.createdAt ?? record.createdAt,
+        recentDecisions: record.recentDecisions.map((item) => ({ ...item })),
+        followThroughItems: record.followThroughItems.map((item) => ({ ...item }))
+      };
+      governanceHistorySnapshots.set(record.runId, nextRecord);
+      return {
+        ...nextRecord,
+        recentDecisions: nextRecord.recentDecisions.map((item) => ({ ...item })),
+        followThroughItems: nextRecord.followThroughItems.map((item) => ({ ...item }))
+      };
+    },
+
+    async getGovernanceHistorySnapshot(runId) {
+      const record = governanceHistorySnapshots.get(runId);
+      return record
+        ? {
+            ...record,
+            recentDecisions: record.recentDecisions.map((item) => ({ ...item })),
+            followThroughItems: record.followThroughItems.map((item) => ({ ...item }))
           }
         : null;
     },
@@ -803,6 +834,42 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
       return result.rows[0] ? mapHarnessCompletionPackageSnapshotRow(result.rows[0]) : null;
     },
 
+    async upsertGovernanceHistorySnapshot(record) {
+      const result = await client.query(
+        `insert into wfpc.harness_governance_history_snapshots
+          (run_id, tenant_id, workflow_id, package_id, snapshot_payload, created_at, updated_at)
+         values ($1, $2, $3, $4, $5::jsonb, $6::timestamptz, $7::timestamptz)
+         on conflict (run_id) do update
+           set snapshot_payload = excluded.snapshot_payload,
+               updated_at = excluded.updated_at
+         returning run_id, tenant_id, workflow_id, package_id, snapshot_payload, created_at, updated_at`,
+        [
+          record.runId,
+          record.tenantId,
+          record.workflowId,
+          record.packageId,
+          JSON.stringify({
+            recentDecisions: record.recentDecisions,
+            followThroughItems: record.followThroughItems
+          }),
+          record.createdAt,
+          record.updatedAt
+        ]
+      );
+      return mapHarnessGovernanceHistorySnapshotRow(result.rows[0])!;
+    },
+
+    async getGovernanceHistorySnapshot(runId) {
+      const result = await client.query(
+        `select run_id, tenant_id, workflow_id, package_id, snapshot_payload, created_at, updated_at
+         from wfpc.harness_governance_history_snapshots
+         where run_id = $1
+         limit 1`,
+        [runId]
+      );
+      return result.rows[0] ? mapHarnessGovernanceHistorySnapshotRow(result.rows[0]) : null;
+    },
+
     async getExportDeliveryByIdempotencyKey(idempotencyKey) {
       const result = await client.query(
         `select id, run_id, tenant_id, workflow_id, package_id, candidate_id, status, export_format, record_target,
@@ -1158,6 +1225,61 @@ function mapHarnessCompletionPackageSnapshotRow(row: unknown): HarnessCompletion
             title: String(entry.title ?? ""),
             deliverableLabel: String(entry.deliverableLabel ?? ""),
             outcome: String(entry.outcome ?? "")
+          };
+        })
+      : [],
+    createdAt: asIsoTimestamp(record.created_at) ?? "",
+    updatedAt: asIsoTimestamp(record.updated_at) ?? ""
+  };
+}
+
+function mapHarnessGovernanceHistorySnapshotRow(row: unknown): HarnessGovernanceHistorySnapshotRecord | null {
+  const record = asRecord(row);
+  if (!record.run_id || !record.tenant_id || !record.workflow_id || !record.package_id) {
+    return null;
+  }
+
+  const snapshot = asRecord(record.snapshot_payload);
+  return {
+    runId: String(record.run_id),
+    tenantId: String(record.tenant_id),
+    workflowId: String(record.workflow_id),
+    packageId: String(record.package_id),
+    recentDecisions: Array.isArray(snapshot.recentDecisions)
+      ? snapshot.recentDecisions.map((item) => {
+          const entry = asRecord(item);
+          return {
+            id: String(entry.id ?? ""),
+            decisionKind: String(entry.decisionKind ?? ""),
+            label: String(entry.label ?? ""),
+            ...(typeof entry.resolution === "string" ? { resolution: entry.resolution } : {}),
+            ...(typeof entry.policyReasonLabel === "string" ? { policyReasonLabel: entry.policyReasonLabel } : {}),
+            ...(typeof entry.recommendationSummary === "string"
+              ? { recommendationSummary: entry.recommendationSummary }
+              : {}),
+            ...(typeof entry.objectionSummary === "string" ? { objectionSummary: entry.objectionSummary } : {}),
+            timestampLabel: String(entry.timestampLabel ?? "")
+          };
+        })
+      : [],
+    followThroughItems: Array.isArray(snapshot.followThroughItems)
+      ? snapshot.followThroughItems.map((item) => {
+          const entry = asRecord(item);
+          return {
+            id: String(entry.id ?? ""),
+            action: String(entry.action ?? "opened_lane") as HarnessGovernanceHistorySnapshotRecord["followThroughItems"][number]["action"],
+            summary: String(entry.summary ?? ""),
+            timestampLabel: String(entry.timestampLabel ?? ""),
+            ...(typeof entry.targetCardId === "string" ? { targetCardId: entry.targetCardId } : {}),
+            ...(typeof entry.proposalId === "string" ? { proposalId: entry.proposalId } : {}),
+            ...(typeof entry.persona === "string" ? { persona: entry.persona } : {}),
+            ...(typeof entry.deliverableLabel === "string" ? { deliverableLabel: entry.deliverableLabel } : {}),
+            ...(typeof entry.resolutionLabel === "string" ? { resolutionLabel: entry.resolutionLabel } : {}),
+            ...(typeof entry.policyReasonLabel === "string" ? { policyReasonLabel: entry.policyReasonLabel } : {}),
+            ...(typeof entry.recommendationSummary === "string"
+              ? { recommendationSummary: entry.recommendationSummary }
+              : {}),
+            ...(typeof entry.objectionSummary === "string" ? { objectionSummary: entry.objectionSummary } : {})
           };
         })
       : [],

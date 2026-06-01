@@ -9,6 +9,7 @@ import type {
   HarnessCompletionPackageSnapshot,
   HarnessCompletionPackageSnapshotRecord,
   HarnessExportDeliveryRecord,
+  HarnessGovernanceHistorySnapshotRecord,
   HarnessRunRecord
 } from "./types.js";
 import { createHarnessBoardDecisionRecord, createHarnessCardContinuityRecord, createHarnessCardEventRecord } from "./types.js";
@@ -1172,13 +1173,14 @@ export function createHarnessBoardService(options: {
         ...(options.runAtomically ? { runAtomically: options.runAtomically } : {})
       });
 
-      const [cards, continuity, events, decisions, exportDeliveries, completionPackageSnapshot] = await Promise.all([
+      const [cards, continuity, events, decisions, exportDeliveries, completionPackageSnapshot, governanceHistorySnapshot] = await Promise.all([
         options.repository.listCardsForRun(run.id),
         options.repository.listCardContinuityForRun(run.id),
         options.repository.listEventsForRun(run.id),
         options.repository.listDecisionsForRun(run.id),
         options.repository.listExportDeliveriesForRun(run.id),
-        options.repository.getCompletionPackageSnapshot(run.id)
+        options.repository.getCompletionPackageSnapshot(run.id),
+        options.repository.getGovernanceHistorySnapshot(run.id)
       ]);
       const proposals = await options.repository.listProposalsForRun(run.id);
 
@@ -1190,7 +1192,8 @@ export function createHarnessBoardService(options: {
         decisions,
         proposals,
         exportDeliveries,
-        ...(completionPackageSnapshot ? { completionPackageSnapshot } : {})
+        ...(completionPackageSnapshot ? { completionPackageSnapshot } : {}),
+        ...(governanceHistorySnapshot ? { governanceHistorySnapshot } : {})
       });
     },
 
@@ -3318,6 +3321,7 @@ export function createHarnessBoardService(options: {
           proposals,
           decisions: completionDecisions
         });
+        const governanceHistorySnapshot = buildGovernanceHistorySnapshot(completionDecisions);
         if (!completionPackage) {
           throw new HarnessRunCompletionConflictError("Harness completion package could not be persisted");
         }
@@ -3327,6 +3331,16 @@ export function createHarnessBoardService(options: {
           workflowId: completedRun.workflowId,
           packageId: completedRun.packageId,
           ...completionPackage,
+          createdAt: completedRun.updatedAt,
+          updatedAt: completedRun.updatedAt
+        });
+        await repository.upsertGovernanceHistorySnapshot({
+          runId: completedRun.id,
+          tenantId: completedRun.tenantId,
+          workflowId: completedRun.workflowId,
+          packageId: completedRun.packageId,
+          recentDecisions: governanceHistorySnapshot.recentDecisions,
+          followThroughItems: governanceHistorySnapshot.followThroughItems,
           createdAt: completedRun.updatedAt,
           updatedAt: completedRun.updatedAt
         });
@@ -4463,13 +4477,15 @@ async function loadExportBoardContext(input: {
   if (!run || run.tenantId !== access.session.tenantId) {
     throw new ApiAuthError();
   }
-  const [cards, continuity, events, decisions, proposals, exportDeliveries] = await Promise.all([
+  const [cards, continuity, events, decisions, proposals, exportDeliveries, completionPackageSnapshot, governanceHistorySnapshot] = await Promise.all([
     input.repository.listCardsForRun(run.id),
     input.repository.listCardContinuityForRun(run.id),
     input.repository.listEventsForRun(run.id),
     input.repository.listDecisionsForRun(run.id),
     input.repository.listProposalsForRun(run.id),
-    input.repository.listExportDeliveriesForRun(run.id)
+    input.repository.listExportDeliveriesForRun(run.id),
+    input.repository.getCompletionPackageSnapshot(run.id),
+    input.repository.getGovernanceHistorySnapshot(run.id)
   ]);
 
   return {
@@ -4483,7 +4499,9 @@ async function loadExportBoardContext(input: {
       events,
       decisions,
       proposals,
-      exportDeliveries
+      exportDeliveries,
+      ...(completionPackageSnapshot ? { completionPackageSnapshot } : {}),
+      ...(governanceHistorySnapshot ? { governanceHistorySnapshot } : {})
     })
   };
 }
@@ -5088,6 +5106,7 @@ function buildHarnessBoardResponse(input: {
   proposals: readonly HarnessSubCardProposal[];
   exportDeliveries?: readonly HarnessExportDeliveryRecord[];
   completionPackageSnapshot?: HarnessCompletionPackageSnapshotRecord;
+  governanceHistorySnapshot?: HarnessGovernanceHistorySnapshotRecord;
 }): HarnessBoardResponse {
   const eventsByCardId = new Map<string, HarnessCardEventRecord[]>();
   const activityByCardId = new Map<string, HarnessBoardActivityItem[]>();
@@ -5135,11 +5154,12 @@ function buildHarnessBoardResponse(input: {
           proposals: input.proposals,
           decisions: input.decisions
         });
-  const recentDecisions = input.decisions.slice(0, 8).map(toRecentDecisionView);
-  const followThroughItems = input.decisions
-    .filter(isFollowThroughDecision)
-    .slice(0, 8)
-    .map(toFollowThroughView);
+  const governanceHistory =
+    input.governanceHistorySnapshot
+      ? toGovernanceHistoryView(input.governanceHistorySnapshot)
+      : buildGovernanceHistorySnapshot(input.decisions);
+  const recentDecisions = governanceHistory.recentDecisions;
+  const followThroughItems = governanceHistory.followThroughItems;
   const pendingAttention = buildPendingAttentionView({
     run: input.run,
     cards: input.cards,
@@ -8781,6 +8801,7 @@ function buildGovernanceHistoryExportDryRun(
   const followThroughLines = board.followThroughItems.map((item) => (
     `- ${item.summary}${item.policyReasonLabel ? `\n  - Policy reason: ${item.policyReasonLabel}` : ""}${item.resolutionLabel ? `\n  - Resolution: ${item.resolutionLabel}` : ""}`
   ));
+  const recordCount = Math.max(1, board.recentDecisions.length + board.followThroughItems.length);
   const content = [
     `# ${noteTitle}`,
     "",
@@ -8817,7 +8838,7 @@ function buildGovernanceHistoryExportDryRun(
     noteTitle,
     noteFileName,
     placement,
-    recordCount: Math.max(1, candidate.itemCount),
+    recordCount,
     disclosureSummary: candidate.exportSourceDisclosurePolicyLabel,
     redactionSummary: candidate.exportRedactionBoundaryLabel,
     files: payloadFiles
@@ -8843,7 +8864,7 @@ function buildGovernanceHistoryExportDryRun(
       placement,
       disclosureSummary: candidate.exportSourceDisclosurePolicyLabel,
       redactionSummary: candidate.exportRedactionBoundaryLabel,
-      recordCount: Math.max(1, candidate.itemCount)
+      recordCount
     },
     null,
     2
@@ -8869,7 +8890,7 @@ function buildGovernanceHistoryExportDryRun(
     content,
     placement,
     files,
-    recordCount: Math.max(1, candidate.itemCount),
+    recordCount,
     disclosureSummary: candidate.exportSourceDisclosurePolicyLabel,
     redactionSummary: candidate.exportRedactionBoundaryLabel
   };
@@ -9329,6 +9350,23 @@ function toCompletionPackageView(record: HarnessCompletionPackageSnapshotRecord)
     objections: [...record.objections],
     governanceItems: record.governanceItems.map((item) => ({ ...item })),
     deliverables: record.deliverables.map((item) => ({ ...item }))
+  };
+}
+
+function buildGovernanceHistorySnapshot(decisions: readonly HarnessBoardDecisionRecord[]) {
+  return {
+    recentDecisions: decisions.slice(0, 8).map(toRecentDecisionView),
+    followThroughItems: decisions
+      .filter(isFollowThroughDecision)
+      .slice(0, 8)
+      .map(toFollowThroughView)
+  };
+}
+
+function toGovernanceHistoryView(record: HarnessGovernanceHistorySnapshotRecord) {
+  return {
+    recentDecisions: record.recentDecisions.map((item) => ({ ...item })),
+    followThroughItems: record.followThroughItems.map((item) => ({ ...item }))
   };
 }
 

@@ -156,6 +156,46 @@ export interface HarnessCompletionPackageSnapshotRecord extends HarnessCompletio
   updatedAt: string;
 }
 
+export interface HarnessGovernanceHistoryRecentDecision {
+  id: string;
+  decisionKind: string;
+  label: string;
+  resolution?: string;
+  policyReasonLabel?: string;
+  recommendationSummary?: string;
+  objectionSummary?: string;
+  timestampLabel: string;
+}
+
+export interface HarnessGovernanceHistoryFollowThroughItem {
+  id: string;
+  action: "opened_lane" | "reused_lane" | "handed_off_lane" | "packaged_outcome";
+  summary: string;
+  timestampLabel: string;
+  targetCardId?: string;
+  proposalId?: string;
+  persona?: string;
+  deliverableLabel?: string;
+  resolutionLabel?: string;
+  policyReasonLabel?: string;
+  recommendationSummary?: string;
+  objectionSummary?: string;
+}
+
+export interface HarnessGovernanceHistorySnapshot {
+  recentDecisions: HarnessGovernanceHistoryRecentDecision[];
+  followThroughItems: HarnessGovernanceHistoryFollowThroughItem[];
+}
+
+export interface HarnessGovernanceHistorySnapshotRecord extends HarnessGovernanceHistorySnapshot {
+  runId: string;
+  tenantId: string;
+  workflowId: string;
+  packageId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface HarnessExportPackageFileRecord {
   path: string;
   mediaType: "text/markdown" | "application/json";

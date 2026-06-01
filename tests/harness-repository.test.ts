@@ -29,6 +29,7 @@ const exportDeliveryResultsMigration = readFileSync("supabase/migrations/0023_wf
 const exportDeliveryClaimsMigration = readFileSync("supabase/migrations/0025_wf_harness_export_delivery_claims.sql", "utf8");
 const exportDeliveryBundleRevisionMigration = readFileSync("supabase/migrations/0026_wf_harness_export_delivery_bundle_revision.sql", "utf8");
 const completionPackageSnapshotsMigration = readFileSync("supabase/migrations/0027_wf_harness_completion_package_snapshots.sql", "utf8");
+const governanceHistorySnapshotsMigration = readFileSync("supabase/migrations/0028_wf_harness_governance_history_snapshots.sql", "utf8");
 const execFileAsync = promisify(execFile);
 
 const HARNESS_POSTGRES_IMAGE = "postgres:16-alpine";
@@ -439,6 +440,64 @@ describe("harness persistence records", () => {
         deliverables: [
           expect.objectContaining({
             cardId: "card_done_1"
+          })
+        ]
+      })
+    );
+  });
+
+  it("stores bounded governance-history snapshots in the minimal in-memory repository", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-123",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+
+    await repository.insertRun(run);
+    await repository.upsertGovernanceHistorySnapshot({
+      runId: run.id,
+      tenantId: run.tenantId,
+      workflowId: run.workflowId,
+      packageId: run.packageId,
+      recentDecisions: [
+        {
+          id: "decision_1",
+          decisionKind: "run_completed",
+          label: "CEO completed the board",
+          resolution: "Completed package assembly",
+          timestampLabel: "Jun 1, 2026"
+        }
+      ],
+      followThroughItems: [
+        {
+          id: "decision_follow_1",
+          action: "packaged_outcome",
+          summary: "Packaged the closed-board outcome for tenant export.",
+          resolutionLabel: "Packaged for export",
+          timestampLabel: "Jun 1, 2026"
+        }
+      ],
+      createdAt: "2026-06-01T00:00:00.000Z",
+      updatedAt: "2026-06-01T00:00:00.000Z"
+    });
+
+    await expect(repository.getGovernanceHistorySnapshot(run.id)).resolves.toEqual(
+      expect.objectContaining({
+        runId: run.id,
+        recentDecisions: [
+          expect.objectContaining({
+            id: "decision_1"
+          })
+        ],
+        followThroughItems: [
+          expect.objectContaining({
+            id: "decision_follow_1"
           })
         ]
       })
@@ -1747,6 +1806,84 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
     },
     120_000
   );
+  it(
+    "stores bounded governance-history snapshots in the real Postgres repository",
+    async () => {
+      const database = requireDisposableHarnessDatabase();
+      const client = new Client({ connectionString: database.connectionString });
+      await client.connect();
+
+      try {
+        const repository = createPostgresHarnessRepository({
+          query: async (sql: string, values: readonly unknown[]) => {
+            const result = await client.query(sql, [...values]);
+            return { rows: result.rows };
+          }
+        });
+        const tenantId = randomUUID();
+        const run = createHarnessRunRecord({
+          tenantId,
+          workflowId: "wf_connect_first_workflow",
+          packageId: "pkg_bib_connect",
+          orchestratorPersona: "ceo",
+          runtimeContext: {
+            providerKind: "openai_api",
+            credentialLabel: "Primary OpenAI"
+          }
+        });
+
+        await resetHarnessProofDatabase(client);
+        await seedHarnessProofPrerequisites(client, tenantId);
+        await client.query(governanceHistorySnapshotsMigration);
+        await repository.insertRun(run);
+        await repository.upsertGovernanceHistorySnapshot({
+          runId: run.id,
+          tenantId: run.tenantId,
+          workflowId: run.workflowId,
+          packageId: run.packageId,
+          recentDecisions: [
+            {
+              id: "decision_pg_1",
+              decisionKind: "run_completed",
+              label: "CEO completed the board",
+              resolution: "Completed package assembly",
+              timestampLabel: "Jun 1, 2026"
+            }
+          ],
+          followThroughItems: [
+            {
+              id: "decision_pg_follow_1",
+              action: "packaged_outcome",
+              summary: "Packaged the closed-board outcome for tenant export.",
+              resolutionLabel: "Packaged for export",
+              timestampLabel: "Jun 1, 2026"
+            }
+          ],
+          createdAt: "2026-06-01T00:00:00.000Z",
+          updatedAt: "2026-06-01T00:00:00.000Z"
+        });
+
+        await expect(repository.getGovernanceHistorySnapshot(run.id)).resolves.toEqual(
+          expect.objectContaining({
+            runId: run.id,
+            recentDecisions: [
+              expect.objectContaining({
+                id: "decision_pg_1"
+              })
+            ],
+            followThroughItems: [
+              expect.objectContaining({
+                id: "decision_pg_follow_1"
+              })
+            ]
+          })
+        );
+      } finally {
+        await client.end();
+      }
+    },
+    120_000
+  );
 });
 
 function hasDockerRuntime() {
@@ -1889,6 +2026,7 @@ async function resetHarnessProofDatabase(client: Client) {
   await client.query(exportDeliveryClaimsMigration);
   await client.query(exportDeliveryBundleRevisionMigration);
   await client.query(completionPackageSnapshotsMigration);
+  await client.query(governanceHistorySnapshotsMigration);
 }
 
 async function seedHarnessProofPrerequisites(client: Client, tenantId: string) {

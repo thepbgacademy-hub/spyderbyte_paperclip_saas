@@ -242,3 +242,6 @@ This file tracks the new harness subproject only.
 - [x] Persist the closed-board `completionPackage` as a bounded harness-owned snapshot so package export and completed-board reads stop depending on a fresh derived rebuild after closure.
 - [x] Rehydrate completed-board package reads from the persisted `completionPackage` snapshot so late proposal/decision noise cannot rewrite the already-closed tenant-facing package surface.
 - [x] Freeze `package_bundle_export` against the persisted `completionPackage` snapshot so package delivery remains revision-aware but no longer depends on mutable post-closure governance reads.
+- [x] Persist closed-board governance history (`recentDecisions` and `followThroughItems`) as a bounded harness-owned snapshot so later completed-board reads and governance export do not re-derive from mutable post-closure decision state.
+- [x] Rehydrate completed-board governance memory from the persisted governance-history snapshot so late post-closure proposal/decision noise cannot rewrite the already-closed tenant-facing governance surface.
+- [x] Freeze `governance_history_export` against the persisted closed-board governance-history snapshot so foundational export delivery no longer drifts after board closure.

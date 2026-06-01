@@ -57,6 +57,7 @@ The first harness implementation slice is now built and verified:
 - persisted export delivery claims must stay recoverable but bounded: a stale `delivery_in_progress` claim may be reclaimed only after the explicit lease window expires, and outcome recording must still compare-and-set against the claimed state instead of trusting best-effort writer order
 - private writer failures must preserve bounded partial-receipt truth: if a governance-history or package-bundle writer fails after some files land, the runtime seam should persist only counts and attempted paths needed for recovery, never note bodies or export-root leakage
 - closed-board package memory is now a persisted seam, not a live rebuild: once `completeRun` stores a `completionPackage` snapshot for a run, completed-board reads and `package_bundle_export` must hydrate from that snapshot instead of re-deriving from later mutable proposal/decision state
+- closed-board governance history is now a persisted seam too: once `completeRun` stores the bounded `recentDecisions` and `followThroughItems` snapshot for a run, completed-board reads and `governance_history_export` must hydrate from that snapshot instead of re-deriving from later mutable decision state
 
 ## External References
 
@@ -190,6 +191,7 @@ The first harness implementation slice is now built and verified:
 - Collapsed governance-history and package-bundle runtime delivery onto one shared bounded executor inside `runtime-server.ts`, so claim, outcome, and audit handling now stay aligned across both export families instead of drifting between duplicated code paths.
 - Closed the next runtime proof gap on that shared executor. `package_bundle_export` now has the same stale-claim interleaving coverage as governance history, proving a late package-bundle writer callback cannot overwrite a newer recovered delivery outcome after claim ownership has moved.
 - Graduated `completionPackage` from a purely derived read model into a persisted harness-owned snapshot. `completeRun` now records the closed-board package once, completed-board reads rehydrate from that snapshot, and late post-closure governance noise no longer rewrites the tenant-facing package surface or package-bundle export seam.
+- Graduated closed-board governance history into the same persisted snapshot posture. `completeRun` now records bounded `recentDecisions` and `followThroughItems` once, export-action board fetches now load that frozen snapshot too, and late post-closure governance noise no longer rewrites the tenant-facing governance-history export seam.
 - Tightened the export-delivery ledger contract itself by treating `deliveryReceipt` as a bounded typed shape instead of an ad hoc JSON blob. Runtime, repository, and board-facing consumers now agree on the allowed receipt fields for primary note path, manifest path, written count, written paths, and partial last-attempted path.
 
 ## Sharp Edges Logged

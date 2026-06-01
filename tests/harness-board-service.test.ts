@@ -7467,6 +7467,112 @@ describe("harness board service", () => {
     expect(JSON.stringify(hydratedBoard.completionPackage)).not.toContain("Open an extra technical review lane");
   });
 
+  it("keeps persisted governance history immutable after the board closes", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "done",
+      resultSummary: "Pricing floor is stable enough for launch."
+    });
+
+    await service.completeRun({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      completionSummary: "The CEO packaged the final business-facing outcome."
+    });
+
+    const completedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const persistedSnapshot = await repository.getGovernanceHistorySnapshot(board.runId);
+    const dryRunAction = completedBoard.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "governance_history_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "export-dry-run");
+    expect(dryRunAction).toBeTruthy();
+    const completedDryRun = await service.dryRunExportCandidate({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      candidateId: "governance_history_export",
+      actionToken: dryRunAction!.actionToken
+    });
+
+    await repository.insertProposal({
+      id: "proposal_post_completion_noise_2",
+      runId: board.runId,
+      parentCardId: created.cardId,
+      requestedByCardId: created.cardId,
+      requestedByPersona: "cfo",
+      persona: "cto",
+      title: "Open an extra technical review lane",
+      deliverableType: "technical_review",
+      status: "denied"
+    });
+    await repository.insertDecision({
+      id: "decision_post_completion_noise_2",
+      runId: board.runId,
+      tenantId: "tenant_123",
+      actorUserId: "user_123",
+      decisionKind: "proposal_denied",
+      cardId: created.cardId,
+      proposalId: "proposal_post_completion_noise_2",
+      targetCardId: null,
+      persona: "cto",
+      deliverableType: "technical_review",
+      policyReason: "scope_guardrail",
+      resolution: null,
+      decisionNote: "Should stay out of the persisted closed-board governance history.",
+      recommendationSummary: "Do not mutate the closed-board governance-history snapshot.",
+      objectionSummary: "This late governance noise should not rewrite the governance export surface.",
+      createdAt: new Date().toISOString()
+    });
+
+    const hydratedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(hydratedBoard.recentDecisions).toEqual(completedBoard.recentDecisions);
+    expect(hydratedBoard.followThroughItems).toEqual(completedBoard.followThroughItems);
+    await expect(repository.getGovernanceHistorySnapshot(board.runId)).resolves.toEqual(
+      expect.objectContaining(persistedSnapshot ?? {})
+    );
+    const refreshedDryRunAction = hydratedBoard.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "governance_history_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "export-dry-run");
+    expect(refreshedDryRunAction).toBeTruthy();
+    const hydratedDryRun = await service.dryRunExportCandidate({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      candidateId: "governance_history_export",
+      actionToken: refreshedDryRunAction!.actionToken
+    });
+    expect(hydratedDryRun.bundleId).toBe(completedDryRun.bundleId);
+    expect(hydratedDryRun.bundleRevision).toBe(completedDryRun.bundleRevision);
+    expect(hydratedDryRun.content).not.toContain("Open an extra technical review lane");
+  });
+
   it("keeps denied-only governance items visible in the completion package", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
