@@ -366,6 +366,10 @@ describe("worker runtime", () => {
           providerKind: "openai_api",
           credentialLabel: "Primary OpenAI"
         },
+        dispatchHandoff: {
+          kind: "initial_claim",
+          kindLabel: "Initial lane claim"
+        },
         laneExecution: expect.objectContaining({
           cardId: "card_cfo",
           parentCardId: "card_ceo",
@@ -387,6 +391,9 @@ describe("worker runtime", () => {
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"dispatchHandoff\":{\"kind\":\"initial_claim\"")
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"status\":\"running\"")
@@ -1049,6 +1056,14 @@ describe("worker runtime", () => {
         runId: "run-1",
         workflowId: "wf_connect_first_workflow",
         status: "running",
+        dispatchHandoff: {
+          kind: "follow_on_dispatch",
+          kindLabel: "Follow-on dispatch",
+          triggeredByCardId: "card_cfo",
+          triggeredByPersona: "cfo",
+          triggeredByOutcomeState: "done",
+          triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
+        },
         laneExecution: {
           cardId: "card_cmo",
           persona: "cmo",
@@ -1102,6 +1117,9 @@ describe("worker runtime", () => {
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"dispatchHandoff\":{\"kind\":\"follow_on_dispatch\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"postOutcomeAction\":{\"kind\":\"dispatch_next_lane\",\"runState\":\"active\",\"cardId\":\"card_cmo\",\"persona\":\"cmo\"}")
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
@@ -1116,6 +1134,14 @@ describe("worker runtime", () => {
         runtimeContext: {
           providerKind: "openai_api",
           credentialLabel: "Primary OpenAI"
+        },
+        dispatchHandoff: {
+          kind: "follow_on_dispatch",
+          kindLabel: "Follow-on dispatch",
+          triggeredByCardId: "card_cfo",
+          triggeredByPersona: "cfo",
+          triggeredByOutcomeState: "done",
+          triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
         },
         laneExecution: expect.objectContaining({
           cardId: "card_cmo",
@@ -1233,6 +1259,14 @@ describe("worker runtime", () => {
           kind: "none"
         },
         nextDispatch: expect.objectContaining({
+          dispatchHandoff: {
+            kind: "follow_on_dispatch",
+            kindLabel: "Follow-on dispatch",
+            triggeredByCardId: "card_cfo",
+            triggeredByPersona: "cfo",
+            triggeredByOutcomeState: "done",
+            triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
+          },
           laneExecution: expect.objectContaining({
             cardId: "card_cmo"
           })
@@ -1246,6 +1280,14 @@ describe("worker runtime", () => {
     expect(onHarnessAttentionResolved).not.toHaveBeenCalled();
     expect(onHarnessLaneReady).toHaveBeenCalledWith(
       expect.objectContaining({
+        dispatchHandoff: {
+          kind: "follow_on_dispatch",
+          kindLabel: "Follow-on dispatch",
+          triggeredByCardId: "card_cfo",
+          triggeredByPersona: "cfo",
+          triggeredByOutcomeState: "done",
+          triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
+        },
         laneExecution: expect.objectContaining({
           cardId: "card_cmo"
         })

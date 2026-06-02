@@ -74,6 +74,10 @@ describe("harness worker executor", () => {
       runId: run.id,
       workflowId: "wf_connect_first_workflow",
       status: "running",
+      dispatchHandoff: {
+        kind: "initial_claim",
+        kindLabel: "Initial lane claim"
+      },
       laneExecution: {
         cardId: cfoCard.id,
         persona: "cfo",
@@ -176,6 +180,10 @@ describe("harness worker executor", () => {
       runId: run.id,
       workflowId: "wf_connect_first_workflow",
       status: "running",
+      dispatchHandoff: {
+        kind: "initial_claim",
+        kindLabel: "Initial lane claim"
+      },
       laneExecution: expect.objectContaining({
         cardId: cfoCard.id,
         persona: "cfo"
@@ -189,6 +197,10 @@ describe("harness worker executor", () => {
       runtimeContext: {
         providerKind: "openai_api",
         credentialLabel: "Primary OpenAI"
+      },
+      dispatchHandoff: {
+        kind: "initial_claim",
+        kindLabel: "Initial lane claim"
       },
       outcomeContract: {
         allowedStates: ["waiting", "done", "blocked", "cancelled"],
@@ -375,6 +387,10 @@ describe("harness worker executor", () => {
       runId: run.id,
       workflowId: "wf_connect_first_workflow",
       status: "running",
+      dispatchHandoff: {
+        kind: "initial_claim",
+        kindLabel: "Initial lane claim"
+      },
       laneExecution: expect.objectContaining({
         cardId: cfoCard.id,
         state: "working",
@@ -907,6 +923,14 @@ describe("harness worker executor", () => {
         runId: run.id,
         workflowId: "wf_connect_first_workflow",
         status: "running",
+        dispatchHandoff: {
+          kind: "follow_on_dispatch",
+          kindLabel: "Follow-on dispatch",
+          triggeredByCardId: cfoCard.id,
+          triggeredByPersona: "cfo",
+          triggeredByOutcomeState: "done",
+          triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
+        },
         laneExecution: {
           cardId: cmoCard.id,
           persona: "cmo",
@@ -1007,6 +1031,14 @@ describe("harness worker executor", () => {
           persona: "cmo"
         },
         nextDispatch: expect.objectContaining({
+          dispatchHandoff: {
+            kind: "follow_on_dispatch",
+            kindLabel: "Follow-on dispatch",
+            triggeredByCardId: cfoCard.id,
+            triggeredByPersona: "cfo",
+            triggeredByOutcomeState: "done",
+            triggeredByResultSummary: "Pricing review is complete and the messaging lane can begin."
+          },
           laneExecution: expect.objectContaining({
             cardId: cmoCard.id,
             state: "working"

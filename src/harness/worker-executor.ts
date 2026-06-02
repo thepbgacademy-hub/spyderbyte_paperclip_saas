@@ -33,6 +33,20 @@ export type HarnessWorkerLaneExecution = {
   absorbedWorkItems?: string[];
 };
 
+export type HarnessWorkerDispatchHandoff =
+  | {
+      kind: "initial_claim";
+      kindLabel: "Initial lane claim";
+    }
+  | {
+      kind: "follow_on_dispatch";
+      kindLabel: "Follow-on dispatch";
+      triggeredByCardId: string;
+      triggeredByPersona: string;
+      triggeredByOutcomeState: Extract<HarnessCardState, "waiting" | "done" | "blocked" | "cancelled">;
+      triggeredByResultSummary?: string;
+    };
+
 export type HarnessWorkerOutcomeContract = {
   allowedStates: readonly Extract<HarnessCardState, "waiting" | "done" | "blocked" | "cancelled">[];
   resultSummaryRequiredStates: readonly Extract<HarnessCardState, "done">[];
@@ -44,6 +58,7 @@ export type HarnessWorkerDispatch = {
   workflowId: string;
   status: "queued" | "running";
   laneExecution: HarnessWorkerLaneExecution | null;
+  dispatchHandoff?: HarnessWorkerDispatchHandoff;
 };
 
 export type HarnessWorkerExecutionEnvelope = {
@@ -53,6 +68,7 @@ export type HarnessWorkerExecutionEnvelope = {
   requiredCapabilities: readonly ProviderCapability[];
   runtimeContext: HarnessRuntimeContext;
   laneExecution: HarnessWorkerLaneExecution;
+  dispatchHandoff?: HarnessWorkerDispatchHandoff;
   outcomeContract: HarnessWorkerOutcomeContract;
 };
 
@@ -142,6 +158,7 @@ export async function buildHarnessWorkerDispatch(input: {
   tenantId: string;
   runId: string;
   workflowId: string;
+  dispatchHandoff?: HarnessWorkerDispatchHandoff;
   runAtomically?: <T>(work: (repository: HarnessDispatchRepository) => Promise<T>) => Promise<T>;
 }): Promise<HarnessWorkerDispatch> {
   const runWork = input.runAtomically ?? (async <T>(work: (repository: HarnessDispatchRepository) => Promise<T>) => work(input.repository));
@@ -210,13 +227,17 @@ export async function buildHarnessWorkerDispatch(input: {
 
     const resumeFocus = resumedRuntime.getResumeFocus(claimedLane.id);
 
-    return {
-      runId: run.id,
-      workflowId: run.workflowId,
-      status: "running",
-      laneExecution: {
-        cardId: claimedLane.id,
-        persona: claimedLane.persona,
+      return {
+        runId: run.id,
+        workflowId: run.workflowId,
+        status: "running",
+        dispatchHandoff: input.dispatchHandoff ?? {
+          kind: "initial_claim",
+          kindLabel: "Initial lane claim"
+        },
+        laneExecution: {
+          cardId: claimedLane.id,
+          persona: claimedLane.persona,
         title: claimedLane.title,
         deliverableType: claimedLane.deliverableType,
         state: claimedLane.state,
@@ -331,7 +352,17 @@ export async function commitHarnessWorkerLaneOutcome(input: {
             repository,
             tenantId: input.tenantId,
             runId: run.id,
-            workflowId: run.workflowId
+            workflowId: run.workflowId,
+            dispatchHandoff: {
+              kind: "follow_on_dispatch",
+              kindLabel: "Follow-on dispatch",
+              triggeredByCardId: updatedCard.id,
+              triggeredByPersona: updatedCard.persona,
+              triggeredByOutcomeState: input.state,
+              ...(continuity.latestResultSummary
+                ? { triggeredByResultSummary: continuity.latestResultSummary }
+                : {})
+            }
           });
     const [latestRun, cardsAfterOutcome, proposalsAfterOutcome, eventsAfterOutcome, continuityAfterOutcome] = await Promise.all([
       repository.getRun(run.id),
@@ -431,6 +462,14 @@ export async function buildHarnessWorkerExecutionEnvelope(input: {
     workflowId: run.workflowId,
     requiredCapabilities: [...input.requiredCapabilities],
     runtimeContext: run.runtimeContext,
+    ...(input.dispatch.dispatchHandoff
+      ? {
+          dispatchHandoff:
+            "triggeredByCardId" in input.dispatch.dispatchHandoff
+              ? { ...input.dispatch.dispatchHandoff }
+              : { ...input.dispatch.dispatchHandoff }
+        }
+      : {}),
     outcomeContract: {
       allowedStates: [...HARNESS_WORKER_OUTCOME_CONTRACT.allowedStates],
       resultSummaryRequiredStates: [...HARNESS_WORKER_OUTCOME_CONTRACT.resultSummaryRequiredStates],
