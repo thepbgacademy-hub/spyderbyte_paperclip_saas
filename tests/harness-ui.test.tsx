@@ -290,6 +290,10 @@ const boardResponse: HarnessBoardResponse = {
     roleSummary: "2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure.",
     ownershipSummary:
       "2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later.",
+    runtimeShapeSummary:
+      "1 runtime bucket keeps the bounded continuity trio, and 1 bucket keeps CEO attention as a live control signal.",
+    runtimeLongMemoryDispositionSummary:
+      "2 runtime buckets stay operational Wealth Factory truth and do not promote directly into tenant-owned long memory.",
     promotionSummary:
       "2 runtime memory buckets never promote, 2 candidate buckets are ready for explicit export later, and 2 candidate buckets still wait on board closure first.",
     recordTargetSummary:
@@ -481,6 +485,9 @@ const boardResponse: HarnessBoardResponse = {
     runtimeOnlyRecoveryPathCount: 2,
     retryLatestRecordExportCount: 2,
     rerunAfterBoardClosureSnapshotCount: 2,
+    continuityTrioRuntimeItemCount: 1,
+    attentionSignalRuntimeItemCount: 1,
+    runtimeOnlyLongMemoryItemCount: 2,
     partitions: {
       runtime: {
         itemCount: 2,
@@ -514,6 +521,12 @@ const boardResponse: HarnessBoardResponse = {
         candidateClassLabel: "Runtime operational",
         durabilityCondition: "runtime_ephemeral",
         durabilityConditionLabel: "Runtime ephemeral",
+        runtimeMemoryShape: "bounded_continuity_trio",
+        runtimeMemoryShapeLabel: "Bounded continuity trio",
+        runtimeMemoryComponents: ["continuity_summary", "latest_result_summary", "absorbed_work_items"],
+        runtimeMemoryComponentLabels: ["Continuity summary", "Latest result summary", "Absorbed work items"],
+        runtimeLongMemoryDisposition: "stays_runtime_only",
+        runtimeLongMemoryDispositionLabel: "Stays runtime only",
         ownershipBoundary: "wealth_factory_only",
         ownershipBoundaryLabel: "Wealth Factory only",
         promotionPath: "never_promotes",
@@ -606,6 +619,12 @@ const boardResponse: HarnessBoardResponse = {
         candidateClassLabel: "Runtime operational",
         durabilityCondition: "runtime_ephemeral",
         durabilityConditionLabel: "Runtime ephemeral",
+        runtimeMemoryShape: "bounded_attention_signal",
+        runtimeMemoryShapeLabel: "Bounded attention signal",
+        runtimeMemoryComponents: ["pending_attention_state"],
+        runtimeMemoryComponentLabels: ["Pending attention state"],
+        runtimeLongMemoryDisposition: "stays_runtime_only",
+        runtimeLongMemoryDispositionLabel: "Stays runtime only",
         ownershipBoundary: "wealth_factory_only",
         ownershipBoundaryLabel: "Wealth Factory only",
         promotionPath: "never_promotes",

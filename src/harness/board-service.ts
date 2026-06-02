@@ -101,6 +101,19 @@ export type HarnessMemoryBoundaryRole =
   | "governance_record_candidate"
   | "packaged_record_candidate";
 
+export type HarnessRuntimeMemoryShape =
+  | "bounded_continuity_trio"
+  | "bounded_attention_signal";
+
+export type HarnessRuntimeMemoryComponent =
+  | "continuity_summary"
+  | "latest_result_summary"
+  | "absorbed_work_items"
+  | "pending_attention_state";
+
+export type HarnessRuntimeLongMemoryDisposition =
+  | "stays_runtime_only";
+
 export type HarnessMemoryBoundaryEligibilityRule =
   | "runtime_only"
   | "explicit_export_later"
@@ -407,6 +420,12 @@ export type HarnessMemoryBoundaryItemView = {
   exportConfirmationRequirementLabel: string;
   exportRecoveryPath: HarnessMemoryBoundaryExportRecoveryPath;
   exportRecoveryPathLabel: string;
+  runtimeMemoryShape?: HarnessRuntimeMemoryShape;
+  runtimeMemoryShapeLabel?: string;
+  runtimeMemoryComponents?: HarnessRuntimeMemoryComponent[];
+  runtimeMemoryComponentLabels?: string[];
+  runtimeLongMemoryDisposition?: HarnessRuntimeLongMemoryDisposition;
+  runtimeLongMemoryDispositionLabel?: string;
   promotionActionDescription: string;
   nextEligibleSummary?: string;
 };
@@ -666,6 +685,11 @@ export type HarnessMemoryBoundaryView = {
   requestShapeSummary: string;
   confirmationSummary: string;
   recoveryPathSummary: string;
+  continuityTrioRuntimeItemCount?: number;
+  attentionSignalRuntimeItemCount?: number;
+  runtimeOnlyLongMemoryItemCount?: number;
+  runtimeShapeSummary?: string;
+  runtimeLongMemoryDispositionSummary?: string;
   exportCandidateSummary?: string;
   exportCandidateGroupCount?: number;
   readyExportCandidateGroupCount?: number;
@@ -5367,6 +5391,20 @@ function buildMemoryBoundaryView(input: {
       exportConfirmationRequirementLabel: humanizeMemoryBoundaryExportConfirmationRequirement("none_runtime_only"),
       exportRecoveryPath: "runtime_only",
       exportRecoveryPathLabel: humanizeMemoryBoundaryExportRecoveryPath("runtime_only"),
+      runtimeMemoryShape: "bounded_continuity_trio",
+      runtimeMemoryShapeLabel: "Bounded continuity trio",
+      runtimeMemoryComponents: [
+        "continuity_summary",
+        "latest_result_summary",
+        "absorbed_work_items"
+      ],
+      runtimeMemoryComponentLabels: [
+        "Continuity summary",
+        "Latest result summary",
+        "Absorbed work items"
+      ],
+      runtimeLongMemoryDisposition: "stays_runtime_only",
+      runtimeLongMemoryDispositionLabel: "Stays runtime only",
       promotionActionDescription: "No export action applies. This runtime memory stays inside Wealth Factory orchestration."
     },
     {
@@ -5459,6 +5497,12 @@ function buildMemoryBoundaryView(input: {
       exportConfirmationRequirementLabel: humanizeMemoryBoundaryExportConfirmationRequirement("none_runtime_only"),
       exportRecoveryPath: "runtime_only",
       exportRecoveryPathLabel: humanizeMemoryBoundaryExportRecoveryPath("runtime_only"),
+      runtimeMemoryShape: "bounded_attention_signal",
+      runtimeMemoryShapeLabel: "Bounded attention signal",
+      runtimeMemoryComponents: ["pending_attention_state"],
+      runtimeMemoryComponentLabels: ["Pending attention state"],
+      runtimeLongMemoryDisposition: "stays_runtime_only",
+      runtimeLongMemoryDispositionLabel: "Stays runtime only",
       promotionActionDescription: "No export action applies. This runtime attention state stays inside Wealth Factory orchestration."
     }
   ];
@@ -6090,6 +6134,15 @@ function buildMemoryBoundaryView(input: {
     (item) => item.promotionTrigger === "board_closure"
   ).length;
   const runtimeOnlyStateCount = operationalItems.filter((item) => item.promotionState === "runtime_only").length;
+  const continuityTrioRuntimeItemCount = operationalItems.filter(
+    (item) => item.runtimeMemoryShape === "bounded_continuity_trio"
+  ).length;
+  const attentionSignalRuntimeItemCount = operationalItems.filter(
+    (item) => item.runtimeMemoryShape === "bounded_attention_signal"
+  ).length;
+  const runtimeOnlyLongMemoryItemCount = operationalItems.filter(
+    (item) => item.runtimeLongMemoryDisposition === "stays_runtime_only"
+  ).length;
   const readyForTenantExportStateCount = exportReadyItems.filter(
     (item) => item.promotionState === "ready_for_tenant_export"
   ).length;
@@ -7057,6 +7110,9 @@ function buildMemoryBoundaryView(input: {
     runtimeOnlyRecoveryPathCount,
     retryLatestRecordExportCount,
     rerunAfterBoardClosureSnapshotCount,
+    continuityTrioRuntimeItemCount,
+    attentionSignalRuntimeItemCount,
+    runtimeOnlyLongMemoryItemCount,
     roleSummary:
       packagedWaitingCount > 0
         ? `${governanceReadyCount} governance record candidate${governanceReadyCount === 1 ? "" : "s"} ${governanceReadyCount === 1 ? "is" : "are"} ready now, and ${packagedWaitingCount} packaged output candidate${packagedWaitingCount === 1 ? "" : "s"} ${packagedWaitingCount === 1 ? "still waits" : "still wait"} on board closure.`
@@ -7205,6 +7261,12 @@ function buildMemoryBoundaryView(input: {
       rerunAfterBoardClosureSnapshotCount > 0
         ? `${runtimeOnlyRecoveryPathCount} runtime buckets are runtime only, ${retryLatestRecordExportCount} export candidate bucket${retryLatestRecordExportCount === 1 ? " retries" : "s retry"} the latest record export, and ${rerunAfterBoardClosureSnapshotCount} bucket${rerunAfterBoardClosureSnapshotCount === 1 ? " still reruns" : "s still rerun"} after the board-closure snapshot.`
         : `${runtimeOnlyRecoveryPathCount} runtime buckets are runtime only, and ${retryLatestRecordExportCount} export candidate bucket${retryLatestRecordExportCount === 1 ? " retries" : "s retry"} the latest record export.`,
+    runtimeShapeSummary:
+      attentionSignalRuntimeItemCount > 0
+        ? `${continuityTrioRuntimeItemCount} runtime bucket${continuityTrioRuntimeItemCount === 1 ? " keeps" : "s keep"} the bounded continuity trio, and ${attentionSignalRuntimeItemCount} bucket${attentionSignalRuntimeItemCount === 1 ? " keeps" : "s keep"} CEO attention as a live control signal.`
+        : `${continuityTrioRuntimeItemCount} runtime bucket${continuityTrioRuntimeItemCount === 1 ? " keeps" : "s keep"} the bounded continuity trio.`,
+    runtimeLongMemoryDispositionSummary:
+      `${runtimeOnlyLongMemoryItemCount} runtime bucket${runtimeOnlyLongMemoryItemCount === 1 ? " stays" : "s stay"} operational Wealth Factory truth and do not promote directly into tenant-owned long memory.`,
     exportCandidateSummary:
       waitingExportCandidateGroupCount > 0
         ? `${readyExportCandidateGroupCount} export candidate group${readyExportCandidateGroupCount === 1 ? " is" : "s are"} ready for later tenant export, and ${waitingExportCandidateGroupCount} group${waitingExportCandidateGroupCount === 1 ? " still waits" : "s still wait"} on board closure first.`

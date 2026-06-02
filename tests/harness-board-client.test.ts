@@ -181,6 +181,10 @@ describe("harness board client", () => {
         roleSummary: "2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure.",
         ownershipSummary:
           "2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later.",
+        runtimeShapeSummary:
+          "1 runtime bucket keeps the bounded continuity trio, and 1 bucket keeps CEO attention as a live control signal.",
+        runtimeLongMemoryDispositionSummary:
+          "2 runtime buckets stay operational Wealth Factory truth and do not promote directly into tenant-owned long memory.",
         sequenceSummary:
           "1 export candidate group forms the foundational export sequence, and 1 group follows after board closure.",
         dependencySummary:
@@ -219,6 +223,9 @@ describe("harness board client", () => {
           "2 runtime buckets have no export confirmation, 2 export candidate buckets require tenant export confirmation, and 2 buckets still require board closure before tenant export confirmation.",
         recoveryPathSummary:
           "2 runtime buckets are runtime only, 2 export candidate buckets retry the latest record export, and 2 buckets still rerun after the board-closure snapshot.",
+        continuityTrioRuntimeItemCount: 1,
+        attentionSignalRuntimeItemCount: 1,
+        runtimeOnlyLongMemoryItemCount: 2,
         readyNowCount: 2,
         waitingOnBoardClosureCount: 2,
         governanceReadyCount: 2,
@@ -240,6 +247,12 @@ describe("harness board client", () => {
             sourceSurface: "continuity_snapshots",
             candidateClass: "runtime_operational",
             durabilityCondition: "runtime_ephemeral",
+            runtimeMemoryShape: "bounded_continuity_trio",
+            runtimeMemoryShapeLabel: "Bounded continuity trio",
+            runtimeMemoryComponents: ["continuity_summary", "latest_result_summary", "absorbed_work_items"],
+            runtimeMemoryComponentLabels: ["Continuity summary", "Latest result summary", "Absorbed work items"],
+            runtimeLongMemoryDisposition: "stays_runtime_only",
+            runtimeLongMemoryDispositionLabel: "Stays runtime only",
             ownershipBoundary: "wealth_factory_only",
             promotionPath: "never_promotes",
             recordTarget: "none_runtime_only",
@@ -322,6 +335,17 @@ describe("harness board client", () => {
 
     expect(board.memoryBoundary.operationalItems[0]?.readiness).toBe("live_runtime_only");
     expect(board.memoryBoundary.operationalItems[0]?.readinessLabel).toBe("Live runtime only");
+    expect(board.memoryBoundary.operationalItems[0]?.runtimeMemoryShape).toBe("bounded_continuity_trio");
+    expect(board.memoryBoundary.operationalItems[0]?.runtimeLongMemoryDisposition).toBe("stays_runtime_only");
+    expect(board.memoryBoundary.continuityTrioRuntimeItemCount).toBe(1);
+    expect(board.memoryBoundary.attentionSignalRuntimeItemCount).toBe(1);
+    expect(board.memoryBoundary.runtimeOnlyLongMemoryItemCount).toBe(2);
+    expect(board.memoryBoundary.runtimeShapeSummary).toBe(
+      "1 runtime bucket keeps the bounded continuity trio, and 1 bucket keeps CEO attention as a live control signal."
+    );
+    expect(board.memoryBoundary.runtimeLongMemoryDispositionSummary).toBe(
+      "2 runtime buckets stay operational Wealth Factory truth and do not promote directly into tenant-owned long memory."
+    );
     expect(board.memoryBoundary.ownershipSummary).toBe(
       "2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later."
     );

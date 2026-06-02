@@ -301,6 +301,7 @@ No issues identified in the harness slice. The board HTTP boundary now distingui
 1. Maintain ignore/exclude hygiene for `.env` and local operational artifacts so the clean harness slice cannot be contaminated by deployment-time staging mistakes.
 2. Keep the harness `runtime_context` sanitization and response-guard tests in the full gate to prevent future regressions that reintroduce `secretValues` or customer-facing execution noise.
 3. Keep tenant-authored summaries on parsed body surfaces only, and extend the same metadata-only audit discipline if broader harness mutation paths begin recording richer business outcomes.
+4. Keep the new runtime-memory shape metadata export-neutral: the explicit continuity-trio and live-attention descriptors should stay operational contract truth and must not be treated as a new tenant-export surface without separate disclosure review.
 
 ## Conclusion
 

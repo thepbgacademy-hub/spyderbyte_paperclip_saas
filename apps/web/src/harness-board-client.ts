@@ -468,6 +468,13 @@ const fallbackBoardBase: HarnessBoardResponse = {
       "2 runtime buckets have no export confirmation, 2 export candidate buckets require tenant export confirmation, and 2 buckets still require board closure before tenant export confirmation.",
     recoveryPathSummary:
       "2 runtime buckets are runtime only, 2 export candidate buckets retry the latest record export, and 2 buckets still rerun after the board-closure snapshot.",
+    continuityTrioRuntimeItemCount: 1,
+    attentionSignalRuntimeItemCount: 1,
+    runtimeOnlyLongMemoryItemCount: 2,
+    runtimeShapeSummary:
+      "1 runtime bucket keeps the bounded continuity trio, and 1 bucket keeps CEO attention as a live control signal.",
+    runtimeLongMemoryDispositionSummary:
+      "2 runtime buckets stay operational Wealth Factory truth and do not promote directly into tenant-owned long memory.",
     noExportSensitivityCount: 2,
     tenantBusinessContextCount: 2,
     tenantDeliverableContextCount: 2,
@@ -537,6 +544,12 @@ const fallbackBoardBase: HarnessBoardResponse = {
         exportConfirmationRequirementLabel: "No export confirmation",
         exportRecoveryPath: "runtime_only",
         exportRecoveryPathLabel: "Runtime only",
+        runtimeMemoryShape: "bounded_continuity_trio",
+        runtimeMemoryShapeLabel: "Bounded continuity trio",
+        runtimeMemoryComponents: ["continuity_summary", "latest_result_summary", "absorbed_work_items"],
+        runtimeMemoryComponentLabels: ["Continuity summary", "Latest result summary", "Absorbed work items"],
+        runtimeLongMemoryDisposition: "stays_runtime_only",
+        runtimeLongMemoryDispositionLabel: "Stays runtime only",
         candidateClass: "runtime_operational",
         candidateClassLabel: "Runtime operational",
         durabilityCondition: "runtime_ephemeral",
@@ -629,6 +642,12 @@ const fallbackBoardBase: HarnessBoardResponse = {
         exportConfirmationRequirementLabel: "No export confirmation",
         exportRecoveryPath: "runtime_only",
         exportRecoveryPathLabel: "Runtime only",
+        runtimeMemoryShape: "bounded_attention_signal",
+        runtimeMemoryShapeLabel: "Bounded attention signal",
+        runtimeMemoryComponents: ["pending_attention_state"],
+        runtimeMemoryComponentLabels: ["Pending attention state"],
+        runtimeLongMemoryDisposition: "stays_runtime_only",
+        runtimeLongMemoryDispositionLabel: "Stays runtime only",
         candidateClass: "runtime_operational",
         candidateClassLabel: "Runtime operational",
         durabilityCondition: "runtime_ephemeral",
@@ -1286,6 +1305,67 @@ function humanizeMemoryBoundarySourceSurface(
       return "Completion package deliverables";
     default:
       return surface;
+  }
+}
+
+function inferRuntimeMemoryShape(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"]
+): NonNullable<NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["runtimeMemoryShape"]>> {
+  return itemId === "lane_continuity" ? "bounded_continuity_trio" : "bounded_attention_signal";
+}
+
+function humanizeRuntimeMemoryShape(
+  shape: NonNullable<NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["runtimeMemoryShape"]>>
+) {
+  switch (shape) {
+    case "bounded_continuity_trio":
+      return "Bounded continuity trio";
+    case "bounded_attention_signal":
+      return "Bounded attention signal";
+    default:
+      return shape;
+  }
+}
+
+function inferRuntimeMemoryComponents(
+  itemId: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["id"]
+): NonNullable<NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["runtimeMemoryComponents"]>> {
+  return itemId === "lane_continuity"
+    ? ["continuity_summary", "latest_result_summary", "absorbed_work_items"]
+    : ["pending_attention_state"];
+}
+
+function humanizeRuntimeMemoryComponent(
+  component: NonNullable<NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["runtimeMemoryComponents"]>[number]>
+) {
+  switch (component) {
+    case "continuity_summary":
+      return "Continuity summary";
+    case "latest_result_summary":
+      return "Latest result summary";
+    case "absorbed_work_items":
+      return "Absorbed work items";
+    case "pending_attention_state":
+      return "Pending attention state";
+    default:
+      return component;
+  }
+}
+
+function inferRuntimeLongMemoryDisposition(): NonNullable<
+  NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["runtimeLongMemoryDisposition"]>
+> {
+  return "stays_runtime_only";
+}
+
+function humanizeRuntimeLongMemoryDisposition(
+  disposition: NonNullable<NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["runtimeLongMemoryDisposition"]>>
+) {
+  switch (disposition) {
+    case "stays_runtime_only":
+      return "Stays runtime only";
+    default:
+      return disposition;
   }
 }
 
@@ -2902,6 +2982,10 @@ function normalizeMemoryBoundary(
     const exportConfirmationRequirement =
       item.exportConfirmationRequirement ?? inferMemoryBoundaryExportConfirmationRequirement(item.id);
     const exportRecoveryPath = item.exportRecoveryPath ?? inferMemoryBoundaryExportRecoveryPath(item.id);
+    const runtimeMemoryShape = item.runtimeMemoryShape ?? inferRuntimeMemoryShape(item.id);
+    const runtimeMemoryComponents = item.runtimeMemoryComponents ?? inferRuntimeMemoryComponents(item.id);
+    const runtimeLongMemoryDisposition =
+      item.runtimeLongMemoryDisposition ?? inferRuntimeLongMemoryDisposition();
     return {
       ...item,
       readiness,
@@ -3026,6 +3110,16 @@ function normalizeMemoryBoundary(
       exportRecoveryPath,
       exportRecoveryPathLabel:
         item.exportRecoveryPathLabel ?? humanizeMemoryBoundaryExportRecoveryPath(exportRecoveryPath),
+      runtimeMemoryShape,
+      runtimeMemoryShapeLabel: item.runtimeMemoryShapeLabel ?? humanizeRuntimeMemoryShape(runtimeMemoryShape),
+      runtimeMemoryComponents,
+      runtimeMemoryComponentLabels:
+        item.runtimeMemoryComponentLabels
+        ?? runtimeMemoryComponents.map((component) => humanizeRuntimeMemoryComponent(component)),
+      runtimeLongMemoryDisposition,
+      runtimeLongMemoryDispositionLabel:
+        item.runtimeLongMemoryDispositionLabel
+        ?? humanizeRuntimeLongMemoryDisposition(runtimeLongMemoryDisposition),
       promotionActionDescription:
         item.promotionActionDescription
         ?? (promotionActionFamily === "none_runtime_only"
@@ -3426,6 +3520,12 @@ function normalizeMemoryBoundary(
     ?? exportReadyItems.filter((item) => item.exportRecoveryPath === "retry_latest_record_export").length;
   const rerunAfterBoardClosureSnapshotCount = memoryBoundary.rerunAfterBoardClosureSnapshotCount
     ?? exportReadyItems.filter((item) => item.exportRecoveryPath === "rerun_after_board_closure_snapshot").length;
+  const continuityTrioRuntimeItemCount = memoryBoundary.continuityTrioRuntimeItemCount
+    ?? operationalItems.filter((item) => item.runtimeMemoryShape === "bounded_continuity_trio").length;
+  const attentionSignalRuntimeItemCount = memoryBoundary.attentionSignalRuntimeItemCount
+    ?? operationalItems.filter((item) => item.runtimeMemoryShape === "bounded_attention_signal").length;
+  const runtimeOnlyLongMemoryItemCount = memoryBoundary.runtimeOnlyLongMemoryItemCount
+    ?? operationalItems.filter((item) => item.runtimeLongMemoryDisposition === "stays_runtime_only").length;
   const exportCandidates = buildExportCandidatesFromMemoryBoundaryItems(exportReadyItems).map(
     (candidate) =>
       candidate.id === "governance_history_export"
@@ -3883,6 +3983,9 @@ function normalizeMemoryBoundary(
       runtimeOnlyRecoveryPathCount,
       retryLatestRecordExportCount,
       rerunAfterBoardClosureSnapshotCount,
+      continuityTrioRuntimeItemCount,
+      attentionSignalRuntimeItemCount,
+      runtimeOnlyLongMemoryItemCount,
     roleSummary:
       memoryBoundary.roleSummary
       ?? (packagedWaitingCount > 0
@@ -4068,6 +4171,14 @@ function normalizeMemoryBoundary(
       ?? (rerunAfterBoardClosureSnapshotCount > 0
         ? `${runtimeOnlyRecoveryPathCount} runtime buckets are runtime only, ${retryLatestRecordExportCount} export candidate bucket${retryLatestRecordExportCount === 1 ? " retries" : "s retry"} the latest record export, and ${rerunAfterBoardClosureSnapshotCount} bucket${rerunAfterBoardClosureSnapshotCount === 1 ? " still reruns" : "s still rerun"} after the board-closure snapshot.`
         : `${runtimeOnlyRecoveryPathCount} runtime buckets are runtime only, and ${retryLatestRecordExportCount} export candidate bucket${retryLatestRecordExportCount === 1 ? " retries" : "s retry"} the latest record export.`),
+    runtimeShapeSummary:
+      memoryBoundary.runtimeShapeSummary
+      ?? (attentionSignalRuntimeItemCount > 0
+        ? `${continuityTrioRuntimeItemCount} runtime bucket${continuityTrioRuntimeItemCount === 1 ? " keeps" : "s keep"} the bounded continuity trio, and ${attentionSignalRuntimeItemCount} bucket${attentionSignalRuntimeItemCount === 1 ? " keeps" : "s keep"} CEO attention as a live control signal.`
+        : `${continuityTrioRuntimeItemCount} runtime bucket${continuityTrioRuntimeItemCount === 1 ? " keeps" : "s keep"} the bounded continuity trio.`),
+    runtimeLongMemoryDispositionSummary:
+      memoryBoundary.runtimeLongMemoryDispositionSummary
+      ?? `${runtimeOnlyLongMemoryItemCount} runtime bucket${runtimeOnlyLongMemoryItemCount === 1 ? " stays" : "s stay"} operational Wealth Factory truth and do not promote directly into tenant-owned long memory.`,
     exportCandidateSummary:
       memoryBoundary.exportCandidateSummary
       ?? (waitingExportCandidateGroupCount > 0

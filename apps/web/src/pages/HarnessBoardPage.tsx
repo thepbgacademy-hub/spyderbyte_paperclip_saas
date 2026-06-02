@@ -1186,6 +1186,8 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
       <p style={styles.actionSummary}>{memoryBoundary.exportSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.roleSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.ownershipSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.runtimeShapeSummary}</p>
+      <p style={styles.actionSummary}>{memoryBoundary.runtimeLongMemoryDispositionSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.promotionSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.recordTargetSummary}</p>
       <p style={styles.actionSummary}>{memoryBoundary.blockerSummary}</p>
@@ -1433,10 +1435,17 @@ function renderMemoryBoundary(board: HarnessBoardResponse) {
                     <span style={styles.badge}>{item.exportRequestShapeLabel}</span>
                     <span style={styles.badge}>{item.exportConfirmationRequirementLabel}</span>
                     <span style={styles.badge}>{item.exportRecoveryPathLabel}</span>
+                    {item.runtimeMemoryShapeLabel ? <span style={styles.badge}>{item.runtimeMemoryShapeLabel}</span> : null}
+                    {item.runtimeLongMemoryDispositionLabel ? (
+                      <span style={styles.badge}>{item.runtimeLongMemoryDispositionLabel}</span>
+                    ) : null}
                   </div>
                   <p style={styles.actionSummary}>{item.summary}</p>
                   <p style={styles.optionBody}>{item.promotionActionDescription}</p>
                   <p style={styles.optionBody}>{`Source surface: ${item.sourceSurfaceLabel}`}</p>
+                  {item.runtimeMemoryComponentLabels?.length ? (
+                    <p style={styles.optionBody}>{`Runtime components: ${item.runtimeMemoryComponentLabels.join(", ")}`}</p>
+                  ) : null}
                   {item.nextEligibleSummary ? <p style={styles.actionSummary}>{item.nextEligibleSummary}</p> : null}
                 </li>
               ))}

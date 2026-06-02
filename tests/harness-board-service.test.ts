@@ -1647,6 +1647,10 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.requestShapeSummary).toContain("single-record export requests");
     expect(hydrated.memoryBoundary.confirmationSummary).toContain("tenant export confirmation");
     expect(hydrated.memoryBoundary.recoveryPathSummary).toContain("retry the latest record export");
+    expect(hydrated.memoryBoundary.runtimeShapeSummary).toContain("bounded continuity trio");
+    expect(hydrated.memoryBoundary.runtimeLongMemoryDispositionSummary).toContain(
+      "do not promote directly into tenant-owned long memory"
+    );
     expect(hydrated.memoryBoundary.exportCandidateSummary).toContain("export candidate group");
     expect(hydrated.memoryBoundary.exportCandidateGroupCount).toBe(1);
     expect(hydrated.memoryBoundary.readyExportCandidateGroupCount).toBe(1);
@@ -1655,6 +1659,9 @@ describe("harness board service", () => {
     expect(hydrated.memoryBoundary.boardClosureFollowingExportCandidateCount).toBe(0);
     expect(hydrated.memoryBoundary.independentExportCandidateCount).toBe(1);
     expect(hydrated.memoryBoundary.dependentExportCandidateCount).toBe(0);
+    expect(hydrated.memoryBoundary.continuityTrioRuntimeItemCount).toBe(1);
+    expect(hydrated.memoryBoundary.attentionSignalRuntimeItemCount).toBe(1);
+    expect(hydrated.memoryBoundary.runtimeOnlyLongMemoryItemCount).toBe(2);
     expect(hydrated.memoryBoundary.sequenceSummary).toContain("foundational export sequence");
     expect(hydrated.memoryBoundary.dependencySummary).toContain("stands independently");
     expect(hydrated.memoryBoundary.blockerSummary).toContain("blocked");
@@ -1679,6 +1686,12 @@ describe("harness board service", () => {
           sourceSurface: "continuity_snapshots",
           candidateClass: "runtime_operational",
           durabilityCondition: "runtime_ephemeral",
+          runtimeMemoryShape: "bounded_continuity_trio",
+          runtimeMemoryShapeLabel: "Bounded continuity trio",
+          runtimeMemoryComponents: ["continuity_summary", "latest_result_summary", "absorbed_work_items"],
+          runtimeMemoryComponentLabels: ["Continuity summary", "Latest result summary", "Absorbed work items"],
+          runtimeLongMemoryDisposition: "stays_runtime_only",
+          runtimeLongMemoryDispositionLabel: "Stays runtime only",
           ownershipBoundary: "wealth_factory_only",
           ownershipBoundaryLabel: "Wealth Factory only",
           promotionPath: "never_promotes",
