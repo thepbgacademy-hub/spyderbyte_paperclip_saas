@@ -460,6 +460,7 @@ export function createWorkerRuntime(options: {
       runId: string;
       workflowId: string;
       cardId: string;
+      executionClaimToken?: string;
       state: "waiting" | "done" | "blocked" | "cancelled";
       resultSummary?: string;
       resumeSummary?: string;
@@ -753,6 +754,7 @@ async function processHarnessWorkflowJob(options: {
     | "listProposalsForRun"
     | "listCardContinuityForRun"
     | "claimCardForExecution"
+    | "refreshCardExecutionClaim"
     | "transitionCardState"
     | "insertEvent"
     | "upsertCardContinuity"
@@ -770,6 +772,7 @@ async function processHarnessWorkflowJob(options: {
         | "listProposalsForRun"
         | "listCardContinuityForRun"
         | "claimCardForExecution"
+        | "refreshCardExecutionClaim"
         | "transitionCardState"
         | "insertEvent"
         | "upsertCardContinuity"
@@ -839,6 +842,7 @@ async function processHarnessLaneOutcome(options: {
     runId: string;
     workflowId: string;
     cardId: string;
+    executionClaimToken?: string;
     state: "waiting" | "done" | "blocked" | "cancelled";
     resultSummary?: string;
     resumeSummary?: string;
@@ -853,6 +857,7 @@ async function processHarnessLaneOutcome(options: {
     | "listProposalsForRun"
     | "listCardContinuityForRun"
     | "claimCardForExecution"
+    | "refreshCardExecutionClaim"
     | "transitionCardState"
     | "insertEvent"
     | "upsertCardContinuity"
@@ -870,6 +875,7 @@ async function processHarnessLaneOutcome(options: {
         | "listProposalsForRun"
         | "listCardContinuityForRun"
         | "claimCardForExecution"
+        | "refreshCardExecutionClaim"
         | "transitionCardState"
         | "insertEvent"
         | "upsertCardContinuity"
@@ -886,6 +892,7 @@ async function processHarnessLaneOutcome(options: {
     runId: options.payload.runId,
     workflowId: options.payload.workflowId,
     cardId: options.payload.cardId,
+    ...(options.payload.executionClaimToken ? { executionClaimToken: options.payload.executionClaimToken } : {}),
     state: options.payload.state,
     ...(options.payload.resultSummary ? { resultSummary: options.payload.resultSummary } : {}),
     ...(options.payload.resumeSummary ? { resumeSummary: options.payload.resumeSummary } : {}),

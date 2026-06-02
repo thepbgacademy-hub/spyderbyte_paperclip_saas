@@ -202,6 +202,10 @@ describe("harness worker executor", () => {
         providerKind: "openai_api",
         credentialLabel: "Primary OpenAI"
       },
+      executionClaim: {
+        token: expect.any(String),
+        claimedAt: expect.any(String)
+      },
       dispatchHandoff: {
         kind: "initial_claim",
         kindLabel: "Initial lane claim",
@@ -289,6 +293,7 @@ describe("harness worker executor", () => {
     mutableAllowedStates.pop();
 
     expect(secondEnvelope.outcomeContract.allowedStates).toEqual(["waiting", "done", "blocked", "cancelled"]);
+    expect(secondEnvelope.executionClaim).toEqual(firstEnvelope.executionClaim);
   });
 
   it("returns no lane execution when all child lanes are terminal or blocked", async () => {
@@ -1716,6 +1721,73 @@ describe("harness worker executor", () => {
       workflowId: "wf_connect_first_workflow",
       status: "ignored",
       reason: "lane_not_working"
+    });
+  });
+
+  it("ignores worker outcome commits that present a stale execution claim token", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "approved";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+
+    const dispatch = await buildHarnessWorkerDispatch({
+      repository,
+      tenantId: "tenant-1",
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow"
+    });
+    const envelope = await buildHarnessWorkerExecutionEnvelope({
+      repository,
+      tenantId: "tenant-1",
+      dispatch,
+      requiredCapabilities: ["text_generation"]
+    });
+    expect(envelope).not.toBeNull();
+    if (!envelope) {
+      return;
+    }
+
+    await expect(
+      commitHarnessWorkerLaneOutcome({
+        repository,
+        tenantId: "tenant-1",
+        runId: run.id,
+        workflowId: "wf_connect_first_workflow",
+        cardId: cfoCard.id,
+        executionClaimToken: "stale-claim-token",
+        state: "done",
+        resultSummary: "This should not commit."
+      })
+    ).resolves.toEqual({
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow",
+      status: "ignored",
+      reason: "stale_execution_claim"
     });
   });
 });

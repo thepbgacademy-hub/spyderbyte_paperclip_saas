@@ -72,6 +72,10 @@ export type HarnessWorkerExecutionEnvelope = {
   workflowId: string;
   requiredCapabilities: readonly ProviderCapability[];
   runtimeContext: HarnessRuntimeContext;
+  executionClaim: {
+    token: string;
+    claimedAt: string;
+  };
   laneExecution: HarnessWorkerLaneExecution;
   dispatchHandoff?: HarnessWorkerDispatchHandoff;
   outcomeContract: HarnessWorkerOutcomeContract;
@@ -81,7 +85,7 @@ export type HarnessWorkerLaneOutcome = {
   runId: string;
   workflowId: string;
   status: "committed" | "ignored";
-  reason?: "terminal_run" | "lane_not_working";
+  reason?: "terminal_run" | "lane_not_working" | "stale_execution_claim";
   attentionTransition?: HarnessWorkerLaneAttentionTransition;
   laneExecution?: {
     cardId: string;
@@ -119,6 +123,7 @@ type HarnessDispatchRepository = Pick<
   | "listProposalsForRun"
   | "listCardContinuityForRun"
   | "claimCardForExecution"
+  | "refreshCardExecutionClaim"
   | "insertEvent"
   | "upsertCardContinuity"
   | "updateRunState"
@@ -134,6 +139,7 @@ type HarnessOutcomeRepository = Pick<
   | "listProposalsForRun"
   | "listCardContinuityForRun"
   | "claimCardForExecution"
+  | "refreshCardExecutionClaim"
   | "transitionCardState"
   | "insertEvent"
   | "upsertCardContinuity"
@@ -264,6 +270,7 @@ export async function commitHarnessWorkerLaneOutcome(input: {
   state: Extract<HarnessCardState, "waiting" | "done" | "blocked" | "cancelled">;
   resultSummary?: string;
   resumeSummary?: string;
+  executionClaimToken?: string;
   runAtomically?: <T>(work: (repository: HarnessOutcomeRepository) => Promise<T>) => Promise<T>;
 }): Promise<HarnessWorkerLaneOutcome> {
   const runWork = input.runAtomically ?? (async <T>(work: (repository: HarnessOutcomeRepository) => Promise<T>) => work(input.repository));
@@ -293,6 +300,14 @@ export async function commitHarnessWorkerLaneOutcome(input: {
         reason: "lane_not_working"
       };
     }
+    if (card.executionClaimToken && input.executionClaimToken !== card.executionClaimToken) {
+      return {
+        runId: run.id,
+        workflowId: run.workflowId,
+        status: "ignored",
+        reason: "stale_execution_claim"
+      };
+    }
 
     const trimmedSummary = input.resultSummary?.trim();
     const trimmedResumeSummary = input.resumeSummary?.trim();
@@ -306,14 +321,15 @@ export async function commitHarnessWorkerLaneOutcome(input: {
     const updatedCard = await repository.transitionCardState({
       cardId: card.id,
       expectedState: "working",
-      state: input.state
+      state: input.state,
+      ...(input.executionClaimToken ? { expectedExecutionClaimToken: input.executionClaimToken } : {})
     });
     if (!updatedCard) {
       return {
         runId: run.id,
         workflowId: run.workflowId,
         status: "ignored",
-        reason: "lane_not_working"
+        reason: "stale_execution_claim"
       };
     }
 
@@ -465,6 +481,9 @@ export async function buildHarnessWorkerExecutionEnvelope(input: {
     throw new Error(`Unknown harness child lane for worker execution envelope: ${input.dispatch.laneExecution.cardId}`);
   }
   const continuity = await input.repository.getCardContinuity(lane.id);
+  if (!lane.executionClaimToken || !lane.executionClaimedAt) {
+    throw new Error(`Missing harness execution claim for worker execution envelope: ${lane.id}`);
+  }
 
   return {
     tenantId: input.tenantId,
@@ -472,6 +491,10 @@ export async function buildHarnessWorkerExecutionEnvelope(input: {
     workflowId: run.workflowId,
     requiredCapabilities: [...input.requiredCapabilities],
     runtimeContext: run.runtimeContext,
+    executionClaim: {
+      token: lane.executionClaimToken,
+      claimedAt: lane.executionClaimedAt
+    },
     ...(input.dispatch.dispatchHandoff
       ? {
           dispatchHandoff:
@@ -505,7 +528,13 @@ async function claimLaneForExecution(input: {
   lane: HarnessCardRecord;
 }): Promise<HarnessCardRecord | null> {
   if (input.lane.state === "working") {
-    return input.lane;
+    if (input.lane.executionClaimToken && input.lane.executionClaimedAt) {
+      return input.lane;
+    }
+    return input.repository.refreshCardExecutionClaim({
+      cardId: input.lane.id,
+      expectedState: "working"
+    });
   }
   if (input.lane.state !== "approved") {
     return null;

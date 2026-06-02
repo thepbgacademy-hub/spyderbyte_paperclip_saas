@@ -30,6 +30,7 @@ const exportDeliveryClaimsMigration = readFileSync("supabase/migrations/0025_wf_
 const exportDeliveryBundleRevisionMigration = readFileSync("supabase/migrations/0026_wf_harness_export_delivery_bundle_revision.sql", "utf8");
 const completionPackageSnapshotsMigration = readFileSync("supabase/migrations/0027_wf_harness_completion_package_snapshots.sql", "utf8");
 const governanceHistorySnapshotsMigration = readFileSync("supabase/migrations/0028_wf_harness_governance_history_snapshots.sql", "utf8");
+const cardExecutionClaimsMigration = readFileSync("supabase/migrations/0029_wf_harness_card_execution_claims.sql", "utf8");
 const execFileAsync = promisify(execFile);
 
 const HARNESS_POSTGRES_IMAGE = "postgres:16-alpine";
@@ -219,6 +220,58 @@ describe("harness persistence records", () => {
 
     await expect(repository.getCardContinuity(card.id)).resolves.toEqual(continuity);
     await expect(repository.listCardContinuityForRun(run.id)).resolves.toEqual([continuity]);
+  });
+
+  it("records and clears bounded execution-claim tokens as lanes enter and leave working state", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-123",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const card = createHarnessCardRecord({
+      runId: run.id,
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    card.state = "approved";
+
+    await repository.insertRun(run);
+    await repository.insertCard(card);
+
+    const claimedCard = await repository.claimCardForExecution({
+      cardId: card.id,
+      expectedState: "approved"
+    });
+    expect(claimedCard).toEqual(
+      expect.objectContaining({
+        id: card.id,
+        state: "working",
+        executionClaimToken: expect.any(String),
+        executionClaimedAt: expect.any(String)
+      })
+    );
+
+    const completedCard = await repository.transitionCardState({
+      cardId: card.id,
+      expectedState: "working",
+      ...(claimedCard?.executionClaimToken ? { expectedExecutionClaimToken: claimedCard.executionClaimToken } : {}),
+      state: "done"
+    });
+    expect(completedCard).toEqual(
+      expect.objectContaining({
+        id: card.id,
+        state: "done",
+        executionClaimToken: null,
+        executionClaimedAt: null
+      })
+    );
   });
 
   it("stores export-ready governance-history delivery bundles in the minimal in-memory repository", async () => {
@@ -745,7 +798,9 @@ describe("harness persistence records", () => {
         title: "Pressure-test the pricing lane",
         deliverableType: "pricing_review"
       }),
-      state: "working" as const
+      state: "working" as const,
+      executionClaimToken: "claim-working-card",
+      executionClaimedAt: "2026-06-02T00:00:00.000Z"
     };
 
     await repository.insertRun(run);
@@ -1105,7 +1160,9 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
             title: "Pressure-test the pricing lane",
             deliverableType: "pricing_review"
           }),
-          state: "working" as const
+          state: "working" as const,
+          executionClaimToken: "claim-working-card-pg",
+          executionClaimedAt: "2026-06-02T00:00:00.000Z"
         };
 
         await resetHarnessProofDatabase(client);
@@ -2029,6 +2086,7 @@ async function resetHarnessProofDatabase(client: Client) {
   await client.query(exportDeliveryBundleRevisionMigration);
   await client.query(completionPackageSnapshotsMigration);
   await client.query(governanceHistorySnapshotsMigration);
+  await client.query(cardExecutionClaimsMigration);
 }
 
 async function seedHarnessProofPrerequisites(client: Client, tenantId: string) {

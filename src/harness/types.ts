@@ -75,6 +75,8 @@ export interface HarnessCardRecord {
   title: string;
   deliverableType: HarnessDeliverableType;
   state: HarnessCardState;
+  executionClaimToken: string | null;
+  executionClaimedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -372,6 +374,8 @@ export function createHarnessCardRecord(input: {
     title: input.title,
     deliverableType: input.deliverableType,
     state: "queued",
+    executionClaimToken: null,
+    executionClaimedAt: null,
     createdAt: timestamp,
     updatedAt: timestamp
   };

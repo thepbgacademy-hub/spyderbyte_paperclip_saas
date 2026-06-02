@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import type {
   HarnessBoardDecisionRow,
   HarnessCardContinuityRow,
@@ -37,8 +39,10 @@ export interface HarnessRepository {
     cardId: string;
     expectedState: HarnessCardState;
     state: HarnessCardState;
+    expectedExecutionClaimToken?: string;
   }): Promise<HarnessCardRecord | null>;
   claimCardForExecution(input: { cardId: string; expectedState: "approved" }): Promise<HarnessCardRecord | null>;
+  refreshCardExecutionClaim(input: { cardId: string; expectedState: "working" }): Promise<HarnessCardRecord | null>;
   updateCardAssignment(input: { cardId: string; persona: string; title: string }): Promise<HarnessCardRecord | null>;
   listCardsForRun(runId: string): Promise<HarnessCardRecord[]>;
   insertEvent(event: HarnessCardEventRecord): Promise<void>;
@@ -141,6 +145,8 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
         const updatedCard = {
           ...existingCard,
           state: input.state,
+          executionClaimToken: input.state === "working" ? randomUUID() : null,
+          executionClaimedAt: input.state === "working" ? new Date().toISOString() : null,
           updatedAt: new Date().toISOString()
         };
         cards.set(
@@ -159,10 +165,18 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
         if (!existingCard || existingCard.state !== input.expectedState) {
           continue;
         }
+        if (
+          input.expectedExecutionClaimToken !== undefined
+          && existingCard.executionClaimToken !== input.expectedExecutionClaimToken
+        ) {
+          continue;
+        }
 
         const updatedCard = {
           ...existingCard,
           state: input.state,
+          executionClaimToken: input.state === "working" ? randomUUID() : null,
+          executionClaimedAt: input.state === "working" ? new Date().toISOString() : null,
           updatedAt: new Date().toISOString()
         };
         cards.set(
@@ -185,6 +199,31 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
         const updatedCard = {
           ...existingCard,
           state: "working" as const,
+          executionClaimToken: randomUUID(),
+          executionClaimedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        cards.set(
+          runId,
+          runCards.map((candidate) => (candidate.id === input.cardId ? updatedCard : candidate))
+        );
+        return { ...updatedCard };
+      }
+
+      return null;
+    },
+
+    async refreshCardExecutionClaim(input) {
+      for (const [runId, runCards] of cards.entries()) {
+        const existingCard = runCards.find((candidate) => candidate.id === input.cardId);
+        if (!existingCard || existingCard.state !== input.expectedState) {
+          continue;
+        }
+
+        const updatedCard = {
+          ...existingCard,
+          executionClaimToken: randomUUID(),
+          executionClaimedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
         cards.set(
@@ -576,15 +615,27 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
     async insertCard(card) {
       await client.query(
         `insert into wfpc.harness_cards
-          (id, run_id, parent_card_id, persona, title, deliverable_type, state, created_at, updated_at)
-         values ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, $9::timestamptz)`,
-        [card.id, card.runId, card.parentCardId, card.persona, card.title, card.deliverableType, card.state, card.createdAt, card.updatedAt]
+          (id, run_id, parent_card_id, persona, title, deliverable_type, state, execution_claim_token, execution_claimed_at, created_at, updated_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9::timestamptz, $10::timestamptz, $11::timestamptz)`,
+        [
+          card.id,
+          card.runId,
+          card.parentCardId,
+          card.persona,
+          card.title,
+          card.deliverableType,
+          card.state,
+          card.executionClaimToken,
+          card.executionClaimedAt,
+          card.createdAt,
+          card.updatedAt
+        ]
       );
     },
 
     async getCard(cardId) {
       const result = await client.query(
-        `select id, run_id, parent_card_id, persona, title, deliverable_type, state, created_at, updated_at
+        `select id, run_id, parent_card_id, persona, title, deliverable_type, state, execution_claim_token, execution_claimed_at, created_at, updated_at
          from wfpc.harness_cards
          where id = $1
          limit 1`,
@@ -597,36 +648,68 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
       const result = await client.query(
         `update wfpc.harness_cards
          set state = $2,
+             execution_claim_token = case when $2 = 'working' then $3 else null end,
+             execution_claimed_at = case when $2 = 'working' then $4::timestamptz else null end,
              updated_at = now()
          where id = $1
-         returning id, run_id, parent_card_id, persona, title, deliverable_type, state, created_at, updated_at`,
-        [input.cardId, input.state]
+         returning id, run_id, parent_card_id, persona, title, deliverable_type, state, execution_claim_token, execution_claimed_at, created_at, updated_at`,
+        [
+          input.cardId,
+          input.state,
+          input.state === "working" ? randomUUID() : null,
+          input.state === "working" ? new Date().toISOString() : null
+        ]
       );
       return mapHarnessCardRow(result.rows[0]);
     },
 
     async transitionCardState(input) {
+      const nextClaimToken = input.state === "working" ? randomUUID() : null;
+      const nextClaimedAt = input.state === "working" ? new Date().toISOString() : null;
       const result = await client.query(
         `update wfpc.harness_cards
          set state = $3,
+             execution_claim_token = case when $3 = 'working' then $4 else null end,
+             execution_claimed_at = case when $3 = 'working' then $5::timestamptz else null end,
              updated_at = now()
          where id = $1
            and state = $2
-         returning id, run_id, parent_card_id, persona, title, deliverable_type, state, created_at, updated_at`,
-        [input.cardId, input.expectedState, input.state]
+           and ($6::text is null or execution_claim_token = $6::text)
+         returning id, run_id, parent_card_id, persona, title, deliverable_type, state, execution_claim_token, execution_claimed_at, created_at, updated_at`,
+        [input.cardId, input.expectedState, input.state, nextClaimToken, nextClaimedAt, input.expectedExecutionClaimToken ?? null]
       );
       return mapHarnessCardRow(result.rows[0]);
     },
 
     async claimCardForExecution(input) {
+      const claimToken = randomUUID();
+      const claimedAt = new Date().toISOString();
       const result = await client.query(
         `update wfpc.harness_cards
          set state = 'working',
+             execution_claim_token = $3,
+             execution_claimed_at = $4::timestamptz,
              updated_at = now()
          where id = $1
            and state = $2
-         returning id, run_id, parent_card_id, persona, title, deliverable_type, state, created_at, updated_at`,
-        [input.cardId, input.expectedState]
+         returning id, run_id, parent_card_id, persona, title, deliverable_type, state, execution_claim_token, execution_claimed_at, created_at, updated_at`,
+        [input.cardId, input.expectedState, claimToken, claimedAt]
+      );
+      return mapHarnessCardRow(result.rows[0]);
+    },
+
+    async refreshCardExecutionClaim(input) {
+      const claimToken = randomUUID();
+      const claimedAt = new Date().toISOString();
+      const result = await client.query(
+        `update wfpc.harness_cards
+         set execution_claim_token = $3,
+             execution_claimed_at = $4::timestamptz,
+             updated_at = now()
+         where id = $1
+           and state = $2
+         returning id, run_id, parent_card_id, persona, title, deliverable_type, state, execution_claim_token, execution_claimed_at, created_at, updated_at`,
+        [input.cardId, input.expectedState, claimToken, claimedAt]
       );
       return mapHarnessCardRow(result.rows[0]);
     },
@@ -638,7 +721,7 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
              title = $3,
              updated_at = now()
          where id = $1
-         returning id, run_id, parent_card_id, persona, title, deliverable_type, state, created_at, updated_at`,
+         returning id, run_id, parent_card_id, persona, title, deliverable_type, state, execution_claim_token, execution_claimed_at, created_at, updated_at`,
         [input.cardId, input.persona, input.title]
       );
       return mapHarnessCardRow(result.rows[0]);
@@ -646,7 +729,7 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
 
     async listCardsForRun(runId) {
       const result = await client.query(
-        `select id, run_id, parent_card_id, persona, title, deliverable_type, state, created_at, updated_at
+        `select id, run_id, parent_card_id, persona, title, deliverable_type, state, execution_claim_token, execution_claimed_at, created_at, updated_at
          from wfpc.harness_cards
          where run_id = $1
          order by created_at asc`,
@@ -1129,6 +1212,8 @@ export function toHarnessCardRow(record: HarnessCardRecord): HarnessCardRow {
     title: record.title,
     deliverableType: record.deliverableType,
     state: record.state,
+    executionClaimToken: record.executionClaimToken,
+    executionClaimedAt: record.executionClaimedAt,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt
   };
@@ -1406,6 +1491,8 @@ function mapHarnessCardRow(row: unknown): HarnessCardRecord | null {
     title: String(record.title),
     deliverableType: String(record.deliverable_type),
     state: String(record.state) as HarnessCardRecord["state"],
+    executionClaimToken: typeof record.execution_claim_token === "string" ? record.execution_claim_token : null,
+    executionClaimedAt: asIsoTimestamp(record.execution_claimed_at),
     createdAt: String(record.created_at),
     updatedAt: String(record.updated_at)
   };

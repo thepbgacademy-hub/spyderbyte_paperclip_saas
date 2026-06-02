@@ -28,6 +28,8 @@ const { makeHarnessRepository, harnessRepositoryRef } = vi.hoisted(() => {
           title: "Prepare launch messaging",
           deliverableType: "marketing_plan",
           state: "working",
+          executionClaimToken: "claim-cmo-active",
+          executionClaimedAt: "2026-05-21T10:07:30.000Z",
           createdAt: "2026-05-21T10:05:00.000Z",
           updatedAt: "2026-05-21T10:08:00.000Z"
         };
@@ -41,6 +43,8 @@ const { makeHarnessRepository, harnessRepositoryRef } = vi.hoisted(() => {
           title: "Pressure-test the pricing lane",
           deliverableType: "pricing_review",
           state: "working",
+          executionClaimToken: "claim-cfo-1",
+          executionClaimedAt: "2026-05-21T10:04:00.000Z",
           createdAt: "2026-05-21T10:01:00.000Z",
           updatedAt: "2026-05-21T10:04:00.000Z"
         };
@@ -56,6 +60,8 @@ const { makeHarnessRepository, harnessRepositoryRef } = vi.hoisted(() => {
         title: "Plan run",
         deliverableType: "plan",
         state: "planning",
+        executionClaimToken: null,
+        executionClaimedAt: null,
         createdAt: "2026-05-21T10:00:00.000Z",
         updatedAt: "2026-05-21T10:00:00.000Z"
       },
@@ -67,6 +73,8 @@ const { makeHarnessRepository, harnessRepositoryRef } = vi.hoisted(() => {
         title: "Pressure-test the pricing lane",
         deliverableType: "pricing_review",
         state: "approved",
+        executionClaimToken: null,
+        executionClaimedAt: null,
         createdAt: "2026-05-21T10:01:00.000Z",
         updatedAt: "2026-05-21T10:02:00.000Z"
       }
@@ -79,8 +87,23 @@ const { makeHarnessRepository, harnessRepositoryRef } = vi.hoisted(() => {
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review",
       state: "working",
+      executionClaimToken: "claim-cfo-1",
+      executionClaimedAt: "2026-05-21T10:04:00.000Z",
       createdAt: "2026-05-21T10:01:00.000Z",
       updatedAt: "2026-05-21T10:04:00.000Z"
+    }),
+    refreshCardExecutionClaim: vi.fn().mockResolvedValue({
+      id: "card_cfo",
+      runId: "run-1",
+      parentCardId: "card_ceo",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review",
+      state: "working",
+      executionClaimToken: "claim-cfo-refreshed",
+      executionClaimedAt: "2026-05-21T10:04:30.000Z",
+      createdAt: "2026-05-21T10:01:00.000Z",
+      updatedAt: "2026-05-21T10:04:30.000Z"
     }),
     transitionCardState: vi.fn().mockImplementation(async ({ cardId, state }) => ({
       id: cardId,
@@ -90,6 +113,8 @@ const { makeHarnessRepository, harnessRepositoryRef } = vi.hoisted(() => {
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review",
       state,
+      executionClaimToken: state === "working" ? "claim-cfo-transitioned" : null,
+      executionClaimedAt: state === "working" ? "2026-05-21T10:05:00.000Z" : null,
       createdAt: "2026-05-21T10:01:00.000Z",
       updatedAt: "2026-05-21T10:05:00.000Z"
     })),
@@ -365,6 +390,10 @@ describe("worker runtime", () => {
         runtimeContext: {
           providerKind: "openai_api",
           credentialLabel: "Primary OpenAI"
+        },
+        executionClaim: {
+          token: "claim-cfo-1",
+          claimedAt: "2026-05-21T10:04:00.000Z"
         },
         dispatchHandoff: {
           kind: "initial_claim",
@@ -684,6 +713,7 @@ describe("worker runtime", () => {
         runId: "run-1",
         workflowId: "wf_connect_first_workflow",
         cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-1",
         state: "done",
         resultSummary: "Validated the pricing model and preserved the final floor."
       })
@@ -715,6 +745,7 @@ describe("worker runtime", () => {
     expect(harnessRepository.transitionCardState).toHaveBeenCalledWith({
       cardId: "card_cfo",
       expectedState: "working",
+      expectedExecutionClaimToken: "claim-cfo-1",
       state: "done"
     });
     expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
@@ -876,6 +907,7 @@ describe("worker runtime", () => {
         runId: "run-1",
         workflowId: "wf_connect_first_workflow",
         cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-1",
         state: "done",
         resultSummary: "Validated the pricing model and preserved the final floor."
       })
@@ -1027,6 +1059,7 @@ describe("worker runtime", () => {
         runId: "run-1",
         workflowId: "wf_connect_first_workflow",
         cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-1",
         state: "done",
         resultSummary: "Pricing review is complete and ready for board packaging."
       })
@@ -1139,6 +1172,10 @@ describe("worker runtime", () => {
         runtimeContext: {
           providerKind: "openai_api",
           credentialLabel: "Primary OpenAI"
+        },
+        executionClaim: {
+          token: "claim-cmo-active",
+          claimedAt: "2026-05-21T10:07:30.000Z"
         },
         dispatchHandoff: {
           kind: "follow_on_dispatch",
@@ -1257,6 +1294,7 @@ describe("worker runtime", () => {
         runId: "run-1",
         workflowId: "wf_connect_first_workflow",
         cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-1",
         state: "done",
         resultSummary: "Pricing review is complete and ready for board packaging."
       })
@@ -1301,6 +1339,10 @@ describe("worker runtime", () => {
           triggeredByPersona: "cfo",
           triggeredByOutcomeState: "done",
           triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
+        },
+        executionClaim: {
+          token: "claim-cmo-active",
+          claimedAt: "2026-05-21T10:07:30.000Z"
         },
         laneExecution: expect.objectContaining({
           cardId: "card_cmo"
@@ -1463,6 +1505,7 @@ describe("worker runtime", () => {
         runId: "run-1",
         workflowId: "wf_connect_first_workflow",
         cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-1",
         state: "waiting",
         resumeSummary: "CFO should resume this lane once the tenant confirms the latest revenue assumption."
       })
@@ -1645,6 +1688,7 @@ describe("worker runtime", () => {
         runId: "run-1",
         workflowId: "wf_connect_first_workflow",
         cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-1",
         state: "done",
         resultSummary: "Validated the pricing model and preserved the final floor."
       })
@@ -1845,6 +1889,7 @@ describe("worker runtime", () => {
         runId: "run-1",
         workflowId: "wf_connect_first_workflow",
         cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-1",
         state: "waiting",
         resumeSummary: "CFO should resume this lane once the tenant confirms the latest revenue assumption."
       })
@@ -2030,6 +2075,7 @@ describe("worker runtime", () => {
         runId: "run-1",
         workflowId: "wf_connect_first_workflow",
         cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-1",
         state: "blocked",
         resumeSummary: "CFO is blocked until the tenant confirms the final margin constraint."
       })
@@ -2282,6 +2328,7 @@ describe("worker runtime", () => {
         runId: "run-1",
         workflowId: "wf_connect_first_workflow",
         cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-1",
         state: "blocked",
         resumeSummary: "CFO is blocked until the tenant confirms the final margin constraint."
       })
@@ -2392,6 +2439,7 @@ describe("worker runtime", () => {
         runId: "run-1",
         workflowId: "wf_connect_first_workflow",
         cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-1",
         state: "done",
         resultSummary: "Pricing review is complete and ready for board packaging."
       })
@@ -2428,6 +2476,42 @@ describe("worker runtime", () => {
     await runtime.close();
   });
 
+  it("ignores a private harness lane outcome when the execution claim token is stale", async () => {
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-outcome-stale-claim"
+    });
+
+    stdoutWrite.mockClear();
+    await expect(
+      runtime.commitHarnessLaneOutcome({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-stale",
+        state: "done",
+        resultSummary: "This should not commit."
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "ignored",
+      reason: "stale_execution_claim"
+    });
+
+    const harnessRepository = harnessRepositoryRef.current;
+    expect(harnessRepository.transitionCardState).not.toHaveBeenCalled();
+    expect(stdoutWrite).not.toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome\"")
+    );
+
+    await runtime.close();
+  });
+
   it("keeps quiet when a private harness lane outcome targets a lane that is no longer working", async () => {
     const onHarnessAttentionResolved = vi.fn();
     const runtime = createWorkerRuntime({
@@ -2459,6 +2543,7 @@ describe("worker runtime", () => {
         runId: "run-1",
         workflowId: "wf_connect_first_workflow",
         cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-1",
         state: "done",
         resultSummary: "This should not commit."
       })

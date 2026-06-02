@@ -852,6 +852,51 @@ try {
       throw new Error("Harness governance history snapshot migration did not produce the required schema shape");
     }
   }
+  const queryHarnessCardExecutionClaimsReady = () =>
+    client.query(
+      `select
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'harness_cards'
+            and column_name = 'execution_claim_token'
+        ) as has_execution_claim_token,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'harness_cards'
+            and column_name = 'execution_claimed_at'
+        ) as has_execution_claimed_at,
+        exists (
+          select 1
+          from pg_constraint
+          where conrelid = to_regclass('wfpc.harness_cards')
+            and conname = 'harness_cards_execution_claim_consistency'
+        ) as has_execution_claim_check,
+        exists (
+          select 1
+          from pg_indexes
+          where schemaname = 'wfpc'
+            and tablename = 'harness_cards'
+            and indexname = 'harness_cards_run_state_execution_claim_idx'
+        ) as has_execution_claim_index`
+    );
+  let harnessCardExecutionClaimsExisting = await queryHarnessCardExecutionClaimsReady();
+  let harnessCardExecutionClaimsReady = Object.values(
+    harnessCardExecutionClaimsExisting.rows[0] ?? {}
+  ).every(Boolean);
+  if (!harnessCardExecutionClaimsReady) {
+    await client.query(readFileSync("supabase/migrations/0029_wf_harness_card_execution_claims.sql", "utf8"));
+    harnessCardExecutionClaimsExisting = await queryHarnessCardExecutionClaimsReady();
+    harnessCardExecutionClaimsReady = Object.values(
+      harnessCardExecutionClaimsExisting.rows[0] ?? {}
+    ).every(Boolean);
+    if (!harnessCardExecutionClaimsReady) {
+      throw new Error("Harness card execution-claim migration did not produce the required schema shape");
+    }
+  }
   const { rows } = await client.query(
     "select table_schema, table_name from information_schema.tables where table_schema = 'wfpc' order by table_name"
   );

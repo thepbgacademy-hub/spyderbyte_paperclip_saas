@@ -79,6 +79,8 @@ describe("harness runtime", () => {
           title: "Plan run",
           deliverableType: "plan",
           state: "working",
+          executionClaimToken: "claim-ceo-runtime",
+          executionClaimedAt: "2026-05-21T10:03:00.000Z",
           createdAt: "2026-05-21T10:00:00.000Z",
           updatedAt: "2026-05-21T10:03:00.000Z"
         },
@@ -90,6 +92,8 @@ describe("harness runtime", () => {
           title: "Review numbers",
           deliverableType: "finance_review",
           state: "waiting",
+          executionClaimToken: null,
+          executionClaimedAt: null,
           createdAt: "2026-05-21T10:01:00.000Z",
           updatedAt: "2026-05-21T10:03:00.000Z"
         }
@@ -159,6 +163,8 @@ describe("harness runtime", () => {
           title: "Review numbers",
           deliverableType: "finance_review",
           state: "working",
+          executionClaimToken: "claim-cfo-runtime",
+          executionClaimedAt: "2026-05-21T10:03:00.000Z",
           createdAt: "2026-05-21T10:01:00.000Z",
           updatedAt: "2026-05-21T10:03:00.000Z"
         }

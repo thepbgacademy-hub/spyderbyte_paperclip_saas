@@ -87,6 +87,8 @@ export type HarnessCardRow = {
   title: string;
   deliverableType: string;
   state: HarnessCardStatus;
+  executionClaimToken: string | null;
+  executionClaimedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
