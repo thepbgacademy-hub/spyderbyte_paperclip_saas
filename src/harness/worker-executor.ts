@@ -358,6 +358,18 @@ export async function commitHarnessWorkerLaneOutcome(input: {
       throw new Error(`Unknown harness run for worker lane outcome: ${input.runId}`);
     }
     if (NON_EXECUTABLE_RUN_STATES.has(run.state)) {
+      const card = await repository.getCard(input.cardId);
+      if (card && card.runId === run.id && card.persona !== "ceo") {
+        await repository.insertEvent(
+          buildIgnoredOutcomeEvent({
+            cardId: card.id,
+            ignored: {
+              reason: "terminal_run",
+              runState: run.state
+            }
+          })
+        );
+      }
       return {
         runId: run.id,
         workflowId: run.workflowId,

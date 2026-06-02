@@ -1873,6 +1873,71 @@ describe("harness worker executor", () => {
     );
   });
 
+  it("persists a bounded ignored-outcome event when a worker callback arrives after the run is already terminal", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    run.state = "done";
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Finalize pricing review",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "working";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+
+    await expect(
+      commitHarnessWorkerLaneOutcome({
+        repository,
+        tenantId: "tenant-1",
+        runId: run.id,
+        workflowId: "wf_connect_first_workflow",
+        cardId: cfoCard.id,
+        executionClaimToken: "claim-cfo-1",
+        state: "done",
+        resultSummary: "This should not commit."
+      })
+    ).resolves.toEqual({
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow",
+      status: "ignored",
+      ignored: {
+        reason: "terminal_run",
+        runState: "done"
+      }
+    });
+    await expect(repository.listEventsForCard(cfoCard.id)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventKind: "execution_outcome_ignored",
+          payload: {
+            reason: "terminal_run",
+            runState: "done"
+          }
+        })
+      ])
+    );
+  });
+
   it("ignores worker outcome commits that present a stale execution claim token", async () => {
     const repository = createInMemoryHarnessRepository();
     const run = createHarnessRunRecord({

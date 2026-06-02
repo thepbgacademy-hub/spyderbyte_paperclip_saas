@@ -2667,6 +2667,85 @@ describe("worker runtime", () => {
     await runtime.close();
   });
 
+  it("emits the ignored-outcome handoff when a private harness callback arrives after the run is terminal", async () => {
+    const onHarnessLaneOutcomeIgnored = vi.fn();
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-outcome-terminal",
+      onHarnessLaneOutcomeIgnored
+    });
+
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.getRun.mockResolvedValueOnce({
+      id: "run-1",
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      state: "done",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      },
+      createdAt: "2026-05-21T10:00:00.000Z",
+      updatedAt: "2026-05-21T10:10:00.000Z"
+    });
+
+    stdoutWrite.mockClear();
+    await expect(
+      runtime.commitHarnessLaneOutcome({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-1",
+        state: "done",
+        resultSummary: "This should not commit."
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "ignored",
+      ignored: {
+        reason: "terminal_run",
+        runState: "done"
+      }
+    });
+
+    expect(harnessRepository.transitionCardState).not.toHaveBeenCalled();
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "execution_outcome_ignored",
+        payload: {
+          reason: "terminal_run",
+          runState: "done"
+        }
+      })
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome_ignored\"")
+    );
+    expect(stdoutWrite).not.toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome\"")
+    );
+    expect(onHarnessLaneOutcomeIgnored).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      cardId: "card_cfo",
+      ignored: {
+        reason: "terminal_run",
+        runState: "done"
+      }
+    });
+
+    await runtime.close();
+  });
+
   it("wires the issue-launch adapter into the worker runtime when configured", async () => {
     const { createPaperclipClient } = await import("../src/paperclip/client.js");
     const {
