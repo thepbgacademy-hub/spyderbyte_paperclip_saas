@@ -62,6 +62,40 @@ export function createWorkerRuntime(options: {
     postOutcomeAction?: HarnessWorkerLaneOutcome["postOutcomeAction"];
     nextDispatch?: HarnessWorkerLaneOutcome["nextDispatch"];
   }) => void | Promise<void>;
+  onHarnessLaneDone?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+    attentionTransition: HarnessWorkerLaneAttentionTransition;
+    postOutcomeAction?: HarnessWorkerLaneOutcome["postOutcomeAction"];
+    nextDispatch?: HarnessWorkerLaneOutcome["nextDispatch"];
+  }) => void | Promise<void>;
+  onHarnessLaneWaiting?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+    attentionTransition: HarnessWorkerLaneAttentionTransition;
+    postOutcomeAction?: HarnessWorkerLaneOutcome["postOutcomeAction"];
+  }) => void | Promise<void>;
+  onHarnessLaneBlocked?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+    attentionTransition: HarnessWorkerLaneAttentionTransition;
+    postOutcomeAction?: HarnessWorkerLaneOutcome["postOutcomeAction"];
+  }) => void | Promise<void>;
+  onHarnessLaneCancelled?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+    attentionTransition: HarnessWorkerLaneAttentionTransition;
+    postOutcomeAction?: HarnessWorkerLaneOutcome["postOutcomeAction"];
+    nextDispatch?: HarnessWorkerLaneOutcome["nextDispatch"];
+  }) => void | Promise<void>;
   onHarnessLaneOutcomeIgnored?: (input: {
     tenantId: string;
     runId: string;
@@ -562,6 +596,20 @@ export function createWorkerRuntime(options: {
                 error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
               });
             }
+            try {
+              await runSpecificCommittedOutcomeHandler({
+                options,
+                handoff: committedOutcomeHandoff
+              });
+            } catch (error) {
+              console.warn("Harness specific committed-outcome handler failed after durable worker outcome", {
+                runId: committedOutcome.runId,
+                workflowId: committedOutcome.workflowId,
+                cardId: committedOutcome.laneExecution.cardId,
+                state: committedOutcome.laneExecution.state,
+                error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+              });
+            }
           }
           const resolvedAttentionAction = readResolvedAttentionAction(committedOutcome.attentionTransition);
           if (resolvedAttentionAction && committedOutcome.laneExecution) {
@@ -702,6 +750,139 @@ function readResolvedAttentionAction(
   transition: HarnessWorkerLaneAttentionTransition | undefined
 ): Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }> | null {
   return transition?.kind === "resolved" ? transition.resolvedAction : null;
+}
+
+async function runSpecificCommittedOutcomeHandler(input: {
+  options: {
+    workerInstanceId?: string;
+    onHarnessLaneDone?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+      attentionTransition: HarnessWorkerLaneAttentionTransition;
+      postOutcomeAction?: HarnessWorkerLaneOutcome["postOutcomeAction"];
+      nextDispatch?: HarnessWorkerLaneOutcome["nextDispatch"];
+    }) => void | Promise<void>;
+    onHarnessLaneWaiting?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+      attentionTransition: HarnessWorkerLaneAttentionTransition;
+      postOutcomeAction?: HarnessWorkerLaneOutcome["postOutcomeAction"];
+    }) => void | Promise<void>;
+    onHarnessLaneBlocked?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+      attentionTransition: HarnessWorkerLaneAttentionTransition;
+      postOutcomeAction?: HarnessWorkerLaneOutcome["postOutcomeAction"];
+    }) => void | Promise<void>;
+    onHarnessLaneCancelled?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+      attentionTransition: HarnessWorkerLaneAttentionTransition;
+      postOutcomeAction?: HarnessWorkerLaneOutcome["postOutcomeAction"];
+      nextDispatch?: HarnessWorkerLaneOutcome["nextDispatch"];
+    }) => void | Promise<void>;
+  };
+  handoff: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+    attentionTransition: HarnessWorkerLaneAttentionTransition;
+    postOutcomeAction?: HarnessWorkerLaneOutcome["postOutcomeAction"];
+    nextDispatch?: HarnessWorkerLaneOutcome["nextDispatch"];
+  };
+}) {
+  switch (input.handoff.laneExecution.state) {
+    case "done": {
+      const laneDoneHandoff = {
+        tenantId: input.handoff.tenantId,
+        runId: input.handoff.runId,
+        workflowId: input.handoff.workflowId,
+        laneExecution: input.handoff.laneExecution,
+        attentionTransition: input.handoff.attentionTransition,
+        ...(input.handoff.postOutcomeAction ? { postOutcomeAction: input.handoff.postOutcomeAction } : {}),
+        ...(input.handoff.nextDispatch ? { nextDispatch: input.handoff.nextDispatch } : {})
+      };
+      emitHarnessSpecificCommittedOutcomeEvent("wealth_factory_harness_lane_done", input.options.workerInstanceId, laneDoneHandoff);
+      await input.options.onHarnessLaneDone?.(laneDoneHandoff);
+      return;
+    }
+    case "waiting": {
+      const laneWaitingHandoff = {
+        tenantId: input.handoff.tenantId,
+        runId: input.handoff.runId,
+        workflowId: input.handoff.workflowId,
+        laneExecution: input.handoff.laneExecution,
+        attentionTransition: input.handoff.attentionTransition,
+        ...(input.handoff.postOutcomeAction ? { postOutcomeAction: input.handoff.postOutcomeAction } : {})
+      };
+      emitHarnessSpecificCommittedOutcomeEvent("wealth_factory_harness_lane_waiting", input.options.workerInstanceId, laneWaitingHandoff);
+      await input.options.onHarnessLaneWaiting?.(laneWaitingHandoff);
+      return;
+    }
+    case "blocked": {
+      const laneBlockedHandoff = {
+        tenantId: input.handoff.tenantId,
+        runId: input.handoff.runId,
+        workflowId: input.handoff.workflowId,
+        laneExecution: input.handoff.laneExecution,
+        attentionTransition: input.handoff.attentionTransition,
+        ...(input.handoff.postOutcomeAction ? { postOutcomeAction: input.handoff.postOutcomeAction } : {})
+      };
+      emitHarnessSpecificCommittedOutcomeEvent("wealth_factory_harness_lane_blocked", input.options.workerInstanceId, laneBlockedHandoff);
+      await input.options.onHarnessLaneBlocked?.(laneBlockedHandoff);
+      return;
+    }
+    case "cancelled": {
+      const laneCancelledHandoff = {
+        tenantId: input.handoff.tenantId,
+        runId: input.handoff.runId,
+        workflowId: input.handoff.workflowId,
+        laneExecution: input.handoff.laneExecution,
+        attentionTransition: input.handoff.attentionTransition,
+        ...(input.handoff.postOutcomeAction ? { postOutcomeAction: input.handoff.postOutcomeAction } : {}),
+        ...(input.handoff.nextDispatch ? { nextDispatch: input.handoff.nextDispatch } : {})
+      };
+      emitHarnessSpecificCommittedOutcomeEvent("wealth_factory_harness_lane_cancelled", input.options.workerInstanceId, laneCancelledHandoff);
+      await input.options.onHarnessLaneCancelled?.(laneCancelledHandoff);
+      return;
+    }
+  }
+}
+
+function emitHarnessSpecificCommittedOutcomeEvent(
+  type:
+    | "wealth_factory_harness_lane_done"
+    | "wealth_factory_harness_lane_waiting"
+    | "wealth_factory_harness_lane_blocked"
+    | "wealth_factory_harness_lane_cancelled",
+  workerInstanceId: string | undefined,
+  payload: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+    attentionTransition: HarnessWorkerLaneAttentionTransition;
+    postOutcomeAction?: HarnessWorkerLaneOutcome["postOutcomeAction"];
+    nextDispatch?: HarnessWorkerLaneOutcome["nextDispatch"];
+  }
+) {
+  process.stdout.write(
+    `${JSON.stringify({
+      type,
+      workerInstanceId: workerInstanceId ?? "worker",
+      observedAt: new Date().toISOString(),
+      ...payload
+    })}\n`
+  );
 }
 
 async function runSpecificPostOutcomeHandler(input: {
