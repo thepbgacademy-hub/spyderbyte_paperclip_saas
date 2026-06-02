@@ -216,6 +216,32 @@ describe("harness worker executor", () => {
         claimedAt: expect.any(String),
         previousClaimedAt: null
       },
+      continuityContext: {
+        source: "state_transition",
+        summary: "CFO should continue this active pricing review lane: Pressure-test the pricing lane.",
+        latestResultSummary: "Initial pricing floor is stable.",
+        absorbedWorkCount: 2,
+        latestAbsorbedWork: {
+          resolution: "update_existing_lane",
+          requestedByPersona: null,
+          title: "Verify competitor anchor notes",
+          label: "Verify competitor anchor notes"
+        },
+        absorbedWorkTrail: [
+          {
+            resolution: "update_existing_lane",
+            requestedByPersona: null,
+            title: "Re-check discount floor",
+            label: "Re-check discount floor"
+          },
+          {
+            resolution: "update_existing_lane",
+            requestedByPersona: null,
+            title: "Verify competitor anchor notes",
+            label: "Verify competitor anchor notes"
+          }
+        ]
+      },
       dispatchHandoff: {
         kind: "initial_claim",
         kindLabel: "Initial lane claim",

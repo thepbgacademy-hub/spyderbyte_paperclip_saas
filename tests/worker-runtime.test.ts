@@ -408,6 +408,32 @@ describe("worker runtime", () => {
           claimedAt: "2026-05-21T10:04:00.000Z",
           previousClaimedAt: null
         },
+        continuityContext: {
+          source: "state_transition",
+          summary: "CFO should continue this active pricing review lane: Pressure-test the pricing lane.",
+          latestResultSummary: "Initial pricing floor is stable.",
+          absorbedWorkCount: 2,
+          latestAbsorbedWork: {
+            resolution: "update_existing_lane",
+            requestedByPersona: null,
+            title: "Verify competitor anchor notes",
+            label: "Verify competitor anchor notes"
+          },
+          absorbedWorkTrail: [
+            {
+              resolution: "update_existing_lane",
+              requestedByPersona: null,
+              title: "Re-check discount floor",
+              label: "Re-check discount floor"
+            },
+            {
+              resolution: "update_existing_lane",
+              requestedByPersona: null,
+              title: "Verify competitor anchor notes",
+              label: "Verify competitor anchor notes"
+            }
+          ]
+        },
         dispatchHandoff: {
           kind: "initial_claim",
           kindLabel: "Initial lane claim",
@@ -448,6 +474,7 @@ describe("worker runtime", () => {
     expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"requiredCapabilities\""));
     expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"runtimeContext\""));
     expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"absorbedWorkItems\""));
+    expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"continuityContext\""));
     expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"outcomeContract\""));
 
     await runtime.close();
@@ -1192,6 +1219,13 @@ describe("worker runtime", () => {
           claimedAt: "2026-05-21T10:07:30.000Z",
           previousClaimedAt: null
         },
+        continuityContext: {
+          source: "state_transition",
+          summary: "CMO should continue this active marketing plan lane: Prepare launch messaging.",
+          latestResultSummary: null,
+          absorbedWorkCount: 0,
+          absorbedWorkTrail: []
+        },
         dispatchHandoff: {
           kind: "follow_on_dispatch",
           kindLabel: "Follow-on dispatch",
@@ -1360,6 +1394,13 @@ describe("worker runtime", () => {
           token: "claim-cmo-active",
           claimedAt: "2026-05-21T10:07:30.000Z",
           previousClaimedAt: null
+        },
+        continuityContext: {
+          source: "state_transition",
+          summary: "CMO should continue this active marketing plan lane: Prepare launch messaging.",
+          latestResultSummary: null,
+          absorbedWorkCount: 0,
+          absorbedWorkTrail: []
         },
         laneExecution: expect.objectContaining({
           cardId: "card_cmo"

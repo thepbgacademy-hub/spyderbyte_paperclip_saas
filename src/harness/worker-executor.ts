@@ -18,6 +18,10 @@ import {
   type HarnessRunRecord,
   type HarnessRuntimeContext
 } from "./types.js";
+import {
+  parseContinuityAbsorbedWorkItem,
+  type ParsedHarnessContinuityAbsorbedWorkItem
+} from "./continuity.js";
 import type { ProviderCapability } from "../packages/package-types.js";
 
 export type HarnessWorkerLaneExecution = {
@@ -31,6 +35,15 @@ export type HarnessWorkerLaneExecution = {
   continuitySource?: HarnessCardContinuityRecord["continuitySource"];
   latestResultSummary?: string;
   absorbedWorkItems?: string[];
+};
+
+export type HarnessWorkerContinuityContext = {
+  source: HarnessCardContinuityRecord["continuitySource"];
+  summary: string | null;
+  latestResultSummary: string | null;
+  absorbedWorkCount: number;
+  latestAbsorbedWork?: ParsedHarnessContinuityAbsorbedWorkItem;
+  absorbedWorkTrail: ParsedHarnessContinuityAbsorbedWorkItem[];
 };
 
 export type HarnessWorkerDispatchHandoff =
@@ -79,6 +92,7 @@ export type HarnessWorkerExecutionEnvelope = {
     previousClaimedAt: string | null;
   };
   laneExecution: HarnessWorkerLaneExecution;
+  continuityContext?: HarnessWorkerContinuityContext;
   dispatchHandoff?: HarnessWorkerDispatchHandoff;
   outcomeContract: HarnessWorkerOutcomeContract;
 };
@@ -508,6 +522,11 @@ export async function buildHarnessWorkerExecutionEnvelope(input: {
       claimedAt: lane.executionClaimedAt,
       previousClaimedAt: null
     },
+    ...(continuity
+      ? {
+          continuityContext: buildWorkerContinuityContext(continuity)
+        }
+      : {}),
     ...(input.dispatch.dispatchHandoff
       ? {
           dispatchHandoff:
@@ -533,6 +552,26 @@ export async function buildHarnessWorkerExecutionEnvelope(input: {
       ...(continuity?.latestResultSummary ? { latestResultSummary: continuity.latestResultSummary } : {}),
       ...(continuity?.absorbedWorkItems?.length ? { absorbedWorkItems: [...continuity.absorbedWorkItems] } : {})
     }
+  };
+}
+
+function buildWorkerContinuityContext(
+  continuity: HarnessCardContinuityRecord
+): HarnessWorkerContinuityContext {
+  const absorbedWorkTrail = continuity.absorbedWorkItems.map((item) => parseContinuityAbsorbedWorkItem(item));
+  return {
+    source: continuity.continuitySource,
+    summary: continuity.continuitySummary,
+    latestResultSummary: continuity.latestResultSummary,
+    absorbedWorkCount: absorbedWorkTrail.length,
+    ...(absorbedWorkTrail.length > 0
+      ? {
+          latestAbsorbedWork: absorbedWorkTrail[absorbedWorkTrail.length - 1]!,
+          absorbedWorkTrail
+        }
+      : {
+          absorbedWorkTrail
+        })
   };
 }
 

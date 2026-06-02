@@ -39,6 +39,11 @@ import {
   TenantMembershipRequiredError
 } from "../db/supabase-repositories.js";
 import type { HarnessProposalStatus, HarnessSubCardProposal } from "./runtime-contract.js";
+import {
+  createContinuityAbsorbedWorkItem,
+  mergeContinuityAbsorbedWorkItems,
+  parseContinuityAbsorbedWorkItem
+} from "./continuity.js";
 
 export type HarnessBoardActivityItem = {
   id: string;
@@ -9681,53 +9686,6 @@ function extractAbsorbedWorkItems(events: readonly HarnessCardEventRecord[]): st
       const requestedByPersona = readOptionalString(event.payload.requestedByPersona)?.toUpperCase() ?? "A BOARD PERSONA";
       return `${requestedByPersona}: ${requestedTitle}`;
     });
-}
-
-const CONTINUITY_HANDOFF_PREFIX = "handoff_existing_lane|";
-const CONTINUITY_UPDATE_PREFIX = "update_existing_lane|";
-
-function createContinuityAbsorbedWorkItem(input: {
-  resolution: "update_existing_lane" | "handoff_existing_lane";
-  requestedByPersona: string;
-  title: string;
-}): string {
-  const label = `${input.requestedByPersona.toUpperCase()}: ${input.title}`;
-  const prefix = input.resolution === "handoff_existing_lane" ? CONTINUITY_HANDOFF_PREFIX : CONTINUITY_UPDATE_PREFIX;
-  return `${prefix}${label}`;
-}
-
-function parseContinuityAbsorbedWorkItem(value: string): {
-  resolution: "update_existing_lane" | "handoff_existing_lane";
-  label: string;
-} {
-  if (value.startsWith(CONTINUITY_HANDOFF_PREFIX)) {
-    return {
-      resolution: "handoff_existing_lane",
-      label: value.slice(CONTINUITY_HANDOFF_PREFIX.length)
-    };
-  }
-  if (value.startsWith(CONTINUITY_UPDATE_PREFIX)) {
-    return {
-      resolution: "update_existing_lane",
-      label: value.slice(CONTINUITY_UPDATE_PREFIX.length)
-    };
-  }
-  return {
-    resolution: "update_existing_lane",
-    label: value
-  };
-}
-
-function mergeContinuityAbsorbedWorkItems(existing: readonly string[], nextValue: string): string[] {
-  const merged: string[] = [];
-  for (const value of [...existing, nextValue]) {
-    const priorIndex = merged.indexOf(value);
-    if (priorIndex >= 0) {
-      merged.splice(priorIndex, 1);
-    }
-    merged.push(value);
-  }
-  return merged.slice(-6);
 }
 
 function createAbsorbedLaneResumeSummary(input: {
