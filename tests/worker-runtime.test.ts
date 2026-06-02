@@ -2880,13 +2880,15 @@ describe("worker runtime", () => {
 
   it("ignores a private harness lane outcome when the execution claim token is stale", async () => {
     const onHarnessLaneOutcomeIgnored = vi.fn();
+    const onHarnessLaneOutcomeIgnoredStaleClaim = vi.fn();
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
         WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
       }),
       workerInstanceId: "worker-test-harness-outcome-stale-claim",
-      onHarnessLaneOutcomeIgnored
+      onHarnessLaneOutcomeIgnored,
+      onHarnessLaneOutcomeIgnoredStaleClaim
     });
 
     stdoutWrite.mockClear();
@@ -2918,11 +2920,27 @@ describe("worker runtime", () => {
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome_ignored\"")
     );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome_ignored_stale_claim\"")
+    );
     expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome\"")
     );
     expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("claim-cfo-stale"));
     expect(onHarnessLaneOutcomeIgnored).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      cardId: "card_cfo",
+      ignored: {
+        reason: "stale_execution_claim",
+        currentLaneState: "working",
+        activeExecutionClaimPresent: true,
+        activeExecutionClaimClaimedAt: "2026-05-21T10:04:00.000Z",
+        presentedExecutionClaimState: "mismatched"
+      }
+    });
+    expect(onHarnessLaneOutcomeIgnoredStaleClaim).toHaveBeenCalledWith({
       tenantId: "tenant-1",
       runId: "run-1",
       workflowId: "wf_connect_first_workflow",
@@ -2942,6 +2960,7 @@ describe("worker runtime", () => {
   it("keeps quiet when a private harness lane outcome targets a lane that is no longer working", async () => {
     const onHarnessAttentionResolved = vi.fn();
     const onHarnessLaneOutcomeIgnored = vi.fn();
+    const onHarnessLaneOutcomeIgnoredLaneNotWorking = vi.fn();
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
@@ -2949,7 +2968,8 @@ describe("worker runtime", () => {
       }),
       workerInstanceId: "worker-test-harness-outcome-idle",
       onHarnessAttentionResolved,
-      onHarnessLaneOutcomeIgnored
+      onHarnessLaneOutcomeIgnored,
+      onHarnessLaneOutcomeIgnoredLaneNotWorking
     });
 
     const harnessRepository = harnessRepositoryRef.current;
@@ -2990,6 +3010,9 @@ describe("worker runtime", () => {
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome_ignored\"")
     );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome_ignored_lane_not_working\"")
+    );
     expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome\"")
     );
@@ -3007,19 +3030,31 @@ describe("worker runtime", () => {
         currentLaneState: "waiting"
       }
     });
+    expect(onHarnessLaneOutcomeIgnoredLaneNotWorking).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      cardId: "card_cfo",
+      ignored: {
+        reason: "lane_not_working",
+        currentLaneState: "waiting"
+      }
+    });
 
     await runtime.close();
   });
 
   it("emits the ignored-outcome handoff when a private harness callback arrives after the run is terminal", async () => {
     const onHarnessLaneOutcomeIgnored = vi.fn();
+    const onHarnessLaneOutcomeIgnoredTerminalRun = vi.fn();
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
         WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
       }),
       workerInstanceId: "worker-test-harness-outcome-terminal",
-      onHarnessLaneOutcomeIgnored
+      onHarnessLaneOutcomeIgnored,
+      onHarnessLaneOutcomeIgnoredTerminalRun
     });
 
     const harnessRepository = harnessRepositoryRef.current;
@@ -3073,6 +3108,9 @@ describe("worker runtime", () => {
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome_ignored\"")
     );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome_ignored_terminal_run\"")
+    );
     expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome\"")
     );
@@ -3086,7 +3124,64 @@ describe("worker runtime", () => {
         runState: "done"
       }
     });
+    expect(onHarnessLaneOutcomeIgnoredTerminalRun).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      cardId: "card_cfo",
+      ignored: {
+        reason: "terminal_run",
+        runState: "done"
+      }
+    });
 
+    await runtime.close();
+  });
+
+  it("still runs the specific ignored-outcome handler when the generic ignored hook rejects", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onHarnessLaneOutcomeIgnored = vi.fn().mockRejectedValue(new Error("ignored handoff unavailable"));
+    const onHarnessLaneOutcomeIgnoredStaleClaim = vi.fn();
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-outcome-ignored-hook-reject",
+      onHarnessLaneOutcomeIgnored,
+      onHarnessLaneOutcomeIgnoredStaleClaim
+    });
+
+    await expect(
+      runtime.commitHarnessLaneOutcome({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-stale",
+        state: "done",
+        resultSummary: "This should not commit."
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        status: "ignored",
+        ignored: expect.objectContaining({
+          reason: "stale_execution_claim"
+        })
+      })
+    );
+
+    expect(onHarnessLaneOutcomeIgnored).toHaveBeenCalledTimes(1);
+    expect(onHarnessLaneOutcomeIgnoredStaleClaim).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      "Harness ignored-outcome hook failed after fail-closed worker rejection",
+      expect.objectContaining({
+        reason: "stale_execution_claim",
+        error: { name: "Error", message: "ignored handoff unavailable" }
+      })
+    );
+
+    warn.mockRestore();
     await runtime.close();
   });
 

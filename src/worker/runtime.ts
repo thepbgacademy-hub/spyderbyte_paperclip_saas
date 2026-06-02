@@ -103,6 +103,27 @@ export function createWorkerRuntime(options: {
     cardId: string;
     ignored: NonNullable<HarnessWorkerLaneOutcome["ignored"]>;
   }) => void | Promise<void>;
+  onHarnessLaneOutcomeIgnoredStaleClaim?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    cardId: string;
+    ignored: NonNullable<Extract<HarnessWorkerLaneOutcome["ignored"], { reason: "stale_execution_claim" }>>;
+  }) => void | Promise<void>;
+  onHarnessLaneOutcomeIgnoredLaneNotWorking?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    cardId: string;
+    ignored: NonNullable<Extract<HarnessWorkerLaneOutcome["ignored"], { reason: "lane_not_working" }>>;
+  }) => void | Promise<void>;
+  onHarnessLaneOutcomeIgnoredTerminalRun?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    cardId: string;
+    ignored: NonNullable<Extract<HarnessWorkerLaneOutcome["ignored"], { reason: "terminal_run" }>>;
+  }) => void | Promise<void>;
   onHarnessAttentionResolved?: (input: {
     tenantId: string;
     runId: string;
@@ -548,17 +569,31 @@ export function createWorkerRuntime(options: {
             );
             try {
               await options.onHarnessLaneOutcomeIgnored?.(ignoredOutcomeHandoff);
-            } catch (error) {
-              console.warn("Harness ignored-outcome hook failed after fail-closed worker rejection", {
-                runId: workerOutcome.runId,
-                workflowId: workerOutcome.workflowId,
-                cardId: input.cardId,
-                reason: workerOutcome.ignored.reason,
-                error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
-              });
+              } catch (error) {
+                console.warn("Harness ignored-outcome hook failed after fail-closed worker rejection", {
+                  runId: workerOutcome.runId,
+                  workflowId: workerOutcome.workflowId,
+                  cardId: input.cardId,
+                  reason: workerOutcome.ignored.reason,
+                  error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+                });
+              }
+              try {
+                await runSpecificIgnoredOutcomeHandler({
+                  options,
+                  handoff: ignoredOutcomeHandoff
+                });
+              } catch (error) {
+                console.warn("Harness specific ignored-outcome handler failed after fail-closed worker rejection", {
+                  runId: workerOutcome.runId,
+                  workflowId: workerOutcome.workflowId,
+                  cardId: input.cardId,
+                  reason: workerOutcome.ignored.reason,
+                  error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+                });
+              }
+              return;
             }
-            return;
-          }
           const committedOutcome = workerOutcome;
           process.stdout.write(
             `${JSON.stringify({
@@ -750,6 +785,111 @@ function readResolvedAttentionAction(
   transition: HarnessWorkerLaneAttentionTransition | undefined
 ): Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }> | null {
   return transition?.kind === "resolved" ? transition.resolvedAction : null;
+}
+
+async function runSpecificIgnoredOutcomeHandler(input: {
+  options: {
+    workerInstanceId?: string;
+    onHarnessLaneOutcomeIgnoredStaleClaim?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      cardId: string;
+      ignored: NonNullable<Extract<HarnessWorkerLaneOutcome["ignored"], { reason: "stale_execution_claim" }>>;
+    }) => void | Promise<void>;
+    onHarnessLaneOutcomeIgnoredLaneNotWorking?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      cardId: string;
+      ignored: NonNullable<Extract<HarnessWorkerLaneOutcome["ignored"], { reason: "lane_not_working" }>>;
+    }) => void | Promise<void>;
+    onHarnessLaneOutcomeIgnoredTerminalRun?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      cardId: string;
+      ignored: NonNullable<Extract<HarnessWorkerLaneOutcome["ignored"], { reason: "terminal_run" }>>;
+    }) => void | Promise<void>;
+  };
+  handoff: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    cardId: string;
+    ignored: NonNullable<HarnessWorkerLaneOutcome["ignored"]>;
+  };
+}) {
+  switch (input.handoff.ignored.reason) {
+    case "stale_execution_claim": {
+      emitSpecificIgnoredOutcomeEvent(
+        "wealth_factory_harness_lane_outcome_ignored_stale_claim",
+        input.options.workerInstanceId,
+        input.handoff
+      );
+      await input.options.onHarnessLaneOutcomeIgnoredStaleClaim?.(input.handoff as {
+        tenantId: string;
+        runId: string;
+        workflowId: string;
+        cardId: string;
+        ignored: NonNullable<Extract<HarnessWorkerLaneOutcome["ignored"], { reason: "stale_execution_claim" }>>;
+      });
+      return;
+    }
+    case "lane_not_working": {
+      emitSpecificIgnoredOutcomeEvent(
+        "wealth_factory_harness_lane_outcome_ignored_lane_not_working",
+        input.options.workerInstanceId,
+        input.handoff
+      );
+      await input.options.onHarnessLaneOutcomeIgnoredLaneNotWorking?.(input.handoff as {
+        tenantId: string;
+        runId: string;
+        workflowId: string;
+        cardId: string;
+        ignored: NonNullable<Extract<HarnessWorkerLaneOutcome["ignored"], { reason: "lane_not_working" }>>;
+      });
+      return;
+    }
+    case "terminal_run": {
+      emitSpecificIgnoredOutcomeEvent(
+        "wealth_factory_harness_lane_outcome_ignored_terminal_run",
+        input.options.workerInstanceId,
+        input.handoff
+      );
+      await input.options.onHarnessLaneOutcomeIgnoredTerminalRun?.(input.handoff as {
+        tenantId: string;
+        runId: string;
+        workflowId: string;
+        cardId: string;
+        ignored: NonNullable<Extract<HarnessWorkerLaneOutcome["ignored"], { reason: "terminal_run" }>>;
+      });
+    }
+  }
+}
+
+function emitSpecificIgnoredOutcomeEvent(
+  type:
+    | "wealth_factory_harness_lane_outcome_ignored_stale_claim"
+    | "wealth_factory_harness_lane_outcome_ignored_lane_not_working"
+    | "wealth_factory_harness_lane_outcome_ignored_terminal_run",
+  workerInstanceId: string | undefined,
+  payload: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    cardId: string;
+    ignored: NonNullable<HarnessWorkerLaneOutcome["ignored"]>;
+  }
+) {
+  process.stdout.write(
+    `${JSON.stringify({
+      type,
+      workerInstanceId: workerInstanceId ?? "worker",
+      observedAt: new Date().toISOString(),
+      ...payload
+    })}\n`
+  );
 }
 
 async function runSpecificCommittedOutcomeHandler(input: {
