@@ -53,6 +53,15 @@ export function createWorkerRuntime(options: {
   env: WorkerEnv;
   workerInstanceId?: string;
   onHarnessLaneReady?: (envelope: HarnessWorkerExecutionEnvelope) => void | Promise<void>;
+  onHarnessLaneOutcomeCommitted?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+    attentionTransition: HarnessWorkerLaneAttentionTransition;
+    postOutcomeAction?: HarnessWorkerLaneOutcome["postOutcomeAction"];
+    nextDispatch?: HarnessWorkerLaneOutcome["nextDispatch"];
+  }) => void | Promise<void>;
   onHarnessLaneOutcomeIgnored?: (input: {
     tenantId: string;
     runId: string;
@@ -525,6 +534,35 @@ export function createWorkerRuntime(options: {
               ...committedOutcome
             })}\n`
           );
+          if (committedOutcome.laneExecution) {
+            const committedOutcomeHandoff = {
+              tenantId: input.tenantId,
+              runId: committedOutcome.runId,
+              workflowId: committedOutcome.workflowId,
+              laneExecution: committedOutcome.laneExecution,
+              attentionTransition: committedOutcome.attentionTransition ?? { kind: "none" as const },
+              ...(committedOutcome.postOutcomeAction ? { postOutcomeAction: committedOutcome.postOutcomeAction } : {}),
+              ...(committedOutcome.nextDispatch ? { nextDispatch: committedOutcome.nextDispatch } : {})
+            };
+            process.stdout.write(
+              `${JSON.stringify({
+                type: "wealth_factory_harness_lane_outcome_committed",
+                workerInstanceId: options.workerInstanceId ?? "worker",
+                observedAt: new Date().toISOString(),
+                ...committedOutcomeHandoff
+              })}\n`
+            );
+            try {
+              await options.onHarnessLaneOutcomeCommitted?.(committedOutcomeHandoff);
+            } catch (error) {
+              console.warn("Harness committed-outcome hook failed after durable worker outcome", {
+                runId: committedOutcome.runId,
+                workflowId: committedOutcome.workflowId,
+                cardId: committedOutcome.laneExecution.cardId,
+                error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+              });
+            }
+          }
           const resolvedAttentionAction = readResolvedAttentionAction(committedOutcome.attentionTransition);
           if (resolvedAttentionAction && committedOutcome.laneExecution) {
             const attentionResolvedHandoff = {

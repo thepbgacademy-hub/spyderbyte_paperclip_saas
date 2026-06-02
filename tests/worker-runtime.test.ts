@@ -676,6 +676,7 @@ describe("worker runtime", () => {
 
   it("commits a private harness lane outcome and emits a bounded worker event", async () => {
     const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
+    const onHarnessLaneOutcomeCommitted = vi.fn();
     const onHarnessPostOutcomeAction = vi.fn();
     const onHarnessCeoReviewRequested = vi.fn();
     const onHarnessLaneResumeAwaited = vi.fn();
@@ -686,6 +687,7 @@ describe("worker runtime", () => {
         WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
       }),
       workerInstanceId: "worker-test-harness-outcome",
+      onHarnessLaneOutcomeCommitted,
       onHarnessPostOutcomeAction,
       onHarnessCeoReviewRequested,
       onHarnessLaneResumeAwaited,
@@ -816,6 +818,9 @@ describe("worker runtime", () => {
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome\"")
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome_committed\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"status\":\"committed\"")
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
@@ -841,6 +846,30 @@ describe("worker runtime", () => {
         state: "done",
         runState: "assembling",
         latestResultSummary: "Validated the pricing model and preserved the final floor."
+      }
+    });
+    expect(onHarnessLaneOutcomeCommitted).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      attentionTransition: {
+        kind: "requested",
+        requestedAction: {
+          kind: "queue_ceo_review",
+          runState: "assembling",
+          reason: "final_assembly"
+        }
+      },
+      laneExecution: {
+        cardId: "card_cfo",
+        state: "done",
+        runState: "assembling",
+        latestResultSummary: "Validated the pricing model and preserved the final floor."
+      },
+      postOutcomeAction: {
+        kind: "queue_ceo_review",
+        runState: "assembling",
+        reason: "final_assembly"
       }
     });
     expect(onHarnessCeoReviewRequested).toHaveBeenCalledWith({
@@ -874,6 +903,7 @@ describe("worker runtime", () => {
 
   it("still runs the specific CEO review handler when the generic post-outcome hook rejects", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onHarnessLaneOutcomeCommitted = vi.fn().mockRejectedValue(new Error("committed handoff unavailable"));
     const onHarnessPostOutcomeAction = vi.fn().mockRejectedValue(new Error("generic handoff unavailable"));
     const onHarnessCeoReviewRequested = vi.fn();
     const runtime = createWorkerRuntime({
@@ -882,6 +912,7 @@ describe("worker runtime", () => {
         WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
       }),
       workerInstanceId: "worker-test-harness-post-outcome-hook-reject",
+      onHarnessLaneOutcomeCommitted,
       onHarnessPostOutcomeAction,
       onHarnessCeoReviewRequested
     });
@@ -977,6 +1008,7 @@ describe("worker runtime", () => {
     });
 
     expect(onHarnessPostOutcomeAction).toHaveBeenCalledTimes(1);
+    expect(onHarnessLaneOutcomeCommitted).toHaveBeenCalledTimes(1);
     expect(onHarnessCeoReviewRequested).toHaveBeenCalledWith({
       tenantId: "tenant-1",
       runId: "run-1",
@@ -994,6 +1026,14 @@ describe("worker runtime", () => {
       }
     });
     expect(warn).toHaveBeenCalledWith(
+      "Harness committed-outcome hook failed after durable worker outcome",
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo"
+      })
+    );
+    expect(warn).toHaveBeenCalledWith(
       "Harness post-outcome hook failed after durable worker outcome",
       expect.objectContaining({
         runId: "run-1",
@@ -1010,6 +1050,7 @@ describe("worker runtime", () => {
   it("emits a follow-on harness dispatch when a committed lane outcome frees the next approved lane", async () => {
     const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
     const onHarnessLaneReady = vi.fn();
+    const onHarnessLaneOutcomeCommitted = vi.fn();
     const onHarnessAttentionResolved = vi.fn();
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
@@ -1017,6 +1058,7 @@ describe("worker runtime", () => {
         WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
       }),
       workerInstanceId: "worker-test-harness-follow-on",
+      onHarnessLaneOutcomeCommitted,
       onHarnessLaneReady,
       onHarnessAttentionResolved
     });
@@ -1190,8 +1232,42 @@ describe("worker runtime", () => {
       })
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome_committed\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_attention_resolved\"")
     );
+    expect(onHarnessLaneOutcomeCommitted).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      attentionTransition: {
+        kind: "resolved",
+        resolvedAction: {
+          kind: "queue_ceo_review",
+          runState: "assembling",
+          reason: "final_assembly"
+        }
+      },
+      laneExecution: {
+        cardId: "card_cfo",
+        state: "done",
+        runState: "active",
+        latestResultSummary: "Pricing review is complete and ready for board packaging."
+      },
+      postOutcomeAction: {
+        kind: "dispatch_next_lane",
+        runState: "active",
+        cardId: "card_cmo",
+        persona: "cmo"
+      },
+      nextDispatch: expect.objectContaining({
+        laneExecution: expect.objectContaining({
+          cardId: "card_cmo",
+          persona: "cmo"
+        })
+      })
+    });
     expect(onHarnessAttentionResolved).toHaveBeenCalledWith({
       tenantId: "tenant-1",
       runId: "run-1",
