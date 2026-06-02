@@ -1860,6 +1860,17 @@ describe("harness worker executor", () => {
         currentLaneState: "waiting"
       }
     });
+    await expect(repository.listEventsForCard(cfoCard.id)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventKind: "execution_outcome_ignored",
+          payload: {
+            reason: "lane_not_working",
+            currentLaneState: "waiting"
+          }
+        })
+      ])
+    );
   });
 
   it("ignores worker outcome commits that present a stale execution claim token", async () => {
@@ -1933,5 +1944,19 @@ describe("harness worker executor", () => {
         presentedExecutionClaimState: "mismatched"
       }
     });
+    await expect(repository.listEventsForCard(cfoCard.id)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventKind: "execution_outcome_ignored",
+          payload: {
+            reason: "stale_execution_claim",
+            currentLaneState: "working",
+            activeExecutionClaimPresent: true,
+            activeExecutionClaimClaimedAt: expect.any(String),
+            presentedExecutionClaimState: "mismatched"
+          }
+        })
+      ])
+    );
   });
 });

@@ -79,6 +79,12 @@ export type HarnessWorkerDispatch = {
   dispatchHandoff?: HarnessWorkerDispatchHandoff;
 };
 
+export type HarnessWorkerExecutionClaimContext = {
+  kind: "approved_claim" | "working_claim_refresh" | "existing_working_claim";
+  claimedAt: string;
+  previousClaimedAt: string | null;
+};
+
 export type HarnessWorkerExecutionEnvelope = {
   tenantId: string;
   runId: string;
@@ -135,6 +141,11 @@ export type HarnessWorkerLaneOutcome = {
   };
   postOutcomeAction?: HarnessPostOutcomeAction;
   nextDispatch?: HarnessWorkerDispatch;
+};
+
+type HarnessWorkerDispatchResolution = {
+  dispatch: HarnessWorkerDispatch;
+  executionClaim?: HarnessWorkerExecutionClaimContext;
 };
 
 export type HarnessWorkerLaneAttentionTransition =
@@ -211,6 +222,18 @@ export async function buildHarnessWorkerDispatch(input: {
   dispatchHandoff?: HarnessWorkerDispatchHandoff;
   runAtomically?: <T>(work: (repository: HarnessDispatchRepository) => Promise<T>) => Promise<T>;
 }): Promise<HarnessWorkerDispatch> {
+  const resolution = await buildHarnessWorkerDispatchResolution(input);
+  return resolution.dispatch;
+}
+
+export async function buildHarnessWorkerDispatchResolution(input: {
+  repository: HarnessDispatchRepository;
+  tenantId: string;
+  runId: string;
+  workflowId: string;
+  dispatchHandoff?: HarnessWorkerDispatchHandoff;
+  runAtomically?: <T>(work: (repository: HarnessDispatchRepository) => Promise<T>) => Promise<T>;
+}): Promise<HarnessWorkerDispatchResolution> {
   const runWork = input.runAtomically ?? (async <T>(work: (repository: HarnessDispatchRepository) => Promise<T>) => work(input.repository));
   return runWork(async (repository) => {
     const run = await repository.getRun(input.runId);
@@ -219,10 +242,12 @@ export async function buildHarnessWorkerDispatch(input: {
     }
     if (NON_EXECUTABLE_RUN_STATES.has(run.state)) {
       return {
-        runId: run.id,
-        workflowId: run.workflowId,
-        status: "queued",
-        laneExecution: null
+        dispatch: {
+          runId: run.id,
+          workflowId: run.workflowId,
+          status: "queued",
+          laneExecution: null
+        }
       };
     }
 
@@ -238,10 +263,12 @@ export async function buildHarnessWorkerDispatch(input: {
     const lane = selectNextActionableLane(cards);
     if (!lane) {
       return {
-        runId: run.id,
-        workflowId: run.workflowId,
-        status: "queued",
-        laneExecution: null
+        dispatch: {
+          runId: run.id,
+          workflowId: run.workflowId,
+          status: "queued",
+          laneExecution: null
+        }
       };
     }
 
@@ -251,10 +278,12 @@ export async function buildHarnessWorkerDispatch(input: {
     });
     if (!claimedExecution || claimedExecution.lane.state !== "working") {
       return {
-        runId: run.id,
-        workflowId: run.workflowId,
-        status: "queued",
-        laneExecution: null
+        dispatch: {
+          runId: run.id,
+          workflowId: run.workflowId,
+          status: "queued",
+          laneExecution: null
+        }
       };
     }
     const claimedLane = claimedExecution.lane;
@@ -280,7 +309,8 @@ export async function buildHarnessWorkerDispatch(input: {
 
     const resumeFocus = resumedRuntime.getResumeFocus(claimedLane.id);
 
-      return {
+    return {
+      dispatch: {
         runId: run.id,
         workflowId: run.workflowId,
         status: "running",
@@ -293,11 +323,17 @@ export async function buildHarnessWorkerDispatch(input: {
         laneExecution: {
           cardId: claimedLane.id,
           persona: claimedLane.persona,
-        title: claimedLane.title,
-        deliverableType: claimedLane.deliverableType,
-        state: claimedLane.state,
-        ...(resumeFocus ? { resumeFocus } : {}),
-        ...(updatedContinuity.latestResultSummary ? { latestResultSummary: updatedContinuity.latestResultSummary } : {})
+          title: claimedLane.title,
+          deliverableType: claimedLane.deliverableType,
+          state: claimedLane.state,
+          ...(resumeFocus ? { resumeFocus } : {}),
+          ...(updatedContinuity.latestResultSummary ? { latestResultSummary: updatedContinuity.latestResultSummary } : {})
+        }
+      },
+      executionClaim: {
+        kind: claimedExecution.claimKind,
+        claimedAt: claimedLane.executionClaimedAt!,
+        previousClaimedAt: claimedExecution.previousClaimedAt
       }
     };
   });
@@ -338,28 +374,42 @@ export async function commitHarnessWorkerLaneOutcome(input: {
       throw new Error(`Unknown harness child lane for worker outcome: ${input.cardId}`);
     }
     if (card.state !== "working") {
+      const ignored = {
+        reason: "lane_not_working" as const,
+        currentLaneState: card.state
+      };
+      await repository.insertEvent(
+        buildIgnoredOutcomeEvent({
+          cardId: card.id,
+          ignored
+        })
+      );
       return {
         runId: run.id,
         workflowId: run.workflowId,
         status: "ignored",
-        ignored: {
-          reason: "lane_not_working",
-          currentLaneState: card.state
-        }
+        ignored
       };
     }
     if (card.executionClaimToken && input.executionClaimToken !== card.executionClaimToken) {
+      const ignored = {
+        reason: "stale_execution_claim" as const,
+        currentLaneState: "working" as const,
+        activeExecutionClaimPresent: true,
+        activeExecutionClaimClaimedAt: card.executionClaimedAt,
+        presentedExecutionClaimState: input.executionClaimToken ? "mismatched" as const : "missing" as const
+      };
+      await repository.insertEvent(
+        buildIgnoredOutcomeEvent({
+          cardId: card.id,
+          ignored
+        })
+      );
       return {
         runId: run.id,
         workflowId: run.workflowId,
         status: "ignored",
-        ignored: {
-          reason: "stale_execution_claim",
-          currentLaneState: "working",
-          activeExecutionClaimPresent: true,
-          activeExecutionClaimClaimedAt: card.executionClaimedAt,
-          presentedExecutionClaimState: input.executionClaimToken ? "mismatched" : "missing"
-        }
+        ignored
       };
     }
 
@@ -379,17 +429,24 @@ export async function commitHarnessWorkerLaneOutcome(input: {
       ...(input.executionClaimToken ? { expectedExecutionClaimToken: input.executionClaimToken } : {})
     });
     if (!updatedCard) {
+      const ignored = {
+        reason: "stale_execution_claim" as const,
+        currentLaneState: "working" as const,
+        activeExecutionClaimPresent: true,
+        activeExecutionClaimClaimedAt: card.executionClaimedAt,
+        presentedExecutionClaimState: input.executionClaimToken ? "mismatched" as const : "missing" as const
+      };
+      await repository.insertEvent(
+        buildIgnoredOutcomeEvent({
+          cardId: card.id,
+          ignored
+        })
+      );
       return {
         runId: run.id,
         workflowId: run.workflowId,
         status: "ignored",
-        ignored: {
-          reason: "stale_execution_claim",
-          currentLaneState: "working",
-          activeExecutionClaimPresent: true,
-          activeExecutionClaimClaimedAt: card.executionClaimedAt,
-          presentedExecutionClaimState: input.executionClaimToken ? "mismatched" : "missing"
-        }
+        ignored
       };
     }
 
@@ -527,6 +584,7 @@ export async function buildHarnessWorkerExecutionEnvelope(input: {
   tenantId: string;
   dispatch: HarnessWorkerDispatch;
   requiredCapabilities: readonly ProviderCapability[];
+  executionClaimContext?: HarnessWorkerExecutionClaimContext;
 }): Promise<HarnessWorkerExecutionEnvelope | null> {
   if (!input.dispatch.laneExecution) {
     return null;
@@ -552,10 +610,10 @@ export async function buildHarnessWorkerExecutionEnvelope(input: {
     requiredCapabilities: [...input.requiredCapabilities],
     runtimeContext: run.runtimeContext,
     executionClaim: {
-      kind: lane.executionClaimedAt === lane.createdAt ? "approved_claim" : "existing_working_claim",
+      kind: input.executionClaimContext?.kind ?? (lane.executionClaimedAt === lane.createdAt ? "approved_claim" : "existing_working_claim"),
       token: lane.executionClaimToken,
       claimedAt: lane.executionClaimedAt,
-      previousClaimedAt: null
+      previousClaimedAt: input.executionClaimContext?.previousClaimedAt ?? null
     },
     ...(continuity
       ? {
@@ -588,6 +646,17 @@ export async function buildHarnessWorkerExecutionEnvelope(input: {
       ...(continuity?.absorbedWorkItems?.length ? { absorbedWorkItems: [...continuity.absorbedWorkItems] } : {})
     }
   };
+}
+
+function buildIgnoredOutcomeEvent(input: {
+  cardId: string;
+  ignored: Exclude<HarnessWorkerLaneOutcome["ignored"], undefined>;
+}) {
+  return createHarnessCardEventRecord({
+    cardId: input.cardId,
+    eventKind: "execution_outcome_ignored",
+    payload: { ...input.ignored }
+  });
 }
 
 function buildWorkerContinuityContext(

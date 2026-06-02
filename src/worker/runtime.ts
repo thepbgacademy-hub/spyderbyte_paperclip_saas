@@ -6,7 +6,7 @@ import { createPgPool, createPgPoolQueryClient, createPgTransactionRunner } from
 import { createSupabaseRepositories } from "../db/supabase-repositories.js";
 import {
   buildHarnessWorkerExecutionEnvelope,
-  buildHarnessWorkerDispatch,
+  buildHarnessWorkerDispatchResolution,
   commitHarnessWorkerLaneOutcome,
   type HarnessWorkerDispatch,
   type HarnessWorkerLaneAttentionTransition,
@@ -823,19 +823,21 @@ async function processHarnessWorkflowJob(options: {
   onExecutionEnvelope?: (envelope: HarnessWorkerExecutionEnvelope) => void | Promise<void>;
 }) {
   try {
-    const dispatch = await buildHarnessWorkerDispatch({
+    const dispatchResolution = await buildHarnessWorkerDispatchResolution({
       repository: options.repository,
       tenantId: options.payload.tenantId,
       runId: options.payload.runId,
       workflowId: options.payload.workflowId,
       ...(options.runAtomically ? { runAtomically: options.runAtomically } : {})
     });
+    const dispatch = dispatchResolution.dispatch;
     if (dispatch.laneExecution) {
       const executionEnvelope = await buildHarnessWorkerExecutionEnvelope({
         repository: options.repository,
         tenantId: options.payload.tenantId,
         dispatch,
-        requiredCapabilities: options.workflowRegistry.getDefinition(dispatch.workflowId).requiredCapabilities
+        requiredCapabilities: options.workflowRegistry.getDefinition(dispatch.workflowId).requiredCapabilities,
+        ...(dispatchResolution.executionClaim ? { executionClaimContext: dispatchResolution.executionClaim } : {})
       });
       if (executionEnvelope) {
         try {

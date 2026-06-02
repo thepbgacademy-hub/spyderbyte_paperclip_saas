@@ -8333,12 +8333,18 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
   const payloadToPersona = readOptionalString(event.payload.toPersona);
   const payloadActionKind = readOptionalString(event.payload.actionKind);
   const payloadAttentionReason = readOptionalString(event.payload.reason);
+  const payloadIgnoredReason = readOptionalString(event.payload.reason);
+  const payloadIgnoredLaneState = readOptionalString(event.payload.currentLaneState);
   const attentionSnapshot = parseHarnessAttentionSnapshot(event.payload);
   const labelByKind: Record<HarnessCardEventRecord["eventKind"], string> = {
     created: `${payloadTitle ?? "Card"} was opened for this persona lane.`,
     state_changed: `Lane status moved to ${humanizeLabel(payloadState ?? "updated")}.`,
     execution_claimed: "A worker claimed this lane for execution.",
     execution_claim_refreshed: "A worker refreshed the active execution claim for this lane.",
+    execution_outcome_ignored: describeIgnoredExecutionOutcomeActivity({
+      reason: payloadIgnoredReason ?? null,
+      currentLaneState: payloadIgnoredLaneState ?? null
+    }),
     comment_added: payloadMessage ?? "A new progress note was added to this lane.",
     subcard_proposed: "A supporting sub-card was proposed for CEO review.",
     proposal_absorbed:
@@ -8379,6 +8385,22 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
     label: labelByKind[event.eventKind],
     timestampLabel: formatBoardTimestamp(event.createdAt)
   };
+}
+
+function describeIgnoredExecutionOutcomeActivity(input: {
+  reason: string | null;
+  currentLaneState: string | null;
+}): string {
+  switch (input.reason) {
+    case "stale_execution_claim":
+      return "A stale worker callback was ignored because this lane had already moved to a newer execution claim.";
+    case "lane_not_working":
+      return `A worker callback was ignored because the lane was already ${humanizeLabel(input.currentLaneState ?? "not working")}.`;
+    case "terminal_run":
+      return "A worker callback was ignored because this run had already reached a terminal state.";
+    default:
+      return "A stale or superseded worker callback was ignored.";
+  }
 }
 
 function buildResolvedAttentionPayload(attention: HarnessAttentionState): Record<string, unknown> {

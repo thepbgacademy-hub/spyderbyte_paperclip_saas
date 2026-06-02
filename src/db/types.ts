@@ -7,6 +7,7 @@ export type HarnessCardEventKind =
   | "state_changed"
   | "execution_claimed"
   | "execution_claim_refreshed"
+  | "execution_outcome_ignored"
   | "comment_added"
   | "subcard_proposed"
   | "proposal_absorbed"

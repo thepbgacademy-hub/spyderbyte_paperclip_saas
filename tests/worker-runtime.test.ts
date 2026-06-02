@@ -403,7 +403,7 @@ describe("worker runtime", () => {
           credentialLabel: "Primary OpenAI"
         },
         executionClaim: {
-          kind: "existing_working_claim",
+          kind: "approved_claim",
           token: "claim-cfo-1",
           claimedAt: "2026-05-21T10:04:00.000Z",
           previousClaimedAt: null
