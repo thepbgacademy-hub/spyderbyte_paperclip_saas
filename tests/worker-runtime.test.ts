@@ -2535,12 +2535,14 @@ describe("worker runtime", () => {
   });
 
   it("ignores a private harness lane outcome when the execution claim token is stale", async () => {
+    const onHarnessLaneOutcomeIgnored = vi.fn();
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
         WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
       }),
-      workerInstanceId: "worker-test-harness-outcome-stale-claim"
+      workerInstanceId: "worker-test-harness-outcome-stale-claim",
+      onHarnessLaneOutcomeIgnored
     });
 
     stdoutWrite.mockClear();
@@ -2558,27 +2560,52 @@ describe("worker runtime", () => {
       runId: "run-1",
       workflowId: "wf_connect_first_workflow",
       status: "ignored",
-      reason: "stale_execution_claim"
+      ignored: {
+        reason: "stale_execution_claim",
+        currentLaneState: "working",
+        activeExecutionClaimPresent: true,
+        activeExecutionClaimClaimedAt: "2026-05-21T10:04:00.000Z",
+        presentedExecutionClaimState: "mismatched"
+      }
     });
 
     const harnessRepository = harnessRepositoryRef.current;
     expect(harnessRepository.transitionCardState).not.toHaveBeenCalled();
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome_ignored\"")
+    );
     expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome\"")
     );
+    expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("claim-cfo-stale"));
+    expect(onHarnessLaneOutcomeIgnored).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      cardId: "card_cfo",
+      ignored: {
+        reason: "stale_execution_claim",
+        currentLaneState: "working",
+        activeExecutionClaimPresent: true,
+        activeExecutionClaimClaimedAt: "2026-05-21T10:04:00.000Z",
+        presentedExecutionClaimState: "mismatched"
+      }
+    });
 
     await runtime.close();
   });
 
   it("keeps quiet when a private harness lane outcome targets a lane that is no longer working", async () => {
     const onHarnessAttentionResolved = vi.fn();
+    const onHarnessLaneOutcomeIgnored = vi.fn();
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
         WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
       }),
       workerInstanceId: "worker-test-harness-outcome-idle",
-      onHarnessAttentionResolved
+      onHarnessAttentionResolved,
+      onHarnessLaneOutcomeIgnored
     });
 
     const harnessRepository = harnessRepositoryRef.current;
@@ -2609,10 +2636,16 @@ describe("worker runtime", () => {
       runId: "run-1",
       workflowId: "wf_connect_first_workflow",
       status: "ignored",
-      reason: "lane_not_working"
+      ignored: {
+        reason: "lane_not_working",
+        currentLaneState: "waiting"
+      }
     });
 
     expect(harnessRepository.transitionCardState).not.toHaveBeenCalled();
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome_ignored\"")
+    );
     expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome\"")
     );
@@ -2620,6 +2653,16 @@ describe("worker runtime", () => {
       expect.stringContaining("\"type\":\"wealth_factory_harness_attention_resolved\"")
     );
     expect(onHarnessAttentionResolved).not.toHaveBeenCalled();
+    expect(onHarnessLaneOutcomeIgnored).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      cardId: "card_cfo",
+      ignored: {
+        reason: "lane_not_working",
+        currentLaneState: "waiting"
+      }
+    });
 
     await runtime.close();
   });

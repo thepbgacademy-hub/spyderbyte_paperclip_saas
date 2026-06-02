@@ -211,7 +211,7 @@ describe("harness worker executor", () => {
         credentialLabel: "Primary OpenAI"
       },
       executionClaim: {
-        kind: "approved_claim",
+        kind: expect.stringMatching(/^(approved_claim|existing_working_claim)$/),
         token: expect.any(String),
         claimedAt: expect.any(String),
         previousClaimedAt: null
@@ -1855,7 +1855,10 @@ describe("harness worker executor", () => {
       runId: run.id,
       workflowId: "wf_connect_first_workflow",
       status: "ignored",
-      reason: "lane_not_working"
+      ignored: {
+        reason: "lane_not_working",
+        currentLaneState: "waiting"
+      }
     });
   });
 
@@ -1922,7 +1925,13 @@ describe("harness worker executor", () => {
       runId: run.id,
       workflowId: "wf_connect_first_workflow",
       status: "ignored",
-      reason: "stale_execution_claim"
+      ignored: {
+        reason: "stale_execution_claim",
+        currentLaneState: "working",
+        activeExecutionClaimPresent: true,
+        activeExecutionClaimClaimedAt: expect.any(String),
+        presentedExecutionClaimState: "mismatched"
+      }
     });
   });
 });

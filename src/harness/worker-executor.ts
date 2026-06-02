@@ -103,11 +103,28 @@ type ClaimedHarnessLane = {
   previousClaimedAt: string | null;
 };
 
+export type HarnessWorkerLaneIgnored =
+  | {
+      reason: "terminal_run";
+      runState: HarnessRunRecord["state"];
+    }
+  | {
+      reason: "lane_not_working";
+      currentLaneState: Exclude<HarnessCardState, "working">;
+    }
+  | {
+      reason: "stale_execution_claim";
+      currentLaneState: "working";
+      activeExecutionClaimPresent: boolean;
+      activeExecutionClaimClaimedAt: string | null;
+      presentedExecutionClaimState: "missing" | "mismatched";
+    };
+
 export type HarnessWorkerLaneOutcome = {
   runId: string;
   workflowId: string;
   status: "committed" | "ignored";
-  reason?: "terminal_run" | "lane_not_working" | "stale_execution_claim";
+  ignored?: HarnessWorkerLaneIgnored;
   attentionTransition?: HarnessWorkerLaneAttentionTransition;
   laneExecution?: {
     cardId: string;
@@ -309,7 +326,10 @@ export async function commitHarnessWorkerLaneOutcome(input: {
         runId: run.id,
         workflowId: run.workflowId,
         status: "ignored",
-        reason: "terminal_run"
+        ignored: {
+          reason: "terminal_run",
+          runState: run.state
+        }
       };
     }
 
@@ -322,7 +342,10 @@ export async function commitHarnessWorkerLaneOutcome(input: {
         runId: run.id,
         workflowId: run.workflowId,
         status: "ignored",
-        reason: "lane_not_working"
+        ignored: {
+          reason: "lane_not_working",
+          currentLaneState: card.state
+        }
       };
     }
     if (card.executionClaimToken && input.executionClaimToken !== card.executionClaimToken) {
@@ -330,7 +353,13 @@ export async function commitHarnessWorkerLaneOutcome(input: {
         runId: run.id,
         workflowId: run.workflowId,
         status: "ignored",
-        reason: "stale_execution_claim"
+        ignored: {
+          reason: "stale_execution_claim",
+          currentLaneState: "working",
+          activeExecutionClaimPresent: true,
+          activeExecutionClaimClaimedAt: card.executionClaimedAt,
+          presentedExecutionClaimState: input.executionClaimToken ? "mismatched" : "missing"
+        }
       };
     }
 
@@ -354,7 +383,13 @@ export async function commitHarnessWorkerLaneOutcome(input: {
         runId: run.id,
         workflowId: run.workflowId,
         status: "ignored",
-        reason: "stale_execution_claim"
+        ignored: {
+          reason: "stale_execution_claim",
+          currentLaneState: "working",
+          activeExecutionClaimPresent: true,
+          activeExecutionClaimClaimedAt: card.executionClaimedAt,
+          presentedExecutionClaimState: input.executionClaimToken ? "mismatched" : "missing"
+        }
       };
     }
 

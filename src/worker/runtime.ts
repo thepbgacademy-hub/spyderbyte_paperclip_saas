@@ -53,6 +53,13 @@ export function createWorkerRuntime(options: {
   env: WorkerEnv;
   workerInstanceId?: string;
   onHarnessLaneReady?: (envelope: HarnessWorkerExecutionEnvelope) => void | Promise<void>;
+  onHarnessLaneOutcomeIgnored?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    cardId: string;
+    ignored: NonNullable<HarnessWorkerLaneOutcome["ignored"]>;
+  }) => void | Promise<void>;
   onHarnessAttentionResolved?: (input: {
     tenantId: string;
     runId: string;
@@ -479,7 +486,37 @@ export function createWorkerRuntime(options: {
         recordStatus: async (status) => {
           await recordWorkflowStatus(status);
         },
-        onOutcome: async (committedOutcome) => {
+        onOutcome: async (workerOutcome) => {
+          if (workerOutcome.status === "ignored" && workerOutcome.ignored) {
+            const ignoredOutcomeHandoff = {
+              tenantId: input.tenantId,
+              runId: workerOutcome.runId,
+              workflowId: workerOutcome.workflowId,
+              cardId: input.cardId,
+              ignored: workerOutcome.ignored
+            };
+            process.stdout.write(
+              `${JSON.stringify({
+                type: "wealth_factory_harness_lane_outcome_ignored",
+                workerInstanceId: options.workerInstanceId ?? "worker",
+                observedAt: new Date().toISOString(),
+                ...ignoredOutcomeHandoff
+              })}\n`
+            );
+            try {
+              await options.onHarnessLaneOutcomeIgnored?.(ignoredOutcomeHandoff);
+            } catch (error) {
+              console.warn("Harness ignored-outcome hook failed after fail-closed worker rejection", {
+                runId: workerOutcome.runId,
+                workflowId: workerOutcome.workflowId,
+                cardId: input.cardId,
+                reason: workerOutcome.ignored.reason,
+                error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+              });
+            }
+            return;
+          }
+          const committedOutcome = workerOutcome;
           process.stdout.write(
             `${JSON.stringify({
               type: "wealth_factory_harness_lane_outcome",
@@ -909,9 +946,7 @@ async function processHarnessLaneOutcome(options: {
       });
     }
   }
-  if (outcome.status === "committed") {
-    await options.onOutcome?.(outcome);
-  }
+  await options.onOutcome?.(outcome);
   return outcome;
 }
 
