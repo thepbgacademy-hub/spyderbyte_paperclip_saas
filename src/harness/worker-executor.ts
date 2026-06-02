@@ -575,6 +575,17 @@ export async function commitHarnessWorkerLaneOutcome(input: {
         })
       );
     }
+    await repository.insertEvent(
+      buildCommittedOutcomeEvent({
+        cardId: updatedCard.id,
+        outcomeState: input.state,
+        runState: latestRunState,
+        ...(postOutcomeAction ? { postOutcomeAction } : {}),
+        ...(continuity.latestResultSummary ? { latestResultSummary: continuity.latestResultSummary } : {}),
+        ...(continuity.continuitySummary ? { continuitySummary: continuity.continuitySummary } : {}),
+        ...(nextDispatch ? { nextDispatch } : {})
+      })
+    );
     return {
       runId: run.id,
       workflowId: run.workflowId,
@@ -670,6 +681,43 @@ function buildIgnoredOutcomeEvent(input: {
     cardId: input.cardId,
     eventKind: "execution_outcome_ignored",
     payload: { ...input.ignored }
+  });
+}
+
+function buildCommittedOutcomeEvent(input: {
+  cardId: string;
+  outcomeState: Extract<HarnessCardState, "waiting" | "done" | "blocked" | "cancelled">;
+  runState: HarnessRunRecord["state"];
+  postOutcomeAction?: HarnessPostOutcomeAction;
+  latestResultSummary?: string | null;
+  continuitySummary?: string | null;
+  nextDispatch?: HarnessWorkerDispatch;
+}) {
+  return createHarnessCardEventRecord({
+    cardId: input.cardId,
+    eventKind: "execution_outcome_committed",
+    payload: {
+      outcomeState: input.outcomeState,
+      runState: input.runState,
+      ...(input.postOutcomeAction
+        ? {
+            postOutcomeActionKind: input.postOutcomeAction.kind,
+            ...(input.postOutcomeAction.kind === "queue_ceo_review"
+              ? { postOutcomeReason: input.postOutcomeAction.reason }
+              : {}),
+            ...("cardId" in input.postOutcomeAction ? { targetCardId: input.postOutcomeAction.cardId } : {}),
+            ...("persona" in input.postOutcomeAction ? { targetPersona: input.postOutcomeAction.persona } : {})
+          }
+        : {}),
+      ...(input.nextDispatch?.laneExecution
+        ? {
+            nextDispatchCardId: input.nextDispatch.laneExecution.cardId,
+            nextDispatchPersona: input.nextDispatch.laneExecution.persona
+          }
+        : {}),
+      ...(input.latestResultSummary ? { resultSummary: input.latestResultSummary } : {}),
+      ...(input.continuitySummary ? { continuitySummary: input.continuitySummary } : {})
+    }
   });
 }
 

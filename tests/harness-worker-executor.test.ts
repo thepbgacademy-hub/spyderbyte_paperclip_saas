@@ -919,6 +919,16 @@ describe("harness worker executor", () => {
           }
         }),
         expect.objectContaining({
+          eventKind: "execution_outcome_committed",
+          payload: {
+            outcomeState: "done",
+            runState: "assembling",
+            postOutcomeActionKind: "queue_ceo_review",
+            postOutcomeReason: "final_assembly",
+            resultSummary: "Validated the pricing model and preserved the final floor."
+          }
+        }),
+        expect.objectContaining({
           eventKind: "attention_requested",
           payload: {
             actionKind: "queue_ceo_review",
@@ -1288,6 +1298,16 @@ describe("harness worker executor", () => {
 
     await expect(repository.listEventsForCard(cfoCard.id)).resolves.toEqual(
       expect.arrayContaining([
+        expect.objectContaining({
+          eventKind: "execution_outcome_committed",
+          payload: {
+            outcomeState: "waiting",
+            runState: "waiting",
+            postOutcomeActionKind: "await_lane_resume",
+            targetCardId: cfoCard.id,
+            continuitySummary: "CFO should resume this lane once the tenant confirms the latest revenue assumption."
+          }
+        }),
         expect.objectContaining({
           eventKind: "attention_requested",
           payload: {

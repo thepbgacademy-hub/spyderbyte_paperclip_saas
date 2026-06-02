@@ -8325,7 +8325,7 @@ function humanizeMemoryBoundaryExportRecoveryPath(path: HarnessMemoryBoundaryExp
 function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivityItem {
   const payloadTitle = readOptionalString(event.payload.title);
   const payloadState = readOptionalString(event.payload.to) ?? readOptionalString(event.payload.state);
-  const payloadSummary = readOptionalString(event.payload.summary);
+  const payloadSummary = readOptionalString(event.payload.summary) ?? readOptionalString(event.payload.resultSummary) ?? null;
   const payloadMessage = readOptionalString(event.payload.message);
   const payloadRequestedTitle = readOptionalString(event.payload.requestedTitle);
   const payloadRequestedByPersona = readOptionalString(event.payload.requestedByPersona);
@@ -8337,6 +8337,10 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
   const payloadTriggeredByPersona = readOptionalString(event.payload.triggeredByPersona);
   const payloadIgnoredReason = readOptionalString(event.payload.reason);
   const payloadIgnoredLaneState = readOptionalString(event.payload.currentLaneState);
+  const payloadOutcomeState = readOptionalString(event.payload.outcomeState);
+  const payloadPostOutcomeActionKind = readOptionalString(event.payload.postOutcomeActionKind);
+  const payloadPostOutcomeReason = readOptionalString(event.payload.postOutcomeReason);
+  const payloadTargetPersona = readOptionalString(event.payload.targetPersona);
   const attentionSnapshot = parseHarnessAttentionSnapshot(event.payload);
   const labelByKind: Record<HarnessCardEventRecord["eventKind"], string> = {
     created: `${payloadTitle ?? "Card"} was opened for this persona lane.`,
@@ -8347,6 +8351,13 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
         : "A worker started this lane from the current execution queue.",
     execution_claimed: "A worker claimed this lane for execution.",
     execution_claim_refreshed: "A worker refreshed the active execution claim for this lane.",
+    execution_outcome_committed: describeCommittedExecutionOutcomeActivity({
+      outcomeState: payloadOutcomeState ?? null,
+      postOutcomeActionKind: payloadPostOutcomeActionKind ?? null,
+      postOutcomeReason: payloadPostOutcomeReason ?? null,
+      targetPersona: payloadTargetPersona ?? null,
+      summary: payloadSummary ?? null
+    }),
     execution_outcome_ignored: describeIgnoredExecutionOutcomeActivity({
       reason: payloadIgnoredReason ?? null,
       currentLaneState: payloadIgnoredLaneState ?? null
@@ -8407,6 +8418,38 @@ function describeIgnoredExecutionOutcomeActivity(input: {
     default:
       return "A stale or superseded worker callback was ignored.";
   }
+}
+
+function describeCommittedExecutionOutcomeActivity(input: {
+  outcomeState: string | null;
+  postOutcomeActionKind: string | null;
+  postOutcomeReason: string | null;
+  targetPersona: string | null;
+  summary: string | null;
+}): string {
+  if (input.outcomeState === "done") {
+    if (input.postOutcomeActionKind === "dispatch_next_lane" && input.targetPersona) {
+      return input.summary
+        ? `A worker finished this lane and handed the next step to ${input.targetPersona.toUpperCase()}: ${input.summary}`
+        : `A worker finished this lane and handed the next step to ${input.targetPersona.toUpperCase()}.`;
+    }
+    if (input.postOutcomeActionKind === "queue_ceo_review") {
+      return input.summary
+        ? `A worker finished this lane and queued CEO review${input.postOutcomeReason ? ` for ${humanizeLabel(input.postOutcomeReason)}` : ""}: ${input.summary}`
+        : `A worker finished this lane and queued CEO review${input.postOutcomeReason ? ` for ${humanizeLabel(input.postOutcomeReason)}` : ""}.`;
+    }
+    return input.summary ? `A worker finished this lane: ${input.summary}` : "A worker finished this lane.";
+  }
+  if (input.outcomeState === "waiting") {
+    return "A worker paused this lane and is waiting for a later resume.";
+  }
+  if (input.outcomeState === "blocked") {
+    return "A worker marked this lane blocked and requested follow-through before continuing.";
+  }
+  if (input.outcomeState === "cancelled") {
+    return "A worker cancelled this lane and returned control to the harness.";
+  }
+  return "A worker committed a new lane outcome.";
 }
 
 function buildResolvedAttentionPayload(attention: HarnessAttentionState): Record<string, unknown> {
