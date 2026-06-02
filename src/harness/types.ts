@@ -9,6 +9,7 @@ export type HarnessDeliverableType = string;
 export type HarnessCardEventKind =
   | "created"
   | "state_changed"
+  | "execution_dispatched"
   | "execution_claimed"
   | "execution_claim_refreshed"
   | "execution_outcome_ignored"

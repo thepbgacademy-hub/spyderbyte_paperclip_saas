@@ -1172,6 +1172,23 @@ describe("worker runtime", () => {
         }
       })
     );
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cmo",
+        eventKind: "execution_dispatched",
+        payload: {
+          kind: "follow_on_dispatch",
+          kindLabel: "Follow-on dispatch",
+          executionStage: "post_outcome_follow_on",
+          executionStageLabel: "Post-outcome follow-on",
+          reactivatedRun: false,
+          triggeredByCardId: "card_cfo",
+          triggeredByPersona: "cfo",
+          triggeredByOutcomeState: "done",
+          triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
+        }
+      })
+    );
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_attention_resolved\"")
     );

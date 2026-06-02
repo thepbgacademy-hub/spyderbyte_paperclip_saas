@@ -236,6 +236,12 @@ export async function buildHarnessWorkerDispatchResolution(input: {
 }): Promise<HarnessWorkerDispatchResolution> {
   const runWork = input.runAtomically ?? (async <T>(work: (repository: HarnessDispatchRepository) => Promise<T>) => work(input.repository));
   return runWork(async (repository) => {
+    const dispatchHandoff: HarnessWorkerDispatchHandoff = input.dispatchHandoff ?? {
+      kind: "initial_claim",
+      kindLabel: "Initial lane claim",
+      executionStage: "initial_lane_start",
+      executionStageLabel: "Initial lane start"
+    };
     const run = await repository.getRun(input.runId);
     if (!run || run.tenantId !== input.tenantId || run.workflowId !== input.workflowId) {
       throw new Error(`Unknown harness run for worker dispatch: ${input.runId}`);
@@ -297,7 +303,8 @@ export async function buildHarnessWorkerDispatchResolution(input: {
       claimedLane,
       claimKind: claimedExecution.claimKind,
       previousClaimedAt: claimedExecution.previousClaimedAt,
-      previousLaneState: lane.state
+      previousLaneState: lane.state,
+      dispatchHandoff
     });
     const resumedRuntime = createHarnessRuntime();
     resumedRuntime.resumeRun({
@@ -314,12 +321,7 @@ export async function buildHarnessWorkerDispatchResolution(input: {
         runId: run.id,
         workflowId: run.workflowId,
         status: "running",
-        dispatchHandoff: input.dispatchHandoff ?? {
-          kind: "initial_claim",
-          kindLabel: "Initial lane claim",
-          executionStage: "initial_lane_start",
-          executionStageLabel: "Initial lane start"
-        },
+        dispatchHandoff,
         laneExecution: {
           cardId: claimedLane.id,
           persona: claimedLane.persona,
@@ -671,6 +673,37 @@ function buildIgnoredOutcomeEvent(input: {
   });
 }
 
+function buildExecutionDispatchedEvent(input: {
+  cardId: string;
+  dispatchHandoff: HarnessWorkerDispatchHandoff;
+}) {
+  return createHarnessCardEventRecord({
+    cardId: input.cardId,
+    eventKind: "execution_dispatched",
+    payload:
+      input.dispatchHandoff.kind === "follow_on_dispatch"
+        ? {
+            kind: input.dispatchHandoff.kind,
+            kindLabel: input.dispatchHandoff.kindLabel,
+            executionStage: input.dispatchHandoff.executionStage,
+            executionStageLabel: input.dispatchHandoff.executionStageLabel,
+            reactivatedRun: input.dispatchHandoff.reactivatedRun,
+            triggeredByCardId: input.dispatchHandoff.triggeredByCardId,
+            triggeredByPersona: input.dispatchHandoff.triggeredByPersona,
+            triggeredByOutcomeState: input.dispatchHandoff.triggeredByOutcomeState,
+            ...(input.dispatchHandoff.triggeredByResultSummary
+              ? { triggeredByResultSummary: input.dispatchHandoff.triggeredByResultSummary }
+              : {})
+          }
+        : {
+            kind: input.dispatchHandoff.kind,
+            kindLabel: input.dispatchHandoff.kindLabel,
+            executionStage: input.dispatchHandoff.executionStage,
+            executionStageLabel: input.dispatchHandoff.executionStageLabel
+          }
+  });
+}
+
 function buildWorkerContinuityContext(
   continuity: HarnessCardContinuityRecord
 ): HarnessWorkerContinuityContext {
@@ -765,6 +798,7 @@ async function persistWorkerStartState(input: {
   claimKind: ClaimedHarnessLane["claimKind"];
   previousClaimedAt: string | null;
   previousLaneState: HarnessCardRecord["state"];
+  dispatchHandoff: HarnessWorkerDispatchHandoff;
 }): Promise<HarnessCardContinuityRecord> {
   const existingContinuity = input.continuity.find((record) => record.cardId === input.claimedLane.id) ?? null;
   const laneStateChanged = input.previousLaneState !== input.claimedLane.state;
@@ -781,6 +815,12 @@ async function persistWorkerStartState(input: {
     );
   }
   if (input.claimKind !== "existing_working_claim") {
+    await input.repository.insertEvent(
+      buildExecutionDispatchedEvent({
+        cardId: input.claimedLane.id,
+        dispatchHandoff: input.dispatchHandoff
+      })
+    );
     await input.repository.insertEvent(
       createHarnessCardEventRecord({
         cardId: input.claimedLane.id,

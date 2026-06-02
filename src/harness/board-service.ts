@@ -8333,12 +8333,18 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
   const payloadToPersona = readOptionalString(event.payload.toPersona);
   const payloadActionKind = readOptionalString(event.payload.actionKind);
   const payloadAttentionReason = readOptionalString(event.payload.reason);
+  const payloadDispatchKind = readOptionalString(event.payload.kind);
+  const payloadTriggeredByPersona = readOptionalString(event.payload.triggeredByPersona);
   const payloadIgnoredReason = readOptionalString(event.payload.reason);
   const payloadIgnoredLaneState = readOptionalString(event.payload.currentLaneState);
   const attentionSnapshot = parseHarnessAttentionSnapshot(event.payload);
   const labelByKind: Record<HarnessCardEventRecord["eventKind"], string> = {
     created: `${payloadTitle ?? "Card"} was opened for this persona lane.`,
     state_changed: `Lane status moved to ${humanizeLabel(payloadState ?? "updated")}.`,
+    execution_dispatched:
+      payloadDispatchKind === "follow_on_dispatch" && payloadTriggeredByPersona
+        ? `A worker started this lane from ${payloadTriggeredByPersona.toUpperCase()}'s follow-on handoff.`
+        : "A worker started this lane from the current execution queue.",
     execution_claimed: "A worker claimed this lane for execution.",
     execution_claim_refreshed: "A worker refreshed the active execution claim for this lane.",
     execution_outcome_ignored: describeIgnoredExecutionOutcomeActivity({

@@ -1610,6 +1610,62 @@ describe("harness board service", () => {
     );
   });
 
+  it("surfaces durable worker dispatch handoff history as bounded board activity", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "launch_copy"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_dispatched",
+      cardId: created.cardId,
+      eventKind: "execution_dispatched",
+      payload: {
+        kind: "follow_on_dispatch",
+        kindLabel: "Follow-on dispatch",
+        executionStage: "post_outcome_follow_on",
+        executionStageLabel: "Post-outcome follow-on",
+        reactivatedRun: false,
+        triggeredByCardId: "card_cfo",
+        triggeredByPersona: "cfo",
+        triggeredByOutcomeState: "done",
+        triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
+      },
+      createdAt: "2026-06-02T15:09:00.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A worker started this lane from CFO's follow-on handoff."
+        })
+      ])
+    );
+  });
+
   it("derives tenant-safe board follow-through items from implemented governance decisions", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({

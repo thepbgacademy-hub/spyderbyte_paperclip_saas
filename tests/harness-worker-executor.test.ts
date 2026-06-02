@@ -113,6 +113,15 @@ describe("harness worker executor", () => {
           }
         }),
         expect.objectContaining({
+          eventKind: "execution_dispatched",
+          payload: {
+            kind: "initial_claim",
+            kindLabel: "Initial lane claim",
+            executionStage: "initial_lane_start",
+            executionStageLabel: "Initial lane start"
+          }
+        }),
+        expect.objectContaining({
           eventKind: "execution_claimed",
           payload: {
             claimKind: "approved_claim",
@@ -536,6 +545,15 @@ describe("harness worker executor", () => {
     });
     expect(afterEvents).toEqual(
       beforeEvents.concat([
+        expect.objectContaining({
+          eventKind: "execution_dispatched",
+          payload: {
+            kind: "initial_claim",
+            kindLabel: "Initial lane claim",
+            executionStage: "initial_lane_start",
+            executionStageLabel: "Initial lane start"
+          }
+        }),
         expect.objectContaining({
           eventKind: "execution_claim_refreshed",
           payload: {

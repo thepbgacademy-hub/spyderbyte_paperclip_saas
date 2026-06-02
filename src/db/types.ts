@@ -5,6 +5,7 @@ export type HarnessCardStatus = "queued" | "planning" | "approved" | "working" |
 export type HarnessCardEventKind =
   | "created"
   | "state_changed"
+  | "execution_dispatched"
   | "execution_claimed"
   | "execution_claim_refreshed"
   | "execution_outcome_ignored"
