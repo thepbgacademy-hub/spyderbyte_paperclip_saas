@@ -76,7 +76,9 @@ describe("harness worker executor", () => {
       status: "running",
       dispatchHandoff: {
         kind: "initial_claim",
-        kindLabel: "Initial lane claim"
+        kindLabel: "Initial lane claim",
+        executionStage: "initial_lane_start",
+        executionStageLabel: "Initial lane start"
       },
       laneExecution: {
         cardId: cfoCard.id,
@@ -182,7 +184,9 @@ describe("harness worker executor", () => {
       status: "running",
       dispatchHandoff: {
         kind: "initial_claim",
-        kindLabel: "Initial lane claim"
+        kindLabel: "Initial lane claim",
+        executionStage: "initial_lane_start",
+        executionStageLabel: "Initial lane start"
       },
       laneExecution: expect.objectContaining({
         cardId: cfoCard.id,
@@ -200,7 +204,9 @@ describe("harness worker executor", () => {
       },
       dispatchHandoff: {
         kind: "initial_claim",
-        kindLabel: "Initial lane claim"
+        kindLabel: "Initial lane claim",
+        executionStage: "initial_lane_start",
+        executionStageLabel: "Initial lane start"
       },
       outcomeContract: {
         allowedStates: ["waiting", "done", "blocked", "cancelled"],
@@ -389,7 +395,9 @@ describe("harness worker executor", () => {
       status: "running",
       dispatchHandoff: {
         kind: "initial_claim",
-        kindLabel: "Initial lane claim"
+        kindLabel: "Initial lane claim",
+        executionStage: "initial_lane_start",
+        executionStageLabel: "Initial lane start"
       },
       laneExecution: expect.objectContaining({
         cardId: cfoCard.id,
@@ -926,6 +934,9 @@ describe("harness worker executor", () => {
         dispatchHandoff: {
           kind: "follow_on_dispatch",
           kindLabel: "Follow-on dispatch",
+          executionStage: "post_outcome_follow_on",
+          executionStageLabel: "Post-outcome follow-on",
+          reactivatedRun: false,
           triggeredByCardId: cfoCard.id,
           triggeredByPersona: "cfo",
           triggeredByOutcomeState: "done",
@@ -1034,6 +1045,9 @@ describe("harness worker executor", () => {
           dispatchHandoff: {
             kind: "follow_on_dispatch",
             kindLabel: "Follow-on dispatch",
+            executionStage: "post_outcome_follow_on",
+            executionStageLabel: "Post-outcome follow-on",
+            reactivatedRun: true,
             triggeredByCardId: cfoCard.id,
             triggeredByPersona: "cfo",
             triggeredByOutcomeState: "done",

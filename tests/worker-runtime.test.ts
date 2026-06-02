@@ -368,7 +368,9 @@ describe("worker runtime", () => {
         },
         dispatchHandoff: {
           kind: "initial_claim",
-          kindLabel: "Initial lane claim"
+          kindLabel: "Initial lane claim",
+          executionStage: "initial_lane_start",
+          executionStageLabel: "Initial lane start"
         },
         laneExecution: expect.objectContaining({
           cardId: "card_cfo",
@@ -1059,6 +1061,9 @@ describe("worker runtime", () => {
         dispatchHandoff: {
           kind: "follow_on_dispatch",
           kindLabel: "Follow-on dispatch",
+          executionStage: "post_outcome_follow_on",
+          executionStageLabel: "Post-outcome follow-on",
+          reactivatedRun: false,
           triggeredByCardId: "card_cfo",
           triggeredByPersona: "cfo",
           triggeredByOutcomeState: "done",
@@ -1138,6 +1143,9 @@ describe("worker runtime", () => {
         dispatchHandoff: {
           kind: "follow_on_dispatch",
           kindLabel: "Follow-on dispatch",
+          executionStage: "post_outcome_follow_on",
+          executionStageLabel: "Post-outcome follow-on",
+          reactivatedRun: false,
           triggeredByCardId: "card_cfo",
           triggeredByPersona: "cfo",
           triggeredByOutcomeState: "done",
@@ -1262,6 +1270,9 @@ describe("worker runtime", () => {
           dispatchHandoff: {
             kind: "follow_on_dispatch",
             kindLabel: "Follow-on dispatch",
+            executionStage: "post_outcome_follow_on",
+            executionStageLabel: "Post-outcome follow-on",
+            reactivatedRun: false,
             triggeredByCardId: "card_cfo",
             triggeredByPersona: "cfo",
             triggeredByOutcomeState: "done",
@@ -1283,6 +1294,9 @@ describe("worker runtime", () => {
         dispatchHandoff: {
           kind: "follow_on_dispatch",
           kindLabel: "Follow-on dispatch",
+          executionStage: "post_outcome_follow_on",
+          executionStageLabel: "Post-outcome follow-on",
+          reactivatedRun: false,
           triggeredByCardId: "card_cfo",
           triggeredByPersona: "cfo",
           triggeredByOutcomeState: "done",

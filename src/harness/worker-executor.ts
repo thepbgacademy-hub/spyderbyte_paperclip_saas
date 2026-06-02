@@ -37,10 +37,15 @@ export type HarnessWorkerDispatchHandoff =
   | {
       kind: "initial_claim";
       kindLabel: "Initial lane claim";
+      executionStage: "initial_lane_start";
+      executionStageLabel: "Initial lane start";
     }
   | {
       kind: "follow_on_dispatch";
       kindLabel: "Follow-on dispatch";
+      executionStage: "post_outcome_follow_on";
+      executionStageLabel: "Post-outcome follow-on";
+      reactivatedRun: boolean;
       triggeredByCardId: string;
       triggeredByPersona: string;
       triggeredByOutcomeState: Extract<HarnessCardState, "waiting" | "done" | "blocked" | "cancelled">;
@@ -233,7 +238,9 @@ export async function buildHarnessWorkerDispatch(input: {
         status: "running",
         dispatchHandoff: input.dispatchHandoff ?? {
           kind: "initial_claim",
-          kindLabel: "Initial lane claim"
+          kindLabel: "Initial lane claim",
+          executionStage: "initial_lane_start",
+          executionStageLabel: "Initial lane start"
         },
         laneExecution: {
           cardId: claimedLane.id,
@@ -356,6 +363,9 @@ export async function commitHarnessWorkerLaneOutcome(input: {
             dispatchHandoff: {
               kind: "follow_on_dispatch",
               kindLabel: "Follow-on dispatch",
+              executionStage: "post_outcome_follow_on",
+              executionStageLabel: "Post-outcome follow-on",
+              reactivatedRun: run.state === "waiting" && nextRun.state === "active",
               triggeredByCardId: updatedCard.id,
               triggeredByPersona: updatedCard.persona,
               triggeredByOutcomeState: input.state,
