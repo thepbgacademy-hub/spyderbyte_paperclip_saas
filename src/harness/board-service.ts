@@ -1497,7 +1497,7 @@ export function createHarnessBoardService(options: {
         }
 
         async function deferDirectChildRequest(input: {
-          policyReason: "deliverable_owner_conflict" | "lane_cap" | "completed_lanes_only";
+          policyReason: "persona_lane_cap" | "deliverable_owner_conflict" | "lane_cap" | "completed_lanes_only";
           decisionNote: string;
         }): Promise<{
           status: "deferred";
@@ -1843,6 +1843,12 @@ export function createHarnessBoardService(options: {
           return deferDirectChildRequest({
             policyReason: "deliverable_owner_conflict",
             decisionNote: "CEO deferred this proposal because another active persona already owns that deliverable lane."
+          });
+        }
+        if (findOpenChildCardByPersona(cards, normalizedPersona)) {
+          return deferDirectChildRequest({
+            policyReason: "persona_lane_cap",
+            decisionNote: `CEO deferred this proposal because ${normalizedPersona.toUpperCase()} already has another active lane.`
           });
         }
         if (countOpenChildCards(cards) >= MAX_OPEN_CHILD_CARDS) {
@@ -2369,6 +2375,7 @@ export function createHarnessBoardService(options: {
           const repeatedRequestPolicyReason =
             earlierUnresolvedSiblingProposal.status === "deferred" &&
             (
+              siblingDecision?.policyReason === "persona_lane_cap" ||
               siblingDecision?.policyReason === "deliverable_owner_conflict" ||
               siblingDecision?.policyReason === "lane_cap" ||
               siblingDecision?.policyReason === "completed_lanes_only"
@@ -2851,6 +2858,84 @@ export function createHarnessBoardService(options: {
                   runId: run.id,
                   decision: "deferred",
                   reason: "completed_lanes_only",
+                  hasDecisionNote: Boolean(trimmedDecisionNote),
+                  requestedByPersona: proposal.requestedByPersona,
+                  targetPersona: proposal.persona,
+                  deliverableType: proposal.deliverableType
+                }
+              }),
+              ...toRunAuditEvents({
+                tenantId: access.session.tenantId,
+                actorUserId: access.session.userId,
+                runId: run.id,
+                previousState: run.state,
+                nextRun: reconciledRun
+              })
+            ]
+          };
+        }
+        if (proposalPolicyReason === "persona_lane_cap") {
+          const decisionNote =
+            trimmedDecisionNote ??
+            `CEO deferred this proposal because ${proposal.persona.toUpperCase()} already has another active lane.`;
+          const decisionUpdate = await repository.markProposalStatus({
+            proposalId: proposal.id,
+            status: "deferred",
+            decisionNote
+          });
+          if (!decisionUpdate.updated) {
+            throw new Error("Harness proposal decision conflicted");
+          }
+          await repository.insertEvent(
+            createHarnessCardEventRecord({
+              cardId: proposal.parentCardId,
+              eventKind: "comment_added",
+              payload: {
+                message: createPublicProposalDecisionMessage({
+                  status: "deferred",
+                  deliverableType: proposal.deliverableType,
+                  policyReason: "persona_lane_cap"
+                })
+              }
+            })
+          );
+          await repository.insertDecision(
+            createHarnessBoardDecisionRecord({
+              runId: run.id,
+              tenantId: access.session.tenantId,
+              actorUserId: access.session.userId,
+              decisionKind: "proposal_deferred",
+              cardId: proposal.parentCardId,
+              proposalId: proposal.id,
+              persona: proposal.persona,
+              deliverableType: proposal.deliverableType,
+              policyReason: "persona_lane_cap",
+              decisionNote,
+              recommendationSummary: createGovernanceRecommendationSummary({
+                deliverableType: proposal.deliverableType,
+                policyReason: "persona_lane_cap",
+                status: "deferred"
+              }),
+              objectionSummary: createGovernanceObjectionSummary({
+                deliverableType: proposal.deliverableType,
+                policyReason: "persona_lane_cap"
+              })
+            })
+          );
+          const reconciledRun = await reconcileHarnessRunState({ repository, run });
+
+          return {
+            status: "deferred",
+            auditEvents: [
+              createHarnessAuditEvent({
+                tenantId: access.session.tenantId,
+                actorUserId: access.session.userId,
+                eventType: "harness_proposal_decided",
+                entityId: proposal.id,
+                metadata: {
+                  runId: run.id,
+                  decision: "deferred",
+                  reason: "persona_lane_cap",
                   hasDecisionNote: Boolean(trimmedDecisionNote),
                   requestedByPersona: proposal.requestedByPersona,
                   targetPersona: proposal.persona,
@@ -4882,6 +4967,18 @@ function findOpenChildCardByPersonaDeliverable(
       isOpenCardState(card.state) &&
       card.persona === target.persona &&
       card.deliverableType === target.deliverableType
+  );
+}
+
+function findOpenChildCardByPersona(
+  cards: readonly HarnessCardRecord[],
+  persona: string
+): HarnessCardRecord | undefined {
+  return cards.find(
+    (card) =>
+      card.persona !== "ceo" &&
+      isOpenCardState(card.state) &&
+      card.persona === persona
   );
 }
 
@@ -9965,10 +10062,12 @@ function createHandoffRecommendationSummary(input: {
 
 function createGovernanceObjectionSummary(input: {
   deliverableType: string;
-  policyReason: "deliverable_owner_conflict" | "lane_cap" | "scope_guardrail" | "completed_lanes_only";
+  policyReason: "persona_lane_cap" | "deliverable_owner_conflict" | "lane_cap" | "scope_guardrail" | "completed_lanes_only";
 }): string {
   const deliverable = humanizeDeliverableType(input.deliverableType).toLowerCase();
   switch (input.policyReason) {
+    case "persona_lane_cap":
+      return `Keep this persona focused on the current ${deliverable} lane until that work closes or is handed off.`;
     case "deliverable_owner_conflict":
       return `Wait for the current ${deliverable} owner to clear or hand off that lane first.`;
     case "lane_cap":
@@ -9985,7 +10084,7 @@ function determineProposalPolicyReason(input: {
   run: Pick<HarnessRunRecord, "state">;
   cards: readonly HarnessCardRecord[];
   proposal: Pick<HarnessSubCardProposal, "persona" | "deliverableType">;
-}): "deliverable_owner_conflict" | "lane_cap" | "scope_guardrail" | "completed_lanes_only" {
+}): "persona_lane_cap" | "deliverable_owner_conflict" | "lane_cap" | "scope_guardrail" | "completed_lanes_only" {
   if (input.run.state === "assembling" || input.run.state === "done") {
     return "completed_lanes_only";
   }
@@ -9998,6 +10097,15 @@ function determineProposalPolicyReason(input: {
   ) {
     return "deliverable_owner_conflict";
   }
+  if (
+    findOpenChildCardByPersona(input.cards, input.proposal.persona) &&
+    !findOpenChildCardByPersonaDeliverable(input.cards, {
+      persona: input.proposal.persona,
+      deliverableType: input.proposal.deliverableType
+    })
+  ) {
+    return "persona_lane_cap";
+  }
   if (countOpenChildCards(input.cards) >= MAX_OPEN_CHILD_CARDS) {
     return "lane_cap";
   }
@@ -10006,11 +10114,13 @@ function determineProposalPolicyReason(input: {
 
 function createGovernanceRecommendationSummary(input: {
   deliverableType: string;
-  policyReason: "deliverable_owner_conflict" | "lane_cap" | "scope_guardrail" | "completed_lanes_only";
+  policyReason: "persona_lane_cap" | "deliverable_owner_conflict" | "lane_cap" | "scope_guardrail" | "completed_lanes_only";
   status: "deferred" | "denied";
 }): string {
   const deliverable = humanizeDeliverableType(input.deliverableType).toLowerCase();
   switch (input.policyReason) {
+    case "persona_lane_cap":
+      return `Finish, close, or hand off the current ${deliverable} lane before opening another active lane for this persona.`;
     case "deliverable_owner_conflict":
       return `Keep advancing the current ${deliverable} lane and revisit this request after a clear handoff.`;
     case "lane_cap":
@@ -10027,11 +10137,13 @@ function createGovernanceRecommendationSummary(input: {
 
 function createRepeatedRequestDecisionNote(input: {
   status: "deferred" | "denied";
-  policyReason: "deliverable_owner_conflict" | "lane_cap" | "scope_guardrail" | "completed_lanes_only";
+  policyReason: "persona_lane_cap" | "deliverable_owner_conflict" | "lane_cap" | "scope_guardrail" | "completed_lanes_only";
   deliverableType: string;
 }): string {
   const deliverable = humanizeDeliverableType(input.deliverableType).toLowerCase();
   switch (input.policyReason) {
+    case "persona_lane_cap":
+      return "CEO deferred this proposal because an equivalent request is already waiting on the same persona's active lane focus.";
     case "deliverable_owner_conflict":
       return `CEO deferred this proposal because an equivalent request is already waiting on the current ${deliverable} owner.`;
     case "lane_cap":
@@ -10049,10 +10161,14 @@ function createRepeatedRequestDecisionNote(input: {
 function createPublicProposalDecisionMessage(input: {
   status: "deferred" | "denied";
   deliverableType: string;
-  policyReason: "deliverable_owner_conflict" | "lane_cap" | "scope_guardrail" | "completed_lanes_only";
+  policyReason: "persona_lane_cap" | "deliverable_owner_conflict" | "lane_cap" | "scope_guardrail" | "completed_lanes_only";
 }): string {
   const deliverable = humanizeDeliverableType(input.deliverableType).toLowerCase();
   switch (input.policyReason) {
+    case "persona_lane_cap":
+      return input.status === "denied"
+        ? `CEO denied this ${deliverable} request because that persona already has another active lane.`
+        : `CEO deferred this ${deliverable} request because that persona already has another active lane.`;
     case "deliverable_owner_conflict":
       return input.status === "denied"
         ? `CEO denied this ${deliverable} request because the current lane owner still controls that work.`
@@ -10079,6 +10195,8 @@ function humanizePolicyReason(value: NonNullable<HarnessBoardDecisionRecord["pol
       return "New lane approved";
     case "reused_existing_lane":
       return "Existing lane reused";
+    case "persona_lane_cap":
+      return "Persona focus protection";
     case "deliverable_owner_conflict":
       return "Waiting on current lane owner";
     case "lane_cap":
@@ -10094,6 +10212,8 @@ function humanizePolicyReason(value: NonNullable<HarnessBoardDecisionRecord["pol
 
 function describeNextReviewTrigger(policyReason: HarnessBoardDecisionRecord["policyReason"]): string {
   switch (policyReason) {
+    case "persona_lane_cap":
+      return "Review again when that persona's current active lane closes or is handed off.";
     case "deliverable_owner_conflict":
       return "Review again when the current deliverable owner clears or hands off the lane.";
     case "lane_cap":

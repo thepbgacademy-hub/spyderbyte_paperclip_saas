@@ -18,6 +18,7 @@ export type HarnessBoardDecisionKind = "lane_opened" | "proposal_approved" | "pr
 export type HarnessBoardPolicyReason =
   | "created_new_lane"
   | "reused_existing_lane"
+  | "persona_lane_cap"
   | "deliverable_owner_conflict"
   | "lane_cap"
   | "scope_guardrail"

@@ -2439,6 +2439,91 @@ describe("harness board service", () => {
     ).toBe(true);
   });
 
+  it("defers approval when the requested persona already has another active lane", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const parentCard = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief"
+    }));
+
+    await repository.insertProposal({
+      id: "proposal_persona_focus_cap_1",
+      runId: board.runId,
+      parentCardId: parentCard.cardId,
+      requestedByCardId: parentCard.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Validate the forecast assumptions",
+      deliverableType: "forecast_model",
+      status: "proposed"
+    });
+
+    await expect(
+      service.decideProposal({
+        authorization: "Bearer valid",
+        proposalId: "proposal_persona_focus_cap_1",
+        decision: "approve"
+      })
+    ).resolves.toEqual({
+      status: "deferred"
+    });
+
+    const deferredProposal = await repository.getProposal("proposal_persona_focus_cap_1");
+    expect(deferredProposal).toEqual(
+      expect.objectContaining({
+        status: "deferred",
+        decisionNote: "CEO deferred this proposal because RESEARCHER already has another active lane."
+      })
+    );
+
+    const deferredBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(deferredBoard.pendingApprovals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "proposal_persona_focus_cap_1",
+          statusLabel: "Deferred for later CEO review",
+          policyReasonLabel: "Persona focus protection",
+          nextReviewTrigger: "Review again when that persona's current active lane closes or is handed off."
+        })
+      ])
+    );
+    expect(
+      deferredBoard.recentDecisions.some(
+        (decision) =>
+          decision.label === "CEO deferred a forecast model request for RESEARCHER." &&
+          decision.policyReasonLabel === "Persona focus protection" &&
+          decision.recommendationSummary ===
+            "Finish, close, or hand off the current forecast model lane before opening another active lane for this persona." &&
+          decision.objectionSummary ===
+            "Keep this persona focused on the current forecast model lane until that work closes or is handed off."
+      )
+    ).toBe(true);
+  });
+
   it("denies a repeated unresolved request when an earlier matching proposal is already pending CEO review", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
@@ -2635,6 +2720,109 @@ describe("harness board service", () => {
           decision.objectionSummary === "Hold this research brief request until the active lane count drops."
       )
     ).toBe(true);
+  });
+
+  it("keeps a repeated request deferred when an earlier matching proposal is already paused for persona focus", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const parentCard = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+
+    await repository.insertProposal({
+      id: "proposal_persona_focus_original_1",
+      runId: board.runId,
+      parentCardId: parentCard.cardId,
+      requestedByCardId: parentCard.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Validate the forecast assumptions",
+      deliverableType: "forecast_model",
+      status: "deferred",
+      decisionNote: "Wait for the current researcher lane to clear first."
+    });
+    await repository.insertDecision({
+      id: "decision_persona_focus_original_1",
+      runId: board.runId,
+      tenantId: "tenant_123",
+      actorUserId: "user_123",
+      decisionKind: "proposal_deferred",
+      cardId: parentCard.cardId,
+      proposalId: "proposal_persona_focus_original_1",
+      targetCardId: null,
+      persona: "researcher",
+      deliverableType: "forecast_model",
+      policyReason: "persona_lane_cap",
+      resolution: null,
+      decisionNote: "Wait for the current researcher lane to clear first.",
+      recommendationSummary:
+        "Finish, close, or hand off the current forecast model lane before opening another active lane for this persona.",
+      objectionSummary:
+        "Keep RESEARCHER focused on the current active lane before opening another forecast model request.",
+      createdAt: new Date(Date.now() - 1000).toISOString()
+    });
+    await repository.insertProposal({
+      id: "proposal_persona_focus_follow_on_1",
+      runId: board.runId,
+      parentCardId: parentCard.cardId,
+      requestedByCardId: parentCard.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Validate the forecast assumptions",
+      deliverableType: "forecast_model",
+      status: "proposed"
+    });
+
+    await expect(
+      service.decideProposal({
+        authorization: "Bearer valid",
+        proposalId: "proposal_persona_focus_follow_on_1",
+        decision: "approve"
+      })
+    ).resolves.toEqual({ status: "deferred" });
+
+    const duplicateProposal = await repository.getProposal("proposal_persona_focus_follow_on_1");
+    expect(duplicateProposal).toEqual(
+      expect.objectContaining({
+        status: "deferred",
+        decisionNote:
+          "CEO deferred this proposal because an equivalent request is already waiting on the same persona's active lane focus."
+      })
+    );
+
+    const hydratedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(hydratedBoard.pendingApprovals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "proposal_persona_focus_original_1",
+          statusLabel: "Deferred for later CEO review",
+          policyReasonLabel: "Persona focus protection"
+        }),
+        expect.objectContaining({
+          id: "proposal_persona_focus_follow_on_1",
+          statusLabel: "Deferred for later CEO review",
+          policyReasonLabel: "Persona focus protection"
+        })
+      ])
+    );
   });
 
   it("does not treat a distinct follow-on request title as a duplicate unresolved proposal", async () => {
@@ -5839,6 +6027,56 @@ describe("harness board service", () => {
     ]);
   });
 
+  it("preserves a direct CEO request as deferred governance when that persona already has another active lane", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "researcher",
+      title: "Gather competitor price anchors",
+      deliverableType: "research_brief"
+    }));
+
+    await expect(
+      service.createTopLevelChildCard({
+        authorization: "Bearer valid",
+        persona: "researcher",
+        title: "Validate the forecast assumptions",
+        deliverableType: "forecast_model"
+      })
+    ).resolves.toEqual({
+      status: "deferred",
+      proposalId: expect.any(String)
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(board.pendingApprovals).toEqual([
+      expect.objectContaining({
+        title: "Validate the forecast assumptions",
+        requestedByPersona: "CEO",
+        targetPersona: "RESEARCHER",
+        deliverableLabel: "Forecast Model",
+        statusLabel: "Deferred for later CEO review",
+        policyReasonLabel: "Persona focus protection",
+        nextReviewTrigger: "Review again when that persona's current active lane closes or is handed off."
+      })
+    ]);
+  });
+
   it("rejects child-card requests outside the approved persona and deliverable catalog", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
@@ -5922,8 +6160,8 @@ describe("harness board service", () => {
         targetPersona: "ANALYST",
         deliverableLabel: "Legal Review",
         statusLabel: "Deferred for later CEO review",
-        policyReasonLabel: "Lane cap protection",
-        nextReviewTrigger: "Review again when one of the active child lanes closes."
+        policyReasonLabel: "Persona focus protection",
+        nextReviewTrigger: "Review again when that persona's current active lane closes or is handed off."
       })
     ]);
 
@@ -5936,7 +6174,7 @@ describe("harness board service", () => {
         title: "Review the offer language",
         deliverableType: "legal_review",
         status: "deferred",
-        decisionNote: "CEO deferred this proposal because the current run is at its active lane cap."
+        decisionNote: "CEO deferred this proposal because ANALYST already has another active lane."
       })
     );
     expect(audit).toHaveBeenCalledWith(
@@ -5944,7 +6182,7 @@ describe("harness board service", () => {
         eventType: "harness_proposal_decided",
         metadata: expect.objectContaining({
           decision: "deferred",
-          reason: "lane_cap",
+          reason: "persona_lane_cap",
           hasDecisionNote: true
         })
       })
@@ -6271,7 +6509,7 @@ describe("harness board service", () => {
       { persona: "cto", title: "Review the automation seams", deliverableType: "technical_review" },
       { persona: "cmo", title: "Draft the launch narrative", deliverableType: "launch_copy" },
       { persona: "analyst", title: "Estimate the revenue delta", deliverableType: "forecast_model" },
-      { persona: "cfo", title: "Review the offer language", deliverableType: "legal_review" }
+      { persona: "researcher", title: "Review the offer language", deliverableType: "legal_review" }
     ]) {
       await expectCreatedCard(service.createTopLevelChildCard({
         authorization: "Bearer valid",

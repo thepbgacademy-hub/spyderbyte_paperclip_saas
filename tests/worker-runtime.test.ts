@@ -403,8 +403,10 @@ describe("worker runtime", () => {
           credentialLabel: "Primary OpenAI"
         },
         executionClaim: {
+          kind: "existing_working_claim",
           token: "claim-cfo-1",
-          claimedAt: "2026-05-21T10:04:00.000Z"
+          claimedAt: "2026-05-21T10:04:00.000Z",
+          previousClaimedAt: null
         },
         dispatchHandoff: {
           kind: "initial_claim",
@@ -1185,8 +1187,10 @@ describe("worker runtime", () => {
           credentialLabel: "Primary OpenAI"
         },
         executionClaim: {
+          kind: "existing_working_claim",
           token: "claim-cmo-active",
-          claimedAt: "2026-05-21T10:07:30.000Z"
+          claimedAt: "2026-05-21T10:07:30.000Z",
+          previousClaimedAt: null
         },
         dispatchHandoff: {
           kind: "follow_on_dispatch",
@@ -1352,8 +1356,10 @@ describe("worker runtime", () => {
           triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
         },
         executionClaim: {
+          kind: "existing_working_claim",
           token: "claim-cmo-active",
-          claimedAt: "2026-05-21T10:07:30.000Z"
+          claimedAt: "2026-05-21T10:07:30.000Z",
+          previousClaimedAt: null
         },
         laneExecution: expect.objectContaining({
           cardId: "card_cmo"

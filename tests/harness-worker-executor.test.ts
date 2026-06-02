@@ -211,8 +211,10 @@ describe("harness worker executor", () => {
         credentialLabel: "Primary OpenAI"
       },
       executionClaim: {
+        kind: "approved_claim",
         token: expect.any(String),
-        claimedAt: expect.any(String)
+        claimedAt: expect.any(String),
+        previousClaimedAt: null
       },
       dispatchHandoff: {
         kind: "initial_claim",
