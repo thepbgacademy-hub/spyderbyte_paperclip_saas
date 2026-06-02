@@ -297,6 +297,7 @@ No issues identified in the harness slice. The board HTTP boundary now distingui
 - Re-ran the scan after adding package-bundle stale-claim interleaving proof and tightening `deliveryReceipt` into a bounded typed contract. The touched slice still introduced no live secret exposure; it only proves the existing private recovery path on the second export family and narrows receipt consumers to safe relative-path/count metadata instead of widening vault roots, note bodies, provider context, BYOK material, or other secret-bearing runtime data.
 - Re-ran the scan after widening the private worker dispatch handoff with explicit execution-stage metadata and follow-on run-reactivation truth. The touched slice still introduced no live secret exposure; it only refines lane-safe orchestration metadata for private runtime consumers and does not widen provider context, note bodies, BYOK material, or secret-bearing execution payloads onto public dispatch telemetry.
 - Re-ran the scan after adding explicit execution-claim tokens to `working` harness lanes and private execution envelopes. The touched slice still introduced no live secret exposure; it only hardens stale-worker rejection and already-working claim refresh on the private lane-execution seam, without widening provider context, note bodies, BYOK material, or secret-bearing runtime data onto public dispatch or outcome telemetry.
+- Re-ran the scan after adding bounded `execution_claimed` and `execution_claim_refreshed` lifecycle events. The touched slice still introduced no live secret exposure; the new events persist only metadata-safe claim lifecycle timestamps and claim-kind labels, not raw claim tokens, provider context, note bodies, BYOK material, or other secret-bearing runtime data.
 
 ## Remediation Priority
 
@@ -304,7 +305,7 @@ No issues identified in the harness slice. The board HTTP boundary now distingui
 2. Keep the harness `runtime_context` sanitization and response-guard tests in the full gate to prevent future regressions that reintroduce `secretValues` or customer-facing execution noise.
 3. Keep tenant-authored summaries on parsed body surfaces only, and extend the same metadata-only audit discipline if broader harness mutation paths begin recording richer business outcomes.
 4. Keep the new runtime-memory shape metadata export-neutral: the explicit continuity-trio and live-attention descriptors should stay operational contract truth and must not be treated as a new tenant-export surface without separate disclosure review.
-5. Keep the new dispatch handoff and execution-claim contracts metadata-only: initial-claim versus follow-on context, prior lane outcome summaries, and execution-claim tokens can help private runtime consumers reject stale workers safely, but those seams must stay free of provider context, raw note bodies, or any content that would widen public lane-dispatch telemetry.
+5. Keep the new dispatch handoff, execution-claim, and execution-lifecycle-event contracts metadata-only: initial-claim versus follow-on context, prior lane outcome summaries, execution-claim tokens, and claim lifecycle timestamps can help private runtime consumers reject stale workers safely, but those seams must stay free of provider context, raw note bodies, or any content that would widen public lane-dispatch telemetry.
 
 ## Conclusion
 

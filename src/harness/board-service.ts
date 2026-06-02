@@ -8235,6 +8235,8 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
   const labelByKind: Record<HarnessCardEventRecord["eventKind"], string> = {
     created: `${payloadTitle ?? "Card"} was opened for this persona lane.`,
     state_changed: `Lane status moved to ${humanizeLabel(payloadState ?? "updated")}.`,
+    execution_claimed: "A worker claimed this lane for execution.",
+    execution_claim_refreshed: "A worker refreshed the active execution claim for this lane.",
     comment_added: payloadMessage ?? "A new progress note was added to this lane.",
     subcard_proposed: "A supporting sub-card was proposed for CEO review.",
     proposal_absorbed:

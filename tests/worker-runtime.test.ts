@@ -372,6 +372,17 @@ describe("worker runtime", () => {
         }
       })
     );
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "execution_claimed",
+        payload: {
+          claimKind: "approved_claim",
+          claimedAt: "2026-05-21T10:04:00.000Z",
+          previousClaimedAt: null
+        }
+      })
+    );
     expect(harnessRepository.upsertCardContinuity).toHaveBeenCalledWith(
       expect.objectContaining({
         cardId: "card_cfo",

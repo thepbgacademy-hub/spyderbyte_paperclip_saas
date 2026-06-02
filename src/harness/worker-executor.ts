@@ -226,7 +226,7 @@ export async function buildHarnessWorkerDispatch(input: {
       proposals,
       continuity,
       claimedLane,
-      previousLaneState: lane.state
+      previousLane: lane
     });
     const resumedRuntime = createHarnessRuntime();
     resumedRuntime.resumeRun({
@@ -576,22 +576,39 @@ async function persistWorkerStartState(input: {
   proposals: Awaited<ReturnType<HarnessDispatchRepository["listProposalsForRun"]>>;
   continuity: Awaited<ReturnType<HarnessDispatchRepository["listCardContinuityForRun"]>>;
   claimedLane: HarnessCardRecord;
-  previousLaneState: HarnessCardRecord["state"];
+  previousLane: HarnessCardRecord;
 }): Promise<HarnessCardContinuityRecord> {
   const existingContinuity = input.continuity.find((record) => record.cardId === input.claimedLane.id) ?? null;
-  const laneStateChanged = input.previousLaneState !== input.claimedLane.state;
+  const laneStateChanged = input.previousLane.state !== input.claimedLane.state;
   if (laneStateChanged) {
     await input.repository.insertEvent(
       createHarnessCardEventRecord({
         cardId: input.claimedLane.id,
         eventKind: "state_changed",
         payload: {
-          from: input.previousLaneState,
+          from: input.previousLane.state,
           to: input.claimedLane.state
         }
       })
     );
   }
+  await input.repository.insertEvent(
+    createHarnessCardEventRecord({
+      cardId: input.claimedLane.id,
+      eventKind:
+        input.previousLane.state === "working"
+          ? "execution_claim_refreshed"
+          : "execution_claimed",
+      payload: {
+        claimKind:
+          input.previousLane.state === "working"
+            ? "working_claim_refresh"
+            : "approved_claim",
+        claimedAt: input.claimedLane.executionClaimedAt,
+        previousClaimedAt: input.previousLane.executionClaimedAt
+      }
+    })
+  );
 
   const updatedContinuity = laneStateChanged
     ? createHarnessCardContinuityRecord({

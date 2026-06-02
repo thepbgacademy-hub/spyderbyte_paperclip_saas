@@ -111,6 +111,14 @@ describe("harness worker executor", () => {
             from: "approved",
             to: "working"
           }
+        }),
+        expect.objectContaining({
+          eventKind: "execution_claimed",
+          payload: {
+            claimKind: "approved_claim",
+            claimedAt: expect.any(String),
+            previousClaimedAt: null
+          }
         })
       ])
     );
@@ -229,6 +237,94 @@ describe("harness worker executor", () => {
         absorbedWorkItems: ["Re-check discount floor", "Verify competitor anchor notes"]
       })
     });
+  });
+
+  it("refreshes a missing execution claim for an already-working lane and records a bounded refresh event", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Resume the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "working";
+    cfoCard.executionClaimToken = null;
+    cfoCard.executionClaimedAt = null;
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+    await repository.upsertCardContinuity(
+      createHarnessCardContinuityRecord({
+        cardId: cfoCard.id,
+        runId: run.id,
+        continuitySource: "resume_override",
+        continuitySummary: "Resume from the board-approved pricing override note.",
+        latestResultSummary: null,
+        absorbedWorkItems: []
+      })
+    );
+
+    const dispatch = await buildHarnessWorkerDispatch({
+      repository,
+      tenantId: "tenant-1",
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow"
+    });
+
+    expect(dispatch).toEqual({
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow",
+      status: "running",
+      dispatchHandoff: {
+        kind: "initial_claim",
+        kindLabel: "Initial lane claim",
+        executionStage: "initial_lane_start",
+        executionStageLabel: "Initial lane start"
+      },
+      laneExecution: expect.objectContaining({
+        cardId: cfoCard.id,
+        state: "working",
+        resumeFocus: "Resume from the board-approved pricing override note."
+      })
+    });
+    await expect(repository.getCard(cfoCard.id)).resolves.toEqual(
+      expect.objectContaining({
+        id: cfoCard.id,
+        state: "working",
+        executionClaimToken: expect.any(String),
+        executionClaimedAt: expect.any(String)
+      })
+    );
+    await expect(repository.listEventsForCard(cfoCard.id)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventKind: "execution_claim_refreshed",
+          payload: {
+            claimKind: "working_claim_refresh",
+            claimedAt: expect.any(String),
+            previousClaimedAt: null
+          }
+        })
+      ])
+    );
   });
 
   it("returns a fresh private outcome contract for each execution envelope", async () => {
@@ -410,7 +506,18 @@ describe("harness worker executor", () => {
         resumeFocus: "Resume from the board-approved pricing override note."
       })
     });
-    expect(afterEvents).toEqual(beforeEvents);
+    expect(afterEvents).toEqual(
+      beforeEvents.concat([
+        expect.objectContaining({
+          eventKind: "execution_claim_refreshed",
+          payload: {
+            claimKind: "working_claim_refresh",
+            claimedAt: expect.any(String),
+            previousClaimedAt: null
+          }
+        })
+      ])
+    );
     expect(continuity).toEqual(
       expect.objectContaining({
         cardId: cfoCard.id,
