@@ -1857,7 +1857,7 @@ describe("harness board service", () => {
     expect(hydratedCard?.activity).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          label: "A worker started this lane from CFO's follow-on handoff."
+          label: "A worker started this lane from CFO's completed-lane handoff."
         })
       ])
     );
@@ -1912,7 +1912,7 @@ describe("harness board service", () => {
     expect(hydratedCard?.activity).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          label: "A worker reactivated this run and started this lane from CFO's follow-on handoff."
+          label: "A worker reactivated this run and started this lane after CFO cancelled the prior lane."
         })
       ])
     );

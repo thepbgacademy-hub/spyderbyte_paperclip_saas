@@ -8349,22 +8349,21 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
   const labelByKind: Record<HarnessCardEventRecord["eventKind"], string> = {
     created: `${payloadTitle ?? "Card"} was opened for this persona lane.`,
     state_changed: `Lane status moved to ${humanizeLabel(payloadState ?? "updated")}.`,
-    execution_dispatched:
-      payloadDispatchKind === "follow_on_dispatch" && payloadTriggeredByPersona
-        ? payloadReactivatedRun
-          ? `A worker reactivated this run and started this lane from ${payloadTriggeredByPersona.toUpperCase()}'s follow-on handoff.`
-          : `A worker started this lane from ${payloadTriggeredByPersona.toUpperCase()}'s follow-on handoff.`
-        : payloadExecutionStage === "initial_lane_start"
-          ? "A worker started this lane from the initial execution claim."
-          : "A worker started this lane from the current execution queue.",
-    execution_claimed:
-      payloadClaimKind === "approved_claim"
-        ? "A worker claimed this lane from the approved execution queue."
-        : "A worker claimed this lane for execution.",
-    execution_claim_refreshed:
-      payloadClaimKind === "working_claim_refresh"
-        ? "A worker refreshed a recovered execution claim for this lane."
-        : "A worker refreshed the active execution claim for this lane.",
+    execution_dispatched: describeExecutionDispatchActivity({
+      dispatchKind: payloadDispatchKind ?? null,
+      executionStage: payloadExecutionStage ?? null,
+      triggeredByPersona: payloadTriggeredByPersona ?? null,
+      triggeredByOutcomeState: readOptionalString(event.payload.triggeredByOutcomeState) ?? null,
+      reactivatedRun: payloadReactivatedRun ?? null
+    }),
+    execution_claimed: describeExecutionClaimActivity({
+      claimKind: payloadClaimKind ?? null,
+      refreshed: false
+    }),
+    execution_claim_refreshed: describeExecutionClaimActivity({
+      claimKind: payloadClaimKind ?? null,
+      refreshed: true
+    }),
     execution_outcome_committed: describeCommittedExecutionOutcomeActivity({
         outcomeState: payloadOutcomeState ?? null,
         postOutcomeActionKind: payloadPostOutcomeActionKind ?? null,
@@ -8433,6 +8432,45 @@ function describeIgnoredExecutionOutcomeActivity(input: {
     default:
       return "A stale or superseded worker callback was ignored.";
   }
+}
+
+function describeExecutionDispatchActivity(input: {
+  dispatchKind: string | null;
+  executionStage: string | null;
+  triggeredByPersona: string | null;
+  triggeredByOutcomeState: string | null;
+  reactivatedRun: boolean | null;
+}): string {
+  if (input.dispatchKind === "follow_on_dispatch" && input.triggeredByPersona) {
+    if (input.reactivatedRun) {
+      if (input.triggeredByOutcomeState === "cancelled") {
+        return `A worker reactivated this run and started this lane after ${input.triggeredByPersona.toUpperCase()} cancelled the prior lane.`;
+      }
+      return `A worker reactivated this run and started this lane from ${input.triggeredByPersona.toUpperCase()}'s follow-on handoff.`;
+    }
+    if (input.triggeredByOutcomeState === "done") {
+      return `A worker started this lane from ${input.triggeredByPersona.toUpperCase()}'s completed-lane handoff.`;
+    }
+    return `A worker started this lane from ${input.triggeredByPersona.toUpperCase()}'s follow-on handoff.`;
+  }
+  if (input.executionStage === "initial_lane_start") {
+    return "A worker started this lane from the initial execution claim.";
+  }
+  return "A worker started this lane from the current execution queue.";
+}
+
+function describeExecutionClaimActivity(input: {
+  claimKind: string | null;
+  refreshed: boolean;
+}): string {
+  if (input.refreshed) {
+    return input.claimKind === "working_claim_refresh"
+      ? "A worker refreshed a recovered execution claim for this lane."
+      : "A worker refreshed the active execution claim for this lane.";
+  }
+  return input.claimKind === "approved_claim"
+    ? "A worker claimed this lane from the approved execution queue."
+    : "A worker claimed this lane for execution.";
 }
 
 function describeCommittedExecutionOutcomeActivity(input: {
