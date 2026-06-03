@@ -2073,6 +2073,59 @@ describe("harness board service", () => {
     );
   });
 
+  it("surfaces done worker outcome history with explicit next-lane handoff copy", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+
+    repository.insertEvent({
+      id: "event_execution_outcome_done_dispatch",
+      cardId: created.cardId,
+      eventKind: "execution_outcome_committed",
+      payload: {
+        outcomeState: "done",
+        runState: "active",
+        postOutcomeActionKind: "dispatch_next_lane",
+        targetCardId: "card_cmo",
+        targetPersona: "cmo",
+        resultSummary: "The pricing lane is ready for message-market fit packaging."
+      },
+      createdAt: "2026-06-02T15:11:30.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A worker finished this lane and handed the next lane to CMO: The pricing lane is ready for message-market fit packaging."
+        })
+      ])
+    );
+  });
+
   it("surfaces blocked worker outcome history with continuity-aware board activity", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({

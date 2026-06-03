@@ -8484,8 +8484,8 @@ function describeCommittedExecutionOutcomeActivity(input: {
   if (input.outcomeState === "done") {
     if (input.postOutcomeActionKind === "dispatch_next_lane" && input.targetPersona) {
       return input.summary
-        ? `A worker finished this lane and handed the next step to ${input.targetPersona.toUpperCase()}: ${input.summary}`
-        : `A worker finished this lane and handed the next step to ${input.targetPersona.toUpperCase()}.`;
+        ? `A worker finished this lane and handed the next lane to ${input.targetPersona.toUpperCase()}: ${input.summary}`
+        : `A worker finished this lane and handed the next lane to ${input.targetPersona.toUpperCase()}.`;
     }
     if (input.postOutcomeActionKind === "queue_ceo_review") {
       return input.summary
