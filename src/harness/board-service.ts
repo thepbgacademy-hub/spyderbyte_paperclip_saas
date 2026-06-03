@@ -8512,7 +8512,7 @@ function describeCommittedExecutionOutcomeActivity(input: {
       if (input.postOutcomeActionKind === "dispatch_next_lane" && input.targetPersona) {
         return input.continuitySummary
           ? `A worker cancelled this lane and handed control to ${input.targetPersona.toUpperCase()}: ${input.continuitySummary}`
-          : "A worker cancelled this lane and returned control to the harness.";
+          : `A worker cancelled this lane and handed control to ${input.targetPersona.toUpperCase()}.`;
       }
       return input.continuitySummary
         ? `A worker cancelled this lane and returned control to the harness: ${input.continuitySummary}`

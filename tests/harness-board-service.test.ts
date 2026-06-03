@@ -2178,6 +2178,58 @@ describe("harness board service", () => {
     );
   });
 
+  it("keeps cancelled worker outcome history persona-aware even without continuity detail", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+
+    repository.insertEvent({
+      id: "event_execution_outcome_cancelled_no_continuity",
+      cardId: created.cardId,
+      eventKind: "execution_outcome_committed",
+      payload: {
+        outcomeState: "cancelled",
+        runState: "active",
+        postOutcomeActionKind: "dispatch_next_lane",
+        targetCardId: "card_cfo",
+        targetPersona: "cfo"
+      },
+      createdAt: "2026-06-02T15:14:00.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A worker cancelled this lane and handed control to CFO."
+        })
+      ])
+    );
+  });
+
   it("derives tenant-safe board follow-through items from implemented governance decisions", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
