@@ -8335,6 +8335,7 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
   const payloadAttentionReason = readOptionalString(event.payload.reason);
   const payloadDispatchKind = readOptionalString(event.payload.kind);
   const payloadExecutionStage = readOptionalString(event.payload.executionStage);
+  const payloadClaimKind = readOptionalString(event.payload.claimKind);
   const payloadTriggeredByPersona = readOptionalString(event.payload.triggeredByPersona);
   const payloadReactivatedRun = readOptionalBoolean(event.payload.reactivatedRun);
   const payloadIgnoredReason = readOptionalString(event.payload.reason);
@@ -8356,8 +8357,14 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
         : payloadExecutionStage === "initial_lane_start"
           ? "A worker started this lane from the initial execution claim."
           : "A worker started this lane from the current execution queue.",
-    execution_claimed: "A worker claimed this lane for execution.",
-    execution_claim_refreshed: "A worker refreshed the active execution claim for this lane.",
+    execution_claimed:
+      payloadClaimKind === "approved_claim"
+        ? "A worker claimed this lane from the approved execution queue."
+        : "A worker claimed this lane for execution.",
+    execution_claim_refreshed:
+      payloadClaimKind === "working_claim_refresh"
+        ? "A worker refreshed a recovered execution claim for this lane."
+        : "A worker refreshed the active execution claim for this lane.",
     execution_outcome_committed: describeCommittedExecutionOutcomeActivity({
         outcomeState: payloadOutcomeState ?? null,
         postOutcomeActionKind: payloadPostOutcomeActionKind ?? null,
