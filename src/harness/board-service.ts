@@ -8427,9 +8427,9 @@ function describeIgnoredExecutionOutcomeActivity(input: {
     case "stale_execution_claim":
       return "A stale worker callback was ignored because this lane had already moved to a newer execution claim.";
     case "lane_not_working":
-      return `A worker callback was ignored because the lane was already ${humanizeLabel(input.currentLaneState ?? "not working")}.`;
+      return `A worker callback was ignored because the lane had already left active execution and was ${humanizeLabel(input.currentLaneState ?? "not working")}.`;
     case "terminal_run":
-      return "A worker callback was ignored because this run had already reached a terminal state.";
+      return "A worker callback was ignored because this run had already closed.";
     default:
       return "A stale or superseded worker callback was ignored.";
   }
