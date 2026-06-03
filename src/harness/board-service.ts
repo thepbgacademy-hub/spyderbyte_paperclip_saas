@@ -8334,7 +8334,9 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
   const payloadActionKind = readOptionalString(event.payload.actionKind);
   const payloadAttentionReason = readOptionalString(event.payload.reason);
   const payloadDispatchKind = readOptionalString(event.payload.kind);
+  const payloadExecutionStage = readOptionalString(event.payload.executionStage);
   const payloadTriggeredByPersona = readOptionalString(event.payload.triggeredByPersona);
+  const payloadReactivatedRun = readOptionalBoolean(event.payload.reactivatedRun);
   const payloadIgnoredReason = readOptionalString(event.payload.reason);
   const payloadIgnoredLaneState = readOptionalString(event.payload.currentLaneState);
   const payloadOutcomeState = readOptionalString(event.payload.outcomeState);
@@ -8348,8 +8350,12 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
     state_changed: `Lane status moved to ${humanizeLabel(payloadState ?? "updated")}.`,
     execution_dispatched:
       payloadDispatchKind === "follow_on_dispatch" && payloadTriggeredByPersona
-        ? `A worker started this lane from ${payloadTriggeredByPersona.toUpperCase()}'s follow-on handoff.`
-        : "A worker started this lane from the current execution queue.",
+        ? payloadReactivatedRun
+          ? `A worker reactivated this run and started this lane from ${payloadTriggeredByPersona.toUpperCase()}'s follow-on handoff.`
+          : `A worker started this lane from ${payloadTriggeredByPersona.toUpperCase()}'s follow-on handoff.`
+        : payloadExecutionStage === "initial_lane_start"
+          ? "A worker started this lane from the initial execution claim."
+          : "A worker started this lane from the current execution queue.",
     execution_claimed: "A worker claimed this lane for execution.",
     execution_claim_refreshed: "A worker refreshed the active execution claim for this lane.",
     execution_outcome_committed: describeCommittedExecutionOutcomeActivity({
@@ -9932,6 +9938,10 @@ function formatBoardTimestamp(value: string): string {
 
 function readOptionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function readOptionalBoolean(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
 }
 
 function toRecentDecisionView(decision: HarnessBoardDecisionRecord): HarnessRecentDecisionView {
