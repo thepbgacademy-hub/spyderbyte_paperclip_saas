@@ -8499,14 +8499,14 @@ function describeCommittedExecutionOutcomeActivity(input: {
         ? `A worker paused this lane and is waiting for a later resume: ${input.continuitySummary}`
         : input.summary
           ? `A worker paused this lane and is waiting for a later resume: ${input.summary}`
-          : "A worker paused this lane and is waiting for a later resume.";
+          : "A worker paused this lane and is waiting for an explicit resume.";
   }
   if (input.outcomeState === "blocked") {
       return input.continuitySummary
         ? `A worker marked this lane blocked and requested follow-through before continuing: ${input.continuitySummary}`
         : input.summary
           ? `A worker marked this lane blocked and requested follow-through before continuing: ${input.summary}`
-          : "A worker marked this lane blocked and requested follow-through before continuing.";
+          : "A worker marked this lane blocked and is waiting for an explicit unblock.";
   }
   if (input.outcomeState === "cancelled") {
       if (input.postOutcomeActionKind === "dispatch_next_lane" && input.targetPersona) {

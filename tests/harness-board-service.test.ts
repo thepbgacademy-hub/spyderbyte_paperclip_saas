@@ -2073,6 +2073,57 @@ describe("harness board service", () => {
     );
   });
 
+  it("keeps waiting worker outcome history explicit when no continuity detail is available", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+
+    repository.insertEvent({
+      id: "event_execution_outcome_waiting_no_detail",
+      cardId: created.cardId,
+      eventKind: "execution_outcome_committed",
+      payload: {
+        outcomeState: "waiting",
+        runState: "waiting",
+        postOutcomeActionKind: "await_lane_resume",
+        targetCardId: created.cardId
+      },
+      createdAt: "2026-06-02T15:11:30.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A worker paused this lane and is waiting for an explicit resume."
+        })
+      ])
+    );
+  });
+
   it("surfaces done worker outcome history with explicit next-lane handoff copy", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
@@ -2173,6 +2224,57 @@ describe("harness board service", () => {
       expect.arrayContaining([
         expect.objectContaining({
           label: "A worker marked this lane blocked and requested follow-through before continuing: Unblock after the tenant confirms the final margin constraint."
+        })
+      ])
+    );
+  });
+
+  it("keeps blocked worker outcome history explicit when no continuity detail is available", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+
+    repository.insertEvent({
+      id: "event_execution_outcome_blocked_no_detail",
+      cardId: created.cardId,
+      eventKind: "execution_outcome_committed",
+      payload: {
+        outcomeState: "blocked",
+        runState: "blocked",
+        postOutcomeActionKind: "await_unblock",
+        targetCardId: created.cardId
+      },
+      createdAt: "2026-06-02T15:12:30.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A worker marked this lane blocked and is waiting for an explicit unblock."
         })
       ])
     );
