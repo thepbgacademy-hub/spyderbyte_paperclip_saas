@@ -3298,6 +3298,64 @@ describe("harness board service", () => {
     );
   });
 
+  it("surfaces first-request post-outcome hook failures as bounded board activity", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "launch_copy"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_hook_failed_requested",
+      cardId: created.cardId,
+      eventKind: "execution_hook_failed",
+      payload: {
+        hookFamily: "post_outcome_action",
+        hookFamilyLabel: "Post-outcome action handoff",
+        deliveryMode: "generic",
+        deliveryModeLabel: "Generic private hook",
+        hookKind: "onHarnessPostOutcomeAction",
+        hookKindLabel: "Post-outcome action hook",
+        actionKind: "await_lane_resume",
+        attentionDelivery: "requested",
+        outcomeState: "waiting",
+        failureMessage: "fresh handoff unavailable"
+      },
+      createdAt: "2026-06-04T09:04:00.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label:
+            "A first-request private hook for the Await Lane Resume post-outcome handoff failed after the worker outcome was already recorded."
+        })
+      ])
+    );
+  });
+
   it("surfaces initial execution-claim dispatch history as bounded board activity", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({

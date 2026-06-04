@@ -8520,6 +8520,11 @@ function describeExecutionHookFailureActivity(input: {
           ? `A replay-safe reasserted ${deliveryLabel} for the ${humanizeLabel(input.actionKind)} post-outcome handoff failed after the worker outcome was already recorded.`
           : `A replay-safe reasserted ${deliveryLabel} for a post-outcome handoff failed after the worker outcome was already recorded.`;
       }
+      if (input.attentionDelivery === "requested") {
+        return input.actionKind
+          ? `A first-request ${deliveryLabel} for the ${humanizeLabel(input.actionKind)} post-outcome handoff failed after the worker outcome was already recorded.`
+          : `A first-request ${deliveryLabel} for a post-outcome handoff failed after the worker outcome was already recorded.`;
+      }
       return input.actionKind
         ? `A ${deliveryLabel} for the ${humanizeLabel(input.actionKind)} post-outcome handoff failed after the worker outcome was already recorded.`
         : `A ${deliveryLabel} for a post-outcome handoff failed after the worker outcome was already recorded.`;
