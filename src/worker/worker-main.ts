@@ -32,32 +32,87 @@ async function main() {
       process.stderr.write(`${message}\n`);
     }
   });
-  void consumer.start().catch((error) => {
+
+  const writeError = (error: unknown) => {
     const message = error instanceof Error ? error.stack ?? error.message : String(error);
     process.stderr.write(`${message}\n`);
     process.exitCode = 1;
-  });
-  await consumer.waitUntilReady();
-
-  process.stdout.write("wealth_factory_worker_ready\n");
+  };
 
   let shutdownPromise: Promise<void> | null = null;
-  const handleShutdownSignal = () => {
-    shutdownPromise ??= consumer.close().then(
-      () => runtime.close(),
-      async () => {
-        await runtime.close();
+  let resolveShutdownRequested!: () => void;
+  const shutdownRequested = new Promise<void>((resolve) => {
+    resolveShutdownRequested = resolve;
+  });
+  let resolveStartupFailed!: () => void;
+  const startupFailed = new Promise<void>((resolve) => {
+    resolveStartupFailed = resolve;
+  });
+  let startupFailureHandled = false;
+  const ensureShutdown = ({ markClosing }: { markClosing: boolean }) => {
+    shutdownPromise ??= (async () => {
+      const shutdownErrors: unknown[] = [];
+
+      try {
+        await consumer.close();
+      } catch (error) {
+        shutdownErrors.push(error);
       }
-    ).catch((error) => {
-      const message = error instanceof Error ? error.stack ?? error.message : String(error);
-      process.stderr.write(`${message}\n`);
-      process.exitCode = 1;
-    });
+
+      try {
+        await runtime.close();
+      } catch (error) {
+        shutdownErrors.push(error);
+      }
+
+      for (const error of shutdownErrors) {
+        writeError(error);
+      }
+    })();
+
+    if (markClosing) {
+      resolveShutdownRequested();
+    }
     void shutdownPromise;
+  };
+  const handleShutdownSignal = () => {
+    ensureShutdown({ markClosing: true });
+  };
+  const handleStartupFailure = (error: unknown) => {
+    if (startupFailureHandled) {
+      return;
+    }
+    startupFailureHandled = true;
+    writeError(error);
+    ensureShutdown({ markClosing: false });
+    resolveStartupFailed();
   };
 
   process.on("SIGINT", handleShutdownSignal);
   process.on("SIGTERM", handleShutdownSignal);
+
+  void consumer.start().catch((error) => {
+    handleStartupFailure(error);
+  });
+
+  const startupState = await Promise.race([
+    consumer.waitUntilReady().then(
+      () => "ready" as const,
+      (error) => {
+        handleStartupFailure(error);
+        return "startup_failed" as const;
+      }
+    ),
+    shutdownRequested.then(() => "closing" as const),
+    startupFailed.then(() => "startup_failed" as const)
+  ]);
+
+  if (startupState !== "ready") {
+    await shutdownPromise;
+    return;
+  }
+
+  process.stdout.write("wealth_factory_worker_ready\n");
 }
 
 main().catch((error) => {
