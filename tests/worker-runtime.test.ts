@@ -1328,6 +1328,153 @@ describe("worker runtime", () => {
     await runtime.close();
   });
 
+  it("still runs the generic post-outcome handoff when the specific CEO review handler rejects", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onHarnessPostOutcomeAction = vi.fn();
+    const onHarnessCeoReviewRequested = vi.fn().mockRejectedValue(new Error("specific review unavailable"));
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-specific-post-outcome-hook-reject",
+      onHarnessPostOutcomeAction,
+      onHarnessCeoReviewRequested
+    });
+
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.getRun
+      .mockResolvedValueOnce({
+        id: "run-1",
+        tenantId: "tenant-1",
+        workflowId: "wf_connect_first_workflow",
+        packageId: "pkg_bib_connect",
+        orchestratorPersona: "ceo",
+        state: "active",
+        runtimeContext: {
+          providerKind: "openai_api",
+          credentialLabel: "Primary OpenAI"
+        },
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      })
+      .mockResolvedValueOnce({
+        id: "run-1",
+        tenantId: "tenant-1",
+        workflowId: "wf_connect_first_workflow",
+        packageId: "pkg_bib_connect",
+        orchestratorPersona: "ceo",
+        state: "assembling",
+        runtimeContext: {
+          providerKind: "openai_api",
+          credentialLabel: "Primary OpenAI"
+        },
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:05:00.000Z"
+      });
+    harnessRepository.listCardsForRun.mockResolvedValueOnce([
+      {
+        id: "card_ceo",
+        runId: "run-1",
+        parentCardId: null,
+        persona: "ceo",
+        title: "Plan run",
+        deliverableType: "plan",
+        state: "planning",
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      },
+      {
+        id: "card_cfo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Pressure-test the pricing lane",
+        deliverableType: "pricing_review",
+        state: "done",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:05:00.000Z"
+      }
+    ]);
+
+    await expect(
+      runtime.commitHarnessLaneOutcome({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-1",
+        state: "done",
+        resultSummary: "Validated the pricing model and preserved the final floor."
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        status: "committed"
+      })
+    );
+
+    expect(onHarnessPostOutcomeAction).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      attentionDelivery: "requested",
+      action: {
+        kind: "queue_ceo_review",
+        runState: "assembling",
+        reason: "final_assembly"
+      },
+      laneExecution: {
+        cardId: "card_cfo",
+        state: "done",
+        runState: "assembling",
+        latestResultSummary: "Validated the pricing model and preserved the final floor."
+      }
+    });
+    expect(onHarnessCeoReviewRequested).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      action: {
+        kind: "queue_ceo_review",
+        runState: "assembling",
+        reason: "final_assembly"
+      },
+      laneExecution: {
+        cardId: "card_cfo",
+        state: "done",
+        runState: "assembling",
+        latestResultSummary: "Validated the pricing model and preserved the final floor."
+      }
+    });
+    expect(warn).toHaveBeenCalledWith(
+      "Harness specific post-outcome handler failed after durable worker outcome",
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        actionKind: "queue_ceo_review"
+      })
+    );
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "execution_hook_failed",
+        payload: expect.objectContaining({
+          hookFamily: "post_outcome_action",
+          deliveryMode: "specific",
+          actionKind: "queue_ceo_review",
+          attentionDelivery: "requested",
+          failureMessage: "specific review unavailable"
+        })
+      })
+    );
+    warn.mockRestore();
+
+    await runtime.close();
+  });
+
   it("emits a follow-on harness dispatch when a committed lane outcome frees the next approved lane", async () => {
     const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
     const onHarnessLaneReady = vi.fn();
@@ -2151,6 +2298,17 @@ describe("worker runtime", () => {
           claimedAt: "2026-05-21T10:04:30.000Z",
           previousClaimedAt: "2026-05-21T10:04:30.000Z"
         }
+      })
+    );
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "execution_start_ready",
+        payload: expect.objectContaining({
+          kind: "initial_claim",
+          executionStage: "initial_lane_start",
+          claimKind: "existing_working_claim"
+        })
       })
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
