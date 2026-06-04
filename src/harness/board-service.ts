@@ -8516,6 +8516,8 @@ function describeCommittedExecutionOutcomeActivity(input: {
       }
       return input.continuitySummary
         ? `A worker cancelled this lane and returned control to the harness: ${input.continuitySummary}`
+        : input.summary
+          ? `A worker cancelled this lane and returned control to the harness: ${input.summary}`
         : "A worker cancelled this lane and returned control to the harness.";
   }
   return "A worker committed a new lane outcome.";

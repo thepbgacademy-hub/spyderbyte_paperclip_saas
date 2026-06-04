@@ -2435,6 +2435,56 @@ describe("harness board service", () => {
     );
   });
 
+  it("keeps cancelled worker outcome summary detail even without continuity detail", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+
+    repository.insertEvent({
+      id: "event_execution_outcome_cancelled_summary_only",
+      cardId: created.cardId,
+      eventKind: "execution_outcome_committed",
+      payload: {
+        outcomeState: "cancelled",
+        runState: "active",
+        resultSummary: "The tenant withdrew the request after the pricing assumptions changed."
+      },
+      createdAt: "2026-06-02T15:15:00.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A worker cancelled this lane and returned control to the harness: The tenant withdrew the request after the pricing assumptions changed."
+        })
+      ])
+    );
+  });
+
   it("derives tenant-safe board follow-through items from implemented governance decisions", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
