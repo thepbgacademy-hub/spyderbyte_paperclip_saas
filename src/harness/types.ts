@@ -135,6 +135,7 @@ export interface HarnessExecutionHookFailurePayload {
   claimKind?: string | undefined;
   outcomeState?: string | undefined;
   actionKind?: string | undefined;
+  attentionDelivery?: "requested" | "reasserted" | undefined;
   reason?: string | undefined;
   currentLaneState?: string | undefined;
   failureMessage: string;

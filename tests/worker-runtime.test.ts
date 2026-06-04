@@ -3760,6 +3760,7 @@ describe("worker runtime", () => {
           deliveryMode: "generic",
           outcomeState: "done",
           actionKind: "queue_ceo_review",
+          attentionDelivery: "reasserted",
           failureMessage: "reasserted handoff unavailable"
         })
       })

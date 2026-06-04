@@ -3240,6 +3240,64 @@ describe("harness board service", () => {
     );
   });
 
+  it("surfaces replay-safe reasserted post-outcome hook failures as bounded board activity", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "launch_copy"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_hook_failed_reasserted",
+      cardId: created.cardId,
+      eventKind: "execution_hook_failed",
+      payload: {
+        hookFamily: "post_outcome_action",
+        hookFamilyLabel: "Post-outcome action handoff",
+        deliveryMode: "generic",
+        deliveryModeLabel: "Generic private hook",
+        hookKind: "onHarnessPostOutcomeActionReasserted",
+        hookKindLabel: "Post-outcome action reasserted hook",
+        actionKind: "queue_ceo_review",
+        attentionDelivery: "reasserted",
+        outcomeState: "done",
+        failureMessage: "reasserted handoff unavailable"
+      },
+      createdAt: "2026-06-04T09:03:00.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label:
+            "A replay-safe reasserted private hook for the Queue Ceo Review post-outcome handoff failed after the worker outcome was already recorded."
+        })
+      ])
+    );
+  });
+
   it("surfaces initial execution-claim dispatch history as bounded board activity", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({

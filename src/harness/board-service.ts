@@ -8369,7 +8369,8 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
       deliveryMode: readOptionalString(event.payload.deliveryMode) ?? null,
       hookKindLabel: readOptionalString(event.payload.hookKindLabel) ?? null,
       outcomeState: payloadOutcomeState ?? null,
-      actionKind: payloadActionKind ?? null
+      actionKind: payloadActionKind ?? null,
+      attentionDelivery: readOptionalString(event.payload.attentionDelivery) ?? null
     }),
     execution_claimed: describeExecutionClaimActivity({
       claimKind: payloadClaimKind ?? null,
@@ -8499,6 +8500,7 @@ function describeExecutionHookFailureActivity(input: {
   hookKindLabel: string | null;
   outcomeState: string | null;
   actionKind: string | null;
+  attentionDelivery?: string | null;
 }): string {
   const deliveryLabel = input.deliveryMode === "specific" ? "specific private hook" : "private hook";
   switch (input.hookFamily) {
@@ -8513,6 +8515,11 @@ function describeExecutionHookFailureActivity(input: {
     case "attention_resolved":
       return "A private attention-resolved handoff failed after the worker outcome was already recorded.";
     case "post_outcome_action":
+      if (input.attentionDelivery === "reasserted") {
+        return input.actionKind
+          ? `A replay-safe reasserted ${deliveryLabel} for the ${humanizeLabel(input.actionKind)} post-outcome handoff failed after the worker outcome was already recorded.`
+          : `A replay-safe reasserted ${deliveryLabel} for a post-outcome handoff failed after the worker outcome was already recorded.`;
+      }
       return input.actionKind
         ? `A ${deliveryLabel} for the ${humanizeLabel(input.actionKind)} post-outcome handoff failed after the worker outcome was already recorded.`
         : `A ${deliveryLabel} for a post-outcome handoff failed after the worker outcome was already recorded.`;

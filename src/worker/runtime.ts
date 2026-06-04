@@ -908,6 +908,7 @@ export function createWorkerRuntime(options: {
                   hookKind: "onHarnessPostOutcomeAction",
                   hookKindLabel: "Post-outcome action hook",
                   actionKind: committedOutcome.postOutcomeAction.kind,
+                  attentionDelivery: "requested",
                   reason: "reason" in committedOutcome.postOutcomeAction ? committedOutcome.postOutcomeAction.reason : undefined,
                   outcomeState: committedOutcome.laneExecution.state,
                   error
@@ -935,6 +936,7 @@ export function createWorkerRuntime(options: {
                   hookKind: committedOutcome.postOutcomeAction.kind,
                   hookKindLabel: humanizeLabel(committedOutcome.postOutcomeAction.kind),
                   actionKind: committedOutcome.postOutcomeAction.kind,
+                  attentionDelivery: "requested",
                   reason: "reason" in committedOutcome.postOutcomeAction ? committedOutcome.postOutcomeAction.reason : undefined,
                   outcomeState: committedOutcome.laneExecution.state,
                   error
@@ -963,6 +965,7 @@ export function createWorkerRuntime(options: {
                   hookKind: "onHarnessPostOutcomeActionReasserted",
                   hookKindLabel: "Post-outcome action reasserted hook",
                   actionKind: committedOutcome.postOutcomeAction.kind,
+                  attentionDelivery: "reasserted",
                   reason: "reason" in committedOutcome.postOutcomeAction ? committedOutcome.postOutcomeAction.reason : undefined,
                   outcomeState: committedOutcome.laneExecution.state,
                   error
@@ -1383,6 +1386,7 @@ async function persistExecutionHookFailure(input: {
   claimKind?: string | undefined;
   outcomeState?: string | undefined;
   actionKind?: string | undefined;
+  attentionDelivery?: "requested" | "reasserted" | undefined;
   reason?: string | undefined;
   currentLaneState?: string | undefined;
   error: unknown;
@@ -1404,6 +1408,7 @@ async function persistExecutionHookFailure(input: {
         ...(input.claimKind ? { claimKind: input.claimKind } : {}),
         ...(input.outcomeState ? { outcomeState: input.outcomeState } : {}),
         ...(input.actionKind ? { actionKind: input.actionKind } : {}),
+        ...(input.attentionDelivery ? { attentionDelivery: input.attentionDelivery } : {}),
         ...(input.reason ? { reason: input.reason } : {}),
         ...(input.currentLaneState ? { currentLaneState: input.currentLaneState } : {}),
         failureMessage
