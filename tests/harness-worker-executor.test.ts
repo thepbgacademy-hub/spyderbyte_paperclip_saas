@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createInMemoryHarnessRepository } from "../src/harness/repository.js";
 import {
   buildHarnessWorkerDispatch,
+  buildHarnessWorkerDispatchResolution,
   buildHarnessWorkerExecutionEnvelope,
   commitHarnessWorkerLaneOutcome
 } from "../src/harness/worker-executor.js";
@@ -182,17 +183,20 @@ describe("harness worker executor", () => {
       })
     );
 
-    const dispatch = await buildHarnessWorkerDispatch({
+    const dispatchResolution = await buildHarnessWorkerDispatchResolution({
       repository,
       tenantId: "tenant-1",
       runId: run.id,
       workflowId: "wf_connect_first_workflow"
     });
+    const dispatch = dispatchResolution.dispatch;
     const envelope = await buildHarnessWorkerExecutionEnvelope({
       repository,
       tenantId: "tenant-1",
       dispatch,
-      requiredCapabilities: ["text_generation"]
+      requiredCapabilities: ["text_generation"],
+      ...(dispatchResolution.lane ? { laneContext: dispatchResolution.lane } : {}),
+      ...(dispatchResolution.executionClaim ? { executionClaimContext: dispatchResolution.executionClaim } : {})
     });
 
     expect(dispatch).toEqual({
@@ -220,7 +224,7 @@ describe("harness worker executor", () => {
         credentialLabel: "Primary OpenAI"
       },
       executionClaim: {
-        kind: expect.stringMatching(/^(approved_claim|existing_working_claim)$/),
+        kind: "approved_claim",
         token: expect.any(String),
         claimedAt: expect.any(String),
         previousClaimedAt: null
@@ -395,23 +399,28 @@ describe("harness worker executor", () => {
     await repository.insertCard(ceoCard);
     await repository.insertCard(cfoCard);
 
-    const dispatch = await buildHarnessWorkerDispatch({
+    const dispatchResolution = await buildHarnessWorkerDispatchResolution({
       repository,
       tenantId: "tenant-1",
       runId: run.id,
       workflowId: "wf_connect_first_workflow"
     });
+    const dispatch = dispatchResolution.dispatch;
     const firstEnvelope = await buildHarnessWorkerExecutionEnvelope({
       repository,
       tenantId: "tenant-1",
       dispatch,
-      requiredCapabilities: ["text_generation"]
+      requiredCapabilities: ["text_generation"],
+      ...(dispatchResolution.lane ? { laneContext: dispatchResolution.lane } : {}),
+      ...(dispatchResolution.executionClaim ? { executionClaimContext: dispatchResolution.executionClaim } : {})
     });
     const secondEnvelope = await buildHarnessWorkerExecutionEnvelope({
       repository,
       tenantId: "tenant-1",
       dispatch,
-      requiredCapabilities: ["text_generation"]
+      requiredCapabilities: ["text_generation"],
+      ...(dispatchResolution.lane ? { laneContext: dispatchResolution.lane } : {}),
+      ...(dispatchResolution.executionClaim ? { executionClaimContext: dispatchResolution.executionClaim } : {})
     });
 
     expect(firstEnvelope).not.toBeNull();
@@ -1076,50 +1085,52 @@ describe("harness worker executor", () => {
         state: "done",
         resultSummary: "Pricing review is complete and ready for board packaging."
       })
-    ).resolves.toEqual({
-      runId: run.id,
-      workflowId: "wf_connect_first_workflow",
-      status: "committed",
-      attentionTransition: {
-        kind: "none"
-      },
-      laneExecution: {
-        cardId: cfoCard.id,
-        state: "done",
-        runState: "active",
-        latestResultSummary: "Pricing review is complete and ready for board packaging."
-      },
-      postOutcomeAction: {
-        kind: "dispatch_next_lane",
-        runState: "active",
-        cardId: cmoCard.id,
-        persona: "cmo"
-      },
-      nextDispatch: {
+    ).resolves.toEqual(
+      expect.objectContaining({
         runId: run.id,
         workflowId: "wf_connect_first_workflow",
-        status: "running",
-        dispatchHandoff: {
-          kind: "follow_on_dispatch",
-          kindLabel: "Follow-on dispatch",
-          executionStage: "post_outcome_follow_on",
-          executionStageLabel: "Post-outcome follow-on",
-          reactivatedRun: false,
-          triggeredByCardId: cfoCard.id,
-          triggeredByPersona: "cfo",
-          triggeredByOutcomeState: "done",
-          triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
+        status: "committed",
+        attentionTransition: {
+          kind: "none"
         },
         laneExecution: {
+          cardId: cfoCard.id,
+          state: "done",
+          runState: "active",
+          latestResultSummary: "Pricing review is complete and ready for board packaging."
+        },
+        postOutcomeAction: {
+          kind: "dispatch_next_lane",
+          runState: "active",
           cardId: cmoCard.id,
-          persona: "cmo",
-          title: "Prepare launch messaging",
-          deliverableType: "marketing_plan",
-          state: "working",
-          resumeFocus: "CMO should continue this active marketing plan lane: Prepare launch messaging."
+          persona: "cmo"
+        },
+        nextDispatch: {
+          runId: run.id,
+          workflowId: "wf_connect_first_workflow",
+          status: "running",
+          dispatchHandoff: {
+            kind: "follow_on_dispatch",
+            kindLabel: "Follow-on dispatch",
+            executionStage: "post_outcome_follow_on",
+            executionStageLabel: "Post-outcome follow-on",
+            reactivatedRun: false,
+            triggeredByCardId: cfoCard.id,
+            triggeredByPersona: "cfo",
+            triggeredByOutcomeState: "done",
+            triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
+          },
+          laneExecution: {
+            cardId: cmoCard.id,
+            persona: "cmo",
+            title: "Prepare launch messaging",
+            deliverableType: "marketing_plan",
+            state: "working",
+            resumeFocus: "CMO should continue this active marketing plan lane: Prepare launch messaging."
+          }
         }
-      }
-    });
+      })
+    );
 
     await expect(repository.getCard(cfoCard.id)).resolves.toEqual(
       expect.objectContaining({
@@ -1322,6 +1333,49 @@ describe("harness worker executor", () => {
         })
       ])
     );
+  });
+
+  it("rejects a done worker outcome without a bounded result summary", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Finalize pricing review",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "working";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+
+    await expect(
+      commitHarnessWorkerLaneOutcome({
+        repository,
+        tenantId: "tenant-1",
+        runId: run.id,
+        workflowId: "wf_connect_first_workflow",
+        cardId: cfoCard.id,
+        state: "done"
+      })
+    ).rejects.toThrow("Worker lane result summaries are required for done outcomes");
   });
 
   it("reports new attention requested in worker outcome metadata", async () => {
@@ -2007,17 +2061,20 @@ describe("harness worker executor", () => {
     await repository.insertCard(ceoCard);
     await repository.insertCard(cfoCard);
 
-    const dispatch = await buildHarnessWorkerDispatch({
+    const dispatchResolution = await buildHarnessWorkerDispatchResolution({
       repository,
       tenantId: "tenant-1",
       runId: run.id,
       workflowId: "wf_connect_first_workflow"
     });
+    const dispatch = dispatchResolution.dispatch;
     const envelope = await buildHarnessWorkerExecutionEnvelope({
       repository,
       tenantId: "tenant-1",
       dispatch,
-      requiredCapabilities: ["text_generation"]
+      requiredCapabilities: ["text_generation"],
+      ...(dispatchResolution.lane ? { laneContext: dispatchResolution.lane } : {}),
+      ...(dispatchResolution.executionClaim ? { executionClaimContext: dispatchResolution.executionClaim } : {})
     });
     expect(envelope).not.toBeNull();
     if (!envelope) {

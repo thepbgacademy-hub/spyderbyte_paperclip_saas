@@ -141,6 +141,10 @@ export type HarnessWorkerLaneOutcome = {
   };
   postOutcomeAction?: HarnessPostOutcomeAction;
   nextDispatch?: HarnessWorkerDispatch;
+  nextExecutionStartContext?: {
+    lane: HarnessCardRecord;
+    executionClaim: HarnessWorkerExecutionClaimContext;
+  };
 };
 
 type HarnessWorkerDispatchResolution = {
@@ -434,6 +438,9 @@ export async function commitHarnessWorkerLaneOutcome(input: {
     if (trimmedSummary && input.state !== "done") {
       throw new Error("Worker lane result summaries can only be recorded for done outcomes");
     }
+    if (input.state === "done" && !trimmedSummary) {
+      throw new Error("Worker lane result summaries are required for done outcomes");
+    }
     if (trimmedResumeSummary && input.state === "done") {
       throw new Error("Worker lane resume summaries cannot be recorded for done outcomes");
     }
@@ -501,10 +508,10 @@ export async function commitHarnessWorkerLaneOutcome(input: {
       run
     });
     const nextRun = reconciledRun ?? run;
-    const nextDispatch =
+    const nextDispatchResolution =
       NON_EXECUTABLE_RUN_STATES.has(nextRun.state)
         ? null
-        : await buildHarnessWorkerDispatch({
+        : await buildHarnessWorkerDispatchResolution({
             repository,
             tenantId: input.tenantId,
             runId: run.id,
@@ -523,6 +530,7 @@ export async function commitHarnessWorkerLaneOutcome(input: {
                 : {})
             }
           });
+    const nextDispatch = nextDispatchResolution?.dispatch ?? null;
     const [latestRun, cardsAfterOutcome, proposalsAfterOutcome, eventsAfterOutcome, continuityAfterOutcome] = await Promise.all([
       repository.getRun(run.id),
       repository.listCardsForRun(run.id),
@@ -588,6 +596,13 @@ export async function commitHarnessWorkerLaneOutcome(input: {
         ...(nextDispatch ? { nextDispatch } : {})
       })
     );
+    const nextExecutionStartContext =
+      nextDispatchResolution?.lane && nextDispatchResolution.executionClaim
+        ? {
+            lane: nextDispatchResolution.lane,
+            executionClaim: nextDispatchResolution.executionClaim
+          }
+        : null;
     return {
       runId: run.id,
       workflowId: run.workflowId,
@@ -601,7 +616,8 @@ export async function commitHarnessWorkerLaneOutcome(input: {
         ...(continuity.latestResultSummary ? { latestResultSummary: continuity.latestResultSummary } : {})
       },
       ...(postOutcomeAction ? { postOutcomeAction } : {}),
-      ...(nextDispatch?.laneExecution ? { nextDispatch } : {})
+      ...(nextDispatch?.laneExecution ? { nextDispatch } : {}),
+      ...(nextExecutionStartContext ? { nextExecutionStartContext } : {})
     };
   });
 }
@@ -633,6 +649,9 @@ export async function buildHarnessWorkerExecutionEnvelope(input: {
   if (!lane.executionClaimToken || !lane.executionClaimedAt) {
     throw new Error(`Missing harness execution claim for worker execution envelope: ${lane.id}`);
   }
+  if (!input.executionClaimContext) {
+    throw new Error(`Missing harness execution claim context for worker execution envelope: ${lane.id}`);
+  }
 
   return {
     tenantId: input.tenantId,
@@ -641,10 +660,10 @@ export async function buildHarnessWorkerExecutionEnvelope(input: {
     requiredCapabilities: [...input.requiredCapabilities],
     runtimeContext: run.runtimeContext,
     executionClaim: {
-      kind: input.executionClaimContext?.kind ?? (lane.executionClaimedAt === lane.createdAt ? "approved_claim" : "existing_working_claim"),
+      kind: input.executionClaimContext.kind,
       token: lane.executionClaimToken,
       claimedAt: lane.executionClaimedAt,
-      previousClaimedAt: input.executionClaimContext?.previousClaimedAt ?? null
+      previousClaimedAt: input.executionClaimContext.previousClaimedAt ?? null
     },
     ...(continuity
       ? {

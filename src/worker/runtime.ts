@@ -792,13 +792,29 @@ export function createWorkerRuntime(options: {
             }
           }
           if (committedOutcome.nextDispatch?.laneExecution) {
-            const executionEnvelope = await buildHarnessWorkerExecutionEnvelope({
-              repository: harnessRepository,
-              tenantId: input.tenantId,
-              dispatch: committedOutcome.nextDispatch,
-              requiredCapabilities: harnessWorkflowRegistry.getDefinition(committedOutcome.nextDispatch.workflowId)
-                .requiredCapabilities
-            });
+            let executionEnvelope: HarnessWorkerExecutionEnvelope | null = null;
+            try {
+              executionEnvelope = await buildHarnessWorkerExecutionEnvelope({
+                repository: harnessRepository,
+                tenantId: input.tenantId,
+                dispatch: committedOutcome.nextDispatch,
+                requiredCapabilities: harnessWorkflowRegistry.getDefinition(committedOutcome.nextDispatch.workflowId)
+                  .requiredCapabilities,
+                ...(committedOutcome.nextExecutionStartContext?.lane
+                  ? { laneContext: committedOutcome.nextExecutionStartContext.lane }
+                  : {}),
+                ...(committedOutcome.nextExecutionStartContext?.executionClaim
+                  ? { executionClaimContext: committedOutcome.nextExecutionStartContext.executionClaim }
+                  : {})
+              });
+            } catch (error) {
+              console.warn("Harness follow-on execution envelope reconstruction failed after durable dispatch", {
+                runId: committedOutcome.runId,
+                workflowId: committedOutcome.workflowId,
+                cardId: committedOutcome.nextDispatch.laneExecution.cardId,
+                error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+              });
+            }
             if (executionEnvelope) {
               try {
                 await options.onHarnessLaneReady?.(executionEnvelope);
@@ -952,6 +968,7 @@ async function runSpecificIgnoredOutcomeHandler(input: {
 
 async function runSpecificExecutionClaimHandler(input: {
   options: {
+    workerInstanceId?: string;
     onHarnessApprovedExecutionClaim?: (input: {
       tenantId: string;
       runId: string;
@@ -984,6 +1001,11 @@ async function runSpecificExecutionClaimHandler(input: {
 }) {
   switch (input.handoff.executionClaim.kind) {
     case "approved_claim":
+      emitSpecificExecutionClaimEvent(
+        "wealth_factory_harness_execution_claim_approved",
+        input.options.workerInstanceId,
+        input.handoff
+      );
       await input.options.onHarnessApprovedExecutionClaim?.(input.handoff as {
         tenantId: string;
         runId: string;
@@ -993,6 +1015,11 @@ async function runSpecificExecutionClaimHandler(input: {
       });
       return;
     case "working_claim_refresh":
+      emitSpecificExecutionClaimEvent(
+        "wealth_factory_harness_execution_claim_recovered",
+        input.options.workerInstanceId,
+        input.handoff
+      );
       await input.options.onHarnessRecoveredExecutionClaim?.(input.handoff as {
         tenantId: string;
         runId: string;
@@ -1002,6 +1029,11 @@ async function runSpecificExecutionClaimHandler(input: {
       });
       return;
     case "existing_working_claim":
+      emitSpecificExecutionClaimEvent(
+        "wealth_factory_harness_execution_claim_existing_working",
+        input.options.workerInstanceId,
+        input.handoff
+      );
       await input.options.onHarnessExistingWorkingExecutionClaim?.(input.handoff as {
         tenantId: string;
         runId: string;
@@ -1015,6 +1047,7 @@ async function runSpecificExecutionClaimHandler(input: {
 
 async function runSpecificExecutionDispatchHandler(input: {
   options: {
+    workerInstanceId?: string;
     onHarnessInitialLaneStart?: (input: {
       tenantId: string;
       runId: string;
@@ -1046,6 +1079,11 @@ async function runSpecificExecutionDispatchHandler(input: {
   };
 }) {
   if (input.handoff.dispatchHandoff.kind === "initial_claim") {
+    emitSpecificExecutionDispatchEvent(
+      "wealth_factory_harness_execution_dispatch_initial",
+      input.options.workerInstanceId,
+      input.handoff
+    );
     await input.options.onHarnessInitialLaneStart?.(input.handoff as {
       tenantId: string;
       runId: string;
@@ -1056,6 +1094,11 @@ async function runSpecificExecutionDispatchHandler(input: {
     return;
   }
   if (input.handoff.dispatchHandoff.reactivatedRun) {
+    emitSpecificExecutionDispatchEvent(
+      "wealth_factory_harness_execution_dispatch_reactivated",
+      input.options.workerInstanceId,
+      input.handoff
+    );
     await input.options.onHarnessReactivatedFollowOnDispatch?.(input.handoff as {
       tenantId: string;
       runId: string;
@@ -1064,6 +1107,11 @@ async function runSpecificExecutionDispatchHandler(input: {
       laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
     });
   }
+  emitSpecificExecutionDispatchEvent(
+    "wealth_factory_harness_execution_dispatch_follow_on",
+    input.options.workerInstanceId,
+    input.handoff
+  );
   await input.options.onHarnessFollowOnDispatch?.(input.handoff as {
     tenantId: string;
     runId: string;
@@ -1085,6 +1133,54 @@ function emitSpecificIgnoredOutcomeEvent(
     workflowId: string;
     cardId: string;
     ignored: NonNullable<HarnessWorkerLaneOutcome["ignored"]>;
+  }
+) {
+  process.stdout.write(
+    `${JSON.stringify({
+      type,
+      workerInstanceId: workerInstanceId ?? "worker",
+      observedAt: new Date().toISOString(),
+      ...payload
+    })}\n`
+  );
+}
+
+function emitSpecificExecutionClaimEvent(
+  type:
+    | "wealth_factory_harness_execution_claim_approved"
+    | "wealth_factory_harness_execution_claim_recovered"
+    | "wealth_factory_harness_execution_claim_existing_working",
+  workerInstanceId: string | undefined,
+  payload: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    executionClaim: HarnessWorkerExecutionClaimContext;
+    laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+  }
+) {
+  process.stdout.write(
+    `${JSON.stringify({
+      type,
+      workerInstanceId: workerInstanceId ?? "worker",
+      observedAt: new Date().toISOString(),
+      ...payload
+    })}\n`
+  );
+}
+
+function emitSpecificExecutionDispatchEvent(
+  type:
+    | "wealth_factory_harness_execution_dispatch_initial"
+    | "wealth_factory_harness_execution_dispatch_follow_on"
+    | "wealth_factory_harness_execution_dispatch_reactivated",
+  workerInstanceId: string | undefined,
+  payload: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    dispatchHandoff: HarnessWorkerDispatchHandoff;
+    laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
   }
 ) {
   process.stdout.write(
@@ -1436,6 +1532,14 @@ async function processHarnessWorkflowJob(options: {
         }
       }
       options.onDispatch?.(dispatch);
+      await options.recordStatus?.({
+        tenantId: options.payload.tenantId,
+        runId: dispatch.runId,
+        workflowId: dispatch.workflowId,
+        status: dispatch.status
+      });
+    }
+    if (!dispatch.laneExecution) {
       await options.recordStatus?.({
         tenantId: options.payload.tenantId,
         runId: dispatch.runId,

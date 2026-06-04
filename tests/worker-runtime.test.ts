@@ -532,7 +532,13 @@ describe("worker runtime", () => {
       expect.stringContaining("\"type\":\"wealth_factory_harness_execution_claimed\"")
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_claim_approved\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_execution_dispatched\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_dispatch_initial\"")
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"dispatchHandoff\":{\"kind\":\"initial_claim\"")
@@ -643,7 +649,12 @@ describe("worker runtime", () => {
     expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
     );
-    expect(acidRepository.transitionWorkflowRunStatus).not.toHaveBeenCalled();
+    expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      from: ["queued", "running"],
+      to: "queued"
+    });
     expect(harnessRepository.insertEvent).not.toHaveBeenCalled();
     expect(harnessRepository.upsertCardContinuity).not.toHaveBeenCalled();
 
@@ -706,7 +717,12 @@ describe("worker runtime", () => {
     expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
     );
-    expect(acidRepository.transitionWorkflowRunStatus).not.toHaveBeenCalled();
+    expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      from: ["queued", "running"],
+      to: "queued"
+    });
 
     await runtime.close();
   });
@@ -746,7 +762,12 @@ describe("worker runtime", () => {
     expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
     );
-    expect(acidRepository.transitionWorkflowRunStatus).not.toHaveBeenCalled();
+    expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      from: ["queued", "running"],
+      to: "queued"
+    });
     expect(onHarnessLaneReady).not.toHaveBeenCalled();
 
     await runtime.close();
@@ -1242,6 +1263,8 @@ describe("worker runtime", () => {
       title: "Prepare launch messaging",
       deliverableType: "marketing_plan",
       state: "working",
+      executionClaimToken: "claim-cmo-active",
+      executionClaimedAt: "2026-05-21T10:07:30.000Z",
       createdAt: "2026-05-21T10:02:00.000Z",
       updatedAt: "2026-05-21T10:07:00.000Z"
     });
@@ -1257,55 +1280,57 @@ describe("worker runtime", () => {
         state: "done",
         resultSummary: "Pricing review is complete and ready for board packaging."
       })
-    ).resolves.toEqual({
-      runId: "run-1",
-      workflowId: "wf_connect_first_workflow",
-      status: "committed",
-      attentionTransition: {
-        kind: "resolved",
-        resolvedAction: {
-          kind: "queue_ceo_review",
-          runState: "assembling",
-          reason: "final_assembly"
-        }
-      },
-      laneExecution: {
-        cardId: "card_cfo",
-        state: "done",
-        runState: "active",
-        latestResultSummary: "Pricing review is complete and ready for board packaging."
-      },
-      postOutcomeAction: {
-        kind: "dispatch_next_lane",
-        runState: "active",
-        cardId: "card_cmo",
-        persona: "cmo"
-      },
-      nextDispatch: {
+    ).resolves.toEqual(
+      expect.objectContaining({
         runId: "run-1",
         workflowId: "wf_connect_first_workflow",
-        status: "running",
-        dispatchHandoff: {
-          kind: "follow_on_dispatch",
-          kindLabel: "Follow-on dispatch",
-          executionStage: "post_outcome_follow_on",
-          executionStageLabel: "Post-outcome follow-on",
-          reactivatedRun: false,
-          triggeredByCardId: "card_cfo",
-          triggeredByPersona: "cfo",
-          triggeredByOutcomeState: "done",
-          triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
+        status: "committed",
+        attentionTransition: {
+          kind: "resolved",
+          resolvedAction: {
+            kind: "queue_ceo_review",
+            runState: "assembling",
+            reason: "final_assembly"
+          }
         },
         laneExecution: {
+          cardId: "card_cfo",
+          state: "done",
+          runState: "active",
+          latestResultSummary: "Pricing review is complete and ready for board packaging."
+        },
+        postOutcomeAction: {
+          kind: "dispatch_next_lane",
+          runState: "active",
           cardId: "card_cmo",
-          persona: "cmo",
-          title: "Prepare launch messaging",
-          deliverableType: "marketing_plan",
-          state: "working",
-          resumeFocus: "CMO should continue this active marketing plan lane: Prepare launch messaging."
+          persona: "cmo"
+        },
+        nextDispatch: {
+          runId: "run-1",
+          workflowId: "wf_connect_first_workflow",
+          status: "running",
+          dispatchHandoff: {
+            kind: "follow_on_dispatch",
+            kindLabel: "Follow-on dispatch",
+            executionStage: "post_outcome_follow_on",
+            executionStageLabel: "Post-outcome follow-on",
+            reactivatedRun: false,
+            triggeredByCardId: "card_cfo",
+            triggeredByPersona: "cfo",
+            triggeredByOutcomeState: "done",
+            triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
+          },
+          laneExecution: {
+            cardId: "card_cmo",
+            persona: "cmo",
+            title: "Prepare launch messaging",
+            deliverableType: "marketing_plan",
+            state: "working",
+            resumeFocus: "CMO should continue this active marketing plan lane: Prepare launch messaging."
+          }
         }
-      }
-    });
+      })
+    );
 
     expect(harnessRepository.claimCardForExecution).toHaveBeenCalledWith({
       cardId: "card_cmo",
@@ -1453,7 +1478,7 @@ describe("worker runtime", () => {
           credentialLabel: "Primary OpenAI"
         },
         executionClaim: {
-          kind: "existing_working_claim",
+          kind: "approved_claim",
           token: "claim-cmo-active",
           claimedAt: "2026-05-21T10:07:30.000Z",
           previousClaimedAt: null
@@ -1507,7 +1532,7 @@ describe("worker runtime", () => {
     const onHarnessLaneReady = vi.fn();
     const onHarnessAttentionResolved = vi.fn();
     const onHarnessExecutionClaimed = vi.fn();
-    const onHarnessExistingWorkingExecutionClaim = vi.fn();
+    const onHarnessApprovedExecutionClaim = vi.fn();
     const onHarnessExecutionDispatched = vi.fn();
     const onHarnessFollowOnDispatch = vi.fn();
     const runtime = createWorkerRuntime({
@@ -1519,7 +1544,7 @@ describe("worker runtime", () => {
       onHarnessLaneReady,
       onHarnessAttentionResolved,
       onHarnessExecutionClaimed,
-      onHarnessExistingWorkingExecutionClaim,
+      onHarnessApprovedExecutionClaim,
       onHarnessExecutionDispatched,
       onHarnessFollowOnDispatch
     });
@@ -1579,6 +1604,8 @@ describe("worker runtime", () => {
       title: "Prepare launch messaging",
       deliverableType: "marketing_plan",
       state: "working",
+      executionClaimToken: "claim-cmo-active",
+      executionClaimedAt: "2026-05-21T10:07:30.000Z",
       createdAt: "2026-05-21T10:02:00.000Z",
       updatedAt: "2026-05-21T10:07:00.000Z"
     });
@@ -1637,7 +1664,7 @@ describe("worker runtime", () => {
           triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
         },
         executionClaim: {
-          kind: "existing_working_claim",
+          kind: "approved_claim",
           token: "claim-cmo-active",
           claimedAt: "2026-05-21T10:07:30.000Z",
           previousClaimedAt: null
@@ -1659,7 +1686,7 @@ describe("worker runtime", () => {
       runId: "run-1",
       workflowId: "wf_connect_first_workflow",
       executionClaim: {
-        kind: "existing_working_claim",
+        kind: "approved_claim",
         claimedAt: "2026-05-21T10:07:30.000Z",
         previousClaimedAt: null
       },
@@ -1668,12 +1695,12 @@ describe("worker runtime", () => {
         persona: "cmo"
       })
     });
-    expect(onHarnessExistingWorkingExecutionClaim).toHaveBeenCalledWith({
+    expect(onHarnessApprovedExecutionClaim).toHaveBeenCalledWith({
       tenantId: "tenant-1",
       runId: "run-1",
       workflowId: "wf_connect_first_workflow",
       executionClaim: {
-        kind: "existing_working_claim",
+        kind: "approved_claim",
         claimedAt: "2026-05-21T10:07:30.000Z",
         previousClaimedAt: null
       },
@@ -1726,7 +1753,13 @@ describe("worker runtime", () => {
       expect.stringContaining("\"type\":\"wealth_factory_harness_execution_claimed\"")
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_claim_approved\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_execution_dispatched\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_dispatch_follow_on\"")
     );
 
     await runtime.close();
@@ -1833,6 +1866,9 @@ describe("worker runtime", () => {
         }
       })
     );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_claim_recovered\"")
+    );
 
     await runtime.close();
   });
@@ -1891,6 +1927,128 @@ describe("worker runtime", () => {
     expect(onHarnessInitialLaneStart).toHaveBeenCalledTimes(1);
 
     warn.mockRestore();
+    await runtime.close();
+  });
+
+  it("keeps a durable follow-on dispatch successful when lane-envelope reconstruction would otherwise refetch stale lane state", async () => {
+    const onHarnessLaneReady = vi.fn();
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-follow-on-lane-context",
+      onHarnessLaneReady
+    });
+
+    const harnessRepository = harnessRepositoryRef.current;
+    const originalGetCard = harnessRepository.getCard;
+    harnessRepository.getCard = vi.fn().mockImplementation(async (cardId: string) => {
+      if (cardId === "card_cmo") {
+        throw new Error("stale follow-on lane reread should not happen");
+      }
+      return originalGetCard(cardId);
+    });
+    harnessRepository.listCardsForRun.mockResolvedValue([
+      {
+        id: "card_ceo",
+        runId: "run-1",
+        parentCardId: null,
+        persona: "ceo",
+        title: "Plan run",
+        deliverableType: "plan",
+        state: "planning",
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      },
+      {
+        id: "card_cfo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Finalize pricing review",
+        deliverableType: "pricing_review",
+        state: "done",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:06:00.000Z"
+      },
+      {
+        id: "card_cmo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cmo",
+        title: "Prepare launch messaging",
+        deliverableType: "marketing_plan",
+        state: "approved",
+        createdAt: "2026-05-21T10:02:00.000Z",
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      }
+    ]);
+    harnessRepository.listCardContinuityForRun.mockResolvedValue([
+      {
+        cardId: "card_cmo",
+        runId: "run-1",
+        continuitySource: "state_transition",
+        continuitySummary: "CMO should continue this active marketing plan lane: Prepare launch messaging.",
+        latestResultSummary: null,
+        absorbedWorkItems: [],
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      }
+    ]);
+    harnessRepository.listEventsForRun.mockResolvedValueOnce([]);
+    harnessRepository.claimCardForExecution.mockResolvedValueOnce({
+      id: "card_cmo",
+      runId: "run-1",
+      parentCardId: "card_ceo",
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "marketing_plan",
+      state: "working",
+      executionClaimToken: "claim-cmo-active",
+      executionClaimedAt: "2026-05-21T10:07:30.000Z",
+      createdAt: "2026-05-21T10:02:00.000Z",
+      updatedAt: "2026-05-21T10:07:00.000Z"
+    });
+
+    stdoutWrite.mockClear();
+    await expect(
+      runtime.commitHarnessLaneOutcome({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-1",
+        state: "done",
+        resultSummary: "Pricing review is complete and the messaging lane can begin."
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        status: "committed",
+        nextDispatch: expect.objectContaining({
+          laneExecution: expect.objectContaining({
+            cardId: "card_cmo"
+          })
+        })
+      })
+    );
+    expect(onHarnessLaneReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        executionClaim: {
+          kind: "approved_claim",
+          token: "claim-cmo-active",
+          claimedAt: "2026-05-21T10:07:30.000Z",
+          previousClaimedAt: null
+        },
+        laneExecution: expect.objectContaining({
+          cardId: "card_cmo",
+          persona: "cmo"
+        })
+      })
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_dispatch_follow_on\"")
+    );
+
     await runtime.close();
   });
 
@@ -3153,6 +3311,8 @@ describe("worker runtime", () => {
       title: "Prepare launch messaging",
       deliverableType: "marketing_plan",
       state: "working",
+      executionClaimToken: "claim-cmo-active",
+      executionClaimedAt: "2026-05-21T10:07:30.000Z",
       createdAt: "2026-05-21T10:02:00.000Z",
       updatedAt: "2026-05-21T10:07:00.000Z"
     });

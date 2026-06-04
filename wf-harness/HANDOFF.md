@@ -58,6 +58,9 @@ The first harness implementation slice is now built and verified:
 - private writer failures must preserve bounded partial-receipt truth: if a governance-history or package-bundle writer fails after some files land, the runtime seam should persist only counts and attempted paths needed for recovery, never note bodies or export-root leakage
 - closed-board package memory is now a persisted seam, not a live rebuild: once `completeRun` stores a `completionPackage` snapshot for a run, completed-board reads and `package_bundle_export` must hydrate from that snapshot instead of re-deriving from later mutable proposal/decision state
 - closed-board governance history is now a persisted seam too: once `completeRun` stores the bounded `recentDecisions` and `followThroughItems` snapshot for a run, completed-board reads and `governance_history_export` must hydrate from that snapshot instead of re-deriving from later mutable decision state
+- private worker execution-start telemetry should stay specific and consistent: approved claims, recovered claims, existing-working claims, initial lane starts, follow-on dispatches, and reactivated follow-on dispatches should each have their own private runtime handoff instead of forcing downstream hooks to infer start posture from one generic lane-ready event
+- follow-on execution starts must reuse the durable claimed-lane truth that outcome commit already produced: if a next lane has been claimed successfully, later private handoff building should not refetch stale lane state and accidentally pair a recovered-claim label with an older claim token
+- worker `done` outcomes must require a bounded `resultSummary`: the private outcome contract and the runtime/service seam should agree that terminal success without a tenant-safe summary is invalid rather than silently committing a truth gap
 
 ## External References
 
