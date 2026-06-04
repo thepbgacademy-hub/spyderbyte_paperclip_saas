@@ -332,13 +332,21 @@ describe("worker runtime", () => {
   it("routes harness-enabled workflows through the bounded lane-dispatch path with continuity resume focus", async () => {
     const { createPaperclipClient } = await import("../src/paperclip/client.js");
     const onHarnessLaneReady = vi.fn();
+    const onHarnessExecutionClaimed = vi.fn();
+    const onHarnessApprovedExecutionClaim = vi.fn();
+    const onHarnessExecutionDispatched = vi.fn();
+    const onHarnessInitialLaneStart = vi.fn();
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
         WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
       }),
       workerInstanceId: "worker-test-harness",
-      onHarnessLaneReady
+      onHarnessLaneReady,
+      onHarnessExecutionClaimed,
+      onHarnessApprovedExecutionClaim,
+      onHarnessExecutionDispatched,
+      onHarnessInitialLaneStart
     });
 
     await expect(
@@ -459,8 +467,72 @@ describe("worker runtime", () => {
         }
       })
     );
+    expect(onHarnessExecutionClaimed).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      executionClaim: {
+        kind: "approved_claim",
+        claimedAt: "2026-05-21T10:04:00.000Z",
+        previousClaimedAt: null
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cfo",
+        persona: "cfo"
+      })
+    });
+    expect(onHarnessApprovedExecutionClaim).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      executionClaim: {
+        kind: "approved_claim",
+        claimedAt: "2026-05-21T10:04:00.000Z",
+        previousClaimedAt: null
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cfo",
+        persona: "cfo"
+      })
+    });
+    expect(onHarnessExecutionDispatched).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      dispatchHandoff: {
+        kind: "initial_claim",
+        kindLabel: "Initial lane claim",
+        executionStage: "initial_lane_start",
+        executionStageLabel: "Initial lane start"
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cfo",
+        persona: "cfo"
+      })
+    });
+    expect(onHarnessInitialLaneStart).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      dispatchHandoff: {
+        kind: "initial_claim",
+        kindLabel: "Initial lane claim",
+        executionStage: "initial_lane_start",
+        executionStageLabel: "Initial lane start"
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cfo",
+        persona: "cfo"
+      })
+    });
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_claimed\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_dispatched\"")
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"dispatchHandoff\":{\"kind\":\"initial_claim\"")
@@ -471,11 +543,17 @@ describe("worker runtime", () => {
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"resumeFocus\":\"CFO should continue this active pricing review lane: Pressure-test the pricing lane.\"")
     );
+    const publicLaneDispatch = stdoutWrite.mock.calls
+      .map(([payload]) => payload)
+      .find((payload) => typeof payload === "string" && payload.includes("\"type\":\"wealth_factory_harness_lane_dispatch\""));
+    expect(publicLaneDispatch).toBeDefined();
+    expect(publicLaneDispatch).not.toContain("\"absorbedWorkItems\"");
+    expect(publicLaneDispatch).not.toContain("\"continuityContext\"");
+    expect(publicLaneDispatch).not.toContain("\"outcomeContract\"");
+    expect(publicLaneDispatch).not.toContain("\"requiredCapabilities\"");
+    expect(publicLaneDispatch).not.toContain("\"runtimeContext\"");
     expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"requiredCapabilities\""));
     expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"runtimeContext\""));
-    expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"absorbedWorkItems\""));
-    expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"continuityContext\""));
-    expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"outcomeContract\""));
 
     await runtime.close();
   });
@@ -1428,6 +1506,10 @@ describe("worker runtime", () => {
   it("does not emit an attention-resolved handoff when a committed follow-on dispatch has no attention transition", async () => {
     const onHarnessLaneReady = vi.fn();
     const onHarnessAttentionResolved = vi.fn();
+    const onHarnessExecutionClaimed = vi.fn();
+    const onHarnessExistingWorkingExecutionClaim = vi.fn();
+    const onHarnessExecutionDispatched = vi.fn();
+    const onHarnessFollowOnDispatch = vi.fn();
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
@@ -1435,7 +1517,11 @@ describe("worker runtime", () => {
       }),
       workerInstanceId: "worker-test-harness-follow-on-no-attention",
       onHarnessLaneReady,
-      onHarnessAttentionResolved
+      onHarnessAttentionResolved,
+      onHarnessExecutionClaimed,
+      onHarnessExistingWorkingExecutionClaim,
+      onHarnessExecutionDispatched,
+      onHarnessFollowOnDispatch
     });
 
     const harnessRepository = harnessRepositoryRef.current;
@@ -1568,7 +1654,243 @@ describe("worker runtime", () => {
         })
       })
     );
+    expect(onHarnessExecutionClaimed).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      executionClaim: {
+        kind: "existing_working_claim",
+        claimedAt: "2026-05-21T10:07:30.000Z",
+        previousClaimedAt: null
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cmo",
+        persona: "cmo"
+      })
+    });
+    expect(onHarnessExistingWorkingExecutionClaim).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      executionClaim: {
+        kind: "existing_working_claim",
+        claimedAt: "2026-05-21T10:07:30.000Z",
+        previousClaimedAt: null
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cmo",
+        persona: "cmo"
+      })
+    });
+    expect(onHarnessExecutionDispatched).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      dispatchHandoff: {
+        kind: "follow_on_dispatch",
+        kindLabel: "Follow-on dispatch",
+        executionStage: "post_outcome_follow_on",
+        executionStageLabel: "Post-outcome follow-on",
+        reactivatedRun: false,
+        triggeredByCardId: "card_cfo",
+        triggeredByPersona: "cfo",
+        triggeredByOutcomeState: "done",
+        triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cmo",
+        persona: "cmo"
+      })
+    });
+    expect(onHarnessFollowOnDispatch).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      dispatchHandoff: {
+        kind: "follow_on_dispatch",
+        kindLabel: "Follow-on dispatch",
+        executionStage: "post_outcome_follow_on",
+        executionStageLabel: "Post-outcome follow-on",
+        reactivatedRun: false,
+        triggeredByCardId: "card_cfo",
+        triggeredByPersona: "cfo",
+        triggeredByOutcomeState: "done",
+        triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cmo",
+        persona: "cmo"
+      })
+    });
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_claimed\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_dispatched\"")
+    );
 
+    await runtime.close();
+  });
+
+  it("emits a recovered execution-claim handoff when a working lane needs claim refresh", async () => {
+    const onHarnessLaneReady = vi.fn();
+    const onHarnessExecutionClaimed = vi.fn();
+    const onHarnessRecoveredExecutionClaim = vi.fn();
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-claim-refresh",
+      onHarnessLaneReady,
+      onHarnessExecutionClaimed,
+      onHarnessRecoveredExecutionClaim
+    });
+
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.listCardsForRun.mockResolvedValueOnce([
+      {
+        id: "card_ceo",
+        runId: "run-1",
+        parentCardId: null,
+        persona: "ceo",
+        title: "Plan run",
+        deliverableType: "plan",
+        state: "planning",
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      },
+      {
+        id: "card_cfo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Pressure-test the pricing lane",
+        deliverableType: "pricing_review",
+        state: "working",
+        executionClaimToken: null,
+        executionClaimedAt: null,
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:04:00.000Z"
+      }
+    ]);
+
+    stdoutWrite.mockClear();
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+
+    expect(harnessRepository.refreshCardExecutionClaim).toHaveBeenCalledWith({
+      cardId: "card_cfo",
+      expectedState: "working"
+    });
+    expect(onHarnessExecutionClaimed).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      executionClaim: {
+        kind: "working_claim_refresh",
+        claimedAt: "2026-05-21T10:04:30.000Z",
+        previousClaimedAt: null
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cfo",
+        persona: "cfo"
+      })
+    });
+    expect(onHarnessRecoveredExecutionClaim).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      executionClaim: {
+        kind: "working_claim_refresh",
+        claimedAt: "2026-05-21T10:04:30.000Z",
+        previousClaimedAt: null
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cfo",
+        persona: "cfo"
+      })
+    });
+    expect(onHarnessLaneReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        executionClaim: {
+          kind: "working_claim_refresh",
+          token: "claim-cfo-refreshed",
+          claimedAt: "2026-05-21T10:04:30.000Z",
+          previousClaimedAt: null
+        }
+      })
+    );
+
+    await runtime.close();
+  });
+
+  it("keeps durable lane start behavior intact when private execution-start hooks reject", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onHarnessApprovedExecutionClaim = vi.fn();
+    const onHarnessInitialLaneStart = vi.fn();
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-start-hook-reject",
+      onHarnessLaneReady: vi.fn(),
+      onHarnessExecutionClaimed: vi.fn().mockRejectedValue(new Error("claim hook unavailable")),
+      onHarnessExecutionDispatched: vi.fn().mockRejectedValue(new Error("dispatch hook unavailable")),
+      onHarnessApprovedExecutionClaim,
+      onHarnessInitialLaneStart
+    });
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+
+    expect(warn).toHaveBeenCalledWith(
+      "Harness execution-claim hook failed after durable lane claim",
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        claimKind: "approved_claim"
+      })
+    );
+    expect(warn).toHaveBeenCalledWith(
+      "Harness execution-dispatch hook failed after durable lane claim",
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        dispatchKind: "initial_claim"
+      })
+    );
+    expect(onHarnessApprovedExecutionClaim).toHaveBeenCalledTimes(1);
+    expect(onHarnessInitialLaneStart).toHaveBeenCalledTimes(1);
+
+    warn.mockRestore();
     await runtime.close();
   });
 

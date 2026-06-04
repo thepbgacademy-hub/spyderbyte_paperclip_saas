@@ -8,7 +8,9 @@ import {
   buildHarnessWorkerExecutionEnvelope,
   buildHarnessWorkerDispatchResolution,
   commitHarnessWorkerLaneOutcome,
+  type HarnessWorkerDispatchHandoff,
   type HarnessWorkerDispatch,
+  type HarnessWorkerExecutionClaimContext,
   type HarnessWorkerLaneAttentionTransition,
   type HarnessWorkerExecutionEnvelope,
   type HarnessWorkerLaneOutcome
@@ -53,6 +55,62 @@ export function createWorkerRuntime(options: {
   env: WorkerEnv;
   workerInstanceId?: string;
   onHarnessLaneReady?: (envelope: HarnessWorkerExecutionEnvelope) => void | Promise<void>;
+  onHarnessExecutionClaimed?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    executionClaim: HarnessWorkerExecutionClaimContext;
+    laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+  }) => void | Promise<void>;
+  onHarnessApprovedExecutionClaim?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    executionClaim: Extract<HarnessWorkerExecutionClaimContext, { kind: "approved_claim" }>;
+    laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+  }) => void | Promise<void>;
+  onHarnessRecoveredExecutionClaim?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    executionClaim: Extract<HarnessWorkerExecutionClaimContext, { kind: "working_claim_refresh" }>;
+    laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+  }) => void | Promise<void>;
+  onHarnessExistingWorkingExecutionClaim?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    executionClaim: Extract<HarnessWorkerExecutionClaimContext, { kind: "existing_working_claim" }>;
+    laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+  }) => void | Promise<void>;
+  onHarnessExecutionDispatched?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    dispatchHandoff: HarnessWorkerDispatchHandoff;
+    laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+  }) => void | Promise<void>;
+  onHarnessInitialLaneStart?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "initial_claim" }>;
+    laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+  }) => void | Promise<void>;
+  onHarnessFollowOnDispatch?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "follow_on_dispatch" }>;
+    laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+  }) => void | Promise<void>;
+  onHarnessReactivatedFollowOnDispatch?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "follow_on_dispatch"; reactivatedRun: true }>;
+    laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+  }) => void | Promise<void>;
   onHarnessLaneOutcomeCommitted?: (input: {
     tenantId: string;
     runId: string;
@@ -474,7 +532,18 @@ export function createWorkerRuntime(options: {
                         await options.onHarnessLaneReady?.(envelope);
                       }
                     }
-                  : {})
+                  : {}),
+                onDispatchResolution: async ({ dispatch, executionClaim, executionEnvelope }) => {
+                  await emitHarnessExecutionStartHandoffs({
+                    options,
+                    ...(options.workerInstanceId ? { workerInstanceId: options.workerInstanceId } : {}),
+                    tenantId: validatedPayload.tenantId,
+                    workflowId: validatedPayload.workflowId,
+                    dispatch,
+                    ...(executionClaim ? { executionClaim } : {}),
+                    executionEnvelope
+                  });
+                }
               })
             : processWorkflowJob({
                 payload: validatedPayload,
@@ -741,6 +810,19 @@ export function createWorkerRuntime(options: {
                   error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
                 });
               }
+              await emitHarnessExecutionStartHandoffs({
+                options,
+                ...(options.workerInstanceId ? { workerInstanceId: options.workerInstanceId } : {}),
+                tenantId: input.tenantId,
+                workflowId: committedOutcome.nextDispatch.workflowId,
+                dispatch: committedOutcome.nextDispatch,
+                executionClaim: {
+                  kind: executionEnvelope.executionClaim.kind,
+                  claimedAt: executionEnvelope.executionClaim.claimedAt,
+                  previousClaimedAt: executionEnvelope.executionClaim.previousClaimedAt
+                },
+                executionEnvelope
+              });
             }
             process.stdout.write(
               `${JSON.stringify({
@@ -866,6 +948,129 @@ async function runSpecificIgnoredOutcomeHandler(input: {
       });
     }
   }
+}
+
+async function runSpecificExecutionClaimHandler(input: {
+  options: {
+    onHarnessApprovedExecutionClaim?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      executionClaim: Extract<HarnessWorkerExecutionClaimContext, { kind: "approved_claim" }>;
+      laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+    }) => void | Promise<void>;
+    onHarnessRecoveredExecutionClaim?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      executionClaim: Extract<HarnessWorkerExecutionClaimContext, { kind: "working_claim_refresh" }>;
+      laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+    }) => void | Promise<void>;
+    onHarnessExistingWorkingExecutionClaim?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      executionClaim: Extract<HarnessWorkerExecutionClaimContext, { kind: "existing_working_claim" }>;
+      laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+    }) => void | Promise<void>;
+  };
+  handoff: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    executionClaim: HarnessWorkerExecutionClaimContext;
+    laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+  };
+}) {
+  switch (input.handoff.executionClaim.kind) {
+    case "approved_claim":
+      await input.options.onHarnessApprovedExecutionClaim?.(input.handoff as {
+        tenantId: string;
+        runId: string;
+        workflowId: string;
+        executionClaim: Extract<HarnessWorkerExecutionClaimContext, { kind: "approved_claim" }>;
+        laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+      });
+      return;
+    case "working_claim_refresh":
+      await input.options.onHarnessRecoveredExecutionClaim?.(input.handoff as {
+        tenantId: string;
+        runId: string;
+        workflowId: string;
+        executionClaim: Extract<HarnessWorkerExecutionClaimContext, { kind: "working_claim_refresh" }>;
+        laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+      });
+      return;
+    case "existing_working_claim":
+      await input.options.onHarnessExistingWorkingExecutionClaim?.(input.handoff as {
+        tenantId: string;
+        runId: string;
+        workflowId: string;
+        executionClaim: Extract<HarnessWorkerExecutionClaimContext, { kind: "existing_working_claim" }>;
+        laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+      });
+      return;
+  }
+}
+
+async function runSpecificExecutionDispatchHandler(input: {
+  options: {
+    onHarnessInitialLaneStart?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "initial_claim" }>;
+      laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+    }) => void | Promise<void>;
+    onHarnessFollowOnDispatch?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "follow_on_dispatch" }>;
+      laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+    }) => void | Promise<void>;
+    onHarnessReactivatedFollowOnDispatch?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "follow_on_dispatch"; reactivatedRun: true }>;
+      laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+    }) => void | Promise<void>;
+  };
+  handoff: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    dispatchHandoff: HarnessWorkerDispatchHandoff;
+    laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+  };
+}) {
+  if (input.handoff.dispatchHandoff.kind === "initial_claim") {
+    await input.options.onHarnessInitialLaneStart?.(input.handoff as {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "initial_claim" }>;
+      laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+    });
+    return;
+  }
+  if (input.handoff.dispatchHandoff.reactivatedRun) {
+    await input.options.onHarnessReactivatedFollowOnDispatch?.(input.handoff as {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "follow_on_dispatch"; reactivatedRun: true }>;
+      laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+    });
+  }
+  await input.options.onHarnessFollowOnDispatch?.(input.handoff as {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "follow_on_dispatch" }>;
+    laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+  });
 }
 
 function emitSpecificIgnoredOutcomeEvent(
@@ -1180,6 +1385,11 @@ async function processHarnessWorkflowJob(options: {
   recordStatus?: (status: { tenantId: string; runId: string; workflowId: string; status: "queued" | "running" | "failed" }) => void | Promise<void>;
   onDispatch?: (dispatch: HarnessWorkerDispatch) => void;
   onExecutionEnvelope?: (envelope: HarnessWorkerExecutionEnvelope) => void | Promise<void>;
+  onDispatchResolution?: (input: {
+    dispatch: HarnessWorkerDispatch;
+    executionClaim?: HarnessWorkerExecutionClaimContext;
+    executionEnvelope: HarnessWorkerExecutionEnvelope;
+  }) => void | Promise<void>;
 }) {
   try {
     const dispatchResolution = await buildHarnessWorkerDispatchResolution({
@@ -1196,6 +1406,7 @@ async function processHarnessWorkflowJob(options: {
         tenantId: options.payload.tenantId,
         dispatch,
         requiredCapabilities: options.workflowRegistry.getDefinition(dispatch.workflowId).requiredCapabilities,
+        ...(dispatchResolution.lane ? { laneContext: dispatchResolution.lane } : {}),
         ...(dispatchResolution.executionClaim ? { executionClaimContext: dispatchResolution.executionClaim } : {})
       });
       if (executionEnvelope) {
@@ -1203,6 +1414,20 @@ async function processHarnessWorkflowJob(options: {
           await options.onExecutionEnvelope?.(executionEnvelope);
         } catch (error) {
           console.warn("Harness lane-ready hook failed after durable lane claim", {
+            runId: executionEnvelope.runId,
+            workflowId: executionEnvelope.workflowId,
+            cardId: executionEnvelope.laneExecution.cardId,
+            error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+          });
+        }
+        try {
+          await options.onDispatchResolution?.({
+            dispatch,
+            ...(dispatchResolution.executionClaim ? { executionClaim: dispatchResolution.executionClaim } : {}),
+            executionEnvelope
+          });
+        } catch (error) {
+          console.warn("Harness execution-start hook failed after durable lane claim", {
             runId: executionEnvelope.runId,
             workflowId: executionEnvelope.workflowId,
             cardId: executionEnvelope.laneExecution.cardId,
@@ -1231,6 +1456,166 @@ async function processHarnessWorkflowJob(options: {
       status: "failed"
     });
     throw error;
+  }
+}
+
+async function emitHarnessExecutionStartHandoffs(input: {
+  options: {
+    workerInstanceId?: string;
+    onHarnessExecutionClaimed?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      executionClaim: HarnessWorkerExecutionClaimContext;
+      laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+    }) => void | Promise<void>;
+    onHarnessApprovedExecutionClaim?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      executionClaim: Extract<HarnessWorkerExecutionClaimContext, { kind: "approved_claim" }>;
+      laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+    }) => void | Promise<void>;
+    onHarnessRecoveredExecutionClaim?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      executionClaim: Extract<HarnessWorkerExecutionClaimContext, { kind: "working_claim_refresh" }>;
+      laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+    }) => void | Promise<void>;
+    onHarnessExistingWorkingExecutionClaim?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      executionClaim: Extract<HarnessWorkerExecutionClaimContext, { kind: "existing_working_claim" }>;
+      laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+    }) => void | Promise<void>;
+    onHarnessExecutionDispatched?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      dispatchHandoff: HarnessWorkerDispatchHandoff;
+      laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+    }) => void | Promise<void>;
+    onHarnessInitialLaneStart?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "initial_claim" }>;
+      laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+    }) => void | Promise<void>;
+    onHarnessFollowOnDispatch?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "follow_on_dispatch" }>;
+      laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+    }) => void | Promise<void>;
+    onHarnessReactivatedFollowOnDispatch?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "follow_on_dispatch"; reactivatedRun: true }>;
+      laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+    }) => void | Promise<void>;
+  };
+  workerInstanceId?: string;
+  tenantId: string;
+  workflowId: string;
+  dispatch: HarnessWorkerDispatch;
+  executionClaim?: HarnessWorkerExecutionClaimContext;
+  executionEnvelope: HarnessWorkerExecutionEnvelope;
+}) {
+  const executionClaim =
+    input.executionClaim ?? {
+      kind: input.executionEnvelope.executionClaim.kind,
+      claimedAt: input.executionEnvelope.executionClaim.claimedAt,
+      previousClaimedAt: input.executionEnvelope.executionClaim.previousClaimedAt
+    };
+  const claimHandoff = {
+    tenantId: input.tenantId,
+    runId: input.dispatch.runId,
+    workflowId: input.workflowId,
+    executionClaim,
+    laneExecution: input.executionEnvelope.laneExecution
+  };
+  process.stdout.write(
+    `${JSON.stringify({
+      type: "wealth_factory_harness_execution_claimed",
+      workerInstanceId: input.workerInstanceId ?? "worker",
+      observedAt: new Date().toISOString(),
+      ...claimHandoff
+    })}\n`
+  );
+  try {
+    await input.options.onHarnessExecutionClaimed?.(claimHandoff);
+  } catch (error) {
+    console.warn("Harness execution-claim hook failed after durable lane claim", {
+      runId: input.dispatch.runId,
+      workflowId: input.workflowId,
+      cardId: input.executionEnvelope.laneExecution.cardId,
+      claimKind: executionClaim.kind,
+      error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+    });
+  }
+  try {
+    await runSpecificExecutionClaimHandler({
+      options: input.options,
+      handoff: claimHandoff
+    });
+  } catch (error) {
+    console.warn("Harness specific execution-claim handler failed after durable lane claim", {
+      runId: input.dispatch.runId,
+      workflowId: input.workflowId,
+      cardId: input.executionEnvelope.laneExecution.cardId,
+      claimKind: executionClaim.kind,
+      error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+    });
+  }
+
+  if (!input.dispatch.dispatchHandoff) {
+    return;
+  }
+
+  const dispatchHandoff = {
+    tenantId: input.tenantId,
+    runId: input.dispatch.runId,
+    workflowId: input.workflowId,
+    dispatchHandoff: input.dispatch.dispatchHandoff,
+    laneExecution: input.executionEnvelope.laneExecution
+  };
+  process.stdout.write(
+    `${JSON.stringify({
+      type: "wealth_factory_harness_execution_dispatched",
+      workerInstanceId: input.workerInstanceId ?? "worker",
+      observedAt: new Date().toISOString(),
+      ...dispatchHandoff
+    })}\n`
+  );
+  try {
+    await input.options.onHarnessExecutionDispatched?.(dispatchHandoff);
+  } catch (error) {
+    console.warn("Harness execution-dispatch hook failed after durable lane claim", {
+      runId: input.dispatch.runId,
+      workflowId: input.workflowId,
+      cardId: input.executionEnvelope.laneExecution.cardId,
+      dispatchKind: input.dispatch.dispatchHandoff.kind,
+      error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+    });
+  }
+  try {
+    await runSpecificExecutionDispatchHandler({
+      options: input.options,
+      handoff: dispatchHandoff
+    });
+  } catch (error) {
+    console.warn("Harness specific execution-dispatch handler failed after durable lane claim", {
+      runId: input.dispatch.runId,
+      workflowId: input.workflowId,
+      cardId: input.executionEnvelope.laneExecution.cardId,
+      dispatchKind: input.dispatch.dispatchHandoff.kind,
+      error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+    });
   }
 }
 

@@ -145,6 +145,7 @@ export type HarnessWorkerLaneOutcome = {
 
 type HarnessWorkerDispatchResolution = {
   dispatch: HarnessWorkerDispatch;
+  lane?: HarnessCardRecord;
   executionClaim?: HarnessWorkerExecutionClaimContext;
 };
 
@@ -332,6 +333,7 @@ export async function buildHarnessWorkerDispatchResolution(input: {
           ...(updatedContinuity.latestResultSummary ? { latestResultSummary: updatedContinuity.latestResultSummary } : {})
         }
       },
+      lane: claimedLane,
       executionClaim: {
         kind: claimedExecution.claimKind,
         claimedAt: claimedLane.executionClaimedAt!,
@@ -609,6 +611,7 @@ export async function buildHarnessWorkerExecutionEnvelope(input: {
   tenantId: string;
   dispatch: HarnessWorkerDispatch;
   requiredCapabilities: readonly ProviderCapability[];
+  laneContext?: HarnessCardRecord;
   executionClaimContext?: HarnessWorkerExecutionClaimContext;
 }): Promise<HarnessWorkerExecutionEnvelope | null> {
   if (!input.dispatch.laneExecution) {
@@ -619,7 +622,10 @@ export async function buildHarnessWorkerExecutionEnvelope(input: {
   if (!run || run.tenantId !== input.tenantId || run.workflowId !== input.dispatch.workflowId) {
     throw new Error(`Unknown harness run for worker execution envelope: ${input.dispatch.runId}`);
   }
-  const lane = await input.repository.getCard(input.dispatch.laneExecution.cardId);
+  const lane =
+    input.laneContext && input.laneContext.id === input.dispatch.laneExecution.cardId
+      ? input.laneContext
+      : await input.repository.getCard(input.dispatch.laneExecution.cardId);
   if (!lane || lane.runId !== run.id || lane.persona === "ceo") {
     throw new Error(`Unknown harness child lane for worker execution envelope: ${input.dispatch.laneExecution.cardId}`);
   }
