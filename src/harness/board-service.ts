@@ -8441,17 +8441,22 @@ function describeExecutionDispatchActivity(input: {
   triggeredByOutcomeState: string | null;
   reactivatedRun: boolean | null;
 }): string {
-  if (input.dispatchKind === "follow_on_dispatch" && input.triggeredByPersona) {
-    if (input.reactivatedRun) {
-      if (input.triggeredByOutcomeState === "cancelled") {
-        return `A worker reactivated this run and started this lane after ${input.triggeredByPersona.toUpperCase()} cancelled the prior lane.`;
+  if (input.dispatchKind === "follow_on_dispatch") {
+    if (input.triggeredByPersona) {
+      if (input.reactivatedRun) {
+        if (input.triggeredByOutcomeState === "cancelled") {
+          return `A worker reactivated this run and started this lane after ${input.triggeredByPersona.toUpperCase()} cancelled the prior lane.`;
+        }
+        return `A worker reactivated this run and started this lane from ${input.triggeredByPersona.toUpperCase()}'s follow-on handoff.`;
       }
-      return `A worker reactivated this run and started this lane from ${input.triggeredByPersona.toUpperCase()}'s follow-on handoff.`;
+      if (input.triggeredByOutcomeState === "done") {
+        return `A worker started this lane from ${input.triggeredByPersona.toUpperCase()}'s completed-lane handoff.`;
+      }
+      return `A worker started this lane from ${input.triggeredByPersona.toUpperCase()}'s follow-on handoff.`;
     }
-    if (input.triggeredByOutcomeState === "done") {
-      return `A worker started this lane from ${input.triggeredByPersona.toUpperCase()}'s completed-lane handoff.`;
-    }
-    return `A worker started this lane from ${input.triggeredByPersona.toUpperCase()}'s follow-on handoff.`;
+    return input.reactivatedRun
+      ? "A worker reactivated this run and started this lane from a follow-on handoff."
+      : "A worker started this lane from a follow-on handoff.";
   }
   if (input.executionStage === "initial_lane_start") {
     return "A worker started this lane from the initial execution claim.";

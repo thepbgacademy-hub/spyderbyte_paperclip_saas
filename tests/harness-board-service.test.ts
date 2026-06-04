@@ -1969,6 +1969,59 @@ describe("harness board service", () => {
     );
   });
 
+  it("keeps follow-on dispatch history explicit even when triggering persona detail is absent", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "researcher",
+      title: "Validate competitor pressure notes",
+      deliverableType: "research_brief"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_dispatched_follow_on_without_persona",
+      cardId: created.cardId,
+      eventKind: "execution_dispatched",
+      payload: {
+        kind: "follow_on_dispatch",
+        kindLabel: "Follow-on dispatch",
+        executionStage: "post_outcome_follow_on",
+        executionStageLabel: "Post-outcome follow-on",
+        reactivatedRun: false,
+        triggeredByOutcomeState: "done"
+      },
+      createdAt: "2026-06-03T10:10:30.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A worker started this lane from a follow-on handoff."
+        })
+      ])
+    );
+  });
+
   it("surfaces committed worker outcome history as bounded board activity", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
