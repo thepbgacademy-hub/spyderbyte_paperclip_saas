@@ -40,6 +40,8 @@ import { createAcidWorkflowStatusRecorder } from "../workflows/acid-status-recor
 import { createTenantExecutionGate } from "./tenant-execution-gate.js";
 
 export type WorkerEnv = ReturnType<typeof loadWorkerEnv>;
+type HarnessFollowOnDispatchHandoff = Extract<HarnessWorkerDispatchHandoff, { kind: "follow_on_dispatch" }>;
+type HarnessReactivatedFollowOnDispatchHandoff = HarnessFollowOnDispatchHandoff & { reactivatedRun: true };
 
 export function loadWorkerEnv(source: NodeJS.ProcessEnv = process.env) {
   const appEnv = loadEnv(source);
@@ -55,6 +57,54 @@ export function createWorkerRuntime(options: {
   env: WorkerEnv;
   workerInstanceId?: string;
   onHarnessLaneReady?: (envelope: HarnessWorkerExecutionEnvelope) => void | Promise<void>;
+  onHarnessExecutionStartSuppressed?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    dispatchHandoff: HarnessWorkerDispatchHandoff;
+    laneExecution: HarnessWorkerDispatch["laneExecution"] extends infer T ? Exclude<T, null> : never;
+    executionClaim?: HarnessWorkerExecutionClaimContext;
+    failure: {
+      kind: "execution_envelope_reconstruction_failed";
+      message: string;
+    };
+  }) => void | Promise<void>;
+  onHarnessInitialLaneStartSuppressed?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "initial_claim" }>;
+    laneExecution: HarnessWorkerDispatch["laneExecution"] extends infer T ? Exclude<T, null> : never;
+    executionClaim?: HarnessWorkerExecutionClaimContext;
+    failure: {
+      kind: "execution_envelope_reconstruction_failed";
+      message: string;
+    };
+  }) => void | Promise<void>;
+  onHarnessFollowOnDispatchSuppressed?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "follow_on_dispatch" }>;
+    laneExecution: HarnessWorkerDispatch["laneExecution"] extends infer T ? Exclude<T, null> : never;
+    executionClaim?: HarnessWorkerExecutionClaimContext;
+    failure: {
+      kind: "execution_envelope_reconstruction_failed";
+      message: string;
+    };
+  }) => void | Promise<void>;
+  onHarnessReactivatedFollowOnDispatchSuppressed?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    dispatchHandoff: HarnessReactivatedFollowOnDispatchHandoff;
+    laneExecution: HarnessWorkerDispatch["laneExecution"] extends infer T ? Exclude<T, null> : never;
+    executionClaim?: HarnessWorkerExecutionClaimContext;
+    failure: {
+      kind: "execution_envelope_reconstruction_failed";
+      message: string;
+    };
+  }) => void | Promise<void>;
   onHarnessExecutionClaimed?: (input: {
     tenantId: string;
     runId: string;
@@ -108,7 +158,7 @@ export function createWorkerRuntime(options: {
     tenantId: string;
     runId: string;
     workflowId: string;
-    dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "follow_on_dispatch"; reactivatedRun: true }>;
+    dispatchHandoff: HarnessReactivatedFollowOnDispatchHandoff;
     laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
   }) => void | Promise<void>;
   onHarnessLaneOutcomeCommitted?: (input: {
@@ -516,6 +566,16 @@ export function createWorkerRuntime(options: {
                 recordStatus: async (status) => {
                   await recordWorkflowStatus(status);
                 },
+                ...(options.workerInstanceId ? { workerInstanceId: options.workerInstanceId } : {}),
+                ...(options.onHarnessExecutionStartSuppressed
+                  ? { onHarnessExecutionStartSuppressed: options.onHarnessExecutionStartSuppressed }
+                  : {}),
+                ...(options.onHarnessInitialLaneStartSuppressed
+                  ? { onHarnessInitialLaneStartSuppressed: options.onHarnessInitialLaneStartSuppressed }
+                  : {}),
+                ...(options.onHarnessFollowOnDispatchSuppressed
+                  ? { onHarnessFollowOnDispatchSuppressed: options.onHarnessFollowOnDispatchSuppressed }
+                  : {}),
                 onDispatch: (dispatch) => {
                   process.stdout.write(
                     `${JSON.stringify({
@@ -808,11 +868,34 @@ export function createWorkerRuntime(options: {
                   : {})
               });
             } catch (error) {
+              const failureMessage = error instanceof Error ? error.message : String(error);
               console.warn("Harness follow-on execution envelope reconstruction failed after durable dispatch", {
                 runId: committedOutcome.runId,
                 workflowId: committedOutcome.workflowId,
                 cardId: committedOutcome.nextDispatch.laneExecution.cardId,
                 error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+              });
+              await emitHarnessExecutionStartSuppressed({
+                options,
+                ...(options.workerInstanceId ? { workerInstanceId: options.workerInstanceId } : {}),
+                tenantId: input.tenantId,
+                runId: committedOutcome.runId,
+                workflowId: committedOutcome.nextDispatch.workflowId,
+                  dispatchHandoff: committedOutcome.nextDispatch.dispatchHandoff ?? {
+                    kind: "follow_on_dispatch",
+                    kindLabel: "Follow-on dispatch",
+                    executionStage: "post_outcome_follow_on",
+                    executionStageLabel: "Post-outcome follow-on",
+                    reactivatedRun: false,
+                    triggeredByCardId: committedOutcome.laneExecution!.cardId,
+                    triggeredByPersona: "unknown",
+                    triggeredByOutcomeState: committedOutcome.laneExecution!.state as "waiting" | "done" | "blocked" | "cancelled"
+                  },
+                laneExecution: committedOutcome.nextDispatch.laneExecution,
+                ...(committedOutcome.nextExecutionStartContext?.executionClaim
+                  ? { executionClaim: committedOutcome.nextExecutionStartContext.executionClaim }
+                  : {}),
+                failureMessage
               });
             }
             if (executionEnvelope) {
@@ -876,6 +959,146 @@ export function createWorkerRuntime(options: {
         execution: snapshot
       })}\n`
     );
+  }
+}
+
+async function emitHarnessExecutionStartSuppressed(input: {
+  options: {
+    workerInstanceId?: string;
+    onHarnessExecutionStartSuppressed?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      dispatchHandoff: HarnessWorkerDispatchHandoff;
+      laneExecution: Exclude<HarnessWorkerDispatch["laneExecution"], null>;
+      executionClaim?: HarnessWorkerExecutionClaimContext;
+      failure: {
+        kind: "execution_envelope_reconstruction_failed";
+        message: string;
+      };
+    }) => void | Promise<void>;
+    onHarnessInitialLaneStartSuppressed?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "initial_claim" }>;
+      laneExecution: Exclude<HarnessWorkerDispatch["laneExecution"], null>;
+      executionClaim?: HarnessWorkerExecutionClaimContext;
+      failure: {
+        kind: "execution_envelope_reconstruction_failed";
+        message: string;
+      };
+    }) => void | Promise<void>;
+    onHarnessFollowOnDispatchSuppressed?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "follow_on_dispatch" }>;
+      laneExecution: Exclude<HarnessWorkerDispatch["laneExecution"], null>;
+      executionClaim?: HarnessWorkerExecutionClaimContext;
+      failure: {
+        kind: "execution_envelope_reconstruction_failed";
+        message: string;
+      };
+    }) => void | Promise<void>;
+    onHarnessReactivatedFollowOnDispatchSuppressed?: (input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      dispatchHandoff: HarnessReactivatedFollowOnDispatchHandoff;
+      laneExecution: Exclude<HarnessWorkerDispatch["laneExecution"], null>;
+      executionClaim?: HarnessWorkerExecutionClaimContext;
+      failure: {
+        kind: "execution_envelope_reconstruction_failed";
+        message: string;
+      };
+    }) => void | Promise<void>;
+  };
+  workerInstanceId?: string;
+  tenantId: string;
+  runId: string;
+  workflowId: string;
+  dispatchHandoff: HarnessWorkerDispatchHandoff;
+  laneExecution: Exclude<HarnessWorkerDispatch["laneExecution"], null>;
+  executionClaim?: HarnessWorkerExecutionClaimContext;
+  failureMessage: string;
+}) {
+  const handoff = {
+    tenantId: input.tenantId,
+    runId: input.runId,
+    workflowId: input.workflowId,
+    dispatchHandoff: input.dispatchHandoff,
+    laneExecution: input.laneExecution,
+    ...(input.executionClaim ? { executionClaim: input.executionClaim } : {}),
+    failure: {
+      kind: "execution_envelope_reconstruction_failed" as const,
+      message: input.failureMessage
+    }
+  };
+  process.stdout.write(
+    `${JSON.stringify({
+      type: "wealth_factory_harness_execution_start_suppressed",
+      workerInstanceId: input.workerInstanceId ?? "worker",
+      observedAt: new Date().toISOString(),
+      ...handoff
+    })}\n`
+  );
+  try {
+    await input.options.onHarnessExecutionStartSuppressed?.(handoff);
+  } catch (error) {
+    console.warn("Harness execution-start-suppressed hook failed after durable claim", {
+      runId: input.runId,
+      workflowId: input.workflowId,
+      cardId: input.laneExecution.cardId,
+      dispatchKind: input.dispatchHandoff.kind,
+      error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+    });
+  }
+
+  const specificType =
+    input.dispatchHandoff.kind === "initial_claim"
+      ? "wealth_factory_harness_execution_start_suppressed_initial"
+      : input.dispatchHandoff.reactivatedRun
+        ? "wealth_factory_harness_execution_start_suppressed_reactivated"
+        : "wealth_factory_harness_execution_start_suppressed_follow_on";
+  process.stdout.write(
+    `${JSON.stringify({
+      type: specificType,
+      workerInstanceId: input.workerInstanceId ?? "worker",
+      observedAt: new Date().toISOString(),
+      ...handoff
+    })}\n`
+  );
+  try {
+    if (input.dispatchHandoff.kind === "initial_claim") {
+      await input.options.onHarnessInitialLaneStartSuppressed?.({
+        ...handoff,
+        dispatchHandoff: input.dispatchHandoff
+      });
+      return;
+    }
+    if (input.dispatchHandoff.reactivatedRun === true) {
+      const reactivatedDispatchHandoff: HarnessReactivatedFollowOnDispatchHandoff = {
+        ...input.dispatchHandoff,
+        reactivatedRun: true
+      };
+      await input.options.onHarnessReactivatedFollowOnDispatchSuppressed?.({
+        ...handoff,
+        dispatchHandoff: reactivatedDispatchHandoff
+      });
+    }
+    await input.options.onHarnessFollowOnDispatchSuppressed?.({
+      ...handoff,
+      dispatchHandoff: input.dispatchHandoff
+    });
+  } catch (error) {
+    console.warn("Harness specific execution-start-suppressed hook failed after durable claim", {
+      runId: input.runId,
+      workflowId: input.workflowId,
+      cardId: input.laneExecution.cardId,
+      dispatchKind: input.dispatchHandoff.kind,
+      error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+    });
   }
 }
 
@@ -1066,7 +1289,7 @@ async function runSpecificExecutionDispatchHandler(input: {
       tenantId: string;
       runId: string;
       workflowId: string;
-      dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "follow_on_dispatch"; reactivatedRun: true }>;
+      dispatchHandoff: HarnessReactivatedFollowOnDispatchHandoff;
       laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
     }) => void | Promise<void>;
   };
@@ -1103,7 +1326,7 @@ async function runSpecificExecutionDispatchHandler(input: {
       tenantId: string;
       runId: string;
       workflowId: string;
-      dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "follow_on_dispatch"; reactivatedRun: true }>;
+      dispatchHandoff: HarnessReactivatedFollowOnDispatchHandoff;
       laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
     });
   }
@@ -1479,6 +1702,43 @@ async function processHarnessWorkflowJob(options: {
   ) => Promise<T>;
   workflowRegistry: Pick<ReturnType<typeof createHarnessWorkflowRegistry>, "getDefinition">;
   recordStatus?: (status: { tenantId: string; runId: string; workflowId: string; status: "queued" | "running" | "failed" }) => void | Promise<void>;
+  workerInstanceId?: string;
+  onHarnessExecutionStartSuppressed?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    dispatchHandoff: HarnessWorkerDispatchHandoff;
+    laneExecution: Exclude<HarnessWorkerDispatch["laneExecution"], null>;
+    executionClaim?: HarnessWorkerExecutionClaimContext;
+    failure: {
+      kind: "execution_envelope_reconstruction_failed";
+      message: string;
+    };
+  }) => void | Promise<void>;
+  onHarnessInitialLaneStartSuppressed?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "initial_claim" }>;
+    laneExecution: Exclude<HarnessWorkerDispatch["laneExecution"], null>;
+    executionClaim?: HarnessWorkerExecutionClaimContext;
+    failure: {
+      kind: "execution_envelope_reconstruction_failed";
+      message: string;
+    };
+  }) => void | Promise<void>;
+  onHarnessFollowOnDispatchSuppressed?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "follow_on_dispatch" }>;
+    laneExecution: Exclude<HarnessWorkerDispatch["laneExecution"], null>;
+    executionClaim?: HarnessWorkerExecutionClaimContext;
+    failure: {
+      kind: "execution_envelope_reconstruction_failed";
+      message: string;
+    };
+  }) => void | Promise<void>;
   onDispatch?: (dispatch: HarnessWorkerDispatch) => void;
   onExecutionEnvelope?: (envelope: HarnessWorkerExecutionEnvelope) => void | Promise<void>;
   onDispatchResolution?: (input: {
@@ -1508,11 +1768,28 @@ async function processHarnessWorkflowJob(options: {
           ...(dispatchResolution.executionClaim ? { executionClaimContext: dispatchResolution.executionClaim } : {})
         });
       } catch (error) {
+        const failureMessage = error instanceof Error ? error.message : String(error);
         console.warn("Harness execution envelope reconstruction failed after durable lane claim", {
           runId: dispatch.runId,
           workflowId: dispatch.workflowId,
           cardId: dispatch.laneExecution.cardId,
           error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+        });
+        await emitHarnessExecutionStartSuppressed({
+          options,
+          ...(options.workerInstanceId ? { workerInstanceId: options.workerInstanceId } : {}),
+          tenantId: options.payload.tenantId,
+          runId: dispatch.runId,
+          workflowId: dispatch.workflowId,
+          dispatchHandoff: dispatch.dispatchHandoff ?? {
+            kind: "initial_claim",
+            kindLabel: "Initial lane claim",
+            executionStage: "initial_lane_start",
+            executionStageLabel: "Initial lane start"
+          },
+          laneExecution: dispatch.laneExecution,
+          ...(dispatchResolution.executionClaim ? { executionClaim: dispatchResolution.executionClaim } : {}),
+          failureMessage
         });
       }
       if (executionEnvelope) {
@@ -1629,7 +1906,7 @@ async function emitHarnessExecutionStartHandoffs(input: {
       tenantId: string;
       runId: string;
       workflowId: string;
-      dispatchHandoff: Extract<HarnessWorkerDispatchHandoff, { kind: "follow_on_dispatch"; reactivatedRun: true }>;
+      dispatchHandoff: HarnessReactivatedFollowOnDispatchHandoff;
       laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
     }) => void | Promise<void>;
   };

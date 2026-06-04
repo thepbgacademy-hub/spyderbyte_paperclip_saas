@@ -607,13 +607,17 @@ describe("worker runtime", () => {
     const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const onHarnessLaneReady = vi.fn();
+    const onHarnessExecutionStartSuppressed = vi.fn();
+    const onHarnessInitialLaneStartSuppressed = vi.fn();
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
         WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
       }),
       workerInstanceId: "worker-test-harness-envelope-rebuild-fail",
-      onHarnessLaneReady
+      onHarnessLaneReady,
+      onHarnessExecutionStartSuppressed,
+      onHarnessInitialLaneStartSuppressed
     });
 
     const harnessRepository = harnessRepositoryRef.current;
@@ -651,6 +655,60 @@ describe("worker runtime", () => {
       })
     );
     expect(onHarnessLaneReady).not.toHaveBeenCalled();
+    expect(onHarnessExecutionStartSuppressed).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      dispatchHandoff: {
+        kind: "initial_claim",
+        kindLabel: "Initial lane claim",
+        executionStage: "initial_lane_start",
+        executionStageLabel: "Initial lane start"
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cfo",
+        persona: "cfo"
+      }),
+      executionClaim: {
+        kind: "approved_claim",
+        claimedAt: expect.any(String),
+        previousClaimedAt: null
+      },
+      failure: {
+        kind: "execution_envelope_reconstruction_failed",
+        message: "continuity lookup unavailable"
+      }
+    });
+    expect(onHarnessInitialLaneStartSuppressed).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      dispatchHandoff: {
+        kind: "initial_claim",
+        kindLabel: "Initial lane claim",
+        executionStage: "initial_lane_start",
+        executionStageLabel: "Initial lane start"
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cfo",
+        persona: "cfo"
+      }),
+      executionClaim: {
+        kind: "approved_claim",
+        claimedAt: expect.any(String),
+        previousClaimedAt: null
+      },
+      failure: {
+        kind: "execution_envelope_reconstruction_failed",
+        message: "continuity lookup unavailable"
+      }
+    });
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_start_suppressed\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_start_suppressed_initial\"")
+    );
     expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_execution_claimed\"")
     );
@@ -3532,6 +3590,450 @@ describe("worker runtime", () => {
         cardId: "card_cmo"
       })
     );
+    const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
+    expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      from: ["queued", "running"],
+      to: "running"
+    });
+
+    warn.mockRestore();
+    await runtime.close();
+  });
+
+  it("keeps a committed follow-on harness dispatch successful when follow-on envelope reconstruction fails", async () => {
+    const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onHarnessLaneReady = vi.fn();
+    const onHarnessExecutionStartSuppressed = vi.fn();
+    const onHarnessFollowOnDispatchSuppressed = vi.fn();
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-follow-on-envelope-fail",
+      onHarnessLaneReady,
+      onHarnessExecutionStartSuppressed,
+      onHarnessFollowOnDispatchSuppressed
+    });
+
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.getCardContinuity
+      .mockResolvedValueOnce({
+        cardId: "card_cfo",
+        runId: "run-1",
+        continuitySource: "result_recorded",
+        continuitySummary: "CFO should continue the finalized pricing lane only if governance reopens it.",
+        latestResultSummary: "Pricing review is complete and ready for board packaging.",
+        absorbedWorkItems: [],
+        updatedAt: "2026-05-21T10:06:00.000Z"
+      })
+      .mockRejectedValueOnce(new Error("follow-on continuity unavailable"));
+    harnessRepository.listCardsForRun.mockResolvedValue([
+      {
+        id: "card_ceo",
+        runId: "run-1",
+        parentCardId: null,
+        persona: "ceo",
+        title: "Plan run",
+        deliverableType: "plan",
+        state: "planning",
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      },
+      {
+        id: "card_cfo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Finalize pricing review",
+        deliverableType: "pricing_review",
+        state: "done",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:06:00.000Z"
+      },
+      {
+        id: "card_cmo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cmo",
+        title: "Prepare launch messaging",
+        deliverableType: "marketing_plan",
+        state: "approved",
+        createdAt: "2026-05-21T10:02:00.000Z",
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      }
+    ]);
+    harnessRepository.listCardContinuityForRun.mockResolvedValue([
+      {
+        cardId: "card_cmo",
+        runId: "run-1",
+        continuitySource: "resume_override",
+        continuitySummary: "Resume the launch messaging lane from the approved positioning draft.",
+        latestResultSummary: null,
+        absorbedWorkItems: [],
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      }
+    ]);
+    harnessRepository.claimCardForExecution.mockResolvedValueOnce({
+      id: "card_cmo",
+      runId: "run-1",
+      parentCardId: "card_ceo",
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "marketing_plan",
+      state: "working",
+      executionClaimToken: "claim-cmo-active",
+      executionClaimedAt: "2026-05-21T10:07:30.000Z",
+      createdAt: "2026-05-21T10:02:00.000Z",
+      updatedAt: "2026-05-21T10:07:00.000Z"
+    });
+
+    stdoutWrite.mockClear();
+    await expect(
+      runtime.commitHarnessLaneOutcome({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-1",
+        state: "done",
+        resultSummary: "Pricing review is complete and ready for board packaging."
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        status: "committed",
+        nextDispatch: expect.objectContaining({
+          laneExecution: expect.objectContaining({
+            cardId: "card_cmo"
+          })
+        })
+      })
+    );
+
+    expect(warn).toHaveBeenCalledWith(
+      "Harness follow-on execution envelope reconstruction failed after durable dispatch",
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cmo"
+      })
+    );
+    expect(onHarnessLaneReady).not.toHaveBeenCalled();
+    expect(onHarnessExecutionStartSuppressed).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      dispatchHandoff: {
+        kind: "follow_on_dispatch",
+        kindLabel: "Follow-on dispatch",
+        executionStage: "post_outcome_follow_on",
+        executionStageLabel: "Post-outcome follow-on",
+        reactivatedRun: false,
+        triggeredByCardId: "card_cfo",
+        triggeredByPersona: "cfo",
+        triggeredByOutcomeState: "done",
+        triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cmo",
+        persona: "cmo"
+      }),
+      executionClaim: {
+        kind: "approved_claim",
+        claimedAt: "2026-05-21T10:07:30.000Z",
+        previousClaimedAt: undefined
+      },
+      failure: {
+        kind: "execution_envelope_reconstruction_failed",
+        message: "follow-on continuity unavailable"
+      }
+    });
+    expect(onHarnessFollowOnDispatchSuppressed).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      dispatchHandoff: {
+        kind: "follow_on_dispatch",
+        kindLabel: "Follow-on dispatch",
+        executionStage: "post_outcome_follow_on",
+        executionStageLabel: "Post-outcome follow-on",
+        reactivatedRun: false,
+        triggeredByCardId: "card_cfo",
+        triggeredByPersona: "cfo",
+        triggeredByOutcomeState: "done",
+        triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cmo",
+        persona: "cmo"
+      }),
+      executionClaim: {
+        kind: "approved_claim",
+        claimedAt: "2026-05-21T10:07:30.000Z",
+        previousClaimedAt: undefined
+      },
+      failure: {
+        kind: "execution_envelope_reconstruction_failed",
+        message: "follow-on continuity unavailable"
+      }
+    });
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_start_suppressed\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_start_suppressed_follow_on\"")
+    );
+
+    const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
+    expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      from: ["queued", "running"],
+      to: "running"
+    });
+
+    warn.mockRestore();
+    await runtime.close();
+  });
+
+  it("emits a reactivated follow-on suppressed-start handoff when a waiting run is reopened but envelope reconstruction fails", async () => {
+    const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onHarnessExecutionStartSuppressed = vi.fn();
+    const onHarnessFollowOnDispatchSuppressed = vi.fn();
+    const onHarnessReactivatedFollowOnDispatchSuppressed = vi.fn();
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-follow-on-reactivated-envelope-fail",
+      onHarnessExecutionStartSuppressed,
+      onHarnessFollowOnDispatchSuppressed,
+      onHarnessReactivatedFollowOnDispatchSuppressed
+    });
+
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.getRun.mockResolvedValueOnce({
+      id: "run-1",
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      state: "waiting",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      },
+      createdAt: "2026-05-21T10:00:00.000Z",
+      updatedAt: "2026-05-21T10:06:00.000Z"
+    });
+    harnessRepository.getCardContinuity
+      .mockResolvedValueOnce({
+        cardId: "card_cfo",
+        runId: "run-1",
+        continuitySource: "result_recorded",
+        continuitySummary: "CFO should continue the finalized pricing lane only if governance reopens it.",
+        latestResultSummary: "Pricing review is complete and ready for board packaging.",
+        absorbedWorkItems: [],
+        updatedAt: "2026-05-21T10:06:00.000Z"
+      })
+      .mockRejectedValueOnce(new Error("reactivated follow-on continuity unavailable"));
+    harnessRepository.listCardsForRun.mockResolvedValue([
+      {
+        id: "card_ceo",
+        runId: "run-1",
+        parentCardId: null,
+        persona: "ceo",
+        title: "Plan run",
+        deliverableType: "plan",
+        state: "planning",
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      },
+      {
+        id: "card_cfo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Finalize pricing review",
+        deliverableType: "pricing_review",
+        state: "done",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:06:00.000Z"
+      },
+      {
+        id: "card_cmo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cmo",
+        title: "Prepare launch messaging",
+        deliverableType: "marketing_plan",
+        state: "approved",
+        createdAt: "2026-05-21T10:02:00.000Z",
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      }
+    ]);
+    harnessRepository.listCardContinuityForRun.mockResolvedValue([
+      {
+        cardId: "card_cmo",
+        runId: "run-1",
+        continuitySource: "resume_override",
+        continuitySummary: "Resume the launch messaging lane from the approved positioning draft.",
+        latestResultSummary: null,
+        absorbedWorkItems: [],
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      }
+    ]);
+    harnessRepository.claimCardForExecution.mockResolvedValueOnce({
+      id: "card_cmo",
+      runId: "run-1",
+      parentCardId: "card_ceo",
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "marketing_plan",
+      state: "working",
+      executionClaimToken: "claim-cmo-active",
+      executionClaimedAt: "2026-05-21T10:07:30.000Z",
+      createdAt: "2026-05-21T10:02:00.000Z",
+      updatedAt: "2026-05-21T10:07:00.000Z"
+    });
+
+    stdoutWrite.mockClear();
+    await expect(
+      runtime.commitHarnessLaneOutcome({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-1",
+        state: "done",
+        resultSummary: "Pricing review is complete and ready for board packaging."
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        status: "committed",
+        nextDispatch: expect.objectContaining({
+          dispatchHandoff: expect.objectContaining({
+            kind: "follow_on_dispatch",
+            reactivatedRun: true
+          }),
+          laneExecution: expect.objectContaining({
+            cardId: "card_cmo"
+          })
+        })
+      })
+    );
+
+    expect(warn).toHaveBeenCalledWith(
+      "Harness follow-on execution envelope reconstruction failed after durable dispatch",
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cmo"
+      })
+    );
+    expect(onHarnessExecutionStartSuppressed).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      dispatchHandoff: {
+        kind: "follow_on_dispatch",
+        kindLabel: "Follow-on dispatch",
+        executionStage: "post_outcome_follow_on",
+        executionStageLabel: "Post-outcome follow-on",
+        reactivatedRun: true,
+        triggeredByCardId: "card_cfo",
+        triggeredByPersona: "cfo",
+        triggeredByOutcomeState: "done",
+        triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cmo",
+        persona: "cmo"
+      }),
+      executionClaim: {
+        kind: "approved_claim",
+        claimedAt: "2026-05-21T10:07:30.000Z",
+        previousClaimedAt: undefined
+      },
+      failure: {
+        kind: "execution_envelope_reconstruction_failed",
+        message: "reactivated follow-on continuity unavailable"
+      }
+    });
+    expect(onHarnessFollowOnDispatchSuppressed).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      dispatchHandoff: {
+        kind: "follow_on_dispatch",
+        kindLabel: "Follow-on dispatch",
+        executionStage: "post_outcome_follow_on",
+        executionStageLabel: "Post-outcome follow-on",
+        reactivatedRun: true,
+        triggeredByCardId: "card_cfo",
+        triggeredByPersona: "cfo",
+        triggeredByOutcomeState: "done",
+        triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cmo",
+        persona: "cmo"
+      }),
+      executionClaim: {
+        kind: "approved_claim",
+        claimedAt: "2026-05-21T10:07:30.000Z",
+        previousClaimedAt: undefined
+      },
+      failure: {
+        kind: "execution_envelope_reconstruction_failed",
+        message: "reactivated follow-on continuity unavailable"
+      }
+    });
+    expect(onHarnessReactivatedFollowOnDispatchSuppressed).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      dispatchHandoff: {
+        kind: "follow_on_dispatch",
+        kindLabel: "Follow-on dispatch",
+        executionStage: "post_outcome_follow_on",
+        executionStageLabel: "Post-outcome follow-on",
+        reactivatedRun: true,
+        triggeredByCardId: "card_cfo",
+        triggeredByPersona: "cfo",
+        triggeredByOutcomeState: "done",
+        triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cmo",
+        persona: "cmo"
+      }),
+      executionClaim: {
+        kind: "approved_claim",
+        claimedAt: "2026-05-21T10:07:30.000Z",
+        previousClaimedAt: undefined
+      },
+      failure: {
+        kind: "execution_envelope_reconstruction_failed",
+        message: "reactivated follow-on continuity unavailable"
+      }
+    });
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_start_suppressed\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_start_suppressed_reactivated\"")
+    );
+
     const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
     expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith({
       tenantId: "tenant-1",

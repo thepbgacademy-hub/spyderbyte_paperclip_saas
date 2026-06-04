@@ -63,6 +63,7 @@ The first harness implementation slice is now built and verified:
 - worker `done` outcomes must require a bounded `resultSummary`: the private outcome contract and the runtime/service seam should agree that terminal success without a tenant-safe summary is invalid rather than silently committing a truth gap
 - initial claimed-lane envelope reconstruction must fail open after durable claim: if the private execution envelope cannot be rebuilt after the lane is already durably `working`, runtime status should stay aligned with the durable claim instead of flipping the workflow run to a false `failed`
 - existing-working lane starts still need durable dispatch provenance: resuming a lane that was already `working` should preserve the private `existing_working_claim` handoff while still recording a bounded `execution_dispatched` event, so runtime hooks and durable card history do not disagree about whether execution actually restarted
+- durable execution starts need a bounded suppressed-start seam too: if either the initial claimed-lane envelope or a follow-on claimed-lane envelope cannot be reconstructed after the durable claim/dispatch already happened, runtime should emit a private metadata-only `execution_start_suppressed` handoff instead of leaving that pressure path as warning-only blind spot
 
 ## External References
 
