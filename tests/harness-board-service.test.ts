@@ -2022,6 +2022,197 @@ describe("harness board service", () => {
     );
   });
 
+  it("keeps reactivated follow-on dispatch history explicit even when triggering persona detail is absent", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "researcher",
+      title: "Validate competitor pressure notes",
+      deliverableType: "research_brief"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_dispatched_reactivated_without_persona",
+      cardId: created.cardId,
+      eventKind: "execution_dispatched",
+      payload: {
+        kind: "follow_on_dispatch",
+        kindLabel: "Follow-on dispatch",
+        executionStage: "post_outcome_follow_on",
+        executionStageLabel: "Post-outcome follow-on",
+        reactivatedRun: true,
+        triggeredByOutcomeState: "cancelled"
+      },
+      createdAt: "2026-06-03T10:10:45.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A worker reactivated this run and started this lane from a follow-on handoff."
+        })
+      ])
+    );
+  });
+
+  it("keeps current execution-queue dispatch history explicit when dispatch metadata is absent", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "researcher",
+      title: "Validate competitor pressure notes",
+      deliverableType: "research_brief"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_dispatched_generic_queue",
+      cardId: created.cardId,
+      eventKind: "execution_dispatched",
+      payload: {},
+      createdAt: "2026-06-03T10:11:00.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A worker started this lane from the current execution queue."
+        })
+      ])
+    );
+  });
+
+  it("keeps generic execution-claim history explicit when claim kind metadata is absent", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "researcher",
+      title: "Validate competitor pressure notes",
+      deliverableType: "research_brief"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_claimed_generic",
+      cardId: created.cardId,
+      eventKind: "execution_claimed",
+      payload: {},
+      createdAt: "2026-06-03T10:11:15.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A worker claimed this lane for execution."
+        })
+      ])
+    );
+  });
+
+  it("keeps generic execution-claim refresh history explicit when recovery kind metadata is absent", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "researcher",
+      title: "Validate competitor pressure notes",
+      deliverableType: "research_brief"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_claimed_refreshed_generic",
+      cardId: created.cardId,
+      eventKind: "execution_claim_refreshed",
+      payload: {},
+      createdAt: "2026-06-03T10:11:30.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A worker refreshed the active execution claim for this lane."
+        })
+      ])
+    );
+  });
+
   it("surfaces committed worker outcome history as bounded board activity", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
@@ -2280,6 +2471,56 @@ describe("harness board service", () => {
     );
   });
 
+  it("keeps done worker outcome summary detail explicit when no post-outcome action is present", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+
+    repository.insertEvent({
+      id: "event_execution_outcome_done_summary_only",
+      cardId: created.cardId,
+      eventKind: "execution_outcome_committed",
+      payload: {
+        outcomeState: "done",
+        runState: "active",
+        resultSummary: "The pricing lane finished cleanly without another immediate handoff."
+      },
+      createdAt: "2026-06-02T15:11:45.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A worker finished this lane: The pricing lane finished cleanly without another immediate handoff."
+        })
+      ])
+    );
+  });
+
   it("surfaces blocked worker outcome history with continuity-aware board activity", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
@@ -2533,6 +2774,52 @@ describe("harness board service", () => {
       expect.arrayContaining([
         expect.objectContaining({
           label: "A worker cancelled this lane and returned control to the harness: The tenant withdrew the request after the pricing assumptions changed."
+        })
+      ])
+    );
+  });
+
+  it("keeps generic committed-outcome history explicit when outcome-state metadata is absent", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+
+    repository.insertEvent({
+      id: "event_execution_outcome_generic",
+      cardId: created.cardId,
+      eventKind: "execution_outcome_committed",
+      payload: {},
+      createdAt: "2026-06-02T15:15:15.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A worker committed a new lane outcome."
         })
       ])
     );
