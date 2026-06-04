@@ -22,7 +22,7 @@ const workerEvents = (
       try {
         const parsed = JSON.parse(line);
         return parsed?.type === "wealth_factory_worker_run"
-          || parsed?.type === "wealth_factory_worker_claim"
+          || parsed?.type === "wealth_factory_worker_job_event"
           || parsed?.type === "wealth_factory_worker_fairness"
           ? [parsed]
           : [];

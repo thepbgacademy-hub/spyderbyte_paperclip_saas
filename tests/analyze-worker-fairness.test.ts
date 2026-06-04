@@ -82,7 +82,7 @@ describe("analyze-worker-fairness script", () => {
     await writeFile(
       workerAPath,
       `${JSON.stringify({
-        type: "wealth_factory_worker_claim",
+        type: "wealth_factory_worker_job_event",
         workerInstanceId: "worker-a",
         observedAt: "2026-05-20T00:00:00.500Z",
         event: "claimed",
@@ -95,7 +95,7 @@ describe("analyze-worker-fairness script", () => {
     await writeFile(
       workerBPath,
       `${JSON.stringify({
-        type: "wealth_factory_worker_claim",
+        type: "wealth_factory_worker_job_event",
         workerInstanceId: "worker-b",
         observedAt: "2026-05-20T00:00:00.600Z",
         event: "claimed",
@@ -168,7 +168,7 @@ describe("analyze-worker-fairness script", () => {
       workerAPath,
       [
         {
-          type: "wealth_factory_worker_claim",
+          type: "wealth_factory_worker_job_event",
           workerInstanceId: "worker-a",
           observedAt: "2026-05-20T00:00:00.100Z",
           event: "claimed",
@@ -177,7 +177,7 @@ describe("analyze-worker-fairness script", () => {
           workflowId: "workflow-1"
         },
         {
-          type: "wealth_factory_worker_claim",
+          type: "wealth_factory_worker_job_event",
           workerInstanceId: "worker-a",
           observedAt: "2026-05-20T00:00:00.400Z",
           event: "claimed",
@@ -192,7 +192,7 @@ describe("analyze-worker-fairness script", () => {
       workerBPath,
       [
         {
-          type: "wealth_factory_worker_claim",
+          type: "wealth_factory_worker_job_event",
           workerInstanceId: "worker-b",
           observedAt: "2026-05-20T00:00:00.200Z",
           event: "claimed",
@@ -201,7 +201,7 @@ describe("analyze-worker-fairness script", () => {
           workflowId: "workflow-2"
         },
         {
-          type: "wealth_factory_worker_claim",
+          type: "wealth_factory_worker_job_event",
           workerInstanceId: "worker-b",
           observedAt: "2026-05-20T00:00:00.500Z",
           event: "claimed",
@@ -216,7 +216,7 @@ describe("analyze-worker-fairness script", () => {
       workerCPath,
       [
         {
-          type: "wealth_factory_worker_claim",
+          type: "wealth_factory_worker_job_event",
           workerInstanceId: "worker-c",
           observedAt: "2026-05-20T00:00:00.300Z",
           event: "claimed",
@@ -225,7 +225,7 @@ describe("analyze-worker-fairness script", () => {
           workflowId: "workflow-3"
         },
         {
-          type: "wealth_factory_worker_claim",
+          type: "wealth_factory_worker_job_event",
           workerInstanceId: "worker-c",
           observedAt: "2026-05-20T00:00:00.600Z",
           event: "claimed",
@@ -302,7 +302,7 @@ describe("analyze-worker-fairness script", () => {
     await writeFile(
       workerPath,
       `${JSON.stringify({
-        type: "wealth_factory_worker_claim",
+        type: "wealth_factory_worker_job_event",
         workerInstanceId: "worker-a",
         observedAt: "2026-05-20T00:00:00.500Z",
         event: "claimed",
@@ -378,7 +378,7 @@ describe("analyze-worker-fairness script", () => {
 
     const eventLines = requests.map((request: { tenantId: string; runId: string; workflowId: string }, index: number) =>
       JSON.stringify({
-        type: "wealth_factory_worker_claim",
+        type: "wealth_factory_worker_job_event",
         workerInstanceId: index % 3 === 0 ? "worker-a" : index % 3 === 1 ? "worker-b" : "worker-c",
         observedAt: `2026-05-20T00:00:${String(index).padStart(2, "0")}.500Z`,
         event: "claimed",

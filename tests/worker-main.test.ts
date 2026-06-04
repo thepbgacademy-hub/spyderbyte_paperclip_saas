@@ -26,9 +26,15 @@ async function importWorkerMainWithMocks(input?: {
   waitUntilReadyError?: Error;
   closePromise?: Promise<void>;
   closeError?: Error;
+  closeOnError?: Error;
   runtimeClosePromise?: Promise<void>;
   runtimeCloseError?: Error;
 }) {
+  let consumerOptions:
+    | {
+        onError?: (error: unknown) => void;
+      }
+    | undefined;
   const consumerStart = input?.startError
     ? vi.fn().mockImplementation(() => Promise.reject(input.startError))
     : vi.fn().mockReturnValue(input?.startPromise ?? Promise.resolve());
@@ -37,7 +43,12 @@ async function importWorkerMainWithMocks(input?: {
     : vi.fn().mockReturnValue(input?.waitUntilReadyPromise ?? Promise.resolve());
   const consumerClose = input?.closeError
     ? vi.fn().mockImplementation(() => Promise.reject(input.closeError))
-    : vi.fn().mockReturnValue(input?.closePromise ?? Promise.resolve());
+    : input?.closeOnError
+      ? vi.fn().mockImplementation(() => {
+          consumerOptions?.onError?.(input.closeOnError);
+          return input?.closePromise ?? Promise.resolve();
+        })
+      : vi.fn().mockReturnValue(input?.closePromise ?? Promise.resolve());
   const runtimeClose = input?.runtimeCloseError
     ? vi.fn().mockImplementation(() => Promise.reject(input.runtimeCloseError))
     : vi.fn().mockReturnValue(input?.runtimeClosePromise ?? Promise.resolve());
@@ -45,11 +56,14 @@ async function importWorkerMainWithMocks(input?: {
     processQueuePayload: vi.fn(),
     close: runtimeClose
   }));
-  const createBullmqWorkflowConsumer = vi.fn(() => ({
-    start: consumerStart,
-    waitUntilReady: consumerWaitUntilReady,
-    close: consumerClose
-  }));
+  const createBullmqWorkflowConsumer = vi.fn((options: { onError?: (error: unknown) => void }) => {
+    consumerOptions = options;
+    return {
+      start: consumerStart,
+      waitUntilReady: consumerWaitUntilReady,
+      close: consumerClose
+    };
+  });
 
   const signalHandlers = new Map<string, () => void>();
   vi.spyOn(process, "on").mockImplementation(((event: string, handler: () => void) => {
@@ -311,5 +325,81 @@ describe("worker main", () => {
       stderrWrite.mock.calls.some(([message]) => String(message).includes("worker readiness interrupted by shutdown"))
     ).toBe(false);
     expect(process.exitCode).not.toBe(1);
+  });
+
+  it("suppresses BullMQ closing-noise errors after shutdown was already requested", async () => {
+    const waitUntilReady = createDeferred<void>();
+
+    const {
+      signalHandlers,
+      createBullmqWorkflowConsumer,
+      stderrWrite
+    } = await importWorkerMainWithMocks({
+      waitUntilReadyPromise: waitUntilReady.promise
+    });
+
+    signalHandlers.get("SIGTERM")?.();
+    const consumerCall = vi.mocked(createBullmqWorkflowConsumer).mock.calls.at(0) as
+      | [{ onError?: (error: unknown) => void }]
+      | undefined;
+    const onError = consumerCall?.[0].onError;
+    onError?.(new Error("Worker runtime is closing"));
+    await Promise.resolve();
+
+    expect(
+      stderrWrite.mock.calls.some(([message]) => String(message).includes("Worker runtime is closing"))
+    ).toBe(false);
+
+    waitUntilReady.resolve();
+    await Promise.resolve();
+  });
+
+  it("suppresses BullMQ closing-noise errors emitted synchronously during consumer close", async () => {
+    const waitUntilReady = createDeferred<void>();
+
+    const {
+      signalHandlers,
+      stderrWrite
+    } = await importWorkerMainWithMocks({
+      waitUntilReadyPromise: waitUntilReady.promise,
+      closeOnError: new Error("Worker runtime is closing")
+    });
+
+    signalHandlers.get("SIGTERM")?.();
+    await Promise.resolve();
+
+    expect(
+      stderrWrite.mock.calls.some(([message]) => String(message).includes("Worker runtime is closing"))
+    ).toBe(false);
+
+    waitUntilReady.resolve();
+    await Promise.resolve();
+  });
+
+  it("still logs BullMQ errors after shutdown when the error is not the bounded closing sentinel", async () => {
+    const waitUntilReady = createDeferred<void>();
+
+    const {
+      signalHandlers,
+      createBullmqWorkflowConsumer,
+      stderrWrite
+    } = await importWorkerMainWithMocks({
+      waitUntilReadyPromise: waitUntilReady.promise
+    });
+
+    signalHandlers.get("SIGTERM")?.();
+    const consumerCall = vi.mocked(createBullmqWorkflowConsumer).mock.calls.at(0) as
+      | [{ onError?: (error: unknown) => void }]
+      | undefined;
+    const onError = consumerCall?.[0].onError;
+    onError?.(new Error("bullmq connection dropped during shutdown"));
+    await Promise.resolve();
+
+    expect(
+      stderrWrite.mock.calls.some(([message]) => String(message).includes("bullmq connection dropped during shutdown"))
+    ).toBe(true);
+
+    waitUntilReady.resolve();
+    await Promise.resolve();
   });
 });

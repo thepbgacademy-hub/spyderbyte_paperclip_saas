@@ -668,7 +668,7 @@ describe("pressure drive helpers", () => {
       ],
       workerEvents: [
         {
-          type: "wealth_factory_worker_claim",
+          type: "wealth_factory_worker_job_event",
           event: "claimed",
           workerInstanceId: "worker-a",
           tenantId: "tenant-1",
@@ -676,7 +676,7 @@ describe("pressure drive helpers", () => {
           observedAt: "2026-05-20T06:00:01.900Z"
         },
         {
-          type: "wealth_factory_worker_claim",
+          type: "wealth_factory_worker_job_event",
           event: "claimed",
           workerInstanceId: "worker-b",
           tenantId: "tenant-2",
@@ -863,7 +863,7 @@ describe("pressure drive helpers", () => {
       ],
       workerEvents: [
         {
-          type: "wealth_factory_worker_claim",
+          type: "wealth_factory_worker_job_event",
           event: "claimed",
           workerInstanceId: "worker-a",
           tenantId: "tenant-1",
@@ -871,7 +871,7 @@ describe("pressure drive helpers", () => {
           observedAt: "2026-05-20T06:00:01.900Z"
         },
         {
-          type: "wealth_factory_worker_claim",
+          type: "wealth_factory_worker_job_event",
           event: "claimed",
           workerInstanceId: "worker-b",
           tenantId: "tenant-2",
@@ -920,7 +920,7 @@ describe("pressure drive helpers", () => {
       ],
       workerEvents: [
         {
-          type: "wealth_factory_worker_claim",
+          type: "wealth_factory_worker_job_event",
           event: "claimed",
           workerInstanceId: "worker-a",
           tenantId: "tenant-1",
@@ -1229,11 +1229,11 @@ describe("pressure drive helpers", () => {
         { lane: "gamma", tenantId: "tenant-3", runId: "run-6", runStatus: "running", outboxStatus: "enqueued", queueState: "completed", observedFirstProgressAt: "2026-05-20T06:00:08.000Z", observedFirstStartedAt: "2026-05-20T06:00:08.000Z" }
       ],
       workerEvents: [
-        { type: "wealth_factory_worker_claim", event: "claimed", workerInstanceId: "worker-a", tenantId: "tenant-1", runId: "run-1", observedAt: "2026-05-20T06:00:01.900Z" },
-        { type: "wealth_factory_worker_claim", event: "claimed", workerInstanceId: "worker-b", tenantId: "tenant-2", runId: "run-2", observedAt: "2026-05-20T06:00:01.950Z" },
+        { type: "wealth_factory_worker_job_event", event: "claimed", workerInstanceId: "worker-a", tenantId: "tenant-1", runId: "run-1", observedAt: "2026-05-20T06:00:01.900Z" },
+        { type: "wealth_factory_worker_job_event", event: "claimed", workerInstanceId: "worker-b", tenantId: "tenant-2", runId: "run-2", observedAt: "2026-05-20T06:00:01.950Z" },
         { type: "wealth_factory_worker_run", event: "started", workerInstanceId: "worker-a", tenantId: "tenant-3", runId: "run-3", observedAt: "2026-05-20T06:00:03.000Z" },
-        { type: "wealth_factory_worker_claim", event: "claimed", workerInstanceId: "worker-b", tenantId: "tenant-1", runId: "run-4", observedAt: "2026-05-20T06:00:06.900Z" },
-        { type: "wealth_factory_worker_claim", event: "claimed", workerInstanceId: "worker-a", tenantId: "tenant-2", runId: "run-5", observedAt: "2026-05-20T06:00:06.950Z" },
+        { type: "wealth_factory_worker_job_event", event: "claimed", workerInstanceId: "worker-b", tenantId: "tenant-1", runId: "run-4", observedAt: "2026-05-20T06:00:06.900Z" },
+        { type: "wealth_factory_worker_job_event", event: "claimed", workerInstanceId: "worker-a", tenantId: "tenant-2", runId: "run-5", observedAt: "2026-05-20T06:00:06.950Z" },
         { type: "wealth_factory_worker_run", event: "started", workerInstanceId: "worker-b", tenantId: "tenant-3", runId: "run-6", observedAt: "2026-05-20T06:00:08.000Z" }
       ],
       mode: "global-fairness"
@@ -1277,7 +1277,7 @@ describe("pressure drive helpers", () => {
     }));
 
     const workerEvents = requests.map((request: { tenantId: string; runId: string }, index: number) => ({
-      type: "wealth_factory_worker_claim",
+      type: "wealth_factory_worker_job_event",
       event: "claimed",
       workerInstanceId: index % 3 === 0 ? "worker-a" : index % 3 === 1 ? "worker-b" : "worker-c",
       tenantId: request.tenantId,
@@ -1334,10 +1334,10 @@ describe("pressure drive helpers", () => {
         { lane: "beta", tenantId: "tenant-2", runId: "run-4", runStatus: "running", outboxStatus: "enqueued", queueState: "completed", observedFirstProgressAt: "2026-05-20T06:00:07.100Z", observedFirstStartedAt: "2026-05-20T06:00:07.100Z" }
       ],
       workerEvents: [
-        { type: "wealth_factory_worker_claim", event: "claimed", workerInstanceId: "worker-a", tenantId: "tenant-1", runId: "run-1", observedAt: "2026-05-20T06:00:01.900Z" },
-        { type: "wealth_factory_worker_claim", event: "claimed", workerInstanceId: "worker-b", tenantId: "tenant-2", runId: "run-2", observedAt: "2026-05-20T06:00:01.950Z" },
-        { type: "wealth_factory_worker_claim", event: "claimed", workerInstanceId: "worker-a", tenantId: "tenant-1", runId: "run-3", observedAt: "2026-05-20T06:00:06.900Z" },
-        { type: "wealth_factory_worker_claim", event: "claimed", workerInstanceId: "worker-a", tenantId: "tenant-2", runId: "run-4", observedAt: "2026-05-20T06:00:06.950Z" }
+        { type: "wealth_factory_worker_job_event", event: "claimed", workerInstanceId: "worker-a", tenantId: "tenant-1", runId: "run-1", observedAt: "2026-05-20T06:00:01.900Z" },
+        { type: "wealth_factory_worker_job_event", event: "claimed", workerInstanceId: "worker-b", tenantId: "tenant-2", runId: "run-2", observedAt: "2026-05-20T06:00:01.950Z" },
+        { type: "wealth_factory_worker_job_event", event: "claimed", workerInstanceId: "worker-a", tenantId: "tenant-1", runId: "run-3", observedAt: "2026-05-20T06:00:06.900Z" },
+        { type: "wealth_factory_worker_job_event", event: "claimed", workerInstanceId: "worker-a", tenantId: "tenant-2", runId: "run-4", observedAt: "2026-05-20T06:00:06.950Z" }
       ],
       mode: "global-fairness"
     });

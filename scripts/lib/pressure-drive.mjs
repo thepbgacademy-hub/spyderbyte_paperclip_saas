@@ -582,7 +582,7 @@ function summarizeGlobalFairness(input) {
   const allWorkerEvents = (Array.isArray(input?.workerEvents) ? input.workerEvents : [])
     .map((event) => normalizeWorkerEvent(event))
     .filter((event) =>
-      (event.type === "wealth_factory_worker_run" || event.type === "wealth_factory_worker_claim")
+      (event.type === "wealth_factory_worker_run" || event.type === "wealth_factory_worker_job_event")
       && event.workerInstanceId
       && requestedRunIds.has(event.runId)
     );
@@ -805,7 +805,7 @@ function selectFairnessStartEvents(events) {
       .map((event) => [event.runId, event])
   );
   for (const event of events) {
-    if (event.type === "wealth_factory_worker_claim" && event.event === "claimed") {
+    if (event.type === "wealth_factory_worker_job_event" && event.event === "claimed") {
       startedByRun.set(event.runId, event);
     }
   }

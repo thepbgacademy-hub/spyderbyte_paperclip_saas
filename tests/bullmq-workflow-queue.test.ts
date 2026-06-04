@@ -260,4 +260,45 @@ describe("bullmq workflow queue", () => {
     expect(mocks.workerClose).toHaveBeenCalledOnce();
     expect(mocks.redisQuit).toHaveBeenCalledOnce();
   });
+
+  it("emits claimed and failed job events when launch succeeds but status recording fails afterward", async () => {
+    const failure = new Error("status recorder unavailable after launch");
+    const processPayload = vi.fn().mockRejectedValue(failure);
+    const onJobEvent = vi.fn();
+    const consumer = createBullmqWorkflowConsumer({
+      redisUrl: "redis://localhost:6379",
+      queueName: "wfpc-workflow-runs",
+      concurrency: 1,
+      processPayload,
+      onJobEvent
+    });
+
+    const processor = mocks.workerCtor.mock.results.at(-1)?.value.__processor as (job: { id?: string; data: unknown }) => Promise<unknown>;
+    await expect(
+      processor({
+        id: "job-late-status-failure",
+        data: {
+          tenantId: "tenant-1",
+          runId: "run-3",
+          workflowId: "workflow-3",
+          createdByUserId: "user-1",
+          idempotencyKey: "tenant-1:workflow-3:run-3",
+          createdAt: new Date().toISOString()
+        }
+      })
+    ).rejects.toThrow("status recorder unavailable after launch");
+
+    expect(onJobEvent).toHaveBeenNthCalledWith(
+      1,
+      "claimed",
+      expect.objectContaining({ jobId: "job-late-status-failure" })
+    );
+    expect(onJobEvent).toHaveBeenNthCalledWith(
+      2,
+      "failed",
+      expect.objectContaining({ jobId: "job-late-status-failure", error: failure })
+    );
+
+    await consumer.close();
+  });
 });

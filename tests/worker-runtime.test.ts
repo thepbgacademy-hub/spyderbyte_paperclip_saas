@@ -431,6 +431,45 @@ describe("worker runtime", () => {
     expect(poolEnd).toHaveBeenCalledTimes(1);
   });
 
+  it("records failed status when an in-flight non-harness launch rejects after shutdown begins", async () => {
+    const { createPgPool } = await import("../src/db/postgres-client.js");
+    const { createPaperclipClient } = await import("../src/paperclip/client.js");
+    const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
+    const deferred = createDeferred<{ paperclipRunId: string; status: "queued" }>();
+    const launchFailure = new Error("paperclip launch failed after shutdown");
+    const runtime = createWorkerRuntime({ env: loadWorkerEnv(validEnv), workerInstanceId: "worker-test-non-harness-close-failure" });
+    const paperclipClient = vi.mocked(createPaperclipClient).mock.results.at(-1)?.value;
+    paperclipClient?.createRun.mockImplementationOnce(() => deferred.promise);
+
+    const processPromise = runtime.processQueuePayload({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "workflow-1",
+      createdByUserId: "user-1",
+      idempotencyKey: "tenant-1:workflow-1:run-1",
+      createdAt: new Date().toISOString()
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
+    const poolEnd = vi.mocked(createPgPool).mock.results.at(-1)?.value.end;
+    const closePromise = runtime.close();
+
+    deferred.reject(launchFailure);
+
+    await expect(processPromise).rejects.toThrow("paperclip launch failed after shutdown");
+    await closePromise;
+
+    expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      from: ["queued", "running"],
+      to: "failed"
+    });
+    expect(poolEnd).toHaveBeenCalledTimes(1);
+  });
+
   it("routes harness-enabled workflows through the bounded lane-dispatch path with continuity resume focus", async () => {
     const { createPaperclipClient } = await import("../src/paperclip/client.js");
     const onHarnessLaneReady = vi.fn();

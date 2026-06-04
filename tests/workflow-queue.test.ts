@@ -602,6 +602,48 @@ describe("workflow worker", () => {
     });
   });
 
+  it("records failed status and rethrows when status recording fails after launch succeeds", async () => {
+    const createRun = vi.fn().mockResolvedValue({
+      paperclipRunId: "pc-run-1",
+      status: "queued"
+    });
+    const recordStatus = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("status recorder unavailable"))
+      .mockResolvedValueOnce(undefined);
+
+    await expect(
+      processWorkflowJob({
+        payload: createWorkflowQueuePayload({
+          tenantId: "tenant-1",
+          runId: "run-1",
+          workflowId: "workflow-1",
+          createdByUserId: "user-1"
+        }),
+        paperclipClient: { createRun },
+        tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
+        authorizeRunStart: vi.fn().mockResolvedValue(true),
+        isPaperclipEnabled: vi.fn().mockResolvedValue(true),
+        checkEntitlement: vi.fn().mockResolvedValue({ allowed: true }),
+        recordStatus
+      })
+    ).rejects.toThrow("status recorder unavailable");
+
+    expect(createRun).toHaveBeenCalledOnce();
+    expect(recordStatus).toHaveBeenNthCalledWith(1, {
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "workflow-1",
+      status: "queued"
+    });
+    expect(recordStatus).toHaveBeenNthCalledWith(2, {
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "workflow-1",
+      status: "failed"
+    });
+  });
+
   it("worker blocks Paperclip calls when tenant integration is disabled", async () => {
     const createRun = vi.fn();
     await expect(

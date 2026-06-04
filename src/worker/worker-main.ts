@@ -7,6 +7,7 @@ import { createBullmqWorkflowConsumer } from "../workflows/bullmq-workflow-queue
 async function main() {
   const env = loadWorkerEnv(process.env);
   const workerInstanceId = process.env.WF_WORKER_INSTANCE_ID?.trim() || `${hostname()}:${process.pid}`;
+  let shutdownRequestedFlag = false;
   const runtime = createWorkerRuntime({ env, workerInstanceId });
   const consumer = createBullmqWorkflowConsumer({
     redisUrl: env.redisUrl,
@@ -16,7 +17,7 @@ async function main() {
     onJobEvent: (event, details) => {
       process.stdout.write(
         `${JSON.stringify({
-          type: "wealth_factory_worker_claim",
+          type: "wealth_factory_worker_job_event",
           workerInstanceId,
           observedAt: new Date().toISOString(),
           event,
@@ -28,6 +29,9 @@ async function main() {
       );
     },
     onError: (error) => {
+      if (shutdownRequestedFlag && isClosingError(error)) {
+        return;
+      }
       const message = error instanceof Error ? error.stack ?? error.message : String(error);
       process.stderr.write(`${message}\n`);
     }
@@ -49,8 +53,12 @@ async function main() {
     resolveStartupFailed = resolve;
   });
   let startupFailureHandled = false;
-  let shutdownRequestedFlag = false;
   const ensureShutdown = ({ markClosing }: { markClosing: boolean }) => {
+    if (markClosing && !shutdownRequestedFlag) {
+      shutdownRequestedFlag = true;
+      resolveShutdownRequested();
+    }
+
     shutdownPromise ??= (async () => {
       const shutdownErrors: unknown[] = [];
 
@@ -70,11 +78,6 @@ async function main() {
         writeError(error);
       }
     })();
-
-    if (markClosing) {
-      shutdownRequestedFlag = true;
-      resolveShutdownRequested();
-    }
     void shutdownPromise;
   };
   const handleShutdownSignal = () => {
@@ -119,6 +122,10 @@ async function main() {
   }
 
   process.stdout.write("wealth_factory_worker_ready\n");
+}
+
+function isClosingError(error: unknown) {
+  return error instanceof Error && error.message === "Worker runtime is closing";
 }
 
 main().catch((error) => {
