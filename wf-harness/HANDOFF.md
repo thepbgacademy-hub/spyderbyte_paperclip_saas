@@ -61,6 +61,8 @@ The first harness implementation slice is now built and verified:
 - private worker execution-start telemetry should stay specific and consistent: approved claims, recovered claims, existing-working claims, initial lane starts, follow-on dispatches, and reactivated follow-on dispatches should each have their own private runtime handoff instead of forcing downstream hooks to infer start posture from one generic lane-ready event
 - follow-on execution starts must reuse the durable claimed-lane truth that outcome commit already produced: if a next lane has been claimed successfully, later private handoff building should not refetch stale lane state and accidentally pair a recovered-claim label with an older claim token
 - worker `done` outcomes must require a bounded `resultSummary`: the private outcome contract and the runtime/service seam should agree that terminal success without a tenant-safe summary is invalid rather than silently committing a truth gap
+- initial claimed-lane envelope reconstruction must fail open after durable claim: if the private execution envelope cannot be rebuilt after the lane is already durably `working`, runtime status should stay aligned with the durable claim instead of flipping the workflow run to a false `failed`
+- existing-working lane starts still need durable dispatch provenance: resuming a lane that was already `working` should preserve the private `existing_working_claim` handoff while still recording a bounded `execution_dispatched` event, so runtime hooks and durable card history do not disagree about whether execution actually restarted
 
 ## External References
 

@@ -14,6 +14,16 @@ import {
   createHarnessRunRecord
 } from "../src/harness/types.js";
 
+function markCardWorkingWithClaim(
+  card: ReturnType<typeof createHarnessCardRecord>,
+  claimToken = "claim-cfo-1",
+  claimedAt = "2026-05-21T10:04:30.000Z"
+): void {
+  card.state = "working";
+  card.executionClaimToken = claimToken;
+  card.executionClaimedAt = claimedAt;
+}
+
 describe("harness worker executor", () => {
   it("hydrates continuity-backed resume focus into the next actionable lane dispatch", async () => {
     const repository = createInMemoryHarnessRepository();
@@ -305,7 +315,7 @@ describe("harness worker executor", () => {
       title: "Resume the pricing lane",
       deliverableType: "pricing_review"
     });
-    cfoCard.state = "working";
+    markCardWorkingWithClaim(cfoCard);
     cfoCard.executionClaimToken = null;
     cfoCard.executionClaimedAt = null;
 
@@ -510,7 +520,7 @@ describe("harness worker executor", () => {
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
     });
-    cfoCard.state = "working";
+    markCardWorkingWithClaim(cfoCard);
 
     await repository.insertRun(run);
     await repository.insertCard(ceoCard);
@@ -562,14 +572,6 @@ describe("harness worker executor", () => {
             executionStage: "initial_lane_start",
             executionStageLabel: "Initial lane start"
           }
-        }),
-        expect.objectContaining({
-          eventKind: "execution_claim_refreshed",
-          payload: {
-            claimKind: "working_claim_refresh",
-            claimedAt: expect.any(String),
-            previousClaimedAt: null
-          }
         })
       ])
     );
@@ -579,6 +581,89 @@ describe("harness worker executor", () => {
         continuitySource: "resume_override",
         continuitySummary: "Resume from the board-approved pricing override note."
       })
+    );
+  });
+
+  it("persists dispatch provenance when resuming an already-claimed working lane", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    markCardWorkingWithClaim(cfoCard);
+    cfoCard.executionClaimToken = "claim-cfo-active";
+    cfoCard.executionClaimedAt = "2026-05-21T10:04:30.000Z";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+    await repository.upsertCardContinuity(
+      createHarnessCardContinuityRecord({
+        cardId: cfoCard.id,
+        runId: run.id,
+        continuitySource: "resume_override",
+        continuitySummary: "Resume from the board-approved pricing override note.",
+        latestResultSummary: null,
+        absorbedWorkItems: []
+      })
+    );
+
+    const beforeEvents = await repository.listEventsForCard(cfoCard.id);
+    const dispatch = await buildHarnessWorkerDispatch({
+      repository,
+      tenantId: "tenant-1",
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow"
+    });
+    const afterEvents = await repository.listEventsForCard(cfoCard.id);
+
+    expect(dispatch).toEqual({
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow",
+      status: "running",
+      dispatchHandoff: {
+        kind: "initial_claim",
+        kindLabel: "Initial lane claim",
+        executionStage: "initial_lane_start",
+        executionStageLabel: "Initial lane start"
+      },
+      laneExecution: expect.objectContaining({
+        cardId: cfoCard.id,
+        state: "working",
+        resumeFocus: "Resume from the board-approved pricing override note."
+      })
+    });
+    expect(afterEvents).toEqual(
+      beforeEvents.concat([
+        expect.objectContaining({
+          eventKind: "execution_dispatched",
+          payload: {
+            kind: "initial_claim",
+            kindLabel: "Initial lane claim",
+            executionStage: "initial_lane_start",
+            executionStageLabel: "Initial lane start"
+          }
+        })
+      ])
     );
   });
 
@@ -749,7 +834,7 @@ describe("harness worker executor", () => {
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
     });
-    cfoCard.state = "working";
+    markCardWorkingWithClaim(cfoCard);
 
     await repository.insertRun(run);
     await repository.insertCard(ceoCard);
@@ -859,7 +944,7 @@ describe("harness worker executor", () => {
       title: "Pressure-test the pricing lane",
       deliverableType: "pricing_review"
     });
-    cfoCard.state = "working";
+    markCardWorkingWithClaim(cfoCard);
 
     await repository.insertRun(run);
     await repository.insertCard(ceoCard);
@@ -872,6 +957,7 @@ describe("harness worker executor", () => {
         runId: run.id,
         workflowId: "wf_connect_first_workflow",
         cardId: cfoCard.id,
+        executionClaimToken: cfoCard.executionClaimToken!,
         state: "done",
         resultSummary: "Validated the pricing model and preserved the final floor."
       })
@@ -978,7 +1064,7 @@ describe("harness worker executor", () => {
       title: "Finalize pricing review",
       deliverableType: "pricing_review"
     });
-    cfoCard.state = "working";
+    markCardWorkingWithClaim(cfoCard);
 
     await repository.insertRun(run);
     await repository.insertCard(ceoCard);
@@ -1002,6 +1088,7 @@ describe("harness worker executor", () => {
         runId: run.id,
         workflowId: "wf_connect_first_workflow",
         cardId: cfoCard.id,
+        executionClaimToken: cfoCard.executionClaimToken!,
         state: "done",
         resultSummary: "Pricing review is complete and the deferred messaging follow-up remains open."
       })
@@ -1053,7 +1140,7 @@ describe("harness worker executor", () => {
       title: "Finalize pricing review",
       deliverableType: "pricing_review"
     });
-    cfoCard.state = "working";
+    markCardWorkingWithClaim(cfoCard);
     const cmoCard = createHarnessCardRecord({
       runId: run.id,
       parentCardId: ceoCard.id,
@@ -1082,6 +1169,7 @@ describe("harness worker executor", () => {
         runId: run.id,
         workflowId: "wf_connect_first_workflow",
         cardId: cfoCard.id,
+        executionClaimToken: cfoCard.executionClaimToken!,
         state: "done",
         resultSummary: "Pricing review is complete and ready for board packaging."
       })
@@ -1178,7 +1266,7 @@ describe("harness worker executor", () => {
       title: "Finalize pricing review",
       deliverableType: "pricing_review"
     });
-    cfoCard.state = "working";
+    markCardWorkingWithClaim(cfoCard);
     const cmoCard = createHarnessCardRecord({
       runId: run.id,
       parentCardId: ceoCard.id,
@@ -1200,6 +1288,7 @@ describe("harness worker executor", () => {
         runId: run.id,
         workflowId: "wf_connect_first_workflow",
         cardId: cfoCard.id,
+        executionClaimToken: cfoCard.executionClaimToken!,
         state: "done",
         resultSummary: "Pricing review is complete and the messaging lane can begin."
       })
@@ -1266,7 +1355,7 @@ describe("harness worker executor", () => {
       title: "Wait for revenue assumptions",
       deliverableType: "pricing_review"
     });
-    cfoCard.state = "working";
+    markCardWorkingWithClaim(cfoCard);
 
     await repository.insertRun(run);
     await repository.insertCard(ceoCard);
@@ -1279,6 +1368,7 @@ describe("harness worker executor", () => {
         runId: run.id,
         workflowId: "wf_connect_first_workflow",
         cardId: cfoCard.id,
+        executionClaimToken: cfoCard.executionClaimToken!,
         state: "waiting",
         resumeSummary: "CFO should resume this lane once the tenant confirms the latest revenue assumption."
       })
@@ -1360,7 +1450,7 @@ describe("harness worker executor", () => {
       title: "Finalize pricing review",
       deliverableType: "pricing_review"
     });
-    cfoCard.state = "working";
+    markCardWorkingWithClaim(cfoCard);
 
     await repository.insertRun(run);
     await repository.insertCard(ceoCard);
@@ -1373,6 +1463,7 @@ describe("harness worker executor", () => {
         runId: run.id,
         workflowId: "wf_connect_first_workflow",
         cardId: cfoCard.id,
+        executionClaimToken: cfoCard.executionClaimToken!,
         state: "done"
       })
     ).rejects.toThrow("Worker lane result summaries are required for done outcomes");
@@ -1403,7 +1494,7 @@ describe("harness worker executor", () => {
       title: "Wait for revenue assumptions",
       deliverableType: "pricing_review"
     });
-    cfoCard.state = "working";
+    markCardWorkingWithClaim(cfoCard);
 
     await repository.insertRun(run);
     await repository.insertCard(ceoCard);
@@ -1416,6 +1507,7 @@ describe("harness worker executor", () => {
         runId: run.id,
         workflowId: "wf_connect_first_workflow",
         cardId: cfoCard.id,
+        executionClaimToken: cfoCard.executionClaimToken!,
         state: "waiting",
         resumeSummary: "CFO should resume this lane once the tenant confirms the latest revenue assumption."
       })
@@ -1458,7 +1550,7 @@ describe("harness worker executor", () => {
       title: "Finalize pricing review",
       deliverableType: "pricing_review"
     });
-    cfoCard.state = "working";
+    markCardWorkingWithClaim(cfoCard);
     const cmoCard = createHarnessCardRecord({
       runId: run.id,
       parentCardId: ceoCard.id,
@@ -1480,6 +1572,7 @@ describe("harness worker executor", () => {
         runId: run.id,
         workflowId: "wf_connect_first_workflow",
         cardId: cfoCard.id,
+        executionClaimToken: cfoCard.executionClaimToken!,
         state: "done",
         resultSummary: "Pricing review is complete and waiting on the CMO brief."
       })
@@ -1519,7 +1612,7 @@ describe("harness worker executor", () => {
       title: "Finalize pricing review",
       deliverableType: "pricing_review"
     });
-    cfoCard.state = "working";
+    markCardWorkingWithClaim(cfoCard);
     const cmoCard = createHarnessCardRecord({
       runId: run.id,
       parentCardId: ceoCard.id,
@@ -1552,6 +1645,7 @@ describe("harness worker executor", () => {
         runId: run.id,
         workflowId: "wf_connect_first_workflow",
         cardId: cfoCard.id,
+        executionClaimToken: cfoCard.executionClaimToken!,
         state: "done",
         resultSummary: "Pricing review is complete and ready for board packaging."
       })
@@ -1611,7 +1705,7 @@ describe("harness worker executor", () => {
       title: "Finalize pricing review",
       deliverableType: "pricing_review"
     });
-    cfoCard.state = "working";
+    markCardWorkingWithClaim(cfoCard);
     const cmoCard = createHarnessCardRecord({
       runId: run.id,
       parentCardId: ceoCard.id,
@@ -1648,6 +1742,7 @@ describe("harness worker executor", () => {
         runId: run.id,
         workflowId: "wf_connect_first_workflow",
         cardId: cfoCard.id,
+        executionClaimToken: cfoCard.executionClaimToken!,
         state: "done",
         resultSummary: "Pricing review is complete and ready for board packaging."
       })
@@ -1707,7 +1802,7 @@ describe("harness worker executor", () => {
       title: "Finalize pricing review",
       deliverableType: "pricing_review"
     });
-    cfoCard.state = "working";
+    markCardWorkingWithClaim(cfoCard);
     const cmoCard = createHarnessCardRecord({
       runId: run.id,
       parentCardId: ceoCard.id,
@@ -1740,6 +1835,7 @@ describe("harness worker executor", () => {
         runId: run.id,
         workflowId: "wf_connect_first_workflow",
         cardId: cfoCard.id,
+        executionClaimToken: cfoCard.executionClaimToken!,
         state: "done",
         resultSummary: "Pricing review is complete and ready for board packaging."
       })
@@ -1786,7 +1882,7 @@ describe("harness worker executor", () => {
       title: "Finalize pricing review",
       deliverableType: "pricing_review"
     });
-    cfoCard.state = "working";
+    markCardWorkingWithClaim(cfoCard);
     const cmoCard = createHarnessCardRecord({
       runId: run.id,
       parentCardId: ceoCard.id,
@@ -1819,6 +1915,7 @@ describe("harness worker executor", () => {
         runId: run.id,
         workflowId: "wf_connect_first_workflow",
         cardId: cfoCard.id,
+        executionClaimToken: cfoCard.executionClaimToken!,
         state: "done",
         resultSummary: "Pricing review is complete and ready for board packaging."
       })
@@ -1861,7 +1958,7 @@ describe("harness worker executor", () => {
       title: "Finalize pricing review",
       deliverableType: "pricing_review"
     });
-    cfoCard.state = "working";
+    markCardWorkingWithClaim(cfoCard);
 
     await repository.insertRun(run);
     await repository.insertCard(ceoCard);
@@ -1885,6 +1982,7 @@ describe("harness worker executor", () => {
         runId: run.id,
         workflowId: "wf_connect_first_workflow",
         cardId: cfoCard.id,
+        executionClaimToken: cfoCard.executionClaimToken!,
         state: "done",
         resultSummary: "Pricing review is complete and ready for board packaging."
       })
@@ -2114,6 +2212,77 @@ describe("harness worker executor", () => {
             activeExecutionClaimPresent: true,
             activeExecutionClaimClaimedAt: expect.any(String),
             presentedExecutionClaimState: "mismatched"
+          }
+        })
+      ])
+    );
+  });
+
+  it("fails closed when a working lane lost its persisted execution claim", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "working";
+    cfoCard.executionClaimToken = null;
+    cfoCard.executionClaimedAt = null;
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+
+    await expect(
+      commitHarnessWorkerLaneOutcome({
+        repository,
+        tenantId: "tenant-1",
+        runId: run.id,
+        workflowId: "wf_connect_first_workflow",
+        cardId: cfoCard.id,
+        state: "done",
+        resultSummary: "This should not commit."
+      })
+    ).resolves.toEqual({
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow",
+      status: "ignored",
+      ignored: {
+        reason: "stale_execution_claim",
+        currentLaneState: "working",
+        activeExecutionClaimPresent: false,
+        activeExecutionClaimClaimedAt: null,
+        presentedExecutionClaimState: "missing"
+      }
+    });
+    await expect(repository.listEventsForCard(cfoCard.id)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventKind: "execution_outcome_ignored",
+          payload: {
+            reason: "stale_execution_claim",
+            currentLaneState: "working",
+            activeExecutionClaimPresent: false,
+            activeExecutionClaimClaimedAt: null,
+            presentedExecutionClaimState: "missing"
           }
         })
       ])

@@ -411,6 +411,27 @@ export async function commitHarnessWorkerLaneOutcome(input: {
         ignored
       };
     }
+    if (!card.executionClaimToken || !card.executionClaimedAt) {
+      const ignored = {
+        reason: "stale_execution_claim" as const,
+        currentLaneState: "working" as const,
+        activeExecutionClaimPresent: false,
+        activeExecutionClaimClaimedAt: null,
+        presentedExecutionClaimState: input.executionClaimToken ? "mismatched" as const : "missing" as const
+      };
+      await repository.insertEvent(
+        buildIgnoredOutcomeEvent({
+          cardId: card.id,
+          ignored
+        })
+      );
+      return {
+        runId: run.id,
+        workflowId: run.workflowId,
+        status: "ignored",
+        ignored
+      };
+    }
     if (card.executionClaimToken && input.executionClaimToken !== card.executionClaimToken) {
       const ignored = {
         reason: "stale_execution_claim" as const,
@@ -887,13 +908,14 @@ async function persistWorkerStartState(input: {
       })
     );
   }
+  await input.repository.insertEvent(
+    buildExecutionDispatchedEvent({
+      cardId: input.claimedLane.id,
+      dispatchHandoff: input.dispatchHandoff
+    })
+  );
+
   if (input.claimKind !== "existing_working_claim") {
-    await input.repository.insertEvent(
-      buildExecutionDispatchedEvent({
-        cardId: input.claimedLane.id,
-        dispatchHandoff: input.dispatchHandoff
-      })
-    );
     await input.repository.insertEvent(
       createHarnessCardEventRecord({
         cardId: input.claimedLane.id,

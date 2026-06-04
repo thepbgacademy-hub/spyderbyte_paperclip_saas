@@ -1497,14 +1497,24 @@ async function processHarnessWorkflowJob(options: {
     });
     const dispatch = dispatchResolution.dispatch;
     if (dispatch.laneExecution) {
-      const executionEnvelope = await buildHarnessWorkerExecutionEnvelope({
-        repository: options.repository,
-        tenantId: options.payload.tenantId,
-        dispatch,
-        requiredCapabilities: options.workflowRegistry.getDefinition(dispatch.workflowId).requiredCapabilities,
-        ...(dispatchResolution.lane ? { laneContext: dispatchResolution.lane } : {}),
-        ...(dispatchResolution.executionClaim ? { executionClaimContext: dispatchResolution.executionClaim } : {})
-      });
+      let executionEnvelope: HarnessWorkerExecutionEnvelope | null = null;
+      try {
+        executionEnvelope = await buildHarnessWorkerExecutionEnvelope({
+          repository: options.repository,
+          tenantId: options.payload.tenantId,
+          dispatch,
+          requiredCapabilities: options.workflowRegistry.getDefinition(dispatch.workflowId).requiredCapabilities,
+          ...(dispatchResolution.lane ? { laneContext: dispatchResolution.lane } : {}),
+          ...(dispatchResolution.executionClaim ? { executionClaimContext: dispatchResolution.executionClaim } : {})
+        });
+      } catch (error) {
+        console.warn("Harness execution envelope reconstruction failed after durable lane claim", {
+          runId: dispatch.runId,
+          workflowId: dispatch.workflowId,
+          cardId: dispatch.laneExecution.cardId,
+          error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+        });
+      }
       if (executionEnvelope) {
         try {
           await options.onExecutionEnvelope?.(executionEnvelope);

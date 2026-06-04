@@ -603,6 +603,62 @@ describe("worker runtime", () => {
     await runtime.close();
   });
 
+  it("keeps a durably claimed harness lane running when private envelope reconstruction fails", async () => {
+    const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onHarnessLaneReady = vi.fn();
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-envelope-rebuild-fail",
+      onHarnessLaneReady
+    });
+
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.getCardContinuity = vi.fn().mockRejectedValueOnce(new Error("continuity lookup unavailable"));
+
+    stdoutWrite.mockClear();
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+
+    const acidRepository = vi.mocked(createAcidGuardRepository).mock.results[0]?.value;
+    expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      from: ["queued", "running"],
+      to: "running"
+    });
+    expect(warn).toHaveBeenCalledWith(
+      "Harness execution envelope reconstruction failed after durable lane claim",
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo"
+      })
+    );
+    expect(onHarnessLaneReady).not.toHaveBeenCalled();
+    expect(stdoutWrite).not.toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_claimed\"")
+    );
+
+    warn.mockRestore();
+    await runtime.close();
+  });
+
   it("fails closed for terminal harness runs without emitting a stale lane dispatch", async () => {
     const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
     const runtime = createWorkerRuntime({
@@ -1868,6 +1924,134 @@ describe("worker runtime", () => {
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_execution_claim_recovered\"")
+    );
+
+    await runtime.close();
+  });
+
+  it("emits existing-working execution-start handoffs when resuming an already-claimed lane", async () => {
+    const onHarnessLaneReady = vi.fn();
+    const onHarnessExecutionClaimed = vi.fn();
+    const onHarnessExistingWorkingExecutionClaim = vi.fn();
+    const onHarnessExecutionDispatched = vi.fn();
+    const onHarnessInitialLaneStart = vi.fn();
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-existing-working",
+      onHarnessLaneReady,
+      onHarnessExecutionClaimed,
+      onHarnessExistingWorkingExecutionClaim,
+      onHarnessExecutionDispatched,
+      onHarnessInitialLaneStart
+    });
+
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.listCardsForRun.mockResolvedValueOnce([
+      {
+        id: "card_ceo",
+        runId: "run-1",
+        parentCardId: null,
+        persona: "ceo",
+        title: "Plan run",
+        deliverableType: "plan",
+        state: "planning",
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      },
+      {
+        id: "card_cfo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Pressure-test the pricing lane",
+        deliverableType: "pricing_review",
+        state: "working",
+        executionClaimToken: "claim-cfo-active",
+        executionClaimedAt: "2026-05-21T10:04:30.000Z",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:04:30.000Z"
+      }
+    ]);
+
+    stdoutWrite.mockClear();
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+
+    expect(harnessRepository.refreshCardExecutionClaim).not.toHaveBeenCalled();
+    expect(onHarnessExecutionClaimed).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      executionClaim: {
+        kind: "existing_working_claim",
+        claimedAt: "2026-05-21T10:04:30.000Z",
+        previousClaimedAt: "2026-05-21T10:04:30.000Z"
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cfo",
+        persona: "cfo"
+      })
+    });
+    expect(onHarnessExistingWorkingExecutionClaim).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      executionClaim: {
+        kind: "existing_working_claim",
+        claimedAt: "2026-05-21T10:04:30.000Z",
+        previousClaimedAt: "2026-05-21T10:04:30.000Z"
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cfo",
+        persona: "cfo"
+      })
+    });
+    expect(onHarnessExecutionDispatched).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      dispatchHandoff: {
+        kind: "initial_claim",
+        kindLabel: "Initial lane claim",
+        executionStage: "initial_lane_start",
+        executionStageLabel: "Initial lane start"
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cfo",
+        persona: "cfo"
+      })
+    });
+    expect(onHarnessInitialLaneStart).toHaveBeenCalledTimes(1);
+    expect(onHarnessLaneReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        executionClaim: {
+          kind: "existing_working_claim",
+          token: "claim-cfo-active",
+          claimedAt: "2026-05-21T10:04:30.000Z",
+          previousClaimedAt: "2026-05-21T10:04:30.000Z"
+        }
+      })
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_claim_existing_working\"")
+    );
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_dispatch_initial\"")
     );
 
     await runtime.close();
@@ -3435,6 +3619,91 @@ describe("worker runtime", () => {
         presentedExecutionClaimState: "mismatched"
       }
     });
+
+    await runtime.close();
+  });
+
+  it("fails closed when a working lane lost its persisted execution claim", async () => {
+    const onHarnessLaneOutcomeIgnored = vi.fn();
+    const onHarnessLaneOutcomeIgnoredStaleClaim = vi.fn();
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-outcome-missing-claim",
+      onHarnessLaneOutcomeIgnored,
+      onHarnessLaneOutcomeIgnoredStaleClaim
+    });
+
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.getCard.mockResolvedValueOnce({
+      id: "card_cfo",
+      runId: "run-1",
+      parentCardId: "card_ceo",
+      persona: "cfo",
+      title: "Finalize pricing review",
+      deliverableType: "pricing_review",
+      state: "working",
+      executionClaimToken: null,
+      executionClaimedAt: null,
+      createdAt: "2026-05-21T10:01:00.000Z",
+      updatedAt: "2026-05-21T10:04:00.000Z"
+    });
+
+    stdoutWrite.mockClear();
+    await expect(
+      runtime.commitHarnessLaneOutcome({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        state: "done",
+        resultSummary: "This should not commit."
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "ignored",
+      ignored: {
+        reason: "stale_execution_claim",
+        currentLaneState: "working",
+        activeExecutionClaimPresent: false,
+        activeExecutionClaimClaimedAt: null,
+        presentedExecutionClaimState: "missing"
+      }
+    });
+
+    expect(harnessRepository.transitionCardState).not.toHaveBeenCalled();
+    expect(onHarnessLaneOutcomeIgnored).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      cardId: "card_cfo",
+      ignored: {
+        reason: "stale_execution_claim",
+        currentLaneState: "working",
+        activeExecutionClaimPresent: false,
+        activeExecutionClaimClaimedAt: null,
+        presentedExecutionClaimState: "missing"
+      }
+    });
+    expect(onHarnessLaneOutcomeIgnoredStaleClaim).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      cardId: "card_cfo",
+      ignored: {
+        reason: "stale_execution_claim",
+        currentLaneState: "working",
+        activeExecutionClaimPresent: false,
+        activeExecutionClaimClaimedAt: null,
+        presentedExecutionClaimState: "missing"
+      }
+    });
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_outcome_ignored_stale_claim\"")
+    );
 
     await runtime.close();
   });
