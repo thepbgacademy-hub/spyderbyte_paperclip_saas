@@ -64,6 +64,7 @@ The first harness implementation slice is now built and verified:
 - initial claimed-lane envelope reconstruction must fail open after durable claim: if the private execution envelope cannot be rebuilt after the lane is already durably `working`, runtime status should stay aligned with the durable claim instead of flipping the workflow run to a false `failed`
 - existing-working lane starts still need durable dispatch provenance: resuming a lane that was already `working` should preserve the private `existing_working_claim` handoff while still recording a bounded `execution_dispatched` event, so runtime hooks and durable card history do not disagree about whether execution actually restarted
 - durable execution starts need a bounded suppressed-start seam too: if either the initial claimed-lane envelope or a follow-on claimed-lane envelope cannot be reconstructed after the durable claim/dispatch already happened, runtime should emit a private metadata-only `execution_start_suppressed` handoff instead of leaving that pressure path as warning-only blind spot
+- execution-start outcomes should be durable engine truth, not stdout-only telemetry: once a private worker start is either fully rebuilt or explicitly suppressed, persist bounded `execution_start_ready` / `execution_start_suppressed` history on the lane so audit, replay, and support paths can distinguish a healthy start from a fail-open start without depending on transient runtime hooks
 
 ## External References
 

@@ -29,6 +29,7 @@ export type CustomerSafePlatformLoad = {
 
 type DashboardScope = {
   tenantId: string;
+  excludeRunId?: string;
 };
 
 type MembershipScope = DashboardScope & {
@@ -98,8 +99,9 @@ export function createSupabaseRepositories(client: QueryClient) {
         `select count(*)::int as running_run_count
            from wfpc.workflow_runs
            where tenant_id = $1
-             and status = 'running'`,
-        [input.tenantId]
+             and status = 'running'
+             and ($2::text is null or id <> $2::text)`,
+        [input.tenantId, input.excludeRunId ?? null]
       );
       return Number(asRecord(result.rows[0]).running_run_count ?? 0);
     },

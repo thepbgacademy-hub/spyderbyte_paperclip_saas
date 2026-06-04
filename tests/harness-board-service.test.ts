@@ -3070,6 +3070,120 @@ describe("harness board service", () => {
     );
   });
 
+  it("surfaces execution-start-ready history as bounded board activity", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "launch_copy"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_start_ready",
+      cardId: created.cardId,
+      eventKind: "execution_start_ready",
+      payload: {
+        kind: "follow_on_dispatch",
+        kindLabel: "Follow-on dispatch",
+        executionStage: "post_outcome_follow_on",
+        executionStageLabel: "Post-outcome follow-on",
+        reactivatedRun: false,
+        triggeredByCardId: "card_cfo",
+        triggeredByPersona: "cfo",
+        triggeredByOutcomeState: "done",
+        claimKind: "approved_claim"
+      },
+      createdAt: "2026-06-04T09:00:00.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Worker execution start was prepared for the next lane after the prior lane outcome."
+        })
+      ])
+    );
+  });
+
+  it("surfaces execution-start-suppressed history as bounded board activity", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "launch_copy"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_start_suppressed",
+      cardId: created.cardId,
+      eventKind: "execution_start_suppressed",
+      payload: {
+        kind: "follow_on_dispatch",
+        kindLabel: "Follow-on dispatch",
+        executionStage: "post_outcome_follow_on",
+        executionStageLabel: "Post-outcome follow-on",
+        reactivatedRun: false,
+        triggeredByCardId: "card_cfo",
+        triggeredByPersona: "cfo",
+        triggeredByOutcomeState: "done",
+        claimKind: "approved_claim",
+        failureKind: "execution_envelope_reconstruction_failed",
+        failureMessage: "follow-on continuity unavailable"
+      },
+      createdAt: "2026-06-04T09:01:00.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Worker execution start could not be rebuilt after the next lane was already dispatched."
+        })
+      ])
+    );
+  });
+
   it("surfaces initial execution-claim dispatch history as bounded board activity", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({

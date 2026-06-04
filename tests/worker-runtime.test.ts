@@ -540,6 +540,17 @@ describe("worker runtime", () => {
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_execution_dispatch_initial\"")
     );
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "execution_start_ready",
+        payload: expect.objectContaining({
+          kind: "initial_claim",
+          executionStage: "initial_lane_start",
+          claimKind: "approved_claim"
+        })
+      })
+    );
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"dispatchHandoff\":{\"kind\":\"initial_claim\"")
     );
@@ -708,6 +719,18 @@ describe("worker runtime", () => {
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_execution_start_suppressed_initial\"")
+    );
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "execution_start_suppressed",
+        payload: expect.objectContaining({
+          kind: "initial_claim",
+          executionStage: "initial_lane_start",
+          claimKind: "approved_claim",
+          failureKind: "execution_envelope_reconstruction_failed"
+        })
+      })
     );
     expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_execution_claimed\"")
@@ -1571,6 +1594,18 @@ describe("worker runtime", () => {
     });
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
+    );
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cmo",
+        eventKind: "execution_start_ready",
+        payload: expect.objectContaining({
+          kind: "follow_on_dispatch",
+          executionStage: "post_outcome_follow_on",
+          reactivatedRun: false,
+          claimKind: "approved_claim"
+        })
+      })
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"dispatchHandoff\":{\"kind\":\"follow_on_dispatch\"")
@@ -3788,6 +3823,18 @@ describe("worker runtime", () => {
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_execution_start_suppressed_follow_on\"")
     );
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cmo",
+        eventKind: "execution_start_suppressed",
+        payload: expect.objectContaining({
+          kind: "follow_on_dispatch",
+          executionStage: "post_outcome_follow_on",
+          claimKind: "approved_claim",
+          failureKind: "execution_envelope_reconstruction_failed"
+        })
+      })
+    );
 
     const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
     expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith({
@@ -4032,6 +4079,19 @@ describe("worker runtime", () => {
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_execution_start_suppressed_reactivated\"")
+    );
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cmo",
+        eventKind: "execution_start_suppressed",
+        payload: expect.objectContaining({
+          kind: "follow_on_dispatch",
+          executionStage: "post_outcome_follow_on",
+          reactivatedRun: true,
+          claimKind: "approved_claim",
+          failureKind: "execution_envelope_reconstruction_failed"
+        })
+      })
     );
 
     const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
@@ -4633,7 +4693,7 @@ describe("worker runtime", () => {
       })
     });
     const repositories = vi.mocked(createSupabaseRepositories).mock.results[0]?.value;
-    repositories.countRunningWorkflowRuns.mockResolvedValue(1);
+    repositories.countRunningWorkflowRuns.mockResolvedValue(2);
     await runtime.processQueuePayload({
       tenantId: "tenant-1",
       runId: "run-1",
@@ -4666,8 +4726,87 @@ describe("worker runtime", () => {
       })
     ).rejects.toThrow("Paperclip secret binding refresh deferred");
 
+    expect(repositories.countRunningWorkflowRuns).toHaveBeenCalledWith({
+      tenantId: "tenant-1"
+    });
     const syncService = vi.mocked(createPaperclipSecretSyncService).mock.results[0]?.value;
     expect(syncService.syncBinding).not.toHaveBeenCalled();
+
+    await runtime.close();
+  });
+
+  it("allows first-use Paperclip secret refresh when the current run is the only running tenant run", async () => {
+    const { createPaperclipClient } = await import("../src/paperclip/client.js");
+    const {
+      createPaperclipSecretBindingRepository,
+      createPaperclipSecretSyncService
+    } = await import("../src/paperclip/secret-sync.js");
+    const { createSupabaseRepositories } = await import("../src/db/supabase-repositories.js");
+
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_PAPERCLIP_LAUNCH_MODE: "issues",
+        WF_PAPERCLIP_BOARD_SESSION_TOKEN: "board-session-token",
+        WF_PAPERCLIP_BOARD_ORIGIN: "https://paperclip-board.internal.local/",
+        WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-fallback"
+      })
+    });
+    const repositories = vi.mocked(createSupabaseRepositories).mock.results[0]?.value;
+    repositories.countRunningWorkflowRuns.mockResolvedValue(1);
+
+    await runtime.processQueuePayload({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "workflow-1",
+      createdByUserId: "user-1",
+      idempotencyKey: "tenant-1:workflow-1:run-1",
+      createdAt: new Date().toISOString()
+    });
+
+    const issueLaunch = vi.mocked(createPaperclipClient).mock.calls.at(-1)?.[0].issueLaunch;
+    const bindingRepository = vi.mocked(createPaperclipSecretBindingRepository).mock.results[0]?.value;
+    bindingRepository.findActiveBySecretRef.mockResolvedValue(null);
+
+    const syncService = vi.mocked(createPaperclipSecretSyncService).mock.results[0]?.value;
+    syncService.syncBinding.mockResolvedValueOnce({
+      paperclipSecretId: "pc-secret-self-only",
+      paperclipSecretKey: "OPENAI_API_KEY",
+      paperclipSecretVersion: "21"
+    });
+
+    await expect(
+      issueLaunch?.syncProviderSecretRefs?.({
+        companyId: "pc-company-1",
+        workflowId: "workflow-1",
+        agentId: "pc-agent-1",
+        providerContext: [
+          {
+            capability: "text_generation",
+            providerKind: "openai_api",
+            label: "Bound OpenAI",
+            secretRef: "wf_secret_bound",
+            metadata: {},
+            secretValues: { apiKey: "sk-tenant" }
+          }
+        ]
+      })
+    ).resolves.toEqual({
+      adapterConfig: {
+        env: {
+          OPENAI_API_KEY: {
+            type: "secret_ref",
+            secretId: "pc-secret-self-only",
+            version: 21
+          }
+        }
+      }
+    });
+
+    expect(repositories.countRunningWorkflowRuns).toHaveBeenCalledWith({
+      tenantId: "tenant-1"
+    });
+    expect(syncService.syncBinding).toHaveBeenCalledTimes(1);
 
     await runtime.close();
   });

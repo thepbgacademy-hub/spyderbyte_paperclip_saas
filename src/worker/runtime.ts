@@ -38,6 +38,7 @@ import { processWorkflowJob } from "../workflows/worker.js";
 import { validateWorkflowQueuePayload } from "../workflows/queue.js";
 import { createAcidWorkflowStatusRecorder } from "../workflows/acid-status-recorder.js";
 import { createTenantExecutionGate } from "./tenant-execution-gate.js";
+import { createHarnessCardEventRecord } from "../harness/types.js";
 
 export type WorkerEnv = ReturnType<typeof loadWorkerEnv>;
 type HarnessFollowOnDispatchHandoff = Extract<HarnessWorkerDispatchHandoff, { kind: "follow_on_dispatch" }>;
@@ -422,7 +423,7 @@ export function createWorkerRuntime(options: {
       }
 
       const runningRunCount = await repositories.countRunningWorkflowRuns({ tenantId: input.tenantId });
-      if (runningRunCount > 0) {
+      if (runningRunCount > 1) {
         throw new Error(
           `Paperclip secret binding refresh deferred for ${input.providerKind}:${input.envKey} while another tenant run is still active`
         );
@@ -869,6 +870,28 @@ export function createWorkerRuntime(options: {
               });
             } catch (error) {
               const failureMessage = error instanceof Error ? error.message : String(error);
+              await harnessRepository.insertEvent(
+                createHarnessCardEventRecord({
+                  cardId: committedOutcome.nextDispatch.laneExecution.cardId,
+                  eventKind: "execution_start_suppressed",
+                  payload: toExecutionStartEventPayload({
+                    dispatchHandoff: committedOutcome.nextDispatch.dispatchHandoff ?? {
+                      kind: "follow_on_dispatch",
+                      kindLabel: "Follow-on dispatch",
+                      executionStage: "post_outcome_follow_on",
+                      executionStageLabel: "Post-outcome follow-on",
+                      reactivatedRun: false,
+                      triggeredByCardId: committedOutcome.laneExecution!.cardId,
+                      triggeredByPersona: "unknown",
+                      triggeredByOutcomeState: committedOutcome.laneExecution!.state as "waiting" | "done" | "blocked" | "cancelled"
+                    },
+                    ...(committedOutcome.nextExecutionStartContext?.executionClaim
+                      ? { executionClaim: committedOutcome.nextExecutionStartContext.executionClaim }
+                      : {}),
+                    failureMessage
+                  })
+                })
+              );
               console.warn("Harness follow-on execution envelope reconstruction failed after durable dispatch", {
                 runId: committedOutcome.runId,
                 workflowId: committedOutcome.workflowId,
@@ -899,6 +922,29 @@ export function createWorkerRuntime(options: {
               });
             }
             if (executionEnvelope) {
+              await harnessRepository.insertEvent(
+                createHarnessCardEventRecord({
+                  cardId: executionEnvelope.laneExecution.cardId,
+                  eventKind: "execution_start_ready",
+                  payload: toExecutionStartEventPayload({
+                    dispatchHandoff: executionEnvelope.dispatchHandoff ?? {
+                      kind: "follow_on_dispatch",
+                      kindLabel: "Follow-on dispatch",
+                      executionStage: "post_outcome_follow_on",
+                      executionStageLabel: "Post-outcome follow-on",
+                      reactivatedRun: false,
+                      triggeredByCardId: committedOutcome.laneExecution!.cardId,
+                      triggeredByPersona: "unknown",
+                      triggeredByOutcomeState: committedOutcome.laneExecution!.state as "waiting" | "done" | "blocked" | "cancelled"
+                    },
+                    executionClaim: {
+                      kind: executionEnvelope.executionClaim.kind,
+                      claimedAt: executionEnvelope.executionClaim.claimedAt,
+                      previousClaimedAt: executionEnvelope.executionClaim.previousClaimedAt
+                    }
+                  })
+                })
+              );
               try {
                 await options.onHarnessLaneReady?.(executionEnvelope);
               } catch (error) {
@@ -1100,6 +1146,35 @@ async function emitHarnessExecutionStartSuppressed(input: {
       error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
     });
   }
+}
+
+function toExecutionStartEventPayload(input: {
+  dispatchHandoff: HarnessWorkerDispatchHandoff;
+  executionClaim?: HarnessWorkerExecutionClaimContext;
+  failureMessage?: string;
+}) {
+  return {
+    kind: input.dispatchHandoff.kind,
+    kindLabel: input.dispatchHandoff.kindLabel,
+    executionStage: input.dispatchHandoff.executionStage,
+    executionStageLabel: input.dispatchHandoff.executionStageLabel,
+    ...("reactivatedRun" in input.dispatchHandoff ? { reactivatedRun: input.dispatchHandoff.reactivatedRun } : {}),
+    ...("triggeredByCardId" in input.dispatchHandoff ? { triggeredByCardId: input.dispatchHandoff.triggeredByCardId } : {}),
+    ...("triggeredByPersona" in input.dispatchHandoff ? { triggeredByPersona: input.dispatchHandoff.triggeredByPersona } : {}),
+    ...("triggeredByOutcomeState" in input.dispatchHandoff
+      ? { triggeredByOutcomeState: input.dispatchHandoff.triggeredByOutcomeState }
+      : {}),
+    ...("triggeredByResultSummary" in input.dispatchHandoff && input.dispatchHandoff.triggeredByResultSummary
+      ? { triggeredByResultSummary: input.dispatchHandoff.triggeredByResultSummary }
+      : {}),
+    ...(input.executionClaim ? { claimKind: input.executionClaim.kind } : {}),
+    ...(input.failureMessage
+      ? {
+          failureKind: "execution_envelope_reconstruction_failed",
+          failureMessage: input.failureMessage
+        }
+      : {})
+  };
 }
 
 function readResolvedAttentionAction(
@@ -1769,6 +1844,22 @@ async function processHarnessWorkflowJob(options: {
         });
       } catch (error) {
         const failureMessage = error instanceof Error ? error.message : String(error);
+        await options.repository.insertEvent(
+          createHarnessCardEventRecord({
+            cardId: dispatch.laneExecution.cardId,
+            eventKind: "execution_start_suppressed",
+            payload: toExecutionStartEventPayload({
+              dispatchHandoff: dispatch.dispatchHandoff ?? {
+                kind: "initial_claim",
+                kindLabel: "Initial lane claim",
+                executionStage: "initial_lane_start",
+                executionStageLabel: "Initial lane start"
+              },
+              ...(dispatchResolution.executionClaim ? { executionClaim: dispatchResolution.executionClaim } : {}),
+              failureMessage
+            })
+          })
+        );
         console.warn("Harness execution envelope reconstruction failed after durable lane claim", {
           runId: dispatch.runId,
           workflowId: dispatch.workflowId,
@@ -1793,6 +1884,25 @@ async function processHarnessWorkflowJob(options: {
         });
       }
       if (executionEnvelope) {
+        await options.repository.insertEvent(
+          createHarnessCardEventRecord({
+            cardId: executionEnvelope.laneExecution.cardId,
+            eventKind: "execution_start_ready",
+            payload: toExecutionStartEventPayload({
+              dispatchHandoff: executionEnvelope.dispatchHandoff ?? {
+                kind: "initial_claim",
+                kindLabel: "Initial lane claim",
+                executionStage: "initial_lane_start",
+                executionStageLabel: "Initial lane start"
+              },
+              executionClaim: {
+                kind: executionEnvelope.executionClaim.kind,
+                claimedAt: executionEnvelope.executionClaim.claimedAt,
+                previousClaimedAt: executionEnvelope.executionClaim.previousClaimedAt
+              }
+            })
+          })
+        );
         try {
           await options.onExecutionEnvelope?.(executionEnvelope);
         } catch (error) {

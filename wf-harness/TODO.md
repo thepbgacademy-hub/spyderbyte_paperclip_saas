@@ -116,6 +116,7 @@ This file tracks the new harness subproject only.
   - [x] Add explicit runtime-side handlers for CEO review, lane resume, and unblock so non-dispatch worker outcomes do not collapse back into one generic branch.
   - [x] Keep generic and specific post-outcome hooks failure-isolated so one rejected runtime consumer cannot suppress the rest of the durable handoff path.
   - [x] Emit dedicated bounded worker events for CEO review, lane resume, and lane unblock so future consumers do not have to recover those paths by parsing a generic post-outcome event.
+  - [x] Persist bounded execution-start truth on the worker seam so durable history can distinguish `execution_start_ready` from `execution_start_suppressed` instead of leaving healthy starts and fail-open starts visible only through private runtime stdout/hooks.
   - [x] Share post-outcome action classification between the worker seam and the board-facing read model so CEO-facing follow-through does not drift onto a second set of heuristics.
   - [x] Persist a bounded `attention_requested` event when a worker outcome leaves the board waiting on CEO review, lane resume, or unblock.
   - [x] Surface a bounded `pendingAttention` board view so the CEO side can see the next required orchestration step without inferring it from raw lane state.

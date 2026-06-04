@@ -6,6 +6,8 @@ export type HarnessCardEventKind =
   | "created"
   | "state_changed"
   | "execution_dispatched"
+  | "execution_start_ready"
+  | "execution_start_suppressed"
   | "execution_claimed"
   | "execution_claim_refreshed"
   | "execution_outcome_committed"
@@ -229,19 +231,36 @@ export type HarnessExportDeliveryRow = {
   exportFormat: "obsidian_markdown_bundle";
   recordTarget: "governance_history_record" | "package_deliverable_record";
   bundleId: string;
+  bundleRevision: string;
   idempotencyKey: string;
   noteTitle: string;
   noteFileName: string;
-  placementManifest: unknown;
-  files: unknown;
+  placementTargetSystem: "obsidian_vault";
+  vaultFolder: string;
+  primaryNotePath: string;
+  syncStrategy: string;
+  confirmationRequirement: string;
+  files: Array<{
+    path: string;
+    mediaType: "text/markdown" | "application/json";
+    byteSize: number;
+    checksum: string;
+    content: string;
+  }>;
   recordCount: number;
   disclosureSummary: string;
   redactionSummary: string;
   attemptCount: number;
   lastAttemptedAt: string | null;
   deliveredAt: string | null;
-  writerKind: string | null;
-  deliveryReceipt: unknown;
+  writerKind: null | "obsidian_filesystem";
+  deliveryReceipt: {
+    primaryNotePath?: string;
+    manifestPath?: string | null;
+    writtenFileCount?: number;
+    writtenPaths?: string[];
+    lastAttemptedPath?: string;
+  };
   lastErrorCode: string | null;
   lastErrorMessage: string | null;
   createdAt: string;

@@ -8356,6 +8356,14 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
       triggeredByOutcomeState: readOptionalString(event.payload.triggeredByOutcomeState) ?? null,
       reactivatedRun: payloadReactivatedRun ?? null
     }),
+    execution_start_ready:
+      payloadDispatchKind === "follow_on_dispatch"
+        ? "Worker execution start was prepared for the next lane after the prior lane outcome."
+        : "Worker execution start was prepared for this lane after claim.",
+    execution_start_suppressed:
+      payloadDispatchKind === "follow_on_dispatch"
+        ? "Worker execution start could not be rebuilt after the next lane was already dispatched."
+        : "Worker execution start could not be rebuilt after this lane was already claimed.",
     execution_claimed: describeExecutionClaimActivity({
       claimKind: payloadClaimKind ?? null,
       refreshed: false
