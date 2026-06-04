@@ -324,6 +324,7 @@ No issues identified in the harness slice. The board HTTP boundary now distingui
 - Re-ran the scan after tightening dispatch fallback history. The touched slice still introduced no live secret exposure; the new label only reuses already-bounded dispatch kind, reactivation, and outcome-state metadata when triggering-persona detail is absent, and it does not widen execution-claim tokens, provider context, BYOK material, note bodies, or other secret-bearing runtime data.
 - Re-ran the scan after pinning the reactivated dispatch fallback path. This regression-only slice introduced no new live secret exposure; it only asserts the existing bounded reactivated follow-on history label when triggering-persona detail is absent.
 - Re-ran the scan after pinning the generic worker fallback paths. This regression-only slice introduced no new live secret exposure; it only asserts existing bounded labels for current-queue dispatch, generic execution-claim flow, summary-only done outcomes, and fully generic committed outcomes when richer runtime metadata is absent.
+- Re-ran the scan after pinning the attention-history fallback paths. This regression-only slice introduced no new live secret exposure; it only asserts existing bounded labels for governance backlog, governance hold, lane-unblock, and generic orchestration-hold history when persisted attention snapshots are absent.
 
 ## Remediation Priority
 
