@@ -2670,6 +2670,100 @@ describe("harness board service", () => {
     );
   });
 
+  it("keeps generic ignored worker outcomes explicit when no reason metadata is present", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_outcome_ignored_generic",
+      cardId: created.cardId,
+      eventKind: "execution_outcome_ignored",
+      payload: {},
+      createdAt: "2026-06-03T12:14:00.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A stale or superseded worker callback was ignored."
+        })
+      ])
+    );
+  });
+
+  it("keeps no-longer-working ignored outcomes explicit when lane-state metadata is absent", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_outcome_ignored_lane_not_working_generic",
+      cardId: created.cardId,
+      eventKind: "execution_outcome_ignored",
+      payload: {
+        reason: "lane_not_working"
+      },
+      createdAt: "2026-06-03T12:12:30.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A worker callback was ignored because the lane had already left active execution and was Not Working."
+        })
+      ])
+    );
+  });
+
   it("surfaces fresh worker execution claims as bounded historical activity", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
@@ -3037,6 +3131,108 @@ describe("harness board service", () => {
     );
   });
 
+  it("keeps persona-aware follow-on dispatch history explicit when outcome-state metadata is absent", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "researcher",
+      title: "Validate competitor pressure notes",
+      deliverableType: "research_brief"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_dispatched_follow_on_persona_without_outcome",
+      cardId: created.cardId,
+      eventKind: "execution_dispatched",
+      payload: {
+        kind: "follow_on_dispatch",
+        executionStage: "post_outcome_follow_on",
+        reactivatedRun: false,
+        triggeredByPersona: "cfo"
+      },
+      createdAt: "2026-06-03T10:10:35.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A worker started this lane from CFO's follow-on handoff."
+        })
+      ])
+    );
+  });
+
+  it("keeps persona-aware reactivated dispatch history explicit when outcome-state metadata is absent", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "researcher",
+      title: "Validate competitor pressure notes",
+      deliverableType: "research_brief"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_dispatched_reactivated_persona_without_outcome",
+      cardId: created.cardId,
+      eventKind: "execution_dispatched",
+      payload: {
+        kind: "follow_on_dispatch",
+        executionStage: "post_outcome_follow_on",
+        reactivatedRun: true,
+        triggeredByPersona: "cfo"
+      },
+      createdAt: "2026-06-03T10:10:50.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A worker reactivated this run and started this lane from CFO's follow-on handoff."
+        })
+      ])
+    );
+  });
+
   it("keeps current execution-queue dispatch history explicit when dispatch metadata is absent", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
@@ -3324,6 +3520,57 @@ describe("harness board service", () => {
       expect.arrayContaining([
         expect.objectContaining({
           label: "A worker finished this lane and queued CEO review."
+        })
+      ])
+    );
+  });
+
+  it("keeps CEO review outcome summary detail explicit when no review reason is present", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "launch_copy"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_outcome_committed_generic_review_with_summary",
+      cardId: created.cardId,
+      eventKind: "execution_outcome_committed",
+      payload: {
+        outcomeState: "done",
+        runState: "assembling",
+        postOutcomeActionKind: "queue_ceo_review",
+        resultSummary: "Launch copy is ready for executive sign-off."
+      },
+      createdAt: "2026-06-02T15:11:20.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A worker finished this lane and queued CEO review: Launch copy is ready for executive sign-off."
         })
       ])
     );
