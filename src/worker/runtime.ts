@@ -247,6 +247,14 @@ export function createWorkerRuntime(options: {
     action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
     laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
   }) => void | Promise<void>;
+  onHarnessPostOutcomeActionReasserted?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    attentionDelivery: "reasserted";
+    action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
+    laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
+  }) => void | Promise<void>;
   onHarnessCeoReviewRequested?: (input: {
     tenantId: string;
     runId: string;
@@ -868,12 +876,14 @@ export function createWorkerRuntime(options: {
             committedOutcome.postOutcomeAction
             && committedOutcome.postOutcomeAction.kind !== "dispatch_next_lane"
             && committedOutcome.laneExecution
-            && committedOutcome.attentionTransition?.kind !== "unchanged"
           ) {
+            const attentionDelivery =
+              committedOutcome.attentionTransition?.kind === "unchanged" ? "reasserted" as const : "requested" as const;
             const postOutcomeHandoff = {
               tenantId: input.tenantId,
               runId: committedOutcome.runId,
               workflowId: committedOutcome.workflowId,
+              attentionDelivery,
               action: committedOutcome.postOutcomeAction,
               laneExecution: committedOutcome.laneExecution
             };
@@ -885,56 +895,86 @@ export function createWorkerRuntime(options: {
                 ...postOutcomeHandoff
               })}\n`
             );
-            try {
-              await options.onHarnessPostOutcomeAction?.(postOutcomeHandoff);
-            } catch (error) {
-              await persistExecutionHookFailure({
-                repository: harnessRepository,
-                cardId: committedOutcome.laneExecution.cardId,
-                hookFamily: "post_outcome_action",
-                hookFamilyLabel: "Post-outcome action handoff",
-                deliveryMode: "generic",
-                hookKind: "onHarnessPostOutcomeAction",
-                hookKindLabel: "Post-outcome action hook",
-                actionKind: committedOutcome.postOutcomeAction.kind,
-                reason: "reason" in committedOutcome.postOutcomeAction ? committedOutcome.postOutcomeAction.reason : undefined,
-                outcomeState: committedOutcome.laneExecution.state,
-                error
-              });
-              console.warn("Harness post-outcome hook failed after durable worker outcome", {
-                runId: committedOutcome.runId,
-                workflowId: committedOutcome.workflowId,
-                cardId: committedOutcome.laneExecution.cardId,
-                actionKind: committedOutcome.postOutcomeAction.kind,
-                error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
-              });
-            }
-            try {
-              await runSpecificPostOutcomeHandler({
-                options,
-                handoff: postOutcomeHandoff
-              });
-            } catch (error) {
-              await persistExecutionHookFailure({
-                repository: harnessRepository,
-                cardId: committedOutcome.laneExecution.cardId,
-                hookFamily: "post_outcome_action",
-                hookFamilyLabel: "Post-outcome action handoff",
-                deliveryMode: "specific",
-                hookKind: committedOutcome.postOutcomeAction.kind,
-                hookKindLabel: humanizeLabel(committedOutcome.postOutcomeAction.kind),
-                actionKind: committedOutcome.postOutcomeAction.kind,
-                reason: "reason" in committedOutcome.postOutcomeAction ? committedOutcome.postOutcomeAction.reason : undefined,
-                outcomeState: committedOutcome.laneExecution.state,
-                error
-              });
-              console.warn("Harness specific post-outcome handler failed after durable worker outcome", {
-                runId: committedOutcome.runId,
-                workflowId: committedOutcome.workflowId,
-                cardId: committedOutcome.laneExecution.cardId,
-                actionKind: committedOutcome.postOutcomeAction.kind,
-                error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
-              });
+            if (attentionDelivery === "requested") {
+              try {
+                await options.onHarnessPostOutcomeAction?.(postOutcomeHandoff);
+              } catch (error) {
+                await persistExecutionHookFailure({
+                  repository: harnessRepository,
+                  cardId: committedOutcome.laneExecution.cardId,
+                  hookFamily: "post_outcome_action",
+                  hookFamilyLabel: "Post-outcome action handoff",
+                  deliveryMode: "generic",
+                  hookKind: "onHarnessPostOutcomeAction",
+                  hookKindLabel: "Post-outcome action hook",
+                  actionKind: committedOutcome.postOutcomeAction.kind,
+                  reason: "reason" in committedOutcome.postOutcomeAction ? committedOutcome.postOutcomeAction.reason : undefined,
+                  outcomeState: committedOutcome.laneExecution.state,
+                  error
+                });
+                console.warn("Harness post-outcome hook failed after durable worker outcome", {
+                  runId: committedOutcome.runId,
+                  workflowId: committedOutcome.workflowId,
+                  cardId: committedOutcome.laneExecution.cardId,
+                  actionKind: committedOutcome.postOutcomeAction.kind,
+                  error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+                });
+              }
+              try {
+                await runSpecificPostOutcomeHandler({
+                  options,
+                  handoff: postOutcomeHandoff
+                });
+              } catch (error) {
+                await persistExecutionHookFailure({
+                  repository: harnessRepository,
+                  cardId: committedOutcome.laneExecution.cardId,
+                  hookFamily: "post_outcome_action",
+                  hookFamilyLabel: "Post-outcome action handoff",
+                  deliveryMode: "specific",
+                  hookKind: committedOutcome.postOutcomeAction.kind,
+                  hookKindLabel: humanizeLabel(committedOutcome.postOutcomeAction.kind),
+                  actionKind: committedOutcome.postOutcomeAction.kind,
+                  reason: "reason" in committedOutcome.postOutcomeAction ? committedOutcome.postOutcomeAction.reason : undefined,
+                  outcomeState: committedOutcome.laneExecution.state,
+                  error
+                });
+                console.warn("Harness specific post-outcome handler failed after durable worker outcome", {
+                  runId: committedOutcome.runId,
+                  workflowId: committedOutcome.workflowId,
+                  cardId: committedOutcome.laneExecution.cardId,
+                  actionKind: committedOutcome.postOutcomeAction.kind,
+                  error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+                });
+              }
+            } else {
+              try {
+                await options.onHarnessPostOutcomeActionReasserted?.({
+                  ...postOutcomeHandoff,
+                  attentionDelivery: "reasserted"
+                });
+              } catch (error) {
+                await persistExecutionHookFailure({
+                  repository: harnessRepository,
+                  cardId: committedOutcome.laneExecution.cardId,
+                  hookFamily: "post_outcome_action",
+                  hookFamilyLabel: "Post-outcome action handoff",
+                  deliveryMode: "generic",
+                  hookKind: "onHarnessPostOutcomeActionReasserted",
+                  hookKindLabel: "Post-outcome action reasserted hook",
+                  actionKind: committedOutcome.postOutcomeAction.kind,
+                  reason: "reason" in committedOutcome.postOutcomeAction ? committedOutcome.postOutcomeAction.reason : undefined,
+                  outcomeState: committedOutcome.laneExecution.state,
+                  error
+                });
+                console.warn("Harness reasserted post-outcome hook failed after durable worker outcome", {
+                  runId: committedOutcome.runId,
+                  workflowId: committedOutcome.workflowId,
+                  cardId: committedOutcome.laneExecution.cardId,
+                  actionKind: committedOutcome.postOutcomeAction.kind,
+                  error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+                });
+              }
             }
           }
           if (committedOutcome.nextDispatch?.laneExecution) {

@@ -611,6 +611,7 @@ export async function commitHarnessWorkerLaneOutcome(input: {
         cardId: updatedCard.id,
         outcomeState: input.state,
         runState: latestRunState,
+        attentionTransitionKind: attentionTransition.kind,
         ...(postOutcomeAction ? { postOutcomeAction } : {}),
         ...(continuity.latestResultSummary ? { latestResultSummary: continuity.latestResultSummary } : {}),
         ...(continuity.continuitySummary ? { continuitySummary: continuity.continuitySummary } : {}),
@@ -734,6 +735,7 @@ function buildCommittedOutcomeEvent(input: {
   cardId: string;
   outcomeState: Extract<HarnessCardState, "waiting" | "done" | "blocked" | "cancelled">;
   runState: HarnessRunRecord["state"];
+  attentionTransitionKind: HarnessWorkerLaneAttentionTransition["kind"];
   postOutcomeAction?: HarnessPostOutcomeAction;
   latestResultSummary?: string | null;
   continuitySummary?: string | null;
@@ -745,6 +747,7 @@ function buildCommittedOutcomeEvent(input: {
     payload: {
       outcomeState: input.outcomeState,
       runState: input.runState,
+      attentionTransitionKind: input.attentionTransitionKind,
       ...(input.postOutcomeAction
         ? {
             postOutcomeActionKind: input.postOutcomeAction.kind,

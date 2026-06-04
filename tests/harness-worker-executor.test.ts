@@ -1016,6 +1016,7 @@ describe("harness worker executor", () => {
         expect.objectContaining({
           eventKind: "execution_outcome_committed",
           payload: {
+            attentionTransitionKind: "requested",
             outcomeState: "done",
             runState: "assembling",
             postOutcomeActionKind: "queue_ceo_review",
@@ -1402,6 +1403,7 @@ describe("harness worker executor", () => {
         expect.objectContaining({
           eventKind: "execution_outcome_committed",
           payload: {
+            attentionTransitionKind: "requested",
             outcomeState: "waiting",
             runState: "waiting",
             postOutcomeActionKind: "await_lane_resume",
@@ -1930,6 +1932,19 @@ describe("harness worker executor", () => {
           }
         }
       })
+    );
+
+    await expect(repository.listEventsForCard(cfoCard.id)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventKind: "execution_outcome_committed",
+          payload: expect.objectContaining({
+            attentionTransitionKind: "unchanged",
+            outcomeState: "done",
+            resultSummary: "Pricing review is complete and ready for board packaging."
+          })
+        })
+      ])
     );
   });
 

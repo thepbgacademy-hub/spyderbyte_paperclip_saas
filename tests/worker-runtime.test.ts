@@ -1077,6 +1077,7 @@ describe("worker runtime", () => {
       tenantId: "tenant-1",
       runId: "run-1",
       workflowId: "wf_connect_first_workflow",
+      attentionDelivery: "requested",
       action: {
         kind: "queue_ceo_review",
         runState: "assembling",
@@ -2567,6 +2568,7 @@ describe("worker runtime", () => {
       tenantId: "tenant-1",
       runId: "run-1",
       workflowId: "wf_connect_first_workflow",
+      attentionDelivery: "requested",
       action: {
         kind: "await_lane_resume",
         runState: "waiting",
@@ -2642,8 +2644,9 @@ describe("worker runtime", () => {
     await runtime.close();
   });
 
-  it("does not re-emit CEO review handoff chatter when attention remains unchanged", async () => {
+  it("reasserts the generic CEO review handoff without re-emitting specific chatter when attention remains unchanged", async () => {
     const onHarnessPostOutcomeAction = vi.fn();
+    const onHarnessPostOutcomeActionReasserted = vi.fn();
     const onHarnessCeoReviewRequested = vi.fn();
     const onHarnessAttentionResolved = vi.fn();
     const runtime = createWorkerRuntime({
@@ -2653,6 +2656,7 @@ describe("worker runtime", () => {
       }),
       workerInstanceId: "worker-test-harness-unchanged-ceo-review",
       onHarnessPostOutcomeAction,
+      onHarnessPostOutcomeActionReasserted,
       onHarnessCeoReviewRequested,
       onHarnessAttentionResolved
     });
@@ -2754,7 +2758,7 @@ describe("worker runtime", () => {
       })
     );
 
-    expect(stdoutWrite).not.toHaveBeenCalledWith(
+    expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_post_outcome_action\"")
     );
     expect(stdoutWrite).not.toHaveBeenCalledWith(
@@ -2764,14 +2768,32 @@ describe("worker runtime", () => {
       expect.stringContaining("\"type\":\"wealth_factory_harness_attention_resolved\"")
     );
     expect(onHarnessPostOutcomeAction).not.toHaveBeenCalled();
+    expect(onHarnessPostOutcomeActionReasserted).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      attentionDelivery: "reasserted",
+      action: {
+        kind: "queue_ceo_review",
+        runState: "assembling",
+        reason: "final_assembly"
+      },
+      laneExecution: {
+        cardId: "card_cfo",
+        state: "done",
+        runState: "assembling",
+        latestResultSummary: "Validated the pricing model and preserved the final floor."
+      }
+    });
     expect(onHarnessCeoReviewRequested).not.toHaveBeenCalled();
     expect(onHarnessAttentionResolved).not.toHaveBeenCalled();
 
     await runtime.close();
   });
 
-  it("does not re-emit lane-resume handoff chatter when attention remains unchanged", async () => {
+  it("reasserts the generic lane-resume handoff without re-emitting specific chatter when attention remains unchanged", async () => {
     const onHarnessPostOutcomeAction = vi.fn();
+    const onHarnessPostOutcomeActionReasserted = vi.fn();
     const onHarnessLaneResumeAwaited = vi.fn();
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
@@ -2780,6 +2802,7 @@ describe("worker runtime", () => {
       }),
       workerInstanceId: "worker-test-harness-unchanged-resume",
       onHarnessPostOutcomeAction,
+      onHarnessPostOutcomeActionReasserted,
       onHarnessLaneResumeAwaited
     });
 
@@ -2955,13 +2978,33 @@ describe("worker runtime", () => {
       })
     );
 
-    expect(stdoutWrite).not.toHaveBeenCalledWith(
+    expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_post_outcome_action\"")
     );
     expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_resume_awaited\"")
     );
     expect(onHarnessPostOutcomeAction).not.toHaveBeenCalled();
+    expect(onHarnessPostOutcomeActionReasserted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        attentionDelivery: "reasserted",
+        action: {
+          kind: "await_lane_resume",
+          runState: "waiting",
+          cardId: "card_cfo"
+        },
+        laneExecution: expect.objectContaining({
+          cardId: "card_cfo",
+          state: "waiting",
+          runState: "waiting",
+          latestResultSummary: "Initial pricing floor is stable.",
+          resumeFocus: "CFO should resume this lane once the tenant confirms the latest revenue assumption."
+        })
+      })
+    );
     expect(onHarnessLaneResumeAwaited).not.toHaveBeenCalled();
 
     await runtime.close();
@@ -3164,6 +3207,7 @@ describe("worker runtime", () => {
       tenantId: "tenant-1",
       runId: "run-1",
       workflowId: "wf_connect_first_workflow",
+      attentionDelivery: "requested",
       action: {
         kind: "await_unblock",
         runState: "blocked",
@@ -3362,8 +3406,9 @@ describe("worker runtime", () => {
     await runtime.close();
   });
 
-  it("does not re-emit lane-unblock handoff chatter when attention remains unchanged", async () => {
+  it("reasserts the generic lane-unblock handoff without re-emitting specific chatter when attention remains unchanged", async () => {
     const onHarnessPostOutcomeAction = vi.fn();
+    const onHarnessPostOutcomeActionReasserted = vi.fn();
     const onHarnessLaneUnblockAwaited = vi.fn();
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
@@ -3372,6 +3417,7 @@ describe("worker runtime", () => {
       }),
       workerInstanceId: "worker-test-harness-unchanged-unblock",
       onHarnessPostOutcomeAction,
+      onHarnessPostOutcomeActionReasserted,
       onHarnessLaneUnblockAwaited
     });
 
@@ -3547,15 +3593,179 @@ describe("worker runtime", () => {
       })
     );
 
-    expect(stdoutWrite).not.toHaveBeenCalledWith(
+    expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_post_outcome_action\"")
     );
     expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_unblock_awaited\"")
     );
     expect(onHarnessPostOutcomeAction).not.toHaveBeenCalled();
+    expect(onHarnessPostOutcomeActionReasserted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        attentionDelivery: "reasserted",
+        action: {
+          kind: "await_unblock",
+          runState: "blocked",
+          cardId: "card_cfo"
+        },
+        laneExecution: expect.objectContaining({
+          cardId: "card_cfo",
+          state: "blocked",
+          runState: "blocked",
+          latestResultSummary: "Initial pricing floor is stable.",
+          resumeFocus: "CFO is blocked until the tenant confirms the final margin constraint."
+        })
+      })
+    );
     expect(onHarnessLaneUnblockAwaited).not.toHaveBeenCalled();
 
+    await runtime.close();
+  });
+
+  it("persists a durable hook failure when the reasserted post-outcome handoff rejects", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onHarnessPostOutcomeAction = vi.fn();
+    const onHarnessPostOutcomeActionReasserted = vi
+      .fn()
+      .mockRejectedValue(new Error("reasserted handoff unavailable"));
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-reasserted-hook-reject",
+      onHarnessPostOutcomeAction,
+      onHarnessPostOutcomeActionReasserted
+    });
+
+    stdoutWrite.mockClear();
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.getRun
+      .mockResolvedValueOnce({
+        id: "run-1",
+        tenantId: "tenant-1",
+        workflowId: "wf_connect_first_workflow",
+        packageId: "pkg_bib_connect",
+        orchestratorPersona: "ceo",
+        state: "active",
+        runtimeContext: {
+          providerKind: "openai_api",
+          credentialLabel: "Primary OpenAI"
+        },
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      })
+      .mockResolvedValueOnce({
+        id: "run-1",
+        tenantId: "tenant-1",
+        workflowId: "wf_connect_first_workflow",
+        packageId: "pkg_bib_connect",
+        orchestratorPersona: "ceo",
+        state: "assembling",
+        runtimeContext: {
+          providerKind: "openai_api",
+          credentialLabel: "Primary OpenAI"
+        },
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:06:00.000Z"
+      });
+    harnessRepository.listCardsForRun.mockResolvedValueOnce([
+      {
+        id: "card_ceo",
+        runId: "run-1",
+        parentCardId: null,
+        persona: "ceo",
+        title: "Plan run",
+        deliverableType: "plan",
+        state: "planning",
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      },
+      {
+        id: "card_cfo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Pressure-test the pricing lane",
+        deliverableType: "pricing_review",
+        state: "done",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:06:00.000Z"
+      }
+    ]);
+    harnessRepository.listEventsForRun.mockResolvedValueOnce([
+      {
+        id: "event_attention_requested",
+        cardId: "card_cfo",
+        eventKind: "attention_requested",
+        payload: {
+          actionKind: "queue_ceo_review",
+          runState: "assembling",
+          reason: "final_assembly"
+        },
+        createdAt: "2026-05-21T10:05:00.000Z"
+      }
+    ]);
+
+    await expect(
+      runtime.commitHarnessLaneOutcome({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-1",
+        state: "done",
+        resultSummary: "Validated the pricing model and preserved the final floor."
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        attentionTransition: {
+          kind: "unchanged",
+          action: {
+            kind: "queue_ceo_review",
+            runState: "assembling",
+            reason: "final_assembly"
+          }
+        },
+        postOutcomeAction: {
+          kind: "queue_ceo_review",
+          runState: "assembling",
+          reason: "final_assembly"
+        }
+      })
+    );
+
+    expect(onHarnessPostOutcomeAction).not.toHaveBeenCalled();
+    expect(onHarnessPostOutcomeActionReasserted).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      "Harness reasserted post-outcome hook failed after durable worker outcome",
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        actionKind: "queue_ceo_review"
+      })
+    );
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "execution_hook_failed",
+        payload: expect.objectContaining({
+          hookFamily: "post_outcome_action",
+          hookKind: "onHarnessPostOutcomeActionReasserted",
+          hookKindLabel: "Post-outcome action reasserted hook",
+          deliveryMode: "generic",
+          outcomeState: "done",
+          actionKind: "queue_ceo_review",
+          failureMessage: "reasserted handoff unavailable"
+        })
+      })
+    );
+
+    warn.mockRestore();
     await runtime.close();
   });
 
