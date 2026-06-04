@@ -1285,10 +1285,33 @@ async function emitHarnessExecutionStartSuppressed(input: {
         ...input.dispatchHandoff,
         reactivatedRun: true
       };
-      await input.options.onHarnessReactivatedFollowOnDispatchSuppressed?.({
-        ...handoff,
-        dispatchHandoff: reactivatedDispatchHandoff
-      });
+      try {
+        await input.options.onHarnessReactivatedFollowOnDispatchSuppressed?.({
+          ...handoff,
+          dispatchHandoff: reactivatedDispatchHandoff
+        });
+      } catch (error) {
+        await persistExecutionHookFailure({
+          repository: input.repository,
+          cardId: input.laneExecution.cardId,
+          hookFamily: "execution_start_suppressed",
+          hookFamilyLabel: "Execution start suppressed handoff",
+          deliveryMode: "specific",
+          hookKind: "reactivated_follow_on_dispatch",
+          hookKindLabel: "Reactivated follow-on dispatch",
+          dispatchKind: input.dispatchHandoff.kind,
+          executionStage: input.dispatchHandoff.executionStage,
+          claimKind: input.executionClaim?.kind,
+          error
+        });
+        console.warn("Harness specific execution-start-suppressed hook failed after durable claim", {
+          runId: input.runId,
+          workflowId: input.workflowId,
+          cardId: input.laneExecution.cardId,
+          dispatchKind: input.dispatchHandoff.kind,
+          error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+        });
+      }
     }
     await input.options.onHarnessFollowOnDispatchSuppressed?.({
       ...handoff,
@@ -1304,15 +1327,11 @@ async function emitHarnessExecutionStartSuppressed(input: {
       hookKind:
         input.dispatchHandoff.kind === "initial_claim"
           ? "initial_claim"
-          : input.dispatchHandoff.reactivatedRun === true
-            ? "reactivated_follow_on_dispatch"
-            : "follow_on_dispatch",
+          : "follow_on_dispatch",
       hookKindLabel:
         input.dispatchHandoff.kind === "initial_claim"
           ? "Initial claim"
-          : input.dispatchHandoff.reactivatedRun === true
-            ? "Reactivated follow-on dispatch"
-            : "Follow-on dispatch",
+          : "Follow-on dispatch",
       dispatchKind: input.dispatchHandoff.kind,
       executionStage: input.dispatchHandoff.executionStage,
       claimKind: input.executionClaim?.kind,
@@ -1584,6 +1603,7 @@ async function runSpecificExecutionClaimHandler(input: {
 }
 
 async function runSpecificExecutionDispatchHandler(input: {
+  repository: Pick<ReturnType<typeof createPostgresHarnessRepository>, "insertEvent">;
   options: {
     workerInstanceId?: string;
     onHarnessInitialLaneStart?: (input: {
@@ -1637,13 +1657,35 @@ async function runSpecificExecutionDispatchHandler(input: {
       input.options.workerInstanceId,
       input.handoff
     );
-    await input.options.onHarnessReactivatedFollowOnDispatch?.(input.handoff as {
-      tenantId: string;
-      runId: string;
-      workflowId: string;
-      dispatchHandoff: HarnessReactivatedFollowOnDispatchHandoff;
-      laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
-    });
+    try {
+      await input.options.onHarnessReactivatedFollowOnDispatch?.(input.handoff as {
+        tenantId: string;
+        runId: string;
+        workflowId: string;
+        dispatchHandoff: HarnessReactivatedFollowOnDispatchHandoff;
+        laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+      });
+    } catch (error) {
+      await persistExecutionHookFailure({
+        repository: input.repository,
+        cardId: input.handoff.laneExecution.cardId,
+        hookFamily: "execution_dispatched",
+        hookFamilyLabel: "Execution dispatch handoff",
+        deliveryMode: "specific",
+        hookKind: "reactivated_follow_on_dispatch",
+        hookKindLabel: "Reactivated follow-on dispatch",
+        dispatchKind: input.handoff.dispatchHandoff.kind,
+        executionStage: input.handoff.dispatchHandoff.executionStage,
+        error
+      });
+      console.warn("Harness specific execution-dispatch handler failed after durable lane claim", {
+        runId: input.handoff.runId,
+        workflowId: input.handoff.workflowId,
+        cardId: input.handoff.laneExecution.cardId,
+        dispatchKind: input.handoff.dispatchHandoff.kind,
+        error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+      });
+    }
   }
   emitSpecificExecutionDispatchEvent(
     "wealth_factory_harness_execution_dispatch_follow_on",
@@ -2418,6 +2460,7 @@ async function emitHarnessExecutionStartHandoffs(input: {
   }
   try {
     await runSpecificExecutionDispatchHandler({
+      repository: input.repository,
       options: input.options,
       handoff: dispatchHandoff
     });
@@ -2431,15 +2474,11 @@ async function emitHarnessExecutionStartHandoffs(input: {
       hookKind:
         input.dispatch.dispatchHandoff.kind === "initial_claim"
           ? "initial_claim"
-          : input.dispatch.dispatchHandoff.reactivatedRun === true
-            ? "reactivated_follow_on_dispatch"
-            : "follow_on_dispatch",
+          : "follow_on_dispatch",
       hookKindLabel:
         input.dispatch.dispatchHandoff.kind === "initial_claim"
           ? "Initial claim"
-          : input.dispatch.dispatchHandoff.reactivatedRun === true
-            ? "Reactivated follow-on dispatch"
-            : "Follow-on dispatch",
+          : "Follow-on dispatch",
       dispatchKind: input.dispatch.dispatchHandoff.kind,
       executionStage: input.dispatch.dispatchHandoff.executionStage,
       error

@@ -8529,13 +8529,25 @@ function describeExecutionHookFailureActivity(input: {
         ? `A ${deliveryLabel} for the ${humanizeLabel(input.actionKind)} post-outcome handoff failed after the worker outcome was already recorded.`
         : `A ${deliveryLabel} for a post-outcome handoff failed after the worker outcome was already recorded.`;
     case "execution_start_ready":
-      return "A private execution-start handoff failed after this lane was already durably prepared.";
+      return `A ${deliveryLabel} for execution start failed after this lane was already durably prepared.`;
     case "execution_start_suppressed":
-      return "A private execution-start-suppressed handoff failed after this lane was already durably marked as suppressed.";
+      if (input.hookKindLabel === "Reactivated follow-on dispatch") {
+        return `A ${deliveryLabel} for reactivated follow-on start suppression failed after this lane was already durably marked as suppressed.`;
+      }
+      if (input.hookKindLabel === "Follow-on dispatch") {
+        return `A ${deliveryLabel} for follow-on start suppression failed after this lane was already durably marked as suppressed.`;
+      }
+      return `A ${deliveryLabel} for execution-start suppression failed after this lane was already durably marked as suppressed.`;
     case "execution_claimed":
-      return "A private execution-claim handoff failed after this lane was already durably claimed.";
+      return `A ${deliveryLabel} for execution claim failed after this lane was already durably claimed.`;
     case "execution_dispatched":
-      return "A private execution-dispatch handoff failed after this lane was already durably dispatched.";
+      if (input.hookKindLabel === "Reactivated follow-on dispatch") {
+        return `A ${deliveryLabel} for reactivated follow-on execution dispatch failed after this lane was already durably dispatched.`;
+      }
+      if (input.hookKindLabel === "Follow-on dispatch") {
+        return `A ${deliveryLabel} for follow-on execution dispatch failed after this lane was already durably dispatched.`;
+      }
+      return `A ${deliveryLabel} for execution dispatch failed after this lane was already durably dispatched.`;
     default:
       return "A private worker-execution handoff failed after the durable harness state was already recorded.";
   }

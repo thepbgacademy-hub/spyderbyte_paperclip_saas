@@ -2404,6 +2404,297 @@ describe("worker runtime", () => {
     await runtime.close();
   });
 
+  it("still runs the generic execution-claim handoff when the specific approved-claim handler rejects", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onHarnessExecutionClaimed = vi.fn();
+    const onHarnessApprovedExecutionClaim = vi.fn().mockRejectedValue(new Error("specific claim unavailable"));
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-specific-claim-hook-reject",
+      onHarnessExecutionClaimed,
+      onHarnessApprovedExecutionClaim
+    });
+    const harnessRepository = harnessRepositoryRef.current;
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+
+    expect(onHarnessExecutionClaimed).toHaveBeenCalledTimes(1);
+    expect(onHarnessApprovedExecutionClaim).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      "Harness specific execution-claim handler failed after durable lane claim",
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        claimKind: "approved_claim"
+      })
+    );
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "execution_hook_failed",
+        payload: expect.objectContaining({
+          hookFamily: "execution_claimed",
+          deliveryMode: "specific",
+          claimKind: "approved_claim",
+          failureMessage: "specific claim unavailable"
+        })
+      })
+    );
+
+    warn.mockRestore();
+    await runtime.close();
+  });
+
+  it("still runs the generic execution-dispatch handoff when the specific initial-lane handler rejects", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onHarnessExecutionDispatched = vi.fn();
+    const onHarnessInitialLaneStart = vi.fn().mockRejectedValue(new Error("specific start unavailable"));
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-specific-dispatch-hook-reject",
+      onHarnessExecutionDispatched,
+      onHarnessInitialLaneStart
+    });
+    const harnessRepository = harnessRepositoryRef.current;
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+
+    expect(onHarnessExecutionDispatched).toHaveBeenCalledTimes(1);
+    expect(onHarnessInitialLaneStart).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      "Harness specific execution-dispatch handler failed after durable lane claim",
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        dispatchKind: "initial_claim"
+      })
+    );
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "execution_hook_failed",
+        payload: expect.objectContaining({
+          hookFamily: "execution_dispatched",
+          deliveryMode: "specific",
+          dispatchKind: "initial_claim",
+          executionStage: "initial_lane_start",
+          failureMessage: "specific start unavailable"
+        })
+      })
+    );
+
+    warn.mockRestore();
+    await runtime.close();
+  });
+
+  it("keeps reactivated and shared execution-dispatch failures distinct when both follow-on handlers reject", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onHarnessExecutionDispatched = vi.fn();
+    const onHarnessFollowOnDispatch = vi.fn().mockRejectedValue(new Error("shared follow-on start unavailable"));
+    const onHarnessReactivatedFollowOnDispatch = vi
+      .fn()
+      .mockRejectedValue(new Error("specific reactivated start unavailable"));
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-reactivated-dispatch-hook-reject",
+      onHarnessExecutionDispatched,
+      onHarnessFollowOnDispatch,
+      onHarnessReactivatedFollowOnDispatch
+    });
+
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.getRun.mockResolvedValueOnce({
+      id: "run-1",
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      state: "waiting",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      },
+      createdAt: "2026-05-21T10:00:00.000Z",
+      updatedAt: "2026-05-21T10:06:00.000Z"
+    });
+    harnessRepository.getCardContinuity
+      .mockResolvedValueOnce({
+        cardId: "card_cfo",
+        runId: "run-1",
+        continuitySource: "result_recorded",
+        continuitySummary: "CFO should continue the finalized pricing lane only if governance reopens it.",
+        latestResultSummary: "Pricing review is complete and ready for board packaging.",
+        absorbedWorkItems: [],
+        updatedAt: "2026-05-21T10:06:00.000Z"
+      })
+      .mockResolvedValueOnce({
+        cardId: "card_cmo",
+        runId: "run-1",
+        continuitySource: "resume_override",
+        continuitySummary: "Resume the launch messaging lane from the approved positioning draft.",
+        latestResultSummary: null,
+        absorbedWorkItems: [],
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      });
+    harnessRepository.listCardsForRun.mockResolvedValue([
+      {
+        id: "card_ceo",
+        runId: "run-1",
+        parentCardId: null,
+        persona: "ceo",
+        title: "Plan run",
+        deliverableType: "plan",
+        state: "planning",
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      },
+      {
+        id: "card_cfo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Finalize pricing review",
+        deliverableType: "pricing_review",
+        state: "done",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:06:00.000Z"
+      },
+      {
+        id: "card_cmo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cmo",
+        title: "Prepare launch messaging",
+        deliverableType: "marketing_plan",
+        state: "approved",
+        createdAt: "2026-05-21T10:02:00.000Z",
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      }
+    ]);
+    harnessRepository.listCardContinuityForRun.mockResolvedValue([
+      {
+        cardId: "card_cmo",
+        runId: "run-1",
+        continuitySource: "resume_override",
+        continuitySummary: "Resume the launch messaging lane from the approved positioning draft.",
+        latestResultSummary: null,
+        absorbedWorkItems: [],
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      }
+    ]);
+    harnessRepository.claimCardForExecution.mockResolvedValueOnce({
+      id: "card_cmo",
+      runId: "run-1",
+      parentCardId: "card_ceo",
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "marketing_plan",
+      state: "working",
+      executionClaimToken: "claim-cmo-active",
+      executionClaimedAt: "2026-05-21T10:07:30.000Z",
+      createdAt: "2026-05-21T10:02:00.000Z",
+      updatedAt: "2026-05-21T10:07:00.000Z"
+    });
+
+    await expect(
+      runtime.commitHarnessLaneOutcome({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-1",
+        state: "done",
+        resultSummary: "Pricing review is complete and ready for board packaging."
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        status: "committed"
+      })
+    );
+
+    expect(onHarnessExecutionDispatched).toHaveBeenCalledTimes(1);
+    expect(onHarnessReactivatedFollowOnDispatch).toHaveBeenCalledTimes(1);
+    expect(onHarnessFollowOnDispatch).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      "Harness specific execution-dispatch handler failed after durable lane claim",
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cmo",
+        dispatchKind: "follow_on_dispatch"
+      })
+    );
+    const dispatchHookFailures = harnessRepository.insertEvent.mock.calls
+      .map(([event]) => event)
+      .filter(
+        (event) => event.cardId === "card_cmo" && event.eventKind === "execution_hook_failed" && event.payload.hookFamily === "execution_dispatched"
+      );
+    expect(dispatchHookFailures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            deliveryMode: "specific",
+            hookKind: "reactivated_follow_on_dispatch",
+            dispatchKind: "follow_on_dispatch",
+            executionStage: "post_outcome_follow_on",
+            failureMessage: "specific reactivated start unavailable"
+          })
+        }),
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            deliveryMode: "specific",
+            hookKind: "follow_on_dispatch",
+            dispatchKind: "follow_on_dispatch",
+            executionStage: "post_outcome_follow_on",
+            failureMessage: "shared follow-on start unavailable"
+          })
+        })
+      ])
+    );
+
+    warn.mockRestore();
+    await runtime.close();
+  });
+
   it("keeps a durable follow-on dispatch successful when lane-envelope reconstruction would otherwise refetch stale lane state", async () => {
     const onHarnessLaneReady = vi.fn();
     const runtime = createWorkerRuntime({
@@ -4268,6 +4559,139 @@ describe("worker runtime", () => {
     await runtime.close();
   });
 
+  it("still runs the generic execution-start-suppressed handoff when the specific follow-on suppressed handler rejects", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onHarnessExecutionStartSuppressed = vi.fn();
+    const onHarnessFollowOnDispatchSuppressed = vi.fn().mockRejectedValue(new Error("specific suppressed unavailable"));
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-specific-suppressed-hook-reject",
+      onHarnessExecutionStartSuppressed,
+      onHarnessFollowOnDispatchSuppressed
+    });
+
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.getCardContinuity
+      .mockResolvedValueOnce({
+        cardId: "card_cfo",
+        runId: "run-1",
+        continuitySource: "result_recorded",
+        continuitySummary: "CFO should continue the finalized pricing lane only if governance reopens it.",
+        latestResultSummary: "Pricing review is complete and ready for board packaging.",
+        absorbedWorkItems: [],
+        updatedAt: "2026-05-21T10:06:00.000Z"
+      })
+      .mockRejectedValueOnce(new Error("follow-on continuity unavailable"));
+    harnessRepository.listCardsForRun.mockResolvedValue([
+      {
+        id: "card_ceo",
+        runId: "run-1",
+        parentCardId: null,
+        persona: "ceo",
+        title: "Plan run",
+        deliverableType: "plan",
+        state: "planning",
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      },
+      {
+        id: "card_cfo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Finalize pricing review",
+        deliverableType: "pricing_review",
+        state: "done",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:06:00.000Z"
+      },
+      {
+        id: "card_cmo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cmo",
+        title: "Prepare launch messaging",
+        deliverableType: "marketing_plan",
+        state: "approved",
+        createdAt: "2026-05-21T10:02:00.000Z",
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      }
+    ]);
+    harnessRepository.listCardContinuityForRun.mockResolvedValue([
+      {
+        cardId: "card_cmo",
+        runId: "run-1",
+        continuitySource: "resume_override",
+        continuitySummary: "Resume the launch messaging lane from the approved positioning draft.",
+        latestResultSummary: null,
+        absorbedWorkItems: [],
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      }
+    ]);
+    harnessRepository.claimCardForExecution.mockResolvedValueOnce({
+      id: "card_cmo",
+      runId: "run-1",
+      parentCardId: "card_ceo",
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "marketing_plan",
+      state: "working",
+      executionClaimToken: "claim-cmo-active",
+      executionClaimedAt: "2026-05-21T10:07:30.000Z",
+      createdAt: "2026-05-21T10:02:00.000Z",
+      updatedAt: "2026-05-21T10:07:00.000Z"
+    });
+
+    await expect(
+      runtime.commitHarnessLaneOutcome({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-1",
+        state: "done",
+        resultSummary: "Pricing review is complete and ready for board packaging."
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        status: "committed"
+      })
+    );
+
+    expect(onHarnessExecutionStartSuppressed).toHaveBeenCalledTimes(1);
+    expect(onHarnessFollowOnDispatchSuppressed).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      "Harness specific execution-start-suppressed hook failed after durable claim",
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cmo",
+        dispatchKind: "follow_on_dispatch"
+      })
+    );
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cmo",
+        eventKind: "execution_hook_failed",
+        payload: expect.objectContaining({
+          hookFamily: "execution_start_suppressed",
+          deliveryMode: "specific",
+          dispatchKind: "follow_on_dispatch",
+          executionStage: "post_outcome_follow_on",
+          failureMessage: "specific suppressed unavailable"
+        })
+      })
+    );
+
+    warn.mockRestore();
+    await runtime.close();
+  });
+
   it("emits a reactivated follow-on suppressed-start handoff when a waiting run is reopened but envelope reconstruction fails", async () => {
     const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
@@ -4521,6 +4945,177 @@ describe("worker runtime", () => {
       from: ["queued", "running"],
       to: "running"
     });
+
+    warn.mockRestore();
+    await runtime.close();
+  });
+
+  it("keeps reactivated and shared suppressed-start failures distinct when both follow-on handlers reject", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onHarnessExecutionStartSuppressed = vi.fn();
+    const onHarnessFollowOnDispatchSuppressed = vi
+      .fn()
+      .mockRejectedValue(new Error("shared follow-on suppression unavailable"));
+    const onHarnessReactivatedFollowOnDispatchSuppressed = vi
+      .fn()
+      .mockRejectedValue(new Error("specific reactivated suppressed unavailable"));
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-reactivated-suppressed-hook-reject",
+      onHarnessExecutionStartSuppressed,
+      onHarnessFollowOnDispatchSuppressed,
+      onHarnessReactivatedFollowOnDispatchSuppressed
+    });
+
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.getRun.mockResolvedValueOnce({
+      id: "run-1",
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      state: "waiting",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      },
+      createdAt: "2026-05-21T10:00:00.000Z",
+      updatedAt: "2026-05-21T10:06:00.000Z"
+    });
+    harnessRepository.getCardContinuity
+      .mockResolvedValueOnce({
+        cardId: "card_cfo",
+        runId: "run-1",
+        continuitySource: "result_recorded",
+        continuitySummary: "CFO should continue the finalized pricing lane only if governance reopens it.",
+        latestResultSummary: "Pricing review is complete and ready for board packaging.",
+        absorbedWorkItems: [],
+        updatedAt: "2026-05-21T10:06:00.000Z"
+      })
+      .mockRejectedValueOnce(new Error("reactivated follow-on continuity unavailable"));
+    harnessRepository.listCardsForRun.mockResolvedValue([
+      {
+        id: "card_ceo",
+        runId: "run-1",
+        parentCardId: null,
+        persona: "ceo",
+        title: "Plan run",
+        deliverableType: "plan",
+        state: "planning",
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      },
+      {
+        id: "card_cfo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Finalize pricing review",
+        deliverableType: "pricing_review",
+        state: "done",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:06:00.000Z"
+      },
+      {
+        id: "card_cmo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cmo",
+        title: "Prepare launch messaging",
+        deliverableType: "marketing_plan",
+        state: "approved",
+        createdAt: "2026-05-21T10:02:00.000Z",
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      }
+    ]);
+    harnessRepository.listCardContinuityForRun.mockResolvedValue([
+      {
+        cardId: "card_cmo",
+        runId: "run-1",
+        continuitySource: "resume_override",
+        continuitySummary: "Resume the launch messaging lane from the approved positioning draft.",
+        latestResultSummary: null,
+        absorbedWorkItems: [],
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      }
+    ]);
+    harnessRepository.claimCardForExecution.mockResolvedValueOnce({
+      id: "card_cmo",
+      runId: "run-1",
+      parentCardId: "card_ceo",
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "marketing_plan",
+      state: "working",
+      executionClaimToken: "claim-cmo-active",
+      executionClaimedAt: "2026-05-21T10:07:30.000Z",
+      createdAt: "2026-05-21T10:02:00.000Z",
+      updatedAt: "2026-05-21T10:07:00.000Z"
+    });
+
+    await expect(
+      runtime.commitHarnessLaneOutcome({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-1",
+        state: "done",
+        resultSummary: "Pricing review is complete and ready for board packaging."
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        status: "committed"
+      })
+    );
+
+    expect(onHarnessExecutionStartSuppressed).toHaveBeenCalledTimes(1);
+    expect(onHarnessReactivatedFollowOnDispatchSuppressed).toHaveBeenCalledTimes(1);
+    expect(onHarnessFollowOnDispatchSuppressed).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      "Harness specific execution-start-suppressed hook failed after durable claim",
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cmo",
+        dispatchKind: "follow_on_dispatch"
+      })
+    );
+    const suppressedHookFailures = harnessRepository.insertEvent.mock.calls
+      .map(([event]) => event)
+      .filter(
+        (event) =>
+          event.cardId === "card_cmo" &&
+          event.eventKind === "execution_hook_failed" &&
+          event.payload.hookFamily === "execution_start_suppressed"
+      );
+    expect(suppressedHookFailures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            deliveryMode: "specific",
+            hookKind: "reactivated_follow_on_dispatch",
+            dispatchKind: "follow_on_dispatch",
+            executionStage: "post_outcome_follow_on",
+            failureMessage: "specific reactivated suppressed unavailable"
+          })
+        }),
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            deliveryMode: "specific",
+            hookKind: "follow_on_dispatch",
+            dispatchKind: "follow_on_dispatch",
+            executionStage: "post_outcome_follow_on",
+            failureMessage: "shared follow-on suppression unavailable"
+          })
+        })
+      ])
+    );
 
     warn.mockRestore();
     await runtime.close();

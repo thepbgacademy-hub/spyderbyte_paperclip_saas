@@ -3234,7 +3234,288 @@ describe("harness board service", () => {
     expect(hydratedCard?.activity).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          label: "A private execution-start handoff failed after this lane was already durably prepared."
+          label: "A private hook for execution start failed after this lane was already durably prepared."
+        })
+      ])
+    );
+  });
+
+  it("surfaces specific execution-claim hook failures as bounded board activity", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Validate pricing",
+      deliverableType: "pricing_review"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_hook_failed_specific_claim",
+      cardId: created.cardId,
+      eventKind: "execution_hook_failed",
+      payload: {
+        hookFamily: "execution_claimed",
+        hookFamilyLabel: "Execution claim handoff",
+        deliveryMode: "specific",
+        deliveryModeLabel: "Specific private hook",
+        hookKind: "approved_claim",
+        hookKindLabel: "Approved Claim",
+        claimKind: "approved_claim",
+        failureMessage: "specific claim unavailable"
+      },
+      createdAt: "2026-06-04T09:01:00.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A specific private hook for execution claim failed after this lane was already durably claimed."
+        })
+      ])
+    );
+  });
+
+  it("surfaces specific execution-dispatch hook failures as bounded board activity", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Validate pricing",
+      deliverableType: "pricing_review"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_hook_failed_specific_dispatch",
+      cardId: created.cardId,
+      eventKind: "execution_hook_failed",
+      payload: {
+        hookFamily: "execution_dispatched",
+        hookFamilyLabel: "Execution dispatch handoff",
+        deliveryMode: "specific",
+        deliveryModeLabel: "Specific private hook",
+        hookKind: "initial_claim",
+        hookKindLabel: "Initial claim",
+        dispatchKind: "initial_claim",
+        executionStage: "initial_lane_start",
+        failureMessage: "specific start unavailable"
+      },
+      createdAt: "2026-06-04T09:02:00.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A specific private hook for execution dispatch failed after this lane was already durably dispatched."
+        })
+      ])
+    );
+  });
+
+  it("surfaces specific execution-start-suppressed hook failures as bounded board activity", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Validate pricing",
+      deliverableType: "pricing_review"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_hook_failed_specific_suppressed",
+      cardId: created.cardId,
+      eventKind: "execution_hook_failed",
+      payload: {
+        hookFamily: "execution_start_suppressed",
+        hookFamilyLabel: "Execution start suppressed handoff",
+        deliveryMode: "specific",
+        deliveryModeLabel: "Specific private hook",
+        hookKind: "follow_on_dispatch",
+        hookKindLabel: "Follow-on dispatch",
+        dispatchKind: "follow_on_dispatch",
+        executionStage: "post_outcome_follow_on",
+        failureMessage: "specific suppressed unavailable"
+      },
+      createdAt: "2026-06-04T09:03:00.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A specific private hook for follow-on start suppression failed after this lane was already durably marked as suppressed."
+        })
+      ])
+    );
+  });
+
+  it("surfaces reactivated execution-dispatch hook failures as distinct bounded board activity", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Validate pricing",
+      deliverableType: "pricing_review"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_hook_failed_reactivated_dispatch",
+      cardId: created.cardId,
+      eventKind: "execution_hook_failed",
+      payload: {
+        hookFamily: "execution_dispatched",
+        hookFamilyLabel: "Execution dispatch handoff",
+        deliveryMode: "specific",
+        deliveryModeLabel: "Specific private hook",
+        hookKind: "reactivated_follow_on_dispatch",
+        hookKindLabel: "Reactivated follow-on dispatch",
+        dispatchKind: "follow_on_dispatch",
+        executionStage: "post_outcome_follow_on",
+        failureMessage: "specific reactivated start unavailable"
+      },
+      createdAt: "2026-06-04T09:02:30.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label:
+            "A specific private hook for reactivated follow-on execution dispatch failed after this lane was already durably dispatched."
+        })
+      ])
+    );
+  });
+
+  it("surfaces reactivated execution-start-suppressed hook failures as distinct bounded board activity", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Validate pricing",
+      deliverableType: "pricing_review"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_hook_failed_reactivated_suppressed",
+      cardId: created.cardId,
+      eventKind: "execution_hook_failed",
+      payload: {
+        hookFamily: "execution_start_suppressed",
+        hookFamilyLabel: "Execution start suppressed handoff",
+        deliveryMode: "specific",
+        deliveryModeLabel: "Specific private hook",
+        hookKind: "reactivated_follow_on_dispatch",
+        hookKindLabel: "Reactivated follow-on dispatch",
+        dispatchKind: "follow_on_dispatch",
+        executionStage: "post_outcome_follow_on",
+        failureMessage: "specific reactivated suppressed unavailable"
+      },
+      createdAt: "2026-06-04T09:03:30.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label:
+            "A specific private hook for reactivated follow-on start suppression failed after this lane was already durably marked as suppressed."
         })
       ])
     );
