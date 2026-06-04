@@ -1416,6 +1416,170 @@ describe("harness board service", () => {
     expect(hydrated.pendingAttention).toBeUndefined();
   });
 
+  it("fails closed when explicit lane-resume attention reuses a stale action token", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "waiting",
+      resumeSummary: "Pause until the tenant confirms the revised revenue assumption."
+    });
+
+    const waitingBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const eventsBefore = await repository.listEventsForCard(created.cardId);
+
+    await expect(
+      service.resolvePendingAttention({
+        authorization: "Bearer valid",
+        runId: board.runId,
+        command: "resume_lane",
+        actionToken: `${waitingBoard.pendingAttention?.actionToken ?? "missing"}-stale`
+      })
+    ).rejects.toThrow(/action token no longer matches/i);
+
+    const persistedCard = await repository.getCard(created.cardId);
+    const eventsAfter = await repository.listEventsForCard(created.cardId);
+    expect(persistedCard?.state).toBe("waiting");
+    expect(eventsAfter).toEqual(eventsBefore);
+  });
+
+  it("fails closed when explicit lane-unblock attention reuses a stale action token", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "blocked"
+    });
+
+    const blockedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const eventsBefore = await repository.listEventsForCard(created.cardId);
+
+    await expect(
+      service.resolvePendingAttention({
+        authorization: "Bearer valid",
+        runId: board.runId,
+        command: "unblock_lane",
+        actionToken: `${blockedBoard.pendingAttention?.actionToken ?? "missing"}-stale`
+      })
+    ).rejects.toThrow(/action token no longer matches/i);
+
+    const persistedCard = await repository.getCard(created.cardId);
+    const eventsAfter = await repository.listEventsForCard(created.cardId);
+    expect(persistedCard?.state).toBe("blocked");
+    expect(eventsAfter).toEqual(eventsBefore);
+  });
+
+  it("fails closed when the pending attention target changes during explicit lane resolution", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "waiting",
+      resumeSummary: "Pause until the tenant confirms the revised revenue assumption."
+    });
+
+    const waitingBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const eventsBefore = await repository.listEventsForCard(created.cardId);
+    repository.transitionCardState = async () => null;
+
+    await expect(
+      service.resolvePendingAttention({
+        authorization: "Bearer valid",
+        runId: board.runId,
+        command: "resume_lane",
+        ...(waitingBoard.pendingAttention?.actionToken
+          ? { actionToken: waitingBoard.pendingAttention.actionToken }
+          : {})
+      })
+    ).rejects.toThrow(/progression conflicted/i);
+
+    const persistedCard = await repository.getCard(created.cardId);
+    const eventsAfter = await repository.listEventsForCard(created.cardId);
+    expect(persistedCard?.state).toBe("waiting");
+    expect(eventsAfter).toEqual(eventsBefore);
+  });
+
   it("fails closed when explicit attention resolution does not match the active attention kind", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
@@ -2959,6 +3123,72 @@ describe("harness board service", () => {
     );
   });
 
+  it("surfaces existing-working execution claims as resumed active-lane history", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_claimed_existing_working",
+      cardId: created.cardId,
+      eventKind: "execution_claimed",
+      payload: {
+        claimKind: "existing_working_claim",
+        claimedAt: "2026-06-03T10:12:00.000Z",
+        previousClaimedAt: "2026-06-03T10:12:00.000Z"
+      },
+      createdAt: "2026-06-03T10:12:00.000Z"
+    });
+    await repository.insertEvent({
+      id: "event_execution_start_ready_existing_working",
+      cardId: created.cardId,
+      eventKind: "execution_start_ready",
+      payload: {
+        kind: "initial_claim",
+        kindLabel: "Initial lane claim",
+        executionStage: "initial_lane_start",
+        executionStageLabel: "Initial lane start",
+        claimKind: "existing_working_claim"
+      },
+      createdAt: "2026-06-03T10:12:01.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A worker resumed this lane from an already-active execution claim."
+        }),
+        expect.objectContaining({
+          label: "Worker execution start was re-prepared for this already-claimed active lane."
+        })
+      ])
+    );
+  });
+
   it("surfaces durable worker dispatch handoff history as bounded board activity", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
@@ -3111,6 +3341,62 @@ describe("harness board service", () => {
         claimKind: "approved_claim"
       },
       createdAt: "2026-06-04T09:00:00.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Worker execution start was prepared for the next lane after the prior lane outcome."
+        })
+      ])
+    );
+  });
+
+  it("keeps follow-on execution-start-ready history stage-specific even if claim metadata survives", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "launch_copy"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_start_ready_follow_on_existing_claim",
+      cardId: created.cardId,
+      eventKind: "execution_start_ready",
+      payload: {
+        kind: "follow_on_dispatch",
+        kindLabel: "Follow-on dispatch",
+        executionStage: "post_outcome_follow_on",
+        executionStageLabel: "Post-outcome follow-on",
+        reactivatedRun: false,
+        triggeredByCardId: "card_cfo",
+        triggeredByPersona: "cfo",
+        triggeredByOutcomeState: "done",
+        claimKind: "existing_working_claim"
+      },
+      createdAt: "2026-06-04T09:01:00.000Z"
     });
 
     const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(

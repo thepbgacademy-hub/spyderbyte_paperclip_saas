@@ -8357,9 +8357,15 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
       reactivatedRun: payloadReactivatedRun ?? null
     }),
     execution_start_ready:
+      readOptionalString(event.payload.claimKind) === "existing_working_claim"
+      && payloadDispatchKind !== "follow_on_dispatch"
+      && payloadExecutionStage === "initial_lane_start"
+        ? "Worker execution start was re-prepared for this already-claimed active lane."
+        : (
       payloadDispatchKind === "follow_on_dispatch"
         ? "Worker execution start was prepared for the next lane after the prior lane outcome."
-        : "Worker execution start was prepared for this lane after claim.",
+        : "Worker execution start was prepared for this lane after claim."
+        ),
     execution_start_suppressed:
       payloadDispatchKind === "follow_on_dispatch"
         ? "Worker execution start could not be rebuilt after the next lane was already dispatched."
@@ -8488,6 +8494,9 @@ function describeExecutionClaimActivity(input: {
     return input.claimKind === "working_claim_refresh"
       ? "A worker refreshed a recovered execution claim for this lane."
       : "A worker refreshed the active execution claim for this lane.";
+  }
+  if (input.claimKind === "existing_working_claim") {
+    return "A worker resumed this lane from an already-active execution claim.";
   }
   return input.claimKind === "approved_claim"
     ? "A worker claimed this lane from the approved execution queue."
