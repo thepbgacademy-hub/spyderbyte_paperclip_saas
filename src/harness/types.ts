@@ -12,6 +12,7 @@ export type HarnessCardEventKind =
   | "execution_dispatched"
   | "execution_start_ready"
   | "execution_start_suppressed"
+  | "execution_hook_failed"
   | "execution_claimed"
   | "execution_claim_refreshed"
   | "execution_outcome_committed"
@@ -96,6 +97,57 @@ export interface HarnessCardEventRecord {
   payload: Record<string, unknown>;
   createdAt: string;
 }
+
+export interface HarnessExecutionStartEventPayload {
+  kind: string;
+  kindLabel: string;
+  executionStage: string;
+  executionStageLabel: string;
+  reactivatedRun?: boolean;
+  triggeredByCardId?: string;
+  triggeredByPersona?: string;
+  triggeredByOutcomeState?: string;
+  triggeredByResultSummary?: string;
+  claimKind?: string;
+  claimedAt?: string;
+  previousClaimedAt?: string;
+  failureKind?: "execution_envelope_reconstruction_failed";
+  failureMessage?: string;
+}
+
+export interface HarnessExecutionHookFailurePayload {
+  hookFamily:
+    | "lane_outcome_ignored"
+    | "lane_outcome_committed"
+    | "attention_resolved"
+    | "post_outcome_action"
+    | "execution_start_ready"
+    | "execution_start_suppressed"
+    | "execution_claimed"
+    | "execution_dispatched";
+  hookFamilyLabel: string;
+  deliveryMode: "generic" | "specific";
+  deliveryModeLabel: string;
+  hookKind?: string | undefined;
+  hookKindLabel?: string | undefined;
+  dispatchKind?: string | undefined;
+  executionStage?: string | undefined;
+  claimKind?: string | undefined;
+  outcomeState?: string | undefined;
+  actionKind?: string | undefined;
+  reason?: string | undefined;
+  currentLaneState?: string | undefined;
+  failureMessage: string;
+}
+
+type HarnessKnownCardEventPayloadMap = {
+  execution_start_ready: HarnessExecutionStartEventPayload;
+  execution_start_suppressed: HarnessExecutionStartEventPayload;
+  execution_hook_failed: HarnessExecutionHookFailurePayload;
+};
+
+export type HarnessCardEventPayloadFor<K extends HarnessCardEventKind> =
+  K extends keyof HarnessKnownCardEventPayloadMap ? HarnessKnownCardEventPayloadMap[K] : Record<string, unknown>;
 
 export interface HarnessCardContinuityRecord {
   cardId: string;
@@ -389,16 +441,16 @@ export function createHarnessCardRecord(input: {
   };
 }
 
-export function createHarnessCardEventRecord(input: {
+export function createHarnessCardEventRecord<K extends HarnessCardEventKind>(input: {
   cardId: string;
-  eventKind: HarnessCardEventKind;
-  payload?: Record<string, unknown>;
+  eventKind: K;
+  payload?: HarnessCardEventPayloadFor<K>;
 }): HarnessCardEventRecord {
   return {
     id: randomUUID(),
     cardId: input.cardId,
     eventKind: input.eventKind,
-    payload: input.payload ?? {},
+    payload: (input.payload ?? {}) as Record<string, unknown>,
     createdAt: new Date().toISOString()
   };
 }

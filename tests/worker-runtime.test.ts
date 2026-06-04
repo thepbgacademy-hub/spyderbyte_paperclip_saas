@@ -1277,6 +1277,18 @@ describe("worker runtime", () => {
     expect(onHarnessPostOutcomeAction).toHaveBeenCalledTimes(1);
     expect(onHarnessLaneOutcomeCommitted).toHaveBeenCalledTimes(1);
     expect(onHarnessLaneDone).toHaveBeenCalledTimes(1);
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "execution_hook_failed",
+        payload: expect.objectContaining({
+          hookFamily: "lane_outcome_committed",
+          deliveryMode: "generic",
+          outcomeState: "done",
+          failureMessage: "committed handoff unavailable"
+        })
+      })
+    );
     expect(onHarnessCeoReviewRequested).toHaveBeenCalledWith({
       tenantId: "tenant-1",
       runId: "run-1",
@@ -2154,6 +2166,7 @@ describe("worker runtime", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const onHarnessApprovedExecutionClaim = vi.fn();
     const onHarnessInitialLaneStart = vi.fn();
+    const harnessRepository = harnessRepositoryRef.current;
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
@@ -2191,6 +2204,18 @@ describe("worker runtime", () => {
         claimKind: "approved_claim"
       })
     );
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "execution_hook_failed",
+        payload: expect.objectContaining({
+          hookFamily: "execution_claimed",
+          deliveryMode: "generic",
+          claimKind: "approved_claim",
+          failureMessage: "claim hook unavailable"
+        })
+      })
+    );
     expect(warn).toHaveBeenCalledWith(
       "Harness execution-dispatch hook failed after durable lane claim",
       expect.objectContaining({
@@ -2198,6 +2223,19 @@ describe("worker runtime", () => {
         workflowId: "wf_connect_first_workflow",
         cardId: "card_cfo",
         dispatchKind: "initial_claim"
+      })
+    );
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "execution_hook_failed",
+        payload: expect.objectContaining({
+          hookFamily: "execution_dispatched",
+          deliveryMode: "generic",
+          dispatchKind: "initial_claim",
+          executionStage: "initial_lane_start",
+          failureMessage: "dispatch hook unavailable"
+        })
       })
     );
     expect(onHarnessApprovedExecutionClaim).toHaveBeenCalledTimes(1);
@@ -3623,6 +3661,19 @@ describe("worker runtime", () => {
         runId: "run-1",
         workflowId: "wf_connect_first_workflow",
         cardId: "card_cmo"
+      })
+    );
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cmo",
+        eventKind: "execution_hook_failed",
+        payload: expect.objectContaining({
+          hookFamily: "execution_start_ready",
+          deliveryMode: "generic",
+          dispatchKind: "follow_on_dispatch",
+          executionStage: "post_outcome_follow_on",
+          failureMessage: "hook unavailable"
+        })
       })
     );
     const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;

@@ -3184,6 +3184,62 @@ describe("harness board service", () => {
     );
   });
 
+  it("surfaces execution-hook-failed history as bounded board activity", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "launch_copy"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_hook_failed",
+      cardId: created.cardId,
+      eventKind: "execution_hook_failed",
+      payload: {
+        hookFamily: "execution_start_ready",
+        hookFamilyLabel: "Execution start ready handoff",
+        deliveryMode: "generic",
+        deliveryModeLabel: "Generic private hook",
+        hookKind: "onHarnessLaneReady",
+        hookKindLabel: "Lane-ready hook",
+        dispatchKind: "follow_on_dispatch",
+        executionStage: "post_outcome_follow_on",
+        failureMessage: "hook unavailable"
+      },
+      createdAt: "2026-06-04T09:02:00.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A private execution-start handoff failed after this lane was already durably prepared."
+        })
+      ])
+    );
+  });
+
   it("surfaces initial execution-claim dispatch history as bounded board activity", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({

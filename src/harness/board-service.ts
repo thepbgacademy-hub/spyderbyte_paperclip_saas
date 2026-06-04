@@ -8364,6 +8364,13 @@ function toBoardActivityItem(event: HarnessCardEventRecord): HarnessBoardActivit
       payloadDispatchKind === "follow_on_dispatch"
         ? "Worker execution start could not be rebuilt after the next lane was already dispatched."
         : "Worker execution start could not be rebuilt after this lane was already claimed.",
+    execution_hook_failed: describeExecutionHookFailureActivity({
+      hookFamily: readOptionalString(event.payload.hookFamily) ?? null,
+      deliveryMode: readOptionalString(event.payload.deliveryMode) ?? null,
+      hookKindLabel: readOptionalString(event.payload.hookKindLabel) ?? null,
+      outcomeState: payloadOutcomeState ?? null,
+      actionKind: payloadActionKind ?? null
+    }),
     execution_claimed: describeExecutionClaimActivity({
       claimKind: payloadClaimKind ?? null,
       refreshed: false
@@ -8484,6 +8491,42 @@ function describeExecutionClaimActivity(input: {
   return input.claimKind === "approved_claim"
     ? "A worker claimed this lane from the approved execution queue."
     : "A worker claimed this lane for execution.";
+}
+
+function describeExecutionHookFailureActivity(input: {
+  hookFamily: string | null;
+  deliveryMode: string | null;
+  hookKindLabel: string | null;
+  outcomeState: string | null;
+  actionKind: string | null;
+}): string {
+  const deliveryLabel = input.deliveryMode === "specific" ? "specific private hook" : "private hook";
+  switch (input.hookFamily) {
+    case "lane_outcome_ignored":
+      return input.hookKindLabel
+        ? `A ${deliveryLabel} for ignored worker outcomes failed after the callback was already rejected (${input.hookKindLabel}).`
+        : `A ${deliveryLabel} for ignored worker outcomes failed after the callback was already rejected.`;
+    case "lane_outcome_committed":
+      return input.outcomeState
+        ? `A ${deliveryLabel} for the committed ${humanizeLabel(input.outcomeState)} worker outcome failed after the outcome was already recorded.`
+        : `A ${deliveryLabel} for a committed worker outcome failed after the outcome was already recorded.`;
+    case "attention_resolved":
+      return "A private attention-resolved handoff failed after the worker outcome was already recorded.";
+    case "post_outcome_action":
+      return input.actionKind
+        ? `A ${deliveryLabel} for the ${humanizeLabel(input.actionKind)} post-outcome handoff failed after the worker outcome was already recorded.`
+        : `A ${deliveryLabel} for a post-outcome handoff failed after the worker outcome was already recorded.`;
+    case "execution_start_ready":
+      return "A private execution-start handoff failed after this lane was already durably prepared.";
+    case "execution_start_suppressed":
+      return "A private execution-start-suppressed handoff failed after this lane was already durably marked as suppressed.";
+    case "execution_claimed":
+      return "A private execution-claim handoff failed after this lane was already durably claimed.";
+    case "execution_dispatched":
+      return "A private execution-dispatch handoff failed after this lane was already durably dispatched.";
+    default:
+      return "A private worker-execution handoff failed after the durable harness state was already recorded.";
+  }
 }
 
 function describeCommittedExecutionOutcomeActivity(input: {

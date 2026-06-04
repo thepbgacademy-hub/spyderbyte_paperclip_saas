@@ -8,6 +8,7 @@ export type HarnessCardEventKind =
   | "execution_dispatched"
   | "execution_start_ready"
   | "execution_start_suppressed"
+  | "execution_hook_failed"
   | "execution_claimed"
   | "execution_claim_refreshed"
   | "execution_outcome_committed"

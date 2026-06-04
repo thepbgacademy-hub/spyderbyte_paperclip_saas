@@ -596,6 +596,7 @@ export function createWorkerRuntime(options: {
                   : {}),
                 onDispatchResolution: async ({ dispatch, executionClaim, executionEnvelope }) => {
                   await emitHarnessExecutionStartHandoffs({
+                    repository: harnessRepository,
                     options,
                     ...(options.workerInstanceId ? { workerInstanceId: options.workerInstanceId } : {}),
                     tenantId: validatedPayload.tenantId,
@@ -699,31 +700,55 @@ export function createWorkerRuntime(options: {
             );
             try {
               await options.onHarnessLaneOutcomeIgnored?.(ignoredOutcomeHandoff);
-              } catch (error) {
-                console.warn("Harness ignored-outcome hook failed after fail-closed worker rejection", {
-                  runId: workerOutcome.runId,
-                  workflowId: workerOutcome.workflowId,
-                  cardId: input.cardId,
-                  reason: workerOutcome.ignored.reason,
-                  error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
-                });
-              }
-              try {
-                await runSpecificIgnoredOutcomeHandler({
-                  options,
-                  handoff: ignoredOutcomeHandoff
-                });
-              } catch (error) {
-                console.warn("Harness specific ignored-outcome handler failed after fail-closed worker rejection", {
-                  runId: workerOutcome.runId,
-                  workflowId: workerOutcome.workflowId,
-                  cardId: input.cardId,
-                  reason: workerOutcome.ignored.reason,
-                  error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
-                });
-              }
-              return;
+            } catch (error) {
+              await persistExecutionHookFailure({
+                repository: harnessRepository,
+                cardId: input.cardId,
+                hookFamily: "lane_outcome_ignored",
+                hookFamilyLabel: "Ignored worker outcome handoff",
+                deliveryMode: "generic",
+                hookKind: "onHarnessLaneOutcomeIgnored",
+                hookKindLabel: "Ignored worker outcome hook",
+                reason: workerOutcome.ignored.reason,
+                currentLaneState: "currentLaneState" in workerOutcome.ignored ? workerOutcome.ignored.currentLaneState : undefined,
+                error
+              });
+              console.warn("Harness ignored-outcome hook failed after fail-closed worker rejection", {
+                runId: workerOutcome.runId,
+                workflowId: workerOutcome.workflowId,
+                cardId: input.cardId,
+                reason: workerOutcome.ignored.reason,
+                error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+              });
             }
+            try {
+              await runSpecificIgnoredOutcomeHandler({
+                options,
+                handoff: ignoredOutcomeHandoff
+              });
+            } catch (error) {
+              await persistExecutionHookFailure({
+                repository: harnessRepository,
+                cardId: input.cardId,
+                hookFamily: "lane_outcome_ignored",
+                hookFamilyLabel: "Ignored worker outcome handoff",
+                deliveryMode: "specific",
+                hookKind: workerOutcome.ignored.reason,
+                hookKindLabel: humanizeLabel(workerOutcome.ignored.reason),
+                reason: workerOutcome.ignored.reason,
+                currentLaneState: "currentLaneState" in workerOutcome.ignored ? workerOutcome.ignored.currentLaneState : undefined,
+                error
+              });
+              console.warn("Harness specific ignored-outcome handler failed after fail-closed worker rejection", {
+                runId: workerOutcome.runId,
+                workflowId: workerOutcome.workflowId,
+                cardId: input.cardId,
+                reason: workerOutcome.ignored.reason,
+                error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+              });
+            }
+            return;
+          }
           const committedOutcome = workerOutcome;
           process.stdout.write(
             `${JSON.stringify({
@@ -754,6 +779,17 @@ export function createWorkerRuntime(options: {
             try {
               await options.onHarnessLaneOutcomeCommitted?.(committedOutcomeHandoff);
             } catch (error) {
+              await persistExecutionHookFailure({
+                repository: harnessRepository,
+                cardId: committedOutcome.laneExecution.cardId,
+                hookFamily: "lane_outcome_committed",
+                hookFamilyLabel: "Committed worker outcome handoff",
+                deliveryMode: "generic",
+                hookKind: "onHarnessLaneOutcomeCommitted",
+                hookKindLabel: "Committed worker outcome hook",
+                outcomeState: committedOutcome.laneExecution.state,
+                error
+              });
               console.warn("Harness committed-outcome hook failed after durable worker outcome", {
                 runId: committedOutcome.runId,
                 workflowId: committedOutcome.workflowId,
@@ -767,6 +803,17 @@ export function createWorkerRuntime(options: {
                 handoff: committedOutcomeHandoff
               });
             } catch (error) {
+              await persistExecutionHookFailure({
+                repository: harnessRepository,
+                cardId: committedOutcome.laneExecution.cardId,
+                hookFamily: "lane_outcome_committed",
+                hookFamilyLabel: "Committed worker outcome handoff",
+                deliveryMode: "specific",
+                hookKind: committedOutcome.laneExecution.state,
+                hookKindLabel: humanizeLabel(committedOutcome.laneExecution.state),
+                outcomeState: committedOutcome.laneExecution.state,
+                error
+              });
               console.warn("Harness specific committed-outcome handler failed after durable worker outcome", {
                 runId: committedOutcome.runId,
                 workflowId: committedOutcome.workflowId,
@@ -796,6 +843,18 @@ export function createWorkerRuntime(options: {
             try {
               await options.onHarnessAttentionResolved?.(attentionResolvedHandoff);
             } catch (error) {
+              await persistExecutionHookFailure({
+                repository: harnessRepository,
+                cardId: committedOutcome.laneExecution.cardId,
+                hookFamily: "attention_resolved",
+                hookFamilyLabel: "Attention resolved handoff",
+                deliveryMode: "generic",
+                hookKind: "onHarnessAttentionResolved",
+                hookKindLabel: "Attention resolved hook",
+                actionKind: resolvedAttentionAction.kind,
+                reason: "reason" in resolvedAttentionAction ? resolvedAttentionAction.reason : undefined,
+                error
+              });
               console.warn("Harness attention-resolved hook failed after durable worker outcome", {
                 runId: committedOutcome.runId,
                 workflowId: committedOutcome.workflowId,
@@ -829,6 +888,19 @@ export function createWorkerRuntime(options: {
             try {
               await options.onHarnessPostOutcomeAction?.(postOutcomeHandoff);
             } catch (error) {
+              await persistExecutionHookFailure({
+                repository: harnessRepository,
+                cardId: committedOutcome.laneExecution.cardId,
+                hookFamily: "post_outcome_action",
+                hookFamilyLabel: "Post-outcome action handoff",
+                deliveryMode: "generic",
+                hookKind: "onHarnessPostOutcomeAction",
+                hookKindLabel: "Post-outcome action hook",
+                actionKind: committedOutcome.postOutcomeAction.kind,
+                reason: "reason" in committedOutcome.postOutcomeAction ? committedOutcome.postOutcomeAction.reason : undefined,
+                outcomeState: committedOutcome.laneExecution.state,
+                error
+              });
               console.warn("Harness post-outcome hook failed after durable worker outcome", {
                 runId: committedOutcome.runId,
                 workflowId: committedOutcome.workflowId,
@@ -843,6 +915,19 @@ export function createWorkerRuntime(options: {
                 handoff: postOutcomeHandoff
               });
             } catch (error) {
+              await persistExecutionHookFailure({
+                repository: harnessRepository,
+                cardId: committedOutcome.laneExecution.cardId,
+                hookFamily: "post_outcome_action",
+                hookFamilyLabel: "Post-outcome action handoff",
+                deliveryMode: "specific",
+                hookKind: committedOutcome.postOutcomeAction.kind,
+                hookKindLabel: humanizeLabel(committedOutcome.postOutcomeAction.kind),
+                actionKind: committedOutcome.postOutcomeAction.kind,
+                reason: "reason" in committedOutcome.postOutcomeAction ? committedOutcome.postOutcomeAction.reason : undefined,
+                outcomeState: committedOutcome.laneExecution.state,
+                error
+              });
               console.warn("Harness specific post-outcome handler failed after durable worker outcome", {
                 runId: committedOutcome.runId,
                 workflowId: committedOutcome.workflowId,
@@ -899,6 +984,7 @@ export function createWorkerRuntime(options: {
                 error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
               });
               await emitHarnessExecutionStartSuppressed({
+                repository: harnessRepository,
                 options,
                 ...(options.workerInstanceId ? { workerInstanceId: options.workerInstanceId } : {}),
                 tenantId: input.tenantId,
@@ -948,6 +1034,19 @@ export function createWorkerRuntime(options: {
               try {
                 await options.onHarnessLaneReady?.(executionEnvelope);
               } catch (error) {
+                await persistExecutionHookFailure({
+                  repository: harnessRepository,
+                  cardId: executionEnvelope.laneExecution.cardId,
+                  hookFamily: "execution_start_ready",
+                  hookFamilyLabel: "Execution start ready handoff",
+                  deliveryMode: "generic",
+                  hookKind: "onHarnessLaneReady",
+                  hookKindLabel: "Lane-ready hook",
+                  dispatchKind: committedOutcome.nextDispatch.dispatchHandoff?.kind,
+                  executionStage: committedOutcome.nextDispatch.dispatchHandoff?.executionStage,
+                  claimKind: executionEnvelope.executionClaim.kind,
+                  error
+                });
                 console.warn("Harness lane-ready hook failed after durable follow-on dispatch", {
                   runId: executionEnvelope.runId,
                   workflowId: executionEnvelope.workflowId,
@@ -956,6 +1055,7 @@ export function createWorkerRuntime(options: {
                 });
               }
               await emitHarnessExecutionStartHandoffs({
+                repository: harnessRepository,
                 options,
                 ...(options.workerInstanceId ? { workerInstanceId: options.workerInstanceId } : {}),
                 tenantId: input.tenantId,
@@ -1009,6 +1109,7 @@ export function createWorkerRuntime(options: {
 }
 
 async function emitHarnessExecutionStartSuppressed(input: {
+  repository: Pick<ReturnType<typeof createPostgresHarnessRepository>, "insertEvent">;
   options: {
     workerInstanceId?: string;
     onHarnessExecutionStartSuppressed?: (input: {
@@ -1092,6 +1193,19 @@ async function emitHarnessExecutionStartSuppressed(input: {
   try {
     await input.options.onHarnessExecutionStartSuppressed?.(handoff);
   } catch (error) {
+    await persistExecutionHookFailure({
+      repository: input.repository,
+      cardId: input.laneExecution.cardId,
+      hookFamily: "execution_start_suppressed",
+      hookFamilyLabel: "Execution start suppressed handoff",
+      deliveryMode: "generic",
+      hookKind: "onHarnessExecutionStartSuppressed",
+      hookKindLabel: "Execution start suppressed hook",
+      dispatchKind: input.dispatchHandoff.kind,
+      executionStage: input.dispatchHandoff.executionStage,
+      claimKind: input.executionClaim?.kind,
+      error
+    });
     console.warn("Harness execution-start-suppressed hook failed after durable claim", {
       runId: input.runId,
       workflowId: input.workflowId,
@@ -1138,6 +1252,29 @@ async function emitHarnessExecutionStartSuppressed(input: {
       dispatchHandoff: input.dispatchHandoff
     });
   } catch (error) {
+    await persistExecutionHookFailure({
+      repository: input.repository,
+      cardId: input.laneExecution.cardId,
+      hookFamily: "execution_start_suppressed",
+      hookFamilyLabel: "Execution start suppressed handoff",
+      deliveryMode: "specific",
+      hookKind:
+        input.dispatchHandoff.kind === "initial_claim"
+          ? "initial_claim"
+          : input.dispatchHandoff.reactivatedRun === true
+            ? "reactivated_follow_on_dispatch"
+            : "follow_on_dispatch",
+      hookKindLabel:
+        input.dispatchHandoff.kind === "initial_claim"
+          ? "Initial claim"
+          : input.dispatchHandoff.reactivatedRun === true
+            ? "Reactivated follow-on dispatch"
+            : "Follow-on dispatch",
+      dispatchKind: input.dispatchHandoff.kind,
+      executionStage: input.dispatchHandoff.executionStage,
+      claimKind: input.executionClaim?.kind,
+      error
+    });
     console.warn("Harness specific execution-start-suppressed hook failed after durable claim", {
       runId: input.runId,
       workflowId: input.workflowId,
@@ -1148,11 +1285,19 @@ async function emitHarnessExecutionStartSuppressed(input: {
   }
 }
 
+function humanizeLabel(value: string): string {
+  return value
+    .split("_")
+    .filter((segment) => segment.length > 0)
+    .map((segment) => `${segment.slice(0, 1).toUpperCase()}${segment.slice(1)}`)
+    .join(" ");
+}
+
 function toExecutionStartEventPayload(input: {
   dispatchHandoff: HarnessWorkerDispatchHandoff;
   executionClaim?: HarnessWorkerExecutionClaimContext;
   failureMessage?: string;
-}) {
+}): import("../harness/types.js").HarnessExecutionStartEventPayload {
   return {
     kind: input.dispatchHandoff.kind,
     kindLabel: input.dispatchHandoff.kindLabel,
@@ -1170,11 +1315,61 @@ function toExecutionStartEventPayload(input: {
     ...(input.executionClaim ? { claimKind: input.executionClaim.kind } : {}),
     ...(input.failureMessage
       ? {
-          failureKind: "execution_envelope_reconstruction_failed",
+          failureKind: "execution_envelope_reconstruction_failed" as const,
           failureMessage: input.failureMessage
         }
       : {})
   };
+}
+
+async function persistExecutionHookFailure(input: {
+  repository: Pick<ReturnType<typeof createPostgresHarnessRepository>, "insertEvent">;
+  cardId: string;
+  hookFamily:
+    | "lane_outcome_ignored"
+    | "lane_outcome_committed"
+    | "attention_resolved"
+    | "post_outcome_action"
+    | "execution_start_ready"
+    | "execution_start_suppressed"
+    | "execution_claimed"
+    | "execution_dispatched";
+  hookFamilyLabel: string;
+  deliveryMode: "generic" | "specific";
+  hookKind?: string | undefined;
+  hookKindLabel?: string | undefined;
+  dispatchKind?: string | undefined;
+  executionStage?: string | undefined;
+  claimKind?: string | undefined;
+  outcomeState?: string | undefined;
+  actionKind?: string | undefined;
+  reason?: string | undefined;
+  currentLaneState?: string | undefined;
+  error: unknown;
+}) {
+  const failureMessage = input.error instanceof Error ? input.error.message : String(input.error);
+  await input.repository.insertEvent(
+    createHarnessCardEventRecord({
+      cardId: input.cardId,
+      eventKind: "execution_hook_failed",
+      payload: {
+        hookFamily: input.hookFamily,
+        hookFamilyLabel: input.hookFamilyLabel,
+        deliveryMode: input.deliveryMode,
+        deliveryModeLabel: input.deliveryMode === "specific" ? "Specific private hook" : "Generic private hook",
+        ...(input.hookKind ? { hookKind: input.hookKind } : {}),
+        ...(input.hookKindLabel ? { hookKindLabel: input.hookKindLabel } : {}),
+        ...(input.dispatchKind ? { dispatchKind: input.dispatchKind } : {}),
+        ...(input.executionStage ? { executionStage: input.executionStage } : {}),
+        ...(input.claimKind ? { claimKind: input.claimKind } : {}),
+        ...(input.outcomeState ? { outcomeState: input.outcomeState } : {}),
+        ...(input.actionKind ? { actionKind: input.actionKind } : {}),
+        ...(input.reason ? { reason: input.reason } : {}),
+        ...(input.currentLaneState ? { currentLaneState: input.currentLaneState } : {}),
+        failureMessage
+      }
+    })
+  );
 }
 
 function readResolvedAttentionAction(
@@ -1867,6 +2062,7 @@ async function processHarnessWorkflowJob(options: {
           error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
         });
         await emitHarnessExecutionStartSuppressed({
+          repository: options.repository,
           options,
           ...(options.workerInstanceId ? { workerInstanceId: options.workerInstanceId } : {}),
           tenantId: options.payload.tenantId,
@@ -1906,6 +2102,19 @@ async function processHarnessWorkflowJob(options: {
         try {
           await options.onExecutionEnvelope?.(executionEnvelope);
         } catch (error) {
+          await persistExecutionHookFailure({
+            repository: options.repository,
+            cardId: executionEnvelope.laneExecution.cardId,
+            hookFamily: "execution_start_ready",
+            hookFamilyLabel: "Execution start ready handoff",
+            deliveryMode: "generic",
+            hookKind: "onExecutionEnvelope",
+            hookKindLabel: "Lane-ready hook",
+            dispatchKind: dispatch.dispatchHandoff?.kind,
+            executionStage: dispatch.dispatchHandoff?.executionStage,
+            claimKind: dispatchResolution.executionClaim?.kind,
+            error
+          });
           console.warn("Harness lane-ready hook failed after durable lane claim", {
             runId: executionEnvelope.runId,
             workflowId: executionEnvelope.workflowId,
@@ -1920,6 +2129,29 @@ async function processHarnessWorkflowJob(options: {
             executionEnvelope
           });
         } catch (error) {
+          await persistExecutionHookFailure({
+            repository: options.repository,
+            cardId: executionEnvelope.laneExecution.cardId,
+            hookFamily: "execution_start_ready",
+            hookFamilyLabel: "Execution start ready handoff",
+            deliveryMode: "specific",
+            hookKind:
+              dispatch.dispatchHandoff?.kind === "initial_claim"
+                ? "initial_claim"
+                : dispatch.dispatchHandoff?.reactivatedRun === true
+                  ? "reactivated_follow_on_dispatch"
+                  : "follow_on_dispatch",
+            hookKindLabel:
+              dispatch.dispatchHandoff?.kind === "initial_claim"
+                ? "Initial claim"
+                : dispatch.dispatchHandoff?.reactivatedRun === true
+                  ? "Reactivated follow-on dispatch"
+                  : "Follow-on dispatch",
+            dispatchKind: dispatch.dispatchHandoff?.kind,
+            executionStage: dispatch.dispatchHandoff?.executionStage,
+            claimKind: dispatchResolution.executionClaim?.kind,
+            error
+          });
           console.warn("Harness execution-start hook failed after durable lane claim", {
             runId: executionEnvelope.runId,
             workflowId: executionEnvelope.workflowId,
@@ -1961,6 +2193,7 @@ async function processHarnessWorkflowJob(options: {
 }
 
 async function emitHarnessExecutionStartHandoffs(input: {
+  repository: Pick<ReturnType<typeof createPostgresHarnessRepository>, "insertEvent">;
   options: {
     workerInstanceId?: string;
     onHarnessExecutionClaimed?: (input: {
@@ -2051,6 +2284,17 @@ async function emitHarnessExecutionStartHandoffs(input: {
   try {
     await input.options.onHarnessExecutionClaimed?.(claimHandoff);
   } catch (error) {
+    await persistExecutionHookFailure({
+      repository: input.repository,
+      cardId: input.executionEnvelope.laneExecution.cardId,
+      hookFamily: "execution_claimed",
+      hookFamilyLabel: "Execution claim handoff",
+      deliveryMode: "generic",
+      hookKind: "onHarnessExecutionClaimed",
+      hookKindLabel: "Execution claim hook",
+      claimKind: executionClaim.kind,
+      error
+    });
     console.warn("Harness execution-claim hook failed after durable lane claim", {
       runId: input.dispatch.runId,
       workflowId: input.workflowId,
@@ -2065,6 +2309,17 @@ async function emitHarnessExecutionStartHandoffs(input: {
       handoff: claimHandoff
     });
   } catch (error) {
+    await persistExecutionHookFailure({
+      repository: input.repository,
+      cardId: input.executionEnvelope.laneExecution.cardId,
+      hookFamily: "execution_claimed",
+      hookFamilyLabel: "Execution claim handoff",
+      deliveryMode: "specific",
+      hookKind: executionClaim.kind,
+      hookKindLabel: humanizeLabel(executionClaim.kind),
+      claimKind: executionClaim.kind,
+      error
+    });
     console.warn("Harness specific execution-claim handler failed after durable lane claim", {
       runId: input.dispatch.runId,
       workflowId: input.workflowId,
@@ -2096,6 +2351,18 @@ async function emitHarnessExecutionStartHandoffs(input: {
   try {
     await input.options.onHarnessExecutionDispatched?.(dispatchHandoff);
   } catch (error) {
+    await persistExecutionHookFailure({
+      repository: input.repository,
+      cardId: input.executionEnvelope.laneExecution.cardId,
+      hookFamily: "execution_dispatched",
+      hookFamilyLabel: "Execution dispatch handoff",
+      deliveryMode: "generic",
+      hookKind: "onHarnessExecutionDispatched",
+      hookKindLabel: "Execution dispatch hook",
+      dispatchKind: input.dispatch.dispatchHandoff.kind,
+      executionStage: input.dispatch.dispatchHandoff.executionStage,
+      error
+    });
     console.warn("Harness execution-dispatch hook failed after durable lane claim", {
       runId: input.dispatch.runId,
       workflowId: input.workflowId,
@@ -2110,6 +2377,28 @@ async function emitHarnessExecutionStartHandoffs(input: {
       handoff: dispatchHandoff
     });
   } catch (error) {
+    await persistExecutionHookFailure({
+      repository: input.repository,
+      cardId: input.executionEnvelope.laneExecution.cardId,
+      hookFamily: "execution_dispatched",
+      hookFamilyLabel: "Execution dispatch handoff",
+      deliveryMode: "specific",
+      hookKind:
+        input.dispatch.dispatchHandoff.kind === "initial_claim"
+          ? "initial_claim"
+          : input.dispatch.dispatchHandoff.reactivatedRun === true
+            ? "reactivated_follow_on_dispatch"
+            : "follow_on_dispatch",
+      hookKindLabel:
+        input.dispatch.dispatchHandoff.kind === "initial_claim"
+          ? "Initial claim"
+          : input.dispatch.dispatchHandoff.reactivatedRun === true
+            ? "Reactivated follow-on dispatch"
+            : "Follow-on dispatch",
+      dispatchKind: input.dispatch.dispatchHandoff.kind,
+      executionStage: input.dispatch.dispatchHandoff.executionStage,
+      error
+    });
     console.warn("Harness specific execution-dispatch handler failed after durable lane claim", {
       runId: input.dispatch.runId,
       workflowId: input.workflowId,
