@@ -49,6 +49,7 @@ async function main() {
     resolveStartupFailed = resolve;
   });
   let startupFailureHandled = false;
+  let shutdownRequestedFlag = false;
   const ensureShutdown = ({ markClosing }: { markClosing: boolean }) => {
     shutdownPromise ??= (async () => {
       const shutdownErrors: unknown[] = [];
@@ -71,6 +72,7 @@ async function main() {
     })();
 
     if (markClosing) {
+      shutdownRequestedFlag = true;
       resolveShutdownRequested();
     }
     void shutdownPromise;
@@ -80,6 +82,10 @@ async function main() {
   };
   const handleStartupFailure = (error: unknown) => {
     if (startupFailureHandled) {
+      return;
+    }
+    if (shutdownRequestedFlag) {
+      startupFailureHandled = true;
       return;
     }
     startupFailureHandled = true;

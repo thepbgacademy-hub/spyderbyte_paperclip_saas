@@ -339,6 +339,98 @@ describe("worker runtime", () => {
     await runtime.close();
   });
 
+  it("waits for an in-flight non-harness workflow launch before closing runtime dependencies", async () => {
+    const { createPgPool } = await import("../src/db/postgres-client.js");
+    const { createPaperclipClient } = await import("../src/paperclip/client.js");
+    const deferred = createDeferred<{ paperclipRunId: string; status: "queued" }>();
+    const runtime = createWorkerRuntime({ env: loadWorkerEnv(validEnv), workerInstanceId: "worker-test-non-harness-close" });
+    const paperclipClient = vi.mocked(createPaperclipClient).mock.results.at(-1)?.value;
+    paperclipClient?.createRun.mockImplementationOnce(() => deferred.promise);
+
+    const processPromise = runtime.processQueuePayload({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "workflow-1",
+      createdByUserId: "user-1",
+      idempotencyKey: "tenant-1:workflow-1:run-1",
+      createdAt: new Date().toISOString()
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const poolEnd = vi.mocked(createPgPool).mock.results.at(-1)?.value.end;
+    let closeSettled = false;
+    const closePromise = runtime.close().then(() => {
+      closeSettled = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(closeSettled).toBe(false);
+    expect(poolEnd).not.toHaveBeenCalled();
+
+    deferred.resolve({ paperclipRunId: "pc-run-1", status: "queued" });
+
+    await expect(processPromise).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "workflow-1",
+      status: "queued"
+    });
+    await Promise.all([closePromise, runtime.close()]);
+
+    expect(closeSettled).toBe(true);
+    expect(poolEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not start queued-behind-gate non-harness work after shutdown begins", async () => {
+    const { createPgPool } = await import("../src/db/postgres-client.js");
+    const { createPaperclipClient } = await import("../src/paperclip/client.js");
+    const deferred = createDeferred<{ paperclipRunId: string; status: "queued" }>();
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_WORKER_CONCURRENCY: "1"
+      }),
+      workerInstanceId: "worker-test-non-harness-close-gated-backlog"
+    });
+    const paperclipClient = vi.mocked(createPaperclipClient).mock.results.at(-1)?.value;
+    paperclipClient?.createRun.mockImplementationOnce(() => deferred.promise);
+
+    const firstPromise = runtime.processQueuePayload({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "workflow-1",
+      createdByUserId: "user-1",
+      idempotencyKey: "tenant-1:workflow-1:run-1",
+      createdAt: new Date().toISOString()
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const secondPromise = runtime.processQueuePayload({
+      tenantId: "tenant-1",
+      runId: "run-2",
+      workflowId: "workflow-2",
+      createdByUserId: "user-1",
+      idempotencyKey: "tenant-1:workflow-2:run-2",
+      createdAt: new Date().toISOString()
+    });
+
+    const poolEnd = vi.mocked(createPgPool).mock.results.at(-1)?.value.end;
+    const closePromise = runtime.close();
+
+    deferred.resolve({ paperclipRunId: "pc-run-1", status: "queued" });
+
+    await expect(firstPromise).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "workflow-1",
+      status: "queued"
+    });
+    await expect(secondPromise).rejects.toThrow("Worker runtime is closing");
+    await closePromise;
+
+    expect(poolEnd).toHaveBeenCalledTimes(1);
+  });
+
   it("routes harness-enabled workflows through the bounded lane-dispatch path with continuity resume focus", async () => {
     const { createPaperclipClient } = await import("../src/paperclip/client.js");
     const onHarnessLaneReady = vi.fn();

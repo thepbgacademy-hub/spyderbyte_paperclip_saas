@@ -16,6 +16,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.resetModules();
   vi.unstubAllEnvs();
+  process.exitCode = undefined;
 });
 
 async function importWorkerMainWithMocks(input?: {
@@ -261,5 +262,54 @@ describe("worker main", () => {
     expect(
       stderrWrite.mock.calls.filter(([message]) => String(message).includes("worker bootstrap failed"))
     ).toHaveLength(1);
+  });
+
+  it("does not log or fail exit when startup rejects after shutdown was already requested", async () => {
+    const startDeferred = createDeferred<void>();
+    const waitUntilReady = createDeferred<void>();
+    const startFailure = new Error("worker start interrupted by shutdown");
+
+    const { signalHandlers, consumerClose, runtimeClose, stderrWrite } = await importWorkerMainWithMocks({
+      startPromise: startDeferred.promise,
+      waitUntilReadyPromise: waitUntilReady.promise
+    });
+
+    signalHandlers.get("SIGTERM")?.();
+    startDeferred.reject(startFailure);
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(consumerClose).toHaveBeenCalledOnce();
+    expect(runtimeClose).toHaveBeenCalledOnce();
+    expect(
+      stderrWrite.mock.calls.some(([message]) => String(message).includes("worker start interrupted by shutdown"))
+    ).toBe(false);
+    expect(process.exitCode).not.toBe(1);
+
+    waitUntilReady.resolve();
+    await Promise.resolve();
+  });
+
+  it("does not log or fail exit when readiness rejects after shutdown was already requested", async () => {
+    const waitUntilReady = createDeferred<void>();
+    const readinessFailure = new Error("worker readiness interrupted by shutdown");
+
+    const { signalHandlers, consumerClose, runtimeClose, stderrWrite } = await importWorkerMainWithMocks({
+      waitUntilReadyPromise: waitUntilReady.promise
+    });
+
+    signalHandlers.get("SIGINT")?.();
+    waitUntilReady.reject(readinessFailure);
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(consumerClose).toHaveBeenCalledOnce();
+    expect(runtimeClose).toHaveBeenCalledOnce();
+    expect(
+      stderrWrite.mock.calls.some(([message]) => String(message).includes("worker readiness interrupted by shutdown"))
+    ).toBe(false);
+    expect(process.exitCode).not.toBe(1);
   });
 });

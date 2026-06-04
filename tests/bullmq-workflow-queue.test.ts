@@ -200,4 +200,64 @@ describe("bullmq workflow queue", () => {
 
     await consumer.close();
   });
+
+  it("emits claimed and failed job events when the runtime rejects work because shutdown already began", async () => {
+    const failure = new Error("Worker runtime is closing");
+    const processPayload = vi.fn().mockRejectedValue(failure);
+    const onJobEvent = vi.fn();
+    const consumer = createBullmqWorkflowConsumer({
+      redisUrl: "redis://localhost:6379",
+      queueName: "wfpc-workflow-runs",
+      concurrency: 1,
+      processPayload,
+      onJobEvent
+    });
+
+    const processor = mocks.workerCtor.mock.results.at(-1)?.value.__processor as (job: { id?: string; data: unknown }) => Promise<unknown>;
+    await expect(
+      processor({
+        id: "job-shutdown",
+        data: {
+          tenantId: "tenant-1",
+          runId: "run-2",
+          workflowId: "workflow-2",
+          createdByUserId: "user-1",
+          idempotencyKey: "tenant-1:workflow-2:run-2",
+          createdAt: new Date().toISOString()
+        }
+      })
+    ).rejects.toThrow("Worker runtime is closing");
+
+    expect(onJobEvent).toHaveBeenNthCalledWith(
+      1,
+      "claimed",
+      expect.objectContaining({ jobId: "job-shutdown" })
+    );
+    expect(onJobEvent).toHaveBeenNthCalledWith(
+      2,
+      "failed",
+      expect.objectContaining({ jobId: "job-shutdown", error: failure })
+    );
+
+    await consumer.close();
+  });
+
+  it("still closes BullMQ resources cleanly after worker startup rejects", async () => {
+    const startupFailure = new Error("worker bootstrap failed");
+    mocks.workerRun.mockRejectedValueOnce(startupFailure);
+
+    const consumer = createBullmqWorkflowConsumer({
+      redisUrl: "redis://localhost:6379",
+      queueName: "wfpc-workflow-runs",
+      concurrency: 1,
+      processPayload: vi.fn().mockResolvedValue({ status: "queued" })
+    });
+
+    await expect(consumer.start()).rejects.toThrow("worker bootstrap failed");
+
+    await consumer.close();
+
+    expect(mocks.workerClose).toHaveBeenCalledOnce();
+    expect(mocks.redisQuit).toHaveBeenCalledOnce();
+  });
 });
