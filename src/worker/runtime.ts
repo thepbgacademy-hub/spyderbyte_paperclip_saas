@@ -57,6 +57,7 @@ export function loadWorkerEnv(source: NodeJS.ProcessEnv = process.env) {
 export function createWorkerRuntime(options: {
   env: WorkerEnv;
   workerInstanceId?: string;
+  runtimeCloseDrainTimeoutMs?: number;
   onHarnessLaneReady?: (envelope: HarnessWorkerExecutionEnvelope) => void | Promise<void>;
   onHarnessExecutionStartSuppressed?: (input: {
     tenantId: string;
@@ -335,6 +336,36 @@ export function createWorkerRuntime(options: {
     label: "Operator Debug Provider"
   });
   const inFlightPaperclipSecretBindings = new Map<string, Promise<{ type: "secret_ref"; secretId: string; version: string | number }>>();
+  const inFlightRuntimeOperations = new Set<Promise<unknown>>();
+  let isClosing = false;
+  let closingPromise: Promise<void> | null = null;
+  const runtimeCloseDrainTimeoutMs = Math.max(0, options.runtimeCloseDrainTimeoutMs ?? 5_000);
+
+  function trackRuntimeOperation<T>(promise: Promise<T>): Promise<T> {
+    const tracked = promise.finally(() => {
+      inFlightRuntimeOperations.delete(tracked);
+    });
+    inFlightRuntimeOperations.add(tracked);
+    return tracked;
+  }
+
+  async function waitForInFlightRuntimeOperations(): Promise<"drained" | "timed_out"> {
+    const deadline = Date.now() + runtimeCloseDrainTimeoutMs;
+    while (inFlightRuntimeOperations.size > 0) {
+      const remainingMs = deadline - Date.now();
+      if (remainingMs <= 0) {
+        return "timed_out";
+      }
+      const snapshot = [...inFlightRuntimeOperations];
+      await Promise.race([
+        Promise.allSettled(snapshot),
+        new Promise<"timed_out">((resolve) => {
+          setTimeout(() => resolve("timed_out"), remainingMs);
+        })
+      ]);
+    }
+    return "drained";
+  }
 
   async function resolveExistingPaperclipSecretRefBinding(input: {
     tenantId: string;
@@ -556,15 +587,22 @@ export function createWorkerRuntime(options: {
 
   return {
     async processQueuePayload(payload: unknown) {
+      if (isClosing) {
+        throw new Error("Worker runtime is closing");
+      }
       const validatedPayload = validateWorkflowQueuePayload(payload);
 
       return executionGate.run({
         tenantId: validatedPayload.tenantId,
         onStarted: (snapshot) => emitWorkerRunEvent("started", validatedPayload, snapshot),
         onReleased: (snapshot) => emitWorkerRunEvent("released", validatedPayload, snapshot),
-        operation: async () =>
-          harnessWorkflowRegistry.isHarnessEligible(validatedPayload.workflowId)
-            ? processHarnessWorkflowJob({
+        operation: async () => {
+          if (isClosing) {
+            throw new Error("Worker runtime is closing");
+          }
+          return trackRuntimeOperation(
+            harnessWorkflowRegistry.isHarnessEligible(validatedPayload.workflowId)
+              ? processHarnessWorkflowJob({
                 payload: validatedPayload,
                 repository: harnessRepository,
                 runAtomically: (work) =>
@@ -615,7 +653,7 @@ export function createWorkerRuntime(options: {
                   });
                 }
               })
-            : processWorkflowJob({
+              : processWorkflowJob({
                 payload: validatedPayload,
                 paperclipClient,
                 tenantResolver: async (tenantId) => {
@@ -658,6 +696,8 @@ export function createWorkerRuntime(options: {
                   await recordWorkflowStatus(status);
                 }
               })
+          );
+        }
       });
     },
 
@@ -679,7 +719,11 @@ export function createWorkerRuntime(options: {
         throw new Error(`Harness lane outcome is not enabled for workflow ${input.workflowId}`);
       }
 
-      const outcome = await processHarnessLaneOutcome({
+      if (isClosing) {
+        throw new Error("Worker runtime is closing");
+      }
+
+      const outcome = await trackRuntimeOperation(processHarnessLaneOutcome({
         payload: input,
         repository: harnessRepository,
         runAtomically: (work) =>
@@ -1122,12 +1166,23 @@ export function createWorkerRuntime(options: {
             );
           }
         }
-      });
+      }));
       return outcome;
     },
 
     async close() {
-      await pool.end();
+      closingPromise ??= (async () => {
+        isClosing = true;
+        const drainStatus = await waitForInFlightRuntimeOperations();
+        if (drainStatus === "timed_out") {
+          console.warn("Worker runtime close timed out while waiting for in-flight operations", {
+            timeoutMs: runtimeCloseDrainTimeoutMs,
+            remainingInFlightOperations: inFlightRuntimeOperations.size
+          });
+        }
+        await pool.end();
+      })();
+      await closingPromise;
     }
   };
 

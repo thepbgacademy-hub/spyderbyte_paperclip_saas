@@ -41,8 +41,9 @@ async function main() {
 
   process.stdout.write("wealth_factory_worker_ready\n");
 
+  let shutdownPromise: Promise<void> | null = null;
   const handleShutdownSignal = () => {
-    void consumer.close().then(
+    shutdownPromise ??= consumer.close().then(
       () => runtime.close(),
       async () => {
         await runtime.close();
@@ -52,6 +53,7 @@ async function main() {
       process.stderr.write(`${message}\n`);
       process.exitCode = 1;
     });
+    void shutdownPromise;
   };
 
   process.on("SIGINT", handleShutdownSignal);

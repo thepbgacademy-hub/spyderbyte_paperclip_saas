@@ -279,6 +279,16 @@ beforeEach(() => {
   harnessRepositoryRef.current = makeHarnessRepository();
 });
 
+function createDeferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 describe("worker runtime", () => {
   const validEnv = {
     NODE_ENV: "test",
@@ -525,9 +535,11 @@ describe("worker runtime", () => {
         persona: "cfo"
       })
     });
-    expect(stdoutWrite).toHaveBeenCalledWith(
-      expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
-    );
+    expect(
+      stdoutWrite.mock.calls.some(([value]) =>
+        String(value).includes("\"type\":\"wealth_factory_harness_lane_dispatch\"")
+      )
+    ).toBe(true);
     expect(stdoutWrite).toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_execution_claimed\"")
     );
@@ -573,6 +585,82 @@ describe("worker runtime", () => {
     expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"runtimeContext\""));
 
     await runtime.close();
+  });
+
+  it("waits for an in-flight initial harness lane-ready callback before closing runtime dependencies", async () => {
+    const { createPgPool } = await import("../src/db/postgres-client.js");
+    const deferred = createDeferred<void>();
+    const onHarnessLaneReady = vi.fn(async () => {
+      await deferred.promise;
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-close-initial-overlap",
+      onHarnessLaneReady
+    });
+
+    stdoutWrite.mockClear();
+    const processPromise = runtime.processQueuePayload({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      createdByUserId: "user-1",
+      idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+      createdAt: new Date().toISOString()
+    });
+
+    while (onHarnessLaneReady.mock.calls.length === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    const poolEnd = vi.mocked(createPgPool).mock.results.at(-1)?.value.end;
+    let closeSettled = false;
+    const closePromise = runtime.close().then(() => {
+      closeSettled = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(closeSettled).toBe(false);
+    expect(poolEnd).not.toHaveBeenCalled();
+    expect(harnessRepositoryRef.current.claimCardForExecution).toHaveBeenCalledWith({
+      cardId: "card_cfo",
+      expectedState: "approved"
+    });
+    expect(harnessRepositoryRef.current.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "execution_claimed"
+      })
+    );
+    expect(harnessRepositoryRef.current.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "execution_start_ready"
+      })
+    );
+    deferred.resolve();
+
+    await expect(processPromise).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+    await Promise.all([closePromise, runtime.close()]);
+
+    expect(closeSettled).toBe(true);
+    expect(poolEnd).toHaveBeenCalledTimes(1);
+    expect(
+      stdoutWrite.mock.calls.some(([value]) =>
+        String(value).includes("\"type\":\"wealth_factory_harness_lane_dispatch\"")
+      )
+    ).toBe(true);
+    expect(warn).not.toHaveBeenCalled();
+
+    warn.mockRestore();
   });
 
   it("keeps a durably claimed harness lane running when the private execution-envelope hook rejects", async () => {
@@ -4557,6 +4645,278 @@ describe("worker runtime", () => {
 
     warn.mockRestore();
     await runtime.close();
+  });
+
+  it("waits for an in-flight follow-on harness lane-ready callback before closing runtime dependencies", async () => {
+    const { createPgPool } = await import("../src/db/postgres-client.js");
+    const deferred = createDeferred<void>();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onHarnessLaneReady = vi.fn(async () => {
+      await deferred.promise;
+    });
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-close-follow-on-overlap",
+      onHarnessLaneReady
+    });
+
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.getCardContinuity.mockResolvedValueOnce({
+      cardId: "card_cfo",
+      runId: "run-1",
+      continuitySource: "result_recorded",
+      continuitySummary: "CFO should continue the finalized pricing lane only if governance reopens it.",
+      latestResultSummary: "Pricing review is complete and ready for board packaging.",
+      absorbedWorkItems: [],
+      updatedAt: "2026-05-21T10:06:00.000Z"
+    });
+    harnessRepository.listCardsForRun.mockResolvedValue([
+      {
+        id: "card_ceo",
+        runId: "run-1",
+        parentCardId: null,
+        persona: "ceo",
+        title: "Plan run",
+        deliverableType: "plan",
+        state: "planning",
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      },
+      {
+        id: "card_cfo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Finalize pricing review",
+        deliverableType: "pricing_review",
+        state: "done",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:06:00.000Z"
+      },
+      {
+        id: "card_cmo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cmo",
+        title: "Prepare launch messaging",
+        deliverableType: "marketing_plan",
+        state: "approved",
+        createdAt: "2026-05-21T10:02:00.000Z",
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      }
+    ]);
+    harnessRepository.listCardContinuityForRun.mockResolvedValue([
+      {
+        cardId: "card_cmo",
+        runId: "run-1",
+        continuitySource: "resume_override",
+        continuitySummary: "Resume the launch messaging lane from the approved positioning draft.",
+        latestResultSummary: null,
+        absorbedWorkItems: [],
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      }
+    ]);
+    harnessRepository.claimCardForExecution.mockResolvedValueOnce({
+      id: "card_cmo",
+      runId: "run-1",
+      parentCardId: "card_ceo",
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "marketing_plan",
+      state: "working",
+      executionClaimToken: "claim-cmo-active",
+      executionClaimedAt: "2026-05-21T10:07:30.000Z",
+      createdAt: "2026-05-21T10:02:00.000Z",
+      updatedAt: "2026-05-21T10:07:00.000Z"
+    });
+
+    stdoutWrite.mockClear();
+    const outcomePromise = runtime.commitHarnessLaneOutcome({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      cardId: "card_cfo",
+      executionClaimToken: "claim-cfo-1",
+      state: "done",
+      resultSummary: "Pricing review is complete and ready for board packaging."
+    });
+
+    while (onHarnessLaneReady.mock.calls.length === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    const poolEnd = vi.mocked(createPgPool).mock.results.at(-1)?.value.end;
+    let closeSettled = false;
+    const closePromise = runtime.close().then(() => {
+      closeSettled = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(closeSettled).toBe(false);
+    expect(poolEnd).not.toHaveBeenCalled();
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "execution_outcome_committed"
+      })
+    );
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cmo",
+        eventKind: "execution_start_ready"
+      })
+    );
+    deferred.resolve();
+
+    await expect(outcomePromise).resolves.toEqual(
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        status: "committed",
+        nextDispatch: expect.objectContaining({
+          laneExecution: expect.objectContaining({
+            cardId: "card_cmo"
+          })
+        })
+      })
+    );
+    await Promise.all([closePromise, runtime.close()]);
+
+    expect(closeSettled).toBe(true);
+    expect(poolEnd).toHaveBeenCalledTimes(1);
+    expect(
+      stdoutWrite.mock.calls.some(([value]) =>
+        String(value).includes("\"type\":\"wealth_factory_harness_lane_dispatch\"")
+      )
+    ).toBe(true);
+    expect(
+      stdoutWrite.mock.calls.some(([value]) =>
+        String(value).includes("\"type\":\"wealth_factory_harness_execution_dispatch_follow_on\"")
+      )
+    ).toBe(true);
+    expect(
+      stdoutWrite.mock.calls.filter(([value]) =>
+        String(value).includes("\"type\":\"wealth_factory_harness_execution_dispatch_follow_on\"")
+      )
+    ).toHaveLength(1);
+    expect(warn).not.toHaveBeenCalled();
+
+    warn.mockRestore();
+  });
+
+  it("does not start queued-behind-gate harness work after shutdown begins", async () => {
+    const { createPgPool } = await import("../src/db/postgres-client.js");
+    const firstDeferred = createDeferred<void>();
+    const onHarnessLaneReady = vi.fn(async () => {
+      await firstDeferred.promise;
+    });
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow",
+        WF_WORKER_CONCURRENCY: "1"
+      }),
+      workerInstanceId: "worker-test-harness-close-gated-backlog",
+      onHarnessLaneReady
+    });
+
+    const firstPromise = runtime.processQueuePayload({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      createdByUserId: "user-1",
+      idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+      createdAt: new Date().toISOString()
+    });
+
+    while (onHarnessLaneReady.mock.calls.length === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    const secondPromise = runtime.processQueuePayload({
+      tenantId: "tenant-1",
+      runId: "run-2",
+      workflowId: "wf_connect_first_workflow",
+      createdByUserId: "user-1",
+      idempotencyKey: "tenant-1:wf_connect_first_workflow:run-2",
+      createdAt: new Date().toISOString()
+    });
+
+    const poolEnd = vi.mocked(createPgPool).mock.results.at(-1)?.value.end;
+    const closePromise = runtime.close();
+    firstDeferred.resolve();
+
+    await expect(firstPromise).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+    await expect(secondPromise).rejects.toThrow("Worker runtime is closing");
+    await closePromise;
+
+    expect(onHarnessLaneReady).toHaveBeenCalledTimes(1);
+    expect(poolEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it("bounds runtime close when an in-flight harness callback never resolves", async () => {
+    const { createPgPool } = await import("../src/db/postgres-client.js");
+    const deferred = createDeferred<void>();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onHarnessLaneReady = vi.fn(async () => {
+      await deferred.promise;
+    });
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-close-timeout",
+      runtimeCloseDrainTimeoutMs: 10,
+      onHarnessLaneReady
+    });
+
+    const processPromise = runtime.processQueuePayload({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      createdByUserId: "user-1",
+      idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+      createdAt: new Date().toISOString()
+    });
+
+    while (onHarnessLaneReady.mock.calls.length === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    const poolEnd = vi.mocked(createPgPool).mock.results.at(-1)?.value.end;
+    let processSettled = false;
+    void processPromise.finally(() => {
+      processSettled = true;
+    });
+
+    await runtime.close();
+
+    expect(processSettled).toBe(false);
+    expect(poolEnd).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      "Worker runtime close timed out while waiting for in-flight operations",
+      expect.objectContaining({
+        timeoutMs: 10,
+        remainingInFlightOperations: 1
+      })
+    );
+
+    deferred.resolve();
+    await expect(processPromise).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+
+    warn.mockRestore();
   });
 
   it("still runs the generic execution-start-suppressed handoff when the specific follow-on suppressed handler rejects", async () => {
