@@ -2067,7 +2067,7 @@ describe("harness board service", () => {
     expect(hydratedCard?.activity).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          label: "A worker paused this lane and is waiting for a later resume: Resume after the tenant confirms the latest revenue assumption."
+          label: "A worker paused this lane and is waiting for an explicit resume: Resume after the tenant confirms the latest revenue assumption."
         })
       ])
     );
@@ -2223,7 +2223,7 @@ describe("harness board service", () => {
     expect(hydratedCard?.activity).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          label: "A worker marked this lane blocked and requested follow-through before continuing: Unblock after the tenant confirms the final margin constraint."
+          label: "A worker marked this lane blocked and is waiting for an explicit unblock: Unblock after the tenant confirms the final margin constraint."
         })
       ])
     );
