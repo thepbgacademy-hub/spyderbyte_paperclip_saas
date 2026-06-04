@@ -327,6 +327,7 @@ No issues identified in the harness slice. The board HTTP boundary now distingui
 - Re-ran the scan after pinning the attention-history fallback paths. This regression-only slice introduced no new live secret exposure; it only asserts existing bounded labels for governance backlog, governance hold, lane-unblock, and generic orchestration-hold history when persisted attention snapshots are absent.
 - Re-ran the scan after pinning the remaining attention-history fallback paths. This regression-only slice introduced no new live secret exposure; it only asserts existing bounded labels for final-assembly, lane-resume, lane-unblock, and generic resolved attention history when persisted attention snapshots are absent.
 - Re-ran the scan after pinning the legacy-activity fallback paths. This regression-only slice introduced no new live secret exposure; it only asserts existing bounded labels for created, state-changed, comment-added, lane-handoff, and result-recorded history when thin legacy events omit richer metadata.
+- Re-ran the scan after pinning the empty-payload legacy-event paths. This regression-only slice introduced no new live secret exposure; it only asserts existing bounded fallback labels on the public activity feed when older events arrive without their richer metadata.
 
 ## Remediation Priority
 
