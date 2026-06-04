@@ -2073,6 +2073,56 @@ describe("harness board service", () => {
     );
   });
 
+  it("keeps CEO review outcome history explicit when no review reason is present", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "launch_copy"
+    }));
+
+    await repository.insertEvent({
+      id: "event_execution_outcome_committed_generic_review",
+      cardId: created.cardId,
+      eventKind: "execution_outcome_committed",
+      payload: {
+        outcomeState: "done",
+        runState: "assembling",
+        postOutcomeActionKind: "queue_ceo_review"
+      },
+      createdAt: "2026-06-02T15:11:15.000Z"
+    });
+
+    const hydratedCard = (await service.listBoardState({ authorization: "Bearer valid" })).cards.find(
+      (card) => card.id === created.cardId
+    );
+
+    expect(hydratedCard?.activity).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "A worker finished this lane and queued CEO review."
+        })
+      ])
+    );
+  });
+
   it("keeps waiting worker outcome history explicit when no continuity detail is available", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({

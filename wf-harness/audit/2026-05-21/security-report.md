@@ -319,6 +319,7 @@ No issues identified in the harness slice. The board HTTP boundary now distingui
 - Re-ran the scan after tightening successful worker handoff wording. The touched slice still introduced no live secret exposure; the new label only reuses already-bounded target-persona and result-summary metadata from durable committed-outcome events, and it does not widen execution-claim tokens, provider context, BYOK material, note bodies, or other secret-bearing runtime data.
 - Re-ran the scan after tightening waiting and blocked fallback wording. The touched slice still introduced no live secret exposure; the new labels only reuse already-bounded outcome-state and post-outcome-action metadata from durable committed-outcome events, and they do not widen execution-claim tokens, provider context, BYOK material, note bodies, or other secret-bearing runtime data.
 - Re-ran the scan after tightening richer waiting and blocked history wording. The touched slice still introduced no live secret exposure; the new labels only restate already-bounded continuity summary, result summary, outcome-state, and post-outcome-action metadata from durable committed-outcome events, and they do not widen execution-claim tokens, provider context, BYOK material, note bodies, or other secret-bearing runtime data.
+- Re-ran the scan after pinning the CEO-review fallback path. This regression-only slice introduced no new live secret exposure; it only asserts the existing bounded `queue_ceo_review` history label when no extra reason or summary metadata is present.
 
 ## Remediation Priority
 
