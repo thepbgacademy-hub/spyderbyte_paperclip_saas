@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createRuntimeSessionAuth, createRuntimeSessionToken } from "../src/api/runtime-auth.js";
 import { createDashboardRuntime, createNodeRequestListener, loadRuntimeEnv } from "../src/api/runtime-server.js";
 import { createDurableAuditSink } from "../src/audit/durable-audit.js";
-import { createPgPoolQueryClient } from "../src/db/postgres-client.js";
+import { createPgPoolQueryClient, createPgTransactionRunner } from "../src/db/postgres-client.js";
 import {
   createHarnessBoardService,
   type HarnessGovernanceHistoryExportReadyDispatch,
@@ -175,6 +175,10 @@ function createMockDbQuery() {
       return { rows: [mockExportDeliveryRow] };
     }
 
+    if (sql.includes("workflow_queue_outbox")) {
+      return { rows: [{ id: "outbox-redispatch-1" }] };
+    }
+
     return { rows: [] };
   });
 }
@@ -186,7 +190,15 @@ vi.mock("../src/db/postgres-client.js", () => ({
     end: vi.fn().mockResolvedValue(undefined)
   })),
   createPgPoolQueryClient: vi.fn(() => ({ query: createMockDbQuery() })),
-  createPgTransactionRunner: vi.fn(() => ({ withTransaction: vi.fn() }))
+  createPgTransactionRunner: vi.fn(() => {
+    const query = createMockDbQuery();
+    return {
+      __query: query,
+      withTransaction: vi.fn().mockImplementation(async (callback: (transaction: { query: typeof query }) => Promise<unknown>) =>
+        callback({ query })
+      )
+    };
+  })
 }));
 
 vi.mock("../src/db/supabase-repositories.js", () => ({
@@ -782,18 +794,60 @@ describe("runtime server", () => {
       runId: "run_123",
       workflowId: "wf_connect_first_workflow",
       cardId: "card_123",
+      actionToken: "attention-token-123",
       command: "resume_lane",
       state: "working"
     });
 
-    expect(enqueueOnce).toHaveBeenCalledWith({
-      tenantId: "tenant_123",
-      workflowTemplateId: "wf_connect_first_workflow",
-      runId: "run_123",
-      userId: "user_123",
-      idempotencyKey: "tenant_123:wf_connect_first_workflow:run_123"
+    expect(enqueueOnce).not.toHaveBeenCalled();
+    const redispatchQuery = (vi.mocked(createPgTransactionRunner).mock.results.at(-1)?.value as { __query?: ReturnType<typeof vi.fn> } | undefined)?.__query;
+    const sql = redispatchQuery?.mock.calls.map(([statement]) => String(statement)).join("\n") ?? "";
+    expect(sql).toMatch(/insert into wfpc\.workflow_queue_outbox/i);
+    expect(sql).toMatch(/when wfpc\.workflow_queue_outbox\.status = 'claimed' then wfpc\.workflow_queue_outbox\.idempotency_key/i);
+    expect(sql).toMatch(/else excluded\.idempotency_key/i);
+    expect(redispatchQuery?.mock.calls[0]?.[1]?.[4]).toMatch(/^tenant_123:wf_connect_first_workflow:run_123:redispatch:resume_lane:[a-f0-9]{12}$/i);
+
+    await runtime.close();
+  });
+
+  it("does not warn when resolved harness attention redispatch staging succeeds", async () => {
+    const enqueueOnce = vi.fn().mockResolvedValue("enqueued");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() },
+      workflowQueueEnqueuer: { enqueueOnce }
     });
 
+    const boardServiceOptions = vi.mocked(createHarnessBoardService).mock.calls.at(-1)?.[0];
+    await expect(
+      boardServiceOptions?.onResolvedAttentionDispatch?.({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        runId: "run_123",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_123",
+        actionToken: "attention-token-123",
+        command: "resume_lane",
+        state: "working"
+      })
+    ).resolves.toBeUndefined();
+
+    expect(enqueueOnce).not.toHaveBeenCalled();
+    expect(warnSpy).not.toHaveBeenCalled();
+    const redispatchQuery = (vi.mocked(createPgTransactionRunner).mock.results.at(-1)?.value as { __query?: ReturnType<typeof vi.fn> } | undefined)?.__query;
+    const sql = redispatchQuery?.mock.calls.map(([statement]) => String(statement)).join("\n") ?? "";
+    expect(sql).toMatch(/insert into wfpc\.workflow_queue_outbox/i);
+    expect(enqueueOnce).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
     await runtime.close();
   });
 
@@ -820,18 +874,59 @@ describe("runtime server", () => {
       userId: "user_123",
       runId: "run_124",
       workflowId: "wf_connect_first_workflow",
+      actionToken: "fresh-cycle-token-123",
       mode: "reopen_deferred",
       reopenedProposalCount: 1
     });
 
-    expect(enqueueOnce).toHaveBeenCalledWith({
-      tenantId: "tenant_123",
-      workflowTemplateId: "wf_connect_first_workflow",
-      runId: "run_124",
-      userId: "user_123",
-      idempotencyKey: "tenant_123:wf_connect_first_workflow:run_124"
+    expect(enqueueOnce).not.toHaveBeenCalled();
+    const redispatchQuery = (vi.mocked(createPgTransactionRunner).mock.results.at(-1)?.value as { __query?: ReturnType<typeof vi.fn> } | undefined)?.__query;
+    const sql = redispatchQuery?.mock.calls.map(([statement]) => String(statement)).join("\n") ?? "";
+    expect(sql).toMatch(/insert into wfpc\.workflow_queue_outbox/i);
+    expect(sql).toMatch(/when wfpc\.workflow_queue_outbox\.status = 'claimed' then wfpc\.workflow_queue_outbox\.idempotency_key/i);
+    expect(sql).toMatch(/else excluded\.idempotency_key/i);
+    expect(redispatchQuery?.mock.calls[0]?.[1]?.[4]).toMatch(/^tenant_123:wf_connect_first_workflow:run_124:redispatch:fresh_cycle_reopen_deferred:[a-f0-9]{12}$/i);
+
+    await runtime.close();
+  });
+
+  it("does not warn when fresh-cycle redispatch staging succeeds", async () => {
+    const enqueueOnce = vi.fn().mockResolvedValue("enqueued");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() },
+      workflowQueueEnqueuer: { enqueueOnce }
     });
 
+    const boardServiceOptions = vi.mocked(createHarnessBoardService).mock.calls.at(-1)?.[0];
+    await expect(
+      boardServiceOptions?.onFreshCycleDispatch?.({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        runId: "run_124",
+        workflowId: "wf_connect_first_workflow",
+        actionToken: "fresh-cycle-token-123",
+        mode: "reopen_deferred",
+        reopenedProposalCount: 1
+      })
+    ).resolves.toBeUndefined();
+
+    expect(enqueueOnce).not.toHaveBeenCalled();
+    expect(warnSpy).not.toHaveBeenCalled();
+    const redispatchQuery = (vi.mocked(createPgTransactionRunner).mock.results.at(-1)?.value as { __query?: ReturnType<typeof vi.fn> } | undefined)?.__query;
+    const sql = redispatchQuery?.mock.calls.map(([statement]) => String(statement)).join("\n") ?? "";
+    expect(sql).toMatch(/insert into wfpc\.workflow_queue_outbox/i);
+    expect(enqueueOnce).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
     await runtime.close();
   });
 

@@ -180,7 +180,13 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
       });
     },
 
-    async markWorkflowRunQueued(input: { tenantId: string; runId: string; outboxId: string; claimToken: string }): Promise<{ marked: boolean }> {
+    async markWorkflowRunQueued(input: {
+      tenantId: string;
+      runId: string;
+      outboxId: string;
+      claimToken: string;
+      idempotencyKey: string;
+    }): Promise<{ marked: boolean }> {
       return runner.withTransaction(async (transaction) => {
         const result = await transaction.query(
           `update wfpc.workflow_queue_outbox
@@ -193,11 +199,59 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
              and run_id = $2
              and id = $3::uuid
              and claim_token = $4::uuid
+             and idempotency_key = $5
              and status = 'claimed'
            returning id`,
-          [input.tenantId, input.runId, input.outboxId, input.claimToken]
+          [input.tenantId, input.runId, input.outboxId, input.claimToken, input.idempotencyKey]
         );
         return { marked: result.rows.length > 0 };
+      });
+    },
+
+    async stageWorkflowRunRedispatch(input: {
+      tenantId: string;
+      runId: string;
+      workflowTemplateId: string;
+      userId: string;
+      idempotencyKey: string;
+    }): Promise<{ staged: boolean; outboxId: string | null }> {
+      return runner.withTransaction(async (transaction) => {
+        const result = await transaction.query(
+          `insert into wfpc.workflow_queue_outbox
+             (tenant_id, run_id, workflow_template_id, created_by_user_id, idempotency_key, status, available_at, claim_token, claimed_at, enqueued_at, last_error, updated_at)
+           values ($1, $2, $3, $4, $5, 'pending', now(), null, null, null, null, now())
+           on conflict (tenant_id, run_id) do update
+             set workflow_template_id = excluded.workflow_template_id,
+                 idempotency_key = case
+                   when wfpc.workflow_queue_outbox.status = 'claimed' then wfpc.workflow_queue_outbox.idempotency_key
+                   else excluded.idempotency_key
+                 end,
+                 status = case
+                   when wfpc.workflow_queue_outbox.status = 'claimed' then wfpc.workflow_queue_outbox.status
+                   else 'pending'
+                 end,
+                 available_at = case
+                   when wfpc.workflow_queue_outbox.status = 'claimed' then wfpc.workflow_queue_outbox.available_at
+                   else now()
+                 end,
+                 claim_token = case
+                   when wfpc.workflow_queue_outbox.status = 'claimed' then wfpc.workflow_queue_outbox.claim_token
+                   else null
+                 end,
+                 claimed_at = case
+                   when wfpc.workflow_queue_outbox.status = 'claimed' then wfpc.workflow_queue_outbox.claimed_at
+                   else null
+                 end,
+                 enqueued_at = case
+                   when wfpc.workflow_queue_outbox.status = 'claimed' then wfpc.workflow_queue_outbox.enqueued_at
+                   else null
+                 end,
+                 last_error = null,
+                 updated_at = now()
+           returning id`,
+          [input.tenantId, input.runId, input.workflowTemplateId, input.userId, input.idempotencyKey]
+        );
+        return { staged: result.rows.length > 0, outboxId: result.rows.length > 0 ? String(asRecord(result.rows[0]).id) : null };
       });
     },
 

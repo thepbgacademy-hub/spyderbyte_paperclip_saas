@@ -305,7 +305,8 @@ describe("ACID guard repository", () => {
         tenantId: "tenant-1",
         runId: "run-1",
         outboxId: "outbox-1",
-        claimToken: "11111111-1111-4111-8111-111111111111"
+        claimToken: "11111111-1111-4111-8111-111111111111",
+        idempotencyKey: "tenant-1:workflow-1:run-1"
       })
     ).resolves.toEqual({ marked: true });
 
@@ -315,7 +316,34 @@ describe("ACID guard repository", () => {
     expect(sql).toMatch(/claim_token = null/i);
     expect(sql).toMatch(/and id = \$3::uuid/i);
     expect(sql).toMatch(/and claim_token = \$4::uuid/i);
+    expect(sql).toMatch(/and idempotency_key = \$5/i);
     expect(sql).toMatch(/and status = 'claimed'/i);
+  });
+
+  it("re-arms workflow outbox rows for redispatch recovery on the same run id", async () => {
+    const client = createSequencedClient([[{ id: "outbox-1" }]]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(
+      repository.stageWorkflowRunRedispatch({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowTemplateId: "workflow-1",
+        userId: "user-1",
+        idempotencyKey: "tenant-1:workflow-1:run-1:redispatch:resume_lane:abc123def456"
+      })
+    ).resolves.toEqual({ staged: true, outboxId: "outbox-1" });
+
+    const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
+    expect(sql).toMatch(/insert into wfpc\.workflow_queue_outbox/i);
+    expect(sql).toMatch(/on conflict \(tenant_id, run_id\) do update/i);
+    expect(sql).toMatch(/when wfpc\.workflow_queue_outbox\.status = 'claimed' then wfpc\.workflow_queue_outbox\.idempotency_key/i);
+    expect(sql).toMatch(/else excluded\.idempotency_key/i);
+    expect(sql).not.toMatch(/created_by_user_id = excluded\.created_by_user_id/i);
+    expect(sql).toMatch(/when wfpc\.workflow_queue_outbox\.status = 'claimed' then wfpc\.workflow_queue_outbox\.status/i);
+    expect(sql).toMatch(/when wfpc\.workflow_queue_outbox\.status = 'claimed' then wfpc\.workflow_queue_outbox\.claim_token/i);
+    expect(sql).toMatch(/when wfpc\.workflow_queue_outbox\.status = 'claimed' then wfpc\.workflow_queue_outbox\.claimed_at/i);
+    expect(sql).toMatch(/else now\(\)/i);
   });
 
   it("claims pending workflow outbox rows with skip locked", async () => {

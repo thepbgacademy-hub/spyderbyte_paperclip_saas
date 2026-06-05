@@ -41,7 +41,8 @@ describe("queue outbox worker", () => {
       tenantId: "tenant-1",
       runId: "run-1",
       outboxId: "outbox-1",
-      claimToken: "11111111-1111-4111-8111-111111111111"
+      claimToken: "11111111-1111-4111-8111-111111111111",
+      idempotencyKey: "tenant-1:workflow-1:run-1"
     });
     expect(repository.releaseWorkflowQueueOutbox).not.toHaveBeenCalled();
     expect(repository.confirmWorkflowRunQueued).not.toHaveBeenCalled();
@@ -71,7 +72,8 @@ describe("queue outbox worker", () => {
       tenantId: "tenant-1",
       runId: "run-1",
       outboxId: "outbox-1",
-      claimToken: "11111111-1111-4111-8111-111111111111"
+      claimToken: "11111111-1111-4111-8111-111111111111",
+      idempotencyKey: "tenant-1:workflow-1:run-1"
     });
     expect(repository.confirmWorkflowRunQueued).not.toHaveBeenCalled();
   });

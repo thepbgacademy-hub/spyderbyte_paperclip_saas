@@ -960,6 +960,7 @@ export type HarnessResolvedAttentionDispatch = {
   runId: string;
   workflowId: string;
   cardId: string;
+  actionToken: string;
   command: HarnessAttentionResolutionCommand;
   state: "working" | "approved";
 };
@@ -968,6 +969,7 @@ export type HarnessFreshCycleDispatch = {
   userId: string;
   runId: string;
   workflowId: string;
+  actionToken: string;
   mode: HarnessFreshCycleMode;
   reopenedProposalCount: number;
 };
@@ -3645,6 +3647,12 @@ export function createHarnessBoardService(options: {
         ) {
           throw new HarnessCardProgressionConflictError("Harness run is not waiting on that attention command");
         }
+        const resolvedAttentionActionToken =
+          request.actionToken ??
+          createPendingAttentionActionToken({
+            runId: run.id,
+            action: pendingAttention
+          });
 
         const targetCardId = "cardId" in pendingAttention ? pendingAttention.cardId : null;
         if (!targetCardId) {
@@ -3765,6 +3773,7 @@ export function createHarnessBoardService(options: {
           runId: run.id,
           workflowId: run.workflowId,
           cardId: updatedCard.id,
+          actionToken: resolvedAttentionActionToken,
           command: request.command,
           state: resolvedState,
           status: request.command === "resume_lane" ? "resumed" as const : "unblocked" as const,
@@ -3802,6 +3811,7 @@ export function createHarnessBoardService(options: {
           runId: result.runId,
           workflowId: result.workflowId,
           cardId: result.cardId,
+          actionToken: result.actionToken,
           command: result.command,
           state: result.state
         });
@@ -3989,6 +3999,7 @@ export function createHarnessBoardService(options: {
           userId: access.session.userId,
           runId: nextRun.id,
           workflowId: nextRun.workflowId,
+          actionToken: request.actionToken ?? nextRun.id,
           mode: freshCycleMode,
           reopenedProposalCount: carryForwardProposals.length,
           auditEvents: [
@@ -4015,6 +4026,7 @@ export function createHarnessBoardService(options: {
           userId: result.userId,
           runId: result.runId,
           workflowId: result.workflowId,
+          actionToken: result.actionToken,
           mode: result.mode,
           reopenedProposalCount: result.reopenedProposalCount
         });

@@ -129,6 +129,40 @@ Completed outcome:
 - Healthcheck and server bootstrap only require Paperclip launch env when configured workflows still truly route through the adapter.
 - The remaining Paperclip execution dependency is explicitly limited to still-unmigrated workflow families.
 
+## Phase 5: Redispatch-Safe Native Continuation Seam
+
+Status: `completed`
+
+Goal:
+- Keep the already-migrated native workflow family restartable on the same run id without reopening Paperclip assumptions.
+
+Scope:
+- Preserve the current public queue payload shape and tenant-safe DTO boundaries.
+- Allow resumed and unblocked same-run harness redispatch to mint a fresh BullMQ job id, and keep fresh-cycle redispatch on the same bounded token seam without reopening Paperclip assumptions.
+- Keep first-launch reservation/outbox idempotency intact for initial queue admission.
+- Propagate only bounded action metadata needed to derive a fresh redispatch key.
+
+Required outputs:
+- Resolved-attention and fresh-cycle dispatch hooks carry a bounded redispatch token.
+- BullMQ job ids use the enqueue request idempotency key, while the queue payload keeps its existing run-identity-safe shape.
+- Native continuation on the same run id no longer collapses into `already_queued` only because the original BullMQ job id was reused.
+- Worker/native continuation still stays entirely off the Paperclip path for `wf_connect_first_workflow`.
+
+Non-goals:
+- No second public workflow family yet.
+- No multi-provider native execution widening.
+- No queue payload expansion for customer-facing or public API surfaces.
+
+Exit criteria:
+- Resumed/unblocked/native continuation dispatch is proven end to end under focused and full verification.
+- The remaining native-expansion backlog is narrowed further and stays explicitly scoped away from already-migrated Paperclip-free paths.
+
+Completed outcome:
+- Harness resume/unblock/fresh-cycle redispatch now carries a bounded action token.
+- Redispatch queue admission now mints a fresh BullMQ job id without widening the existing queue payload contract.
+- Redispatch stages a durable outbox continuation record and relies on the existing outbox worker for safe queue admission, so transient BullMQ or Redis failures no longer strand resumed or fresh-cycle native continuation.
+- `wf_connect_first_workflow` can re-enter native continuation on the same run id without colliding with its original BullMQ job id.
+
 ## Immediate Execution Order
 
 1. Keep the migrated `wf_connect_first_workflow` native path green under the full verification bar.

@@ -4,6 +4,7 @@ Current execution note:
 - This file is historical architecture context for the older Paperclip-backed build track.
 - The active phased replacement plan now lives at `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`.
 - Phases 3 and 4 are now complete for the first native workflow family (`wf_connect_first_workflow`): it is native by default, and its worker/runtime path no longer requires Paperclip launch env or private adapter mapping.
+- In this file, older MVP/post-MVP phase numbers are historical only; the active Phase 1+ numbering now belongs to the native replacement plan of record.
 - New execution sessions should enter through `wf-harness/HANDOFF.md` first, not treat this document as the current plan of record.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -353,7 +354,7 @@ expect(publicResponse.workflowName).toContain("Wealth Factory");
 - [ ] Reviewer checks that operator endpoints cannot be reached by tenant users.
 - [ ] Commit with message: `feat: add operator control surface`
 
-## Phase 5: Minimal Branded MVP UI
+## Legacy MVP Phase 5: Minimal Branded MVP UI
 
 **Outcome:** A small SpyderByte UI proves login, tenant selection, credential registration, workflow run, and sanitized result display.
 

@@ -1355,6 +1355,7 @@ describe("harness board service", () => {
       runId: board.runId,
       workflowId: "wf_connect_first_workflow",
       cardId: created.cardId,
+      actionToken: expect.any(String),
       command: "resume_lane",
       state: "working"
     });
@@ -7260,6 +7261,7 @@ describe("harness board service", () => {
       userId: "user_123",
       runId: reopened.runId,
       workflowId: "wf_connect_first_workflow",
+      actionToken: expect.any(String),
       mode: "reopen_deferred",
       reopenedProposalCount: 1
     });

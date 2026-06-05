@@ -114,6 +114,39 @@ describe("bullmq workflow queue", () => {
     ).resolves.toBe("already_queued");
   });
 
+  it("uses the enqueue request idempotency key as the BullMQ job id while preserving the safe payload run key", async () => {
+    mocks.add.mockResolvedValue({ id: "job-redispatch-1" });
+
+    const enqueuer = createBullmqWorkflowRunEnqueuer({
+      redisUrl: "redis://localhost:6379",
+      queueName: "wfpc-workflow-runs"
+    });
+
+    await expect(
+      enqueuer.enqueueOnce({
+        tenantId: "tenant-1",
+        userId: "user-1",
+        workflowTemplateId: "workflow-1",
+        runId: "run-1",
+        idempotencyKey: "tenant-1:workflow-1:run-1:redispatch:resume_lane:abc123def456"
+      })
+    ).resolves.toBe("enqueued");
+
+    expect(mocks.add).toHaveBeenCalledWith(
+      "workflow-run",
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        workflowId: "workflow-1",
+        createdByUserId: "user-1",
+        runId: "run-1",
+        idempotencyKey: "tenant-1:workflow-1:run-1"
+      }),
+      {
+        jobId: "tenant-1:workflow-1:run-1:redispatch:resume_lane:abc123def456"
+      }
+    );
+  });
+
   it("starts a BullMQ worker that forwards queue payloads into the workflow runtime", async () => {
     const processPayload = vi.fn().mockResolvedValue({ status: "queued" });
     const onJobEvent = vi.fn();

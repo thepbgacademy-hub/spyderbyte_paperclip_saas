@@ -8,7 +8,7 @@ Phases 0 through 7 are complete, tested, reviewed, and committed.
 
 The first post-MVP productization slices are implemented locally: security baseline helpers, Wealth Factory boundary layer, package entitlements/provider requirements, temporary artifacts, expanded provider definitions, a Wealth Factory dashboard POC surface, the first API-backed dashboard foundation, and the first database-backed ACID/race-condition foundation.
 
-The next session should enter through the harness lane first, read the current phased native-replacement plan, and continue from the now-complete Phase 4 cutover for `wf_connect_first_workflow` into the next bounded native-expansion seam instead of reopening Paperclip adapter dependency for that workflow family.
+The next session should enter through the harness lane first, read the current phased native-replacement plan, and continue from the now-complete Phase 5 redispatch-safe native continuation seam for `wf_connect_first_workflow` into the next bounded native-expansion seam instead of reopening Paperclip adapter dependency for that workflow family.
 
 ## Reference Docs
 
@@ -453,7 +453,7 @@ Nuances to preserve:
 - Add package/subscription entitlement checks before exposing commercial workflow run APIs.
 - Expand provider credentials to company-specific OpenAI API, Anthropic API, xAI/Grok API, OpenRouter API, and optional company-isolated ChatGPT/Codex subscription auth.
 - Never use a shared server/operator `~/.codex`, `CODEX_HOME`, ChatGPT login, or provider API key for subscriber work.
-- Replace remaining Phase 5 demo UI state with authenticated API-backed state.
+- Replace remaining legacy MVP UI demo state with authenticated API-backed state.
 - Derive tenant role and operator role from server-side authorization.
 - Use Wealth Factory DTOs rather than raw database rows or internal workflow responses.
 - Add route tests proving tenant isolation and operator-only access.

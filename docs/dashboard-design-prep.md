@@ -6,7 +6,7 @@ Reference docs: `docs/design.md`, `docs/build.md`, `deploy/runbooks/deploy-poc.m
 
 ## Purpose
 
-This document prepares the post-MVP Wealth Factory control panel/dashboard. The Phase 5 UI proved the core safety shape, but the production dashboard should be designed separately so customer workflows, operator controls, BYOK credentials, subscription auth, and tenant isolation are clear before implementation.
+This document prepares the post-MVP Wealth Factory control panel/dashboard. The legacy MVP UI proved the core safety shape, but the production dashboard should be designed separately so customer workflows, operator controls, BYOK credentials, subscription auth, and tenant isolation are clear before implementation.
 
 The dashboard must stay Wealth Factory-branded. It must not expose internal workflow-engine prompts, raw skill-pack names, commands, agents, tool calls, raw logs, service routes, private company mappings, or service tokens.
 
@@ -622,7 +622,7 @@ Before building the dashboard:
 - Add server-side authorization tests for every route.
 - Add Playwright tests for member, operator, and cross-tenant access.
 - Add response-shape tests proving forbidden terms and internal fields are absent.
-- Replace the Phase 5 role query flag with real auth-derived role state.
+- Replace the legacy MVP UI role query flag with real auth-derived role state.
 - Add design review screenshots for desktop and mobile.
 
 ## Open Decisions

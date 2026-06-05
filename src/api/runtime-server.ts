@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import path from "node:path";
 
@@ -242,6 +242,17 @@ function parseRedirectOrigin(value: string): string {
     throw new RuntimeEnvError("WF_STORAGE_OAUTH_REDIRECT_ORIGIN must be a bare http(s) origin");
   }
   return url.origin;
+}
+
+function createRedispatchQueueJobId(input: {
+  tenantId: string;
+  workflowId: string;
+  runId: string;
+  dispatchKind: string;
+  actionToken: string;
+}): string {
+  const digest = createHash("sha256").update(input.actionToken).digest("hex").slice(0, 12);
+  return `${input.tenantId}:${input.workflowId}:${input.runId}:redispatch:${input.dispatchKind}:${digest}`;
 }
 
 export function createDashboardRuntime(options: {
@@ -514,32 +525,64 @@ export function createDashboardRuntime(options: {
             runId: string;
             workflowId: string;
             cardId: string;
+            actionToken: string;
             command: "resume_lane" | "unblock_lane";
             state: "working" | "approved";
           }) => {
-            await options.workflowQueueEnqueuer?.enqueueOnce({
+            const redispatchQueueJobId = createRedispatchQueueJobId({
               tenantId: dispatch.tenantId,
-              workflowTemplateId: dispatch.workflowId,
+              workflowId: dispatch.workflowId,
               runId: dispatch.runId,
-              userId: dispatch.userId,
-              idempotencyKey: `${dispatch.tenantId}:${dispatch.workflowId}:${dispatch.runId}`
+              dispatchKind: dispatch.command,
+              actionToken: dispatch.actionToken
             });
+            const stagedRedispatch = await acidRepository.stageWorkflowRunRedispatch({
+              tenantId: dispatch.tenantId,
+              runId: dispatch.runId,
+              workflowTemplateId: dispatch.workflowId,
+              userId: dispatch.userId,
+              idempotencyKey: redispatchQueueJobId
+            });
+            if (!stagedRedispatch.staged) {
+              console.warn("Resolved harness attention redispatch staging did not return an outbox row", {
+                runId: dispatch.runId,
+                workflowId: dispatch.workflowId,
+                cardId: dispatch.cardId,
+                command: dispatch.command
+              });
+            }
           },
           onFreshCycleDispatch: async (dispatch: {
             tenantId: string;
             userId: string;
             runId: string;
             workflowId: string;
+            actionToken: string;
             mode: "reopen_deferred" | "clean";
             reopenedProposalCount: number;
           }) => {
-            await options.workflowQueueEnqueuer?.enqueueOnce({
+            const redispatchQueueJobId = createRedispatchQueueJobId({
               tenantId: dispatch.tenantId,
-              workflowTemplateId: dispatch.workflowId,
+              workflowId: dispatch.workflowId,
               runId: dispatch.runId,
-              userId: dispatch.userId,
-              idempotencyKey: `${dispatch.tenantId}:${dispatch.workflowId}:${dispatch.runId}`
+              dispatchKind: `fresh_cycle_${dispatch.mode}`,
+              actionToken: dispatch.actionToken
             });
+            const stagedRedispatch = await acidRepository.stageWorkflowRunRedispatch({
+              tenantId: dispatch.tenantId,
+              runId: dispatch.runId,
+              workflowTemplateId: dispatch.workflowId,
+              userId: dispatch.userId,
+              idempotencyKey: redispatchQueueJobId
+            });
+            if (!stagedRedispatch.staged) {
+              console.warn("Fresh harness cycle redispatch staging did not return an outbox row", {
+                runId: dispatch.runId,
+                workflowId: dispatch.workflowId,
+                mode: dispatch.mode,
+                reopenedProposalCount: dispatch.reopenedProposalCount
+              });
+            }
           }
         }
       : {}),

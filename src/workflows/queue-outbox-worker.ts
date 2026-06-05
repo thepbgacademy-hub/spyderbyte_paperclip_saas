@@ -3,7 +3,13 @@ import type { WorkflowRunEnqueuer } from "./acid-run-reservation.js";
 
 export type QueueOutboxRepository = {
   claimWorkflowQueueOutbox(input: { limit: number; staleClaimSeconds?: number }): Promise<QueueOutboxRecord[]>;
-  markWorkflowRunQueued(input: { tenantId: string; runId: string; outboxId: string; claimToken: string }): Promise<{ marked: boolean }>;
+  markWorkflowRunQueued(input: {
+    tenantId: string;
+    runId: string;
+    outboxId: string;
+    claimToken: string;
+    idempotencyKey: string;
+  }): Promise<{ marked: boolean }>;
   confirmWorkflowRunQueued(input: { tenantId: string; runId: string; outboxId: string; claimToken?: string }): Promise<{ confirmed: boolean }>;
   releaseWorkflowQueueOutbox(input: { outboxId: string; claimToken: string; error: string; retryAfterSeconds: number }): Promise<{ released: boolean }>;
 };
@@ -45,7 +51,8 @@ export function createQueueOutboxWorker(options: { repository: QueueOutboxReposi
             tenantId: record.tenantId,
             runId: record.runId,
             outboxId: record.id,
-            claimToken: record.claimToken
+            claimToken: record.claimToken,
+            idempotencyKey: record.idempotencyKey
           });
           if (!marked.marked) {
             const confirmed = await options.repository.confirmWorkflowRunQueued({

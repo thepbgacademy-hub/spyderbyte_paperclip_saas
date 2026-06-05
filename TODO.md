@@ -49,7 +49,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Ensure operator APIs require operator role and write audit events.
 - [x] Run lint/build/refactor pass.
 - [x] Complete Phase 4 reviewer check.
-- [x] Phase 5: Minimal branded MVP UI.
+- [x] Legacy MVP Phase 5: Minimal branded MVP UI.
 - [x] Build minimal UI using SpyderByte naming only.
 - [x] Add workflow run page with sanitized status/result.
 - [x] Add BYOK registration page that never redisplays the secret.
@@ -107,7 +107,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Add temporary artifact size limits and audit event shape.
 - [x] Add customer-owned storage provider definitions.
 - [x] Add artifact service tests.
-- [x] Post-MVP Phase 5: Provider lane expansion.
+- [x] Post-MVP Slice 5: Provider lane expansion.
 - [x] Add Anthropic, xAI/Grok, OpenRouter, and Codex subscription provider definitions.
 - [x] Add Codex subscription isolation validation.
 - [x] Add provider credential lane tests.
@@ -166,7 +166,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Preserve OpenAI API as its own provider lane instead of collapsing it into the legacy OpenAI kind.
 - [x] Apply private encrypted vault migration to live Supabase.
 
-## Current Phase: Harness-Native Replacement Track Active
+## Current Native Plan-Of-Record
 
 - [x] MVP/POC phases are built, tested, reviewed, and committed.
 - [x] Post-MVP security, boundary, package, artifact, provider, and dashboard POC slices are built and tested.
@@ -177,6 +177,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Phase 2: First native provider lane is complete.
 - [x] Phase 3: First native workflow family is complete for `wf_connect_first_workflow`.
 - [x] Phase 4: Adapter cutover and removal is complete for `wf_connect_first_workflow`, and the phased plan now moves to the next bounded native-expansion seam.
+- [x] Phase 5: Redispatch-safe native continuation is complete for `wf_connect_first_workflow`.
 
 ## Later Phases
 

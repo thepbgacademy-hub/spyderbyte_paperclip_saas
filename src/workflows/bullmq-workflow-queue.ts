@@ -36,7 +36,7 @@ export function createBullmqWorkflowRunEnqueuer(options: WorkflowQueueConnection
 
       try {
         await queue.add("workflow-run", payload, {
-          jobId: payload.idempotencyKey
+          jobId: input.idempotencyKey
         });
         return "enqueued";
       } catch (error) {
