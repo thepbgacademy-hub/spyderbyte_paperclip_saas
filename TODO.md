@@ -154,6 +154,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Write workflow queue outbox rows inside the workflow reservation transaction.
 - [x] Mark outbox rows enqueued after queue success.
 - [x] Add recovery worker to claim, enqueue, mark, or release outbox rows.
+- [x] Require durable outbox-row confirmation before retrying a claim-lost enqueue path.
 - [x] Wire runtime outbox pump so workers can drain pending jobs without overlapping drains.
 - [x] Apply queue outbox migration to live Supabase.
 - [x] Post-MVP Phase 13: Vault-backed provider credential registration.
@@ -184,7 +185,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Add real OAuth flows for Google Drive and Dropbox storage connectors, including runtime begin/callback routes, offline refresh-token enforcement, and public-target sanitization.
 - [x] Add private storage connector secret-reference persistence.
 - [x] Capture the live Paperclip secure secret-ref direction in `docs/paperclip-secret-ref-mapping.md`.
-- [ ] Normalize `bound_provider_context` so capability fields use real capability labels instead of provider vendor enums.
+- [x] Normalize `bound_provider_context` so capability fields use real capability labels instead of provider vendor enums.
 - [x] Design a private runtime provider repository path for worker/sync use that can resolve `secretRef`, metadata, and capability coverage without weakening customer-safe provider DTO paths.
 - [x] Design app-side `paperclip_secret_bindings` persistence so Wealth Factory can track synced Paperclip secret ids, env keys, agent targets, sync status, and rotation/revoke drift.
 - [x] Add a configurable Paperclip issue-launch adapter seam plus secret-sync service scaffolding and tests.

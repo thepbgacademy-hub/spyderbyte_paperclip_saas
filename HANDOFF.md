@@ -81,7 +81,7 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
 - Live Supabase reachability confirmed from Windows through the self-hosted pooler with `SUPABASE_DB_SSL=false`; `wfpc` has 16 tables.
 - Live Supabase now includes `wfpc.workflow_run_reservations` with RLS enabled, idempotency uniqueness, active credential uniqueness, secret lookup, and status guard indexes.
 - Live Supabase now includes `wfpc.tenant_package_purchases` with RLS enabled, tenant/package uniqueness, and active purchase lookup support.
-- Live Supabase now includes `wfpc.workflow_queue_outbox` with RLS enabled, idempotent run/workflow uniqueness, pending/stale-claimed lookup support, claim-token fencing, backfill repair for queued reservations, and recovery worker/pump wiring in the runtime factory.
+- Live Supabase now includes `wfpc.workflow_queue_outbox` with RLS enabled, idempotent run/workflow uniqueness, pending/stale-claimed lookup support, claim-token fencing, bounded durable-enqueue reconciliation before retry, backfill repair for queued reservations, and recovery worker/pump wiring in the runtime factory.
 - Provider credential registration now has a vault-backed path: encrypted secret material is persisted in private `wfpc_private.vault_secrets` behind opaque `wf_secret_*` handles, while `wfpc.secret_references` stores only the handle, provider kind, label, and public metadata.
 - Public provider registration responses now return only `{ providerKind, label, connected, metadata }`; no `secretRef`, vault handle, API key, token, or raw credential leaves the backend boundary.
 - Google Drive and Dropbox storage connector setup now has runtime-reachable OAuth/PKCE begin/callback routes. The callback exchange requires offline refresh-token access, stores OAuth tokens in the encrypted vault, and persists connector secret references in private `wfpc_private.storage_connector_secrets`.
@@ -111,8 +111,8 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
    - Wealth Factory should remain the tenant trust boundary and canonical BYOK vault
    - Paperclip should receive synchronized managed secrets plus bound `secret_ref` runtime config, not plain tenant `secretValues` on issue payloads
    - before adapter cutover, fix 2 repo seams:
-     - current `bound_provider_context.capability` values are vendor-shaped instead of capability-shaped
      - current run binding storage is effectively single-provider even though the product model assumes future multi-capability workflows
+     - keep the normalized capability-label contract on `bound_provider_context` and avoid drifting back to vendor-shaped values
 11. Runtime hardening checkpoint now landed in the repo:
    - durable masked audit events now flow through `src/audit/durable-audit.ts` for API/worker secret composition and storage OAuth registration
    - OAuth callback state is now backed by `wfpc_private.oauth_pending_states`
@@ -533,7 +533,6 @@ Nuances to preserve:
   - let the heartbeat runtime resolve the secret internally
 - That direction is documented in `docs/paperclip-secret-ref-mapping.md`.
 - Reviewer findings that must shape the next implementation slice:
-  - `src/db/acid-guard-repository.ts` currently writes provider vendor enums into `bound_provider_context.capability`, but the design direction expects capability labels like `text_generation`
   - `workflow_runs` still centers on one `bound_secret_reference_id`, which is too narrow for future multi-capability workflows
   - the repo still lacks a private runtime repository path that can resolve full provider bindings for worker/sync use without weakening customer-safe DTO paths
 - Immediate implication:

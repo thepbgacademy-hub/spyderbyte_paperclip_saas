@@ -755,7 +755,7 @@ Next work after this phase:
 - [x] Add `wfpc.workflow_queue_outbox` with private RLS, run/idempotency uniqueness, pending lookup index, attempt counts, retry timestamps, and last-error tracking.
 - [x] Insert an outbox row inside the same transaction that reserves a workflow run.
 - [x] Mark outbox rows `enqueued` only after the external queue accepts the job.
-- [x] Add a recovery worker that claims pending/failed/stale-claimed outbox rows with `for update skip locked`, enqueues them through the idempotent `enqueueOnce` queue contract, marks success with claim-token fencing, or releases them for retry.
+- [x] Add a recovery worker that claims pending/failed/stale-claimed outbox rows with `for update skip locked`, enqueues them through the idempotent `enqueueOnce` queue contract, marks success with claim-token fencing, seals the outbox as durably `enqueued` when the repository can prove the run already advanced, or releases the row for retry.
 - [x] Wire a runtime outbox pump into `createDashboardRuntime` when a queue enqueuer is provided, so the production runtime can drain pending jobs at a fixed interval without overlapping drain attempts.
 - [x] Apply the migration to live Supabase and verify `wfpc` reports 16 tables.
 - [x] Run focused outbox/runtime tests with 133 passing tests in the full Vitest suite.
@@ -890,8 +890,8 @@ Mapping update from live Paperclip discovery:
 - Wealth Factory should remain the canonical tenant BYOK vault and trust boundary
 - Paperclip should receive synchronized managed secrets plus bound `secret_ref` runtime config, not plain issue-level secret values
 - before adapter cutover, fix the runtime-binding seam:
-  - current `bound_provider_context.capability` values are vendor-shaped instead of capability-shaped
   - current run binding storage is effectively single-provider even though the product model assumes future multi-capability workflows
+  - keep the normalized capability-label contract on `bound_provider_context` instead of drifting back to vendor-shaped values
   - a private runtime provider repository path is still needed for worker/sync use
   - a configurable issue-launch adapter and `paperclip_secret_bindings` persistence are now in the repo, and the worker runtime can enforce or refresh explicit company/agent/env-key bindings before issue launch
   - provider registration can now project Paperclip-managed secrets through the board-session lane when `WF_PAPERCLIP_BOARD_SESSION_TOKEN`, trusted `WF_PAPERCLIP_BOARD_ORIGIN` headers, and `WF_PAPERCLIP_ISSUE_AGENT_ID` are configured while `PAPERCLIP_BASE_URL` stays on the private runtime address

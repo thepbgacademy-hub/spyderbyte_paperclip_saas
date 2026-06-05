@@ -38,6 +38,7 @@ export type QueueOutboxRecord = {
   idempotencyKey: string;
   attempts: number;
   claimToken: string;
+  claimSource: "pending_retry" | "stale_claim";
 };
 
 export type BoundProviderContextRecord = {
@@ -198,11 +199,42 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
       });
     },
 
+    async confirmWorkflowRunQueued(input: { tenantId: string; runId: string; outboxId: string; claimToken?: string }): Promise<{ confirmed: boolean }> {
+      return runner.withTransaction(async (transaction) => {
+        const result = await transaction.query(
+          `update wfpc.workflow_queue_outbox outbox
+           set status = 'enqueued',
+               enqueued_at = coalesce(outbox.enqueued_at, now()),
+               claim_token = null,
+               updated_at = now(),
+               last_error = null
+           from wfpc.workflow_runs runs
+           where outbox.tenant_id = $1
+             and outbox.run_id = $2
+             and outbox.id = $3::uuid
+             and runs.tenant_id = outbox.tenant_id
+             and runs.id = outbox.run_id
+             and (
+               (outbox.status = 'enqueued' and outbox.claim_token is null)
+               or (
+                 $4::uuid is not null
+                 and outbox.claim_token = $4::uuid
+                 and runs.status <> 'queued'
+               )
+             )
+           returning outbox.id`,
+          [input.tenantId, input.runId, input.outboxId, input.claimToken ?? null]
+        );
+        return { confirmed: result.rows.length > 0 };
+      });
+    },
+
     async claimWorkflowQueueOutbox(input: { limit: number; staleClaimSeconds?: number }): Promise<QueueOutboxRecord[]> {
       return runner.withTransaction(async (transaction) => {
         const result = await transaction.query(
           `with next_jobs as (
              select id
+                  , status as previous_status
              from wfpc.workflow_queue_outbox
              where (
                 status in ('pending', 'failed')
@@ -224,7 +256,7 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
                updated_at = now()
            from next_jobs
            where outbox.id = next_jobs.id
-           returning outbox.id, outbox.tenant_id, outbox.run_id, outbox.workflow_template_id, outbox.created_by_user_id, outbox.idempotency_key, outbox.attempts, outbox.claim_token`,
+           returning outbox.id, outbox.tenant_id, outbox.run_id, outbox.workflow_template_id, outbox.created_by_user_id, outbox.idempotency_key, outbox.attempts, outbox.claim_token, next_jobs.previous_status`,
           [input.limit, input.staleClaimSeconds ?? 300]
         );
         return result.rows.map((row) => {
@@ -237,7 +269,8 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
             userId: String(record.created_by_user_id),
             idempotencyKey: String(record.idempotency_key),
             attempts: Number(record.attempts),
-            claimToken: String(record.claim_token)
+            claimToken: String(record.claim_token),
+            claimSource: record.previous_status === "claimed" ? "stale_claim" : "pending_retry"
           };
         });
       });

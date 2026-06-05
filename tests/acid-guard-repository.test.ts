@@ -344,7 +344,8 @@ describe("ACID guard repository", () => {
         userId: "user-1",
         idempotencyKey: "idem-1",
         attempts: 1,
-        claimToken: "11111111-1111-4111-8111-111111111111"
+        claimToken: "11111111-1111-4111-8111-111111111111",
+        claimSource: "pending_retry"
       }
     ]);
 
@@ -352,6 +353,7 @@ describe("ACID guard repository", () => {
     expect(sql).toMatch(/for update skip locked/i);
     expect(sql).toMatch(/status = 'claimed'/i);
     expect(sql).toMatch(/claim_token = gen_random_uuid\(\)/i);
+    expect(sql).toMatch(/status as previous_status/i);
     expect(sql).toMatch(/status = 'claimed'[\s\S]+claimed_at < now\(\) - \(\$2::int \* interval '1 second'\)/i);
   });
 
@@ -371,6 +373,30 @@ describe("ACID guard repository", () => {
     const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
     expect(sql).toMatch(/claim_token = null/i);
     expect(sql).toMatch(/where id = \$1[\s\S]+and claim_token = \$4::uuid[\s\S]+and status = 'claimed'/i);
+  });
+
+  it("reconciles an already queued row or a reclaimed already-advanced run into a durable enqueued closure without reopening the claim", async () => {
+    const client = createSequencedClient([[{ id: "outbox-1" }]]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(
+      repository.confirmWorkflowRunQueued({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        outboxId: "outbox-1",
+        claimToken: "11111111-1111-4111-8111-111111111111"
+      })
+    ).resolves.toEqual({ confirmed: true });
+
+    const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
+    expect(sql).toMatch(/update wfpc\.workflow_queue_outbox outbox/i);
+    expect(sql).toMatch(/status = 'enqueued'/i);
+    expect(sql).toMatch(/enqueued_at = coalesce\(outbox\.enqueued_at, now\(\)\)/i);
+    expect(sql).toMatch(/from wfpc\.workflow_runs runs/i);
+    expect(sql).toMatch(/\(outbox\.status = 'enqueued' and outbox\.claim_token is null\)/i);
+    expect(sql).toMatch(/\$4::uuid is not null[\s\S]+outbox\.claim_token = \$4::uuid[\s\S]+runs\.status <> 'queued'/i);
+    expect(sql).toMatch(/last_error = null/i);
+    expect(sql).not.toMatch(/for update/i);
   });
 });
   it("loads a run's bound provider context only while the bound credential remains active", async () => {

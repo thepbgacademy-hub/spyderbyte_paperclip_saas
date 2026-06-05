@@ -4,6 +4,7 @@ import type { WorkflowRunEnqueuer } from "./acid-run-reservation.js";
 export type QueueOutboxRepository = {
   claimWorkflowQueueOutbox(input: { limit: number; staleClaimSeconds?: number }): Promise<QueueOutboxRecord[]>;
   markWorkflowRunQueued(input: { tenantId: string; runId: string; outboxId: string; claimToken: string }): Promise<{ marked: boolean }>;
+  confirmWorkflowRunQueued(input: { tenantId: string; runId: string; outboxId: string; claimToken?: string }): Promise<{ confirmed: boolean }>;
   releaseWorkflowQueueOutbox(input: { outboxId: string; claimToken: string; error: string; retryAfterSeconds: number }): Promise<{ released: boolean }>;
 };
 
@@ -26,7 +27,20 @@ export function createQueueOutboxWorker(options: { repository: QueueOutboxReposi
           idempotencyKey: record.idempotencyKey
         };
         try {
-          await options.enqueuer.enqueueOnce(queueInput);
+          if (record.claimSource === "stale_claim") {
+            const reconciled = await options.repository.confirmWorkflowRunQueued({
+              tenantId: record.tenantId,
+              runId: record.runId,
+              outboxId: record.id,
+              claimToken: record.claimToken
+            });
+            if (reconciled.confirmed) {
+              enqueued += 1;
+              continue;
+            }
+          }
+
+          const enqueueResult = await options.enqueuer.enqueueOnce(queueInput);
           const marked = await options.repository.markWorkflowRunQueued({
             tenantId: record.tenantId,
             runId: record.runId,
@@ -34,7 +48,14 @@ export function createQueueOutboxWorker(options: { repository: QueueOutboxReposi
             claimToken: record.claimToken
           });
           if (!marked.marked) {
-            throw new Error("outbox_claim_lost");
+            const confirmed = await options.repository.confirmWorkflowRunQueued({
+              tenantId: record.tenantId,
+              runId: record.runId,
+              outboxId: record.id
+            });
+            if (!confirmed.confirmed) {
+              throw new Error(enqueueResult === "already_queued" ? "outbox_enqueue_confirm_lost" : "outbox_claim_lost");
+            }
           }
           enqueued += 1;
         } catch (error) {
