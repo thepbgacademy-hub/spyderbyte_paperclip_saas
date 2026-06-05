@@ -18,6 +18,7 @@ export type AppEnv = {
   paperclipIssuePollIntervalMs: number;
   paperclipIssueMaxPollAttempts: number;
   harnessEnabledWorkflowIds: readonly string[];
+  nativeExecutorEnabledWorkflowIds: readonly string[];
   workerConcurrency: number;
   workerMaxActivePerTenant: number;
 };
@@ -121,6 +122,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     invalidKeys.push("WF_WORKER_MAX_ACTIVE_PER_TENANT");
   }
   const harnessEnabledWorkflowIds = parseCommaSeparatedValues(source.WF_HARNESS_ENABLED_WORKFLOW_IDS);
+  const nativeExecutorEnabledWorkflowIds = parseCommaSeparatedValues(source.WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS);
 
   if (missingKeys.length > 0 || invalidKeys.length > 0) {
     throw new EnvValidationError(missingKeys, invalidKeys);
@@ -146,6 +148,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     paperclipIssuePollIntervalMs: paperclipIssuePollIntervalMs as number,
     paperclipIssueMaxPollAttempts: paperclipIssueMaxPollAttempts as number,
     harnessEnabledWorkflowIds,
+    nativeExecutorEnabledWorkflowIds,
     workerConcurrency: workerConcurrency as number,
     workerMaxActivePerTenant: workerMaxActivePerTenant as number
   };

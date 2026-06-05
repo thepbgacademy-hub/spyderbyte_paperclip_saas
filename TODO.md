@@ -166,13 +166,14 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Preserve OpenAI API as its own provider lane instead of collapsing it into the legacy OpenAI kind.
 - [x] Apply private encrypted vault migration to live Supabase.
 
-## Current Phase: Vault-Backed Credential Registration Complete
+## Current Phase: Harness-Native Replacement Track Active
 
 - [x] MVP/POC phases are built, tested, reviewed, and committed.
 - [x] Post-MVP security, boundary, package, artifact, provider, and dashboard POC slices are built and tested.
 - [x] First API-backed dashboard foundation is built and tested.
 - [x] ACID and race-condition database foundation is built, tested, and applied to live Supabase.
 - [x] Durable queue outbox and vault-backed provider credential registration slices are built and tested.
+- [ ] Active native replacement track follows `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`.
 
 ## Later Phases
 
@@ -192,7 +193,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Wire the configurable issue-launch adapter into the live worker/runtime path with explicit launch-mode env controls and bound-secret-binding validation for company/agent/env-key resolution.
 - [x] Extend the live worker/runtime path from binding validation to admin-token-backed Paperclip secret provisioning and rotation when the higher-scope lane is configured.
 - [ ] Verify the live VPS Paperclip admin lane against the real board/admin token path and confirm the expected `/api/admin/...` routes match the installed build.
-- [ ] Replace the legacy Paperclip `/runs` assumption with a mocked issue-launch adapter plan after the secret-sync and runtime-binding seams are in place.
+- [ ] Keep the legacy Paperclip adapter backlog clearly separate from the active native replacement plan in `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`.
 - [x] Add worker-side concurrency defaults and tenant fairness gate before BullMQ consumer rollout.
 - [x] Wire the BullMQ enqueuer/consumer path into the API and worker runtime entrypoints.
 - [x] Add a temporary public-Paperclip verification script and accept the live health payload contract during the test-drive phase.

@@ -8,12 +8,14 @@ Phases 0 through 7 are complete, tested, reviewed, and committed.
 
 The first post-MVP productization slices are implemented locally: security baseline helpers, Wealth Factory boundary layer, package entitlements/provider requirements, temporary artifacts, expanded provider definitions, a Wealth Factory dashboard POC surface, the first API-backed dashboard foundation, and the first database-backed ACID/race-condition foundation.
 
-The next session should continue from the live VPS API deployment that now answers behind `api.spyderbyte.cloud`, then finish the remaining commercial hardening gaps.
+The next session should enter through the harness lane first, read the current phased native-replacement plan, and only then continue any remaining runtime or live-ops hardening work.
 
 ## Reference Docs
 
 - `docs/design.md`
 - `docs/build.md`
+- `wf-harness/HANDOFF.md`
+- `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`
 - `docs/recovery-2026-05-16.md`
 - `docs/recovery-backup-2026-05-14.md`
 - `docs/dashboard-design-prep.md`

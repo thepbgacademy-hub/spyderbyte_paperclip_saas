@@ -79,10 +79,12 @@ The first harness implementation slice is now built and verified:
 
 - `wf-harness/docs/2026-05-21-wf-harness-v1-design.md`
 - `wf-harness/docs/paperclip-pressure-lessons-and-wealth-factory-guardrails.md`
+- `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`
 
 ## Plan Of Record
 
-- `wf-harness/docs/plans/2026-05-21-wf-harness-v1-implementation-plan.md`
+- `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`
+- Historical context: `wf-harness/docs/plans/2026-05-21-wf-harness-v1-implementation-plan.md`
 
 ## Standard Preflight
 

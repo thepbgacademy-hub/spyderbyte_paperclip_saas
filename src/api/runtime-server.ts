@@ -262,7 +262,9 @@ export function createDashboardRuntime(options: {
   const harnessRepository = createPostgresHarnessRepository(queryClient);
   const harnessWorkflowRegistry = createHarnessWorkflowRegistry({
     harnessEnabledWorkflowIds:
-      options.env.runtimeEnv.WF_HARNESS_ENABLED_WORKFLOW_IDS?.split(",").map((entry) => entry.trim()).filter(Boolean) ?? []
+      options.env.runtimeEnv.WF_HARNESS_ENABLED_WORKFLOW_IDS?.split(",").map((entry) => entry.trim()).filter(Boolean) ?? [],
+    nativeExecutorEnabledWorkflowIds:
+      options.env.runtimeEnv.WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS?.split(",").map((entry) => entry.trim()).filter(Boolean) ?? []
   });
   const repositories = createSupabaseRepositories(queryClient);
   const audit = createDurableAuditSink(queryClient);

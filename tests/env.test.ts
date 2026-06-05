@@ -31,6 +31,7 @@ describe("loadEnv", () => {
       paperclipIssuePollIntervalMs: 1000,
       paperclipIssueMaxPollAttempts: 60,
       harnessEnabledWorkflowIds: [],
+      nativeExecutorEnabledWorkflowIds: [],
       workerConcurrency: 2,
       workerMaxActivePerTenant: 1
     });
@@ -169,6 +170,15 @@ describe("loadEnv", () => {
         ...validEnv,
         WF_HARNESS_ENABLED_WORKFLOW_IDS: " wf_connect_first_workflow , wf_package_followup "
       }).harnessEnabledWorkflowIds
+    ).toEqual(["wf_connect_first_workflow", "wf_package_followup"]);
+  });
+
+  it("parses opted-in native executor workflow ids", () => {
+    expect(
+      loadEnv({
+        ...validEnv,
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: " wf_connect_first_workflow , wf_package_followup "
+      }).nativeExecutorEnabledWorkflowIds
     ).toEqual(["wf_connect_first_workflow", "wf_package_followup"]);
   });
 

@@ -1,5 +1,10 @@
 # SpyderByte Paperclip SaaS Implementation Plan
 
+Current execution note:
+- This file is historical architecture context for the older Paperclip-backed build track.
+- The active phased replacement plan now lives at `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`.
+- New execution sessions should enter through `wf-harness/HANDOFF.md` first, not treat this document as the current plan of record.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build an MVP/POC branded SaaS wrapper, customer-facing as Wealth Factory, that uses private self-hosted Paperclip as a background workflow engine.

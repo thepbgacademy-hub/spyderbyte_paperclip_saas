@@ -39,6 +39,7 @@ import { validateWorkflowQueuePayload } from "../workflows/queue.js";
 import { createAcidWorkflowStatusRecorder } from "../workflows/acid-status-recorder.js";
 import { createTenantExecutionGate } from "./tenant-execution-gate.js";
 import { WorkerRuntimeClosingError } from "./runtime-closing-error.js";
+import { createPhaseOneNativeExecutor, type NativeExecutionOutcome, type NativeExecutor } from "./native-executor.js";
 import { createHarnessCardEventRecord } from "../harness/types.js";
 
 export type WorkerEnv = ReturnType<typeof loadWorkerEnv>;
@@ -257,6 +258,7 @@ export function createWorkerRuntime(options: {
     action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
     laneExecution: NonNullable<HarnessWorkerLaneOutcome["laneExecution"]>;
   }) => void | Promise<void>;
+  nativeExecutor?: NativeExecutor;
   onHarnessCeoReviewRequested?: (input: {
     tenantId: string;
     runId: string;
@@ -288,8 +290,10 @@ export function createWorkerRuntime(options: {
   const repositories = createSupabaseRepositories(queryClient);
   const harnessRepository = createPostgresHarnessRepository(queryClient);
   const harnessWorkflowRegistry = createHarnessWorkflowRegistry({
-    harnessEnabledWorkflowIds: options.env.harnessEnabledWorkflowIds
+    harnessEnabledWorkflowIds: options.env.harnessEnabledWorkflowIds,
+    nativeExecutorEnabledWorkflowIds: options.env.nativeExecutorEnabledWorkflowIds
   });
+  const nativeExecutor = options.nativeExecutor ?? createPhaseOneNativeExecutor();
   const paperclipSecretBindings = createPaperclipSecretBindingRepository(queryClient);
   const paperclipSecretSync =
     options.env.paperclipBoardSessionToken && options.env.paperclipLaunchMode === "issues"
@@ -586,7 +590,7 @@ export function createWorkerRuntime(options: {
     }
   });
 
-  return {
+  const runtimeApi = {
     async processQueuePayload(payload: unknown) {
       if (isClosing) {
         throw new WorkerRuntimeClosingError();
@@ -601,8 +605,17 @@ export function createWorkerRuntime(options: {
           if (isClosing) {
             throw new WorkerRuntimeClosingError();
           }
+          const workflowDefinition = harnessWorkflowRegistry.isHarnessEligible(validatedPayload.workflowId)
+            ? harnessWorkflowRegistry.getDefinition(validatedPayload.workflowId)
+            : null;
+          const harnessExecutionEngine =
+            workflowDefinition?.executionEngine === "wf_native_v1"
+              ? "wf_native_v1"
+              : workflowDefinition?.executionEngine === "wf_harness_v1"
+                ? "wf_harness_v1"
+                : null;
           return trackRuntimeOperation(
-            harnessWorkflowRegistry.isHarnessEligible(validatedPayload.workflowId)
+            workflowDefinition && harnessExecutionEngine
               ? processHarnessWorkflowJob({
                 payload: validatedPayload,
                 repository: harnessRepository,
@@ -611,10 +624,36 @@ export function createWorkerRuntime(options: {
                     work(createPostgresHarnessRepository(transaction))
                   ),
                 workflowRegistry: harnessWorkflowRegistry,
+                executionEngine: harnessExecutionEngine,
                 recordStatus: async (status) => {
                   await recordWorkflowStatus(status);
                 },
                 ...(options.workerInstanceId ? { workerInstanceId: options.workerInstanceId } : {}),
+                ...(harnessExecutionEngine === "wf_native_v1"
+                  ? {
+                      nativeExecutor,
+                      commitNativeOutcome: async (nativeInput: {
+                        tenantId: string;
+                        runId: string;
+                        workflowId: string;
+                        cardId: string;
+                        executionClaimToken?: string;
+                        outcome: NativeExecutionOutcome;
+                      }) => commitHarnessLaneOutcomeInternal(
+                        {
+                          tenantId: nativeInput.tenantId,
+                          runId: nativeInput.runId,
+                          workflowId: nativeInput.workflowId,
+                          cardId: nativeInput.cardId,
+                          ...(nativeInput.executionClaimToken ? { executionClaimToken: nativeInput.executionClaimToken } : {}),
+                          state: nativeInput.outcome.state,
+                          ...(nativeInput.outcome.resultSummary ? { resultSummary: nativeInput.outcome.resultSummary } : {}),
+                          ...(nativeInput.outcome.resumeSummary ? { resumeSummary: nativeInput.outcome.resumeSummary } : {})
+                        },
+                        { allowDuringClose: true }
+                      )
+                    }
+                  : {}),
                 ...(options.onHarnessExecutionStartSuppressed
                   ? { onHarnessExecutionStartSuppressed: options.onHarnessExecutionStartSuppressed }
                   : {}),
@@ -716,25 +755,60 @@ export function createWorkerRuntime(options: {
       resultSummary?: string;
       resumeSummary?: string;
     }) {
-      if (!harnessWorkflowRegistry.isHarnessEligible(input.workflowId)) {
-        throw new Error(`Harness lane outcome is not enabled for workflow ${input.workflowId}`);
-      }
+      return commitHarnessLaneOutcomeInternal(input, { allowDuringClose: false });
+    },
 
-      if (isClosing) {
-        throw new WorkerRuntimeClosingError();
-      }
+    async close() {
+      closingPromise ??= (async () => {
+        isClosing = true;
+        const drainStatus = await waitForInFlightRuntimeOperations();
+        if (drainStatus === "timed_out") {
+          console.warn("Worker runtime close timed out while waiting for in-flight operations", {
+            timeoutMs: runtimeCloseDrainTimeoutMs,
+            remainingInFlightOperations: inFlightRuntimeOperations.size
+          });
+        }
+        await pool.end();
+      })();
+      await closingPromise;
+    }
+  };
+  return runtimeApi;
 
-      const outcome = await trackRuntimeOperation(processHarnessLaneOutcome({
-        payload: input,
-        repository: harnessRepository,
-        runAtomically: (work) =>
-          transactionRunner.withTransaction((transaction) =>
-            work(createPostgresHarnessRepository(transaction))
-          ),
-        recordStatus: async (status) => {
-          await recordWorkflowStatus(status);
-        },
-        onOutcome: async (workerOutcome) => {
+  async function commitHarnessLaneOutcomeInternal(
+    input: {
+      tenantId: string;
+      runId: string;
+      workflowId: string;
+      cardId: string;
+      executionClaimToken?: string;
+      state: "waiting" | "done" | "blocked" | "cancelled";
+      resultSummary?: string;
+      resumeSummary?: string;
+    },
+    commitOptions: {
+      allowDuringClose: boolean;
+    }
+  ) {
+    if (!harnessWorkflowRegistry.isHarnessEligible(input.workflowId)) {
+      throw new Error(`Harness lane outcome is not enabled for workflow ${input.workflowId}`);
+    }
+
+    if (isClosing && !commitOptions.allowDuringClose) {
+      throw new WorkerRuntimeClosingError();
+    }
+
+    const outcome = await trackRuntimeOperation(processHarnessLaneOutcome({
+      payload: input,
+      repository: harnessRepository,
+      runAtomically: (work) =>
+        transactionRunner.withTransaction((transaction) =>
+          work(createPostgresHarnessRepository(transaction))
+        ),
+      recordStatus: async (status) => {
+        await recordWorkflowStatus(status);
+      },
+      onOutcome: async (workerOutcome) => {
           if (workerOutcome.status === "ignored" && workerOutcome.ignored) {
             const ignoredOutcomeHandoff = {
               tenantId: input.tenantId,
@@ -1168,24 +1242,8 @@ export function createWorkerRuntime(options: {
           }
         }
       }));
-      return outcome;
-    },
-
-    async close() {
-      closingPromise ??= (async () => {
-        isClosing = true;
-        const drainStatus = await waitForInFlightRuntimeOperations();
-        if (drainStatus === "timed_out") {
-          console.warn("Worker runtime close timed out while waiting for in-flight operations", {
-            timeoutMs: runtimeCloseDrainTimeoutMs,
-            remainingInFlightOperations: inFlightRuntimeOperations.size
-          });
-        }
-        await pool.end();
-      })();
-      await closingPromise;
-    }
-  };
+    return outcome;
+  }
 
   function emitWorkerRunEvent(
     event: "started" | "released",
@@ -2113,8 +2171,18 @@ async function processHarnessWorkflowJob(options: {
       >
     ) => Promise<T>
   ) => Promise<T>;
+  executionEngine: "wf_harness_v1" | "wf_native_v1";
   workflowRegistry: Pick<ReturnType<typeof createHarnessWorkflowRegistry>, "getDefinition">;
   recordStatus?: (status: { tenantId: string; runId: string; workflowId: string; status: "queued" | "running" | "failed" }) => void | Promise<void>;
+  nativeExecutor?: NativeExecutor;
+  commitNativeOutcome?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    cardId: string;
+    executionClaimToken?: string;
+    outcome: NativeExecutionOutcome;
+  }) => Promise<HarnessWorkerLaneOutcome>;
   workerInstanceId?: string;
   onHarnessExecutionStartSuppressed?: (input: {
     tenantId: string;
@@ -2169,6 +2237,8 @@ async function processHarnessWorkflowJob(options: {
       ...(options.runAtomically ? { runAtomically: options.runAtomically } : {})
     });
     const dispatch = dispatchResolution.dispatch;
+    let finalStatus: PaperclipRunStatus = dispatch.status;
+    let nativeOutcomeCommitted = false;
     if (dispatch.laneExecution) {
       let executionEnvelope: HarnessWorkerExecutionEnvelope | null = null;
       try {
@@ -2302,14 +2372,37 @@ async function processHarnessWorkflowJob(options: {
             error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
           });
         }
+        if (options.executionEngine === "wf_native_v1") {
+          if (!options.nativeExecutor || !options.commitNativeOutcome) {
+            throw new Error(`Native executor is not configured for workflow ${dispatch.workflowId}`);
+          }
+          const nativeOutcome = await options.nativeExecutor.execute({
+            tenantId: options.payload.tenantId,
+            runId: dispatch.runId,
+            workflowId: dispatch.workflowId,
+            executionEnvelope
+          });
+          const committedNativeOutcome = await options.commitNativeOutcome({
+            tenantId: options.payload.tenantId,
+            runId: dispatch.runId,
+            workflowId: dispatch.workflowId,
+            cardId: executionEnvelope.laneExecution.cardId,
+            executionClaimToken: executionEnvelope.executionClaim.token,
+            outcome: nativeOutcome
+          });
+          nativeOutcomeCommitted = true;
+          finalStatus = deriveHarnessWorkflowStatusFromOutcome(committedNativeOutcome) ?? dispatch.status;
+        }
       }
       options.onDispatch?.(dispatch);
-      await options.recordStatus?.({
-        tenantId: options.payload.tenantId,
-        runId: dispatch.runId,
-        workflowId: dispatch.workflowId,
-        status: dispatch.status
-      });
+      if (!nativeOutcomeCommitted) {
+        await options.recordStatus?.({
+          tenantId: options.payload.tenantId,
+          runId: dispatch.runId,
+          workflowId: dispatch.workflowId,
+          status: dispatch.status
+        });
+      }
     }
     if (!dispatch.laneExecution) {
       await options.recordStatus?.({
@@ -2322,7 +2415,7 @@ async function processHarnessWorkflowJob(options: {
     return {
       runId: dispatch.runId,
       workflowId: dispatch.workflowId,
-      status: dispatch.status
+      status: finalStatus
     };
   } catch (error) {
     await options.recordStatus?.({
@@ -2650,3 +2743,4 @@ function deriveHarnessWorkflowStatusFromOutcome(outcome: HarnessWorkerLaneOutcom
       return null;
   }
 }
+

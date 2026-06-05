@@ -28,4 +28,15 @@ describe("harness execution selector", () => {
       })
     ).toBe("paperclip");
   });
+
+  it("routes native-opted eligible workflows to wf_native_v1 before the Paperclip adapter path", () => {
+    expect(
+      selectExecutionEngine({
+        workflowId: "wf_connect_first_workflow",
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"],
+        nativeExecutorEnabledWorkflowIds: ["wf_connect_first_workflow"],
+        harnessEligibleWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy"]
+      })
+    ).toBe("wf_native_v1");
+  });
 });

@@ -74,27 +74,35 @@ export function createWorkflowRegistry(definitions: readonly WealthFactoryWorkfl
     },
 
     isHarnessEligible(publicWorkflowId: string): boolean {
-      return byPublicId.get(publicWorkflowId)?.executionEngine === "wf_harness_v1";
+      const executionEngine = byPublicId.get(publicWorkflowId)?.executionEngine;
+      return executionEngine !== undefined && executionEngine !== "paperclip";
     },
 
     listHarnessEligibleWorkflowIds(): string[] {
-      return definitions.filter((definition) => definition.executionEngine === "wf_harness_v1").map((definition) => definition.publicId);
+      return definitions
+        .filter((definition) => definition.executionEngine !== undefined && definition.executionEngine !== "paperclip")
+        .map((definition) => definition.publicId);
+    },
+
+    listNativeExecutorWorkflowIds(): string[] {
+      return definitions.filter((definition) => definition.executionEngine === "wf_native_v1").map((definition) => definition.publicId);
     }
   };
 }
 
-export function createHarnessWorkflowRegistry(input: { harnessEnabledWorkflowIds: readonly string[] }) {
+export function createHarnessWorkflowRegistry(input: {
+  harnessEnabledWorkflowIds: readonly string[];
+  nativeExecutorEnabledWorkflowIds?: readonly string[];
+}) {
   return createWorkflowRegistry(
     BASE_WF_HARNESS_WORKFLOW_DEFINITIONS.map((definition) => ({
       ...definition,
-      executionEngine:
-        selectExecutionEngine({
-          workflowId: definition.publicId,
-          harnessEnabledWorkflowIds: input.harnessEnabledWorkflowIds,
-          harnessEligibleWorkflowIds: [...WF_HARNESS_ELIGIBLE_WORKFLOWS]
-        }) === "wf_harness_v1"
-          ? "wf_harness_v1"
-          : "paperclip"
+      executionEngine: selectExecutionEngine({
+        workflowId: definition.publicId,
+        harnessEnabledWorkflowIds: input.harnessEnabledWorkflowIds,
+        nativeExecutorEnabledWorkflowIds: input.nativeExecutorEnabledWorkflowIds ?? [],
+        harnessEligibleWorkflowIds: [...WF_HARNESS_ELIGIBLE_WORKFLOWS]
+      })
     }))
   );
 }

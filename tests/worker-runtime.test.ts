@@ -725,6 +725,271 @@ describe("worker runtime", () => {
     await runtime.close();
   });
 
+  it("routes native-enabled harness workflows through the native executor seam without hitting Paperclip", async () => {
+    const { createPaperclipClient } = await import("../src/paperclip/client.js");
+    const nativeExecutor = {
+      execute: vi.fn().mockResolvedValue({
+        state: "done",
+        resultSummary: "Native executor completed the pricing review lane."
+      })
+    };
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow",
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-native",
+      nativeExecutor
+    });
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+
+    expect(nativeExecutor.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        executionEnvelope: expect.objectContaining({
+          laneExecution: expect.objectContaining({
+            cardId: "card_cfo",
+            state: "working"
+          })
+        })
+      })
+    );
+    expect(vi.mocked(createPaperclipClient).mock.results.at(-1)?.value.createRun).not.toHaveBeenCalled();
+    expect(harnessRepositoryRef.current.transitionCardState).toHaveBeenCalledWith({
+      cardId: "card_cfo",
+      expectedState: "working",
+      expectedExecutionClaimToken: "claim-cfo-1",
+      state: "done"
+    });
+
+    await runtime.close();
+  });
+
+  it("drains an in-flight native executor run before closing the runtime", async () => {
+    const { createPaperclipClient } = await import("../src/paperclip/client.js");
+    const deferred = createDeferred<{ state: "done"; resultSummary: string }>();
+    const nativeExecutor = {
+      execute: vi.fn().mockImplementation(() => deferred.promise)
+    };
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow",
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-native-close",
+      nativeExecutor
+    });
+
+    const processPromise = runtime.processQueuePayload({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      createdByUserId: "user-1",
+      idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+      createdAt: new Date().toISOString()
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    let closeSettled = false;
+    const closePromise = runtime.close().then(() => {
+      closeSettled = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(closeSettled).toBe(false);
+    expect(vi.mocked(createPaperclipClient).mock.results.at(-1)?.value.createRun).not.toHaveBeenCalled();
+
+    deferred.resolve({
+      state: "done",
+      resultSummary: "Native executor completed the pricing review lane."
+    });
+
+    await expect(processPromise).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+    await closePromise;
+    expect(closeSettled).toBe(true);
+  });
+
+  it("uses the default Phase 1 native executor skeleton as a bounded blocked lane without hitting Paperclip", async () => {
+    const { createPaperclipClient } = await import("../src/paperclip/client.js");
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow",
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-native-default"
+    });
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+
+    expect(vi.mocked(createPaperclipClient).mock.results.at(-1)?.value.createRun).not.toHaveBeenCalled();
+    expect(harnessRepositoryRef.current.transitionCardState).toHaveBeenCalledWith({
+      cardId: "card_cfo",
+      expectedState: "working",
+      expectedExecutionClaimToken: "claim-cfo-1",
+      state: "blocked"
+    });
+    expect(harnessRepositoryRef.current.upsertCardContinuity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        runId: "run-1",
+        continuitySource: "resume_override",
+        continuitySummary:
+          "Native executor skeleton claimed the cfo lane for Pressure-test the pricing lane, but workflow-specific execution is not implemented yet.",
+        latestResultSummary: "Initial pricing floor is stable.",
+        absorbedWorkItems: ["Re-check discount floor", "Verify competitor anchor notes"]
+      })
+    );
+
+    await runtime.close();
+  });
+
+  it("keeps a native blocked outcome durably queued instead of restamping it as running", async () => {
+    const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow",
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-native-blocked-status",
+      nativeExecutor: {
+        execute: vi.fn().mockResolvedValue({
+          state: "blocked",
+          resumeSummary: "Native execution needs a workflow-specific implementation before it can continue."
+        })
+      }
+    });
+
+    const harnessRepository = harnessRepositoryRef.current;
+    const approvedLane = {
+      id: "card_cfo",
+      runId: "run-1",
+      parentCardId: "card_ceo",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review",
+      state: "approved",
+      executionClaimToken: null,
+      executionClaimedAt: null,
+      createdAt: "2026-05-21T10:01:00.000Z",
+      updatedAt: "2026-05-21T10:02:00.000Z"
+    };
+    const blockedLane = {
+      ...approvedLane,
+      state: "blocked",
+      executionClaimToken: null,
+      executionClaimedAt: null,
+      updatedAt: "2026-05-21T10:06:00.000Z"
+    };
+    const ceoCard = {
+      id: "card_ceo",
+      runId: "run-1",
+      parentCardId: null,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan",
+      state: "planning",
+      executionClaimToken: null,
+      executionClaimedAt: null,
+      createdAt: "2026-05-21T10:00:00.000Z",
+      updatedAt: "2026-05-21T10:00:00.000Z"
+    };
+    let currentRunState: "active" | "blocked" = "active";
+    let currentLaneState: "approved" | "blocked" = "approved";
+    harnessRepository.transitionCardState = vi.fn().mockImplementation(async () => {
+      currentRunState = "blocked";
+      currentLaneState = "blocked";
+      return blockedLane;
+    });
+    harnessRepository.listCardsForRun = vi.fn().mockImplementation(async () => [
+      ceoCard,
+      currentLaneState === "approved" ? approvedLane : blockedLane
+    ]);
+    harnessRepository.getRun = vi.fn().mockImplementation(async () => ({
+      id: "run-1",
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      state: currentRunState,
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      },
+      createdAt: "2026-05-21T10:00:00.000Z",
+      updatedAt: currentRunState === "active" ? "2026-05-21T10:00:00.000Z" : "2026-05-21T10:06:00.000Z"
+    }));
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "queued"
+    });
+
+    const acidRepository = vi.mocked(createAcidGuardRepository).mock.results[0]?.value;
+    expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      from: ["queued", "running"],
+      to: "queued"
+    });
+    expect(acidRepository.transitionWorkflowRunStatus).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        to: "running"
+      })
+    );
+
+    await runtime.close();
+  });
+
   it("waits for an in-flight initial harness lane-ready callback before closing runtime dependencies", async () => {
     const { createPgPool } = await import("../src/db/postgres-client.js");
     const deferred = createDeferred<void>();
