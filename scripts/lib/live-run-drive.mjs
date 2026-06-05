@@ -186,7 +186,7 @@ export function summarizeWorkflowRunVerification({ snapshot, queue }) {
     };
   }
 
-  if (!snapshot.run.boundSecretReferenceId || snapshot.run.providerContext.length === 0) {
+  if (!snapshot.run.boundSecretReferenceId || snapshot.run.providerContext.length !== 1) {
     return {
       ok: false,
       phase: "binding_missing",

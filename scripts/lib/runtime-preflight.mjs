@@ -15,6 +15,23 @@ export async function loadRuntimePreflight({ client, tenantId, workflowId }) {
      order by ordinal_position`,
     []
   );
+  const runtimeSchemaGuards = await client.query(
+    `select
+       exists (
+         select 1
+         from pg_constraint
+         where conname = 'workflow_runs_bound_provider_context_single_entry_check'
+           and conrelid = to_regclass('wfpc.workflow_runs')
+           and pg_get_constraintdef(oid) like '%jsonb_array_length(bound_provider_context) <= 1%'
+       ) as has_single_provider_bound_context_guard,
+       exists (
+         select 1
+         from pg_indexes
+         where schemaname = 'wfpc'
+           and indexname = 'secret_references_active_provider_lane_unique'
+       ) as has_single_active_provider_lane_guard`,
+    []
+  );
   const workerSignals = await client.query(
     `select
        exists (
@@ -49,11 +66,13 @@ export async function loadRuntimePreflight({ client, tenantId, workflowId }) {
   const workflow = asRecord(workflowRows.rows[0]);
   const mapping = asRecord(mappingRows.rows[0]);
   const signals = asRecord(workerSignals.rows[0]);
+  const guards = asRecord(runtimeSchemaGuards.rows[0]);
 
   return {
     schema: {
       workflowRunsBoundProviderReady:
         workflowRunColumnSet.has("bound_secret_reference_id") && workflowRunColumnSet.has("bound_provider_context"),
+      workflowRunsSingleProviderGuardReady: Boolean(guards.has_single_provider_bound_context_guard),
       tenantPackagePurchasesReady:
         purchaseColumnSet.has("purchased_by_user_id") || purchaseColumnSet.has("created_by_user_id"),
       purchaseActorColumn: purchaseColumnSet.has("created_by_user_id")
@@ -61,6 +80,7 @@ export async function loadRuntimePreflight({ client, tenantId, workflowId }) {
         : purchaseColumnSet.has("purchased_by_user_id")
           ? "purchased_by_user_id"
           : null,
+      secretReferencesSingleActiveProviderLaneReady: Boolean(guards.has_single_active_provider_lane_guard),
       hasOutbox: Boolean(signals.has_outbox),
       hasCompanyMappingTable: Boolean(signals.has_company_mapping)
     },
@@ -88,8 +108,14 @@ export function summarizeRuntimePreflight(preflight) {
   if (!preflight.schema.workflowRunsBoundProviderReady) {
     blockers.push("workflow_runs is missing bound provider context columns from the latest repo migrations");
   }
+  if (!preflight.schema.workflowRunsSingleProviderGuardReady) {
+    blockers.push("workflow_runs is missing the single-provider bound context guard from the latest repo migrations");
+  }
   if (!preflight.schema.tenantPackagePurchasesReady) {
     blockers.push("tenant_package_purchases is missing the purchaser column expected by the live-drive seed path");
+  }
+  if (!preflight.schema.secretReferencesSingleActiveProviderLaneReady) {
+    blockers.push("secret_references is missing the single-active provider lane guard from the latest repo migrations");
   }
   if (!preflight.schema.hasOutbox) {
     blockers.push("workflow_queue_outbox table is missing");

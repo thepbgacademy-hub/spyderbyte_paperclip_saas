@@ -540,6 +540,36 @@ describe("ACID guard repository", () => {
     await expect(repository.getBoundProviderContext({ tenantId: "tenant-1", runId: "run-1" })).resolves.toBeNull();
   });
 
+  it("fails closed when a bound run row carries more than one stored entry even if only one normalizes cleanly", async () => {
+    const client = createSequencedClient([
+      [
+        {
+          bound_provider_context: [
+            {
+              capability: "text_generation",
+              providerKind: "openai_api",
+              label: "Primary OpenAI",
+              secretRef: "wf_secret_openai",
+              metadata: {}
+            },
+            {
+              capability: null,
+              providerKind: "",
+              label: "",
+              secretRef: "",
+              metadata: {}
+            }
+          ],
+          secret_ref: "wf_secret_openai",
+          provider_kind: "openai_api"
+        }
+      ]
+    ]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(repository.getBoundProviderContext({ tenantId: "tenant-1", runId: "run-1" })).resolves.toBeNull();
+  });
+
   it("fails closed when a bound provider entry does not match the single joined secret row", async () => {
     const client = createSequencedClient([
       [

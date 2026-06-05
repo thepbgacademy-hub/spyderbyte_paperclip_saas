@@ -113,7 +113,8 @@ Do not rely on LLM memory or prompt instructions to enforce this rebrand. The pr
    - before adapter cutover, fix 2 repo seams:
      - current run binding storage is effectively single-provider even though the product model assumes future multi-capability workflows
      - keep the normalized capability-label contract on `bound_provider_context` and avoid drifting back to vendor-shaped values
-   - current repo behavior now fails closed if a run ever carries more than one bound provider entry or a mismatched provider kind, while still rewriting queued/running bindings to the current joined `secret_ref` when the same secret row rotates in place
+   - the storage format still stays JSON-array-shaped, but the DB/apply/preflight seam now requires the cardinality guard `jsonb_array_length(bound_provider_context) <= 1`
+   - current repo/runtime behavior now fails closed if a run ever carries more than one stored bound-provider entry or a mismatched provider kind, while still rewriting queued/running bindings to the current joined `secret_ref` when the same secret row rotates in place
 11. Runtime hardening checkpoint now landed in the repo:
    - durable masked audit events now flow through `src/audit/durable-audit.ts` for API/worker secret composition and storage OAuth registration
    - OAuth callback state is now backed by `wfpc_private.oauth_pending_states`

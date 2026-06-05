@@ -155,6 +155,54 @@ describe("live run drive helpers", () => {
     });
   });
 
+  it("fails closed when the workflow run carries more than one bound provider context entry", () => {
+    expect(
+      summarizeWorkflowRunVerification({
+        snapshot: {
+          run: {
+            id: "run-1",
+            status: "queued",
+            boundSecretReferenceId: "secret-ref-1",
+            providerContext: [
+              {
+                capability: "text_generation",
+                providerKind: "openai_api",
+                label: "OpenAI",
+                secretRef: "wf_secret_demo",
+                metadata: {}
+              },
+              {
+                capability: "image_generation",
+                providerKind: "openai_api",
+                label: "OpenAI",
+                secretRef: "wf_secret_demo",
+                metadata: {}
+              }
+            ]
+          },
+          outbox: {
+            id: "outbox-1",
+            status: "enqueued",
+            attempts: 1,
+            lastError: null
+          }
+        },
+        queue: {
+          queueName: "wfpc-workflow-runs",
+          jobId: "tenant-1:workflow-1:run-1",
+          state: "waiting"
+        }
+      })
+    ).toEqual({
+      ok: false,
+      phase: "binding_missing",
+      notes: [
+        "Workflow run is missing bound provider context.",
+        "The worker should not be allowed to drift onto an unbound or shared credential."
+      ]
+    });
+  });
+
   it("distinguishes unreachable queue inspection from missing queue state", () => {
     expect(
       summarizeWorkflowRunVerification({

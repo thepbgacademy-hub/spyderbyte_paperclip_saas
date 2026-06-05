@@ -450,6 +450,10 @@ function toSingleBoundProviderContext(input: {
   secretRef: string;
   providerKind: string;
 }): readonly BoundProviderContextRecord[] | null {
+  if (!Array.isArray(input.value) || input.value.length !== 1) {
+    return null;
+  }
+
   const normalized = toBoundProviderContext(input.value);
   if (normalized.length !== 1) {
     return null;

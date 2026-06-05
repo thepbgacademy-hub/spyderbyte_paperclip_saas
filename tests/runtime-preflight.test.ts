@@ -10,6 +10,7 @@ describe("runtime preflight", () => {
     const responses = [
       { rows: [{ column_name: "id" }, { column_name: "status" }] },
       { rows: [{ column_name: "id" }, { column_name: "status" }] },
+      { rows: [{ has_single_provider_bound_context_guard: false, has_single_active_provider_lane_guard: false }] },
       { rows: [{ has_outbox: true, has_company_mapping: true }] },
       { rows: [{ id: "tenant-1", paused_at: null }] },
       { rows: [{ id: "workflow-1", tenant_id: "tenant-1", enabled: true, provider_kind: "openai_api", package_id: "package-1" }] },
@@ -28,6 +29,8 @@ describe("runtime preflight", () => {
 
     expect(summary.ok).toBe(false);
     expect(summary.blockers).toContain("workflow_runs is missing bound provider context columns from the latest repo migrations");
+    expect(summary.blockers).toContain("workflow_runs is missing the single-provider bound context guard from the latest repo migrations");
+    expect(summary.blockers).toContain("secret_references is missing the single-active provider lane guard from the latest repo migrations");
     expect(summary.blockers).toContain("tenant_package_purchases is missing the purchaser column expected by the live-drive seed path");
     expect(preflight.schema.purchaseActorColumn).toBe(null);
   });
@@ -36,6 +39,7 @@ describe("runtime preflight", () => {
     const responses = [
       { rows: [{ column_name: "id" }, { column_name: "bound_secret_reference_id" }, { column_name: "bound_provider_context" }] },
       { rows: [{ column_name: "id" }, { column_name: "purchased_by_user_id" }] },
+      { rows: [{ has_single_provider_bound_context_guard: true, has_single_active_provider_lane_guard: true }] },
       { rows: [{ has_outbox: true, has_company_mapping: false }] },
       { rows: [{ id: "tenant-1", paused_at: null }] },
       { rows: [{ id: "workflow-1", tenant_id: "tenant-1", enabled: true, provider_kind: "openai_api", package_id: "package-1" }] }
@@ -64,6 +68,7 @@ describe("runtime preflight", () => {
     const responses = [
       { rows: [{ column_name: "id" }, { column_name: "bound_secret_reference_id" }, { column_name: "bound_provider_context" }] },
       { rows: [{ column_name: "id" }, { column_name: "purchased_by_user_id" }] },
+      { rows: [{ has_single_provider_bound_context_guard: true, has_single_active_provider_lane_guard: true }] },
       { rows: [{ has_outbox: true, has_company_mapping: true }] },
       { rows: [{ id: "tenant-1", paused_at: null }] },
       { rows: [{ id: "workflow-1", tenant_id: "tenant-1", enabled: true, provider_kind: "openai_api", package_id: "package-1" }] },
@@ -85,5 +90,31 @@ describe("runtime preflight", () => {
       blockers: []
     });
     expect(preflight.schema.purchaseActorColumn).toBe("purchased_by_user_id");
+  });
+
+  it("flags missing single-provider seam guards even when the bound-provider columns exist", async () => {
+    const responses = [
+      { rows: [{ column_name: "id" }, { column_name: "bound_secret_reference_id" }, { column_name: "bound_provider_context" }] },
+      { rows: [{ column_name: "id" }, { column_name: "purchased_by_user_id" }] },
+      { rows: [{ has_single_provider_bound_context_guard: false, has_single_active_provider_lane_guard: true }] },
+      { rows: [{ has_outbox: true, has_company_mapping: true }] },
+      { rows: [{ id: "tenant-1", paused_at: null }] },
+      { rows: [{ id: "workflow-1", tenant_id: "tenant-1", enabled: true, provider_kind: "openai_api", package_id: "package-1" }] },
+      { rows: [{ tenant_id: "tenant-1", paperclip_company_id: "pc-company-1" }] }
+    ];
+    const client = {
+      query: async () => responses.shift() ?? { rows: [] }
+    };
+
+    const preflight = await loadRuntimePreflight({
+      client,
+      tenantId: "tenant-1",
+      workflowId: "workflow-1"
+    });
+    const summary = summarizeRuntimePreflight(preflight);
+
+    expect(summary.ok).toBe(false);
+    expect(summary.blockers).toContain("workflow_runs is missing the single-provider bound context guard from the latest repo migrations");
+    expect(summary.blockers).not.toContain("workflow_runs is missing bound provider context columns from the latest repo migrations");
   });
 });

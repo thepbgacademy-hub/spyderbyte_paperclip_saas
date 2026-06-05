@@ -103,42 +103,64 @@ try {
   if (!outboxReady) {
     await client.query(readFileSync("supabase/migrations/0004_workflow_queue_outbox.sql", "utf8"));
   }
-  const boundProviderExisting = await client.query(
-    `select
-      exists (select 1 from information_schema.columns where table_schema = 'wfpc' and table_name = 'workflow_runs' and column_name = 'bound_secret_reference_id') as has_secret_reference_id,
-      exists (
-        select 1
-        from pg_constraint
-        where conname = 'workflow_runs_bound_secret_reference_id_fkey'
-          and conrelid = to_regclass('wfpc.workflow_runs')
-          and pg_get_constraintdef(oid) like '%references wfpc.secret_references(id)%'
-      ) as has_secret_reference_fk,
-      exists (select 1 from information_schema.columns where table_schema = 'wfpc' and table_name = 'workflow_runs' and column_name = 'bound_provider_context' and is_nullable = 'NO') as has_provider_context,
-      exists (
-        select 1
-        from pg_constraint
-        where conname = 'workflow_runs_bound_provider_context_object_check'
-          and conrelid = to_regclass('wfpc.workflow_runs')
-          and pg_get_constraintdef(oid) like '%jsonb_typeof(bound_provider_context) = ''array''%'
-      ) as has_context_check,
-      exists (select 1 from pg_indexes where schemaname = 'wfpc' and indexname = 'workflow_runs_bound_secret_reference_idx') as has_secret_reference_idx`
-  );
-  const boundProviderReady = Object.values(boundProviderExisting.rows[0] ?? {}).every(Boolean);
+  const queryBoundProviderReady = () =>
+    client.query(
+      `select
+        exists (select 1 from information_schema.columns where table_schema = 'wfpc' and table_name = 'workflow_runs' and column_name = 'bound_secret_reference_id') as has_secret_reference_id,
+        exists (
+          select 1
+          from pg_constraint
+          where conname = 'workflow_runs_bound_secret_reference_id_fkey'
+            and conrelid = to_regclass('wfpc.workflow_runs')
+            and pg_get_constraintdef(oid) like '%references wfpc.secret_references(id)%'
+        ) as has_secret_reference_fk,
+        exists (select 1 from information_schema.columns where table_schema = 'wfpc' and table_name = 'workflow_runs' and column_name = 'bound_provider_context' and is_nullable = 'NO') as has_provider_context,
+        exists (
+          select 1
+          from pg_constraint
+          where conname = 'workflow_runs_bound_provider_context_object_check'
+            and conrelid = to_regclass('wfpc.workflow_runs')
+            and pg_get_constraintdef(oid) like '%jsonb_typeof(bound_provider_context) = ''array''%'
+        ) as has_context_check,
+        exists (
+          select 1
+          from pg_constraint
+          where conname = 'workflow_runs_bound_provider_context_single_entry_check'
+            and conrelid = to_regclass('wfpc.workflow_runs')
+            and pg_get_constraintdef(oid) like '%jsonb_array_length(bound_provider_context) <= 1%'
+        ) as has_single_entry_check,
+        exists (select 1 from pg_indexes where schemaname = 'wfpc' and indexname = 'workflow_runs_bound_secret_reference_idx') as has_secret_reference_idx`
+    );
+  let boundProviderExisting = await queryBoundProviderReady();
+  let boundProviderReady = Object.values(boundProviderExisting.rows[0] ?? {}).every(Boolean);
   if (!boundProviderReady) {
     await client.query(readFileSync("supabase/migrations/0005_bound_provider_context.sql", "utf8"));
+    await client.query(readFileSync("supabase/migrations/0030_bound_provider_context_single_entry.sql", "utf8"));
+    boundProviderExisting = await queryBoundProviderReady();
+    boundProviderReady = Object.values(boundProviderExisting.rows[0] ?? {}).every(Boolean);
+    if (!boundProviderReady) {
+      throw new Error("Bound provider context migrations did not produce the required schema shape");
+    }
   }
-  const activeProviderLaneExisting = await client.query(
-    `select
-      exists (
-        select 1
-        from pg_indexes
-        where schemaname = 'wfpc'
-          and indexname = 'secret_references_active_provider_lane_unique'
-      ) as has_active_provider_lane_index`
-  );
-  const activeProviderLaneReady = Object.values(activeProviderLaneExisting.rows[0] ?? {}).every(Boolean);
+  const queryActiveProviderLaneReady = () =>
+    client.query(
+      `select
+        exists (
+          select 1
+          from pg_indexes
+          where schemaname = 'wfpc'
+            and indexname = 'secret_references_active_provider_lane_unique'
+        ) as has_active_provider_lane_index`
+    );
+  let activeProviderLaneExisting = await queryActiveProviderLaneReady();
+  let activeProviderLaneReady = Object.values(activeProviderLaneExisting.rows[0] ?? {}).every(Boolean);
   if (!activeProviderLaneReady) {
     await client.query(readFileSync("supabase/migrations/0006_single_active_provider_lane.sql", "utf8"));
+    activeProviderLaneExisting = await queryActiveProviderLaneReady();
+    activeProviderLaneReady = Object.values(activeProviderLaneExisting.rows[0] ?? {}).every(Boolean);
+    if (!activeProviderLaneReady) {
+      throw new Error("Single active provider lane migration did not produce the required schema shape");
+    }
   }
   const vaultExisting = await client.query(
     `select
