@@ -8,7 +8,12 @@ export class RuntimeProviderExecutionError extends Error {
   readonly code = "runtime_provider_execution_unavailable";
   readonly publicMessage = "workflow_failed";
 
-  constructor(input: { tenantId: string; workflowId: string; providerKind: string; reason: "secret_payload_invalid" | "secret_unavailable" }) {
+  constructor(input: {
+    tenantId: string;
+    workflowId: string;
+    providerKind: string;
+    reason: "secret_payload_invalid" | "secret_unavailable" | "multi_provider_binding_unsupported";
+  }) {
     super(`Unable to hydrate provider execution context for ${input.providerKind}: ${input.reason}`);
     this.name = "RuntimeProviderExecutionError";
   }
@@ -24,6 +29,15 @@ export function createRuntimeProviderExecutionContextResolver(options: {
       workflowId: string;
       providerBindings: readonly RuntimeProviderBinding[];
     }): Promise<RuntimeProviderExecutionBinding[]> {
+      if (input.providerBindings.length !== 1) {
+        throw new RuntimeProviderExecutionError({
+          tenantId: input.tenantId,
+          workflowId: input.workflowId,
+          providerKind: input.providerBindings[0]?.providerKind ?? "unknown_provider",
+          reason: "multi_provider_binding_unsupported"
+        });
+      }
+
       return Promise.all(
         input.providerBindings.map(async (binding) => {
           let secretValues: unknown;

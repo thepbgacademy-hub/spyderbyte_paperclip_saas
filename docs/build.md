@@ -892,6 +892,7 @@ Mapping update from live Paperclip discovery:
 - before adapter cutover, fix the runtime-binding seam:
   - current run binding storage is effectively single-provider even though the product model assumes future multi-capability workflows
   - keep the normalized capability-label contract on `bound_provider_context` instead of drifting back to vendor-shaped values
+  - keep the current single-provider repo seam fail-closed: reject multi-entry bound contexts and provider-kind mismatches, while still rebasing queued/running bindings onto the current joined `secret_ref` when the same secret row rotates in place
   - a private runtime provider repository path is still needed for worker/sync use
   - a configurable issue-launch adapter and `paperclip_secret_bindings` persistence are now in the repo, and the worker runtime can enforce or refresh explicit company/agent/env-key bindings before issue launch
   - provider registration can now project Paperclip-managed secrets through the board-session lane when `WF_PAPERCLIP_BOARD_SESSION_TOKEN`, trusted `WF_PAPERCLIP_BOARD_ORIGIN` headers, and `WF_PAPERCLIP_ISSUE_AGENT_ID` are configured while `PAPERCLIP_BASE_URL` stays on the private runtime address

@@ -382,7 +382,9 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
     async getBoundProviderContext(input: { tenantId: string; runId: string }): Promise<readonly BoundProviderContextRecord[] | null> {
       return runner.withTransaction(async (transaction) => {
         const result = await transaction.query(
-          `select runs.bound_provider_context
+          `select runs.bound_provider_context,
+                  secrets.secret_ref,
+                  secrets.provider_kind
            from wfpc.workflow_runs runs
            join wfpc.secret_references secrets
              on secrets.id = runs.bound_secret_reference_id
@@ -404,7 +406,11 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
         }
 
         const record = asRecord(result.rows[0]);
-        return toBoundProviderContext(record.bound_provider_context);
+        return toSingleBoundProviderContext({
+          value: record.bound_provider_context,
+          secretRef: String(record.secret_ref ?? ""),
+          providerKind: String(record.provider_kind ?? "")
+        });
       });
     }
   };
@@ -437,6 +443,33 @@ function toBoundProviderContext(value: unknown): readonly BoundProviderContextRe
       ...entry,
       capability: entry.capability as ProviderCapability
     }));
+}
+
+function toSingleBoundProviderContext(input: {
+  value: unknown;
+  secretRef: string;
+  providerKind: string;
+}): readonly BoundProviderContextRecord[] | null {
+  const normalized = toBoundProviderContext(input.value);
+  if (normalized.length !== 1) {
+    return null;
+  }
+
+  const [binding] = normalized;
+  if (!binding) {
+    return null;
+  }
+
+  if (binding.providerKind !== input.providerKind || input.secretRef.length === 0) {
+    return null;
+  }
+
+  return [
+    {
+      ...binding,
+      secretRef: input.secretRef
+    }
+  ];
 }
 
 function resolveBoundCapability(input: { providerKind: string; requirementRows: readonly unknown[] }): ProviderCapability | null {

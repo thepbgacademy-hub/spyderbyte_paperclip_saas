@@ -64,4 +64,43 @@ describe("runtime provider execution context", () => {
       })
     );
   });
+
+  it("fails closed when runtime execution is asked to hydrate more than one provider binding", async () => {
+    const accessSecretRef = vi.fn();
+    const resolver = createRuntimeProviderExecutionContextResolver({
+      accessSecretRef
+    });
+
+    await expect(
+      resolver.resolveForRun({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf-social-calendar",
+        providerBindings: [
+          {
+            capability: "text_generation",
+            providerKind: "openai_api",
+            label: "Primary OpenAI",
+            secretRef: "wf_secret_openai",
+            metadata: {}
+          },
+          {
+            capability: "image_generation",
+            providerKind: "openai_api",
+            label: "Primary OpenAI",
+            secretRef: "wf_secret_openai",
+            metadata: {}
+          }
+        ]
+      })
+    ).rejects.toEqual(
+      new RuntimeProviderExecutionError({
+        tenantId: "tenant-1",
+        workflowId: "wf-social-calendar",
+        providerKind: "openai_api",
+        reason: "multi_provider_binding_unsupported"
+      })
+    );
+    expect(accessSecretRef).not.toHaveBeenCalled();
+  });
 });

@@ -276,23 +276,23 @@ The Paperclip integration is not production-ready until these are true:
 
 ## Sharp Edges To Solve Before Implementation
 
-### 0. Capability Drift In The Current Bound Context
+### 0. Capability Contract In The Current Bound Context
 
-The current reservation code writes vendor enums into `bound_provider_context.capability`.
+The current reservation code now writes normalized capability labels into `bound_provider_context.capability`.
 
 Current behavior:
 
-- `capability: "openai_api"`
-
-Desired long-term behavior:
-
 - `capability: "text_generation"` or another actual capability label
 
-Why this matters:
+Guardrail:
 
-- the docs and resolver direction already assume workflows request capabilities, not vendors
-- Paperclip secret binding strategy will be harder to evolve if run bindings are vendor-shaped from the start
-- package policies that allow multiple vendors for one capability will not fit the current binding shape cleanly
+- keep `bound_provider_context.capability` capability-shaped, not vendor-shaped
+
+Why this still matters:
+
+- the docs and resolver direction assume workflows request capabilities, not vendors
+- Paperclip secret binding strategy gets brittle again if run bindings drift back toward provider enums
+- package policies that allow multiple vendors for one capability still need capability-first binding semantics
 
 Primary files:
 
