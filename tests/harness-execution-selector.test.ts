@@ -38,6 +38,15 @@ describe("harness execution selector", () => {
         nativeDefaultWorkflowIds: ["wf_connect_first_workflow"]
       })
     ).toBe("wf_native_v1");
+
+    expect(
+      selectExecutionEngine({
+        workflowId: "wf_connect_first_workflow",
+        harnessEnabledWorkflowIds: [],
+        harnessEligibleWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy"],
+        nativeDefaultWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    ).toBe("wf_native_v1");
   });
 
   it("treats native-default-only workflow configs as not requiring the Paperclip adapter", () => {

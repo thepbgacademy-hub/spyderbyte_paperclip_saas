@@ -15,6 +15,7 @@ export type WealthFactoryWorkflowDefinition = {
   privateMapping?: PrivateWorkflowMapping;
   requiredCapabilities: readonly ProviderCapability[];
   executionEngine?: ExecutionEngine;
+  boardExposureEnabled?: boolean;
 };
 
 export type WealthFactoryWorkflowListItem = {
@@ -84,6 +85,12 @@ export function createWorkflowRegistry(definitions: readonly WealthFactoryWorkfl
         .map((definition) => definition.publicId);
     },
 
+    listBoardExposedWorkflowIds(): string[] {
+      return definitions
+        .filter((definition) => definition.boardExposureEnabled === true)
+        .map((definition) => definition.publicId);
+    },
+
     listNativeExecutorWorkflowIds(): string[] {
       return definitions.filter((definition) => definition.executionEngine === "wf_native_v1").map((definition) => definition.publicId);
     }
@@ -95,12 +102,16 @@ export function createHarnessWorkflowRegistry(input: {
   nativeExecutorEnabledWorkflowIds?: readonly string[];
   nativeDefaultWorkflowIds?: readonly string[];
 }) {
+  const boardExposedWorkflowIds = new Set(input.harnessEnabledWorkflowIds);
+  const executionEnabledWorkflowIds = [...new Set([...(input.harnessEnabledWorkflowIds ?? []), ...(input.nativeDefaultWorkflowIds ?? [...WF_NATIVE_DEFAULT_WORKFLOWS])])];
+
   return createWorkflowRegistry(
     BASE_WF_HARNESS_WORKFLOW_DEFINITIONS.map((definition) => ({
       ...definition,
+      boardExposureEnabled: boardExposedWorkflowIds.has(definition.publicId),
       executionEngine: selectExecutionEngine({
         workflowId: definition.publicId,
-        harnessEnabledWorkflowIds: input.harnessEnabledWorkflowIds,
+        harnessEnabledWorkflowIds: executionEnabledWorkflowIds,
         nativeExecutorEnabledWorkflowIds: input.nativeExecutorEnabledWorkflowIds ?? [],
         harnessEligibleWorkflowIds: [...WF_HARNESS_ELIGIBLE_WORKFLOWS],
         nativeDefaultWorkflowIds: input.nativeDefaultWorkflowIds ?? [...WF_NATIVE_DEFAULT_WORKFLOWS]

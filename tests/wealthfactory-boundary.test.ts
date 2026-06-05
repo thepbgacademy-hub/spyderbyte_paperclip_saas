@@ -62,13 +62,17 @@ describe("Wealth Factory boundary layer", () => {
     ]);
   });
 
-  it("uses enabled workflow ids to expose only the harness slice that is actually routed there", () => {
+  it("keeps the cut-over workflow family native by default even without an explicit harness-enabled env flag", () => {
     const disabledRegistry = createHarnessWorkflowRegistry({ harnessEnabledWorkflowIds: [] });
     const enabledRegistry = createHarnessWorkflowRegistry({ harnessEnabledWorkflowIds: ["wf_connect_first_workflow"] });
 
-    expect(disabledRegistry.listHarnessEligibleWorkflowIds()).toEqual([]);
+    expect(disabledRegistry.listHarnessEligibleWorkflowIds()).toEqual(["wf_connect_first_workflow"]);
+    expect(disabledRegistry.listNativeExecutorWorkflowIds()).toEqual(["wf_connect_first_workflow"]);
+    expect(disabledRegistry.listBoardExposedWorkflowIds()).toEqual([]);
+    expect(disabledRegistry.getDefinition("wf_connect_first_workflow").executionEngine).toBe("wf_native_v1");
     expect(enabledRegistry.listHarnessEligibleWorkflowIds()).toEqual(["wf_connect_first_workflow"]);
     expect(enabledRegistry.listNativeExecutorWorkflowIds()).toEqual(["wf_connect_first_workflow"]);
+    expect(enabledRegistry.listBoardExposedWorkflowIds()).toEqual(["wf_connect_first_workflow"]);
     expect(enabledRegistry.getDefinition("wf_connect_first_workflow").executionEngine).toBe("wf_native_v1");
     expect(enabledRegistry.getDefinition("wf_connect_first_workflow").privateMapping).toBeUndefined();
     expect(enabledRegistry.getDefinition("wf_connect_first_workflow").packageId).toBe("pkg_bib_connect");

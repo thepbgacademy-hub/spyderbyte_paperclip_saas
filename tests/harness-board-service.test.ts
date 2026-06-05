@@ -122,7 +122,8 @@ describe("harness board service", () => {
       repository: createInMemoryHarnessRepository(),
       runAtomically: async (work) => work(createInMemoryHarnessRepository()),
       workflowRegistry: createHarnessWorkflowRegistry({
-        harnessEnabledWorkflowIds: []
+        harnessEnabledWorkflowIds: [],
+        nativeDefaultWorkflowIds: []
       })
     });
 
@@ -144,7 +145,7 @@ describe("harness board service", () => {
       repository,
       runAtomically: async (work) => work(repository),
       workflowRegistry: {
-        listHarnessEligibleWorkflowIds: () => ["wf_connect_first_workflow", "wf_package_followup"],
+        listBoardExposedWorkflowIds: () => ["wf_connect_first_workflow", "wf_package_followup"],
         getDefinition: vi.fn()
       }
     });

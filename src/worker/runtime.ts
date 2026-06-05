@@ -612,11 +612,12 @@ export function createWorkerRuntime(options: {
         throw new WorkerRuntimeClosingError();
       }
       const validatedPayload = validateWorkflowQueuePayload(payload);
+      const workerExecutionEngine = resolveWorkerExecutionEngine(validatedPayload.workflowId);
 
       return executionGate.run({
         tenantId: validatedPayload.tenantId,
-        onStarted: (snapshot) => emitWorkerRunEvent("started", validatedPayload, snapshot),
-        onReleased: (snapshot) => emitWorkerRunEvent("released", validatedPayload, snapshot),
+        onStarted: (snapshot) => emitWorkerRunEvent("started", validatedPayload, snapshot, workerExecutionEngine),
+        onReleased: (snapshot) => emitWorkerRunEvent("released", validatedPayload, snapshot, workerExecutionEngine),
         operation: async () => {
           if (isClosing) {
             throw new WorkerRuntimeClosingError();
@@ -1272,10 +1273,19 @@ export function createWorkerRuntime(options: {
     return outcome;
   }
 
+  function resolveWorkerExecutionEngine(workflowId: string): "paperclip" | "wf_harness_v1" | "wf_native_v1" {
+    if (!harnessWorkflowRegistry.isHarnessEligible(workflowId)) {
+      return "paperclip";
+    }
+
+    return harnessWorkflowRegistry.getDefinition(workflowId).executionEngine ?? "paperclip";
+  }
+
   function emitWorkerRunEvent(
     event: "started" | "released",
     payload: { tenantId: string; runId: string; workflowId: string },
-    snapshot: { activeRuns: number; activeByTenant: Record<string, number>; queuedByTenant: Record<string, number> }
+    snapshot: { activeRuns: number; activeByTenant: Record<string, number>; queuedByTenant: Record<string, number> },
+    executionEngine: "paperclip" | "wf_harness_v1" | "wf_native_v1"
   ) {
     process.stdout.write(
       `${JSON.stringify({
@@ -1286,6 +1296,7 @@ export function createWorkerRuntime(options: {
         tenantId: payload.tenantId,
         runId: payload.runId,
         workflowId: payload.workflowId,
+        executionEngine,
         execution: snapshot
       })}\n`
     );

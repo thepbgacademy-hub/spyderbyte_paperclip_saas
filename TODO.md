@@ -178,6 +178,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Phase 3: First native workflow family is complete for `wf_connect_first_workflow`.
 - [x] Phase 4: Adapter cutover and removal is complete for `wf_connect_first_workflow`, and the phased plan now moves to the next bounded native-expansion seam.
 - [x] Phase 5: Redispatch-safe native continuation is complete for `wf_connect_first_workflow`.
+- [x] Phase 6: Native start-path cutover proof is complete for `wf_connect_first_workflow`.
 
 ## Later Phases
 

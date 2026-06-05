@@ -18,6 +18,7 @@ This file tracks the new harness subproject only.
   - [x] Phase 3: First native workflow family.
   - [x] Phase 4: Adapter cutover and removal.
   - [x] Phase 5: Redispatch-safe native continuation seam.
+  - [x] Phase 6: Native start-path cutover proof.
 
 ## V1 Build Targets
 

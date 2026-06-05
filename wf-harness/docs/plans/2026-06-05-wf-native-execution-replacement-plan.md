@@ -163,6 +163,41 @@ Completed outcome:
 - Redispatch stages a durable outbox continuation record and relies on the existing outbox worker for safe queue admission, so transient BullMQ or Redis failures no longer strand resumed or fresh-cycle native continuation.
 - `wf_connect_first_workflow` can re-enter native continuation on the same run id without colliding with its original BullMQ job id.
 
+## Phase 6: Native Start-Path Cutover Proof
+
+Status: `completed`
+
+Goal:
+- Prove that the cut-over workflow family starts natively by default and cannot silently drift back onto the Paperclip adapter path because of env toggles or ambiguous launch selection.
+
+Scope:
+- Keep the queue payload shape unchanged.
+- Tighten execution selection so native-default workflow families remain native even when a harness-enabled env flag is absent.
+- Surface launch provenance on the worker start seam so support can distinguish native versus adapter starts without reopening runtime internals.
+- Add focused proof at the registry, dashboard-runtime, and worker start seams.
+
+Required outputs:
+- Native-default workflow families select `wf_native_v1` before any Paperclip fallback, even when `WF_HARNESS_ENABLED_WORKFLOW_IDS` does not explicitly include them.
+- Dashboard/runtime registry wiring reflects the native-default truth for `wf_connect_first_workflow` without requiring private adapter mapping.
+- Worker start telemetry carries explicit execution-engine provenance for native and adapter starts.
+- Native-cutover worker starts for `wf_connect_first_workflow` remain off the Paperclip adapter path even when Paperclip launch env is absent and no harness-enabled env flag is set.
+
+Non-goals:
+- No second native workflow family yet.
+- No queue payload expansion.
+- No Paperclip removal for still-unmigrated workflow families.
+
+Exit criteria:
+- Focused tests prove native-default selection, dashboard-runtime cutover truth, and worker start provenance.
+- Full repo verification is green after the cutover-proof changes.
+- Handoff and TODO surfaces point to the next bounded native-expansion seam instead of adapter hardening for the already-migrated family.
+
+Completed outcome:
+- `wf_connect_first_workflow` now stays on `wf_native_v1` by default instead of requiring an explicit harness-enabled env flag to avoid silent fallback.
+- The dashboard/runtime registry now treats the cut-over workflow family as native without private adapter mapping, even when runtime env leaves the harness-enabled list empty.
+- Worker start telemetry now records the selected execution engine, so operator/support traces can distinguish native starts from adapter starts directly at the worker seam.
+- Focused and full verification now prove the native start path stays off Paperclip for the cut-over workflow family under default-native configuration.
+
 ## Immediate Execution Order
 
 1. Keep the migrated `wf_connect_first_workflow` native path green under the full verification bar.

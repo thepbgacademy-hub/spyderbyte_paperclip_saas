@@ -1138,7 +1138,7 @@ export type HarnessRecentDecisionView = {
 };
 
 type HarnessWorkflowRegistry = {
-  listHarnessEligibleWorkflowIds(): string[];
+  listBoardExposedWorkflowIds(): string[];
   getDefinition(publicWorkflowId: string): WealthFactoryWorkflowDefinition;
 };
 
@@ -4658,7 +4658,7 @@ async function authorizeHarnessRequest(input: {
     throw new ApiAuthError();
   }
 
-  const workflowIds = input.workflowRegistry.listHarnessEligibleWorkflowIds();
+  const workflowIds = input.workflowRegistry.listBoardExposedWorkflowIds();
   if (workflowIds.length === 0) {
     throw new Error("Harness workflow is not enabled");
   }

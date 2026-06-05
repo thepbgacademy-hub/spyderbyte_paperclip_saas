@@ -10,8 +10,7 @@ export interface ExecutionSelectorInput {
 
 export function selectExecutionEngine(input: ExecutionSelectorInput): ExecutionEngine {
   const eligibleWorkflowIds = new Set(input.harnessEligibleWorkflowIds ?? input.harnessEnabledWorkflowIds);
-  const harnessEnabled = input.harnessEnabledWorkflowIds.includes(input.workflowId);
-  if (!eligibleWorkflowIds.has(input.workflowId) || !harnessEnabled) {
+  if (!eligibleWorkflowIds.has(input.workflowId)) {
     return "paperclip";
   }
 

@@ -93,7 +93,8 @@ The first harness implementation slice is now built and verified:
 - Phase 3 first native workflow family is complete for `wf_connect_first_workflow`.
 - Phase 4 adapter cutover/removal is now also complete for `wf_connect_first_workflow`.
 - Phase 5 redispatch-safe native continuation is now also complete for `wf_connect_first_workflow`.
-- The immediate continuation point is the next bounded native-expansion seam, not a return to Paperclip dependency for the migrated workflow family and not more redispatch hotfixing on the already-migrated path.
+- Phase 6 native start-path cutover proof is now also complete for `wf_connect_first_workflow`.
+- The immediate continuation point is the next bounded native-expansion seam, not a return to Paperclip dependency for the migrated workflow family, not more redispatch hotfixing on the already-migrated path, and not more start-path ambiguity work for the already-cut-over family.
 
 ## Standard Preflight
 

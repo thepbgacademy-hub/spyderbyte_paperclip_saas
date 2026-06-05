@@ -770,6 +770,29 @@ describe("runtime server", () => {
     expect(pump.stop).toHaveBeenCalledOnce();
   });
 
+  it("keeps the cut-over workflow family native by default in the dashboard runtime registry even without harness env flags", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() }
+    });
+
+    const boardServiceOptions = vi.mocked(createHarnessBoardService).mock.calls.at(-1)?.[0];
+    const workflowRegistry = boardServiceOptions?.workflowRegistry;
+    expect(workflowRegistry).toBeDefined();
+    expect(workflowRegistry?.getDefinition("wf_connect_first_workflow").executionEngine).toBe("wf_native_v1");
+    expect(workflowRegistry?.listBoardExposedWorkflowIds()).toEqual([]);
+    expect(workflowRegistry?.getDefinition("wf_connect_first_workflow").privateMapping).toBeUndefined();
+
+    await runtime.close();
+  });
+
   it("requeues resolved harness attention through the existing workflow queue seam when an enqueuer is available", async () => {
     const enqueueOnce = vi.fn().mockResolvedValue("enqueued");
     const runtime = createDashboardRuntime({

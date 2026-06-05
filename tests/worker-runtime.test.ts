@@ -956,6 +956,47 @@ describe("worker runtime", () => {
     await runtime.close();
   });
 
+  it("keeps the cut-over connect-first workflow on the native start path even without harness-enabled env flags", async () => {
+    const { createPaperclipClient } = await import("../src/paperclip/client.js");
+    const {
+      PAPERCLIP_BASE_URL: _paperclipBaseUrl,
+      PAPERCLIP_SERVICE_TOKEN: _paperclipServiceToken,
+      ...nativeOnlyEnv
+    } = validEnv;
+    stdoutWrite.mockClear();
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv(nativeOnlyEnv),
+      workerInstanceId: "worker-test-native-default-start-path"
+    });
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+
+    expect(vi.mocked(createPaperclipClient)).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(
+      stdoutWrite.mock.calls.some(([value]) =>
+        String(value).includes("\"type\":\"wealth_factory_worker_run\"") &&
+        String(value).includes("\"workflowId\":\"wf_connect_first_workflow\"") &&
+        String(value).includes("\"executionEngine\":\"wf_native_v1\"")
+      )
+    ).toBe(true);
+
+    await runtime.close();
+  });
+
   it("fails closed before native execution when the run loses its bound provider launch binding", async () => {
     const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
     const { createPaperclipClient } = await import("../src/paperclip/client.js");
