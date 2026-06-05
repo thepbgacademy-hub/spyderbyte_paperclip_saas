@@ -94,7 +94,9 @@ The first harness implementation slice is now built and verified:
 - Phase 4 adapter cutover/removal is now also complete for `wf_connect_first_workflow`.
 - Phase 5 redispatch-safe native continuation is now also complete for `wf_connect_first_workflow`.
 - Phase 6 native start-path cutover proof is now also complete for `wf_connect_first_workflow`.
-- The immediate continuation point is the next bounded native-expansion seam, not a return to Paperclip dependency for the migrated workflow family, not more redispatch hotfixing on the already-migrated path, and not more start-path ambiguity work for the already-cut-over family.
+- Phase 7 second native workflow family migration is now also complete for `wf_tax_strategy`.
+- `wf_tax_strategy` is native-default on the worker/runtime seam, but board/start exposure intentionally remains limited to `wf_connect_first_workflow` until the package/install selector seam is widened in a dedicated follow-up phase.
+- The immediate continuation point is the next bounded native-expansion seam, not a return to Paperclip dependency for the migrated workflow families, not more redispatch hotfixing on the already-migrated path, and not more start-path ambiguity work for already-cut-over families.
 
 ## Standard Preflight
 

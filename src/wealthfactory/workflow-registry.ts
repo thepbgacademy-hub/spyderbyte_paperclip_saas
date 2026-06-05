@@ -26,8 +26,9 @@ export type WealthFactoryWorkflowListItem = {
   requiredCapabilities: readonly ProviderCapability[];
 };
 
-export const WF_HARNESS_ELIGIBLE_WORKFLOWS = ["wf_connect_first_workflow"] as const;
-export const WF_NATIVE_DEFAULT_WORKFLOWS = ["wf_connect_first_workflow"] as const;
+export const WF_HARNESS_ELIGIBLE_WORKFLOWS = ["wf_connect_first_workflow", "wf_tax_strategy"] as const;
+export const WF_NATIVE_DEFAULT_WORKFLOWS = ["wf_connect_first_workflow", "wf_tax_strategy"] as const;
+export const WF_BOARD_EXPOSED_WORKFLOWS = ["wf_connect_first_workflow"] as const;
 
 const BASE_WF_HARNESS_WORKFLOW_DEFINITIONS: readonly Omit<WealthFactoryWorkflowDefinition, "executionEngine">[] = [
   {
@@ -35,6 +36,13 @@ const BASE_WF_HARNESS_WORKFLOW_DEFINITIONS: readonly Omit<WealthFactoryWorkflowD
     packageId: "pkg_bib_connect",
     publicName: "Connect First Workflow",
     description: "CEO-led first-workflow setup run inside the Wealth Factory harness.",
+    requiredCapabilities: ["text_generation"]
+  },
+  {
+    publicId: "wf_tax_strategy",
+    packageId: "pkg_tax_strategy",
+    publicName: "Tax Strategy Workflow",
+    description: "Bounded tax strategy review run inside the Wealth Factory harness.",
     requiredCapabilities: ["text_generation"]
   }
 ];
@@ -102,7 +110,8 @@ export function createHarnessWorkflowRegistry(input: {
   nativeExecutorEnabledWorkflowIds?: readonly string[];
   nativeDefaultWorkflowIds?: readonly string[];
 }) {
-  const boardExposedWorkflowIds = new Set(input.harnessEnabledWorkflowIds);
+  const boardEligibleWorkflowIds = new Set<string>(WF_BOARD_EXPOSED_WORKFLOWS);
+  const boardExposedWorkflowIds = new Set(input.harnessEnabledWorkflowIds.filter((workflowId) => boardEligibleWorkflowIds.has(workflowId)));
   const executionEnabledWorkflowIds = [...new Set([...(input.harnessEnabledWorkflowIds ?? []), ...(input.nativeDefaultWorkflowIds ?? [...WF_NATIVE_DEFAULT_WORKFLOWS])])];
 
   return createWorkflowRegistry(

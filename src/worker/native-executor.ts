@@ -3,6 +3,7 @@ import type { RuntimeProviderExecutionBinding } from "../providers/runtime-provi
 import { createNativeOpenAITextGenerator, NativeOpenAIExecutionError } from "../providers/native-openai-text.js";
 
 const CONNECT_FIRST_WORKFLOW_ID = "wf_connect_first_workflow";
+const TAX_STRATEGY_WORKFLOW_ID = "wf_tax_strategy";
 
 export type NativeExecutionOutcome = {
   state: "waiting" | "done" | "blocked" | "cancelled";
@@ -52,6 +53,23 @@ export function createDefaultNativeExecutor(options?: {
         });
       }
 
+      if (input.workflowId === TAX_STRATEGY_WORKFLOW_ID) {
+        const generated = await openAITextGenerator.generateText({
+          binding: input.providerBinding,
+          prompt: buildTaxStrategyWorkflowPrompt({
+            workflowId: input.workflowId,
+            executionEnvelope: input.executionEnvelope
+          }),
+          maxOutputTokens: 260,
+          preserveStructuredOutput: true
+        });
+
+        return parseTaxStrategyWorkflowOutcome({
+          outputText: generated.outputText,
+          laneExecution: input.executionEnvelope.laneExecution
+        });
+      }
+
       return {
         state: "blocked",
         resumeSummary:
@@ -93,6 +111,38 @@ function buildConnectFirstWorkflowPrompt(input: {
   ].join("\n");
 }
 
+function buildTaxStrategyWorkflowPrompt(input: {
+  workflowId: string;
+  executionEnvelope: HarnessWorkerExecutionEnvelope;
+}): string {
+  const { executionEnvelope } = input;
+  const continuitySummary = executionEnvelope.continuityContext?.summary ?? executionEnvelope.laneExecution.resumeFocus ?? "No continuity summary recorded.";
+  const latestResultSummary = executionEnvelope.continuityContext?.latestResultSummary ?? executionEnvelope.laneExecution.latestResultSummary ?? "No prior result summary recorded.";
+  const absorbedWork =
+    executionEnvelope.continuityContext?.absorbedWorkTrail.map((item) => item.title).join("; ") ??
+    executionEnvelope.laneExecution.absorbedWorkItems?.join("; ") ??
+    "No absorbed work items recorded.";
+
+  return [
+    "You are Wealth Factory's native executor for the Tax Strategy Workflow family.",
+    "Decide whether the current lane is complete, needs more information, or is blocked.",
+    "Return strict JSON only with this shape: {\"state\":\"done|waiting|blocked\",\"summary\":\"...\"}.",
+    "Use state \"done\" only when the lane is actually complete and the next operator can treat it as finished.",
+    "Use state \"waiting\" when the lane needs more information, confirmation, or a deliberate resume action.",
+    "Use state \"blocked\" when the lane cannot proceed because a prerequisite, dependency, or required input is missing.",
+    "Keep summary tenant-safe, concise, and specific to the lane. Do not mention Paperclip, prompts, tools, or internal runtime mechanics.",
+    "Focus on tax-position readiness, open assumptions, and the clearest next bounded operator action.",
+    `Workflow: ${input.workflowId}`,
+    `Persona: ${executionEnvelope.laneExecution.persona}`,
+    `Lane title: ${executionEnvelope.laneExecution.title}`,
+    `Deliverable type: ${executionEnvelope.laneExecution.deliverableType}`,
+    `Resume focus: ${executionEnvelope.laneExecution.resumeFocus ?? "None"}`,
+    `Continuity summary: ${continuitySummary}`,
+    `Latest result summary: ${latestResultSummary}`,
+    `Absorbed work items: ${absorbedWork}`
+  ].join("\n");
+}
+
 function parseConnectFirstWorkflowOutcome(input: {
   outputText: string;
   laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
@@ -120,6 +170,40 @@ function parseConnectFirstWorkflowOutcome(input: {
   return {
     state: parsed.state,
     resumeSummary: formatConnectFirstWorkflowResumeSummary({
+      state: parsed.state,
+      generatedSummary: parsed.summary,
+      laneExecution: input.laneExecution
+    })
+  };
+}
+
+function parseTaxStrategyWorkflowOutcome(input: {
+  outputText: string;
+  laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+}): NativeExecutionOutcome {
+  const parsed = tryParseWorkflowDecision(input.outputText);
+  if (!parsed) {
+    return {
+      state: "blocked",
+      resumeSummary:
+        `Native execution returned an invalid Tax Strategy Workflow decision for ${input.laneExecution.persona.toUpperCase()}: ${input.laneExecution.title}. ` +
+        "Keep this lane blocked until the native workflow decision contract is repaired."
+    };
+  }
+
+  if (parsed.state === "done") {
+    return {
+      state: "done",
+      resultSummary: formatTaxStrategyWorkflowResult({
+        generatedResultSummary: parsed.summary,
+        laneExecution: input.laneExecution
+      })
+    };
+  }
+
+  return {
+    state: parsed.state,
+    resumeSummary: formatTaxStrategyWorkflowResumeSummary({
       state: parsed.state,
       generatedSummary: parsed.summary,
       laneExecution: input.laneExecution
@@ -187,6 +271,28 @@ function formatConnectFirstWorkflowResumeSummary(input: {
   const action = input.state === "waiting" ? "resume" : "unblock";
   return [
     `Connect First Workflow ${humanizeDeliverableType(input.laneExecution.deliverableType).toLowerCase()} lane for ${input.laneExecution.persona.toUpperCase()}: ${input.laneExecution.title} needs an explicit ${action} action.`,
+    input.generatedSummary
+  ].join(" ");
+}
+
+function formatTaxStrategyWorkflowResult(input: {
+  generatedResultSummary: string;
+  laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+}): string {
+  return [
+    `Completed the Tax Strategy Workflow ${humanizeDeliverableType(input.laneExecution.deliverableType).toLowerCase()} lane for ${input.laneExecution.persona.toUpperCase()}: ${input.laneExecution.title}.`,
+    input.generatedResultSummary
+  ].join(" ");
+}
+
+function formatTaxStrategyWorkflowResumeSummary(input: {
+  state: "waiting" | "blocked";
+  generatedSummary: string;
+  laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+}): string {
+  const action = input.state === "waiting" ? "resume" : "unblock";
+  return [
+    `Tax Strategy Workflow ${humanizeDeliverableType(input.laneExecution.deliverableType).toLowerCase()} lane for ${input.laneExecution.persona.toUpperCase()}: ${input.laneExecution.title} needs an explicit ${action} action.`,
     input.generatedSummary
   ].join(" ");
 }

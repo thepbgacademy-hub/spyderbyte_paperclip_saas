@@ -770,7 +770,7 @@ describe("runtime server", () => {
     expect(pump.stop).toHaveBeenCalledOnce();
   });
 
-  it("keeps the cut-over workflow family native by default in the dashboard runtime registry even without harness env flags", async () => {
+  it("keeps cut-over workflow families native by default in the dashboard runtime registry even without harness env flags", async () => {
     const runtime = createDashboardRuntime({
       env: {
         supabaseDbUrl: TEST_SUPABASE_DB_URL,
@@ -787,8 +787,10 @@ describe("runtime server", () => {
     const workflowRegistry = boardServiceOptions?.workflowRegistry;
     expect(workflowRegistry).toBeDefined();
     expect(workflowRegistry?.getDefinition("wf_connect_first_workflow").executionEngine).toBe("wf_native_v1");
+    expect(workflowRegistry?.getDefinition("wf_tax_strategy").executionEngine).toBe("wf_native_v1");
     expect(workflowRegistry?.listBoardExposedWorkflowIds()).toEqual([]);
     expect(workflowRegistry?.getDefinition("wf_connect_first_workflow").privateMapping).toBeUndefined();
+    expect(workflowRegistry?.getDefinition("wf_tax_strategy").privateMapping).toBeUndefined();
 
     await runtime.close();
   });

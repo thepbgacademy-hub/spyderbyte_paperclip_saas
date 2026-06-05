@@ -198,9 +198,46 @@ Completed outcome:
 - Worker start telemetry now records the selected execution engine, so operator/support traces can distinguish native starts from adapter starts directly at the worker seam.
 - Focused and full verification now prove the native start path stays off Paperclip for the cut-over workflow family under default-native configuration.
 
+## Phase 7: Second Native Workflow Family Migration
+
+Status: `completed`
+
+Goal:
+- Migrate the next smallest named Paperclip-routed workflow family onto the already-proven native execution plane without widening queue payloads, board exposure, or adapter assumptions.
+
+Scope:
+- Formalize `wf_tax_strategy` as a real Wealth Factory workflow family instead of leaving it as a selector/env placeholder.
+- Keep the existing native provider lane and harness runtime contract.
+- Keep board exposure explicit and env-gated even while the worker/runtime path becomes native by default, and do not widen the board start seam beyond workflows that already have proven package/install wiring.
+- Add focused proof that `wf_tax_strategy` stays off Paperclip on the worker start path and through native execution.
+
+Required outputs:
+- `wf_tax_strategy` exists as a real registry definition with package identity and required capabilities.
+- `wf_tax_strategy` is harness-eligible and native-default without requiring Paperclip launch env.
+- The native executor has a bounded workflow-family implementation for `wf_tax_strategy`.
+- Registry, env, runtime-server, and worker-runtime tests prove the new family stays on `wf_native_v1` and does not silently reopen the Paperclip path.
+
+Non-goals:
+- No queue payload expansion.
+- No new multi-provider execution shape.
+- No migration of broader social/package-followup families in the same phase.
+
+Exit criteria:
+- `wf_tax_strategy` is proven end to end on the native worker/runtime path.
+- Full repo verification is green after the new family lands.
+- Handoff and TODO surfaces point at the next bounded native-expansion seam and explicitly leave dashboard/start-path widening for a later dedicated phase.
+
+Completed outcome:
+- `wf_tax_strategy` is now a real Wealth Factory workflow family with a bounded native registry definition.
+- The native executor now owns a tenant-safe Tax Strategy Workflow decision contract on the same OpenAI-backed provider lane used by the first family.
+- Env validation, registry wiring, dashboard/runtime registry truth, and worker-runtime proofs now treat `wf_tax_strategy` as native-default instead of Paperclip-routed on the worker/runtime seam.
+- `wf_tax_strategy` worker starts now stay off Paperclip launch env and emit explicit `wf_native_v1` execution-engine provenance on the worker seam.
+- Board/start exposure intentionally remains limited to the already-proven package-wired workflow family until the selector and entitlement seam is widened in a dedicated follow-up phase.
+
 ## Immediate Execution Order
 
 1. Keep the migrated `wf_connect_first_workflow` native path green under the full verification bar.
-2. Choose the next bounded workflow family or runtime seam for native expansion without widening Paperclip dependency again.
-3. Keep the legacy Paperclip adapter backlog explicitly scoped to still-unmigrated workflows.
-4. Re-run focused and full repo verification before each additional native-family cutover.
+2. Keep the migrated `wf_tax_strategy` native path green under the full verification bar.
+3. Choose the next bounded workflow family or runtime seam for native expansion without widening Paperclip dependency again.
+4. Keep the legacy Paperclip adapter backlog explicitly scoped to still-unmigrated workflows.
+5. Re-run focused and full repo verification before each additional native-family cutover.

@@ -60,7 +60,7 @@ describe("loadEnv", () => {
     ).toBe(false);
   });
 
-  it("still requires Paperclip launch env for workflows that have not been cut over natively", () => {
+  it("allows the tax-strategy workflow family to start without Paperclip launch env once it is cut over natively", () => {
     expect(() =>
       loadEnv({
         ...validEnv,
@@ -68,7 +68,15 @@ describe("loadEnv", () => {
         PAPERCLIP_SERVICE_TOKEN: undefined,
         WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_tax_strategy"
       })
-    ).toThrow(/missing: PAPERCLIP_BASE_URL, PAPERCLIP_SERVICE_TOKEN/);
+    ).not.toThrow();
+    expect(
+      requiresPaperclipLaunchEnv({
+        ...validEnv,
+        PAPERCLIP_BASE_URL: undefined,
+        PAPERCLIP_SERVICE_TOKEN: undefined,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_tax_strategy"
+      })
+    ).toBe(false);
   });
 
   it("throws with missing required keys", () => {
@@ -171,11 +179,11 @@ describe("loadEnv", () => {
       validatePaperclipLaunchEnv({
         WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_tax_strategy"
       })
-    ).toThrow(/missing: PAPERCLIP_BASE_URL, PAPERCLIP_SERVICE_TOKEN/);
+    ).not.toThrow();
 
     expect(() =>
       validatePaperclipLaunchEnv({
-        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_tax_strategy",
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_social_campaign_builder",
         PAPERCLIP_BASE_URL: "not-a-url",
         PAPERCLIP_SERVICE_TOKEN: "paperclip-service-token",
         WF_PAPERCLIP_LAUNCH_MODE: "issues",
@@ -186,7 +194,7 @@ describe("loadEnv", () => {
 
     expect(() =>
       validatePaperclipLaunchEnv({
-        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_tax_strategy",
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_social_campaign_builder",
         PAPERCLIP_BASE_URL: "https://paperclip-internal.spyderbyte.cloud/",
         PAPERCLIP_SERVICE_TOKEN: "paperclip-service-token",
         WF_PAPERCLIP_LAUNCH_MODE: "issues",
@@ -198,7 +206,7 @@ describe("loadEnv", () => {
 
     expect(() =>
       validatePaperclipLaunchEnv({
-        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_tax_strategy",
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_social_campaign_builder",
         PAPERCLIP_BASE_URL: "https://paperclip-internal.spyderbyte.cloud/",
         PAPERCLIP_SERVICE_TOKEN: "paperclip-service-token",
         WF_PAPERCLIP_LAUNCH_MODE: "issues",
@@ -209,7 +217,7 @@ describe("loadEnv", () => {
 
     expect(() =>
       validatePaperclipLaunchEnv({
-        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_tax_strategy",
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_social_campaign_builder",
         PAPERCLIP_BASE_URL: "https://paperclip-internal.spyderbyte.cloud/",
         PAPERCLIP_SERVICE_TOKEN: "paperclip-service-token",
         WF_PAPERCLIP_LAUNCH_MODE: "issues",

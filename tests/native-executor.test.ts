@@ -54,6 +54,39 @@ function buildExecutionEnvelope() {
   };
 }
 
+function buildTaxExecutionEnvelope() {
+  return {
+    ...buildExecutionEnvelope(),
+    workflowId: "wf_tax_strategy",
+    laneExecution: {
+      ...buildExecutionEnvelope().laneExecution,
+      title: "Review the founder tax posture",
+      deliverableType: "tax_strategy_review",
+      resumeFocus: "Confirm whether the Q3 restructuring assumptions are ready for recommendation."
+    },
+    continuityContext: {
+      ...buildExecutionEnvelope().continuityContext,
+      summary: "Resume the tax strategy lane from the latest restructuring assumptions workbook.",
+      latestResultSummary: "The draft tax posture is directionally viable.",
+      absorbedWorkTrail: [
+        {
+          resolution: "update_existing_lane" as const,
+          requestedByPersona: "CFO",
+          title: "Check restructuring assumptions",
+          label: "CFO: Check restructuring assumptions"
+        }
+      ],
+      latestAbsorbedWork: {
+        resolution: "update_existing_lane" as const,
+        requestedByPersona: "CFO",
+        title: "Check restructuring assumptions",
+        label: "CFO: Check restructuring assumptions"
+      },
+      absorbedWorkCount: 1
+    }
+  };
+}
+
 describe("default native executor", () => {
   it("completes the connect-first workflow family natively through the provider lane", async () => {
     const fetch = vi.fn().mockResolvedValue({
@@ -122,6 +155,40 @@ describe("default native executor", () => {
       resumeSummary:
         "Connect First Workflow pricing review lane for CFO: Pressure-test the pricing lane needs an explicit resume action. " +
         "Need the updated competitor discount sheet before the pricing recommendation can be finalized."
+    });
+  });
+
+  it("completes the tax-strategy workflow family natively through the provider lane", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        output_text: "{\"state\":\"done\",\"summary\":\"Validated the restructuring assumptions and framed the tax recommendation for review.\"}"
+      })
+    });
+    const executor = createDefaultNativeExecutor({
+      fetch: fetch as unknown as typeof globalThis.fetch
+    });
+
+    await expect(
+      executor.execute({
+        tenantId: "tenant-1",
+        runId: "run-tax-1",
+        workflowId: "wf_tax_strategy",
+        executionEnvelope: buildTaxExecutionEnvelope(),
+        providerBinding: {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Primary OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: {},
+          secretValues: { apiKey: "sk-tenant" }
+        }
+      })
+    ).resolves.toEqual({
+      state: "done",
+      resultSummary:
+        "Completed the Tax Strategy Workflow tax strategy review lane for CFO: Review the founder tax posture. " +
+        "Validated the restructuring assumptions and framed the tax recommendation for review."
     });
   });
 

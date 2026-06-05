@@ -59,6 +59,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Run lint/build/refactor pass.
 - [x] Complete reviewer check.
 - [x] Overwrite `HANDOFF.md` with Phase 6-only next steps.
+- [ ] Next native-expansion seam: widen board/start package-selector support deliberately before exposing additional migrated workflow families on the dashboard start path.
 
 - [x] Phase 6: VPS deployment POC.
 - [x] Create VPS deployment POC configuration.
@@ -80,6 +81,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Run lint/build/test/refactor pass.
 - [x] Complete reviewer check.
 - [x] Overwrite `HANDOFF.md` with completion handoff.
+- [x] Phase 7: Second native workflow family migration is complete for `wf_tax_strategy`.
 
 - [x] Post-MVP Phase 1: Security baseline.
 - [x] Add split-origin CORS allowlist checks.
