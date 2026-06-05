@@ -14,8 +14,8 @@ This file tracks the new harness subproject only.
 - [x] Verify the first harness slice with full lint/build/test/E2E fail-then-pass.
 - [ ] Execute the native replacement phases from `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`.
   - [x] Phase 1: Native executor skeleton.
-  - [ ] Phase 2: First native provider lane.
-  - [ ] Phase 3: First native workflow family.
+  - [x] Phase 2: First native provider lane.
+  - [x] Phase 3: First native workflow family.
   - [ ] Phase 4: Adapter cutover and removal.
 
 ## V1 Build Targets
@@ -76,7 +76,7 @@ This file tracks the new harness subproject only.
 
 ## Current Next Slice
 
-- [ ] Read `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md` before continuing Phase 2, the active first native provider lane.
+- [ ] Read `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md` before continuing Phase 4, the active adapter cutover/removal track.
 - [x] Reconcile persisted run-state progression with the new child-card advancement seam so run-level status is no longer effectively bootstrap-only.
 - [x] Add a parsed request-body contract for harness mutations before tenant-authored outcome summaries are accepted over HTTP.
 - [x] Add richer CEO approval policy beyond exact-match idempotency and the current open-card cap.

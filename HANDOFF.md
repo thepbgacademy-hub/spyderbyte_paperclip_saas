@@ -8,7 +8,7 @@ Phases 0 through 7 are complete, tested, reviewed, and committed.
 
 The first post-MVP productization slices are implemented locally: security baseline helpers, Wealth Factory boundary layer, package entitlements/provider requirements, temporary artifacts, expanded provider definitions, a Wealth Factory dashboard POC surface, the first API-backed dashboard foundation, and the first database-backed ACID/race-condition foundation.
 
-The next session should enter through the harness lane first, read the current phased native-replacement plan, and continue with Phase 2, the first native provider lane, before any broader native workflow-family cutover work.
+The next session should enter through the harness lane first, read the current phased native-replacement plan, and continue with Phase 4, the adapter cutover/removal track, on top of the now-complete native provider lane and first native workflow-family cutover for `wf_connect_first_workflow`.
 
 ## Reference Docs
 

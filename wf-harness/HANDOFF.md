@@ -89,8 +89,9 @@ The first harness implementation slice is now built and verified:
 ## Active Native Replacement Position
 
 - Phase 1 native executor skeleton is complete.
-- Phase 2 first native provider lane is the active phase.
-- The immediate continuation point is the first bounded provider-backed native lane, not Phase 1 seam-building and not Phase 3 workflow-family migration.
+- Phase 2 first native provider lane is complete.
+- Phase 3 first native workflow family is complete for `wf_connect_first_workflow`.
+- The immediate continuation point is Phase 4 adapter cutover/removal, not more Phase 2 seam-building and not a second workflow-family migration yet.
 
 ## Standard Preflight
 

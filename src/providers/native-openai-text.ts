@@ -30,12 +30,13 @@ export function createNativeOpenAITextGenerator(options?: {
   const model = options?.model ?? DEFAULT_NATIVE_OPENAI_MODEL;
 
   return {
-    async generateLaneResult(input: {
+    async generateText(input: {
       binding: RuntimeProviderExecutionBinding;
-      workflowId: string;
-      executionEnvelope: HarnessWorkerExecutionEnvelope;
+      prompt: string;
+      maxOutputTokens?: number;
+      preserveStructuredOutput?: boolean;
     }): Promise<{
-      resultSummary: string;
+      outputText: string;
       model: string;
     }> {
       if (input.binding.providerKind !== "openai_api" && input.binding.providerKind !== "openai") {
@@ -66,11 +67,8 @@ export function createNativeOpenAITextGenerator(options?: {
         },
         body: JSON.stringify({
           model,
-          input: buildLanePrompt({
-            workflowId: input.workflowId,
-            executionEnvelope: input.executionEnvelope
-          }),
-          max_output_tokens: 220
+          input: input.prompt,
+          max_output_tokens: input.maxOutputTokens ?? 220
         })
       });
 
@@ -83,8 +81,9 @@ export function createNativeOpenAITextGenerator(options?: {
       }
 
       const payload = await response.json();
-      const resultSummary = normalizeOutputText(extractOutputText(payload));
-      if (!resultSummary) {
+      const rawOutputText = extractOutputText(payload);
+      const outputText = input.preserveStructuredOutput ? rawOutputText.trim() : normalizeOutputText(rawOutputText);
+      if (!outputText) {
         throw new NativeOpenAIExecutionError(
           "response_invalid",
           "Native OpenAI text generation returned no text output."
@@ -92,8 +91,29 @@ export function createNativeOpenAITextGenerator(options?: {
       }
 
       return {
-        resultSummary,
+        outputText,
         model
+      };
+    },
+    async generateLaneResult(input: {
+      binding: RuntimeProviderExecutionBinding;
+      workflowId: string;
+      executionEnvelope: HarnessWorkerExecutionEnvelope;
+    }): Promise<{
+      resultSummary: string;
+      model: string;
+    }> {
+      const generated = await this.generateText({
+        binding: input.binding,
+        prompt: buildLanePrompt({
+          workflowId: input.workflowId,
+          executionEnvelope: input.executionEnvelope
+        })
+      });
+
+      return {
+        resultSummary: generated.outputText,
+        model: generated.model
       };
     }
   };

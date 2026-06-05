@@ -291,7 +291,7 @@ beforeEach(() => {
   fetchMock.mockResolvedValue({
     ok: true,
     json: async () => ({
-      output_text: "Validated the pricing floor and preserved the next action."
+      output_text: "{\"state\":\"done\",\"summary\":\"Validated the pricing floor and preserved the next action.\"}"
     })
   });
 });
@@ -842,7 +842,7 @@ describe("worker runtime", () => {
     expect(closeSettled).toBe(true);
   });
 
-  it("uses the default native executor to prove the bound OpenAI lane and then blocks for workflow-specific handling", async () => {
+  it("uses the default native executor to complete the connect-first workflow family through the bound OpenAI lane", async () => {
     const { createPaperclipClient } = await import("../src/paperclip/client.js");
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
@@ -882,15 +882,23 @@ describe("worker runtime", () => {
       cardId: "card_cfo",
       expectedState: "working",
       expectedExecutionClaimToken: "claim-cfo-1",
-      state: "blocked"
+      state: "done"
     });
+    expect(harnessRepositoryRef.current.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "result_recorded",
+        payload: expect.objectContaining({
+          summary: expect.stringContaining("Completed the Connect First Workflow pricing review lane for CFO")
+        })
+      })
+    );
     expect(
       harnessRepositoryRef.current.upsertCardContinuity.mock.calls.some(([value]) =>
         value.cardId === "card_cfo" &&
         value.runId === "run-1" &&
-        value.continuitySource === "resume_override" &&
-        typeof value.continuitySummary === "string" &&
-        value.continuitySummary.includes("Workflow-specific native completion is not implemented yet.") &&
+        value.continuitySource === "result_recorded" &&
+        value.latestResultSummary?.includes("Completed the Connect First Workflow pricing review lane for CFO") &&
         Array.isArray(value.absorbedWorkItems) &&
         value.absorbedWorkItems.includes("Re-check discount floor")
       )

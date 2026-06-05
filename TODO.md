@@ -174,7 +174,9 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] ACID and race-condition database foundation is built, tested, and applied to live Supabase.
 - [x] Durable queue outbox and vault-backed provider credential registration slices are built and tested.
 - [x] Phase 1: Native executor skeleton is complete.
-- [ ] Phase 2: First native provider lane is the active phase in `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`.
+- [x] Phase 2: First native provider lane is complete.
+- [x] Phase 3: First native workflow family is complete for `wf_connect_first_workflow`.
+- [ ] Phase 4: Adapter cutover and removal is the active phase in `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`.
 
 ## Later Phases
 

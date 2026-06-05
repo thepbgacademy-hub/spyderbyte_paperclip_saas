@@ -57,10 +57,10 @@ Exit criteria:
 
 ## Phase 2: First Native Provider Lane
 
-Status: `active in this session`
+Status: `completed`
 
 Goal:
-- Replace “Paperclip receives provider context” with “Wealth Factory executes with provider context here” for one bounded lane.
+- Replace "Paperclip receives provider context" with "Wealth Factory executes with provider context here" for one bounded lane.
 
 Scope:
 - Support one hydrated `text_generation` provider binding.
@@ -81,6 +81,8 @@ Exit criteria:
 - Existing provider guardrails remain intact.
 
 ## Phase 3: First Native Workflow Family
+
+Status: `completed`
 
 Goal:
 - Move one concrete workflow family off the Paperclip adapter and onto the native executor.
@@ -103,6 +105,8 @@ Exit criteria:
 
 ## Phase 4: Adapter Cutover And Removal
 
+Status: `next`
+
 Goal:
 - Remove Paperclip as a required execution dependency for the migrated workflow family/families.
 
@@ -121,7 +125,7 @@ Exit criteria:
 
 ## Immediate Execution Order
 
-1. Finish the first native provider lane on top of the completed Phase 1 skeleton.
-2. Re-run focused worker/runtime tests.
-3. Re-run full repo verification.
-4. Record the finished Phase 2 state in handoff and TODO before beginning Phase 3.
+1. Start Phase 4 from the completed `wf_connect_first_workflow` native path.
+2. Decide the first bounded adapter-removal seam for that workflow family.
+3. Re-run focused runtime/queue verification after the first cutover slice.
+4. Re-run full repo verification before retiring any Paperclip launch assumption.

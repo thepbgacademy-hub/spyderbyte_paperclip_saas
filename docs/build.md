@@ -3,6 +3,7 @@
 Current execution note:
 - This file is historical architecture context for the older Paperclip-backed build track.
 - The active phased replacement plan now lives at `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`.
+- Phase 3 is now complete for the first native workflow family (`wf_connect_first_workflow`), and Phase 4 adapter cutover/removal is the next active phase.
 - New execution sessions should enter through `wf-harness/HANDOFF.md` first, not treat this document as the current plan of record.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
