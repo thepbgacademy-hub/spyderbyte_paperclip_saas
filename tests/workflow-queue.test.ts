@@ -782,6 +782,32 @@ describe("workflow worker", () => {
     expect(createRun).not.toHaveBeenCalled();
   });
 
+  it("worker fails closed in tenant-required mode when a bound run loses its launch-ready provider context and no fallback resolver is wired", async () => {
+    const createRun = vi.fn();
+
+    await expect(
+      processWorkflowJob({
+        payload: createWorkflowQueuePayload({
+          tenantId: "tenant-1",
+          runId: "run-1",
+          workflowId: "workflow-1",
+          createdByUserId: "user-1"
+        }),
+        paperclipClient: { createRun },
+        tenantResolver: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1" }),
+        authorizeRunStart: vi.fn().mockResolvedValue(true),
+        isPaperclipEnabled: vi.fn().mockResolvedValue(true),
+        checkEntitlement: vi.fn().mockResolvedValue({ allowed: true }),
+        loadBoundProviderContext: vi.fn().mockResolvedValue(null)
+      })
+    ).rejects.toMatchObject({
+      code: "runtime_provider_unavailable",
+      publicMessage: "workflow_failed"
+    });
+
+    expect(createRun).not.toHaveBeenCalled();
+  });
+
   it("worker uses debug shared fallback only in explicit fallback mode", async () => {
     const createRun = vi.fn().mockResolvedValue({
       paperclipRunId: "pc-run-1",

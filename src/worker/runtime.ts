@@ -681,8 +681,8 @@ export function createWorkerRuntime(options: {
                 checkEntitlement: async () => ({ allowed: true }),
                 providerExecutionMode: options.env.providerExecutionMode,
                 loadBoundProviderContext: async ({ tenantId, runId }) => {
-                  const context = await acidRepository.getBoundProviderContext({ tenantId, runId });
-                  return context as readonly RuntimeProviderBinding[] | null;
+                  const binding = await acidRepository.getBoundProviderLaunchBinding({ tenantId, runId });
+                  return binding ? ([binding] as readonly RuntimeProviderBinding[]) : null;
                 },
                 hydrateProviderContext: async ({ tenantId, runId, workflowId, providerBindings }) =>
                   providerExecutionResolver.resolveForRun({

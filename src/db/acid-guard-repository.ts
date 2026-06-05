@@ -49,6 +49,8 @@ export type BoundProviderContextRecord = {
   metadata: Record<string, unknown>;
 };
 
+export type BoundProviderLaunchBinding = BoundProviderContextRecord;
+
 export function createAcidGuardRepository(runner: TransactionRunner) {
   return {
     async reserveWorkflowRun(input: ReserveWorkflowRunInput): Promise<ReserveWorkflowRunResult> {
@@ -412,6 +414,11 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
           providerKind: String(record.provider_kind ?? "")
         });
       });
+    },
+
+    async getBoundProviderLaunchBinding(input: { tenantId: string; runId: string }): Promise<BoundProviderLaunchBinding | null> {
+      const context = await this.getBoundProviderContext(input);
+      return context?.[0] ?? null;
     }
   };
 }

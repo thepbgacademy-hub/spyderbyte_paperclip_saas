@@ -16,8 +16,17 @@ export async function resolveProviderExecutionContext(options: {
   }) => Promise<readonly RuntimeProviderExecutionBinding[]>;
   resolveDebugSharedProvider?: DebugSharedProviderResolver;
 }): Promise<readonly RuntimeProviderExecutionBinding[] | readonly RuntimeProviderBinding[] | undefined> {
+  const boundProviderBindings = options.loadBoundProviderContext ? await options.loadBoundProviderContext(options.input) : null;
+  if (options.loadBoundProviderContext && boundProviderBindings === null && options.mode !== "debug_shared_fallback") {
+    throw new RuntimeProviderResolutionError({
+      tenantId: options.input.tenantId,
+      workflowId: options.input.workflowId,
+      capability: options.input.requiredCapabilities?.[0] ?? "text_generation"
+    });
+  }
+
   const providerBindings =
-    (options.loadBoundProviderContext ? await options.loadBoundProviderContext(options.input) : null) ??
+    boundProviderBindings ??
     (options.resolveProviderContext ? await tryResolveProviderContext(options.resolveProviderContext, options.input, options.mode, options.resolveDebugSharedProvider) : undefined);
 
   if (!providerBindings) {

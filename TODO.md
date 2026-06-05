@@ -201,7 +201,7 @@ This file tracks implementation progress. Keep it current after every phase.
   - [x] Fetch tenant provider secrets from the vault just-in-time in the worker.
   - [x] Extend the Paperclip adapter to accept per-run provider context instead of assuming one shared VPS credential.
   - [x] Keep operator/shared credentials available only as explicit debug/test fallback until the tenant-scoped path is proven.
-  - [x] Disable shared fallback credentials for normal subscriber production runs by default, with debug fallback available only through explicit runtime mode.
+  - [x] Disable shared fallback credentials for normal subscriber production runs by default in the intended runtime path, with debug fallback available only through explicit runtime mode.
   - [x] Add repo-owned live-drive scripts to seed current queue prerequisites, reserve one real workflow run, and inspect outbox/BullMQ state without improvised SQL.
   - [x] Add a live-runtime preflight so schema drift and missing migration blockers are reported before controlled queue tests begin.
   - [x] Apply the live DB migration that adds `workflow_runs.bound_secret_reference_id` and `workflow_runs.bound_provider_context`.

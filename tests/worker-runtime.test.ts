@@ -219,6 +219,13 @@ vi.mock("../src/db/acid-guard-repository.js", () => ({
         metadata: {}
       }
     ]),
+    getBoundProviderLaunchBinding: vi.fn().mockResolvedValue({
+      capability: "text_generation",
+      providerKind: "openai_api",
+      label: "Bound OpenAI",
+      secretRef: "wf_secret_bound",
+      metadata: {}
+    }),
     transitionWorkflowRunStatus: vi.fn().mockResolvedValue({ transitioned: true, status: "queued" })
   }))
 }));

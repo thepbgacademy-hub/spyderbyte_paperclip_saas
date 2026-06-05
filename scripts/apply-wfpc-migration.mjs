@@ -129,6 +129,16 @@ try {
             and conrelid = to_regclass('wfpc.workflow_runs')
             and pg_get_constraintdef(oid) like '%jsonb_array_length(bound_provider_context) <= 1%'
         ) as has_single_entry_check,
+        exists (
+          select 1
+          from pg_constraint
+          where conname = 'workflow_runs_bound_provider_context_binding_check'
+            and conrelid = to_regclass('wfpc.workflow_runs')
+            and pg_get_constraintdef(oid) like '%bound_secret_reference_id is null%'
+            and pg_get_constraintdef(oid) like '%jsonb_array_length(bound_provider_context) = 0%'
+            and pg_get_constraintdef(oid) like '%bound_secret_reference_id is not null%'
+            and pg_get_constraintdef(oid) like '%jsonb_array_length(bound_provider_context) = 1%'
+        ) as has_binding_shape_check,
         exists (select 1 from pg_indexes where schemaname = 'wfpc' and indexname = 'workflow_runs_bound_secret_reference_idx') as has_secret_reference_idx`
     );
   let boundProviderExisting = await queryBoundProviderReady();
@@ -136,6 +146,7 @@ try {
   if (!boundProviderReady) {
     await client.query(readFileSync("supabase/migrations/0005_bound_provider_context.sql", "utf8"));
     await client.query(readFileSync("supabase/migrations/0030_bound_provider_context_single_entry.sql", "utf8"));
+    await client.query(readFileSync("supabase/migrations/0031_bound_provider_context_binding_shape.sql", "utf8"));
     boundProviderExisting = await queryBoundProviderReady();
     boundProviderReady = Object.values(boundProviderExisting.rows[0] ?? {}).every(Boolean);
     if (!boundProviderReady) {

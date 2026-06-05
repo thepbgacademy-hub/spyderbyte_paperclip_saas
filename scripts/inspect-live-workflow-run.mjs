@@ -55,6 +55,9 @@ try {
       2
     ) + "\n"
   );
+  if (!summary.ok) {
+    process.exitCode = 1;
+  }
 } finally {
   closing = true;
   await client.end();

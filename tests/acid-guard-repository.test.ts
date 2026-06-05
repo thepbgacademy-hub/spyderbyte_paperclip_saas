@@ -510,6 +510,35 @@ describe("ACID guard repository", () => {
     ]);
   });
 
+  it("loads a launch-ready bound provider binding as a single authoritative record", async () => {
+    const client = createSequencedClient([
+      [
+        {
+          bound_provider_context: [
+            {
+              capability: "text_generation",
+              providerKind: "openai_api",
+              label: "Primary OpenAI",
+              secretRef: "wf_secret_openai",
+              metadata: {}
+            }
+          ],
+          secret_ref: "wf_secret_openai",
+          provider_kind: "openai_api"
+        }
+      ]
+    ]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(repository.getBoundProviderLaunchBinding({ tenantId: "tenant-1", runId: "run-1" })).resolves.toEqual({
+      capability: "text_generation",
+      providerKind: "openai_api",
+      label: "Primary OpenAI",
+      secretRef: "wf_secret_openai",
+      metadata: {}
+    });
+  });
+
   it("fails closed when a bound run row carries more than one provider binding entry", async () => {
     const client = createSequencedClient([
       [
@@ -591,6 +620,29 @@ describe("ACID guard repository", () => {
     const repository = createAcidGuardRepository(createTransactionRunner(client));
 
     await expect(repository.getBoundProviderContext({ tenantId: "tenant-1", runId: "run-1" })).resolves.toBeNull();
+  });
+
+  it("returns no launch-ready binding when the stored run context is not launchable", async () => {
+    const client = createSequencedClient([
+      [
+        {
+          bound_provider_context: [
+            {
+              capability: "text_generation",
+              providerKind: "anthropic_api",
+              label: "Primary Anthropic",
+              secretRef: "wf_secret_anthropic",
+              metadata: {}
+            }
+          ],
+          secret_ref: "wf_secret_openai",
+          provider_kind: "openai_api"
+        }
+      ]
+    ]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(repository.getBoundProviderLaunchBinding({ tenantId: "tenant-1", runId: "run-1" })).resolves.toBeNull();
   });
 
   it("keeps already-bound queued runs readable when the same secret row rotates to a new secret_ref", async () => {

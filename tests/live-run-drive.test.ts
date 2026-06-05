@@ -237,11 +237,11 @@ describe("live run drive helpers", () => {
         }
       })
     ).toEqual({
-      ok: true,
+      ok: false,
       phase: "queued_queue_unreachable",
       notes: [
         "Workflow run is reserved and the outbox is marked enqueued.",
-        "Queue reachability could not be verified from this caller.",
+        "Queue reachability could not be verified from this caller, so worker pickup is still unproven.",
         "Queue inspection error: Connection is closed."
       ]
     });
