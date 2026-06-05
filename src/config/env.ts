@@ -1,3 +1,6 @@
+import { isPaperclipExecutionRequired } from "../harness/execution-selector.js";
+import { WF_HARNESS_ELIGIBLE_WORKFLOWS, WF_NATIVE_DEFAULT_WORKFLOWS } from "../wealthfactory/workflow-registry.js";
+
 export type AppEnv = {
   nodeEnv: "development" | "test" | "production";
   supabaseUrl: string;
@@ -5,8 +8,8 @@ export type AppEnv = {
   supabaseServiceRoleKey: string;
   redisUrl: string;
   workflowQueueName: string;
-  paperclipBaseUrl: string;
-  paperclipServiceToken: string;
+  paperclipBaseUrl?: string;
+  paperclipServiceToken?: string;
   paperclipServiceTokensByCompany: Readonly<Record<string, string>>;
   paperclipBoardSessionToken?: string;
   paperclipBoardOrigin?: string;
@@ -34,12 +37,10 @@ const REQUIRED_KEYS = [
   "SUPABASE_ANON_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
   "REDIS_URL",
-  "PAPERCLIP_BASE_URL",
-  "PAPERCLIP_SERVICE_TOKEN",
   "WF_VAULT_MASTER_KEY"
 ] as const;
 
-type RequiredEnvKey = (typeof REQUIRED_KEYS)[number];
+type RequiredEnvKey = (typeof REQUIRED_KEYS)[number] | "PAPERCLIP_BASE_URL" | "PAPERCLIP_SERVICE_TOKEN";
 
 export class EnvValidationError extends Error {
   constructor(readonly missingKeys: RequiredEnvKey[], readonly invalidKeys: string[]) {
@@ -56,8 +57,26 @@ export class EnvValidationError extends Error {
 }
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
-  const missingKeys = REQUIRED_KEYS.filter((key) => !hasValue(source[key]));
+  const baseMissingKeys = REQUIRED_KEYS.filter((key) => !hasValue(source[key]));
   const invalidKeys: string[] = [];
+
+  const harnessEnabledWorkflowIds = parseCommaSeparatedValues(source.WF_HARNESS_ENABLED_WORKFLOW_IDS);
+  const nativeExecutorEnabledWorkflowIds = parseCommaSeparatedValues(source.WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS);
+  const nativeOpenAIModel = source.WF_NATIVE_OPENAI_MODEL?.trim() || "gpt-4.1-mini";
+  const configuredWorkflowIds = [...new Set([...harnessEnabledWorkflowIds, ...nativeExecutorEnabledWorkflowIds])];
+  const paperclipExecutionRequired = isPaperclipExecutionRequired({
+    configuredWorkflowIds,
+    harnessEnabledWorkflowIds,
+    nativeExecutorEnabledWorkflowIds,
+    harnessEligibleWorkflowIds: [...WF_HARNESS_ELIGIBLE_WORKFLOWS],
+    nativeDefaultWorkflowIds: [...WF_NATIVE_DEFAULT_WORKFLOWS]
+  });
+  const missingKeys = [
+    ...baseMissingKeys,
+    ...(paperclipExecutionRequired
+      ? (["PAPERCLIP_BASE_URL", "PAPERCLIP_SERVICE_TOKEN"] as const).filter((key) => !hasValue(source[key]))
+      : [])
+  ];
 
   if (hasValue(source.SUPABASE_URL) && !isHttpUrl(source.SUPABASE_URL)) {
     invalidKeys.push("SUPABASE_URL");
@@ -122,10 +141,6 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   if (workerMaxActivePerTenant === null) {
     invalidKeys.push("WF_WORKER_MAX_ACTIVE_PER_TENANT");
   }
-  const harnessEnabledWorkflowIds = parseCommaSeparatedValues(source.WF_HARNESS_ENABLED_WORKFLOW_IDS);
-  const nativeExecutorEnabledWorkflowIds = parseCommaSeparatedValues(source.WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS);
-  const nativeOpenAIModel = source.WF_NATIVE_OPENAI_MODEL?.trim() || "gpt-4.1-mini";
-
   if (missingKeys.length > 0 || invalidKeys.length > 0) {
     throw new EnvValidationError(missingKeys, invalidKeys);
   }
@@ -137,8 +152,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     supabaseServiceRoleKey: source.SUPABASE_SERVICE_ROLE_KEY as string,
     redisUrl: source.REDIS_URL as string,
     workflowQueueName: source.WF_WORKFLOW_QUEUE_NAME?.trim() || "wfpc-workflow-runs",
-    paperclipBaseUrl: trimTrailingSlash(source.PAPERCLIP_BASE_URL as string),
-    paperclipServiceToken: source.PAPERCLIP_SERVICE_TOKEN as string,
+    ...(hasValue(source.PAPERCLIP_BASE_URL) ? { paperclipBaseUrl: trimTrailingSlash(source.PAPERCLIP_BASE_URL) } : {}),
+    ...(hasValue(source.PAPERCLIP_SERVICE_TOKEN) ? { paperclipServiceToken: source.PAPERCLIP_SERVICE_TOKEN.trim() } : {}),
     paperclipServiceTokensByCompany: paperclipServiceTokensByCompany ?? {},
     ...(paperclipBoardSessionToken ? { paperclipBoardSessionToken } : {}),
     ...(paperclipBoardOrigin ? { paperclipBoardOrigin } : {}),
@@ -158,7 +173,20 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
 }
 
 export function validatePaperclipLaunchEnv(source: NodeJS.ProcessEnv = process.env): void {
+  if (!requiresPaperclipLaunchEnv(source)) {
+    return;
+  }
+
+  const missingKeys: RequiredEnvKey[] = [];
   const invalidKeys: string[] = [];
+  if (!hasValue(source.PAPERCLIP_BASE_URL)) {
+    missingKeys.push("PAPERCLIP_BASE_URL");
+  } else if (!isHttpUrl(source.PAPERCLIP_BASE_URL)) {
+    invalidKeys.push("PAPERCLIP_BASE_URL");
+  }
+  if (!hasValue(source.PAPERCLIP_SERVICE_TOKEN)) {
+    missingKeys.push("PAPERCLIP_SERVICE_TOKEN");
+  }
 
   const paperclipLaunchMode = source.WF_PAPERCLIP_LAUNCH_MODE ?? "runs";
   if (!["runs", "issues"].includes(paperclipLaunchMode)) {
@@ -183,13 +211,36 @@ export function validatePaperclipLaunchEnv(source: NodeJS.ProcessEnv = process.e
     ? source.WF_PAPERCLIP_BOARD_SESSION_TOKEN.trim()
     : undefined;
   const paperclipBoardOrigin = hasValue(source.WF_PAPERCLIP_BOARD_ORIGIN) ? trimTrailingSlash(source.WF_PAPERCLIP_BOARD_ORIGIN) : undefined;
+  if (hasValue(source.WF_PAPERCLIP_BOARD_ORIGIN) && !isHttpUrl(source.WF_PAPERCLIP_BOARD_ORIGIN)) {
+    invalidKeys.push("WF_PAPERCLIP_BOARD_ORIGIN");
+  }
   if (paperclipBoardSessionToken && !paperclipBoardOrigin) {
     invalidKeys.push("WF_PAPERCLIP_BOARD_ORIGIN");
   }
 
-  if (invalidKeys.length > 0) {
-    throw new EnvValidationError([], invalidKeys);
+  if (missingKeys.length > 0 || invalidKeys.length > 0) {
+    throw new EnvValidationError(missingKeys, invalidKeys);
   }
+}
+
+export function requiresPaperclipLaunchEnv(source: NodeJS.ProcessEnv = process.env): boolean {
+  const harnessEnabledWorkflowIds = parseCommaSeparatedValues(source.WF_HARNESS_ENABLED_WORKFLOW_IDS);
+  const nativeExecutorEnabledWorkflowIds = parseCommaSeparatedValues(source.WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS);
+  const configuredWorkflowIds = [...new Set([...harnessEnabledWorkflowIds, ...nativeExecutorEnabledWorkflowIds])];
+
+  if (
+    isPaperclipExecutionRequired({
+      configuredWorkflowIds,
+      harnessEnabledWorkflowIds,
+      nativeExecutorEnabledWorkflowIds,
+      harnessEligibleWorkflowIds: [...WF_HARNESS_ELIGIBLE_WORKFLOWS],
+      nativeDefaultWorkflowIds: [...WF_NATIVE_DEFAULT_WORKFLOWS]
+    })
+  ) {
+    return true;
+  }
+
+  return hasValue(source.PAPERCLIP_BASE_URL) || hasValue(source.PAPERCLIP_SERVICE_TOKEN);
 }
 
 export function loadWorkflowQueueEnv(source: NodeJS.ProcessEnv = process.env): WorkflowQueueEnv {

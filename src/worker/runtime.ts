@@ -301,7 +301,7 @@ export function createWorkerRuntime(options: {
   });
   const paperclipSecretBindings = createPaperclipSecretBindingRepository(queryClient);
   const paperclipSecretSync =
-    options.env.paperclipBoardSessionToken && options.env.paperclipLaunchMode === "issues"
+    options.env.paperclipBoardSessionToken && options.env.paperclipBaseUrl && options.env.paperclipLaunchMode === "issues"
       ? createPaperclipSecretSyncService({
           adminClient: createPaperclipSecretAdminHttpClient({
             baseUrl: options.env.paperclipBoardOrigin ?? options.env.paperclipBaseUrl,
@@ -526,60 +526,71 @@ export function createWorkerRuntime(options: {
     return trackedBindingPromise;
   }
 
-  const paperclipClient = createPaperclipClient({
-    baseUrl: options.env.paperclipBaseUrl,
-    serviceToken: options.env.paperclipServiceToken,
-    launchMode: options.env.paperclipLaunchMode,
-    ...(options.env.paperclipLaunchMode === "issues"
-      ? {
-        issueLaunch: {
-            resolveServiceToken: async ({ companyId }) => {
-              const mappedToken = companyIdToServiceToken.get(companyId);
-              if (mappedToken) {
-                return mappedToken;
-              }
-              return options.env.paperclipServiceToken;
-            },
-            resolveLaunchTarget: async ({ companyId }) => {
-              const mappedAgentId = companyIdToIssueAgentId.get(companyId) ?? options.env.paperclipIssueAgentId;
-              if (!mappedAgentId) {
-                throw new Error(`Missing Paperclip issue agent mapping for company ${companyId}`);
-              }
-              return {
-                agentId: mappedAgentId
-              };
-            },
-            syncProviderSecretRefs: async ({ companyId, agentId, providerContext }) => {
-              const tenantId = companyIdToTenantId.get(companyId) ?? "";
-              const adapterEnv: Record<string, { type: "secret_ref"; secretId: string; version: string | number }> = {};
-              for (const binding of providerContext) {
-                for (const bindingTarget of toPaperclipEnvBindings(binding.providerKind as ProviderKind, binding.secretValues ?? {})) {
-                  if (!tenantId) {
-                    throw new Error(`Missing tenant context for Paperclip company ${companyId}`);
+  let paperclipClientCache: ReturnType<typeof createPaperclipClient> | null = null;
+  function getPaperclipClient() {
+    if (paperclipClientCache) {
+      return paperclipClientCache;
+    }
+    if (!options.env.paperclipBaseUrl || !options.env.paperclipServiceToken) {
+      throw new Error("Paperclip launch client is not configured for this runtime.");
+    }
+
+    paperclipClientCache = createPaperclipClient({
+      baseUrl: options.env.paperclipBaseUrl,
+      serviceToken: options.env.paperclipServiceToken,
+      launchMode: options.env.paperclipLaunchMode,
+      ...(options.env.paperclipLaunchMode === "issues"
+        ? {
+            issueLaunch: {
+              resolveServiceToken: async ({ companyId }) => {
+                const mappedToken = companyIdToServiceToken.get(companyId);
+                if (mappedToken) {
+                  return mappedToken;
+                }
+                return options.env.paperclipServiceToken as string;
+              },
+              resolveLaunchTarget: async ({ companyId }) => {
+                const mappedAgentId = companyIdToIssueAgentId.get(companyId) ?? options.env.paperclipIssueAgentId;
+                if (!mappedAgentId) {
+                  throw new Error(`Missing Paperclip issue agent mapping for company ${companyId}`);
+                }
+                return {
+                  agentId: mappedAgentId
+                };
+              },
+              syncProviderSecretRefs: async ({ companyId, agentId, providerContext }) => {
+                const tenantId = companyIdToTenantId.get(companyId) ?? "";
+                const adapterEnv: Record<string, { type: "secret_ref"; secretId: string; version: string | number }> = {};
+                for (const binding of providerContext) {
+                  for (const bindingTarget of toPaperclipEnvBindings(binding.providerKind as ProviderKind, binding.secretValues ?? {})) {
+                    if (!tenantId) {
+                      throw new Error(`Missing tenant context for Paperclip company ${companyId}`);
+                    }
+                    adapterEnv[bindingTarget.envKey] = await resolveOrSyncPaperclipSecretRefBinding({
+                      tenantId,
+                      companyId: companyId,
+                      agentId: agentId,
+                      envKey: bindingTarget.envKey,
+                      secretRef: binding.secretRef,
+                      providerKind: binding.providerKind as ProviderKind,
+                      secretValue: bindingTarget.secretValue
+                    });
                   }
-                  adapterEnv[bindingTarget.envKey] = await resolveOrSyncPaperclipSecretRefBinding({
-                    tenantId,
-                    companyId: companyId,
-                    agentId: agentId,
-                    envKey: bindingTarget.envKey,
-                    secretRef: binding.secretRef,
-                    providerKind: binding.providerKind as ProviderKind,
-                    secretValue: bindingTarget.secretValue
-                  });
                 }
-              }
-              return {
-                adapterConfig: {
-                  env: adapterEnv
-                }
-              };
-            },
-            pollIntervalMs: options.env.paperclipIssuePollIntervalMs,
-            maxPollAttempts: options.env.paperclipIssueMaxPollAttempts
+                return {
+                  adapterConfig: {
+                    env: adapterEnv
+                  }
+                };
+              },
+              pollIntervalMs: options.env.paperclipIssuePollIntervalMs,
+              maxPollAttempts: options.env.paperclipIssueMaxPollAttempts
+            }
           }
-        }
-      : {})
-  });
+        : {})
+    });
+    return paperclipClientCache;
+  }
   const executionGate = createTenantExecutionGate({
     maxConcurrentRuns: options.env.workerConcurrency,
     maxConcurrentRunsPerTenant: options.env.workerMaxActivePerTenant,
@@ -711,7 +722,7 @@ export function createWorkerRuntime(options: {
               })
               : processWorkflowJob({
                 payload: validatedPayload,
-                paperclipClient,
+                paperclipClient: getPaperclipClient(),
                 tenantResolver: async (tenantId) => {
                   const mapping = await repositories.resolvePaperclipCompanyMapping({ tenantId });
                   companyIdToTenantId.set(mapping.paperclipCompanyId, tenantId);

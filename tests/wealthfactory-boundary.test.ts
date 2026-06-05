@@ -39,14 +39,18 @@ describe("Wealth Factory boundary layer", () => {
         packageId: "pkg-social",
         publicName: "Connect First Workflow",
         description: "Shape the opening business run.",
-        privateMapping: { paperclipWorkflowId: "pc-workflow-2", paperclipCompanyId: "pc-company-2" },
         requiredCapabilities: ["text_generation"],
-        executionEngine: "wf_harness_v1"
+        executionEngine: "wf_native_v1"
       }
     ]);
 
     expect(registry.isHarnessEligible("wf-connect-first-workflow")).toBe(true);
     expect(registry.listHarnessEligibleWorkflowIds()).toEqual(["wf-connect-first-workflow"]);
+    expect(registry.listNativeExecutorWorkflowIds()).toEqual(["wf-connect-first-workflow"]);
+    expect(registry.getDefinition("wf-connect-first-workflow").privateMapping).toBeUndefined();
+    expect(() => registry.resolvePrivateMapping("wf-connect-first-workflow")).toThrow(
+      /Workflow does not require a private adapter mapping/
+    );
     expect(registry.listPublicWorkflows()).toEqual([
       {
         id: "wf-connect-first-workflow",
@@ -61,16 +65,12 @@ describe("Wealth Factory boundary layer", () => {
   it("uses enabled workflow ids to expose only the harness slice that is actually routed there", () => {
     const disabledRegistry = createHarnessWorkflowRegistry({ harnessEnabledWorkflowIds: [] });
     const enabledRegistry = createHarnessWorkflowRegistry({ harnessEnabledWorkflowIds: ["wf_connect_first_workflow"] });
-    const nativeRegistry = createHarnessWorkflowRegistry({
-      harnessEnabledWorkflowIds: ["wf_connect_first_workflow"],
-      nativeExecutorEnabledWorkflowIds: ["wf_connect_first_workflow"]
-    });
 
     expect(disabledRegistry.listHarnessEligibleWorkflowIds()).toEqual([]);
     expect(enabledRegistry.listHarnessEligibleWorkflowIds()).toEqual(["wf_connect_first_workflow"]);
-    expect(nativeRegistry.listHarnessEligibleWorkflowIds()).toEqual(["wf_connect_first_workflow"]);
-    expect(nativeRegistry.listNativeExecutorWorkflowIds()).toEqual(["wf_connect_first_workflow"]);
-    expect(nativeRegistry.getDefinition("wf_connect_first_workflow").executionEngine).toBe("wf_native_v1");
+    expect(enabledRegistry.listNativeExecutorWorkflowIds()).toEqual(["wf_connect_first_workflow"]);
+    expect(enabledRegistry.getDefinition("wf_connect_first_workflow").executionEngine).toBe("wf_native_v1");
+    expect(enabledRegistry.getDefinition("wf_connect_first_workflow").privateMapping).toBeUndefined();
     expect(enabledRegistry.getDefinition("wf_connect_first_workflow").packageId).toBe("pkg_bib_connect");
   });
 

@@ -12,7 +12,7 @@ export type WealthFactoryWorkflowDefinition = {
   packageId: string;
   publicName: string;
   description: string;
-  privateMapping: PrivateWorkflowMapping;
+  privateMapping?: PrivateWorkflowMapping;
   requiredCapabilities: readonly ProviderCapability[];
   executionEngine?: ExecutionEngine;
 };
@@ -26,6 +26,7 @@ export type WealthFactoryWorkflowListItem = {
 };
 
 export const WF_HARNESS_ELIGIBLE_WORKFLOWS = ["wf_connect_first_workflow"] as const;
+export const WF_NATIVE_DEFAULT_WORKFLOWS = ["wf_connect_first_workflow"] as const;
 
 const BASE_WF_HARNESS_WORKFLOW_DEFINITIONS: readonly Omit<WealthFactoryWorkflowDefinition, "executionEngine">[] = [
   {
@@ -33,10 +34,6 @@ const BASE_WF_HARNESS_WORKFLOW_DEFINITIONS: readonly Omit<WealthFactoryWorkflowD
     packageId: "pkg_bib_connect",
     publicName: "Connect First Workflow",
     description: "CEO-led first-workflow setup run inside the Wealth Factory harness.",
-    privateMapping: {
-      paperclipWorkflowId: "wf_connect_first_workflow",
-      paperclipCompanyId: "wf-harness-local"
-    },
     requiredCapabilities: ["text_generation"]
   }
 ];
@@ -59,6 +56,9 @@ export function createWorkflowRegistry(definitions: readonly WealthFactoryWorkfl
       const definition = byPublicId.get(publicWorkflowId);
       if (!definition) {
         throw new Error("Unknown Wealth Factory workflow");
+      }
+      if (!definition.privateMapping) {
+        throw new Error("Workflow does not require a private adapter mapping");
       }
 
       return definition.privateMapping;
@@ -93,6 +93,7 @@ export function createWorkflowRegistry(definitions: readonly WealthFactoryWorkfl
 export function createHarnessWorkflowRegistry(input: {
   harnessEnabledWorkflowIds: readonly string[];
   nativeExecutorEnabledWorkflowIds?: readonly string[];
+  nativeDefaultWorkflowIds?: readonly string[];
 }) {
   return createWorkflowRegistry(
     BASE_WF_HARNESS_WORKFLOW_DEFINITIONS.map((definition) => ({
@@ -101,7 +102,8 @@ export function createHarnessWorkflowRegistry(input: {
         workflowId: definition.publicId,
         harnessEnabledWorkflowIds: input.harnessEnabledWorkflowIds,
         nativeExecutorEnabledWorkflowIds: input.nativeExecutorEnabledWorkflowIds ?? [],
-        harnessEligibleWorkflowIds: [...WF_HARNESS_ELIGIBLE_WORKFLOWS]
+        harnessEligibleWorkflowIds: [...WF_HARNESS_ELIGIBLE_WORKFLOWS],
+        nativeDefaultWorkflowIds: input.nativeDefaultWorkflowIds ?? [...WF_NATIVE_DEFAULT_WORKFLOWS]
       })
     }))
   );

@@ -105,7 +105,7 @@ Exit criteria:
 
 ## Phase 4: Adapter Cutover And Removal
 
-Status: `next`
+Status: `completed`
 
 Goal:
 - Remove Paperclip as a required execution dependency for the migrated workflow family/families.
@@ -123,9 +123,15 @@ Required outputs:
 Exit criteria:
 - Migrated workflow families no longer require the Paperclip adapter in production runtime.
 
+Completed outcome:
+- `wf_connect_first_workflow` is now native by default.
+- The worker/runtime path for that workflow family no longer requires Paperclip launch env or private adapter mapping.
+- Healthcheck and server bootstrap only require Paperclip launch env when configured workflows still truly route through the adapter.
+- The remaining Paperclip execution dependency is explicitly limited to still-unmigrated workflow families.
+
 ## Immediate Execution Order
 
-1. Start Phase 4 from the completed `wf_connect_first_workflow` native path.
-2. Decide the first bounded adapter-removal seam for that workflow family.
-3. Re-run focused runtime/queue verification after the first cutover slice.
-4. Re-run full repo verification before retiring any Paperclip launch assumption.
+1. Keep the migrated `wf_connect_first_workflow` native path green under the full verification bar.
+2. Choose the next bounded workflow family or runtime seam for native expansion without widening Paperclip dependency again.
+3. Keep the legacy Paperclip adapter backlog explicitly scoped to still-unmigrated workflows.
+4. Re-run focused and full repo verification before each additional native-family cutover.

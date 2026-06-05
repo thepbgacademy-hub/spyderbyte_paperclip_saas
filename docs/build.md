@@ -3,7 +3,7 @@
 Current execution note:
 - This file is historical architecture context for the older Paperclip-backed build track.
 - The active phased replacement plan now lives at `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`.
-- Phase 3 is now complete for the first native workflow family (`wf_connect_first_workflow`), and Phase 4 adapter cutover/removal is the next active phase.
+- Phases 3 and 4 are now complete for the first native workflow family (`wf_connect_first_workflow`): it is native by default, and its worker/runtime path no longer requires Paperclip launch env or private adapter mapping.
 - New execution sessions should enter through `wf-harness/HANDOFF.md` first, not treat this document as the current plan of record.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -843,6 +843,11 @@ Next work after this phase:
 - [ ] Add external VPS smoke tests for CORS, auth failure, exposed ports, and response guard.
 
 ## Post-MVP Phase: Tenant-Scoped Paperclip Provider Runtime Cutover
+
+Current status:
+- This section is now historical context for the older adapter-hardening track.
+- `wf_connect_first_workflow` has completed the bounded Phase 4 cutover in `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`.
+- Paperclip remains only for still-unmigrated workflow families and residual adapter backlog, not as the default execution dependency for the migrated native workflow family.
 
 **Outcome:** Wealth Factory keeps operator/provider credentials available for
 temporary testing and debugging, but commercial workflow execution uses

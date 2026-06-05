@@ -176,7 +176,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Phase 1: Native executor skeleton is complete.
 - [x] Phase 2: First native provider lane is complete.
 - [x] Phase 3: First native workflow family is complete for `wf_connect_first_workflow`.
-- [ ] Phase 4: Adapter cutover and removal is the active phase in `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`.
+- [x] Phase 4: Adapter cutover and removal is complete for `wf_connect_first_workflow`, and the phased plan now moves to the next bounded native-expansion seam.
 
 ## Later Phases
 
@@ -196,7 +196,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Wire the configurable issue-launch adapter into the live worker/runtime path with explicit launch-mode env controls and bound-secret-binding validation for company/agent/env-key resolution.
 - [x] Extend the live worker/runtime path from binding validation to admin-token-backed Paperclip secret provisioning and rotation when the higher-scope lane is configured.
 - [ ] Verify the live VPS Paperclip admin lane against the real board/admin token path and confirm the expected `/api/admin/...` routes match the installed build.
-- [ ] Keep the legacy Paperclip adapter backlog clearly separate from the active native replacement plan in `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`.
+- [x] Keep the legacy Paperclip adapter backlog clearly separate from the active native replacement plan in `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`.
 - [x] Add worker-side concurrency defaults and tenant fairness gate before BullMQ consumer rollout.
 - [x] Wire the BullMQ enqueuer/consumer path into the API and worker runtime entrypoints.
 - [x] Add a temporary public-Paperclip verification script and accept the live health payload contract during the test-drive phase.

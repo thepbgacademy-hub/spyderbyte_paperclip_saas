@@ -28,6 +28,12 @@ describe("worker healthcheck", () => {
     expect(checkPaperclip).not.toHaveBeenCalled();
   });
 
+  it("passes in native-only mode when Redis is healthy and no Paperclip probe is required", async () => {
+    const pingRedis = vi.fn().mockResolvedValue(undefined);
+
+    await expect(createWorkerHealthcheck({ pingRedis })()).resolves.toBeUndefined();
+  });
+
   it("surfaces Paperclip client rejections directly", async () => {
     const pingRedis = vi.fn().mockResolvedValue(undefined);
     const checkPaperclip = vi.fn().mockRejectedValue(new Error("paperclip unavailable"));

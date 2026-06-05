@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { EnvValidationError, loadEnv, loadWorkflowQueueEnv, validatePaperclipLaunchEnv } from "../src/config/env.js";
+import { EnvValidationError, loadEnv, loadWorkflowQueueEnv, requiresPaperclipLaunchEnv, validatePaperclipLaunchEnv } from "../src/config/env.js";
 
 const validEnv = {
   NODE_ENV: "test",
@@ -36,6 +36,39 @@ describe("loadEnv", () => {
       workerConcurrency: 2,
       workerMaxActivePerTenant: 1
     });
+  });
+
+  it("allows a native-only harness workflow to start without Paperclip launch env", () => {
+    expect(
+      loadEnv({
+        ...validEnv,
+        PAPERCLIP_BASE_URL: undefined,
+        PAPERCLIP_SERVICE_TOKEN: undefined,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      })
+    ).toMatchObject({
+      harnessEnabledWorkflowIds: ["wf_connect_first_workflow"],
+      nativeExecutorEnabledWorkflowIds: []
+    });
+    expect(
+      requiresPaperclipLaunchEnv({
+        ...validEnv,
+        PAPERCLIP_BASE_URL: undefined,
+        PAPERCLIP_SERVICE_TOKEN: undefined,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      })
+    ).toBe(false);
+  });
+
+  it("still requires Paperclip launch env for workflows that have not been cut over natively", () => {
+    expect(() =>
+      loadEnv({
+        ...validEnv,
+        PAPERCLIP_BASE_URL: undefined,
+        PAPERCLIP_SERVICE_TOKEN: undefined,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_tax_strategy"
+      })
+    ).toThrow(/missing: PAPERCLIP_BASE_URL, PAPERCLIP_SERVICE_TOKEN/);
   });
 
   it("throws with missing required keys", () => {
@@ -136,6 +169,38 @@ describe("loadEnv", () => {
   it("validates the issue-launch env seam without requiring the full app env set", () => {
     expect(() =>
       validatePaperclipLaunchEnv({
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_tax_strategy"
+      })
+    ).toThrow(/missing: PAPERCLIP_BASE_URL, PAPERCLIP_SERVICE_TOKEN/);
+
+    expect(() =>
+      validatePaperclipLaunchEnv({
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_tax_strategy",
+        PAPERCLIP_BASE_URL: "not-a-url",
+        PAPERCLIP_SERVICE_TOKEN: "paperclip-service-token",
+        WF_PAPERCLIP_LAUNCH_MODE: "issues",
+        WF_PAPERCLIP_BOARD_SESSION_TOKEN: "board-session-cookie",
+        WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-1"
+      })
+    ).toThrow(/PAPERCLIP_BASE_URL/);
+
+    expect(() =>
+      validatePaperclipLaunchEnv({
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_tax_strategy",
+        PAPERCLIP_BASE_URL: "https://paperclip-internal.spyderbyte.cloud/",
+        PAPERCLIP_SERVICE_TOKEN: "paperclip-service-token",
+        WF_PAPERCLIP_LAUNCH_MODE: "issues",
+        WF_PAPERCLIP_BOARD_SESSION_TOKEN: "board-session-cookie",
+        WF_PAPERCLIP_BOARD_ORIGIN: "ftp://paperclip-board.internal.local",
+        WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-1"
+      })
+    ).toThrow(/WF_PAPERCLIP_BOARD_ORIGIN/);
+
+    expect(() =>
+      validatePaperclipLaunchEnv({
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_tax_strategy",
+        PAPERCLIP_BASE_URL: "https://paperclip-internal.spyderbyte.cloud/",
+        PAPERCLIP_SERVICE_TOKEN: "paperclip-service-token",
         WF_PAPERCLIP_LAUNCH_MODE: "issues",
         WF_PAPERCLIP_BOARD_SESSION_TOKEN: "board-session-cookie",
         WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-1"
@@ -144,10 +209,23 @@ describe("loadEnv", () => {
 
     expect(() =>
       validatePaperclipLaunchEnv({
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_tax_strategy",
+        PAPERCLIP_BASE_URL: "https://paperclip-internal.spyderbyte.cloud/",
+        PAPERCLIP_SERVICE_TOKEN: "paperclip-service-token",
         WF_PAPERCLIP_LAUNCH_MODE: "issues",
         WF_PAPERCLIP_BOARD_SESSION_TOKEN: "board-session-cookie",
         WF_PAPERCLIP_BOARD_ORIGIN: "https://paperclip-board.internal.local",
         WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-1"
+      })
+    ).not.toThrow();
+  });
+
+  it("skips Paperclip launch-env validation when only the native-default workflow is enabled", () => {
+    expect(() =>
+      validatePaperclipLaunchEnv({
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow",
+        WF_PAPERCLIP_LAUNCH_MODE: "issues",
+        WF_PAPERCLIP_BOARD_SESSION_TOKEN: "board-session-cookie"
       })
     ).not.toThrow();
   });

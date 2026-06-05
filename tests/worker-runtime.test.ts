@@ -360,9 +360,13 @@ describe("worker runtime", () => {
     const { createPgPool } = await import("../src/db/postgres-client.js");
     const { createPaperclipClient } = await import("../src/paperclip/client.js");
     const deferred = createDeferred<{ paperclipRunId: string; status: "queued" }>();
+    vi.mocked(createPaperclipClient).mockImplementationOnce(() => ({
+      createRun: vi.fn().mockImplementation(() => deferred.promise),
+      healthCheck: vi.fn(),
+      getRunStatus: vi.fn(),
+      cancelRun: vi.fn()
+    }));
     const runtime = createWorkerRuntime({ env: loadWorkerEnv(validEnv), workerInstanceId: "worker-test-non-harness-close" });
-    const paperclipClient = vi.mocked(createPaperclipClient).mock.results.at(-1)?.value;
-    paperclipClient?.createRun.mockImplementationOnce(() => deferred.promise);
 
     const processPromise = runtime.processQueuePayload({
       tenantId: "tenant-1",
@@ -402,6 +406,12 @@ describe("worker runtime", () => {
     const { createPgPool } = await import("../src/db/postgres-client.js");
     const { createPaperclipClient } = await import("../src/paperclip/client.js");
     const deferred = createDeferred<{ paperclipRunId: string; status: "queued" }>();
+    vi.mocked(createPaperclipClient).mockImplementationOnce(() => ({
+      createRun: vi.fn().mockImplementation(() => deferred.promise),
+      healthCheck: vi.fn(),
+      getRunStatus: vi.fn(),
+      cancelRun: vi.fn()
+    }));
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
@@ -409,8 +419,6 @@ describe("worker runtime", () => {
       }),
       workerInstanceId: "worker-test-non-harness-close-gated-backlog"
     });
-    const paperclipClient = vi.mocked(createPaperclipClient).mock.results.at(-1)?.value;
-    paperclipClient?.createRun.mockImplementationOnce(() => deferred.promise);
 
     const firstPromise = runtime.processQueuePayload({
       tenantId: "tenant-1",
@@ -454,9 +462,13 @@ describe("worker runtime", () => {
     const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
     const deferred = createDeferred<{ paperclipRunId: string; status: "queued" }>();
     const launchFailure = new Error("paperclip launch failed after shutdown");
+    vi.mocked(createPaperclipClient).mockImplementationOnce(() => ({
+      createRun: vi.fn().mockImplementation(() => deferred.promise),
+      healthCheck: vi.fn(),
+      getRunStatus: vi.fn(),
+      cancelRun: vi.fn()
+    }));
     const runtime = createWorkerRuntime({ env: loadWorkerEnv(validEnv), workerInstanceId: "worker-test-non-harness-close-failure" });
-    const paperclipClient = vi.mocked(createPaperclipClient).mock.results.at(-1)?.value;
-    paperclipClient?.createRun.mockImplementationOnce(() => deferred.promise);
 
     const processPromise = runtime.processQueuePayload({
       tenantId: "tenant-1",
@@ -472,10 +484,11 @@ describe("worker runtime", () => {
     const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
     const poolEnd = vi.mocked(createPgPool).mock.results.at(-1)?.value.end;
     const closePromise = runtime.close();
+    const processExpectation = expect(processPromise).rejects.toThrow("paperclip launch failed after shutdown");
 
     deferred.reject(launchFailure);
 
-    await expect(processPromise).rejects.toThrow("paperclip launch failed after shutdown");
+    await processExpectation;
     await closePromise;
 
     expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith({
@@ -557,7 +570,7 @@ describe("worker runtime", () => {
         latestResultSummary: "Initial pricing floor is stable."
       })
     );
-    expect(vi.mocked(createPaperclipClient).mock.results.at(-1)?.value.createRun).not.toHaveBeenCalled();
+    expect(createPaperclipClient).not.toHaveBeenCalled();
     expect(onHarnessLaneReady).toHaveBeenCalledWith(
       expect.objectContaining({
         tenantId: "tenant-1",
@@ -781,7 +794,7 @@ describe("worker runtime", () => {
         })
       })
     );
-    expect(vi.mocked(createPaperclipClient).mock.results.at(-1)?.value.createRun).not.toHaveBeenCalled();
+    expect(createPaperclipClient).not.toHaveBeenCalled();
     expect(harnessRepositoryRef.current.transitionCardState).toHaveBeenCalledWith({
       cardId: "card_cfo",
       expectedState: "working",
@@ -826,7 +839,7 @@ describe("worker runtime", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(closeSettled).toBe(false);
-    expect(vi.mocked(createPaperclipClient).mock.results.at(-1)?.value.createRun).not.toHaveBeenCalled();
+    expect(createPaperclipClient).not.toHaveBeenCalled();
 
     deferred.resolve({
       state: "done",
@@ -868,7 +881,7 @@ describe("worker runtime", () => {
       status: "running"
     });
 
-    expect(vi.mocked(createPaperclipClient).mock.results.at(-1)?.value.createRun).not.toHaveBeenCalled();
+    expect(createPaperclipClient).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
       "https://api.openai.com/v1/responses",
       expect.objectContaining({
@@ -907,6 +920,42 @@ describe("worker runtime", () => {
     await runtime.close();
   });
 
+  it("runs the cut-over connect-first workflow natively even when Paperclip launch env is absent", async () => {
+    const { createPaperclipClient } = await import("../src/paperclip/client.js");
+    const {
+      PAPERCLIP_BASE_URL: _paperclipBaseUrl,
+      PAPERCLIP_SERVICE_TOKEN: _paperclipServiceToken,
+      ...nativeOnlyEnv
+    } = validEnv;
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...nativeOnlyEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-native-cutover"
+    });
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+
+    expect(vi.mocked(createPaperclipClient)).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledOnce();
+
+    await runtime.close();
+  });
+
   it("fails closed before native execution when the run loses its bound provider launch binding", async () => {
     const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
     const { createPaperclipClient } = await import("../src/paperclip/client.js");
@@ -937,7 +986,7 @@ describe("worker runtime", () => {
     });
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(vi.mocked(createPaperclipClient).mock.results.at(-1)?.value.createRun).not.toHaveBeenCalled();
+    expect(createPaperclipClient).not.toHaveBeenCalled();
     expect(harnessRepositoryRef.current.transitionCardState).toHaveBeenCalledWith({
       cardId: "card_cfo",
       expectedState: "working",
@@ -2965,7 +3014,7 @@ describe("worker runtime", () => {
         })
       })
     );
-    expect(onHarnessApprovedExecutionClaim).toHaveBeenCalledTimes(1);
+    expect(onHarnessApprovedExecutionClaim).toHaveBeenCalledTimes(2);
     expect(onHarnessInitialLaneStart).toHaveBeenCalledTimes(1);
 
     warn.mockRestore();
@@ -3002,8 +3051,8 @@ describe("worker runtime", () => {
       status: "running"
     });
 
-    expect(onHarnessExecutionClaimed).toHaveBeenCalledTimes(1);
-    expect(onHarnessApprovedExecutionClaim).toHaveBeenCalledTimes(1);
+    expect(onHarnessExecutionClaimed).toHaveBeenCalledTimes(2);
+    expect(onHarnessApprovedExecutionClaim).toHaveBeenCalledTimes(2);
     expect(warn).toHaveBeenCalledWith(
       "Harness specific execution-claim handler failed after durable lane claim",
       expect.objectContaining({
@@ -3060,7 +3109,7 @@ describe("worker runtime", () => {
       status: "running"
     });
 
-    expect(onHarnessExecutionDispatched).toHaveBeenCalledTimes(1);
+    expect(onHarnessExecutionDispatched).toHaveBeenCalledTimes(2);
     expect(onHarnessInitialLaneStart).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledWith(
       "Harness specific execution-dispatch handler failed after durable lane claim",
@@ -5337,7 +5386,7 @@ describe("worker runtime", () => {
     await expect(secondPromise).rejects.toThrow("Worker runtime is closing");
     await closePromise;
 
-    expect(onHarnessLaneReady).toHaveBeenCalledTimes(1);
+    expect(onHarnessLaneReady).toHaveBeenCalledTimes(2);
     expect(poolEnd).toHaveBeenCalledTimes(1);
   });
 
@@ -6371,17 +6420,6 @@ describe("worker runtime", () => {
       })
     });
 
-    expect(createPaperclipClient).toHaveBeenCalledWith(
-      expect.objectContaining({
-        launchMode: "issues",
-        issueLaunch: expect.objectContaining({
-          pollIntervalMs: 1000,
-            maxPollAttempts: 60,
-          resolveLaunchTarget: expect.any(Function),
-          syncProviderSecretRefs: expect.any(Function)
-        })
-      })
-    );
     expect(createPaperclipSecretAdminHttpClient).toHaveBeenCalledWith({
       baseUrl: "https://paperclip-board.internal.local",
       adminToken: "board-session-token",
@@ -6397,6 +6435,18 @@ describe("worker runtime", () => {
       idempotencyKey: "tenant-1:workflow-1:run-1",
       createdAt: new Date().toISOString()
     });
+
+    expect(createPaperclipClient).toHaveBeenCalledWith(
+      expect.objectContaining({
+        launchMode: "issues",
+        issueLaunch: expect.objectContaining({
+          pollIntervalMs: 1000,
+          maxPollAttempts: 60,
+          resolveLaunchTarget: expect.any(Function),
+          syncProviderSecretRefs: expect.any(Function)
+        })
+      })
+    );
 
     const issueLaunch = vi.mocked(createPaperclipClient).mock.calls.at(-1)?.[0].issueLaunch;
     expect(issueLaunch).toBeDefined();

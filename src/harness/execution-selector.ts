@@ -5,17 +5,41 @@ export interface ExecutionSelectorInput {
   harnessEnabledWorkflowIds: readonly string[];
   nativeExecutorEnabledWorkflowIds?: readonly string[];
   harnessEligibleWorkflowIds?: readonly string[];
+  nativeDefaultWorkflowIds?: readonly string[];
 }
 
 export function selectExecutionEngine(input: ExecutionSelectorInput): ExecutionEngine {
   const eligibleWorkflowIds = new Set(input.harnessEligibleWorkflowIds ?? input.harnessEnabledWorkflowIds);
-  if (!eligibleWorkflowIds.has(input.workflowId)) {
+  const harnessEnabled = input.harnessEnabledWorkflowIds.includes(input.workflowId);
+  if (!eligibleWorkflowIds.has(input.workflowId) || !harnessEnabled) {
     return "paperclip";
   }
 
-  if (input.nativeExecutorEnabledWorkflowIds?.includes(input.workflowId)) {
+  if (
+    input.nativeExecutorEnabledWorkflowIds?.includes(input.workflowId) ||
+    input.nativeDefaultWorkflowIds?.includes(input.workflowId)
+  ) {
     return "wf_native_v1";
   }
 
   return input.harnessEnabledWorkflowIds.includes(input.workflowId) ? "wf_harness_v1" : "paperclip";
+}
+
+export function isPaperclipExecutionRequired(input: {
+  configuredWorkflowIds: readonly string[];
+  harnessEnabledWorkflowIds: readonly string[];
+  nativeExecutorEnabledWorkflowIds?: readonly string[];
+  harnessEligibleWorkflowIds?: readonly string[];
+  nativeDefaultWorkflowIds?: readonly string[];
+}): boolean {
+  return input.configuredWorkflowIds.some(
+    (workflowId) =>
+      selectExecutionEngine({
+        workflowId,
+        harnessEnabledWorkflowIds: input.harnessEnabledWorkflowIds,
+        ...(input.nativeExecutorEnabledWorkflowIds ? { nativeExecutorEnabledWorkflowIds: input.nativeExecutorEnabledWorkflowIds } : {}),
+        ...(input.harnessEligibleWorkflowIds ? { harnessEligibleWorkflowIds: input.harnessEligibleWorkflowIds } : {}),
+        ...(input.nativeDefaultWorkflowIds ? { nativeDefaultWorkflowIds: input.nativeDefaultWorkflowIds } : {})
+      }) === "paperclip"
+  );
 }

@@ -91,7 +91,8 @@ The first harness implementation slice is now built and verified:
 - Phase 1 native executor skeleton is complete.
 - Phase 2 first native provider lane is complete.
 - Phase 3 first native workflow family is complete for `wf_connect_first_workflow`.
-- The immediate continuation point is Phase 4 adapter cutover/removal, not more Phase 2 seam-building and not a second workflow-family migration yet.
+- Phase 4 adapter cutover/removal is now also complete for `wf_connect_first_workflow`.
+- The immediate continuation point is the next bounded native-expansion seam, not more Phase 2 seam-building and not a return to Paperclip dependency for the migrated workflow family.
 
 ## Standard Preflight
 
