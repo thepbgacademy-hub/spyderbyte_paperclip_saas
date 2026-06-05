@@ -19,6 +19,7 @@ export type AppEnv = {
   paperclipIssueMaxPollAttempts: number;
   harnessEnabledWorkflowIds: readonly string[];
   nativeExecutorEnabledWorkflowIds: readonly string[];
+  nativeOpenAIModel: string;
   workerConcurrency: number;
   workerMaxActivePerTenant: number;
 };
@@ -123,6 +124,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   }
   const harnessEnabledWorkflowIds = parseCommaSeparatedValues(source.WF_HARNESS_ENABLED_WORKFLOW_IDS);
   const nativeExecutorEnabledWorkflowIds = parseCommaSeparatedValues(source.WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS);
+  const nativeOpenAIModel = source.WF_NATIVE_OPENAI_MODEL?.trim() || "gpt-4.1-mini";
 
   if (missingKeys.length > 0 || invalidKeys.length > 0) {
     throw new EnvValidationError(missingKeys, invalidKeys);
@@ -149,6 +151,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     paperclipIssueMaxPollAttempts: paperclipIssueMaxPollAttempts as number,
     harnessEnabledWorkflowIds,
     nativeExecutorEnabledWorkflowIds,
+    nativeOpenAIModel,
     workerConcurrency: workerConcurrency as number,
     workerMaxActivePerTenant: workerMaxActivePerTenant as number
   };

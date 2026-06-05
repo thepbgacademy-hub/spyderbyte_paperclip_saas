@@ -28,7 +28,7 @@ Each phase is an interrupted build/test boundary.
 
 ## Phase 1: Native Executor Skeleton
 
-Status: `active in this session`
+Status: `completed`
 
 Goal:
 - Land a real native execution seam inside the existing worker/harness path.
@@ -56,6 +56,8 @@ Exit criteria:
 - Paperclip path remains unchanged for non-opted-in workflows.
 
 ## Phase 2: First Native Provider Lane
+
+Status: `active in this session`
 
 Goal:
 - Replace “Paperclip receives provider context” with “Wealth Factory executes with provider context here” for one bounded lane.
@@ -119,7 +121,7 @@ Exit criteria:
 
 ## Immediate Execution Order
 
-1. Finish Phase 1 skeleton.
+1. Finish the first native provider lane on top of the completed Phase 1 skeleton.
 2. Re-run focused worker/runtime tests.
 3. Re-run full repo verification.
-4. Record the finished Phase 1 state in handoff and TODO before beginning Phase 2.
+4. Record the finished Phase 2 state in handoff and TODO before beginning Phase 3.

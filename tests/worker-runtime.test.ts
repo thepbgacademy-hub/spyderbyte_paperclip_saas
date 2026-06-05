@@ -276,14 +276,24 @@ vi.mock("../src/paperclip/client.js", () => ({
 }));
 
 const stdoutWrite = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+const fetchMock = vi.fn();
+
+vi.stubGlobal("fetch", fetchMock);
 
 afterAll(() => {
   stdoutWrite.mockRestore();
+  vi.unstubAllGlobals();
 });
 
 beforeEach(() => {
   vi.clearAllMocks();
   harnessRepositoryRef.current = makeHarnessRepository();
+  fetchMock.mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      output_text: "Validated the pricing floor and preserved the next action."
+    })
+  });
 });
 
 function createDeferred<T = void>() {
@@ -832,7 +842,7 @@ describe("worker runtime", () => {
     expect(closeSettled).toBe(true);
   });
 
-  it("uses the default Phase 1 native executor skeleton as a bounded blocked lane without hitting Paperclip", async () => {
+  it("uses the default native executor to prove the bound OpenAI lane and then blocks for workflow-specific handling", async () => {
     const { createPaperclipClient } = await import("../src/paperclip/client.js");
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
@@ -859,23 +869,82 @@ describe("worker runtime", () => {
     });
 
     expect(vi.mocked(createPaperclipClient).mock.results.at(-1)?.value.createRun).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.openai.com/v1/responses",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer sk-tenant"
+        })
+      })
+    );
     expect(harnessRepositoryRef.current.transitionCardState).toHaveBeenCalledWith({
       cardId: "card_cfo",
       expectedState: "working",
       expectedExecutionClaimToken: "claim-cfo-1",
       state: "blocked"
     });
-    expect(harnessRepositoryRef.current.upsertCardContinuity).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cardId: "card_cfo",
+    expect(
+      harnessRepositoryRef.current.upsertCardContinuity.mock.calls.some(([value]) =>
+        value.cardId === "card_cfo" &&
+        value.runId === "run-1" &&
+        value.continuitySource === "resume_override" &&
+        typeof value.continuitySummary === "string" &&
+        value.continuitySummary.includes("Workflow-specific native completion is not implemented yet.") &&
+        Array.isArray(value.absorbedWorkItems) &&
+        value.absorbedWorkItems.includes("Re-check discount floor")
+      )
+    ).toBe(true);
+
+    await runtime.close();
+  });
+
+  it("fails closed before native execution when the run loses its bound provider launch binding", async () => {
+    const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
+    const { createPaperclipClient } = await import("../src/paperclip/client.js");
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow",
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-native-missing-binding"
+    });
+    const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
+    acidRepository.getBoundProviderLaunchBinding.mockResolvedValueOnce(null);
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
         runId: "run-1",
-        continuitySource: "resume_override",
-        continuitySummary:
-          "Native executor skeleton claimed the cfo lane for Pressure-test the pricing lane, but workflow-specific execution is not implemented yet.",
-        latestResultSummary: "Initial pricing floor is stable.",
-        absorbedWorkItems: ["Re-check discount floor", "Verify competitor anchor notes"]
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
       })
-    );
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(vi.mocked(createPaperclipClient).mock.results.at(-1)?.value.createRun).not.toHaveBeenCalled();
+    expect(harnessRepositoryRef.current.transitionCardState).toHaveBeenCalledWith({
+      cardId: "card_cfo",
+      expectedState: "working",
+      expectedExecutionClaimToken: "claim-cfo-1",
+      state: "blocked"
+    });
+    expect(
+      harnessRepositoryRef.current.upsertCardContinuity.mock.calls.some(([value]) =>
+        value.cardId === "card_cfo" &&
+        value.runId === "run-1" &&
+        value.continuitySource === "resume_override" &&
+        value.continuitySummary ===
+          "Native execution could not continue because the run lost its required tenant-bound provider binding before execution started."
+      )
+    ).toBe(true);
 
     await runtime.close();
   });

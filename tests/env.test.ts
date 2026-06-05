@@ -32,6 +32,7 @@ describe("loadEnv", () => {
       paperclipIssueMaxPollAttempts: 60,
       harnessEnabledWorkflowIds: [],
       nativeExecutorEnabledWorkflowIds: [],
+      nativeOpenAIModel: "gpt-4.1-mini",
       workerConcurrency: 2,
       workerMaxActivePerTenant: 1
     });
@@ -180,6 +181,15 @@ describe("loadEnv", () => {
         WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: " wf_connect_first_workflow , wf_package_followup "
       }).nativeExecutorEnabledWorkflowIds
     ).toEqual(["wf_connect_first_workflow", "wf_package_followup"]);
+  });
+
+  it("accepts an explicit native OpenAI model override", () => {
+    expect(
+      loadEnv({
+        ...validEnv,
+        WF_NATIVE_OPENAI_MODEL: "gpt-4.1"
+      }).nativeOpenAIModel
+    ).toBe("gpt-4.1");
   });
 
   it("rejects invalid worker concurrency settings", () => {

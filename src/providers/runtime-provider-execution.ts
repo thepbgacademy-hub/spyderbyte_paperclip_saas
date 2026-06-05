@@ -7,6 +7,7 @@ export type RuntimeProviderExecutionBinding = RuntimeProviderBinding & {
 export class RuntimeProviderExecutionError extends Error {
   readonly code = "runtime_provider_execution_unavailable";
   readonly publicMessage = "workflow_failed";
+  readonly reason: "secret_payload_invalid" | "secret_unavailable" | "multi_provider_binding_unsupported";
 
   constructor(input: {
     tenantId: string;
@@ -16,6 +17,7 @@ export class RuntimeProviderExecutionError extends Error {
   }) {
     super(`Unable to hydrate provider execution context for ${input.providerKind}: ${input.reason}`);
     this.name = "RuntimeProviderExecutionError";
+    this.reason = input.reason;
   }
 }
 

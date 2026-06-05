@@ -173,7 +173,8 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] First API-backed dashboard foundation is built and tested.
 - [x] ACID and race-condition database foundation is built, tested, and applied to live Supabase.
 - [x] Durable queue outbox and vault-backed provider credential registration slices are built and tested.
-- [ ] Active native replacement track follows `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`.
+- [x] Phase 1: Native executor skeleton is complete.
+- [ ] Phase 2: First native provider lane is the active phase in `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`.
 
 ## Later Phases
 

@@ -17,6 +17,7 @@ import {
 } from "../harness/worker-executor.js";
 import { type HarnessPostOutcomeAction } from "../harness/post-outcome.js";
 import { createPostgresHarnessRepository } from "../harness/repository.js";
+import type { ProviderCapability } from "../packages/package-types.js";
 import { createPaperclipClient } from "../paperclip/client.js";
 import type { PaperclipRunStatus } from "../paperclip/types.js";
 import {
@@ -29,7 +30,9 @@ import {
 import { type ProviderKind } from "../providers/provider-types.js";
 import { createRuntimeProviderExecutionContextResolver } from "../providers/runtime-provider-execution.js";
 import { createDebugSharedProviderFallbackResolver } from "../providers/runtime-provider-fallback.js";
+import { RuntimeProviderExecutionError, type RuntimeProviderExecutionBinding } from "../providers/runtime-provider-execution.js";
 import type { RuntimeProviderBinding } from "../providers/runtime-provider-resolution.js";
+import { RuntimeProviderResolutionError } from "../providers/runtime-provider-resolution.js";
 import { createEncryptedSecretVault } from "../secrets/encrypted-vault.js";
 import { createPostgresEncryptedVaultStore } from "../secrets/postgres-vault-store.js";
 import { createSecretService } from "../secrets/secret-service.js";
@@ -39,7 +42,7 @@ import { validateWorkflowQueuePayload } from "../workflows/queue.js";
 import { createAcidWorkflowStatusRecorder } from "../workflows/acid-status-recorder.js";
 import { createTenantExecutionGate } from "./tenant-execution-gate.js";
 import { WorkerRuntimeClosingError } from "./runtime-closing-error.js";
-import { createPhaseOneNativeExecutor, type NativeExecutionOutcome, type NativeExecutor } from "./native-executor.js";
+import { createDefaultNativeExecutor, NativeExecutionError, type NativeExecutionOutcome, type NativeExecutor } from "./native-executor.js";
 import { createHarnessCardEventRecord } from "../harness/types.js";
 
 export type WorkerEnv = ReturnType<typeof loadWorkerEnv>;
@@ -293,7 +296,9 @@ export function createWorkerRuntime(options: {
     harnessEnabledWorkflowIds: options.env.harnessEnabledWorkflowIds,
     nativeExecutorEnabledWorkflowIds: options.env.nativeExecutorEnabledWorkflowIds
   });
-  const nativeExecutor = options.nativeExecutor ?? createPhaseOneNativeExecutor();
+  const nativeExecutor = options.nativeExecutor ?? createDefaultNativeExecutor({
+    openAIModel: options.env.nativeOpenAIModel
+  });
   const paperclipSecretBindings = createPaperclipSecretBindingRepository(queryClient);
   const paperclipSecretSync =
     options.env.paperclipBoardSessionToken && options.env.paperclipLaunchMode === "issues"
@@ -628,6 +633,17 @@ export function createWorkerRuntime(options: {
                 recordStatus: async (status) => {
                   await recordWorkflowStatus(status);
                 },
+                loadBoundProviderContext: async ({ tenantId, runId }) => {
+                  const binding = await acidRepository.getBoundProviderLaunchBinding({ tenantId, runId });
+                  return binding ? ([binding] as readonly RuntimeProviderBinding[]) : null;
+                },
+                hydrateProviderContext: async ({ tenantId, runId, workflowId, providerBindings }) =>
+                  providerExecutionResolver.resolveForRun({
+                    tenantId,
+                    runId,
+                    workflowId,
+                    providerBindings
+                  }),
                 ...(options.workerInstanceId ? { workerInstanceId: options.workerInstanceId } : {}),
                 ...(harnessExecutionEngine === "wf_native_v1"
                   ? {
@@ -2175,6 +2191,18 @@ async function processHarnessWorkflowJob(options: {
   workflowRegistry: Pick<ReturnType<typeof createHarnessWorkflowRegistry>, "getDefinition">;
   recordStatus?: (status: { tenantId: string; runId: string; workflowId: string; status: "queued" | "running" | "failed" }) => void | Promise<void>;
   nativeExecutor?: NativeExecutor;
+  loadBoundProviderContext?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    requiredCapabilities: readonly ProviderCapability[];
+  }) => Promise<readonly RuntimeProviderBinding[] | null>;
+  hydrateProviderContext?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    providerBindings: readonly RuntimeProviderBinding[];
+  }) => Promise<readonly RuntimeProviderExecutionBinding[]>;
   commitNativeOutcome?: (input: {
     tenantId: string;
     runId: string;
@@ -2373,15 +2401,52 @@ async function processHarnessWorkflowJob(options: {
           });
         }
         if (options.executionEngine === "wf_native_v1") {
-          if (!options.nativeExecutor || !options.commitNativeOutcome) {
+          if (!options.nativeExecutor || !options.commitNativeOutcome || !options.loadBoundProviderContext || !options.hydrateProviderContext) {
             throw new Error(`Native executor is not configured for workflow ${dispatch.workflowId}`);
           }
-          const nativeOutcome = await options.nativeExecutor.execute({
-            tenantId: options.payload.tenantId,
-            runId: dispatch.runId,
-            workflowId: dispatch.workflowId,
-            executionEnvelope
-          });
+          let nativeOutcome: NativeExecutionOutcome;
+          try {
+            const providerBindings = await options.loadBoundProviderContext({
+              tenantId: options.payload.tenantId,
+              runId: dispatch.runId,
+              workflowId: dispatch.workflowId,
+              requiredCapabilities: executionEnvelope.requiredCapabilities
+            });
+            if (providerBindings === null) {
+              throw new RuntimeProviderResolutionError({
+                tenantId: options.payload.tenantId,
+                workflowId: dispatch.workflowId,
+                capability: executionEnvelope.requiredCapabilities[0] ?? "text_generation"
+              });
+            }
+            const hydratedProviderContext = await options.hydrateProviderContext({
+              tenantId: options.payload.tenantId,
+              runId: dispatch.runId,
+              workflowId: dispatch.workflowId,
+              providerBindings
+            });
+            if (hydratedProviderContext.length !== 1 || !hydratedProviderContext[0]) {
+              throw new RuntimeProviderExecutionError({
+                tenantId: options.payload.tenantId,
+                workflowId: dispatch.workflowId,
+                providerKind: providerBindings[0]?.providerKind ?? "unknown_provider",
+                reason: "multi_provider_binding_unsupported"
+              });
+            }
+            nativeOutcome = await options.nativeExecutor.execute({
+              tenantId: options.payload.tenantId,
+              runId: dispatch.runId,
+              workflowId: dispatch.workflowId,
+              executionEnvelope,
+              providerBinding: hydratedProviderContext[0]
+            });
+          } catch (error) {
+            const failureOutcome = toNativeProviderFailureOutcome(error);
+            if (!failureOutcome) {
+              throw error;
+            }
+            nativeOutcome = failureOutcome;
+          }
           const committedNativeOutcome = await options.commitNativeOutcome({
             tenantId: options.payload.tenantId,
             runId: dispatch.runId,
@@ -2426,6 +2491,36 @@ async function processHarnessWorkflowJob(options: {
     });
     throw error;
   }
+}
+
+function toNativeProviderFailureOutcome(error: unknown): NativeExecutionOutcome | null {
+  if (error instanceof RuntimeProviderResolutionError) {
+    return {
+      state: "blocked",
+      resumeSummary: "Native execution could not continue because the run lost its required tenant-bound provider binding before execution started."
+    };
+  }
+
+  if (error instanceof RuntimeProviderExecutionError) {
+    return {
+      state: "blocked",
+      resumeSummary:
+        error.reason === "secret_unavailable"
+          ? "Native execution could not continue because the bound provider secret was unavailable at execution time."
+          : error.reason === "secret_payload_invalid"
+            ? "Native execution could not continue because the bound provider secret payload was invalid for execution."
+            : "Native execution could not continue because the run no longer has exactly one launch-ready provider binding."
+    };
+  }
+
+  if (error instanceof NativeExecutionError) {
+    return {
+      state: "blocked",
+      resumeSummary: "Native execution reached the provider lane but could not complete the provider call safely. Review the provider response and continue with workflow-specific native handling."
+    };
+  }
+
+  return null;
 }
 
 async function emitHarnessExecutionStartHandoffs(input: {

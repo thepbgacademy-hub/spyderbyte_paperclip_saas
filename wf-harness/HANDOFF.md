@@ -86,6 +86,12 @@ The first harness implementation slice is now built and verified:
 - `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`
 - Historical context: `wf-harness/docs/plans/2026-05-21-wf-harness-v1-implementation-plan.md`
 
+## Active Native Replacement Position
+
+- Phase 1 native executor skeleton is complete.
+- Phase 2 first native provider lane is the active phase.
+- The immediate continuation point is the first bounded provider-backed native lane, not Phase 1 seam-building and not Phase 3 workflow-family migration.
+
 ## Standard Preflight
 
 - If GitNexus will be used as the code map/blast-radius guide, refresh it first:
