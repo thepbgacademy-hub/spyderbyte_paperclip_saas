@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createBullmqWorkflowConsumer, createBullmqWorkflowRunEnqueuer } from "../src/workflows/bullmq-workflow-queue.js";
+import { WorkerRuntimeClosingError } from "../src/worker/runtime-closing-error.js";
 
 const mocks = vi.hoisted(() => ({
   add: vi.fn(),
@@ -16,6 +17,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("bullmq", () => ({
+  UnrecoverableError: class UnrecoverableError extends Error {
+    constructor(message = "bullmq:unrecoverable") {
+      super(message);
+      this.name = "UnrecoverableError";
+    }
+  },
   Queue: mocks.queueCtor.mockImplementation(() => ({
     add: mocks.add,
     close: mocks.queueClose
@@ -67,7 +74,20 @@ describe("bullmq workflow queue", () => {
         runId: "run-1",
         idempotencyKey: "tenant-1:workflow-1:run-1"
       }),
-      { jobId: "tenant-1:workflow-1:run-1" }
+      {
+        jobId: "tenant-1:workflow-1:run-1"
+      }
+    );
+    expect(mocks.queueCtor).toHaveBeenCalledWith(
+      "wfpc-workflow-runs",
+      expect.objectContaining({
+        defaultJobOptions: expect.objectContaining({
+          attempts: 2,
+          backoff: { type: "fixed", delay: 5_000 },
+          removeOnComplete: 1_000,
+          removeOnFail: 5_000
+        })
+      })
     );
 
     await enqueuer.close();
@@ -185,7 +205,7 @@ describe("bullmq workflow queue", () => {
           createdAt: new Date().toISOString()
         }
       })
-    ).rejects.toThrow("boom");
+    ).rejects.toMatchObject({ name: "UnrecoverableError", message: "boom" });
 
     expect(onJobEvent).toHaveBeenNthCalledWith(
       1,
@@ -202,7 +222,7 @@ describe("bullmq workflow queue", () => {
   });
 
   it("emits claimed and failed job events when the runtime rejects work because shutdown already began", async () => {
-    const failure = new Error("Worker runtime is closing");
+    const failure = new WorkerRuntimeClosingError();
     const processPayload = vi.fn().mockRejectedValue(failure);
     const onJobEvent = vi.fn();
     const consumer = createBullmqWorkflowConsumer({
@@ -226,7 +246,7 @@ describe("bullmq workflow queue", () => {
           createdAt: new Date().toISOString()
         }
       })
-    ).rejects.toThrow("Worker runtime is closing");
+    ).rejects.toMatchObject({ name: "WorkerRuntimeClosingError", message: "Worker runtime is closing" });
 
     expect(onJobEvent).toHaveBeenNthCalledWith(
       1,
@@ -286,7 +306,7 @@ describe("bullmq workflow queue", () => {
           createdAt: new Date().toISOString()
         }
       })
-    ).rejects.toThrow("status recorder unavailable after launch");
+    ).rejects.toMatchObject({ name: "UnrecoverableError", message: "status recorder unavailable after launch" });
 
     expect(onJobEvent).toHaveBeenNthCalledWith(
       1,
@@ -298,6 +318,34 @@ describe("bullmq workflow queue", () => {
       "failed",
       expect.objectContaining({ jobId: "job-late-status-failure", error: failure })
     );
+
+    await consumer.close();
+  });
+
+  it("keeps a plain Error with the closing message on the unrecoverable path", async () => {
+    const failure = new Error("Worker runtime is closing");
+    const processPayload = vi.fn().mockRejectedValue(failure);
+    const consumer = createBullmqWorkflowConsumer({
+      redisUrl: "redis://localhost:6379",
+      queueName: "wfpc-workflow-runs",
+      concurrency: 1,
+      processPayload
+    });
+
+    const processor = mocks.workerCtor.mock.results.at(-1)?.value.__processor as (job: { id?: string; data: unknown }) => Promise<unknown>;
+    await expect(
+      processor({
+        id: "job-stringly-closing",
+        data: {
+          tenantId: "tenant-1",
+          runId: "run-4",
+          workflowId: "workflow-4",
+          createdByUserId: "user-1",
+          idempotencyKey: "tenant-1:workflow-4:run-4",
+          createdAt: new Date().toISOString()
+        }
+      })
+    ).rejects.toMatchObject({ name: "UnrecoverableError", message: "Worker runtime is closing" });
 
     await consumer.close();
   });

@@ -38,6 +38,7 @@ import { processWorkflowJob } from "../workflows/worker.js";
 import { validateWorkflowQueuePayload } from "../workflows/queue.js";
 import { createAcidWorkflowStatusRecorder } from "../workflows/acid-status-recorder.js";
 import { createTenantExecutionGate } from "./tenant-execution-gate.js";
+import { WorkerRuntimeClosingError } from "./runtime-closing-error.js";
 import { createHarnessCardEventRecord } from "../harness/types.js";
 
 export type WorkerEnv = ReturnType<typeof loadWorkerEnv>;
@@ -588,7 +589,7 @@ export function createWorkerRuntime(options: {
   return {
     async processQueuePayload(payload: unknown) {
       if (isClosing) {
-        throw new Error("Worker runtime is closing");
+        throw new WorkerRuntimeClosingError();
       }
       const validatedPayload = validateWorkflowQueuePayload(payload);
 
@@ -598,7 +599,7 @@ export function createWorkerRuntime(options: {
         onReleased: (snapshot) => emitWorkerRunEvent("released", validatedPayload, snapshot),
         operation: async () => {
           if (isClosing) {
-            throw new Error("Worker runtime is closing");
+            throw new WorkerRuntimeClosingError();
           }
           return trackRuntimeOperation(
             harnessWorkflowRegistry.isHarnessEligible(validatedPayload.workflowId)
@@ -720,7 +721,7 @@ export function createWorkerRuntime(options: {
       }
 
       if (isClosing) {
-        throw new Error("Worker runtime is closing");
+        throw new WorkerRuntimeClosingError();
       }
 
       const outcome = await trackRuntimeOperation(processHarnessLaneOutcome({

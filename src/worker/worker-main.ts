@@ -3,6 +3,7 @@ import process from "node:process";
 
 import { createWorkerRuntime, loadWorkerEnv } from "./runtime.js";
 import { createBullmqWorkflowConsumer } from "../workflows/bullmq-workflow-queue.js";
+import { isWorkerRuntimeClosingError } from "./runtime-closing-error.js";
 
 async function main() {
   const env = loadWorkerEnv(process.env);
@@ -125,7 +126,7 @@ async function main() {
 }
 
 function isClosingError(error: unknown) {
-  return error instanceof Error && error.message === "Worker runtime is closing";
+  return isWorkerRuntimeClosingError(error);
 }
 
 main().catch((error) => {

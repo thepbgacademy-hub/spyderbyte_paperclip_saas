@@ -1,8 +1,9 @@
-import { Queue, Worker } from "bullmq";
+import { Queue, UnrecoverableError, Worker } from "bullmq";
 import { Redis } from "ioredis";
 
 import type { ReserveWorkflowRunInput } from "../db/acid-guard-repository.js";
 import { createWorkflowQueuePayload, type WorkflowQueuePayload } from "./queue.js";
+import { isWorkerRuntimeClosingError } from "../worker/runtime-closing-error.js";
 
 type WorkflowQueueConnectionOptions = {
   redisUrl: string;
@@ -14,6 +15,11 @@ export function createBullmqWorkflowRunEnqueuer(options: WorkflowQueueConnection
   const queue = new Queue<WorkflowQueuePayload>(options.queueName, {
     connection,
     defaultJobOptions: {
+      attempts: 2,
+      backoff: {
+        type: "fixed",
+        delay: 5_000
+      },
       removeOnComplete: 1_000,
       removeOnFail: 5_000
     }
@@ -80,7 +86,7 @@ export function createBullmqWorkflowConsumer(options: WorkflowQueueConnectionOpt
           payload: job.data,
           error
         });
-        throw error;
+        throw toBullmqProcessorError(error);
       }
     },
     {
@@ -133,3 +139,17 @@ function isDuplicateJobError(error: unknown): boolean {
 
   return /job.+already exists|duplicated job|jobid/i.test(error.message);
 }
+
+function toBullmqProcessorError(error: unknown): Error {
+  if (isRuntimeClosingError(error)) {
+    return error instanceof Error ? error : new Error("Worker runtime is closing");
+  }
+
+  if (error instanceof Error) {
+    return new UnrecoverableError(error.message);
+  }
+
+  return new UnrecoverableError(String(error));
+}
+
+const isRuntimeClosingError = isWorkerRuntimeClosingError;

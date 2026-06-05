@@ -1,6 +1,7 @@
 import process from "node:process";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { WorkerRuntimeClosingError } from "../src/worker/runtime-closing-error.js";
 
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -343,7 +344,7 @@ describe("worker main", () => {
       | [{ onError?: (error: unknown) => void }]
       | undefined;
     const onError = consumerCall?.[0].onError;
-    onError?.(new Error("Worker runtime is closing"));
+    onError?.(new WorkerRuntimeClosingError());
     await Promise.resolve();
 
     expect(
@@ -362,7 +363,7 @@ describe("worker main", () => {
       stderrWrite
     } = await importWorkerMainWithMocks({
       waitUntilReadyPromise: waitUntilReady.promise,
-      closeOnError: new Error("Worker runtime is closing")
+      closeOnError: new WorkerRuntimeClosingError()
     });
 
     signalHandlers.get("SIGTERM")?.();
@@ -397,6 +398,33 @@ describe("worker main", () => {
 
     expect(
       stderrWrite.mock.calls.some(([message]) => String(message).includes("bullmq connection dropped during shutdown"))
+    ).toBe(true);
+
+    waitUntilReady.resolve();
+    await Promise.resolve();
+  });
+
+  it("does not suppress a plain Error that only happens to reuse the closing message", async () => {
+    const waitUntilReady = createDeferred<void>();
+
+    const {
+      signalHandlers,
+      createBullmqWorkflowConsumer,
+      stderrWrite
+    } = await importWorkerMainWithMocks({
+      waitUntilReadyPromise: waitUntilReady.promise
+    });
+
+    signalHandlers.get("SIGTERM")?.();
+    const consumerCall = vi.mocked(createBullmqWorkflowConsumer).mock.calls.at(0) as
+      | [{ onError?: (error: unknown) => void }]
+      | undefined;
+    const onError = consumerCall?.[0].onError;
+    onError?.(new Error("Worker runtime is closing"));
+    await Promise.resolve();
+
+    expect(
+      stderrWrite.mock.calls.some(([message]) => String(message).includes("Worker runtime is closing"))
     ).toBe(true);
 
     waitUntilReady.resolve();
