@@ -1140,6 +1140,7 @@ export type HarnessRecentDecisionView = {
 type HarnessWorkflowRegistry = {
   listBoardExposedWorkflowIds(): string[];
   getDefinition(publicWorkflowId: string): WealthFactoryWorkflowDefinition;
+  resolveBoardWorkflowDefinition?(publicWorkflowId?: string): WealthFactoryWorkflowDefinition;
 };
 
 const MAX_OPEN_CHILD_CARDS = 6;
@@ -1162,6 +1163,13 @@ export class HarnessRunCompletionConflictError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "HarnessRunCompletionConflictError";
+  }
+}
+
+export class HarnessWorkflowSelectionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "HarnessWorkflowSelectionError";
   }
 }
 
@@ -1197,13 +1205,14 @@ export function createHarnessBoardService(options: {
   const runtime = createHarnessRuntime();
 
   return {
-    async listBoardState(request: { authorization: string; cookie?: string }): Promise<HarnessBoardResponse> {
+    async listBoardState(request: { authorization: string; cookie?: string; workflowId?: string }): Promise<HarnessBoardResponse> {
       const access = await authorizeHarnessRequest({
         authenticate: options.authenticate,
         requireTenantMember: options.requireTenantMember,
         requireActivePackageInstall: options.requireActivePackageInstall,
         workflowRegistry: options.workflowRegistry,
         authorization: request.authorization,
+        ...(request.workflowId ? { requestedWorkflowId: request.workflowId } : {}),
         ...(request.cookie ? { cookie: request.cookie } : {})
       });
       const run = await getOrCreateCurrentRun({
@@ -1241,6 +1250,7 @@ export function createHarnessBoardService(options: {
     async createTopLevelChildCard(request: {
       authorization: string;
       cookie?: string;
+      workflowId?: string;
       persona: string;
       title: string;
       deliverableType: string;
@@ -1251,6 +1261,7 @@ export function createHarnessBoardService(options: {
         requireActivePackageInstall: options.requireActivePackageInstall,
         workflowRegistry: options.workflowRegistry,
         authorization: request.authorization,
+        ...(request.workflowId ? { requestedWorkflowId: request.workflowId } : {}),
         ...(request.cookie ? { cookie: request.cookie } : {})
       });
 
@@ -1261,6 +1272,9 @@ export function createHarnessBoardService(options: {
       const normalizedPersona = normalizeHarnessPersona(request.persona);
       const normalizedDeliverableType = normalizeHarnessDeliverableType(request.deliverableType);
       if (!isHarnessChildPersona(normalizedPersona) || !isHarnessDeliverableType(normalizedDeliverableType)) {
+        throw new HarnessCardCreationConflictError("Harness child-card request is outside the approved workflow boundary");
+      }
+      if (!access.workflowDefinition.allowedDeliverableTypes.includes(normalizedDeliverableType)) {
         throw new HarnessCardCreationConflictError("Harness child-card request is outside the approved workflow boundary");
       }
 
@@ -1983,6 +1997,9 @@ export function createHarnessBoardService(options: {
           !isHarnessChildPersona(normalizeHarnessPersona(proposal.persona)) ||
           !isHarnessDeliverableType(normalizeHarnessDeliverableType(proposal.deliverableType))
         ) {
+          throw new HarnessCardCreationConflictError("Harness proposal is outside the approved workflow boundary");
+        }
+        if (!access.workflowDefinition.allowedDeliverableTypes.includes(normalizeHarnessDeliverableType(proposal.deliverableType))) {
           throw new HarnessCardCreationConflictError("Harness proposal is outside the approved workflow boundary");
         }
 
@@ -4648,6 +4665,7 @@ async function authorizeHarnessRequest(input: {
   requireActivePackageInstall(input: { tenantId: string; packageId: string }): Promise<void>;
   workflowRegistry: HarnessWorkflowRegistry;
   authorization: string;
+  requestedWorkflowId?: string;
   cookie?: string;
 }): Promise<{ session: ApiSession; workflowDefinition: WealthFactoryWorkflowDefinition }> {
   const session = await input.authenticate({
@@ -4658,19 +4676,17 @@ async function authorizeHarnessRequest(input: {
     throw new ApiAuthError();
   }
 
-  const workflowIds = input.workflowRegistry.listBoardExposedWorkflowIds();
-  if (workflowIds.length === 0) {
-    throw new Error("Harness workflow is not enabled");
+  let workflowDefinition: WealthFactoryWorkflowDefinition;
+  try {
+    workflowDefinition = input.workflowRegistry.resolveBoardWorkflowDefinition
+      ? input.workflowRegistry.resolveBoardWorkflowDefinition(input.requestedWorkflowId)
+      : resolveBoardWorkflowDefinitionFallback(input.workflowRegistry, input.requestedWorkflowId);
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new HarnessWorkflowSelectionError(error.message);
+    }
+    throw error;
   }
-  if (workflowIds.length > 1) {
-    throw new Error("Harness workflow selector is ambiguous");
-  }
-  const workflowId = workflowIds[0];
-  if (!workflowId) {
-    throw new Error("Harness workflow is not enabled");
-  }
-
-  const workflowDefinition = input.workflowRegistry.getDefinition(workflowId);
   try {
     await input.requireTenantMember({ tenantId: session.tenantId, userId: session.userId });
     await input.requireActivePackageInstall({
@@ -4689,6 +4705,30 @@ async function authorizeHarnessRequest(input: {
   }
 
   return { session, workflowDefinition };
+}
+
+function resolveBoardWorkflowDefinitionFallback(
+  workflowRegistry: HarnessWorkflowRegistry,
+  requestedWorkflowId?: string
+): WealthFactoryWorkflowDefinition {
+  const workflowIds = workflowRegistry.listBoardExposedWorkflowIds();
+  if (workflowIds.length === 0) {
+    throw new Error("Harness workflow is not enabled");
+  }
+  if (requestedWorkflowId) {
+    if (!workflowIds.includes(requestedWorkflowId)) {
+      throw new Error("Harness workflow is not enabled");
+    }
+    return workflowRegistry.getDefinition(requestedWorkflowId);
+  }
+  if (workflowIds.length > 1) {
+    throw new Error("Harness workflow selector is ambiguous");
+  }
+  const workflowId = workflowIds[0];
+  if (!workflowId) {
+    throw new Error("Harness workflow is not enabled");
+  }
+  return workflowRegistry.getDefinition(workflowId);
 }
 
 async function getOrCreateCurrentRun(input: {

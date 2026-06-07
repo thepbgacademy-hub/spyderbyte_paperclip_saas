@@ -1,6 +1,7 @@
 import type { ProviderCapability } from "../packages/package-types.js";
 import type { ExecutionEngine } from "../harness/execution-selector.js";
 import { selectExecutionEngine } from "../harness/execution-selector.js";
+import type { HarnessDeliverableType } from "../harness/types.js";
 
 export type PrivateWorkflowMapping = {
   paperclipWorkflowId: string;
@@ -12,6 +13,7 @@ export type WealthFactoryWorkflowDefinition = {
   packageId: string;
   publicName: string;
   description: string;
+  allowedDeliverableTypes: readonly HarnessDeliverableType[];
   privateMapping?: PrivateWorkflowMapping;
   requiredCapabilities: readonly ProviderCapability[];
   executionEngine?: ExecutionEngine;
@@ -28,7 +30,19 @@ export type WealthFactoryWorkflowListItem = {
 
 export const WF_HARNESS_ELIGIBLE_WORKFLOWS = ["wf_connect_first_workflow", "wf_tax_strategy"] as const;
 export const WF_NATIVE_DEFAULT_WORKFLOWS = ["wf_connect_first_workflow", "wf_tax_strategy"] as const;
-export const WF_BOARD_EXPOSED_WORKFLOWS = ["wf_connect_first_workflow"] as const;
+export const WF_BOARD_EXPOSED_WORKFLOWS = ["wf_connect_first_workflow", "wf_tax_strategy"] as const;
+const WF_CONNECT_FIRST_WORKFLOW_DELIVERABLE_TYPES = [
+  "plan",
+  "pricing_review",
+  "research_brief",
+  "ops_handoff",
+  "technical_review",
+  "launch_copy",
+  "forecast_model",
+  "finance_review",
+  "legal_review"
+] as const satisfies readonly HarnessDeliverableType[];
+const WF_TAX_STRATEGY_WORKFLOW_DELIVERABLE_TYPES = ["tax_strategy_review"] as const satisfies readonly HarnessDeliverableType[];
 
 const BASE_WF_HARNESS_WORKFLOW_DEFINITIONS: readonly Omit<WealthFactoryWorkflowDefinition, "executionEngine">[] = [
   {
@@ -36,6 +50,7 @@ const BASE_WF_HARNESS_WORKFLOW_DEFINITIONS: readonly Omit<WealthFactoryWorkflowD
     packageId: "pkg_bib_connect",
     publicName: "Connect First Workflow",
     description: "CEO-led first-workflow setup run inside the Wealth Factory harness.",
+    allowedDeliverableTypes: WF_CONNECT_FIRST_WORKFLOW_DELIVERABLE_TYPES,
     requiredCapabilities: ["text_generation"]
   },
   {
@@ -43,6 +58,7 @@ const BASE_WF_HARNESS_WORKFLOW_DEFINITIONS: readonly Omit<WealthFactoryWorkflowD
     packageId: "pkg_tax_strategy",
     publicName: "Tax Strategy Workflow",
     description: "Bounded tax strategy review run inside the Wealth Factory harness.",
+    allowedDeliverableTypes: WF_TAX_STRATEGY_WORKFLOW_DELIVERABLE_TYPES,
     requiredCapabilities: ["text_generation"]
   }
 ];
@@ -97,6 +113,29 @@ export function createWorkflowRegistry(definitions: readonly WealthFactoryWorkfl
       return definitions
         .filter((definition) => definition.boardExposureEnabled === true)
         .map((definition) => definition.publicId);
+    },
+
+    resolveBoardWorkflowDefinition(publicWorkflowId?: string): WealthFactoryWorkflowDefinition {
+      const boardExposedWorkflowIds = definitions
+        .filter((definition) => definition.boardExposureEnabled === true)
+        .map((definition) => definition.publicId);
+
+      if (boardExposedWorkflowIds.length === 0) {
+        throw new Error("Harness workflow is not enabled");
+      }
+
+      if (publicWorkflowId) {
+        if (!boardExposedWorkflowIds.includes(publicWorkflowId)) {
+          throw new Error("Harness workflow is not enabled");
+        }
+        return byPublicId.get(publicWorkflowId)!;
+      }
+
+      if (boardExposedWorkflowIds.length > 1) {
+        throw new Error("Harness workflow selector is ambiguous");
+      }
+
+      return byPublicId.get(boardExposedWorkflowIds[0]!)!;
     },
 
     listNativeExecutorWorkflowIds(): string[] {

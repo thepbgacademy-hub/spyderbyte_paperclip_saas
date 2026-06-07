@@ -18,6 +18,17 @@ describe("demo seed profiles", () => {
     });
   });
 
+  it("resolves the built-in tax-strategy preset with native package wiring", () => {
+    expect(resolveDemoSeedProfile({ lane: "tax-strategy" }, {})).toMatchObject({
+      laneName: "tax-strategy",
+      packageId: "33333333-3333-4333-8333-444444444444",
+      packageKey: "tax-strategy",
+      packageName: "Tax Strategy",
+      workflowName: "Wealth Factory Tax Strategy",
+      workflowDescription: "Review tax strategy recommendations for the installed package."
+    });
+  });
+
   it("fails closed on an unknown lane when required explicit ids are missing", () => {
     expect(() => resolveDemoSeedProfile({ lane: "octonary" }, {})).toThrow(
       "Unknown demo lane 'octonary'. Use a known preset"

@@ -4,7 +4,7 @@ test("board route shows clean persona progress and opens the drawer", async ({ p
   await page.goto("/");
   await page.getByTestId("nav-board").click();
 
-  await expect(page).toHaveURL(/\/board$/);
+  await expect(page).toHaveURL(/\/board(\?.*)?$/);
   await expect(page.getByTestId("page-board")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Board", exact: true })).toBeVisible();
   await expect(page.getByTestId("harness-board")).toContainText("CEO");

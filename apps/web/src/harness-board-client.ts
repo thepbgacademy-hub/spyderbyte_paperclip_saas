@@ -5646,8 +5646,12 @@ export function createHarnessBoardClient(
       return fallbackState;
     },
 
-    async fetchBoard(): Promise<HarnessBoardResponse> {
-      const response = await fetchWithTimeout("/api/harness/board", {
+    async fetchBoard(workflowId?: string): Promise<HarnessBoardResponse> {
+      const selectedWorkflowId = workflowId ?? readSelectedWorkflowId(browserWindow);
+      const requestPath = selectedWorkflowId
+        ? `/api/harness/board?workflowId=${encodeURIComponent(selectedWorkflowId)}`
+        : "/api/harness/board";
+      const response = await fetchWithTimeout(requestPath, {
         credentials: "include"
       });
       if (!response.ok) {
@@ -5661,5 +5665,15 @@ export function createHarnessBoardClient(
 
     submitAction
   };
+}
+
+function readSelectedWorkflowId(browserWindow?: Pick<Window, "location">): string | undefined {
+  const search = browserWindow?.location?.search;
+  if (typeof search !== "string" || search.trim().length === 0) {
+    return undefined;
+  }
+  const params = new URLSearchParams(search);
+  const workflowId = params.get("workflowId");
+  return workflowId && workflowId.trim().length > 0 ? workflowId.trim() : undefined;
 }
 

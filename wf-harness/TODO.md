@@ -20,6 +20,7 @@ This file tracks the new harness subproject only.
   - [x] Phase 5: Redispatch-safe native continuation seam.
   - [x] Phase 6: Native start-path cutover proof.
   - [x] Phase 7: Second native workflow family migration.
+  - [x] Phase 8: Native board/start selector widening.
 
 ## V1 Build Targets
 
@@ -79,7 +80,7 @@ This file tracks the new harness subproject only.
 
 ## Current Next Slice
 
-- [ ] Widen the board/start package-selector seam deliberately before exposing additional native-migrated workflow families beyond `wf_connect_first_workflow`.
+- [ ] Migrate the next bounded workflow family now that the board/start selector seam safely exposes both `wf_connect_first_workflow` and `wf_tax_strategy`.
 
 - [x] Read `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md` before continuing the active native replacement track.
 - [x] Reconcile persisted run-state progression with the new child-card advancement seam so run-level status is no longer effectively bootstrap-only.

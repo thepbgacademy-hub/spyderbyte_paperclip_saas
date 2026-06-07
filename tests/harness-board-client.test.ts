@@ -42,6 +42,33 @@ describe("harness board client", () => {
     expect(client.isBrowserFallbackEnabled()).toBe(false);
   });
 
+  it("adds the explicit workflow selector to the live board request when present", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        runId: "run_123",
+        workflowId: "wf_tax_strategy",
+        packageId: "pkg_tax_strategy",
+        columns: [],
+        cards: [],
+        pendingApprovals: [],
+        followThroughItems: [],
+        recentDecisions: []
+      })
+    });
+    const client = createHarnessBoardClient(
+      fetchImpl as unknown as typeof fetch,
+      { location: { hostname: "app.spyderbyte.cloud", search: "?workflowId=wf_tax_strategy" } as Window["location"] }
+    );
+
+    await client.fetchBoard();
+
+    expect(fetchImpl).toHaveBeenCalledWith("/api/harness/board?workflowId=wf_tax_strategy", expect.objectContaining({
+      credentials: "include",
+      signal: expect.any(AbortSignal)
+    }));
+  });
+
   it("submits bounded board actions through the live contract path", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,

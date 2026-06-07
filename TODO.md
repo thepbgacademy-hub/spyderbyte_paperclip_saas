@@ -59,7 +59,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Run lint/build/refactor pass.
 - [x] Complete reviewer check.
 - [x] Overwrite `HANDOFF.md` with Phase 6-only next steps.
-- [ ] Next native-expansion seam: widen board/start package-selector support deliberately before exposing additional migrated workflow families on the dashboard start path.
+- [x] Phase 8: Widen board/start selector, entitlement, and package-install support for multiple native workflow families.
 
 - [x] Phase 6: VPS deployment POC.
 - [x] Create VPS deployment POC configuration.

@@ -72,14 +72,20 @@ try {
 
   await client.query(
     `insert into wfpc.wealth_factory_packages (id, package_key, name, kind, metadata)
-     values ($1, 'social-media-agency', 'Social Media Agency', 'industry', '{"industry":"marketing"}'::jsonb)
+     values ($1, $2, $3, $4, $5::jsonb)
      on conflict (id) do update
      set package_key = excluded.package_key,
          name = excluded.name,
          kind = excluded.kind,
          metadata = excluded.metadata,
          updated_at = now()`,
-    [profile.packageId]
+    [
+      profile.packageId,
+      profile.packageKey,
+      profile.packageName,
+      profile.packageKind,
+      JSON.stringify(profile.packageMetadata)
+    ]
   );
 
   await client.query(

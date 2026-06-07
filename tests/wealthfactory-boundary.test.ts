@@ -13,6 +13,7 @@ describe("Wealth Factory boundary layer", () => {
         packageId: "pkg-social",
         publicName: "Wealth Factory Social Calendar",
         description: "Plan a week of social posts.",
+        allowedDeliverableTypes: ["plan"],
         privateMapping: { paperclipWorkflowId: "pc-workflow-1", paperclipCompanyId: "pc-company-1" },
         requiredCapabilities: ["text_generation"]
       }
@@ -39,6 +40,7 @@ describe("Wealth Factory boundary layer", () => {
         packageId: "pkg-social",
         publicName: "Connect First Workflow",
         description: "Shape the opening business run.",
+        allowedDeliverableTypes: ["plan"],
         requiredCapabilities: ["text_generation"],
         executionEngine: "wf_native_v1"
       }
@@ -90,8 +92,8 @@ describe("Wealth Factory boundary layer", () => {
     expect(disabledRegistry.getDefinition("wf_tax_strategy").executionEngine).toBe("wf_native_v1");
     expect(enabledRegistry.listHarnessEligibleWorkflowIds()).toEqual(["wf_connect_first_workflow", "wf_tax_strategy"]);
     expect(enabledRegistry.listNativeExecutorWorkflowIds()).toEqual(["wf_connect_first_workflow", "wf_tax_strategy"]);
-    expect(enabledRegistry.listBoardExposedWorkflowIds()).toEqual(["wf_connect_first_workflow"]);
-    expect(taxOnlyRegistry.listBoardExposedWorkflowIds()).toEqual([]);
+    expect(enabledRegistry.listBoardExposedWorkflowIds()).toEqual(["wf_connect_first_workflow", "wf_tax_strategy"]);
+    expect(taxOnlyRegistry.listBoardExposedWorkflowIds()).toEqual(["wf_tax_strategy"]);
     expect(enabledRegistry.getDefinition("wf_connect_first_workflow").executionEngine).toBe("wf_native_v1");
     expect(enabledRegistry.getDefinition("wf_tax_strategy").executionEngine).toBe("wf_native_v1");
     expect(enabledRegistry.getDefinition("wf_connect_first_workflow").privateMapping).toBeUndefined();

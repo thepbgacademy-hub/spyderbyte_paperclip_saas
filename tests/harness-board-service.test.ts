@@ -155,6 +155,29 @@ describe("harness board service", () => {
     );
   });
 
+  it("accepts an explicit workflow selector when multiple harness workflows are exposed", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid", workflowId: "wf_tax_strategy" });
+
+    expect(board.workflowId).toBe("wf_tax_strategy");
+    expect(board.packageId).toBe("pkg_tax_strategy");
+  });
+
   it("fails closed when the tenant lacks the required package boundary", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
@@ -173,6 +196,71 @@ describe("harness board service", () => {
     });
 
     await expect(service.listBoardState({ authorization: "Bearer valid" })).rejects.toBeInstanceOf(ApiAuthError);
+  });
+
+  it("accepts the tax strategy deliverable catalog on the selected tax workflow board", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid", workflowId: "wf_tax_strategy" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      workflowId: "wf_tax_strategy",
+      persona: "analyst",
+      title: "Model tax exposure options",
+      deliverableType: "tax_strategy_review"
+    }));
+
+    const hydrated = await service.listBoardState({ authorization: "Bearer valid", workflowId: "wf_tax_strategy" });
+    const createdCard = hydrated.cards.find((card) => card.id === created.cardId);
+
+    expect(createdCard).toMatchObject({
+      persona: "ANALYST",
+      deliverableLabel: "Tax Strategy Review"
+    });
+  });
+
+  it("fails closed when a tax-only deliverable is requested on a different exposed workflow board", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid", workflowId: "wf_connect_first_workflow" });
+
+    await expect(
+      service.createTopLevelChildCard({
+        authorization: "Bearer valid",
+        workflowId: "wf_connect_first_workflow",
+        persona: "analyst",
+        title: "Model tax exposure options",
+        deliverableType: "tax_strategy_review"
+      })
+    ).rejects.toThrow(/outside the approved workflow boundary/);
   });
 
   it("fails closed when tenant membership is missing but keeps infrastructure errors visible", async () => {

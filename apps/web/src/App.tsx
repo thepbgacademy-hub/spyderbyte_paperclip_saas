@@ -24,6 +24,17 @@ import { HIDDEN_SHELL_FLAGS } from "./shell/feature-flags.js";
 import { useTheme } from "./shell/theme-context.js";
 import { HIDDEN_FUTURE_ROUTES, VISIBLE_WEALTH_FACTORY_ROUTES, resolveShellRoute } from "./shell/navigation.js";
 
+export function buildBoardPath(workflowId?: string): string {
+  if (!workflowId || workflowId.trim().length === 0) {
+    return "/board";
+  }
+  return `/board?workflowId=${encodeURIComponent(workflowId)}`;
+}
+
+export function resolveAppNavigationPath(path: string, selectedWorkflowId?: string): string {
+  return path === "/board" ? buildBoardPath(selectedWorkflowId) : path;
+}
+
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -110,7 +121,7 @@ export default function App() {
   );
 
   function handleNavigate(page: PageKey) {
-    navigate(getPagePath(page));
+    navigate(resolveAppNavigationPath(getPagePath(page), selectedWorkflowId));
   }
 
   function handleSaveKey(event: FormEvent<HTMLFormElement>) {
@@ -172,6 +183,21 @@ export default function App() {
     setSelectedRoleId(getInitialSelectedRoleId(nextTab));
   }
 
+  useEffect(() => {
+    if (location.pathname !== "/board") {
+      return;
+    }
+    const params = new URLSearchParams(location.search);
+    const workflowId = params.get("workflowId");
+    if (workflowId && workflowId.trim().length > 0) {
+      return;
+    }
+    if (!selectedWorkflowId || selectedWorkflowId.trim().length === 0) {
+      return;
+    }
+    navigate(buildBoardPath(selectedWorkflowId), { replace: true });
+  }, [location.pathname, location.search, navigate, selectedWorkflowId]);
+
   const actions: DashboardPageActions = {
     onApproveResult(resultId) {
       setResultApprovalStates((current) => ({
@@ -231,7 +257,7 @@ export default function App() {
     <ShellLayout
       activePath={location.pathname}
       featureFlags={shellFeatureFlags}
-      onNavigate={(path) => navigate(path)}
+      onNavigate={(path) => navigate(resolveAppNavigationPath(path, selectedWorkflowId))}
       packageName={dashboard.packageName}
       roleLabel={role === "operator" ? "Operator" : "Member"}
       searchValue={searchQuery}

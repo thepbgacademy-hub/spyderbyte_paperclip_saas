@@ -234,10 +234,45 @@ Completed outcome:
 - `wf_tax_strategy` worker starts now stay off Paperclip launch env and emit explicit `wf_native_v1` execution-engine provenance on the worker seam.
 - Board/start exposure intentionally remains limited to the already-proven package-wired workflow family until the selector and entitlement seam is widened in a dedicated follow-up phase.
 
+## Phase 8: Native Board/Start Selector Widening
+
+Status: `completed`
+
+Goal:
+- Widen the board/start seam so more than one already-native workflow family can be exposed safely without ambiguous dashboard bootstrap, invalid child-lane contracts, or dead-start package/install drift.
+
+Scope:
+- Add an explicit board selector seam for live board bootstrap.
+- Keep the worker/runtime native execution plane unchanged.
+- Allow board exposure for `wf_tax_strategy` only once selector resolution, deliverable catalog shape, and repo-local package/demo wiring are present.
+- Keep request/response widening minimal and tenant-safe.
+
+Required outputs:
+- The board/start seam accepts an explicit workflow selector and no longer hard-fails just because multiple board workflows are exposed.
+- `wf_tax_strategy` becomes board-exposed only through the new explicit selector path.
+- The harness board contract accepts `tax_strategy_review` for the tax workflow family.
+- Local demo/package wiring can seed a real tax-strategy package/install path instead of leaving that family as a registry-only string.
+
+Non-goals:
+- No new execution engine.
+- No multi-provider widening.
+- No broad dashboard navigation rewrite beyond the selector seam needed for board bootstrap.
+
+Exit criteria:
+- Focused tests prove selector parsing through the HTTP and client seams, board-service resolution under multiple exposed workflows, and tax-strategy board deliverable acceptance.
+- Full repo verification is green after the selector/package/catalog widening.
+- Handoff and TODO surfaces point to the next bounded native-expansion seam rather than treating the board/start surface as still single-workflow-only.
+
+Completed outcome:
+- `GET /api/harness/board` now accepts an explicit workflow selector while preserving the existing bounded response shape.
+- The board service now resolves multiple board-exposed workflow families safely when a selector is provided, instead of forcing a generic ambiguous-board failure.
+- `wf_tax_strategy` is now board-exposed on purpose, and the harness deliverable catalog admits `tax_strategy_review` so its native lane shape matches the public board contract.
+- Local demo seed profiles and package insert wiring can now seed a tax-strategy package/install path instead of always writing the social-media package identity.
+
 ## Immediate Execution Order
 
 1. Keep the migrated `wf_connect_first_workflow` native path green under the full verification bar.
-2. Keep the migrated `wf_tax_strategy` native path green under the full verification bar.
+2. Keep the migrated `wf_tax_strategy` native worker/runtime and board/start paths green under the full verification bar.
 3. Choose the next bounded workflow family or runtime seam for native expansion without widening Paperclip dependency again.
 4. Keep the legacy Paperclip adapter backlog explicitly scoped to still-unmigrated workflows.
 5. Re-run focused and full repo verification before each additional native-family cutover.

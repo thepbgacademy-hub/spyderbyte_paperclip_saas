@@ -9,6 +9,7 @@ import {
   HarnessCardProgressionConflictError,
   HarnessRunCompletionConflictError,
   HarnessRunCycleConflictError,
+  HarnessWorkflowSelectionError,
   type HarnessBoardResponse,
   type HarnessExportCandidateId,
   type HarnessExportDryRunResult,
@@ -26,10 +27,11 @@ import { assertWealthFactoryResponse } from "../wealthfactory/response-guard.js"
 import type { HarnessCardRecord } from "../harness/types.js";
 
 type HarnessApi = {
-  listBoardState(request: { authorization: string; cookie?: string }): Promise<HarnessBoardResponse>;
+  listBoardState(request: { authorization: string; cookie?: string; workflowId?: string }): Promise<HarnessBoardResponse>;
   createTopLevelChildCard(request: {
     authorization: string;
     cookie?: string;
+    workflowId?: string;
     persona: string;
     title: string;
     deliverableType: string;
@@ -235,8 +237,10 @@ export function createHarnessHttpHandler(options: {
 
     try {
       if (request.method === "GET" && request.path === "/api/harness/board") {
+        const workflowId = readOptionalString(request.query?.workflowId);
         const body = await options.listBoardState({
           authorization: request.headers.authorization ?? "",
+          ...(workflowId ? { workflowId } : {}),
           ...(request.headers.cookie ? { cookie: request.headers.cookie } : {})
         });
         assertWealthFactoryResponse(body);
@@ -248,6 +252,7 @@ export function createHarnessHttpHandler(options: {
         const persona = normalizeHarnessPersona(readRequiredString(bodyInput?.persona));
         const title = readRequiredString(bodyInput?.title);
         const deliverableType = normalizeHarnessDeliverableType(readRequiredString(bodyInput?.deliverableType));
+        const workflowId = readOptionalString(bodyInput?.workflowId);
         if (!persona || !title || !deliverableType || !isHarnessChildPersona(persona) || !isHarnessDeliverableType(deliverableType)) {
           return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
         }
@@ -255,6 +260,7 @@ export function createHarnessHttpHandler(options: {
         const body = await options.createTopLevelChildCard({
           authorization: request.headers.authorization ?? "",
           ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
+          ...(workflowId ? { workflowId } : {}),
           persona,
           title,
           deliverableType
@@ -512,6 +518,9 @@ export function createHarnessHttpHandler(options: {
     } catch (error) {
       if (error instanceof ApiAuthError) {
         return { status: 401, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "unauthorized" } };
+      }
+      if (error instanceof HarnessWorkflowSelectionError) {
+        return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
       }
       if (
         error instanceof HarnessActionContractConflictError

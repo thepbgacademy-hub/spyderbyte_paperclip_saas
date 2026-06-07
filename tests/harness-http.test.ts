@@ -5,6 +5,7 @@ import {
   HarnessActionContractConflictError,
   HarnessCardCreationConflictError,
   HarnessCardProgressionConflictError,
+  HarnessWorkflowSelectionError,
   HarnessRunCycleConflictError
 } from "../src/harness/board-service.js";
 import { createHarnessHttpHandler } from "../src/api/harness-http.js";
@@ -114,6 +115,43 @@ describe("harness HTTP boundary", () => {
     expect(JSON.stringify(response.body)).not.toMatch(/tool[\s_-]?call|prompt|raw[\s_-]?activity|internal[\s_-]?log/i);
   });
 
+  it("threads an explicit workflow selector through the board request seam", async () => {
+    const listBoardState = vi.fn().mockResolvedValue({
+      runId: "run_123",
+      workflowId: "wf_tax_strategy",
+      packageId: "pkg_tax_strategy",
+      columns: [],
+      cards: [],
+      pendingApprovals: [],
+      followThroughItems: [],
+      recentDecisions: []
+    });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState,
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      decideProposal: vi.fn(),
+      completeRun: vi.fn(),
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
+    });
+
+    const response = await handler({
+      method: "GET",
+      path: "/api/harness/board",
+      query: { workflowId: "wf_tax_strategy" },
+      headers: { origin: "https://portal.wealthfactory.test", authorization: "Bearer valid" },
+      bodyByteLength: 0,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(listBoardState).toHaveBeenCalledWith({
+      authorization: "Bearer valid",
+      workflowId: "wf_tax_strategy"
+    });
+  });
+
   it("answers authenticated harness board preflight requests", async () => {
     const listBoardState = vi.fn();
     const createTopLevelChildCard = vi.fn();
@@ -192,6 +230,29 @@ describe("harness HTTP boundary", () => {
     expect(unauthorized.status).toBe(401);
     expect(serviceUnavailable.status).toBe(500);
     expect(serviceUnavailable.body).toEqual({ code: "service_unavailable" });
+  });
+
+  it("returns invalid_request when the workflow selector seam rejects the board request", async () => {
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn().mockRejectedValue(new HarnessWorkflowSelectionError("Harness workflow selector is ambiguous")),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      decideProposal: vi.fn(),
+      completeRun: vi.fn(),
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
+    });
+
+    const response = await handler({
+      method: "GET",
+      path: "/api/harness/board",
+      headers: { origin: "https://portal.wealthfactory.test", authorization: "Bearer valid" },
+      bodyByteLength: 0,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ code: "invalid_request" });
   });
 
   it("routes bounded export preflight, dry-run, and governance-history export through guarded candidate endpoints", async () => {

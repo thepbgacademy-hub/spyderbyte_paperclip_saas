@@ -55,7 +55,8 @@ export const HARNESS_DELIVERABLE_TYPES = [
   "launch_copy",
   "forecast_model",
   "finance_review",
-  "legal_review"
+  "legal_review",
+  "tax_strategy_review"
 ] as const;
 
 export interface HarnessRuntimeContext {
