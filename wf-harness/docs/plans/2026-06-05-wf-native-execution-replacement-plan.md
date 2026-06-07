@@ -269,10 +269,47 @@ Completed outcome:
 - `wf_tax_strategy` is now board-exposed on purpose, and the harness deliverable catalog admits `tax_strategy_review` so its native lane shape matches the public board contract.
 - Local demo seed profiles and package insert wiring can now seed a tax-strategy package/install path instead of always writing the social-media package identity.
 
+## Phase 9: Third Native Harness Workflow Family Migration
+
+Status: `completed`
+
+Goal:
+- Migrate the next bounded harness-native workflow family onto the existing native worker/runtime seam without widening the board/start exposure boundary or reopening Paperclip fallback.
+
+Scope:
+- Formalize `wf_package_followup` as a real Wealth Factory workflow family with package identity, deliverable catalog, and native-default execution.
+- Reuse the existing native provider lane and harness outcome contract.
+- Keep board/start exposure unchanged so only explicitly board-wired families remain tenant-visible there.
+- Add focused proof that `wf_package_followup` stays off Paperclip on the worker/runtime start path and completes through the native executor seam.
+
+Required outputs:
+- `wf_package_followup` exists as a real registry definition with package identity and required capabilities.
+- `wf_package_followup` is harness-eligible and native-default without requiring Paperclip launch env.
+- The native executor has a bounded workflow-family implementation for `wf_package_followup`.
+- Registry, env, runtime-server, and worker-runtime tests prove the new family stays on `wf_native_v1` and does not silently reopen the Paperclip path.
+
+Non-goals:
+- No board/start exposure widening for `wf_package_followup` in this phase.
+- No queue payload expansion.
+- No multi-provider execution widening.
+
+Exit criteria:
+- `wf_package_followup` is proven end to end on the native worker/runtime path.
+- Full repo verification is green after the new family lands.
+- Handoff and TODO surfaces point at the next seam: deliberate board/start widening for additional native families or the next bounded family migration.
+
+Completed outcome:
+- `wf_package_followup` is now a real Wealth Factory workflow family with a bounded native registry definition.
+- The native executor now owns a tenant-safe Package Follow-up Workflow decision contract on the same OpenAI-backed provider lane used by the earlier native families.
+- Env validation, registry wiring, dashboard/runtime registry truth, and worker-runtime proofs now treat `wf_package_followup` as native-default instead of Paperclip-routed on the worker/runtime seam.
+- `wf_package_followup` worker starts now stay off Paperclip launch env and emit explicit `wf_native_v1` execution-engine provenance on the worker seam.
+- Board/start exposure intentionally remains limited to `wf_connect_first_workflow` and `wf_tax_strategy`, so `wf_package_followup` does not become tenant-visible there until a later explicit widening phase.
+
 ## Immediate Execution Order
 
 1. Keep the migrated `wf_connect_first_workflow` native path green under the full verification bar.
 2. Keep the migrated `wf_tax_strategy` native worker/runtime and board/start paths green under the full verification bar.
-3. Choose the next bounded workflow family or runtime seam for native expansion without widening Paperclip dependency again.
-4. Keep the legacy Paperclip adapter backlog explicitly scoped to still-unmigrated workflows.
-5. Re-run focused and full repo verification before each additional native-family cutover.
+3. Keep the migrated `wf_package_followup` native worker/runtime path green under the full verification bar while preserving the current board/start exposure boundary.
+4. Choose the next bounded workflow family or board/start widening seam for native expansion without widening Paperclip dependency again.
+5. Keep the legacy Paperclip adapter backlog explicitly scoped to still-unmigrated workflows.
+6. Re-run focused and full repo verification before each additional native-family cutover.

@@ -21,6 +21,22 @@ const { makeHarnessRepository, harnessRepositoryRef } = vi.hoisted(() => {
           updatedAt: "2026-05-21T10:00:00.000Z"
         };
       }
+      if (runId === "run-followup-1") {
+        return {
+          id: "run-followup-1",
+          tenantId: "tenant-1",
+          workflowId: "wf_package_followup",
+          packageId: "pkg_package_followup",
+          orchestratorPersona: "ceo",
+          state: "active",
+          runtimeContext: {
+            providerKind: "openai_api",
+            credentialLabel: "Primary OpenAI"
+          },
+          createdAt: "2026-05-21T10:00:00.000Z",
+          updatedAt: "2026-05-21T10:00:00.000Z"
+        };
+      }
 
       return {
         id: "run-1",
@@ -1203,6 +1219,228 @@ describe("worker runtime", () => {
       stdoutWrite.mock.calls.some(([value]) =>
         String(value).includes("\"type\":\"wealth_factory_worker_run\"") &&
         String(value).includes("\"workflowId\":\"wf_tax_strategy\"") &&
+        String(value).includes("\"executionEngine\":\"wf_native_v1\"")
+      )
+    ).toBe(true);
+
+    await runtime.close();
+  });
+
+  it("runs the package-followup workflow family natively on the default start path without Paperclip launch env", async () => {
+    const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
+    const { createPaperclipClient } = await import("../src/paperclip/client.js");
+    const {
+      PAPERCLIP_BASE_URL: _paperclipBaseUrl,
+      PAPERCLIP_SERVICE_TOKEN: _paperclipServiceToken,
+      ...nativeOnlyEnv
+    } = validEnv;
+    harnessRepositoryRef.current.getRun.mockResolvedValueOnce({
+      id: "run-followup-1",
+      tenantId: "tenant-1",
+      workflowId: "wf_package_followup",
+      packageId: "pkg_package_followup",
+      orchestratorPersona: "ceo",
+      state: "active",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      },
+      createdAt: "2026-05-21T10:00:00.000Z",
+      updatedAt: "2026-05-21T10:00:00.000Z"
+    });
+    let followupLaneState: "approved" | "working" | "waiting" = "approved";
+    harnessRepositoryRef.current.listCardsForRun.mockImplementation(async (runId: string) => {
+      if (runId === "run-followup-1") {
+        return [
+          {
+            id: "card_ceo",
+            runId: "run-followup-1",
+            parentCardId: null,
+            persona: "ceo",
+            title: "Plan package follow-up run",
+            deliverableType: "plan",
+            state: "planning",
+            executionClaimToken: null,
+            executionClaimedAt: null,
+            createdAt: "2026-05-21T10:00:00.000Z",
+            updatedAt: "2026-05-21T10:00:00.000Z"
+          },
+          {
+            id: "card_cmo",
+            runId: "run-followup-1",
+            parentCardId: "card_ceo",
+            persona: "cmo",
+            title: "Draft the package follow-up narrative",
+            deliverableType: "launch_copy",
+            state: followupLaneState,
+            executionClaimToken: followupLaneState === "approved" ? null : "claim-cmo-1",
+            executionClaimedAt: followupLaneState === "approved" ? null : "2026-05-21T10:04:00.000Z",
+            createdAt: "2026-05-21T10:01:00.000Z",
+            updatedAt: followupLaneState === "approved" ? "2026-05-21T10:02:00.000Z" : "2026-05-21T10:04:00.000Z"
+          }
+        ];
+      }
+
+      return [
+        {
+          id: "card_ceo",
+          runId: "run-1",
+          parentCardId: null,
+          persona: "ceo",
+          title: "Plan run",
+          deliverableType: "plan",
+          state: "planning",
+          executionClaimToken: null,
+          executionClaimedAt: null,
+          createdAt: "2026-05-21T10:00:00.000Z",
+          updatedAt: "2026-05-21T10:00:00.000Z"
+        },
+        {
+          id: "card_cfo",
+          runId: "run-1",
+          parentCardId: "card_ceo",
+          persona: "cfo",
+          title: "Pressure-test the pricing lane",
+          deliverableType: "pricing_review",
+          state: "approved",
+          executionClaimToken: null,
+          executionClaimedAt: null,
+          createdAt: "2026-05-21T10:01:00.000Z",
+          updatedAt: "2026-05-21T10:02:00.000Z"
+        }
+      ];
+    });
+    harnessRepositoryRef.current.claimCardForExecution.mockImplementationOnce(async () => {
+      followupLaneState = "working";
+      return {
+        id: "card_cmo",
+        runId: "run-followup-1",
+        parentCardId: "card_ceo",
+        persona: "cmo",
+        title: "Draft the package follow-up narrative",
+        deliverableType: "launch_copy",
+        state: "working",
+        executionClaimToken: "claim-cmo-1",
+        executionClaimedAt: "2026-05-21T10:04:00.000Z",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:04:00.000Z"
+      };
+    });
+    harnessRepositoryRef.current.getCard.mockImplementation(async (cardId: string) => {
+      if (cardId === "card_cmo") {
+        return {
+          id: "card_cmo",
+          runId: "run-followup-1",
+          parentCardId: "card_ceo",
+          persona: "cmo",
+          title: "Draft the package follow-up narrative",
+          deliverableType: "launch_copy",
+          state: followupLaneState,
+          executionClaimToken: followupLaneState === "approved" ? null : "claim-cmo-1",
+          executionClaimedAt: followupLaneState === "approved" ? null : "2026-05-21T10:04:00.000Z",
+          createdAt: "2026-05-21T10:01:00.000Z",
+          updatedAt: "2026-05-21T10:04:00.000Z"
+        };
+      }
+      return null;
+    });
+    harnessRepositoryRef.current.transitionCardState.mockImplementationOnce(async ({ state }) => {
+      followupLaneState = state as "waiting";
+      return {
+        id: "card_cmo",
+        runId: "run-followup-1",
+        parentCardId: "card_ceo",
+        persona: "cmo",
+        title: "Draft the package follow-up narrative",
+        deliverableType: "launch_copy",
+        state,
+        executionClaimToken: null,
+        executionClaimedAt: null,
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:05:00.000Z"
+      };
+    });
+    harnessRepositoryRef.current.getCardContinuity.mockImplementation(async (cardId: string) => {
+      if (cardId === "card_cmo") {
+        return {
+          cardId: "card_cmo",
+          runId: "run-followup-1",
+          continuitySource: "resume_override",
+          continuitySummary: "Resume the package follow-up lane from the packaged customer-facing outcome.",
+          latestResultSummary: "The latest package outcome is ready for follow-up positioning.",
+          absorbedWorkItems: ["Frame the next bounded package follow-up"],
+          updatedAt: "2026-05-21T10:03:00.000Z"
+        };
+      }
+      return null;
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        output_text:
+          "{\"state\":\"waiting\",\"summary\":\"Need the final customer-facing package summary before the follow-up brief can be approved.\"}"
+      })
+    });
+    stdoutWrite.mockClear();
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv(nativeOnlyEnv),
+      workerInstanceId: "worker-test-package-followup-native-default-start-path"
+    });
+    const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-followup-1",
+        workflowId: "wf_package_followup",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_package_followup:run-followup-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-followup-1",
+      workflowId: "wf_package_followup",
+      status: "queued"
+    });
+
+    expect(vi.mocked(createPaperclipClient)).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual(
+      expect.objectContaining({
+        input: expect.stringContaining("Workflow: wf_package_followup")
+      })
+    );
+    expect(String(fetchMock.mock.calls[0]?.[1]?.body)).toContain("Lane title: Draft the package follow-up narrative");
+    expect(String(fetchMock.mock.calls[0]?.[1]?.body)).toContain(
+      "Continuity summary: Resume the package follow-up lane from the packaged customer-facing outcome."
+    );
+    expect(harnessRepositoryRef.current.transitionCardState).toHaveBeenCalledWith({
+      cardId: "card_cmo",
+      expectedState: "working",
+      expectedExecutionClaimToken: "claim-cmo-1",
+      state: "waiting"
+    });
+    expect(
+      harnessRepositoryRef.current.upsertCardContinuity.mock.calls.some(([input]) =>
+        input.cardId === "card_cmo" &&
+        input.runId === "run-followup-1" &&
+        input.continuitySource === "resume_override" &&
+        String(input.continuitySummary).includes("Need the final customer-facing package summary before the follow-up brief can be approved.") &&
+        input.latestResultSummary === "The latest package outcome is ready for follow-up positioning."
+      )
+    ).toBe(true);
+    expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        runId: "run-followup-1",
+        from: ["queued", "running"],
+        to: "queued"
+      })
+    );
+    expect(
+      stdoutWrite.mock.calls.some(([value]) =>
+        String(value).includes("\"type\":\"wealth_factory_worker_run\"") &&
+        String(value).includes("\"workflowId\":\"wf_package_followup\"") &&
         String(value).includes("\"executionEngine\":\"wf_native_v1\"")
       )
     ).toBe(true);

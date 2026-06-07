@@ -4,11 +4,11 @@ This handoff is intentionally overwritten after each phase. It now describes the
 
 ## Status
 
-Phases 0 through 8 are complete, tested, reviewed, and committed.
+Phases 0 through 9 are complete, tested, reviewed, and committed.
 
 The first post-MVP productization slices are implemented locally: security baseline helpers, Wealth Factory boundary layer, package entitlements/provider requirements, temporary artifacts, expanded provider definitions, a Wealth Factory dashboard POC surface, the first API-backed dashboard foundation, and the first database-backed ACID/race-condition foundation.
 
-The next session should enter through the harness lane first, read the current phased native-replacement plan, and continue from the now-complete Phase 8 native board/start selector widening into the next bounded native-expansion seam instead of reopening Paperclip adapter dependency for already-migrated families. `wf_tax_strategy` is now native on both the worker/runtime seam and the explicit board/start selector seam, but that widening stays bounded to explicitly selected board workflows rather than implying every native family is tenant-visible by default.
+The next session should enter through the harness lane first, read the current phased native-replacement plan, and continue from the now-complete Phase 9 third native harness workflow-family migration into the next bounded native-expansion seam instead of reopening Paperclip adapter dependency for already-migrated families. `wf_package_followup` is now native on the worker/runtime seam beside `wf_connect_first_workflow` and `wf_tax_strategy`, but board/start exposure still stays bounded to the explicitly selected board workflows rather than implying every native family is tenant-visible by default.
 
 ## Reference Docs
 

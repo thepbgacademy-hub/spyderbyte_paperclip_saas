@@ -28,8 +28,8 @@ export type WealthFactoryWorkflowListItem = {
   requiredCapabilities: readonly ProviderCapability[];
 };
 
-export const WF_HARNESS_ELIGIBLE_WORKFLOWS = ["wf_connect_first_workflow", "wf_tax_strategy"] as const;
-export const WF_NATIVE_DEFAULT_WORKFLOWS = ["wf_connect_first_workflow", "wf_tax_strategy"] as const;
+export const WF_HARNESS_ELIGIBLE_WORKFLOWS = ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"] as const;
+export const WF_NATIVE_DEFAULT_WORKFLOWS = ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"] as const;
 export const WF_BOARD_EXPOSED_WORKFLOWS = ["wf_connect_first_workflow", "wf_tax_strategy"] as const;
 const WF_CONNECT_FIRST_WORKFLOW_DELIVERABLE_TYPES = [
   "plan",
@@ -43,6 +43,11 @@ const WF_CONNECT_FIRST_WORKFLOW_DELIVERABLE_TYPES = [
   "legal_review"
 ] as const satisfies readonly HarnessDeliverableType[];
 const WF_TAX_STRATEGY_WORKFLOW_DELIVERABLE_TYPES = ["tax_strategy_review"] as const satisfies readonly HarnessDeliverableType[];
+const WF_PACKAGE_FOLLOWUP_WORKFLOW_DELIVERABLE_TYPES = [
+  "launch_copy",
+  "research_brief",
+  "forecast_model"
+] as const satisfies readonly HarnessDeliverableType[];
 
 const BASE_WF_HARNESS_WORKFLOW_DEFINITIONS: readonly Omit<WealthFactoryWorkflowDefinition, "executionEngine">[] = [
   {
@@ -59,6 +64,14 @@ const BASE_WF_HARNESS_WORKFLOW_DEFINITIONS: readonly Omit<WealthFactoryWorkflowD
     publicName: "Tax Strategy Workflow",
     description: "Bounded tax strategy review run inside the Wealth Factory harness.",
     allowedDeliverableTypes: WF_TAX_STRATEGY_WORKFLOW_DELIVERABLE_TYPES,
+    requiredCapabilities: ["text_generation"]
+  },
+  {
+    publicId: "wf_package_followup",
+    packageId: "pkg_package_followup",
+    publicName: "Package Follow-up Workflow",
+    description: "Bounded package follow-up run inside the Wealth Factory harness.",
+    allowedDeliverableTypes: WF_PACKAGE_FOLLOWUP_WORKFLOW_DELIVERABLE_TYPES,
     requiredCapabilities: ["text_generation"]
   }
 ];

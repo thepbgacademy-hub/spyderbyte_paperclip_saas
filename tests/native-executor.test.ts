@@ -87,6 +87,40 @@ function buildTaxExecutionEnvelope() {
   };
 }
 
+function buildPackageFollowupExecutionEnvelope() {
+  return {
+    ...buildExecutionEnvelope(),
+    workflowId: "wf_package_followup",
+    laneExecution: {
+      ...buildExecutionEnvelope().laneExecution,
+      persona: "cmo",
+      title: "Draft the package follow-up narrative",
+      deliverableType: "launch_copy",
+      resumeFocus: "Turn the latest package outcome into a concise follow-up brief."
+    },
+    continuityContext: {
+      ...buildExecutionEnvelope().continuityContext,
+      summary: "Resume the package follow-up lane from the packaged customer-facing outcome.",
+      latestResultSummary: "The latest package outcome is ready for follow-up positioning.",
+      absorbedWorkTrail: [
+        {
+          resolution: "update_existing_lane" as const,
+          requestedByPersona: "CEO",
+          title: "Frame the next bounded package follow-up",
+          label: "CEO: Frame the next bounded package follow-up"
+        }
+      ],
+      latestAbsorbedWork: {
+        resolution: "update_existing_lane" as const,
+        requestedByPersona: "CEO",
+        title: "Frame the next bounded package follow-up",
+        label: "CEO: Frame the next bounded package follow-up"
+      },
+      absorbedWorkCount: 1
+    }
+  };
+}
+
 describe("default native executor", () => {
   it("completes the connect-first workflow family natively through the provider lane", async () => {
     const fetch = vi.fn().mockResolvedValue({
@@ -189,6 +223,40 @@ describe("default native executor", () => {
       resultSummary:
         "Completed the Tax Strategy Workflow tax strategy review lane for CFO: Review the founder tax posture. " +
         "Validated the restructuring assumptions and framed the tax recommendation for review."
+    });
+  });
+
+  it("completes the package-followup workflow family natively through the provider lane", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        output_text: "{\"state\":\"done\",\"summary\":\"Turned the packaged outcome into a concise follow-up brief for the next customer-facing step.\"}"
+      })
+    });
+    const executor = createDefaultNativeExecutor({
+      fetch: fetch as unknown as typeof globalThis.fetch
+    });
+
+    await expect(
+      executor.execute({
+        tenantId: "tenant-1",
+        runId: "run-followup-1",
+        workflowId: "wf_package_followup",
+        executionEnvelope: buildPackageFollowupExecutionEnvelope(),
+        providerBinding: {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Primary OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: {},
+          secretValues: { apiKey: "sk-tenant" }
+        }
+      })
+    ).resolves.toEqual({
+      state: "done",
+      resultSummary:
+        "Completed the Package Follow-up Workflow launch copy lane for CMO: Draft the package follow-up narrative. " +
+        "Turned the packaged outcome into a concise follow-up brief for the next customer-facing step."
     });
   });
 

@@ -6,18 +6,18 @@ describe("harness execution selector", () => {
   it("routes only opted-in eligible workflows to wf_harness_v1 when they are not cut over natively by default", () => {
     expect(
       selectExecutionEngine({
-        workflowId: "wf_package_followup",
-        harnessEnabledWorkflowIds: ["wf_package_followup"],
-        harnessEligibleWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"],
+        workflowId: "wf_future_harness",
+        harnessEnabledWorkflowIds: ["wf_future_harness"],
+        harnessEligibleWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup", "wf_future_harness"],
         nativeDefaultWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy"]
       })
     ).toBe("wf_harness_v1");
 
     expect(
       selectExecutionEngine({
-        workflowId: "wf_package_followup",
+        workflowId: "wf_future_harness",
         harnessEnabledWorkflowIds: [],
-        harnessEligibleWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"],
+        harnessEligibleWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup", "wf_future_harness"],
         nativeDefaultWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy"]
       })
     ).toBe("paperclip");
@@ -26,7 +26,7 @@ describe("harness execution selector", () => {
       selectExecutionEngine({
         workflowId: "wf_social_campaign_builder",
         harnessEnabledWorkflowIds: ["wf_social_campaign_builder"],
-        harnessEligibleWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"],
+        harnessEligibleWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup", "wf_future_harness"],
         nativeDefaultWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy"]
       })
     ).toBe("paperclip");
@@ -37,8 +37,8 @@ describe("harness execution selector", () => {
       selectExecutionEngine({
         workflowId: "wf_connect_first_workflow",
         harnessEnabledWorkflowIds: ["wf_connect_first_workflow"],
-        harnessEligibleWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"],
-        nativeDefaultWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy"]
+        harnessEligibleWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup", "wf_future_harness"],
+        nativeDefaultWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"]
       })
     ).toBe("wf_native_v1");
 
@@ -46,8 +46,17 @@ describe("harness execution selector", () => {
       selectExecutionEngine({
         workflowId: "wf_tax_strategy",
         harnessEnabledWorkflowIds: [],
-        harnessEligibleWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"],
-        nativeDefaultWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy"]
+        harnessEligibleWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup", "wf_future_harness"],
+        nativeDefaultWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"]
+      })
+    ).toBe("wf_native_v1");
+
+    expect(
+      selectExecutionEngine({
+        workflowId: "wf_package_followup",
+        harnessEnabledWorkflowIds: [],
+        harnessEligibleWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup", "wf_future_harness"],
+        nativeDefaultWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"]
       })
     ).toBe("wf_native_v1");
   });
@@ -57,8 +66,8 @@ describe("harness execution selector", () => {
       isPaperclipExecutionRequired({
         configuredWorkflowIds: ["wf_connect_first_workflow"],
         harnessEnabledWorkflowIds: ["wf_connect_first_workflow"],
-        harnessEligibleWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"],
-        nativeDefaultWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy"]
+        harnessEligibleWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup", "wf_future_harness"],
+        nativeDefaultWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"]
       })
     ).toBe(false);
 
@@ -66,8 +75,17 @@ describe("harness execution selector", () => {
       isPaperclipExecutionRequired({
         configuredWorkflowIds: ["wf_tax_strategy"],
         harnessEnabledWorkflowIds: ["wf_tax_strategy"],
-        harnessEligibleWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"],
-        nativeDefaultWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy"]
+        harnessEligibleWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup", "wf_future_harness"],
+        nativeDefaultWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"]
+      })
+    ).toBe(false);
+
+    expect(
+      isPaperclipExecutionRequired({
+        configuredWorkflowIds: ["wf_package_followup"],
+        harnessEnabledWorkflowIds: ["wf_package_followup"],
+        harnessEligibleWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup", "wf_future_harness"],
+        nativeDefaultWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"]
       })
     ).toBe(false);
   });

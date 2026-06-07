@@ -3,7 +3,7 @@
 Current execution note:
 - This file is historical architecture context for the older Paperclip-backed build track.
 - The active phased replacement plan now lives at `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`.
-- Phases 3 through 8 now cover two native workflow families: `wf_connect_first_workflow` remains native by default with durable redispatch and native start-path proof, and `wf_tax_strategy` now also exists as a real native-default workflow family on the same bounded provider/runtime seam instead of remaining a Paperclip-routed selector placeholder. Its worker/runtime path is cut over natively, and Phase 8 now widens the explicit board/start selector seam so that multiple native workflow families can be exposed safely without ambiguous dashboard bootstrap.
+- Phases 3 through 9 now cover three native workflow families on the worker/runtime seam: `wf_connect_first_workflow`, `wf_tax_strategy`, and now `wf_package_followup`. Phase 8 widened the explicit board/start selector seam so multiple native workflow families can be exposed safely without ambiguous dashboard bootstrap, while Phase 9 keeps `wf_package_followup` native-default on the worker/runtime seam without automatically widening board/start exposure for it.
 - In this file, older MVP/post-MVP phase numbers are historical only; the active Phase 1+ numbering now belongs to the native replacement plan of record.
 - New execution sessions should enter through `wf-harness/HANDOFF.md` first, not treat this document as the current plan of record.
 

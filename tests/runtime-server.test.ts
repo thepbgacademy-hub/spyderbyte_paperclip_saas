@@ -788,9 +788,35 @@ describe("runtime server", () => {
     expect(workflowRegistry).toBeDefined();
     expect(workflowRegistry?.getDefinition("wf_connect_first_workflow").executionEngine).toBe("wf_native_v1");
     expect(workflowRegistry?.getDefinition("wf_tax_strategy").executionEngine).toBe("wf_native_v1");
+    expect(workflowRegistry?.getDefinition("wf_package_followup").executionEngine).toBe("wf_native_v1");
     expect(workflowRegistry?.listBoardExposedWorkflowIds()).toEqual([]);
     expect(workflowRegistry?.getDefinition("wf_connect_first_workflow").privateMapping).toBeUndefined();
     expect(workflowRegistry?.getDefinition("wf_tax_strategy").privateMapping).toBeUndefined();
+    expect(workflowRegistry?.getDefinition("wf_package_followup").privateMapping).toBeUndefined();
+
+    await runtime.close();
+  });
+
+  it("keeps package-followup native but board-dark when it is the only harness-enabled family in runtime env", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {
+          WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_package_followup"
+        }
+      },
+      auth: { authenticate: vi.fn() }
+    });
+
+    const boardServiceOptions = vi.mocked(createHarnessBoardService).mock.calls.at(-1)?.[0];
+    const workflowRegistry = boardServiceOptions?.workflowRegistry;
+    expect(workflowRegistry).toBeDefined();
+    expect(workflowRegistry?.getDefinition("wf_package_followup").executionEngine).toBe("wf_native_v1");
+    expect(workflowRegistry?.listBoardExposedWorkflowIds()).toEqual([]);
 
     await runtime.close();
   });

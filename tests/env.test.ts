@@ -79,6 +79,25 @@ describe("loadEnv", () => {
     ).toBe(false);
   });
 
+  it("allows the package-followup workflow family to start without Paperclip launch env once it is cut over natively", () => {
+    expect(() =>
+      loadEnv({
+        ...validEnv,
+        PAPERCLIP_BASE_URL: undefined,
+        PAPERCLIP_SERVICE_TOKEN: undefined,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_package_followup"
+      })
+    ).not.toThrow();
+    expect(
+      requiresPaperclipLaunchEnv({
+        ...validEnv,
+        PAPERCLIP_BASE_URL: undefined,
+        PAPERCLIP_SERVICE_TOKEN: undefined,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_package_followup"
+      })
+    ).toBe(false);
+  });
+
   it("throws with missing required keys", () => {
     expect(() => loadEnv({ ...validEnv, REDIS_URL: "" })).toThrow(EnvValidationError);
 
