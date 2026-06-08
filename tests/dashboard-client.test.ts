@@ -59,6 +59,48 @@ describe("dashboard client", () => {
     });
   });
 
+  it("starts workflow runs through the dashboard runtime API", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 202,
+      json: () => Promise.resolve({ runId: "run-123", queued: true })
+    });
+    const client = createDashboardClient({
+      apiBaseUrl: "https://api.wealthfactory.test",
+      fetchImpl
+    });
+
+    await expect(client.startWorkflowRun({ authorization: "Bearer valid", workflowId: "workflow-template-1" })).resolves.toEqual({
+      runId: "run-123",
+      queued: true
+    });
+    expect(fetchImpl).toHaveBeenCalledWith("https://api.wealthfactory.test/api/dashboard/runs", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer valid",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ workflowId: "workflow-template-1" })
+    });
+  });
+
+  it("preserves bounded dashboard run-start conflicts for the caller", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: () => Promise.resolve({ code: "conflict" })
+    });
+    const client = createDashboardClient({
+      apiBaseUrl: "https://api.wealthfactory.test",
+      fetchImpl
+    });
+
+    await expect(client.startWorkflowRun({ authorization: "Bearer valid", workflowId: "workflow-template-1" })).rejects.toMatchObject({
+      code: "conflict",
+      status: 409
+    });
+  });
+
   it("creates a browser client from injected dashboard bootstrap config", () => {
     const browserWindow = {
       __WF_DASHBOARD_BOOTSTRAP__: {
@@ -86,6 +128,7 @@ describe("dashboard client", () => {
     const browserClient = createBrowserDashboardClient(browserWindow);
 
     expect(browserClient.authorization).toBeNull();
+    expect(browserClient.mode).toBe("bootstrap_only");
     expect(browserClient.client.getSnapshot().tenantName).toBe("Injected Tenant");
     expect(browserClient.client.getSnapshot().role).toBe("member");
   });
@@ -146,6 +189,7 @@ describe("dashboard client", () => {
 
     const browserClient = createBrowserDashboardClient(browserWindow);
 
+    expect(browserClient.mode).toBe("runtime_api");
     expect(browserClient.client.getSnapshot().tenantName).toBe("tenant-shell");
     expect(browserClient.client.getSnapshot().role).toBe("operator");
   });

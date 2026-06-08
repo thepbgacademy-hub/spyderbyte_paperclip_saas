@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
-import { createBrowserDashboardClient, type DashboardSnapshot } from "./dashboard-client.js";
+import { createBrowserDashboardClient, DashboardClientRequestError, type DashboardSnapshot } from "./dashboard-client.js";
 import DashboardPages, { type DashboardPageActions, type DashboardPageState } from "./pages/DashboardPages.js";
 import HarnessBoardPage from "./pages/HarnessBoardPage.js";
 import {
@@ -163,7 +163,7 @@ export default function App() {
     setKeySaved(false);
   }
 
-  function handleQueueRun() {
+  async function handleQueueRun() {
     const selectedWorkflow = getWorkflowCards(dashboard, { connectedProviders }).find((workflow) => workflow.id === selectedWorkflowId);
     const selectedWorkflowReady = selectedWorkflow?.readiness === "Available now";
 
@@ -174,8 +174,26 @@ export default function App() {
     if (!packageReady || !selectedWorkflowReady) {
       return;
     }
-    setRunStatus("queued");
-    navigate("/results");
+
+    if (dashboardRuntime.mode === "bootstrap_only") {
+      setRunStatus("queued");
+      navigate("/results");
+      return;
+    }
+
+    try {
+      await dashboardRuntime.client.startWorkflowRun({
+        authorization: dashboardRuntime.authorization ?? "",
+        workflowId: selectedWorkflowId
+      });
+      setRunStatus("queued");
+      navigate("/results");
+    } catch (error) {
+      if (error instanceof DashboardClientRequestError && error.code === "service_unavailable") {
+        return;
+      }
+      throw error;
+    }
   }
 
   function handleUpdateTeamTab(nextTab: TeamTab) {

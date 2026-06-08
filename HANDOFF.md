@@ -4,11 +4,11 @@ This handoff is intentionally overwritten after each phase. It now describes the
 
 ## Status
 
-Phases 0 through 10 are complete, tested, and reviewed locally.
+Phases 0 through 11 are complete, tested, and reviewed locally.
 
 The first post-MVP productization slices are implemented locally: security baseline helpers, Wealth Factory boundary layer, package entitlements/provider requirements, temporary artifacts, expanded provider definitions, a Wealth Factory dashboard POC surface, the first API-backed dashboard foundation, and the first database-backed ACID/race-condition foundation.
 
-The next session should enter through the harness lane first, read the current phased native-replacement plan, and continue from the now-complete Phase 10 bounded board-exposure widening for `wf_package_followup` into the next native-expansion seam instead of reopening Paperclip adapter dependency for already-migrated families. `wf_package_followup` is now native on the worker/runtime seam beside `wf_connect_first_workflow` and `wf_tax_strategy`, and it is now board-exposed through the explicit workflow selector seam too. The remaining truth gap is the deeper public run-start/API seam, which still needs its own dedicated cutover phase rather than being inferred from the board exposure alone.
+The next session should enter through the harness lane first, read the current phased native-replacement plan, and continue from the now-complete Phase 11 public run-start/API cutover for the widened native families into the next native-expansion seam instead of reopening Paperclip adapter dependency for already-migrated families. `wf_package_followup` is now native on the worker/runtime seam beside `wf_connect_first_workflow` and `wf_tax_strategy`, it is board-exposed through the explicit workflow selector seam, and the runtime-backed dashboard start path is now real for those widened families. The remaining distinction that must stay explicit is that the browser-only bootstrap/demo shell still uses a bounded local fallback path when no runtime API is present.
 
 ## Reference Docs
 

@@ -341,11 +341,47 @@ Completed outcome:
 - Client routing, HTTP selector parsing, runtime registry truth, and local demo seed wiring now all recognize the Package Follow-up workflow family directly.
 - This phase intentionally stops short of claiming full public run-start cutover; the board exposure is now truthful, while the deeper start-path/API seam remains a later dedicated phase.
 
+## Phase 11: Public Run-Start API Cutover For Widened Native Families
+
+Status: `completed`
+
+Goal:
+- Replace the fake dashboard queued-state stub with a real authenticated API-to-reservation cutover for the already-widened native workflow families, while keeping the existing outbox-first queue discipline and avoiding direct worker launch from the browser.
+
+Scope:
+- Add a bounded authenticated dashboard run-start HTTP route.
+- Route that new public seam into the existing ACID reservation + workflow queue outbox staging path.
+- Update the browser dashboard client to call the real start endpoint and preserve bounded error codes.
+- Update the app start action to use the real runtime API when the app is running behind the authenticated runtime shell, while keeping the browser-only bootstrap shell fallback for local/demo surfaces that do not have the runtime API.
+
+Required outputs:
+- `POST /api/dashboard/runs` exists as a guarded authenticated runtime route.
+- The runtime dashboard composition can start a run only when queue start wiring is available, and fails closed otherwise.
+- The browser dashboard client can start a workflow run and preserve bounded `invalid_request`, `conflict`, `rate_limited`, and `service_unavailable` failure codes.
+- The app start button no longer marks a runtime-backed workflow as queued before the API confirms reservation.
+
+Non-goals:
+- No direct browser-to-worker launch path.
+- No queue-engine rewrite.
+- No removal of the browser-only bootstrap/demo fallback in this phase.
+- No new board widening beyond the already-selected workflow families.
+
+Exit criteria:
+- Focused tests prove the new dashboard POST route, runtime composition wiring, and browser client mutation seam.
+- Full repo verification is green after the cutover lands.
+- Handoff and TODO surfaces explicitly distinguish the now-real runtime-backed public start seam from the still-existing browser-only fallback shell.
+
+Completed outcome:
+- The public runtime-backed dashboard now exposes `POST /api/dashboard/runs` as a real authenticated start path instead of only a local queued-state UI stub.
+- That public start path composes the existing ACID reservation and outbox staging seam rather than bypassing it, so the browser never launches workers directly.
+- The browser dashboard client now knows how to start workflow runs and preserve bounded failure codes for operator/member handling.
+- The app start button now waits for runtime-backed queue confirmation before surfacing `queued`, while the browser-only bootstrap shell still uses a bounded fallback path for local/demo surfaces that do not have the runtime API.
+
 ## Immediate Execution Order
 
 1. Keep the migrated `wf_connect_first_workflow` native path green under the full verification bar.
 2. Keep the migrated `wf_tax_strategy` native worker/runtime and board/start paths green under the full verification bar.
-3. Keep the migrated `wf_package_followup` native worker/runtime and board exposure seams green under the full verification bar.
-4. Choose the next bounded seam between a real public run-start cutover for the widened native families or the next native workflow-family migration.
+3. Keep the migrated `wf_package_followup` native worker/runtime, board exposure, and runtime-backed public start seams green under the full verification bar.
+4. Choose the next bounded seam between another native workflow-family migration or a later cleanup/removal of browser-only fallback/demo start behavior.
 5. Keep the legacy Paperclip adapter backlog explicitly scoped to still-unmigrated workflows.
 6. Re-run focused and full repo verification before each additional native-family cutover or public-surface widening.

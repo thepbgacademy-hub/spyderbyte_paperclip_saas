@@ -62,6 +62,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Phase 8: Widen board/start selector, entitlement, and package-install support for multiple native workflow families.
 - [x] Phase 9: Migrate `wf_package_followup` onto the native worker/runtime seam without widening board/start exposure.
 - [x] Phase 10: Widen the explicit board exposure and local demo/package wiring for `wf_package_followup` without overstating the public run-start seam.
+- [x] Phase 11: Cut over the runtime-backed public dashboard start path onto the real reservation/outbox seam for the widened native families.
 
 - [x] Phase 6: VPS deployment POC.
 - [x] Create VPS deployment POC configuration.
@@ -187,6 +188,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Phase 8: Native board/start selector widening is complete for `wf_connect_first_workflow` and `wf_tax_strategy`.
 - [x] Phase 9: Third native workflow family migration is complete for `wf_package_followup` on the worker/runtime seam.
 - [x] Phase 10: `wf_package_followup` is now explicit-selector-safe on the board seam with bounded deliverable and demo/package wiring truth, while the deeper public run-start/API cutover remains a later phase.
+- [x] Phase 11: The runtime-backed public dashboard start path is now real for the widened native families, while the browser-only bootstrap/demo shell still uses a bounded fallback when no runtime API is present.
 
 ## Later Phases
 

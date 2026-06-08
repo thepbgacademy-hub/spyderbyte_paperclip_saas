@@ -101,6 +101,57 @@ function resetMockExportDeliveryRow(overrides: Partial<typeof defaultExportDeliv
 
 function createMockDbQuery() {
   return vi.fn(async (sql: string, values: readonly unknown[] = []) => {
+    if (sql.includes("select paused_at from wfpc.tenants")) {
+      return { rows: [{ paused_at: null }] };
+    }
+
+    if (sql.includes("from wfpc.tenant_memberships")) {
+      return { rows: [{ tenant_id: values[0] ?? "tenant-1" }] };
+    }
+
+    if (sql.includes("from wfpc.workflow_templates") && sql.includes("for update")) {
+      return {
+        rows: [
+          {
+            id: values[1] ?? "workflow-template-1",
+            package_id: "pkg_bib_connect",
+            provider_kind: "openai_api"
+          }
+        ]
+      };
+    }
+
+    if (sql.includes("from wfpc.tenant_package_installs i")) {
+      return { rows: [{ id: "install-1" }] };
+    }
+
+    if (sql.includes("from wfpc.package_provider_requirements")) {
+      return {
+        rows: [{ id: "requirement-1", capability: "text_generation", provider_kind: "openai_api" }]
+      };
+    }
+
+    if (sql.includes("from wfpc.secret_references") && sql.includes("for update")) {
+      return {
+        rows: [
+          {
+            id: "secret-reference-1",
+            secret_ref: "wf_secret_demo_openai",
+            label: "OpenAI",
+            metadata: {}
+          }
+        ]
+      };
+    }
+
+    if (sql.includes("insert into wfpc.workflow_run_reservations")) {
+      return { rows: [{ id: "reservation-1" }] };
+    }
+
+    if (sql.includes("insert into wfpc.workflow_runs")) {
+      return { rows: [{ id: values[0] ?? "run-123" }] };
+    }
+
     if (sql.includes("from wfpc.harness_export_deliveries") && sql.includes("idempotency_key")) {
       return { rows: [mockExportDeliveryRow] };
     }
@@ -564,6 +615,86 @@ describe("runtime server", () => {
     await runtime.close();
   });
 
+  it("routes dashboard run-start requests through the runtime dashboard surface when queue start is wired", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: {
+        authenticate: vi.fn().mockResolvedValue({
+          tenantId: "tenant-1",
+          userId: "user-1",
+          role: "member"
+        })
+      },
+      workflowQueueEnqueuer: { enqueueOnce: vi.fn().mockResolvedValue("enqueued") }
+    });
+
+    const request = createRequest({
+      method: "POST",
+      url: "/api/dashboard/runs",
+      headers: {
+        authorization: "Bearer token",
+        origin: "https://www.spyderbyte.cloud",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ workflowId: "workflow-template-1" })
+    });
+    const response = createResponse();
+
+    runtime.server.emit("request", request as unknown as IncomingMessage, response as unknown as ServerResponse);
+    await response.finished;
+
+    expect(response.statusCode).toBe(202);
+    expect(response.body).toContain("\"queued\":true");
+    expect(response.body).toContain("\"runId\":");
+    await runtime.close();
+  });
+
+  it("fails closed on dashboard run-start requests when queue start is unavailable", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: {
+        authenticate: vi.fn().mockResolvedValue({
+          tenantId: "tenant-1",
+          userId: "user-1",
+          role: "member"
+        })
+      }
+    });
+
+    const request = createRequest({
+      method: "POST",
+      url: "/api/dashboard/runs",
+      headers: {
+        authorization: "Bearer token",
+        origin: "https://www.spyderbyte.cloud",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ workflowId: "workflow-template-1" })
+    });
+    const response = createResponse();
+
+    runtime.server.emit("request", request as unknown as IncomingMessage, response as unknown as ServerResponse);
+    await response.finished;
+
+    expect(response.statusCode).toBe(503);
+    expect(response.body).toBe(JSON.stringify({ code: "service_unavailable" }));
+    await runtime.close();
+  });
+
   it("routes the harness direct-child mutation through the runtime harness surface", async () => {
     const runtime = createDashboardRuntime({
       env: {
@@ -765,7 +896,7 @@ describe("runtime server", () => {
     await runtime.close();
 
     expect(createQueueOutboxPump).toHaveBeenCalled();
-    const pump = vi.mocked(createQueueOutboxPump).mock.results[0]?.value;
+    const pump = vi.mocked(createQueueOutboxPump).mock.results.at(-1)?.value;
     expect(pump.start).toHaveBeenCalledOnce();
     expect(pump.stop).toHaveBeenCalledOnce();
   });

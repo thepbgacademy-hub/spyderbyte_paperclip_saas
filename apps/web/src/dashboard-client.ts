@@ -54,6 +54,18 @@ export type DashboardBootstrap = {
   initialResponse?: unknown;
 };
 
+export type DashboardRunStartResponse = {
+  runId: string;
+  queued: true;
+};
+
+export class DashboardClientRequestError extends Error {
+  constructor(readonly code: string, readonly status: number) {
+    super("Dashboard request failed");
+    this.name = "DashboardClientRequestError";
+  }
+}
+
 declare global {
   interface Window {
     __WF_DASHBOARD_BOOTSTRAP__?: DashboardBootstrap;
@@ -109,6 +121,33 @@ export function createDashboardClient(options: DashboardClientOptions) {
       }
 
       return mapDashboardResponse(await response.json());
+    },
+
+    async startWorkflowRun(request: { authorization: string; workflowId: string }): Promise<DashboardRunStartResponse> {
+      if (!fetchImpl) {
+        return {
+          runId: "preview-local-run",
+          queued: true
+        };
+      }
+
+      const response = await fetchImpl(`${apiBaseUrl}/api/dashboard/runs`, {
+        method: "POST",
+        headers: {
+          authorization: request.authorization,
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({ workflowId: request.workflowId })
+      });
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({ code: "service_unavailable" }));
+        throw new DashboardClientRequestError(
+          typeof errorBody?.code === "string" ? errorBody.code : "service_unavailable",
+          response.status
+        );
+      }
+
+      return (await response.json()) as DashboardRunStartResponse;
     }
   };
 }
@@ -135,10 +174,16 @@ export function getBrowserDashboardBootstrap(browserWindow: Window = window): Da
 export function createBrowserDashboardClient(browserWindow: Window = window) {
   const bootstrap = getBrowserDashboardBootstrap(browserWindow);
   const fallbackSnapshot = bootstrap?.initialSnapshot ?? (bootstrap?.initialResponse ? mapDashboardResponse(bootstrap.initialResponse) : defaultSnapshot);
+  const mode = bootstrap?.initialResponse ? "runtime_api" : "bootstrap_only";
 
   return {
     authorization: null,
-    client: createDashboardClient(fallbackSnapshot)
+    mode,
+    client: createDashboardClient({
+      apiBaseUrl: "",
+      fetchImpl: browserWindow.fetch.bind(browserWindow),
+      fallbackSnapshot
+    })
   };
 }
 

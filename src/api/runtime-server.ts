@@ -143,7 +143,7 @@ import { createStorageOAuthService, STORAGE_OAUTH_PROVIDER_CONFIGS } from "../st
 import { createPostgresOAuthStateStore } from "../storage/postgres-oauth-state-store.js";
 import { createVaultBackedStorageOAuthRegistration } from "../storage/vault-backed-storage-oauth-registration.js";
 import { createHarnessWorkflowRegistry } from "../wealthfactory/workflow-registry.js";
-import type { WorkflowRunEnqueuer } from "../workflows/acid-run-reservation.js";
+import { createAcidRunReservationService, type WorkflowRunEnqueuer } from "../workflows/acid-run-reservation.js";
 import { createQueueOutboxPump } from "../workflows/queue-outbox-pump.js";
 import { createQueueOutboxWorker } from "../workflows/queue-outbox-worker.js";
 
@@ -373,6 +373,13 @@ export function createDashboardRuntime(options: {
         })
       })
     : undefined;
+  const workflowRunReservation =
+    options.workflowQueueEnqueuer
+      ? createAcidRunReservationService({
+          repository: acidRepository,
+          enqueuer: options.workflowQueueEnqueuer
+        })
+      : undefined;
   const dashboardApi = createDashboardApi({
     authenticate: options.auth.authenticate,
     requireTenantMember: repositories.requireTenantMember,
@@ -381,7 +388,21 @@ export function createDashboardRuntime(options: {
     listArtifacts: repositories.listArtifacts,
     listProviderConnections: repositories.listProviderConnections,
     listStorageConnectors: repositories.listStorageConnectors,
-    getPlatformLoad: repositories.getPlatformLoad
+    getPlatformLoad: repositories.getPlatformLoad,
+    ...(workflowRunReservation
+      ? {
+          startWorkflowRun: async (input: { tenantId: string; userId: string; workflowId: string }) => {
+            const runId = randomUUID();
+            return workflowRunReservation.reserveAndEnqueue({
+              tenantId: input.tenantId,
+              userId: input.userId,
+              workflowTemplateId: input.workflowId,
+              runId,
+              idempotencyKey: `${input.tenantId}:${input.workflowId}:${runId}`
+            });
+          }
+        }
+      : {})
   });
   const governanceHistoryExportWriter =
     options.governanceHistoryExportWriter ??

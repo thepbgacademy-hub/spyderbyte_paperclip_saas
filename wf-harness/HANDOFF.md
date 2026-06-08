@@ -98,9 +98,11 @@ The first harness implementation slice is now built and verified:
 - Phase 8 native board/start selector widening is now also complete for `wf_connect_first_workflow` and `wf_tax_strategy`.
 - Phase 9 third native harness workflow family migration is now also complete for `wf_package_followup`.
 - Phase 10 bounded board exposure widening is now also complete for `wf_package_followup`.
+- Phase 11 runtime-backed public dashboard start-path cutover is now also complete for the widened native families.
 - `wf_tax_strategy` is now explicit-selector-safe on the board/start seam as well as native-default on the worker/runtime seam, without implying that every future native family is tenant-visible by default.
 - `wf_package_followup` is now explicit-selector-safe on the board seam too, with bounded deliverable and demo/package wiring truth that matches its native worker/runtime path.
-- The immediate continuation point is the deeper public run-start/API cutover seam or the next bounded native workflow-family migration, not a return to Paperclip dependency for the migrated workflow families and not a re-widening of already-proven board contracts.
+- The widened native families now have a real runtime-backed public dashboard start path too, while the browser-only bootstrap/demo shell still uses a bounded fallback when no runtime API is present.
+- The immediate continuation point is the next bounded native workflow-family migration or a later cleanup/removal pass on the browser-only fallback seam, not a return to Paperclip dependency for the migrated workflow families and not a re-widening of already-proven board contracts.
 
 ## Standard Preflight
 

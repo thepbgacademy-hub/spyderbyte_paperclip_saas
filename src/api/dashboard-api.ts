@@ -1,5 +1,6 @@
 import { assertWealthFactoryResponse } from "../wealthfactory/response-guard.js";
 import type { CustomerSafePlatformLoad } from "../db/supabase-repositories.js";
+import { WorkflowRunReservationError } from "../workflows/acid-run-reservation.js";
 
 export type ApiRole = "member" | "operator";
 
@@ -19,6 +20,36 @@ export class ApiAuthError extends Error {
   }
 }
 
+export class DashboardApiRequestError extends Error {
+  readonly code = "invalid_request";
+  readonly publicMessage = "invalid_request";
+
+  constructor(message = "Invalid request") {
+    super(message);
+    this.name = "DashboardApiRequestError";
+  }
+}
+
+export class DashboardApiConflictError extends Error {
+  readonly code = "conflict";
+  readonly publicMessage = "conflict";
+
+  constructor(readonly reason: string) {
+    super("Workflow run could not be started");
+    this.name = "DashboardApiConflictError";
+  }
+}
+
+export class DashboardApiServiceUnavailableError extends Error {
+  readonly code = "service_unavailable";
+  readonly publicMessage = "service_unavailable";
+
+  constructor(message = "Workflow start is unavailable") {
+    super(message);
+    this.name = "DashboardApiServiceUnavailableError";
+  }
+}
+
 type DashboardApiDeps = {
   authenticate(input: { authorization: string; cookie?: string }): Promise<ApiSession | null>;
   requireTenantMember(input: { tenantId: string; userId: string }): Promise<void>;
@@ -28,6 +59,7 @@ type DashboardApiDeps = {
   listProviderConnections(input: { tenantId: string; userId: string }): Promise<unknown[]>;
   listStorageConnectors(input: { tenantId: string; userId: string }): Promise<unknown[]>;
   getPlatformLoad(input: { tenantId: string; userId: string }): Promise<CustomerSafePlatformLoad>;
+  startWorkflowRun?: (input: { tenantId: string; userId: string; workflowId: string }) => Promise<{ runId: string; queued: true }>;
 };
 
 export function createDashboardApi(deps: DashboardApiDeps) {
@@ -62,6 +94,39 @@ export function createDashboardApi(deps: DashboardApiDeps) {
 
       assertWealthFactoryResponse(response);
       return response;
+    },
+
+    async startWorkflowRun(request: { authorization: string; cookie?: string; workflowId: string }) {
+      const session = await deps.authenticate({ authorization: request.authorization, ...(request.cookie ? { cookie: request.cookie } : {}) });
+      if (!session) {
+        throw new ApiAuthError();
+      }
+
+      await deps.requireTenantMember({ tenantId: session.tenantId, userId: session.userId });
+
+      const workflowId = request.workflowId.trim();
+      if (workflowId.length === 0) {
+        throw new DashboardApiRequestError();
+      }
+
+      if (!deps.startWorkflowRun) {
+        throw new DashboardApiServiceUnavailableError();
+      }
+
+      try {
+        const response = await deps.startWorkflowRun({
+          tenantId: session.tenantId,
+          userId: session.userId,
+          workflowId
+        });
+        assertWealthFactoryResponse(response);
+        return response;
+      } catch (error) {
+        if (error instanceof WorkflowRunReservationError) {
+          throw new DashboardApiConflictError(error.reason);
+        }
+        throw error;
+      }
     }
   };
 }
