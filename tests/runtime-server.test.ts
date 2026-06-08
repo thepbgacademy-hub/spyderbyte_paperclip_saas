@@ -797,7 +797,7 @@ describe("runtime server", () => {
     await runtime.close();
   });
 
-  it("keeps package-followup native but board-dark when it is the only harness-enabled family in runtime env", async () => {
+  it("keeps package-followup native and board-exposed when it is the only harness-enabled family in runtime env", async () => {
     const runtime = createDashboardRuntime({
       env: {
         supabaseDbUrl: TEST_SUPABASE_DB_URL,
@@ -816,7 +816,7 @@ describe("runtime server", () => {
     const workflowRegistry = boardServiceOptions?.workflowRegistry;
     expect(workflowRegistry).toBeDefined();
     expect(workflowRegistry?.getDefinition("wf_package_followup").executionEngine).toBe("wf_native_v1");
-    expect(workflowRegistry?.listBoardExposedWorkflowIds()).toEqual([]);
+    expect(workflowRegistry?.listBoardExposedWorkflowIds()).toEqual(["wf_package_followup"]);
 
     await runtime.close();
   });

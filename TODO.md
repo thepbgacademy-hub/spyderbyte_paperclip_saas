@@ -61,6 +61,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Overwrite `HANDOFF.md` with Phase 6-only next steps.
 - [x] Phase 8: Widen board/start selector, entitlement, and package-install support for multiple native workflow families.
 - [x] Phase 9: Migrate `wf_package_followup` onto the native worker/runtime seam without widening board/start exposure.
+- [x] Phase 10: Widen the explicit board exposure and local demo/package wiring for `wf_package_followup` without overstating the public run-start seam.
 
 - [x] Phase 6: VPS deployment POC.
 - [x] Create VPS deployment POC configuration.
@@ -185,6 +186,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Phase 7: Second native workflow family migration is complete for `wf_tax_strategy`.
 - [x] Phase 8: Native board/start selector widening is complete for `wf_connect_first_workflow` and `wf_tax_strategy`.
 - [x] Phase 9: Third native workflow family migration is complete for `wf_package_followup` on the worker/runtime seam.
+- [x] Phase 10: `wf_package_followup` is now explicit-selector-safe on the board seam with bounded deliverable and demo/package wiring truth, while the deeper public run-start/API cutover remains a later phase.
 
 ## Later Phases
 

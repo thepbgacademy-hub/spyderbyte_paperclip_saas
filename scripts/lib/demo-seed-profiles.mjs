@@ -140,6 +140,26 @@ export const DEMO_PROFILES = {
     providerLabel: "OpenAI",
     providerSecretRef: "wf_secret_demo_tax_strategy_openai",
     providerMetadata: { project: "tax-strategy" }
+  },
+  "package-followup": {
+    userId: "11111111-1111-4111-8111-888888888888",
+    tenantId: "22222222-2222-4222-8222-999999999999",
+    packageId: "33333333-3333-4333-8333-555555555555",
+    workflowId: "44444444-4444-4444-8444-bbbbbbbbbbbb",
+    providerReferenceId: "55555555-5555-4555-8555-cccccccccccc",
+    purchaseId: "66666666-6666-4666-8666-dddddddddddd",
+    tenantName: "Wealth Factory Package Follow-up Demo",
+    tenantSlug: "wealth-factory-package-followup-demo",
+    userEmail: "package-followup@wealthfactory.local",
+    packageKey: "package-followup",
+    packageName: "Package Follow-up",
+    packageKind: "industry",
+    packageMetadata: { industry: "client-success" },
+    workflowName: "Wealth Factory Package Follow-up",
+    workflowDescription: "Advance the bounded package follow-up workflow for the installed package.",
+    providerLabel: "OpenAI",
+    providerSecretRef: "wf_secret_demo_package_followup_openai",
+    providerMetadata: { project: "package-followup" }
   }
 };
 

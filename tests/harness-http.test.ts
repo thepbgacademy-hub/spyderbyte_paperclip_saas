@@ -152,6 +152,43 @@ describe("harness HTTP boundary", () => {
     });
   });
 
+  it("threads the package-followup workflow selector through the board request seam", async () => {
+    const listBoardState = vi.fn().mockResolvedValue({
+      runId: "run_123",
+      workflowId: "wf_package_followup",
+      packageId: "pkg_package_followup",
+      columns: [],
+      cards: [],
+      pendingApprovals: [],
+      followThroughItems: [],
+      recentDecisions: []
+    });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState,
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      decideProposal: vi.fn(),
+      completeRun: vi.fn(),
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
+    });
+
+    const response = await handler({
+      method: "GET",
+      path: "/api/harness/board",
+      query: { workflowId: "wf_package_followup" },
+      headers: { origin: "https://portal.wealthfactory.test", authorization: "Bearer valid" },
+      bodyByteLength: 0,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(listBoardState).toHaveBeenCalledWith({
+      authorization: "Bearer valid",
+      workflowId: "wf_package_followup"
+    });
+  });
+
   it("answers authenticated harness board preflight requests", async () => {
     const listBoardState = vi.fn();
     const createTopLevelChildCard = vi.fn();

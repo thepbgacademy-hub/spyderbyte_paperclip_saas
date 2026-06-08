@@ -66,7 +66,9 @@ describe("Wealth Factory boundary layer", () => {
 
   it("keeps the cut-over workflow family native by default even without an explicit harness-enabled env flag", () => {
     const disabledRegistry = createHarnessWorkflowRegistry({ harnessEnabledWorkflowIds: [] });
-    const enabledRegistry = createHarnessWorkflowRegistry({ harnessEnabledWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy"] });
+    const enabledRegistry = createHarnessWorkflowRegistry({
+      harnessEnabledWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"]
+    });
     const taxOnlyRegistry = createHarnessWorkflowRegistry({ harnessEnabledWorkflowIds: ["wf_tax_strategy"] });
     const packageFollowupOnlyRegistry = createHarnessWorkflowRegistry({ harnessEnabledWorkflowIds: ["wf_package_followup"] });
 
@@ -101,7 +103,11 @@ describe("Wealth Factory boundary layer", () => {
     expect(disabledRegistry.getDefinition("wf_package_followup").executionEngine).toBe("wf_native_v1");
     expect(enabledRegistry.listHarnessEligibleWorkflowIds()).toEqual(["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"]);
     expect(enabledRegistry.listNativeExecutorWorkflowIds()).toEqual(["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"]);
-    expect(enabledRegistry.listBoardExposedWorkflowIds()).toEqual(["wf_connect_first_workflow", "wf_tax_strategy"]);
+    expect(enabledRegistry.listBoardExposedWorkflowIds()).toEqual([
+      "wf_connect_first_workflow",
+      "wf_tax_strategy",
+      "wf_package_followup"
+    ]);
     expect(taxOnlyRegistry.listBoardExposedWorkflowIds()).toEqual(["wf_tax_strategy"]);
     expect(enabledRegistry.getDefinition("wf_connect_first_workflow").executionEngine).toBe("wf_native_v1");
     expect(enabledRegistry.getDefinition("wf_tax_strategy").executionEngine).toBe("wf_native_v1");
@@ -112,7 +118,7 @@ describe("Wealth Factory boundary layer", () => {
     expect(enabledRegistry.getDefinition("wf_tax_strategy").packageId).toBe("pkg_tax_strategy");
     expect(enabledRegistry.getDefinition("wf_package_followup").privateMapping).toBeUndefined();
     expect(enabledRegistry.getDefinition("wf_package_followup").packageId).toBe("pkg_package_followup");
-    expect(packageFollowupOnlyRegistry.listBoardExposedWorkflowIds()).toEqual([]);
+    expect(packageFollowupOnlyRegistry.listBoardExposedWorkflowIds()).toEqual(["wf_package_followup"]);
   });
 
   it("maps internal run records to Wealth Factory DTOs and blocks forbidden fields", () => {

@@ -263,6 +263,74 @@ describe("harness board service", () => {
     ).rejects.toThrow(/outside the approved workflow boundary/);
   });
 
+  it("accepts the package-followup deliverable catalog on the selected package-followup board", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid", workflowId: "wf_package_followup" });
+    expect(board.workflowId).toBe("wf_package_followup");
+    expect(board.packageId).toBe("pkg_package_followup");
+
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      workflowId: "wf_package_followup",
+      persona: "cmo",
+      title: "Draft the package follow-up narrative",
+      deliverableType: "launch_copy"
+    }));
+
+    const hydrated = await service.listBoardState({ authorization: "Bearer valid", workflowId: "wf_package_followup" });
+    const createdCard = hydrated.cards.find((card) => card.id === created.cardId);
+
+    expect(createdCard).toMatchObject({
+      persona: "CMO",
+      deliverableLabel: "Launch Copy"
+    });
+  });
+
+  it("fails closed when a connect-first-only deliverable is requested on the package-followup board", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid", workflowId: "wf_package_followup" });
+
+    await expect(
+      service.createTopLevelChildCard({
+        authorization: "Bearer valid",
+        workflowId: "wf_package_followup",
+        persona: "cfo",
+        title: "Pressure-test the pricing lane",
+        deliverableType: "pricing_review"
+      })
+    ).rejects.toThrow(/outside the approved workflow boundary/);
+  });
+
   it("fails closed when tenant membership is missing but keeps infrastructure errors visible", async () => {
     const missingMembershipRepository = createInMemoryHarnessRepository();
     const missingMembershipService = createHarnessBoardService({

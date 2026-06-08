@@ -29,6 +29,17 @@ describe("demo seed profiles", () => {
     });
   });
 
+  it("resolves the built-in package-followup preset with native package wiring", () => {
+    expect(resolveDemoSeedProfile({ lane: "package-followup" }, {})).toMatchObject({
+      laneName: "package-followup",
+      packageId: "33333333-3333-4333-8333-555555555555",
+      packageKey: "package-followup",
+      packageName: "Package Follow-up",
+      workflowName: "Wealth Factory Package Follow-up",
+      workflowDescription: "Advance the bounded package follow-up workflow for the installed package."
+    });
+  });
+
   it("fails closed on an unknown lane when required explicit ids are missing", () => {
     expect(() => resolveDemoSeedProfile({ lane: "octonary" }, {})).toThrow(
       "Unknown demo lane 'octonary'. Use a known preset"

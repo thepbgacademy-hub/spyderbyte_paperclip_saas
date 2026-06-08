@@ -305,11 +305,47 @@ Completed outcome:
 - `wf_package_followup` worker starts now stay off Paperclip launch env and emit explicit `wf_native_v1` execution-engine provenance on the worker seam.
 - Board/start exposure intentionally remains limited to `wf_connect_first_workflow` and `wf_tax_strategy`, so `wf_package_followup` does not become tenant-visible there until a later explicit widening phase.
 
+## Phase 10: Deliberate Board Exposure Widening For `wf_package_followup`
+
+Status: `completed`
+
+Goal:
+- Widen the explicit board selector and local package/demo wiring so `wf_package_followup` becomes tenant-visible on the board seam without overstating the still-separate public run-start API seam.
+
+Scope:
+- Add `wf_package_followup` to the explicit board-exposed workflow allowlist.
+- Reuse the existing explicit selector seam rather than inventing a new board bootstrap path.
+- Add bounded board-service proof that the Package Follow-up workflow accepts only its own deliverable catalog on the selected board.
+- Add local demo/package seed truth for the Package Follow-up workflow family so board/package setup is not left as registry-only metadata.
+- Keep the worker/runtime native path unchanged and do not claim that the dashboard start button is already a real queue-reservation path for every exposed family.
+
+Required outputs:
+- `wf_package_followup` is board-exposed only through the explicit workflow selector seam.
+- The board contract accepts Package Follow-up deliverables and rejects deliverables outside that family boundary.
+- The client, HTTP, routing, and runtime registry seams all preserve the `workflowId=wf_package_followup` selector truth.
+- Local demo seed profiles include a built-in Package Follow-up preset with package identity and workflow copy aligned to the native registry definition.
+
+Non-goals:
+- No new public run-start API or queue reservation flow in this phase.
+- No widening of dashboard/start claims beyond the existing selector/bootstrap seam.
+- No migration of another workflow family in the same phase.
+
+Exit criteria:
+- Focused tests prove the widened board exposure, selector threading, board deliverable guardrails, and local demo/package preset truth.
+- Full repo verification is green after the widening lands.
+- Handoff and TODO surfaces point at the next seam: either the real public run-start cutover for the widened native families or the next bounded workflow-family migration.
+
+Completed outcome:
+- `wf_package_followup` is now part of the explicit board-exposed workflow allowlist instead of staying worker-only.
+- The board service now accepts the Package Follow-up deliverable catalog on the selected Package Follow-up board and still fails closed on out-of-family deliverables.
+- Client routing, HTTP selector parsing, runtime registry truth, and local demo seed wiring now all recognize the Package Follow-up workflow family directly.
+- This phase intentionally stops short of claiming full public run-start cutover; the board exposure is now truthful, while the deeper start-path/API seam remains a later dedicated phase.
+
 ## Immediate Execution Order
 
 1. Keep the migrated `wf_connect_first_workflow` native path green under the full verification bar.
 2. Keep the migrated `wf_tax_strategy` native worker/runtime and board/start paths green under the full verification bar.
-3. Keep the migrated `wf_package_followup` native worker/runtime path green under the full verification bar while preserving the current board/start exposure boundary.
-4. Choose the next bounded workflow family or board/start widening seam for native expansion without widening Paperclip dependency again.
+3. Keep the migrated `wf_package_followup` native worker/runtime and board exposure seams green under the full verification bar.
+4. Choose the next bounded seam between a real public run-start cutover for the widened native families or the next native workflow-family migration.
 5. Keep the legacy Paperclip adapter backlog explicitly scoped to still-unmigrated workflows.
-6. Re-run focused and full repo verification before each additional native-family cutover.
+6. Re-run focused and full repo verification before each additional native-family cutover or public-surface widening.

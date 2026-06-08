@@ -69,6 +69,33 @@ describe("harness board client", () => {
     }));
   });
 
+  it("threads the package-followup workflow selector through the live board request seam", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        runId: "run_123",
+        workflowId: "wf_package_followup",
+        packageId: "pkg_package_followup",
+        columns: [],
+        cards: [],
+        pendingApprovals: [],
+        followThroughItems: [],
+        recentDecisions: []
+      })
+    });
+    const client = createHarnessBoardClient(
+      fetchImpl as unknown as typeof fetch,
+      { location: { hostname: "app.spyderbyte.cloud", search: "?workflowId=wf_package_followup" } as Window["location"] }
+    );
+
+    await client.fetchBoard();
+
+    expect(fetchImpl).toHaveBeenCalledWith("/api/harness/board?workflowId=wf_package_followup", expect.objectContaining({
+      credentials: "include",
+      signal: expect.any(AbortSignal)
+    }));
+  });
+
   it("submits bounded board actions through the live contract path", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,

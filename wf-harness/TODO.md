@@ -22,6 +22,7 @@ This file tracks the new harness subproject only.
   - [x] Phase 7: Second native workflow family migration.
   - [x] Phase 8: Native board/start selector widening.
   - [x] Phase 9: Third native harness workflow family migration.
+  - [x] Phase 10: Bounded board exposure widening for `wf_package_followup`.
 
 ## V1 Build Targets
 
@@ -81,7 +82,7 @@ This file tracks the new harness subproject only.
 
 ## Current Next Slice
 
-- [ ] Decide whether the next native-expansion seam should be another worker/runtime family migration or a deliberate board/start exposure widening for `wf_package_followup`.
+- [ ] Decide whether the next native-expansion seam should be the real public run-start/API cutover for the widened native families or the next worker/runtime family migration.
 
 - [x] Read `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md` before continuing the active native replacement track.
 - [x] Reconcile persisted run-state progression with the new child-card advancement seam so run-level status is no longer effectively bootstrap-only.

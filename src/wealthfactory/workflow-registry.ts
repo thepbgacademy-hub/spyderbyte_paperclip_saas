@@ -30,7 +30,7 @@ export type WealthFactoryWorkflowListItem = {
 
 export const WF_HARNESS_ELIGIBLE_WORKFLOWS = ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"] as const;
 export const WF_NATIVE_DEFAULT_WORKFLOWS = ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"] as const;
-export const WF_BOARD_EXPOSED_WORKFLOWS = ["wf_connect_first_workflow", "wf_tax_strategy"] as const;
+export const WF_BOARD_EXPOSED_WORKFLOWS = ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"] as const;
 const WF_CONNECT_FIRST_WORKFLOW_DELIVERABLE_TYPES = [
   "plan",
   "pricing_review",
