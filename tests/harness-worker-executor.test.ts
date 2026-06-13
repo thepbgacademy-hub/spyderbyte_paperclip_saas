@@ -265,6 +265,15 @@ describe("harness worker executor", () => {
           }
         ]
       },
+      orchestratorHandoff: {
+        orchestratorPersona: "ceo",
+        dispatchReason: "The CEO approved this lane for its next bounded execution step.",
+        scopeGuard:
+          "Stay inside this lane only. Do not open new lanes, widen package scope, or assume new governance approval beyond this execution handoff.",
+        completionRule:
+          "Return exactly one bounded lane outcome: done only when this lane is complete, waiting when an explicit resume is needed, blocked when a prerequisite is missing, or cancelled when the lane should end without completion.",
+        resumeDirective: "CFO should continue this active pricing review lane: Pressure-test the pricing lane."
+      },
       dispatchHandoff: {
         kind: "initial_claim",
         kindLabel: "Initial lane claim",
@@ -274,7 +283,36 @@ describe("harness worker executor", () => {
       outcomeContract: {
         allowedStates: ["waiting", "done", "blocked", "cancelled"],
         resultSummaryRequiredStates: ["done"],
-        resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"]
+        resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"],
+        postOutcomeDirectives: [
+          {
+            outcomeState: "waiting",
+            runState: "waiting",
+            actionKind: "await_lane_resume",
+            summary: "If this lane ends waiting, the board will require an explicit resume decision on this lane.",
+            targetCardId: cfoCard.id
+          },
+          {
+            outcomeState: "done",
+            runState: "assembling",
+            actionKind: "queue_ceo_review",
+            summary: "If this lane ends done, the board will queue CEO review (Final assembly).",
+            reason: "final_assembly"
+          },
+          {
+            outcomeState: "blocked",
+            runState: "blocked",
+            actionKind: "await_unblock",
+            summary: "If this lane ends blocked, the board will require an explicit unblock decision on this lane.",
+            targetCardId: cfoCard.id
+          },
+          {
+            outcomeState: "cancelled",
+            runState: "blocked",
+            actionKind: "none",
+            summary: "If this lane ends cancelled, no automatic post-outcome action will be scheduled."
+          }
+        ]
       },
       laneExecution: expect.objectContaining({
         cardId: cfoCard.id,
@@ -443,9 +481,178 @@ describe("harness worker executor", () => {
       "waiting" | "done" | "blocked" | "cancelled"
     >;
     mutableAllowedStates.pop();
+    const mutableDirectives = firstEnvelope.outcomeContract.postOutcomeDirectives as Array<unknown>;
+    mutableDirectives.pop();
 
     expect(secondEnvelope.outcomeContract.allowedStates).toEqual(["waiting", "done", "blocked", "cancelled"]);
+    expect(secondEnvelope.outcomeContract.postOutcomeDirectives).toHaveLength(4);
     expect(secondEnvelope.executionClaim).toEqual(firstEnvelope.executionClaim);
+  });
+
+  it("derives private post-outcome directives for the current lane and next bounded dispatch", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    const cmoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cmo",
+      title: "Draft the launch narrative",
+      deliverableType: "launch_copy"
+    });
+    cfoCard.state = "approved";
+    cmoCard.state = "approved";
+    cmoCard.updatedAt = new Date(Date.parse(cfoCard.updatedAt) + 1_000).toISOString();
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+    await repository.insertCard(cmoCard);
+
+    const dispatchResolution = await buildHarnessWorkerDispatchResolution({
+      repository,
+      tenantId: "tenant-1",
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow"
+    });
+    const dispatch = dispatchResolution.dispatch;
+    const envelope = await buildHarnessWorkerExecutionEnvelope({
+      repository,
+      tenantId: "tenant-1",
+      dispatch,
+      requiredCapabilities: ["text_generation"],
+      ...(dispatchResolution.lane ? { laneContext: dispatchResolution.lane } : {}),
+      ...(dispatchResolution.executionClaim ? { executionClaimContext: dispatchResolution.executionClaim } : {})
+    });
+
+    expect(envelope).not.toBeNull();
+    if (!envelope) {
+      return;
+    }
+
+    expect(envelope.outcomeContract.postOutcomeDirectives).toEqual([
+      {
+        outcomeState: "waiting",
+        runState: "waiting",
+        actionKind: "dispatch_next_lane",
+        summary: `If this lane ends waiting, the next bounded handoff will dispatch CMO on card ${cmoCard.id}.`,
+        targetCardId: cmoCard.id,
+        targetPersona: "cmo"
+      },
+      {
+        outcomeState: "done",
+        runState: "active",
+        actionKind: "dispatch_next_lane",
+        summary: `If this lane ends done, the next bounded handoff will dispatch CMO on card ${cmoCard.id}.`,
+        targetCardId: cmoCard.id,
+        targetPersona: "cmo"
+      },
+      {
+        outcomeState: "blocked",
+        runState: "blocked",
+        actionKind: "dispatch_next_lane",
+        summary: `If this lane ends blocked, the next bounded handoff will dispatch CMO on card ${cmoCard.id}.`,
+        targetCardId: cmoCard.id,
+        targetPersona: "cmo"
+      },
+      {
+        outcomeState: "cancelled",
+        runState: "active",
+        actionKind: "dispatch_next_lane",
+        summary: `If this lane ends cancelled, the next bounded handoff will dispatch CMO on card ${cmoCard.id}.`,
+        targetCardId: cmoCard.id,
+        targetPersona: "cmo"
+      }
+    ]);
+  });
+
+  it("keeps cross-lane resume directives truthful when another child lane is the actual waiting target", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Finalize pricing review",
+      deliverableType: "pricing_review"
+    });
+    const cmoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cmo",
+      title: "Waiting on market brief",
+      deliverableType: "marketing_plan"
+    });
+    cfoCard.state = "approved";
+    cmoCard.state = "waiting";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+    await repository.insertCard(cmoCard);
+
+    const dispatchResolution = await buildHarnessWorkerDispatchResolution({
+      repository,
+      tenantId: "tenant-1",
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow"
+    });
+    const envelope = await buildHarnessWorkerExecutionEnvelope({
+      repository,
+      tenantId: "tenant-1",
+      dispatch: dispatchResolution.dispatch,
+      requiredCapabilities: ["text_generation"],
+      ...(dispatchResolution.lane ? { laneContext: dispatchResolution.lane } : {}),
+      ...(dispatchResolution.executionClaim ? { executionClaimContext: dispatchResolution.executionClaim } : {})
+    });
+
+    expect(envelope?.outcomeContract.postOutcomeDirectives).toEqual(
+      expect.arrayContaining([
+        {
+          outcomeState: "done",
+          runState: "waiting",
+          actionKind: "await_lane_resume",
+          summary: `If this lane ends done, the board will require an explicit resume decision on CMO card ${cmoCard.id}.`,
+          targetCardId: cmoCard.id
+        }
+      ])
+    );
   });
 
   it("returns no lane execution when all child lanes are terminal or blocked", async () => {

@@ -5,6 +5,7 @@ import { createNativeOpenAITextGenerator, NativeOpenAIExecutionError } from "../
 const CONNECT_FIRST_WORKFLOW_ID = "wf_connect_first_workflow";
 const TAX_STRATEGY_WORKFLOW_ID = "wf_tax_strategy";
 const PACKAGE_FOLLOWUP_WORKFLOW_ID = "wf_package_followup";
+const SEO_AUDIT_WORKFLOW_ID = "wf-seo-audit";
 
 export type NativeExecutionOutcome = {
   state: "waiting" | "done" | "blocked" | "cancelled";
@@ -88,6 +89,23 @@ export function createDefaultNativeExecutor(options?: {
         });
       }
 
+      if (input.workflowId === SEO_AUDIT_WORKFLOW_ID) {
+        const generated = await openAITextGenerator.generateText({
+          binding: input.providerBinding,
+          prompt: buildSeoAuditWorkflowPrompt({
+            workflowId: input.workflowId,
+            executionEnvelope: input.executionEnvelope
+          }),
+          maxOutputTokens: 260,
+          preserveStructuredOutput: true
+        });
+
+        return parseSeoAuditWorkflowOutcome({
+          outputText: generated.outputText,
+          laneExecution: input.executionEnvelope.laneExecution
+        });
+      }
+
       return {
         state: "blocked",
         resumeSummary:
@@ -125,7 +143,14 @@ function buildConnectFirstWorkflowPrompt(input: {
     `Resume focus: ${executionEnvelope.laneExecution.resumeFocus ?? "None"}`,
     `Continuity summary: ${continuitySummary}`,
     `Latest result summary: ${latestResultSummary}`,
-    `Absorbed work items: ${absorbedWork}`
+    `Absorbed work items: ${absorbedWork}`,
+    `Orchestrator persona: ${executionEnvelope.orchestratorHandoff.orchestratorPersona}`,
+    `Dispatch reason: ${executionEnvelope.orchestratorHandoff.dispatchReason}`,
+    `Scope guard: ${executionEnvelope.orchestratorHandoff.scopeGuard}`,
+    `Completion rule: ${executionEnvelope.orchestratorHandoff.completionRule}`,
+    `Resume directive: ${executionEnvelope.orchestratorHandoff.resumeDirective ?? "None"}`,
+    "Post-outcome contract:",
+    ...formatPostOutcomeContractLines(executionEnvelope)
   ].join("\n");
 }
 
@@ -157,7 +182,14 @@ function buildTaxStrategyWorkflowPrompt(input: {
     `Resume focus: ${executionEnvelope.laneExecution.resumeFocus ?? "None"}`,
     `Continuity summary: ${continuitySummary}`,
     `Latest result summary: ${latestResultSummary}`,
-    `Absorbed work items: ${absorbedWork}`
+    `Absorbed work items: ${absorbedWork}`,
+    `Orchestrator persona: ${executionEnvelope.orchestratorHandoff.orchestratorPersona}`,
+    `Dispatch reason: ${executionEnvelope.orchestratorHandoff.dispatchReason}`,
+    `Scope guard: ${executionEnvelope.orchestratorHandoff.scopeGuard}`,
+    `Completion rule: ${executionEnvelope.orchestratorHandoff.completionRule}`,
+    `Resume directive: ${executionEnvelope.orchestratorHandoff.resumeDirective ?? "None"}`,
+    "Post-outcome contract:",
+    ...formatPostOutcomeContractLines(executionEnvelope)
   ].join("\n");
 }
 
@@ -189,8 +221,76 @@ function buildPackageFollowupWorkflowPrompt(input: {
     `Resume focus: ${executionEnvelope.laneExecution.resumeFocus ?? "None"}`,
     `Continuity summary: ${continuitySummary}`,
     `Latest result summary: ${latestResultSummary}`,
-    `Absorbed work items: ${absorbedWork}`
+    `Absorbed work items: ${absorbedWork}`,
+    `Orchestrator persona: ${executionEnvelope.orchestratorHandoff.orchestratorPersona}`,
+    `Dispatch reason: ${executionEnvelope.orchestratorHandoff.dispatchReason}`,
+    `Scope guard: ${executionEnvelope.orchestratorHandoff.scopeGuard}`,
+    `Completion rule: ${executionEnvelope.orchestratorHandoff.completionRule}`,
+    `Resume directive: ${executionEnvelope.orchestratorHandoff.resumeDirective ?? "None"}`,
+    "Post-outcome contract:",
+    ...formatPostOutcomeContractLines(executionEnvelope)
   ].join("\n");
+}
+
+function buildSeoAuditWorkflowPrompt(input: {
+  workflowId: string;
+  executionEnvelope: HarnessWorkerExecutionEnvelope;
+}): string {
+  const { executionEnvelope } = input;
+  const continuitySummary = executionEnvelope.continuityContext?.summary ?? executionEnvelope.laneExecution.resumeFocus ?? "No continuity summary recorded.";
+  const latestResultSummary = executionEnvelope.continuityContext?.latestResultSummary ?? executionEnvelope.laneExecution.latestResultSummary ?? "No prior result summary recorded.";
+  const absorbedWork =
+    executionEnvelope.continuityContext?.absorbedWorkTrail.map((item) => item.title).join("; ") ??
+    executionEnvelope.laneExecution.absorbedWorkItems?.join("; ") ??
+    "No absorbed work items recorded.";
+
+  return [
+    "You are Wealth Factory's native executor for the SEO Audit Workflow family.",
+    "Decide whether the current lane is complete, needs more information, or is blocked.",
+    "Return strict JSON only with this shape: {\"state\":\"done|waiting|blocked\",\"summary\":\"...\"}.",
+    "Use state \"done\" only when the SEO audit lane is ready to hand a bounded findings brief back to the operator.",
+    "Use state \"waiting\" when the lane needs more evidence, confirmation, or a deliberate resume action.",
+    "Use state \"blocked\" when the lane cannot proceed because a prerequisite, dependency, or required input is missing.",
+    "Keep summary tenant-safe, concise, and specific to the lane. Do not mention Paperclip, prompts, tools, or internal runtime mechanics.",
+    "Focus on prioritized search visibility findings and the clearest next bounded audit step.",
+    `Workflow: ${input.workflowId}`,
+    `Persona: ${executionEnvelope.laneExecution.persona}`,
+    `Lane title: ${executionEnvelope.laneExecution.title}`,
+    `Deliverable type: ${executionEnvelope.laneExecution.deliverableType}`,
+    `Resume focus: ${executionEnvelope.laneExecution.resumeFocus ?? "None"}`,
+    `Continuity summary: ${continuitySummary}`,
+    `Latest result summary: ${latestResultSummary}`,
+    `Absorbed work items: ${absorbedWork}`,
+    `Orchestrator persona: ${executionEnvelope.orchestratorHandoff.orchestratorPersona}`,
+    `Dispatch reason: ${executionEnvelope.orchestratorHandoff.dispatchReason}`,
+    `Scope guard: ${executionEnvelope.orchestratorHandoff.scopeGuard}`,
+    `Completion rule: ${executionEnvelope.orchestratorHandoff.completionRule}`,
+    `Resume directive: ${executionEnvelope.orchestratorHandoff.resumeDirective ?? "None"}`,
+    "Post-outcome contract:",
+    ...formatPostOutcomeContractLines(executionEnvelope)
+  ].join("\n");
+}
+
+function formatPostOutcomeContractLines(executionEnvelope: HarnessWorkerExecutionEnvelope): string[] {
+  return (executionEnvelope.outcomeContract.postOutcomeDirectives ?? []).map((directive) =>
+    `- ${directive.outcomeState} -> ${directive.actionKind} (run state: ${directive.runState}): ${directive.summary}${formatPostOutcomeDirectiveDetails(directive)}`
+  );
+}
+
+function formatPostOutcomeDirectiveDetails(
+  directive: HarnessWorkerExecutionEnvelope["outcomeContract"]["postOutcomeDirectives"][number]
+): string {
+  const details: string[] = [];
+  if (directive.targetPersona) {
+    details.push(`target persona: ${directive.targetPersona}`);
+  }
+  if (directive.targetCardId) {
+    details.push(`target card: ${directive.targetCardId}`);
+  }
+  if (directive.reason) {
+    details.push(`reason: ${directive.reason}`);
+  }
+  return details.length ? ` [${details.join("; ")}]` : "";
 }
 
 function parseConnectFirstWorkflowOutcome(input: {
@@ -288,6 +388,40 @@ function parsePackageFollowupWorkflowOutcome(input: {
   return {
     state: parsed.state,
     resumeSummary: formatPackageFollowupWorkflowResumeSummary({
+      state: parsed.state,
+      generatedSummary: parsed.summary,
+      laneExecution: input.laneExecution
+    })
+  };
+}
+
+function parseSeoAuditWorkflowOutcome(input: {
+  outputText: string;
+  laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+}): NativeExecutionOutcome {
+  const parsed = tryParseWorkflowDecision(input.outputText);
+  if (!parsed) {
+    return {
+      state: "blocked",
+      resumeSummary:
+        `Native execution returned an invalid SEO Audit Workflow decision for ${input.laneExecution.persona.toUpperCase()}: ${input.laneExecution.title}. ` +
+        "Keep this lane blocked until the native workflow decision contract is repaired."
+    };
+  }
+
+  if (parsed.state === "done") {
+    return {
+      state: "done",
+      resultSummary: formatSeoAuditWorkflowResult({
+        generatedResultSummary: parsed.summary,
+        laneExecution: input.laneExecution
+      })
+    };
+  }
+
+  return {
+    state: parsed.state,
+    resumeSummary: formatSeoAuditWorkflowResumeSummary({
       state: parsed.state,
       generatedSummary: parsed.summary,
       laneExecution: input.laneExecution
@@ -399,6 +533,28 @@ function formatPackageFollowupWorkflowResumeSummary(input: {
   const action = input.state === "waiting" ? "resume" : "unblock";
   return [
     `Package Follow-up Workflow ${humanizeDeliverableType(input.laneExecution.deliverableType).toLowerCase()} lane for ${input.laneExecution.persona.toUpperCase()}: ${input.laneExecution.title} needs an explicit ${action} action.`,
+    input.generatedSummary
+  ].join(" ");
+}
+
+function formatSeoAuditWorkflowResult(input: {
+  generatedResultSummary: string;
+  laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+}): string {
+  return [
+    `Completed the SEO Audit Workflow ${humanizeDeliverableType(input.laneExecution.deliverableType).toLowerCase()} lane for ${input.laneExecution.persona.toUpperCase()}: ${input.laneExecution.title}.`,
+    input.generatedResultSummary
+  ].join(" ");
+}
+
+function formatSeoAuditWorkflowResumeSummary(input: {
+  state: "waiting" | "blocked";
+  generatedSummary: string;
+  laneExecution: HarnessWorkerExecutionEnvelope["laneExecution"];
+}): string {
+  const action = input.state === "waiting" ? "resume" : "unblock";
+  return [
+    `SEO Audit Workflow ${humanizeDeliverableType(input.laneExecution.deliverableType).toLowerCase()} lane for ${input.laneExecution.persona.toUpperCase()}: ${input.laneExecution.title} needs an explicit ${action} action.`,
     input.generatedSummary
   ].join(" ");
 }

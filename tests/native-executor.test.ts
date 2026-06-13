@@ -46,10 +46,49 @@ function buildExecutionEnvelope() {
         }
       ]
     },
+    orchestratorHandoff: {
+      orchestratorPersona: "ceo" as const,
+      dispatchReason: "The CEO approved this lane for its next bounded execution step.",
+      scopeGuard:
+        "Stay inside this lane only. Do not open new lanes, widen package scope, or assume new governance approval beyond this execution handoff.",
+      completionRule:
+        "Return exactly one bounded lane outcome: done only when this lane is complete, waiting when an explicit resume is needed, blocked when a prerequisite is missing, or cancelled when the lane should end without completion.",
+      resumeDirective: "Resume the pricing lane from the revised assumptions workbook."
+    },
     outcomeContract: {
       allowedStates: ["waiting", "done", "blocked", "cancelled"] as const,
       resultSummaryRequiredStates: ["done"] as const,
-      resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"] as const
+      resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"] as const,
+      postOutcomeDirectives: [
+        {
+          outcomeState: "waiting" as const,
+          runState: "waiting" as const,
+          actionKind: "await_lane_resume" as const,
+          summary: "If this lane ends waiting, the board will require an explicit resume decision on this lane.",
+          targetCardId: "card_cfo",
+          targetPersona: "cfo" as const
+        },
+        {
+          outcomeState: "done" as const,
+          runState: "done" as const,
+          actionKind: "none" as const,
+          summary: "If this lane ends done, no automatic post-outcome action will be scheduled."
+        },
+        {
+          outcomeState: "blocked" as const,
+          runState: "blocked" as const,
+          actionKind: "await_unblock" as const,
+          summary: "If this lane ends blocked, the board will require an explicit unblock decision on this lane.",
+          targetCardId: "card_cfo",
+          targetPersona: "cfo" as const
+        },
+        {
+          outcomeState: "cancelled" as const,
+          runState: "done" as const,
+          actionKind: "none" as const,
+          summary: "If this lane ends cancelled, no automatic post-outcome action will be scheduled."
+        }
+      ]
     }
   };
 }
@@ -155,6 +194,15 @@ describe("default native executor", () => {
         "Completed the Connect First Workflow pricing review lane for CFO: Pressure-test the pricing lane. " +
         "Validated the pricing floor and preserved the next action."
     });
+
+    const request = fetch.mock.calls[0]?.[1];
+    expect(typeof request?.body).toBe("string");
+    const body = JSON.parse(String(request?.body));
+    expect(body.input).toContain("Orchestrator persona: ceo");
+    expect(body.input).toContain("Dispatch reason: The CEO approved this lane for its next bounded execution step.");
+    expect(body.input).toContain("Completion rule: Return exactly one bounded lane outcome: done only when this lane is complete, waiting when an explicit resume is needed, blocked when a prerequisite is missing, or cancelled when the lane should end without completion.");
+    expect(body.input).toContain("Post-outcome contract:");
+    expect(body.input).toContain("- blocked -> await_unblock (run state: blocked): If this lane ends blocked, the board will require an explicit unblock decision on this lane. [target persona: cfo; target card: card_cfo]");
   });
 
   it("keeps the connect-first workflow family waiting when the provider says the lane needs more information", async () => {

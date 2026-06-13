@@ -5,6 +5,7 @@ import {
   describeHarnessPostOutcomeActionKind,
   deriveCurrentHarnessAttentionState,
   determineHarnessPostOutcomeAction,
+  humanizePostOutcomeReason,
   isSameAttentionAction,
   type HarnessAttentionSnapshot,
   type HarnessPostOutcomeAction
@@ -22,6 +23,7 @@ import {
   parseContinuityAbsorbedWorkItem,
   type ParsedHarnessContinuityAbsorbedWorkItem
 } from "./continuity.js";
+import type { HarnessSubCardProposal } from "./runtime-contract.js";
 import type { ProviderCapability } from "../packages/package-types.js";
 
 export type HarnessWorkerLaneExecution = {
@@ -69,6 +71,17 @@ export type HarnessWorkerOutcomeContract = {
   allowedStates: readonly Extract<HarnessCardState, "waiting" | "done" | "blocked" | "cancelled">[];
   resultSummaryRequiredStates: readonly Extract<HarnessCardState, "done">[];
   resumeSummaryAllowedStates: readonly Extract<HarnessCardState, "waiting" | "blocked" | "cancelled">[];
+  postOutcomeDirectives: readonly HarnessWorkerPostOutcomeDirective[];
+};
+
+export type HarnessWorkerPostOutcomeDirective = {
+  outcomeState: Extract<HarnessCardState, "waiting" | "done" | "blocked" | "cancelled">;
+  runState: HarnessRunRecord["state"];
+  actionKind: HarnessPostOutcomeAction["kind"] | "none";
+  summary: string;
+  targetCardId?: string;
+  targetPersona?: string;
+  reason?: Extract<HarnessPostOutcomeAction, { kind: "queue_ceo_review" }>["reason"];
 };
 
 export type HarnessWorkerDispatch = {
@@ -85,6 +98,14 @@ export type HarnessWorkerExecutionClaimContext = {
   previousClaimedAt: string | null;
 };
 
+export type HarnessWorkerOrchestratorHandoff = {
+  orchestratorPersona: HarnessRunRecord["orchestratorPersona"];
+  dispatchReason: string;
+  scopeGuard: string;
+  completionRule: string;
+  resumeDirective: string | null;
+};
+
 export type HarnessWorkerExecutionEnvelope = {
   tenantId: string;
   runId: string;
@@ -97,6 +118,7 @@ export type HarnessWorkerExecutionEnvelope = {
     claimedAt: string;
     previousClaimedAt: string | null;
   };
+  orchestratorHandoff: HarnessWorkerOrchestratorHandoff;
   laneExecution: HarnessWorkerLaneExecution;
   continuityContext?: HarnessWorkerContinuityContext;
   dispatchHandoff?: HarnessWorkerDispatchHandoff;
@@ -216,7 +238,8 @@ const NON_EXECUTABLE_RUN_STATES = new Set(["assembling", "done", "failed", "canc
 const HARNESS_WORKER_OUTCOME_CONTRACT: HarnessWorkerOutcomeContract = {
   allowedStates: ["waiting", "done", "blocked", "cancelled"],
   resultSummaryRequiredStates: ["done"],
-  resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"]
+  resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"],
+  postOutcomeDirectives: []
 };
 
 export async function buildHarnessWorkerDispatch(input: {
@@ -645,7 +668,7 @@ export async function commitHarnessWorkerLaneOutcome(input: {
 }
 
 export async function buildHarnessWorkerExecutionEnvelope(input: {
-  repository: Pick<HarnessRepository, "getRun" | "getCard" | "getCardContinuity">;
+  repository: Pick<HarnessRepository, "getRun" | "getCard" | "getCardContinuity" | "listCardsForRun" | "listProposalsForRun">;
   tenantId: string;
   dispatch: HarnessWorkerDispatch;
   requiredCapabilities: readonly ProviderCapability[];
@@ -668,6 +691,10 @@ export async function buildHarnessWorkerExecutionEnvelope(input: {
     throw new Error(`Unknown harness child lane for worker execution envelope: ${input.dispatch.laneExecution.cardId}`);
   }
   const continuity = await input.repository.getCardContinuity(lane.id);
+  const [cardsForRun, proposalsForRun] = await Promise.all([
+    input.repository.listCardsForRun(run.id),
+    input.repository.listProposalsForRun(run.id)
+  ]);
   if (!lane.executionClaimToken || !lane.executionClaimedAt) {
     throw new Error(`Missing harness execution claim for worker execution envelope: ${lane.id}`);
   }
@@ -687,6 +714,17 @@ export async function buildHarnessWorkerExecutionEnvelope(input: {
       claimedAt: lane.executionClaimedAt,
       previousClaimedAt: input.executionClaimContext.previousClaimedAt ?? null
     },
+    orchestratorHandoff: buildWorkerOrchestratorHandoff({
+      run,
+      lane,
+      continuity,
+      dispatchHandoff: input.dispatch.dispatchHandoff ?? {
+        kind: "initial_claim",
+        kindLabel: "Initial lane claim",
+        executionStage: "initial_lane_start",
+        executionStageLabel: "Initial lane start"
+      }
+    }),
     ...(continuity
       ? {
           continuityContext: buildWorkerContinuityContext(continuity)
@@ -703,7 +741,13 @@ export async function buildHarnessWorkerExecutionEnvelope(input: {
     outcomeContract: {
       allowedStates: [...HARNESS_WORKER_OUTCOME_CONTRACT.allowedStates],
       resultSummaryRequiredStates: [...HARNESS_WORKER_OUTCOME_CONTRACT.resultSummaryRequiredStates],
-      resumeSummaryAllowedStates: [...HARNESS_WORKER_OUTCOME_CONTRACT.resumeSummaryAllowedStates]
+      resumeSummaryAllowedStates: [...HARNESS_WORKER_OUTCOME_CONTRACT.resumeSummaryAllowedStates],
+      postOutcomeDirectives: buildWorkerPostOutcomeDirectives({
+        run,
+        lane,
+        cards: cardsForRun,
+        proposals: proposalsForRun
+      })
     },
     laneExecution: {
       cardId: lane.id,
@@ -718,6 +762,135 @@ export async function buildHarnessWorkerExecutionEnvelope(input: {
       ...(continuity?.absorbedWorkItems?.length ? { absorbedWorkItems: [...continuity.absorbedWorkItems] } : {})
     }
   };
+}
+
+function buildWorkerOrchestratorHandoff(input: {
+  run: HarnessRunRecord;
+  lane: HarnessCardRecord;
+  continuity: HarnessCardContinuityRecord | null;
+  dispatchHandoff: HarnessWorkerDispatchHandoff;
+}): HarnessWorkerOrchestratorHandoff {
+  return {
+    orchestratorPersona: input.run.orchestratorPersona,
+    dispatchReason: describeWorkerDispatchReason(input.dispatchHandoff),
+    scopeGuard:
+      "Stay inside this lane only. Do not open new lanes, widen package scope, or assume new governance approval beyond this execution handoff.",
+    completionRule:
+      "Return exactly one bounded lane outcome: done only when this lane is complete, waiting when an explicit resume is needed, blocked when a prerequisite is missing, or cancelled when the lane should end without completion.",
+    resumeDirective: input.continuity?.continuitySummary ?? createActiveResumeSummary(input.lane)
+  };
+}
+
+function buildWorkerPostOutcomeDirectives(input: {
+  run: HarnessRunRecord;
+  lane: HarnessCardRecord;
+  cards: readonly HarnessCardRecord[];
+  proposals: readonly HarnessSubCardProposal[];
+}): HarnessWorkerPostOutcomeDirective[] {
+  return HARNESS_WORKER_OUTCOME_CONTRACT.allowedStates.map((outcomeState) =>
+    deriveWorkerPostOutcomeDirective({
+      run: input.run,
+      lane: input.lane,
+      cards: input.cards,
+      proposals: input.proposals,
+      outcomeState
+    })
+  );
+}
+
+function deriveWorkerPostOutcomeDirective(input: {
+  run: HarnessRunRecord;
+  lane: HarnessCardRecord;
+  cards: readonly HarnessCardRecord[];
+  proposals: readonly HarnessSubCardProposal[];
+  outcomeState: Extract<HarnessCardState, "waiting" | "done" | "blocked" | "cancelled">;
+}): HarnessWorkerPostOutcomeDirective {
+  const simulatedCards = input.cards.map((card) => (
+    card.id === input.lane.id
+      ? {
+          ...card,
+          state: input.outcomeState
+        }
+      : card
+  ));
+  const runState = deriveHarnessRunState({
+    run: input.run,
+    cards: simulatedCards,
+    proposals: input.proposals
+  });
+  const nextLane =
+    NON_EXECUTABLE_RUN_STATES.has(runState)
+      ? null
+      : selectNextActionableLane(simulatedCards);
+  const action = determineHarnessPostOutcomeAction({
+    runState,
+    fallbackCardId: input.lane.id,
+    nextDispatchCard: nextLane
+      ? {
+          cardId: nextLane.id,
+          persona: nextLane.persona
+        }
+      : null,
+    cards: simulatedCards,
+    proposals: input.proposals
+  });
+  const targetCard =
+    action && "cardId" in action
+      ? simulatedCards.find((card) => card.id === action.cardId) ?? null
+      : null;
+
+  return {
+    outcomeState: input.outcomeState,
+    runState,
+    actionKind: action?.kind ?? "none",
+    summary: describeWorkerPostOutcomeDirectiveSummary({
+      currentLaneId: input.lane.id,
+      outcomeState: input.outcomeState,
+      action,
+      targetCard
+    }),
+    ...("cardId" in (action ?? {}) ? { targetCardId: (action as Extract<HarnessPostOutcomeAction, { cardId: string }>).cardId } : {}),
+    ...("persona" in (action ?? {}) ? { targetPersona: (action as Extract<HarnessPostOutcomeAction, { persona: string }>).persona } : {}),
+    ...(action?.kind === "queue_ceo_review" ? { reason: action.reason } : {})
+  };
+}
+
+function describeWorkerPostOutcomeDirectiveSummary(input: {
+  currentLaneId: string;
+  outcomeState: Extract<HarnessCardState, "waiting" | "done" | "blocked" | "cancelled">;
+  action: HarnessPostOutcomeAction | null;
+  targetCard: HarnessCardRecord | null;
+}): string {
+  if (!input.action) {
+    return `If this lane ends ${input.outcomeState}, no automatic post-outcome action will be scheduled.`;
+  }
+
+  switch (input.action.kind) {
+    case "dispatch_next_lane":
+      return `If this lane ends ${input.outcomeState}, the next bounded handoff will dispatch ${input.action.persona.toUpperCase()} on card ${input.action.cardId}.`;
+    case "queue_ceo_review":
+      return `If this lane ends ${input.outcomeState}, the board will queue CEO review (${humanizePostOutcomeReason(input.action.reason)}).`;
+    case "await_lane_resume":
+      return input.action.cardId === input.currentLaneId
+        ? `If this lane ends ${input.outcomeState}, the board will require an explicit resume decision on this lane.`
+        : `If this lane ends ${input.outcomeState}, the board will require an explicit resume decision on ${input.targetCard?.persona?.toUpperCase() ?? "the target"} card ${input.action.cardId}.`;
+    case "await_unblock":
+      return input.action.cardId === input.currentLaneId
+        ? `If this lane ends ${input.outcomeState}, the board will require an explicit unblock decision on this lane.`
+        : `If this lane ends ${input.outcomeState}, the board will require an explicit unblock decision on ${input.targetCard?.persona?.toUpperCase() ?? "the target"} card ${input.action.cardId}.`;
+  }
+}
+
+function describeWorkerDispatchReason(dispatchHandoff: HarnessWorkerDispatchHandoff): string {
+  if (dispatchHandoff.kind === "initial_claim") {
+    return "The CEO approved this lane for its next bounded execution step.";
+  }
+
+  const triggeredByPersona = dispatchHandoff.triggeredByPersona.toUpperCase();
+  const outcomeState = dispatchHandoff.triggeredByOutcomeState.replaceAll("_", " ");
+  return dispatchHandoff.triggeredByResultSummary
+    ? `${triggeredByPersona} finished a ${outcomeState} lane, so the CEO handed this next bounded step forward: ${dispatchHandoff.triggeredByResultSummary}`
+    : `${triggeredByPersona} finished a ${outcomeState} lane, so the CEO handed this next bounded step forward.`;
 }
 
 function buildIgnoredOutcomeEvent(input: {

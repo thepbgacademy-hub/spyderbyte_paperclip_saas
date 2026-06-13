@@ -67,10 +67,49 @@ describe("native OpenAI text generator", () => {
               }
             ]
           },
+          orchestratorHandoff: {
+            orchestratorPersona: "ceo",
+            dispatchReason: "The CEO approved this lane for its next bounded execution step.",
+            scopeGuard:
+              "Stay inside this lane only. Do not open new lanes, widen package scope, or assume new governance approval beyond this execution handoff.",
+            completionRule:
+              "Return exactly one bounded lane outcome: done only when this lane is complete, waiting when an explicit resume is needed, blocked when a prerequisite is missing, or cancelled when the lane should end without completion.",
+            resumeDirective: "Resume the pricing lane from the revised assumptions workbook."
+          },
           outcomeContract: {
             allowedStates: ["waiting", "done", "blocked", "cancelled"],
             resultSummaryRequiredStates: ["done"],
-            resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"]
+            resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"],
+            postOutcomeDirectives: [
+              {
+                outcomeState: "waiting",
+                runState: "waiting",
+                actionKind: "await_lane_resume",
+                summary: "If this lane ends waiting, the board will require an explicit resume decision on this lane.",
+                targetCardId: "card_cfo",
+                targetPersona: "cfo"
+              },
+              {
+                outcomeState: "done",
+                runState: "done",
+                actionKind: "none",
+                summary: "If this lane ends done, no automatic post-outcome action will be scheduled."
+              },
+              {
+                outcomeState: "blocked",
+                runState: "blocked",
+                actionKind: "await_unblock",
+                summary: "If this lane ends blocked, the board will require an explicit unblock decision on this lane.",
+                targetCardId: "card_cfo",
+                targetPersona: "cfo"
+              },
+              {
+                outcomeState: "cancelled",
+                runState: "done",
+                actionKind: "none",
+                summary: "If this lane ends cancelled, no automatic post-outcome action will be scheduled."
+              }
+            ]
           }
         }
       })
@@ -90,6 +129,14 @@ describe("native OpenAI text generator", () => {
         })
       })
     );
+    const request = fetch.mock.calls[0]?.[1];
+    expect(typeof request?.body).toBe("string");
+    const body = JSON.parse(String(request?.body));
+    expect(body.input).toContain("Orchestrator persona: ceo");
+    expect(body.input).toContain("Dispatch reason: The CEO approved this lane for its next bounded execution step.");
+    expect(body.input).toContain("Scope guard: Stay inside this lane only. Do not open new lanes, widen package scope, or assume new governance approval beyond this execution handoff.");
+    expect(body.input).toContain("Post-outcome contract:");
+    expect(body.input).toContain("- waiting -> await_lane_resume (run state: waiting): If this lane ends waiting, the board will require an explicit resume decision on this lane. [target persona: cfo; target card: card_cfo]");
   });
 
   it("fails closed when the binding is not an OpenAI text lane", async () => {
@@ -130,10 +177,20 @@ describe("native OpenAI text generator", () => {
             deliverableType: "pricing_review",
             state: "working"
           },
+          orchestratorHandoff: {
+            orchestratorPersona: "ceo",
+            dispatchReason: "The CEO approved this lane for its next bounded execution step.",
+            scopeGuard:
+              "Stay inside this lane only. Do not open new lanes, widen package scope, or assume new governance approval beyond this execution handoff.",
+            completionRule:
+              "Return exactly one bounded lane outcome: done only when this lane is complete, waiting when an explicit resume is needed, blocked when a prerequisite is missing, or cancelled when the lane should end without completion.",
+            resumeDirective: null
+          },
           outcomeContract: {
             allowedStates: ["waiting", "done", "blocked", "cancelled"],
             resultSummaryRequiredStates: ["done"],
-            resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"]
+            resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"],
+            postOutcomeDirectives: []
           }
         }
       })
@@ -186,10 +243,20 @@ describe("native OpenAI text generator", () => {
             deliverableType: "pricing_review",
             state: "working"
           },
+          orchestratorHandoff: {
+            orchestratorPersona: "ceo",
+            dispatchReason: "The CEO approved this lane for its next bounded execution step.",
+            scopeGuard:
+              "Stay inside this lane only. Do not open new lanes, widen package scope, or assume new governance approval beyond this execution handoff.",
+            completionRule:
+              "Return exactly one bounded lane outcome: done only when this lane is complete, waiting when an explicit resume is needed, blocked when a prerequisite is missing, or cancelled when the lane should end without completion.",
+            resumeDirective: null
+          },
           outcomeContract: {
             allowedStates: ["waiting", "done", "blocked", "cancelled"],
             resultSummaryRequiredStates: ["done"],
-            resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"]
+            resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"],
+            postOutcomeDirectives: []
           }
         }
       })
@@ -241,10 +308,20 @@ describe("native OpenAI text generator", () => {
             deliverableType: "pricing_review",
             state: "working"
           },
+          orchestratorHandoff: {
+            orchestratorPersona: "ceo",
+            dispatchReason: "The CEO approved this lane for its next bounded execution step.",
+            scopeGuard:
+              "Stay inside this lane only. Do not open new lanes, widen package scope, or assume new governance approval beyond this execution handoff.",
+            completionRule:
+              "Return exactly one bounded lane outcome: done only when this lane is complete, waiting when an explicit resume is needed, blocked when a prerequisite is missing, or cancelled when the lane should end without completion.",
+            resumeDirective: null
+          },
           outcomeContract: {
             allowedStates: ["waiting", "done", "blocked", "cancelled"],
             resultSummaryRequiredStates: ["done"],
-            resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"]
+            resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"],
+            postOutcomeDirectives: []
           }
         }
       })

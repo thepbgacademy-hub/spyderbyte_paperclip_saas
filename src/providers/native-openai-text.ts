@@ -143,8 +143,33 @@ function buildLanePrompt(input: {
     `Resume focus: ${executionEnvelope.laneExecution.resumeFocus ?? "None"}`,
     `Continuity summary: ${continuitySummary}`,
     `Latest result summary: ${latestResultSummary}`,
-    `Absorbed work items: ${absorbedWork}`
+    `Absorbed work items: ${absorbedWork}`,
+    `Orchestrator persona: ${executionEnvelope.orchestratorHandoff.orchestratorPersona}`,
+    `Dispatch reason: ${executionEnvelope.orchestratorHandoff.dispatchReason}`,
+    `Scope guard: ${executionEnvelope.orchestratorHandoff.scopeGuard}`,
+    `Completion rule: ${executionEnvelope.orchestratorHandoff.completionRule}`,
+    `Resume directive: ${executionEnvelope.orchestratorHandoff.resumeDirective ?? "None"}`,
+    "Post-outcome contract:",
+    ...(executionEnvelope.outcomeContract.postOutcomeDirectives ?? []).map((directive) =>
+      formatPostOutcomeDirectiveLine(directive)
+    )
   ].join("\n");
+}
+
+function formatPostOutcomeDirectiveLine(
+  directive: HarnessWorkerExecutionEnvelope["outcomeContract"]["postOutcomeDirectives"][number]
+): string {
+  const details: string[] = [];
+  if (directive.targetPersona) {
+    details.push(`target persona: ${directive.targetPersona}`);
+  }
+  if (directive.targetCardId) {
+    details.push(`target card: ${directive.targetCardId}`);
+  }
+  if (directive.reason) {
+    details.push(`reason: ${directive.reason}`);
+  }
+  return `- ${directive.outcomeState} -> ${directive.actionKind} (run state: ${directive.runState}): ${directive.summary}${details.length ? ` [${details.join("; ")}]` : ""}`;
 }
 
 function extractOutputText(value: unknown): string {
