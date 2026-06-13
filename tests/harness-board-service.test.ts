@@ -178,6 +178,171 @@ describe("harness board service", () => {
     expect(board.packageId).toBe("pkg_tax_strategy");
   });
 
+  it("consults a tenant-scoped workflow registry resolver without promoting installed overlays onto the board by default", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const resolveWorkflowRegistry = vi.fn().mockResolvedValue(
+      createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf-seo-audit"],
+        installedPackages: [
+          {
+            id: "pkg-brand-seo",
+            name: "Brand SEO",
+            kind: "industry",
+            includedWorkflowIds: ["wf-seo-audit"],
+            workflowDefinitions: [
+              {
+                publicId: "wf-seo-audit",
+                publicName: "SEO Audit Workflow",
+                description: "Prepare a bounded SEO audit for the installed package.",
+                allowedDeliverableTypes: ["research_brief"],
+                requiredProviderCapabilities: ["text_generation"]
+              }
+            ],
+            includedEmployeeIds: ["ceo"],
+            allowedAssetIds: ["asset-seo-rules"],
+            requiredProviderCapabilities: ["text_generation"],
+            optionalProviderCapabilities: []
+          }
+        ]
+      })
+    );
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: [],
+        nativeDefaultWorkflowIds: []
+      }),
+      resolveWorkflowRegistry
+    });
+
+    await expect(service.listBoardState({ authorization: "Bearer valid", workflowId: "wf-seo-audit" })).rejects.toThrow(
+      /Harness workflow is not enabled/
+    );
+    expect(resolveWorkflowRegistry).toHaveBeenCalledWith({ tenantId: "tenant_123", userId: "user_123" });
+  });
+
+  it("allows an explicitly board-exposed installed-package overlay when tenant install context resolves it", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const resolveWorkflowRegistry = vi.fn().mockResolvedValue(
+      createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf-seo-audit"],
+        installedPackages: [
+          {
+            id: "pkg-brand-seo",
+            name: "Brand SEO",
+            kind: "industry",
+            includedWorkflowIds: ["wf-seo-audit"],
+            workflowDefinitions: [
+              {
+                publicId: "wf-seo-audit",
+                publicName: "SEO Audit Workflow",
+                description: "Prepare a bounded SEO audit for the installed package.",
+                allowedDeliverableTypes: ["research_brief"],
+                requiredProviderCapabilities: ["text_generation"],
+                boardExposureEnabled: true
+              }
+            ],
+            includedEmployeeIds: ["ceo"],
+            allowedAssetIds: ["asset-seo-rules"],
+            requiredProviderCapabilities: ["text_generation"],
+            optionalProviderCapabilities: []
+          }
+        ]
+      })
+    );
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: [],
+        nativeDefaultWorkflowIds: []
+      }),
+      resolveWorkflowRegistry
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid", workflowId: "wf-seo-audit" });
+
+    expect(board.workflowId).toBe("wf-seo-audit");
+    expect(board.packageId).toBe("pkg-brand-seo");
+    expect(resolveWorkflowRegistry).toHaveBeenCalledWith({ tenantId: "tenant_123", userId: "user_123" });
+  });
+
+  it("allows overlay board mutations through the tenant-scoped resolver when the installed package explicitly opts in", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const resolveWorkflowRegistry = vi.fn().mockResolvedValue(
+      createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf-seo-audit"],
+        installedPackages: [
+          {
+            id: "pkg-brand-seo",
+            name: "Brand SEO",
+            kind: "industry",
+            includedWorkflowIds: ["wf-seo-audit"],
+            workflowDefinitions: [
+              {
+                publicId: "wf-seo-audit",
+                publicName: "SEO Audit Workflow",
+                description: "Prepare a bounded SEO audit for the installed package.",
+                allowedDeliverableTypes: ["research_brief"],
+                requiredProviderCapabilities: ["text_generation"],
+                boardExposureEnabled: true
+              }
+            ],
+            includedEmployeeIds: ["ceo"],
+            allowedAssetIds: ["asset-seo-rules"],
+            requiredProviderCapabilities: ["text_generation"],
+            optionalProviderCapabilities: []
+          }
+        ]
+      })
+    );
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: [],
+        nativeDefaultWorkflowIds: []
+      }),
+      resolveWorkflowRegistry
+    });
+
+    const result = await service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      workflowId: "wf-seo-audit",
+      persona: "researcher",
+      title: "Audit search intent and ranking gaps",
+      deliverableType: "research_brief"
+    });
+
+    expect(result).toEqual({ cardId: expect.any(String) });
+    expect(resolveWorkflowRegistry).toHaveBeenCalledWith({ tenantId: "tenant_123", userId: "user_123" });
+    const board = await service.listBoardState({ authorization: "Bearer valid", workflowId: "wf-seo-audit" });
+    expect(board.workflowId).toBe("wf-seo-audit");
+    expect(board.cards.some((card) => card.title === "Audit search intent and ranking gaps")).toBe(true);
+  });
+
   it("fails closed when the tenant lacks the required package boundary", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
@@ -6785,6 +6950,17 @@ describe("harness board service", () => {
       status: "proposed"
     });
 
+    const proposedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(proposedBoard.pendingApprovals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "proposal_persona_focus_follow_on_1",
+          statusLabel: "Pending CEO approval",
+          recommendedOptionValue: "approve"
+        })
+      ])
+    );
+
     await expect(
       service.decideProposal({
         authorization: "Bearer valid",
@@ -6817,6 +6993,92 @@ describe("harness board service", () => {
         })
       ])
     );
+  });
+
+  it("does not inherit stale defer guidance once the live blocking condition has cleared", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const parentCard = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+
+    await repository.insertProposal({
+      id: "proposal_persona_focus_stale_1",
+      runId: board.runId,
+      parentCardId: parentCard.cardId,
+      requestedByCardId: parentCard.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Validate the forecast assumptions",
+      deliverableType: "forecast_model",
+      status: "deferred",
+      decisionNote: "Wait for the current researcher lane to clear first."
+    });
+    await repository.insertDecision({
+      id: "decision_persona_focus_stale_1",
+      runId: board.runId,
+      tenantId: "tenant_123",
+      actorUserId: "user_123",
+      decisionKind: "proposal_deferred",
+      cardId: parentCard.cardId,
+      proposalId: "proposal_persona_focus_stale_1",
+      targetCardId: null,
+      persona: "researcher",
+      deliverableType: "forecast_model",
+      policyReason: "persona_lane_cap",
+      resolution: null,
+      decisionNote: "Wait for the current researcher lane to clear first.",
+      recommendationSummary:
+        "Finish, close, or hand off the current forecast model lane before opening another active lane for this persona.",
+      objectionSummary:
+        "Keep RESEARCHER focused on the current active lane before opening another forecast model request.",
+      createdAt: new Date(Date.now() - 1000).toISOString()
+    });
+    await repository.insertProposal({
+      id: "proposal_persona_focus_stale_follow_on_1",
+      runId: board.runId,
+      parentCardId: parentCard.cardId,
+      requestedByCardId: parentCard.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Validate the forecast assumptions",
+      deliverableType: "forecast_model",
+      status: "proposed"
+    });
+
+    const proposedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(proposedBoard.pendingApprovals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "proposal_persona_focus_stale_follow_on_1",
+          statusLabel: "Pending CEO approval",
+          recommendedOptionValue: "approve"
+        })
+      ])
+    );
+    expect(
+      proposedBoard.pendingApprovals.find((approval) => approval.id === "proposal_persona_focus_stale_follow_on_1")
+    ).not.toEqual(expect.objectContaining({
+      policyReasonLabel: "Persona focus protection"
+    }));
   });
 
   it("does not treat a distinct follow-on request title as a duplicate unresolved proposal", async () => {
@@ -10352,6 +10614,32 @@ describe("harness board service", () => {
       completionSummary: "The CEO packaged the final business-facing outcome."
     });
 
+    await repository.insertProposal({
+      id: "proposal_done_cycle_follow_on_1",
+      runId: board.runId,
+      parentCardId: created.cardId,
+      requestedByCardId: created.cardId,
+      requestedByPersona: "cfo",
+      persona: "researcher",
+      title: "Research the next pricing iteration",
+      deliverableType: "research_brief",
+      status: "proposed"
+    });
+
+    const proposedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(proposedBoard.pendingApprovals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "proposal_done_cycle_follow_on_1",
+          title: "Research the next pricing iteration",
+          statusLabel: "Pending CEO approval",
+          policyReasonLabel: "Completed lanes only",
+          nextReviewTrigger: "Review again only if the CEO deliberately starts a fresh board cycle for follow-on work.",
+          recommendedOptionValue: "defer"
+        })
+      ])
+    );
+
     await expect(
       service.createTopLevelChildCard({
         authorization: "Bearer valid",
@@ -10370,16 +10658,18 @@ describe("harness board service", () => {
     });
     expect(run?.state).toBe("done");
     const boardAfterDone = await service.listBoardState({ authorization: "Bearer valid" });
-    expect(boardAfterDone.pendingApprovals).toEqual([
-      expect.objectContaining({
-        title: "Research the next pricing iteration",
-        requestedByPersona: "CEO",
-        targetPersona: "RESEARCHER",
-        deliverableLabel: "Research Brief",
-        statusLabel: "Deferred for later CEO review",
-        policyReasonLabel: "Completed lanes only"
-      })
-    ]);
+    expect(boardAfterDone.pendingApprovals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          title: "Research the next pricing iteration",
+          requestedByPersona: "CEO",
+          targetPersona: "RESEARCHER",
+          deliverableLabel: "Research Brief",
+          statusLabel: "Deferred for later CEO review",
+          policyReasonLabel: "Completed lanes only"
+        })
+      ])
+    );
   });
 
   it("reuses the same deferred direct CEO request when owner-conflict retries repeat the same bounded assignment", async () => {
@@ -11820,6 +12110,432 @@ describe("harness board service", () => {
     expect(hydratedDryRun.bundleId).toBe(completedDryRun.bundleId);
     expect(hydratedDryRun.bundleRevision).toBe(completedDryRun.bundleRevision);
     expect(hydratedDryRun.content).not.toContain("Open an extra technical review lane");
+  });
+
+  it("keeps the real governance-history export bundle frozen after post-closure governance noise", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "done",
+      resultSummary: "Pricing floor is stable enough for launch."
+    });
+    await service.completeRun({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      completionSummary: "The CEO packaged the final business-facing outcome."
+    });
+
+    const completedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const exportAction = completedBoard.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "governance_history_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "governance-history-export");
+    expect(exportAction).toBeTruthy();
+
+    const firstExport = await service.exportGovernanceHistoryCandidate({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      candidateId: "governance_history_export",
+      actionToken: exportAction!.actionToken
+    });
+
+    await repository.insertProposal({
+      id: "proposal_post_completion_export_noise_1",
+      runId: board.runId,
+      parentCardId: created.cardId,
+      requestedByCardId: created.cardId,
+      requestedByPersona: "cfo",
+      persona: "cto",
+      title: "Open an extra technical review lane",
+      deliverableType: "technical_review",
+      status: "denied"
+    });
+    await repository.insertDecision({
+      id: "decision_post_completion_export_noise_1",
+      runId: board.runId,
+      tenantId: "tenant_123",
+      actorUserId: "user_123",
+      decisionKind: "proposal_denied",
+      cardId: created.cardId,
+      proposalId: "proposal_post_completion_export_noise_1",
+      targetCardId: null,
+      persona: "cto",
+      deliverableType: "technical_review",
+      policyReason: "scope_guardrail",
+      resolution: null,
+      decisionNote: "Should stay out of the persisted closed-board governance export bundle.",
+      recommendationSummary: "Do not mutate the closed-board governance export bundle.",
+      objectionSummary: "This late governance noise should not rewrite the frozen export surface.",
+      createdAt: new Date().toISOString()
+    });
+
+    const hydratedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const refreshedExportAction = hydratedBoard.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "governance_history_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "governance-history-export");
+    expect(refreshedExportAction).toBeTruthy();
+
+    const secondExport = await service.exportGovernanceHistoryCandidate({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      candidateId: "governance_history_export",
+      actionToken: refreshedExportAction!.actionToken
+    });
+
+    expect(secondExport.bundleId).toBe(firstExport.bundleId);
+    expect(secondExport.bundleRevision).toBe(firstExport.bundleRevision);
+    expect(secondExport.content).toBe(firstExport.content);
+    expect(secondExport.content).not.toContain("Open an extra technical review lane");
+  });
+
+  it("keeps the real package-bundle export bundle frozen after post-closure governance noise", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "done",
+      resultSummary: "Pricing floor is stable enough for launch."
+    });
+    await service.completeRun({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      completionSummary: "The CEO packaged the final business-facing outcome."
+    });
+
+    const completedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const governanceCandidate = completedBoard.memoryBoundary.exportCandidates?.find(
+      (entry) => entry.id === "governance_history_export"
+    );
+    const governanceExportAction = governanceCandidate?.exportActions?.find(
+      (entry) => entry.actionRoute === "governance-history-export"
+    );
+    expect(governanceExportAction).toBeTruthy();
+    const governanceExport = await service.exportGovernanceHistoryCandidate({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      candidateId: "governance_history_export",
+      actionToken: governanceExportAction!.actionToken
+    });
+    await repository.upsertExportDelivery({
+      id: "delivery_governance_dependency_phase18_1",
+      runId: board.runId,
+      tenantId: "tenant_123",
+      workflowId: completedBoard.workflowId,
+      packageId: completedBoard.packageId,
+      candidateId: "governance_history_export",
+      status: "delivered",
+      exportFormat: governanceExport.exportFormat,
+      recordTarget: governanceExport.recordTarget,
+      bundleId: governanceExport.bundleId,
+      bundleRevision: governanceExport.bundleRevision,
+      idempotencyKey: governanceExport.idempotencyKey,
+      noteTitle: governanceExport.noteTitle,
+      noteFileName: governanceExport.noteFileName,
+      placementTargetSystem: governanceExport.placement.targetSystem,
+      vaultFolder: governanceExport.placement.vaultFolder,
+      primaryNotePath: governanceExport.placement.primaryNotePath,
+      syncStrategy: governanceExport.placement.syncStrategy,
+      confirmationRequirement: governanceExport.placement.confirmationRequirement,
+      files: governanceExport.files,
+      recordCount: governanceExport.recordCount,
+      disclosureSummary: governanceExport.disclosureSummary,
+      redactionSummary: governanceExport.redactionSummary,
+      attemptCount: 1,
+      lastAttemptedAt: "2026-06-01T00:20:00.000Z",
+      deliveredAt: "2026-06-01T00:20:01.000Z",
+      writerKind: "obsidian_filesystem",
+      deliveryReceipt: {
+        primaryNotePath: governanceExport.placement.primaryNotePath,
+        writtenFileCount: governanceExport.files.length
+      },
+      lastErrorCode: null,
+      lastErrorMessage: null,
+      createdAt: "2026-06-01T00:20:00.000Z",
+      updatedAt: "2026-06-01T00:20:01.000Z"
+    });
+
+    const dependencyReadyBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const packageExportAction = dependencyReadyBoard.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "package_bundle_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "package-bundle-export");
+    expect(packageExportAction).toBeTruthy();
+
+    const firstExport = await service.exportPackageBundleCandidate({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      candidateId: "package_bundle_export",
+      actionToken: packageExportAction!.actionToken
+    });
+
+    await repository.insertProposal({
+      id: "proposal_post_completion_package_noise_1",
+      runId: board.runId,
+      parentCardId: created.cardId,
+      requestedByCardId: created.cardId,
+      requestedByPersona: "cfo",
+      persona: "cto",
+      title: "Open an extra technical review lane",
+      deliverableType: "technical_review",
+      status: "denied"
+    });
+    await repository.insertDecision({
+      id: "decision_post_completion_package_noise_1",
+      runId: board.runId,
+      tenantId: "tenant_123",
+      actorUserId: "user_123",
+      decisionKind: "proposal_denied",
+      cardId: created.cardId,
+      proposalId: "proposal_post_completion_package_noise_1",
+      targetCardId: null,
+      persona: "cto",
+      deliverableType: "technical_review",
+      policyReason: "scope_guardrail",
+      resolution: null,
+      decisionNote: "Should stay out of the persisted closed-board package export bundle.",
+      recommendationSummary: "Do not mutate the closed-board package export bundle.",
+      objectionSummary: "This late governance noise should not rewrite the frozen package export surface.",
+      createdAt: new Date().toISOString()
+    });
+
+    const hydratedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const refreshedPackageExportAction = hydratedBoard.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "package_bundle_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "package-bundle-export");
+    expect(refreshedPackageExportAction).toBeTruthy();
+
+    const secondExport = await service.exportPackageBundleCandidate({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      candidateId: "package_bundle_export",
+      actionToken: refreshedPackageExportAction!.actionToken
+    });
+
+    expect(secondExport.bundleId).toBe(firstExport.bundleId);
+    expect(secondExport.bundleRevision).toBe(firstExport.bundleRevision);
+    expect(secondExport.content).toBe(firstExport.content);
+    expect(secondExport.content).not.toContain("Open an extra technical review lane");
+  });
+
+  it("keeps runtime continuity memory operational-only and out of tenant-owned export artifacts", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const runtimeOnlyContinuitySummary = "Runtime-only continuity summary that must never enter tenant-owned exports.";
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working",
+      resumeSummary: runtimeOnlyContinuitySummary
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "done",
+      resultSummary: "Pricing floor is stable enough for launch."
+    });
+    await service.completeRun({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      completionSummary: "The CEO packaged the final business-facing outcome."
+    });
+
+    const completedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+
+    expect(completedBoard.memoryBoundary.operationalItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "lane_continuity",
+          destination: "wealth_factory_runtime",
+          ownershipBoundary: "wealth_factory_only",
+          promotionPath: "never_promotes",
+          recordTarget: "none_runtime_only",
+          runtimeLongMemoryDisposition: "stays_runtime_only",
+          sourceSurface: "continuity_snapshots"
+        }),
+        expect.objectContaining({
+          id: "attention_state",
+          destination: "wealth_factory_runtime",
+          ownershipBoundary: "wealth_factory_only",
+          promotionPath: "never_promotes",
+          recordTarget: "none_runtime_only",
+          runtimeLongMemoryDisposition: "stays_runtime_only",
+          sourceSurface: "pending_attention"
+        })
+      ])
+    );
+
+    expect(completedBoard.memoryBoundary.exportReadyItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "governance_decisions",
+          destination: "tenant_record_candidate",
+          ownershipBoundary: "tenant_owned_later",
+          promotionPath: "ready_for_explicit_export",
+          recordTarget: "governance_history_record",
+          sourceSurface: "recent_decisions"
+        }),
+        expect.objectContaining({
+          id: "implemented_actions",
+          destination: "tenant_record_candidate",
+          ownershipBoundary: "tenant_owned_later",
+          promotionPath: "ready_for_explicit_export",
+          recordTarget: "governance_history_record",
+          sourceSurface: "follow_through"
+        }),
+        expect.objectContaining({
+          id: "package_governance",
+          destination: "tenant_record_candidate",
+          ownershipBoundary: "tenant_owned_later",
+          promotionPath: "ready_for_explicit_export",
+          recordTarget: "package_governance_record",
+          sourceSurface: "completion_package_governance"
+        }),
+        expect.objectContaining({
+          id: "package_deliverables",
+          destination: "tenant_record_candidate",
+          ownershipBoundary: "tenant_owned_later",
+          promotionPath: "ready_for_explicit_export",
+          recordTarget: "package_deliverable_record",
+          sourceSurface: "completion_package_deliverables"
+        })
+      ])
+    );
+
+    const governanceExportAction = completedBoard.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "governance_history_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "governance-history-export");
+    expect(governanceExportAction).toBeTruthy();
+    const governanceExport = await service.exportGovernanceHistoryCandidate({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      candidateId: "governance_history_export",
+      actionToken: governanceExportAction!.actionToken
+    });
+    expect(governanceExport.content).not.toContain(runtimeOnlyContinuitySummary);
+    await repository.upsertExportDelivery({
+      id: "delivery_governance_memory_boundary_phase19_1",
+      runId: board.runId,
+      tenantId: "tenant_123",
+      workflowId: completedBoard.workflowId,
+      packageId: completedBoard.packageId,
+      candidateId: "governance_history_export",
+      status: "delivered",
+      exportFormat: governanceExport.exportFormat,
+      recordTarget: governanceExport.recordTarget,
+      bundleId: governanceExport.bundleId,
+      bundleRevision: governanceExport.bundleRevision,
+      idempotencyKey: governanceExport.idempotencyKey,
+      noteTitle: governanceExport.noteTitle,
+      noteFileName: governanceExport.noteFileName,
+      placementTargetSystem: governanceExport.placement.targetSystem,
+      vaultFolder: governanceExport.placement.vaultFolder,
+      primaryNotePath: governanceExport.placement.primaryNotePath,
+      syncStrategy: governanceExport.placement.syncStrategy,
+      confirmationRequirement: governanceExport.placement.confirmationRequirement,
+      files: governanceExport.files,
+      recordCount: governanceExport.recordCount,
+      disclosureSummary: governanceExport.disclosureSummary,
+      redactionSummary: governanceExport.redactionSummary,
+      attemptCount: 1,
+      lastAttemptedAt: "2026-06-01T00:30:00.000Z",
+      deliveredAt: "2026-06-01T00:30:01.000Z",
+      writerKind: "obsidian_filesystem",
+      deliveryReceipt: {
+        primaryNotePath: governanceExport.placement.primaryNotePath,
+        writtenFileCount: governanceExport.files.length
+      },
+      lastErrorCode: null,
+      lastErrorMessage: null,
+      createdAt: "2026-06-01T00:30:00.000Z",
+      updatedAt: "2026-06-01T00:30:01.000Z"
+    });
+
+    const dependencyReadyBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const packageExportAction = dependencyReadyBoard.memoryBoundary.exportCandidates
+      ?.find((entry) => entry.id === "package_bundle_export")
+      ?.exportActions?.find((entry) => entry.actionRoute === "package-bundle-export");
+    expect(packageExportAction).toBeTruthy();
+    const packageExport = await service.exportPackageBundleCandidate({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      candidateId: "package_bundle_export",
+      actionToken: packageExportAction!.actionToken
+    });
+    expect(packageExport.content).not.toContain(runtimeOnlyContinuitySummary);
   });
 
   it("keeps denied-only governance items visible in the completion package", async () => {

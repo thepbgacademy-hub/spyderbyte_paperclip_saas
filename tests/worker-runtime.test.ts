@@ -237,6 +237,7 @@ vi.mock("../src/db/supabase-repositories.js", () => ({
     findIdBySecretRef: vi.fn().mockResolvedValue("secret-1"),
     findSecretReferenceId: vi.fn().mockResolvedValue("11111111-1111-4111-8111-111111111111"),
     resolvePaperclipCompanyMapping: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1", paperclipIssueAgentId: "pc-agent-1" }),
+    listActiveInstalledPackageIds: vi.fn().mockResolvedValue([]),
     hasActiveWorkflowRuns: vi.fn().mockResolvedValue(false),
     countActiveWorkflowRuns: vi.fn().mockResolvedValue(1),
     countRunningWorkflowRuns: vi.fn().mockResolvedValue(0)
@@ -245,6 +246,12 @@ vi.mock("../src/db/supabase-repositories.js", () => ({
 
 vi.mock("../src/db/acid-guard-repository.js", () => ({
   createAcidGuardRepository: vi.fn(() => ({
+    getWorkflowRunIdentity: vi.fn().mockResolvedValue({
+      workflowId: "wf_connect_first_workflow",
+      workflowTemplateId: "workflow-1",
+      workflowIdentityKind: "tenant_template",
+      workflowPackageId: "pkg_bib_connect"
+    }),
     getBoundProviderContext: vi.fn().mockResolvedValue([
       {
         capability: "text_generation",
@@ -387,6 +394,45 @@ describe("worker runtime", () => {
       to: "queued"
     });
     expect(createPaperclipClient).toHaveBeenCalled();
+
+    await runtime.close();
+  });
+
+  it("fails closed when a persisted overlay workflow snapshot no longer matches the current package catalog", async () => {
+    const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-seo-audit",
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf-seo-audit"
+      }),
+      workerInstanceId: "worker-test-overlay-drift"
+    });
+    const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
+    acidRepository?.getWorkflowRunIdentity?.mockResolvedValueOnce({
+      workflowId: "wf-seo-audit",
+      workflowTemplateId: null,
+      workflowIdentityKind: "installed_package_overlay",
+      workflowPackageId: "pkg-brand-seo",
+      workflowDefinitionSnapshot: {
+        publicWorkflowId: "wf-seo-audit",
+        packageId: "pkg-brand-seo",
+        executionEngine: "paperclip",
+        requiredCapabilities: ["text_generation"],
+        providerKind: "openai_api"
+      }
+    });
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf-seo-audit",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf-seo-audit:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).rejects.toThrow(/Stored workflow definition snapshot no longer matches/i);
 
     await runtime.close();
   });
@@ -669,7 +715,8 @@ describe("worker runtime", () => {
         outcomeContract: {
           allowedStates: ["waiting", "done", "blocked", "cancelled"],
           resultSummaryRequiredStates: ["done"],
-          resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"]
+          resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"],
+          postOutcomeDirectives: expect.any(Array)
         }
       })
     );
@@ -1444,6 +1491,275 @@ describe("worker runtime", () => {
         String(value).includes("\"executionEngine\":\"wf_native_v1\"")
       )
     ).toBe(true);
+
+    await runtime.close();
+  });
+
+  it("runs the SEO overlay workflow natively when the installed package explicitly opts into native execution", async () => {
+    const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
+    const { createPaperclipClient } = await import("../src/paperclip/client.js");
+    const { createSupabaseRepositories } = await import("../src/db/supabase-repositories.js");
+    harnessRepositoryRef.current.getRun.mockImplementation(async (runId: string) => {
+      if (runId === "run-seo-1") {
+        return {
+          id: "run-seo-1",
+          tenantId: "tenant-1",
+          workflowId: "wf-seo-audit",
+          packageId: "pkg-brand-seo",
+          orchestratorPersona: "ceo",
+          state: "active",
+          runtimeContext: {
+            providerKind: "openai_api",
+            credentialLabel: "Primary OpenAI"
+          },
+          createdAt: "2026-05-21T10:00:00.000Z",
+          updatedAt: "2026-05-21T10:00:00.000Z"
+        };
+      }
+
+      return {
+        id: "run-1",
+        tenantId: "tenant-1",
+        workflowId: "wf_connect_first_workflow",
+        packageId: "pkg_bib_connect",
+        orchestratorPersona: "ceo",
+        state: "active",
+        runtimeContext: {
+          providerKind: "openai_api",
+          credentialLabel: "Primary OpenAI"
+        },
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      };
+    });
+    let seoLaneState: "approved" | "working" | "waiting" = "approved";
+    harnessRepositoryRef.current.listCardsForRun.mockImplementation(async (runId: string) => {
+      if (runId === "run-seo-1") {
+        return [
+          {
+            id: "card_ceo",
+            runId: "run-seo-1",
+            parentCardId: null,
+            persona: "ceo",
+            title: "Plan SEO audit run",
+            deliverableType: "plan",
+            state: "planning",
+            executionClaimToken: null,
+            executionClaimedAt: null,
+            createdAt: "2026-05-21T10:00:00.000Z",
+            updatedAt: "2026-05-21T10:00:00.000Z"
+          },
+          {
+            id: "card_cmo_seo",
+            runId: "run-seo-1",
+            parentCardId: "card_ceo",
+            persona: "cmo",
+            title: "Draft the SEO findings brief",
+            deliverableType: "research_brief",
+            state: seoLaneState,
+            executionClaimToken: seoLaneState === "approved" ? null : "claim-cmo-seo-1",
+            executionClaimedAt: seoLaneState === "approved" ? null : "2026-05-21T10:04:00.000Z",
+            createdAt: "2026-05-21T10:01:00.000Z",
+            updatedAt: seoLaneState === "approved" ? "2026-05-21T10:02:00.000Z" : "2026-05-21T10:04:00.000Z"
+          }
+        ];
+      }
+
+      return [];
+    });
+    harnessRepositoryRef.current.claimCardForExecution.mockImplementationOnce(async () => {
+      seoLaneState = "working";
+      return {
+        id: "card_cmo_seo",
+        runId: "run-seo-1",
+        parentCardId: "card_ceo",
+        persona: "cmo",
+        title: "Draft the SEO findings brief",
+        deliverableType: "research_brief",
+        state: "working",
+        executionClaimToken: "claim-cmo-seo-1",
+        executionClaimedAt: "2026-05-21T10:04:00.000Z",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:04:00.000Z"
+      };
+    });
+    harnessRepositoryRef.current.getCard.mockImplementation(async (cardId: string) => {
+      if (cardId !== "card_cmo_seo") {
+        return null;
+      }
+      return {
+        id: "card_cmo_seo",
+        runId: "run-seo-1",
+        parentCardId: "card_ceo",
+        persona: "cmo",
+        title: "Draft the SEO findings brief",
+        deliverableType: "research_brief",
+        state: seoLaneState,
+        executionClaimToken: seoLaneState === "approved" ? null : "claim-cmo-seo-1",
+        executionClaimedAt: seoLaneState === "approved" ? null : "2026-05-21T10:04:00.000Z",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:04:00.000Z"
+      };
+    });
+    harnessRepositoryRef.current.transitionCardState.mockImplementationOnce(async ({ state }) => {
+      seoLaneState = state as "waiting";
+      return {
+        id: "card_cmo_seo",
+        runId: "run-seo-1",
+        parentCardId: "card_ceo",
+        persona: "cmo",
+        title: "Draft the SEO findings brief",
+        deliverableType: "research_brief",
+        state,
+        executionClaimToken: null,
+        executionClaimedAt: null,
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:05:00.000Z"
+      };
+    });
+    harnessRepositoryRef.current.getCardContinuity.mockImplementation(async (cardId: string) => {
+      if (cardId !== "card_cmo_seo") {
+        return null;
+      }
+      return {
+        cardId: "card_cmo_seo",
+        runId: "run-seo-1",
+        continuitySource: "resume_override",
+        continuitySummary: "Resume the SEO audit lane from the current search visibility findings.",
+        latestResultSummary: "The latest SEO snapshot is ready for synthesis.",
+        absorbedWorkItems: ["Prioritize the top search visibility risks"],
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      };
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        output_text:
+          "{\"state\":\"waiting\",\"summary\":\"Need the final prioritized SEO findings list before the audit brief can be approved.\"}"
+      })
+    });
+    stdoutWrite.mockClear();
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-seo-audit",
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf-seo-audit"
+      }),
+      workerInstanceId: "worker-test-seo-overlay-native-default-start-path"
+    });
+    const repositories = vi.mocked(createSupabaseRepositories).mock.results.at(-1)?.value;
+    repositories?.listActiveInstalledPackageIds.mockResolvedValue(["pkg-brand-seo"]);
+    const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-seo-1",
+        workflowId: "wf-seo-audit",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf-seo-audit:run-seo-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-seo-1",
+      workflowId: "wf-seo-audit",
+      status: "queued"
+    });
+
+    expect(vi.mocked(createPaperclipClient)).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual(
+      expect.objectContaining({
+        input: expect.stringContaining("Workflow: wf-seo-audit")
+      })
+    );
+    expect(String(fetchMock.mock.calls[0]?.[1]?.body)).toContain("Lane title: Draft the SEO findings brief");
+    expect(String(fetchMock.mock.calls[0]?.[1]?.body)).toContain(
+      "Continuity summary: Resume the SEO audit lane from the current search visibility findings."
+    );
+    expect(harnessRepositoryRef.current.transitionCardState).toHaveBeenCalledWith({
+      cardId: "card_cmo_seo",
+      expectedState: "working",
+      expectedExecutionClaimToken: "claim-cmo-seo-1",
+      state: "waiting"
+    });
+    expect(
+      harnessRepositoryRef.current.upsertCardContinuity.mock.calls.some(([input]) =>
+        input.cardId === "card_cmo_seo" &&
+        input.runId === "run-seo-1" &&
+        input.continuitySource === "resume_override" &&
+        String(input.continuitySummary).includes("Need the final prioritized SEO findings list before the audit brief can be approved.") &&
+        input.latestResultSummary === "The latest SEO snapshot is ready for synthesis."
+      )
+    ).toBe(true);
+    expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: "tenant-1",
+        runId: "run-seo-1",
+        from: ["queued", "running"],
+        to: "queued"
+      })
+    );
+    expect(
+      stdoutWrite.mock.calls.some(([value]) =>
+        String(value).includes("\"type\":\"wealth_factory_worker_run\"") &&
+        String(value).includes("\"workflowId\":\"wf-seo-audit\"") &&
+        String(value).includes("\"executionEngine\":\"wf_native_v1\"")
+      )
+    ).toBe(true);
+
+    await runtime.close();
+  });
+
+  it("recovers from a transient tenant package lookup failure instead of caching the failed overlay registry promise forever", async () => {
+    const { createSupabaseRepositories } = await import("../src/db/supabase-repositories.js");
+    const nativeExecutor = {
+      execute: vi.fn().mockResolvedValue({
+        state: "blocked" as const,
+        resumeSummary: "Native execution is waiting on a bounded follow-up."
+      })
+    };
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-registry-cache-recovery",
+      nativeExecutor
+    });
+
+    const repositories = vi.mocked(createSupabaseRepositories).mock.results.at(-1)?.value;
+    repositories?.listActiveInstalledPackageIds
+      .mockRejectedValueOnce(new Error("temporary package lookup failure"))
+      .mockResolvedValue([]);
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).rejects.toThrow("temporary package lookup failure");
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+
+    expect(nativeExecutor.execute).toHaveBeenCalled();
 
     await runtime.close();
   });
@@ -2930,7 +3246,8 @@ describe("worker runtime", () => {
         outcomeContract: {
           allowedStates: ["waiting", "done", "blocked", "cancelled"],
           resultSummaryRequiredStates: ["done"],
-          resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"]
+          resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"],
+          postOutcomeDirectives: expect.any(Array)
         }
       })
     );
@@ -2942,6 +3259,192 @@ describe("worker runtime", () => {
       to: "running"
     });
     expect(onHarnessLaneReady).toHaveBeenCalledTimes(1);
+
+    await runtime.close();
+  });
+
+  it("keeps overlay follow-on dispatch envelope reconstruction tenant-scoped for native installed-package workflows", async () => {
+    const { createSupabaseRepositories } = await import("../src/db/supabase-repositories.js");
+    const onHarnessLaneReady = vi.fn();
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-seo-audit",
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf-seo-audit"
+      }),
+      workerInstanceId: "worker-test-overlay-follow-on",
+      onHarnessLaneReady
+    });
+
+    const repositories = vi.mocked(createSupabaseRepositories).mock.results.at(-1)?.value;
+    repositories?.listActiveInstalledPackageIds.mockResolvedValue(["pkg-brand-seo"]);
+
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.listCardsForRun.mockImplementation(async (runId: string) => {
+      if (runId === "run-seo-follow-on-1") {
+        return [
+          {
+            id: "card_ceo",
+            runId: "run-seo-follow-on-1",
+            parentCardId: null,
+            persona: "ceo",
+            title: "Plan SEO follow-on run",
+            deliverableType: "plan",
+            state: "planning",
+            createdAt: "2026-05-21T10:00:00.000Z",
+            updatedAt: "2026-05-21T10:00:00.000Z"
+          },
+          {
+            id: "card_cmo_seo_done",
+            runId: "run-seo-follow-on-1",
+            parentCardId: "card_ceo",
+            persona: "cmo",
+            title: "Finalize the SEO findings brief",
+            deliverableType: "research_brief",
+            state: "working",
+            executionClaimToken: "claim-cmo-seo-done",
+            executionClaimedAt: "2026-05-21T10:06:00.000Z",
+            createdAt: "2026-05-21T10:01:00.000Z",
+            updatedAt: "2026-05-21T10:06:00.000Z"
+          },
+          {
+            id: "card_cfo_seo_next",
+            runId: "run-seo-follow-on-1",
+            parentCardId: "card_ceo",
+            persona: "cfo",
+            title: "Review the SEO remediation budget impact",
+            deliverableType: "research_brief",
+            state: "approved",
+            createdAt: "2026-05-21T10:02:00.000Z",
+            updatedAt: "2026-05-21T10:03:00.000Z"
+          }
+        ];
+      }
+
+      return [];
+    });
+    harnessRepository.listCardContinuityForRun.mockResolvedValue([
+      {
+        cardId: "card_cfo_seo_next",
+        runId: "run-seo-follow-on-1",
+        continuitySummary: "Resume the SEO budget review from the finalized findings brief.",
+        latestResultSummary: null,
+        absorbedWorkItems: [],
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      }
+    ]);
+    harnessRepository.listEventsForRun.mockResolvedValueOnce([]);
+    harnessRepository.claimCardForExecution.mockResolvedValueOnce({
+      id: "card_cfo_seo_next",
+      runId: "run-seo-follow-on-1",
+      parentCardId: "card_ceo",
+      persona: "cfo",
+      title: "Review the SEO remediation budget impact",
+      deliverableType: "research_brief",
+      state: "working",
+      executionClaimToken: "claim-cfo-seo-next",
+      executionClaimedAt: "2026-05-21T10:07:30.000Z",
+      createdAt: "2026-05-21T10:02:00.000Z",
+      updatedAt: "2026-05-21T10:07:00.000Z"
+    });
+    harnessRepository.getRun.mockImplementation(async (runId: string) => {
+      if (runId === "run-seo-follow-on-1") {
+        return {
+          id: "run-seo-follow-on-1",
+          tenantId: "tenant-1",
+          workflowId: "wf-seo-audit",
+          packageId: "pkg-brand-seo",
+          orchestratorPersona: "ceo",
+          state: "active",
+          runtimeContext: {
+            providerKind: "openai_api",
+            credentialLabel: "Primary OpenAI"
+          },
+          createdAt: "2026-05-21T10:00:00.000Z",
+          updatedAt: "2026-05-21T10:00:00.000Z"
+        };
+      }
+      return null;
+    });
+    harnessRepository.getCard.mockImplementation(async (cardId: string) => {
+      if (cardId === "card_cmo_seo_done") {
+        return {
+          id: "card_cmo_seo_done",
+          runId: "run-seo-follow-on-1",
+          parentCardId: "card_ceo",
+          persona: "cmo",
+          title: "Finalize the SEO findings brief",
+          deliverableType: "research_brief",
+          state: "working",
+          executionClaimToken: "claim-cmo-seo-done",
+          executionClaimedAt: "2026-05-21T10:06:00.000Z",
+          createdAt: "2026-05-21T10:01:00.000Z",
+          updatedAt: "2026-05-21T10:06:00.000Z"
+        };
+      }
+      if (cardId === "card_cfo_seo_next") {
+        return {
+          id: "card_cfo_seo_next",
+          runId: "run-seo-follow-on-1",
+          parentCardId: "card_ceo",
+          persona: "cfo",
+          title: "Review the SEO remediation budget impact",
+          deliverableType: "research_brief",
+          state: "working",
+          executionClaimToken: "claim-cfo-seo-next",
+          executionClaimedAt: "2026-05-21T10:07:30.000Z",
+          createdAt: "2026-05-21T10:02:00.000Z",
+          updatedAt: "2026-05-21T10:07:00.000Z"
+        };
+      }
+      return null;
+    });
+
+    await expect(
+      runtime.commitHarnessLaneOutcome({
+        tenantId: "tenant-1",
+        runId: "run-seo-follow-on-1",
+        workflowId: "wf-seo-audit",
+        cardId: "card_cmo_seo_done",
+        executionClaimToken: "claim-cmo-seo-done",
+        state: "done",
+        resultSummary: "The prioritized SEO findings brief is complete and ready for budget review."
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        runId: "run-seo-follow-on-1",
+        workflowId: "wf-seo-audit",
+        status: "committed",
+        postOutcomeAction: {
+          kind: "dispatch_next_lane",
+          runState: "active",
+          cardId: expect.any(String),
+          persona: expect.any(String)
+        },
+        nextDispatch: expect.objectContaining({
+          workflowId: "wf-seo-audit",
+          laneExecution: expect.objectContaining({
+            deliverableType: "research_brief",
+            state: "working"
+          })
+        })
+      })
+    );
+
+    expect(onHarnessLaneReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runId: "run-seo-follow-on-1",
+        workflowId: "wf-seo-audit",
+        laneExecution: expect.objectContaining({
+          deliverableType: "research_brief"
+        })
+      })
+    );
+    expect(
+      harnessRepository.insertEvent.mock.calls.some(
+        ([event]) => event.cardId === "card_cfo_seo_next" && event.eventKind === "execution_start_suppressed"
+      )
+    ).toBe(false);
 
     await runtime.close();
   });

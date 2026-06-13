@@ -938,7 +938,7 @@ export type HarnessPendingApprovalView = {
   actionDescription: string;
   requestFields: HarnessActionRequestFieldView[];
   actionOptions: HarnessActionOptionView[];
-  recommendedOptionValue?: "approve";
+  recommendedOptionValue?: "approve" | "defer" | "deny";
   allowedDecisions: Array<"approve" | "defer" | "deny">;
   policyReasonLabel?: string;
   nextReviewTrigger?: string;
@@ -1195,6 +1195,7 @@ export function createHarnessBoardService(options: {
   requireActivePackageInstall(input: { tenantId: string; packageId: string }): Promise<void>;
   repository: HarnessRepository;
   workflowRegistry: HarnessWorkflowRegistry;
+  resolveWorkflowRegistry?(input: { tenantId: string; userId: string }): Promise<HarnessWorkflowRegistry>;
   runAtomically?<T>(work: (repository: HarnessRepository) => Promise<T>): Promise<T>;
   audit?: HarnessAudit;
   onResolvedAttentionDispatch?: (dispatch: HarnessResolvedAttentionDispatch) => Promise<void> | void;
@@ -1211,6 +1212,7 @@ export function createHarnessBoardService(options: {
         requireTenantMember: options.requireTenantMember,
         requireActivePackageInstall: options.requireActivePackageInstall,
         workflowRegistry: options.workflowRegistry,
+        ...(options.resolveWorkflowRegistry ? { resolveWorkflowRegistry: options.resolveWorkflowRegistry } : {}),
         authorization: request.authorization,
         ...(request.workflowId ? { requestedWorkflowId: request.workflowId } : {}),
         ...(request.cookie ? { cookie: request.cookie } : {})
@@ -1260,6 +1262,7 @@ export function createHarnessBoardService(options: {
         requireTenantMember: options.requireTenantMember,
         requireActivePackageInstall: options.requireActivePackageInstall,
         workflowRegistry: options.workflowRegistry,
+        ...(options.resolveWorkflowRegistry ? { resolveWorkflowRegistry: options.resolveWorkflowRegistry } : {}),
         authorization: request.authorization,
         ...(request.workflowId ? { requestedWorkflowId: request.workflowId } : {}),
         ...(request.cookie ? { cookie: request.cookie } : {})
@@ -1967,6 +1970,7 @@ export function createHarnessBoardService(options: {
         requireTenantMember: options.requireTenantMember,
         requireActivePackageInstall: options.requireActivePackageInstall,
         workflowRegistry: options.workflowRegistry,
+        ...(options.resolveWorkflowRegistry ? { resolveWorkflowRegistry: options.resolveWorkflowRegistry } : {}),
         authorization: request.authorization,
         ...(request.cookie ? { cookie: request.cookie } : {})
       });
@@ -3191,6 +3195,7 @@ export function createHarnessBoardService(options: {
         requireTenantMember: options.requireTenantMember,
         requireActivePackageInstall: options.requireActivePackageInstall,
         workflowRegistry: options.workflowRegistry,
+        ...(options.resolveWorkflowRegistry ? { resolveWorkflowRegistry: options.resolveWorkflowRegistry } : {}),
         authorization: request.authorization,
         ...(request.cookie ? { cookie: request.cookie } : {})
       });
@@ -3314,6 +3319,7 @@ export function createHarnessBoardService(options: {
         requireTenantMember: options.requireTenantMember,
         requireActivePackageInstall: options.requireActivePackageInstall,
         workflowRegistry: options.workflowRegistry,
+        ...(options.resolveWorkflowRegistry ? { resolveWorkflowRegistry: options.resolveWorkflowRegistry } : {}),
         authorization: request.authorization,
         ...(request.cookie ? { cookie: request.cookie } : {})
       });
@@ -3529,6 +3535,7 @@ export function createHarnessBoardService(options: {
         requireTenantMember: options.requireTenantMember,
         requireActivePackageInstall: options.requireActivePackageInstall,
         workflowRegistry: options.workflowRegistry,
+        ...(options.resolveWorkflowRegistry ? { resolveWorkflowRegistry: options.resolveWorkflowRegistry } : {}),
         authorization: request.authorization,
         ...(request.cookie ? { cookie: request.cookie } : {})
       });
@@ -3615,6 +3622,7 @@ export function createHarnessBoardService(options: {
         requireTenantMember: options.requireTenantMember,
         requireActivePackageInstall: options.requireActivePackageInstall,
         workflowRegistry: options.workflowRegistry,
+        ...(options.resolveWorkflowRegistry ? { resolveWorkflowRegistry: options.resolveWorkflowRegistry } : {}),
         authorization: request.authorization,
         ...(request.cookie ? { cookie: request.cookie } : {})
       });
@@ -3860,6 +3868,7 @@ export function createHarnessBoardService(options: {
         requireTenantMember: options.requireTenantMember,
         requireActivePackageInstall: options.requireActivePackageInstall,
         workflowRegistry: options.workflowRegistry,
+        ...(options.resolveWorkflowRegistry ? { resolveWorkflowRegistry: options.resolveWorkflowRegistry } : {}),
         authorization: request.authorization,
         ...(request.cookie ? { cookie: request.cookie } : {})
       });
@@ -4075,6 +4084,7 @@ export function createHarnessBoardService(options: {
         requireTenantMember: options.requireTenantMember,
         requireActivePackageInstall: options.requireActivePackageInstall,
         workflowRegistry: options.workflowRegistry,
+        ...(options.resolveWorkflowRegistry ? { resolveWorkflowRegistry: options.resolveWorkflowRegistry } : {}),
         authorization: request.authorization,
         ...(request.cookie ? { cookie: request.cookie } : {}),
         runId: request.runId
@@ -4156,6 +4166,7 @@ export function createHarnessBoardService(options: {
         requireTenantMember: options.requireTenantMember,
         requireActivePackageInstall: options.requireActivePackageInstall,
         workflowRegistry: options.workflowRegistry,
+        ...(options.resolveWorkflowRegistry ? { resolveWorkflowRegistry: options.resolveWorkflowRegistry } : {}),
         authorization: request.authorization,
         ...(request.cookie ? { cookie: request.cookie } : {}),
         runId: request.runId
@@ -4209,6 +4220,7 @@ export function createHarnessBoardService(options: {
         requireTenantMember: options.requireTenantMember,
         requireActivePackageInstall: options.requireActivePackageInstall,
         workflowRegistry: options.workflowRegistry,
+        ...(options.resolveWorkflowRegistry ? { resolveWorkflowRegistry: options.resolveWorkflowRegistry } : {}),
         authorization: request.authorization,
         ...(request.cookie ? { cookie: request.cookie } : {}),
         runId: request.runId
@@ -4301,6 +4313,7 @@ export function createHarnessBoardService(options: {
         requireTenantMember: options.requireTenantMember,
         requireActivePackageInstall: options.requireActivePackageInstall,
         workflowRegistry: options.workflowRegistry,
+        ...(options.resolveWorkflowRegistry ? { resolveWorkflowRegistry: options.resolveWorkflowRegistry } : {}),
         authorization: request.authorization,
         ...(request.cookie ? { cookie: request.cookie } : {}),
         runId: request.runId
@@ -4402,6 +4415,7 @@ export function createHarnessBoardService(options: {
         requireTenantMember: options.requireTenantMember,
         requireActivePackageInstall: options.requireActivePackageInstall,
         workflowRegistry: options.workflowRegistry,
+        ...(options.resolveWorkflowRegistry ? { resolveWorkflowRegistry: options.resolveWorkflowRegistry } : {}),
         authorization: request.authorization,
         ...(request.cookie ? { cookie: request.cookie } : {}),
         runId: request.runId
@@ -4506,6 +4520,7 @@ export function createHarnessBoardService(options: {
         requireTenantMember: options.requireTenantMember,
         requireActivePackageInstall: options.requireActivePackageInstall,
         workflowRegistry: options.workflowRegistry,
+        ...(options.resolveWorkflowRegistry ? { resolveWorkflowRegistry: options.resolveWorkflowRegistry } : {}),
         authorization: request.authorization,
         ...(request.cookie ? { cookie: request.cookie } : {}),
         runId: request.runId
@@ -4614,6 +4629,7 @@ async function loadExportBoardContext(input: {
   requireTenantMember(input: { tenantId: string; userId: string }): Promise<void>;
   requireActivePackageInstall(input: { tenantId: string; packageId: string }): Promise<void>;
   workflowRegistry: HarnessWorkflowRegistry;
+  resolveWorkflowRegistry?(input: { tenantId: string; userId: string }): Promise<HarnessWorkflowRegistry>;
   authorization: string;
   cookie?: string;
   runId: string;
@@ -4623,6 +4639,7 @@ async function loadExportBoardContext(input: {
     requireTenantMember: input.requireTenantMember,
     requireActivePackageInstall: input.requireActivePackageInstall,
     workflowRegistry: input.workflowRegistry,
+    ...(input.resolveWorkflowRegistry ? { resolveWorkflowRegistry: input.resolveWorkflowRegistry } : {}),
     authorization: input.authorization,
     ...(input.cookie ? { cookie: input.cookie } : {})
   });
@@ -4664,6 +4681,7 @@ async function authorizeHarnessRequest(input: {
   requireTenantMember(input: { tenantId: string; userId: string }): Promise<void>;
   requireActivePackageInstall(input: { tenantId: string; packageId: string }): Promise<void>;
   workflowRegistry: HarnessWorkflowRegistry;
+  resolveWorkflowRegistry?(input: { tenantId: string; userId: string }): Promise<HarnessWorkflowRegistry>;
   authorization: string;
   requestedWorkflowId?: string;
   cookie?: string;
@@ -4676,11 +4694,15 @@ async function authorizeHarnessRequest(input: {
     throw new ApiAuthError();
   }
 
+  const workflowRegistry = input.resolveWorkflowRegistry
+    ? await input.resolveWorkflowRegistry({ tenantId: session.tenantId, userId: session.userId })
+    : input.workflowRegistry;
+
   let workflowDefinition: WealthFactoryWorkflowDefinition;
   try {
-    workflowDefinition = input.workflowRegistry.resolveBoardWorkflowDefinition
-      ? input.workflowRegistry.resolveBoardWorkflowDefinition(input.requestedWorkflowId)
-      : resolveBoardWorkflowDefinitionFallback(input.workflowRegistry, input.requestedWorkflowId);
+    workflowDefinition = workflowRegistry.resolveBoardWorkflowDefinition
+      ? workflowRegistry.resolveBoardWorkflowDefinition(input.requestedWorkflowId)
+      : resolveBoardWorkflowDefinitionFallback(workflowRegistry, input.requestedWorkflowId);
   } catch (error) {
     if (error instanceof Error) {
       throw new HarnessWorkflowSelectionError(error.message);
@@ -5384,9 +5406,26 @@ function buildHarnessBoardResponse(input: {
     columns,
     cards,
     pendingApprovals: sortedPendingProposals.map((proposal) => {
+        const siblingProposal = proposal.status === "proposed"
+          ? findEarlierUnresolvedSiblingProposal(input.proposals, proposal)
+          : null;
+        const siblingDecision = siblingProposal
+          ? latestDecisionByProposalId.get(siblingProposal.id) ?? null
+          : null;
+        const livePolicyReason = determineProposalPolicyReason({
+          run: input.run,
+          cards: input.cards,
+          proposal
+        });
+        const proposalPolicyReason = proposal.status === "proposed" &&
+          isPendingApprovalPolicyReason(siblingDecision?.policyReason) &&
+          siblingDecision.policyReason === livePolicyReason
+          ? siblingDecision.policyReason
+          : livePolicyReason;
         const policyView = toPendingApprovalPolicyView({
           cards: input.cards,
           proposal,
+          policyReason: proposalPolicyReason,
           latestDecision: latestDecisionByProposalId.get(proposal.id) ?? null
         });
 
@@ -5402,11 +5441,7 @@ function buildHarnessBoardResponse(input: {
           actionMethod: "POST" as const,
           actionToken: createPendingApprovalActionToken({
             proposal,
-            policyReason: determineProposalPolicyReason({
-              run: input.run,
-              cards: input.cards,
-              proposal
-            }),
+            policyReason: proposalPolicyReason,
             ...(policyView.handoffTargetCardId ? { handoffTargetCardId: policyView.handoffTargetCardId } : {}),
             ...(latestDecisionByProposalId.get(proposal.id)?.createdAt
               ? { latestDecisionCreatedAt: latestDecisionByProposalId.get(proposal.id)!.createdAt }
@@ -5416,7 +5451,16 @@ function buildHarnessBoardResponse(input: {
           actionDescription: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
           requestFields: buildPendingApprovalRequestFields(policyView.handoffTargetCardId),
           actionOptions: buildPendingApprovalActionOptions(policyView),
-          ...(proposal.status === "proposed" ? { recommendedOptionValue: "approve" as const } : {}),
+          ...(proposal.status === "proposed"
+            ? {
+                recommendedOptionValue: determinePendingApprovalRecommendedOption({
+                  policyReason: proposalPolicyReason,
+                  ...(policyView.handoffTargetCardId
+                    ? { handoffTargetCardId: policyView.handoffTargetCardId }
+                    : {})
+                })
+              }
+            : {}),
           allowedDecisions: ["approve", "defer", "deny"],
           ...(policyView.handoffTargetPersona && policyView.handoffTargetTitle
             ? {
@@ -10213,6 +10257,7 @@ function describeBoardDecision(decision: HarnessBoardDecisionRecord): string {
 function toPendingApprovalPolicyView(input: {
   cards: readonly HarnessCardRecord[];
   proposal: HarnessSubCardProposal;
+  policyReason: "persona_lane_cap" | "deliverable_owner_conflict" | "lane_cap" | "scope_guardrail" | "completed_lanes_only";
   latestDecision: HarnessBoardDecisionRecord | null;
 }): Partial<HarnessPendingApprovalView> {
   const handoffTarget = selectDeliverableOwnerConflictTarget({
@@ -10220,13 +10265,21 @@ function toPendingApprovalPolicyView(input: {
     proposal: input.proposal
   });
   if (input.proposal.status !== "deferred") {
-    return handoffTarget
-      ? {
-          handoffTargetCardId: handoffTarget.id,
-          handoffTargetPersona: handoffTarget.persona.toUpperCase(),
-          handoffTargetTitle: handoffTarget.title
-        }
-      : {};
+    return {
+      ...(input.policyReason !== "scope_guardrail"
+        ? {
+            policyReasonLabel: humanizePolicyReason(input.policyReason),
+            nextReviewTrigger: describeNextReviewTrigger(input.policyReason)
+          }
+        : {}),
+      ...(handoffTarget
+        ? {
+            handoffTargetCardId: handoffTarget.id,
+            handoffTargetPersona: handoffTarget.persona.toUpperCase(),
+            handoffTargetTitle: handoffTarget.title
+          }
+        : {})
+    };
   }
 
   const decision = input.latestDecision;
@@ -10242,6 +10295,37 @@ function toPendingApprovalPolicyView(input: {
         }
       : {})
   };
+}
+
+function determinePendingApprovalRecommendedOption(
+  input: {
+    policyReason: "persona_lane_cap" | "deliverable_owner_conflict" | "lane_cap" | "scope_guardrail" | "completed_lanes_only";
+    handoffTargetCardId?: string;
+  }
+): "approve" | "defer" | "deny" {
+  switch (input.policyReason) {
+    case "completed_lanes_only":
+    case "persona_lane_cap":
+    case "lane_cap":
+      return "defer";
+    case "deliverable_owner_conflict":
+      return input.handoffTargetCardId ? "approve" : "defer";
+    case "scope_guardrail":
+    default:
+      return "approve";
+  }
+}
+
+function isPendingApprovalPolicyReason(
+  value: HarnessBoardDecisionRecord["policyReason"] | undefined | null
+): value is "persona_lane_cap" | "deliverable_owner_conflict" | "lane_cap" | "scope_guardrail" | "completed_lanes_only" {
+  return (
+    value === "persona_lane_cap" ||
+    value === "deliverable_owner_conflict" ||
+    value === "lane_cap" ||
+    value === "scope_guardrail" ||
+    value === "completed_lanes_only"
+  );
 }
 
 function selectDeliverableOwnerConflictTarget(input: {

@@ -4,13 +4,13 @@ import { createEntitlementService } from "../src/packages/entitlement-service.js
 import { createPackageAssetRegistry } from "../src/packages/package-asset-registry.js";
 import type { TenantPackageState, WealthFactoryPackage } from "../src/packages/package-types.js";
 
-const socialPackage: WealthFactoryPackage = {
-  id: "pkg-social",
-  name: "Social Media Agency",
+const clientOpsPackage: WealthFactoryPackage = {
+  id: "pkg-client-ops",
+  name: "Client Ops",
   kind: "industry",
-  includedWorkflowIds: ["wf-social-calendar"],
+  includedWorkflowIds: ["wf-client-ops-brief"],
   includedEmployeeIds: ["ceo"],
-  allowedAssetIds: ["asset-social-rules"],
+  allowedAssetIds: ["asset-client-ops-rules"],
   requiredProviderCapabilities: ["text_generation"],
   optionalProviderCapabilities: ["image_generation", "video_generation", "media_storage"]
 };
@@ -28,39 +28,39 @@ const brandSeoPackage: WealthFactoryPackage = {
 
 describe("package entitlements", () => {
   it("allows only workflows and assets from the installed package", () => {
-    const service = createEntitlementService({ packages: [socialPackage, brandSeoPackage] });
+    const service = createEntitlementService({ packages: [clientOpsPackage, brandSeoPackage] });
     const tenant: TenantPackageState = {
       tenantId: "tenant-1",
       subscriptionStatus: "active",
-      installedPackageId: "pkg-social",
+      installedPackageId: "pkg-client-ops",
       purchasedAddOnEmployeeIds: [],
       connectedProviderCapabilities: ["text_generation"]
     };
 
-    expect(service.canRunWorkflow(tenant, "wf-social-calendar")).toEqual({ allowed: true });
+    expect(service.canRunWorkflow(tenant, "wf-client-ops-brief")).toEqual({ allowed: true });
     expect(service.canRunWorkflow(tenant, "wf-seo-audit")).toMatchObject({ allowed: false, reason: "workflow_not_in_package" });
 
     const assets = createPackageAssetRegistry([
-      { id: "asset-social-rules", packageId: "pkg-social", type: "rules", privateRef: "pc-social-rules" },
+      { id: "asset-client-ops-rules", packageId: "pkg-client-ops", type: "rules", privateRef: "pc-client-ops-rules" },
       { id: "asset-seo-rules", packageId: "pkg-brand-seo", type: "rules", privateRef: "pc-seo-rules" }
     ]);
-    expect(assets.resolveAllowedAsset(socialPackage, "asset-social-rules")).toMatchObject({ id: "asset-social-rules" });
-    expect(() => assets.resolveAllowedAsset(socialPackage, "asset-seo-rules")).toThrow("Asset is not allowed for this package");
+    expect(assets.resolveAllowedAsset(clientOpsPackage, "asset-client-ops-rules")).toMatchObject({ id: "asset-client-ops-rules" });
+    expect(() => assets.resolveAllowedAsset(clientOpsPackage, "asset-seo-rules")).toThrow("Asset is not allowed for this package");
   });
 
   it("requires active subscription and package-specific provider capabilities", () => {
-    const service = createEntitlementService({ packages: [socialPackage] });
+    const service = createEntitlementService({ packages: [clientOpsPackage] });
 
     expect(
       service.canRunWorkflow(
         {
           tenantId: "tenant-1",
           subscriptionStatus: "past_due",
-          installedPackageId: "pkg-social",
+          installedPackageId: "pkg-client-ops",
           purchasedAddOnEmployeeIds: [],
           connectedProviderCapabilities: ["text_generation"]
         },
-        "wf-social-calendar"
+        "wf-client-ops-brief"
       )
     ).toMatchObject({ allowed: false, reason: "subscription_inactive" });
 
@@ -69,7 +69,7 @@ describe("package entitlements", () => {
         {
           tenantId: "tenant-1",
           subscriptionStatus: "active",
-          installedPackageId: "pkg-social",
+          installedPackageId: "pkg-client-ops",
           purchasedAddOnEmployeeIds: [],
           connectedProviderCapabilities: ["text_generation"]
         },

@@ -6,6 +6,8 @@ import { createRuntimeSessionAuth, createRuntimeSessionToken } from "../src/api/
 import { createDashboardRuntime, createNodeRequestListener, loadRuntimeEnv } from "../src/api/runtime-server.js";
 import { createDurableAuditSink } from "../src/audit/durable-audit.js";
 import { createPgPoolQueryClient, createPgTransactionRunner } from "../src/db/postgres-client.js";
+import { createSupabaseRepositories } from "../src/db/supabase-repositories.js";
+import { createHarnessWorkflowRegistry } from "../src/wealthfactory/workflow-registry.js";
 import {
   createHarnessBoardService,
   type HarnessGovernanceHistoryExportReadyDispatch,
@@ -263,11 +265,14 @@ vi.mock("../src/db/supabase-repositories.js", () => ({
   })),
   createSupabaseRepositories: vi.fn(() => ({
     resolvePaperclipCompanyMapping: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1", paperclipIssueAgentId: "pc-agent-1" }),
+    listActiveInstalledPackageIds: vi.fn().mockResolvedValue([]),
     hasActiveWorkflowRuns: vi.fn().mockResolvedValue(false),
     countActiveWorkflowRuns: vi.fn().mockResolvedValue(0),
     requireTenantMember: vi.fn(),
     requireActivePackageInstall: vi.fn(),
-    listWorkflows: vi.fn(),
+    listWorkflows: vi.fn().mockResolvedValue([
+      { id: "workflow-template-1", name: "Connect First Workflow", providerKind: "openai_api", enabled: true }
+    ]),
     listPackages: vi.fn(),
     listArtifacts: vi.fn(),
     listProviderConnections: vi.fn(),
@@ -695,6 +700,268 @@ describe("runtime server", () => {
     await runtime.close();
   });
 
+  it("fails closed when the public dashboard start seam receives an overlay-only workflow id", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {
+          WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-seo-audit"
+        }
+      },
+      auth: {
+        authenticate: vi.fn().mockResolvedValue({
+          tenantId: "tenant-1",
+          userId: "user-1",
+          role: "member"
+        })
+      },
+      workflowQueueEnqueuer: { enqueueOnce: vi.fn().mockResolvedValue("enqueued") }
+    });
+
+    const request = createRequest({
+      method: "POST",
+      url: "/api/dashboard/runs",
+      headers: {
+        authorization: "Bearer token",
+        origin: "https://www.spyderbyte.cloud",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ workflowId: "wf-seo-audit" })
+    });
+    const response = createResponse();
+
+    runtime.server.emit("request", request as unknown as IncomingMessage, response as unknown as ServerResponse);
+    await response.finished;
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toBe(JSON.stringify({ code: "invalid_request" }));
+    await runtime.close();
+  });
+
+  it("does not surface core built-in public ids as dashboard-startable catalog entries without tenant template rows", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: {
+        authenticate: vi.fn().mockResolvedValue({
+          tenantId: "tenant-1",
+          userId: "user-1",
+          role: "member"
+        })
+      },
+      workflowQueueEnqueuer: { enqueueOnce: vi.fn().mockResolvedValue("enqueued") }
+    });
+
+    const dashboardRequest = createRequest({
+      method: "GET",
+      url: "/api/dashboard",
+      headers: {
+        authorization: "Bearer token",
+        origin: "https://www.spyderbyte.cloud",
+        "content-length": "0"
+      }
+    });
+    const dashboardResponse = createResponse();
+
+    runtime.server.emit("request", dashboardRequest as unknown as IncomingMessage, dashboardResponse as unknown as ServerResponse);
+    await dashboardResponse.finished;
+
+    expect(dashboardResponse.statusCode).toBe(200);
+    expect(dashboardResponse.body).not.toContain('"id":"wf_connect_first_workflow"');
+    expect(dashboardResponse.body).not.toContain('"id":"wf_tax_strategy"');
+    expect(dashboardResponse.body).not.toContain('"id":"wf_package_followup"');
+
+    const startRequest = createRequest({
+      method: "POST",
+      url: "/api/dashboard/runs",
+      headers: {
+        authorization: "Bearer token",
+        origin: "https://www.spyderbyte.cloud",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ workflowId: "wf_connect_first_workflow" })
+    });
+    const startResponse = createResponse();
+
+    runtime.server.emit("request", startRequest as unknown as IncomingMessage, startResponse as unknown as ServerResponse);
+    await startResponse.finished;
+
+    expect(startResponse.statusCode).toBe(400);
+    expect(startResponse.body).toBe(JSON.stringify({ code: "invalid_request" }));
+    await runtime.close();
+  });
+
+  it("surfaces an explicitly public installed-package overlay on the tenant dashboard and allows that same catalog entry to start", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {
+          WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-seo-audit"
+        }
+      },
+      auth: {
+        authenticate: vi.fn().mockResolvedValue({
+          tenantId: "tenant-1",
+          userId: "user-1",
+          role: "member"
+        })
+      },
+      workflowQueueEnqueuer: { enqueueOnce: vi.fn().mockResolvedValue("enqueued") }
+    });
+
+    const repositories = vi.mocked(createSupabaseRepositories).mock.results.at(-1)?.value;
+    repositories?.listActiveInstalledPackageIds.mockResolvedValueOnce(["pkg-brand-seo"]).mockResolvedValueOnce(["pkg-brand-seo"]);
+
+    const dashboardRequest = createRequest({
+      method: "GET",
+      url: "/api/dashboard",
+      headers: {
+        authorization: "Bearer token",
+        origin: "https://www.spyderbyte.cloud",
+        "content-length": "0"
+      }
+    });
+    const dashboardResponse = createResponse();
+
+    runtime.server.emit("request", dashboardRequest as unknown as IncomingMessage, dashboardResponse as unknown as ServerResponse);
+    await dashboardResponse.finished;
+
+    expect(dashboardResponse.statusCode).toBe(200);
+    expect(dashboardResponse.body).toContain('"id":"wf-seo-audit"');
+
+    const startRequest = createRequest({
+      method: "POST",
+      url: "/api/dashboard/runs",
+      headers: {
+        authorization: "Bearer token",
+        origin: "https://www.spyderbyte.cloud",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ workflowId: "wf-seo-audit" })
+    });
+    const startResponse = createResponse();
+
+    runtime.server.emit("request", startRequest as unknown as IncomingMessage, startResponse as unknown as ServerResponse);
+    await startResponse.finished;
+
+    expect(startResponse.statusCode).toBe(202);
+    expect(startResponse.body).toContain('"queued":true');
+    await runtime.close();
+  });
+
+  it("keeps a public-dashboard-visible overlay reviewable but not startable when public start opt-in is absent", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {
+          WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-hidden-start-overlay"
+        }
+      },
+      auth: {
+        authenticate: vi.fn().mockResolvedValue({
+          tenantId: "tenant-1",
+          userId: "user-1",
+          role: "member"
+        })
+      },
+      workflowQueueEnqueuer: { enqueueOnce: vi.fn().mockResolvedValue("enqueued") }
+    });
+
+    const repositories = vi.mocked(createSupabaseRepositories).mock.results.at(-1)?.value;
+    repositories?.listActiveInstalledPackageIds.mockResolvedValueOnce(["pkg-brand-seo"]).mockResolvedValueOnce(["pkg-brand-seo"]);
+
+    const originalRegistryFactory = createHarnessWorkflowRegistry;
+    const registrySpy = vi.spyOn(await import("../src/wealthfactory/workflow-registry.js"), "createHarnessWorkflowRegistry");
+    registrySpy.mockImplementation((input) =>
+      originalRegistryFactory({
+        ...input,
+        installedPackages: [
+          {
+            id: "pkg-brand-seo",
+            name: "Brand SEO",
+            kind: "industry",
+            includedWorkflowIds: ["wf-hidden-start-overlay"],
+            includedEmployeeIds: ["ceo"],
+            allowedAssetIds: ["asset-seo-rules"],
+            requiredProviderCapabilities: ["text_generation"],
+            optionalProviderCapabilities: [],
+            workflowDefinitions: [
+              {
+                publicId: "wf-hidden-start-overlay",
+                publicName: "Review-Only Overlay Workflow",
+                description: "Visible on the dashboard without public start opt-in.",
+                allowedDeliverableTypes: ["plan"],
+                requiredProviderCapabilities: ["text_generation"],
+                publicDashboardEnabled: true,
+                publicStartEnabled: false,
+                providerKind: "openai_api"
+              }
+            ]
+          }
+        ]
+      })
+    );
+
+    try {
+      const dashboardRequest = createRequest({
+        method: "GET",
+        url: "/api/dashboard",
+        headers: {
+          authorization: "Bearer token",
+          origin: "https://www.spyderbyte.cloud",
+          "content-length": "0"
+        }
+      });
+      const dashboardResponse = createResponse();
+
+      runtime.server.emit("request", dashboardRequest as unknown as IncomingMessage, dashboardResponse as unknown as ServerResponse);
+      await dashboardResponse.finished;
+
+      expect(dashboardResponse.statusCode).toBe(200);
+      expect(dashboardResponse.body).toContain('"id":"wf-hidden-start-overlay"');
+      expect(dashboardResponse.body).toContain('"startEnabled":false');
+
+      const startRequest = createRequest({
+        method: "POST",
+        url: "/api/dashboard/runs",
+        headers: {
+          authorization: "Bearer token",
+          origin: "https://www.spyderbyte.cloud",
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({ workflowId: "wf-hidden-start-overlay" })
+      });
+      const startResponse = createResponse();
+
+      runtime.server.emit("request", startRequest as unknown as IncomingMessage, startResponse as unknown as ServerResponse);
+      await startResponse.finished;
+
+      expect(startResponse.statusCode).toBe(400);
+      expect(startResponse.body).toBe(JSON.stringify({ code: "invalid_request" }));
+    } finally {
+      registrySpy.mockRestore();
+      await runtime.close();
+    }
+  });
+
   it("routes the harness direct-child mutation through the runtime harness surface", async () => {
     const runtime = createDashboardRuntime({
       env: {
@@ -952,6 +1219,75 @@ describe("runtime server", () => {
     await runtime.close();
   });
 
+  it("resolves explicitly native-enabled installed package overlays into the runtime-scoped registry without promoting them into core workflow truth", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {
+          WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-seo-audit"
+        }
+      },
+      auth: { authenticate: vi.fn() }
+    });
+
+    const boardServiceOptions = vi.mocked(createHarnessBoardService).mock.calls.at(-1)?.[0];
+    const repositories = vi.mocked(createSupabaseRepositories).mock.results.at(-1)?.value;
+    const resolveWorkflowRegistry = boardServiceOptions?.resolveWorkflowRegistry;
+    expect(resolveWorkflowRegistry).toEqual(expect.any(Function));
+    expect(repositories).toBeDefined();
+
+    repositories!.listActiveInstalledPackageIds.mockResolvedValueOnce(["pkg-brand-seo"]);
+    const installedRegistry = await resolveWorkflowRegistry!({ tenantId: "tenant_123", userId: "user_123" });
+    expect(installedRegistry).toBeDefined();
+    const resolvedInstalledRegistry = installedRegistry as ReturnType<typeof createHarnessWorkflowRegistry>;
+    expect(resolvedInstalledRegistry.getDefinition("wf-seo-audit").packageId).toBe("pkg-brand-seo");
+    expect(resolvedInstalledRegistry.getDefinition("wf-seo-audit").executionEngine).toBe("wf_native_v1");
+    expect(resolvedInstalledRegistry.listHarnessEligibleWorkflowIds()).toContain("wf-seo-audit");
+    expect(resolvedInstalledRegistry.listBoardExposedWorkflowIds()).toEqual(["wf-seo-audit"]);
+
+    repositories.listActiveInstalledPackageIds.mockResolvedValueOnce([]);
+    const builtInOnlyRegistry = await boardServiceOptions?.resolveWorkflowRegistry?.({ tenantId: "tenant_123", userId: "user_123" });
+    expect(() => builtInOnlyRegistry?.getDefinition("wf-seo-audit")).toThrow(/Unknown Wealth Factory workflow/i);
+
+    await runtime.close();
+  });
+
+  it("allows runtime-scoped installed-package overlays onto the board only when the canonical package definition explicitly opts in", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {
+          WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-seo-audit"
+        }
+      },
+      auth: { authenticate: vi.fn() }
+    });
+
+    const boardServiceOptions = vi.mocked(createHarnessBoardService).mock.calls.at(-1)?.[0];
+    const repositories = vi.mocked(createSupabaseRepositories).mock.results.at(-1)?.value;
+    const resolveWorkflowRegistry = boardServiceOptions?.resolveWorkflowRegistry;
+    expect(resolveWorkflowRegistry).toEqual(expect.any(Function));
+    expect(repositories).toBeDefined();
+
+    repositories!.listActiveInstalledPackageIds.mockResolvedValueOnce(["pkg-brand-seo"]);
+    const installedRegistry = await resolveWorkflowRegistry!({ tenantId: "tenant_123", userId: "user_123" });
+    expect(installedRegistry).toBeDefined();
+    const resolvedRegistry = installedRegistry as ReturnType<typeof createHarnessWorkflowRegistry>;
+    expect(resolvedRegistry.listBoardExposedWorkflowIds()).toEqual(["wf-seo-audit"]);
+    expect(resolvedRegistry.resolveBoardWorkflowDefinition("wf-seo-audit").packageId).toBe("pkg-brand-seo");
+    expect(resolvedRegistry.getDefinition("wf-seo-audit").executionEngine).toBe("wf_native_v1");
+
+    await runtime.close();
+  });
+
   it("requeues resolved harness attention through the existing workflow queue seam when an enqueuer is available", async () => {
     const enqueueOnce = vi.fn().mockResolvedValue("enqueued");
     const runtime = createDashboardRuntime({
@@ -987,7 +1323,7 @@ describe("runtime server", () => {
     expect(sql).toMatch(/insert into wfpc\.workflow_queue_outbox/i);
     expect(sql).toMatch(/when wfpc\.workflow_queue_outbox\.status = 'claimed' then wfpc\.workflow_queue_outbox\.idempotency_key/i);
     expect(sql).toMatch(/else excluded\.idempotency_key/i);
-    expect(redispatchQuery?.mock.calls[0]?.[1]?.[4]).toMatch(/^tenant_123:wf_connect_first_workflow:run_123:redispatch:resume_lane:[a-f0-9]{12}$/i);
+    expect(redispatchQuery?.mock.calls[0]?.[1]?.[3]).toMatch(/^tenant_123:wf_connect_first_workflow:run_123:redispatch:resume_lane:[a-f0-9]{12}$/i);
 
     await runtime.close();
   });
@@ -1067,7 +1403,7 @@ describe("runtime server", () => {
     expect(sql).toMatch(/insert into wfpc\.workflow_queue_outbox/i);
     expect(sql).toMatch(/when wfpc\.workflow_queue_outbox\.status = 'claimed' then wfpc\.workflow_queue_outbox\.idempotency_key/i);
     expect(sql).toMatch(/else excluded\.idempotency_key/i);
-    expect(redispatchQuery?.mock.calls[0]?.[1]?.[4]).toMatch(/^tenant_123:wf_connect_first_workflow:run_124:redispatch:fresh_cycle_reopen_deferred:[a-f0-9]{12}$/i);
+    expect(redispatchQuery?.mock.calls[0]?.[1]?.[3]).toMatch(/^tenant_123:wf_connect_first_workflow:run_124:redispatch:fresh_cycle_reopen_deferred:[a-f0-9]{12}$/i);
 
     await runtime.close();
   });

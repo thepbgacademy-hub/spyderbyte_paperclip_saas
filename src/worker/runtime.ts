@@ -17,6 +17,7 @@ import {
 } from "../harness/worker-executor.js";
 import { type HarnessPostOutcomeAction } from "../harness/post-outcome.js";
 import { createPostgresHarnessRepository } from "../harness/repository.js";
+import { listInstalledPackageDefinitions } from "../packages/package-catalog.js";
 import type { ProviderCapability } from "../packages/package-types.js";
 import { createPaperclipClient } from "../paperclip/client.js";
 import type { PaperclipRunStatus } from "../paperclip/types.js";
@@ -296,6 +297,7 @@ export function createWorkerRuntime(options: {
     harnessEnabledWorkflowIds: options.env.harnessEnabledWorkflowIds,
     nativeExecutorEnabledWorkflowIds: options.env.nativeExecutorEnabledWorkflowIds
   });
+  const tenantWorkflowRegistryCache = new Map<string, Promise<ReturnType<typeof createHarnessWorkflowRegistry>>>();
   const nativeExecutor = options.nativeExecutor ?? createDefaultNativeExecutor({
     openAIModel: options.env.nativeOpenAIModel
   });
@@ -357,6 +359,54 @@ export function createWorkerRuntime(options: {
     });
     inFlightRuntimeOperations.add(tracked);
     return tracked;
+  }
+
+  function resolveHarnessWorkflowRegistryForTenant(tenantId: string) {
+    const cached = tenantWorkflowRegistryCache.get(tenantId);
+    if (cached) {
+      return cached;
+    }
+
+    const registryPromise = repositories
+      .listActiveInstalledPackageIds({ tenantId })
+      .then((installedPackageIds) =>
+        createHarnessWorkflowRegistry({
+          harnessEnabledWorkflowIds: options.env.harnessEnabledWorkflowIds,
+          nativeExecutorEnabledWorkflowIds: options.env.nativeExecutorEnabledWorkflowIds,
+          installedPackages: listInstalledPackageDefinitions({ installedPackageIds })
+        })
+      )
+      .finally(() => {
+        tenantWorkflowRegistryCache.delete(tenantId);
+      });
+    tenantWorkflowRegistryCache.set(tenantId, registryPromise);
+    return registryPromise;
+  }
+
+  async function resolveHarnessWorkflowRegistryForRun(input: { tenantId: string; runId: string }) {
+    const workflowIdentity = await acidRepository.getWorkflowRunIdentity(input);
+    if (workflowIdentity?.workflowIdentityKind === "installed_package_overlay" && workflowIdentity.workflowPackageId) {
+      const registry = createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: options.env.harnessEnabledWorkflowIds,
+        nativeExecutorEnabledWorkflowIds: options.env.nativeExecutorEnabledWorkflowIds,
+        installedPackages: listInstalledPackageDefinitions({ installedPackageIds: [workflowIdentity.workflowPackageId] })
+      });
+      const snapshot = workflowIdentity.workflowDefinitionSnapshot;
+      if (snapshot) {
+        const definition = registry.getDefinition(workflowIdentity.workflowId);
+        if (
+          definition.packageId !== snapshot.packageId ||
+          (definition.executionEngine ?? "paperclip") !== snapshot.executionEngine ||
+          JSON.stringify([...definition.requiredCapabilities]) !== JSON.stringify([...snapshot.requiredCapabilities]) ||
+          (definition.providerKind ?? null) !== (snapshot.providerKind ?? null)
+        ) {
+          throw new Error(`Stored workflow definition snapshot no longer matches the current overlay catalog for ${workflowIdentity.workflowId}`);
+        }
+      }
+      return registry;
+    }
+
+    return resolveHarnessWorkflowRegistryForTenant(input.tenantId);
   }
 
   async function waitForInFlightRuntimeOperations(): Promise<"drained" | "timed_out"> {
@@ -612,7 +662,14 @@ export function createWorkerRuntime(options: {
         throw new WorkerRuntimeClosingError();
       }
       const validatedPayload = validateWorkflowQueuePayload(payload);
-      const workerExecutionEngine = resolveWorkerExecutionEngine(validatedPayload.workflowId);
+      const tenantHarnessWorkflowRegistry = await resolveHarnessWorkflowRegistryForRun({
+        tenantId: validatedPayload.tenantId,
+        runId: validatedPayload.runId
+      });
+      const workerExecutionEngine = resolveWorkerExecutionEngine(
+        validatedPayload.workflowId,
+        tenantHarnessWorkflowRegistry
+      );
 
       return executionGate.run({
         tenantId: validatedPayload.tenantId,
@@ -622,8 +679,8 @@ export function createWorkerRuntime(options: {
           if (isClosing) {
             throw new WorkerRuntimeClosingError();
           }
-          const workflowDefinition = harnessWorkflowRegistry.isHarnessEligible(validatedPayload.workflowId)
-            ? harnessWorkflowRegistry.getDefinition(validatedPayload.workflowId)
+          const workflowDefinition = tenantHarnessWorkflowRegistry.isHarnessEligible(validatedPayload.workflowId)
+            ? tenantHarnessWorkflowRegistry.getDefinition(validatedPayload.workflowId)
             : null;
           const harnessExecutionEngine =
             workflowDefinition?.executionEngine === "wf_native_v1"
@@ -640,7 +697,7 @@ export function createWorkerRuntime(options: {
                   transactionRunner.withTransaction((transaction) =>
                     work(createPostgresHarnessRepository(transaction))
                   ),
-                workflowRegistry: harnessWorkflowRegistry,
+                workflowRegistry: tenantHarnessWorkflowRegistry,
                 executionEngine: harnessExecutionEngine,
                 recordStatus: async (status) => {
                   await recordWorkflowStatus(status);
@@ -818,7 +875,11 @@ export function createWorkerRuntime(options: {
       allowDuringClose: boolean;
     }
   ) {
-    if (!harnessWorkflowRegistry.isHarnessEligible(input.workflowId)) {
+    const tenantHarnessWorkflowRegistry = await resolveHarnessWorkflowRegistryForRun({
+      tenantId: input.tenantId,
+      runId: input.runId
+    });
+    if (!tenantHarnessWorkflowRegistry.isHarnessEligible(input.workflowId)) {
       throw new Error(`Harness lane outcome is not enabled for workflow ${input.workflowId}`);
     }
 
@@ -1130,11 +1191,15 @@ export function createWorkerRuntime(options: {
           if (committedOutcome.nextDispatch?.laneExecution) {
             let executionEnvelope: HarnessWorkerExecutionEnvelope | null = null;
             try {
+              const tenantHarnessWorkflowRegistry = await resolveHarnessWorkflowRegistryForRun({
+                tenantId: input.tenantId,
+                runId: input.runId
+              });
               executionEnvelope = await buildHarnessWorkerExecutionEnvelope({
                 repository: harnessRepository,
                 tenantId: input.tenantId,
                 dispatch: committedOutcome.nextDispatch,
-                requiredCapabilities: harnessWorkflowRegistry.getDefinition(committedOutcome.nextDispatch.workflowId)
+                requiredCapabilities: tenantHarnessWorkflowRegistry.getDefinition(committedOutcome.nextDispatch.workflowId)
                   .requiredCapabilities,
                 ...(committedOutcome.nextExecutionStartContext?.lane
                   ? { laneContext: committedOutcome.nextExecutionStartContext.lane }
@@ -1273,12 +1338,15 @@ export function createWorkerRuntime(options: {
     return outcome;
   }
 
-  function resolveWorkerExecutionEngine(workflowId: string): "paperclip" | "wf_harness_v1" | "wf_native_v1" {
-    if (!harnessWorkflowRegistry.isHarnessEligible(workflowId)) {
+  function resolveWorkerExecutionEngine(
+    workflowId: string,
+    workflowRegistry: ReturnType<typeof createHarnessWorkflowRegistry> = harnessWorkflowRegistry
+  ): "paperclip" | "wf_harness_v1" | "wf_native_v1" {
+    if (!workflowRegistry.isHarnessEligible(workflowId)) {
       return "paperclip";
     }
 
-    return harnessWorkflowRegistry.getDefinition(workflowId).executionEngine ?? "paperclip";
+    return workflowRegistry.getDefinition(workflowId).executionEngine ?? "paperclip";
   }
 
   function emitWorkerRunEvent(

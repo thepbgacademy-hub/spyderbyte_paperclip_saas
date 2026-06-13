@@ -142,7 +142,8 @@ import { createSecretService } from "../secrets/secret-service.js";
 import { createStorageOAuthService, STORAGE_OAUTH_PROVIDER_CONFIGS } from "../storage/storage-oauth-service.js";
 import { createPostgresOAuthStateStore } from "../storage/postgres-oauth-state-store.js";
 import { createVaultBackedStorageOAuthRegistration } from "../storage/vault-backed-storage-oauth-registration.js";
-import { createHarnessWorkflowRegistry } from "../wealthfactory/workflow-registry.js";
+import { listInstalledPackageDefinitions } from "../packages/package-catalog.js";
+import { createHarnessWorkflowRegistry, WF_HARNESS_ELIGIBLE_WORKFLOWS } from "../wealthfactory/workflow-registry.js";
 import { createAcidRunReservationService, type WorkflowRunEnqueuer } from "../workflows/acid-run-reservation.js";
 import { createQueueOutboxPump } from "../workflows/queue-outbox-pump.js";
 import { createQueueOutboxWorker } from "../workflows/queue-outbox-worker.js";
@@ -253,6 +254,58 @@ function createRedispatchQueueJobId(input: {
 }): string {
   const digest = createHash("sha256").update(input.actionToken).digest("hex").slice(0, 12);
   return `${input.tenantId}:${input.workflowId}:${input.runId}:redispatch:${input.dispatchKind}:${digest}`;
+}
+
+async function resolveTenantInstalledOverlayPackages(input: {
+  tenantId: string;
+  repositories: Pick<ReturnType<typeof createSupabaseRepositories>, "listActiveInstalledPackageIds">;
+}) {
+  const installedPackageIds = await input.repositories.listActiveInstalledPackageIds({ tenantId: input.tenantId });
+  return listInstalledPackageDefinitions({ installedPackageIds });
+}
+
+async function listTenantDashboardWorkflows(input: {
+  tenantId: string;
+  userId: string;
+  repositories: Pick<ReturnType<typeof createSupabaseRepositories>, "listWorkflows" | "listActiveInstalledPackageIds">;
+}) {
+  const [dbWorkflows, installedPackages] = await Promise.all([
+    input.repositories.listWorkflows({ tenantId: input.tenantId }),
+    resolveTenantInstalledOverlayPackages({ tenantId: input.tenantId, repositories: input.repositories })
+  ]);
+  const registry = createHarnessWorkflowRegistry({
+    harnessEnabledWorkflowIds: [],
+    installedPackages
+  });
+  const coreBuiltInPublicIds = new Set<string>([...WF_HARNESS_ELIGIBLE_WORKFLOWS]);
+  const workflowMap = new Map<string, Record<string, unknown>>();
+
+  for (const workflow of dbWorkflows) {
+    if (workflow && typeof workflow === "object") {
+      const record = workflow as Record<string, unknown>;
+      const id = String(record.id ?? "");
+      if (id.length > 0) {
+        workflowMap.set(id, {
+          ...record,
+          startEnabled: record.startEnabled !== false
+        });
+      }
+    }
+  }
+
+  for (const workflow of registry.listPublicDashboardWorkflows()) {
+    if (coreBuiltInPublicIds.has(workflow.id)) {
+      continue;
+    }
+    if (!workflowMap.has(workflow.id)) {
+      workflowMap.set(workflow.id, {
+        ...workflow,
+        enabled: true
+      });
+    }
+  }
+
+  return [...workflowMap.values()];
 }
 
 export function createDashboardRuntime(options: {
@@ -383,7 +436,7 @@ export function createDashboardRuntime(options: {
   const dashboardApi = createDashboardApi({
     authenticate: options.auth.authenticate,
     requireTenantMember: repositories.requireTenantMember,
-    listWorkflows: repositories.listWorkflows,
+    listWorkflows: (input) => listTenantDashboardWorkflows({ ...input, repositories }),
     listPackages: repositories.listPackages,
     listArtifacts: repositories.listArtifacts,
     listProviderConnections: repositories.listProviderConnections,
@@ -393,12 +446,52 @@ export function createDashboardRuntime(options: {
       ? {
           startWorkflowRun: async (input: { tenantId: string; userId: string; workflowId: string }) => {
             const runId = randomUUID();
+            const installedPackages = await resolveTenantInstalledOverlayPackages({ tenantId: input.tenantId, repositories });
+            const registry = createHarnessWorkflowRegistry({
+              harnessEnabledWorkflowIds:
+                options.env.runtimeEnv.WF_HARNESS_ENABLED_WORKFLOW_IDS?.split(",").map((entry) => entry.trim()).filter(Boolean) ?? [],
+              nativeExecutorEnabledWorkflowIds:
+                options.env.runtimeEnv.WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS?.split(",").map((entry) => entry.trim()).filter(Boolean) ?? [],
+              installedPackages
+            });
+            const definition = (() => {
+              try {
+                return registry.getDefinition(input.workflowId);
+              } catch {
+                return null;
+              }
+            })();
             return workflowRunReservation.reserveAndEnqueue({
               tenantId: input.tenantId,
               userId: input.userId,
-              workflowTemplateId: input.workflowId,
+              workflowId: input.workflowId,
+              ...(definition && definition.publicStartEnabled === true && definition.providerKind
+                ? {
+                    workflowTemplateId: null,
+                    workflowIdentityKind: "installed_package_overlay" as const,
+                    workflowPackageId: definition.packageId,
+                    workflowDefinitionSnapshot: {
+                      publicWorkflowId: input.workflowId,
+                      packageId: definition.packageId,
+                      executionEngine: definition.executionEngine ?? "paperclip",
+                      requiredCapabilities: [...definition.requiredCapabilities],
+                      providerKind: definition.providerKind
+                    }
+                  }
+                : {
+                    workflowTemplateId: input.workflowId,
+                    workflowIdentityKind: "tenant_template" as const
+                  }),
               runId,
-              idempotencyKey: `${input.tenantId}:${input.workflowId}:${runId}`
+              idempotencyKey: `${input.tenantId}:${input.workflowId}:${runId}`,
+              ...(definition && definition.publicStartEnabled === true && definition.providerKind
+                ? {
+                    workflowBinding: {
+                      packageId: definition.packageId,
+                      providerKind: definition.providerKind
+                    }
+                  }
+                : {})
             });
           }
         }
@@ -537,6 +630,14 @@ export function createDashboardRuntime(options: {
     requireActivePackageInstall: repositories.requireActivePackageInstall,
     repository: harnessRepository,
     workflowRegistry: harnessWorkflowRegistry,
+    resolveWorkflowRegistry: async ({ tenantId }) =>
+      createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds:
+          options.env.runtimeEnv.WF_HARNESS_ENABLED_WORKFLOW_IDS?.split(",").map((entry) => entry.trim()).filter(Boolean) ?? [],
+        nativeExecutorEnabledWorkflowIds:
+          options.env.runtimeEnv.WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS?.split(",").map((entry) => entry.trim()).filter(Boolean) ?? [],
+        installedPackages: await resolveTenantInstalledOverlayPackages({ tenantId, repositories })
+      }),
     audit,
     ...(options.workflowQueueEnqueuer
       ? {
@@ -560,7 +661,6 @@ export function createDashboardRuntime(options: {
             const stagedRedispatch = await acidRepository.stageWorkflowRunRedispatch({
               tenantId: dispatch.tenantId,
               runId: dispatch.runId,
-              workflowTemplateId: dispatch.workflowId,
               userId: dispatch.userId,
               idempotencyKey: redispatchQueueJobId
             });
@@ -592,7 +692,6 @@ export function createDashboardRuntime(options: {
             const stagedRedispatch = await acidRepository.stageWorkflowRunRedispatch({
               tenantId: dispatch.tenantId,
               runId: dispatch.runId,
-              workflowTemplateId: dispatch.workflowId,
               userId: dispatch.userId,
               idempotencyKey: redispatchQueueJobId
             });
