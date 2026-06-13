@@ -88,11 +88,11 @@ export async function reserveLiveWorkflowRun(input) {
   }
   const reservation = await input.client.query(
     `insert into wfpc.workflow_run_reservations
-      (tenant_id, workflow_template_id, run_id, idempotency_key, reserved_by_user_id)
-     values ($1, $2, $3, $4, $5)
+      (tenant_id, public_workflow_id, workflow_template_id, workflow_identity_kind, workflow_package_id, run_id, idempotency_key, reserved_by_user_id)
+     values ($1, $2, $3, 'tenant_template', $4::uuid, $5, $6, $7)
      on conflict do nothing
      returning id`,
-    [input.tenantId, input.workflowId, input.runId, input.idempotencyKey, input.userId]
+    [input.tenantId, input.workflowId, input.workflowId, workflowRow.package_id, input.runId, input.idempotencyKey, input.userId]
   );
   if (reservation.rows.length === 0) {
     return { reserved: false, reason: "duplicate" };
@@ -100,12 +100,14 @@ export async function reserveLiveWorkflowRun(input) {
 
   await input.client.query(
     `insert into wfpc.workflow_runs
-      (id, tenant_id, workflow_template_id, created_by_user_id, status, bound_secret_reference_id, bound_provider_context)
-     values ($1, $2, $3, $4, 'queued', $5::uuid, $6::jsonb)`,
+      (id, tenant_id, public_workflow_id, workflow_template_id, workflow_identity_kind, workflow_package_id, created_by_user_id, status, bound_secret_reference_id, bound_provider_context)
+     values ($1, $2, $3, $4, 'tenant_template', $5::uuid, $6, 'queued', $7::uuid, $8::jsonb)`,
     [
       input.runId,
       input.tenantId,
       input.workflowId,
+      input.workflowId,
+      workflowRow.package_id,
       input.userId,
       String(credentialRow.id),
       JSON.stringify([
@@ -122,10 +124,10 @@ export async function reserveLiveWorkflowRun(input) {
 
   await input.client.query(
     `insert into wfpc.workflow_queue_outbox
-      (tenant_id, run_id, workflow_template_id, created_by_user_id, idempotency_key)
-     values ($1, $2, $3, $4, $5)
+      (tenant_id, run_id, public_workflow_id, workflow_template_id, workflow_identity_kind, workflow_package_id, created_by_user_id, idempotency_key)
+     values ($1, $2, $3, $4, 'tenant_template', $5::uuid, $6, $7)
      on conflict (tenant_id, run_id) do nothing`,
-    [input.tenantId, input.runId, input.workflowId, input.userId, input.idempotencyKey]
+    [input.tenantId, input.runId, input.workflowId, input.workflowId, workflowRow.package_id, input.userId, input.idempotencyKey]
   );
 
   return { reserved: true, runId: input.runId };

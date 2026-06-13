@@ -227,7 +227,6 @@ export function requiresPaperclipLaunchEnv(source: NodeJS.ProcessEnv = process.e
   const harnessEnabledWorkflowIds = parseCommaSeparatedValues(source.WF_HARNESS_ENABLED_WORKFLOW_IDS);
   const nativeExecutorEnabledWorkflowIds = parseCommaSeparatedValues(source.WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS);
   const configuredWorkflowIds = [...new Set([...harnessEnabledWorkflowIds, ...nativeExecutorEnabledWorkflowIds])];
-
   if (
     isPaperclipExecutionRequired({
       configuredWorkflowIds,

@@ -3,7 +3,7 @@
 Current execution note:
 - This file is historical architecture context for the older Paperclip-backed build track.
 - The active phased replacement plan now lives at `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`.
-- Phases 3 through 11 now cover three native workflow families on the worker/runtime seam: `wf_connect_first_workflow`, `wf_tax_strategy`, and `wf_package_followup`. Phase 8 widened the explicit board/start selector seam so multiple native workflow families can be exposed safely without ambiguous dashboard bootstrap, Phase 9 kept `wf_package_followup` native-default on the worker/runtime seam, Phase 10 widened bounded board exposure and demo/package wiring for `wf_package_followup`, and Phase 11 cut the runtime-backed public dashboard start path over to the real reservation/outbox seam for the widened native families while leaving the browser-only bootstrap/demo fallback explicit.
+- Phases 3 through 30 now cover three native workflow families on the worker/runtime seam: `wf_connect_first_workflow`, `wf_tax_strategy`, and `wf_package_followup`. Later phases added overlay registration/runtime/catalog/start fencing, tenant-scoped overlay resolution, durable public workflow identity/provenance, Phase 27 public-dashboard start-eligibility truthfulness so customer-visible dashboard workflow visibility stays separate from per-workflow public-start approval, Phase 28 bounded worker orchestrator handoff so private child execution receives an explicit `orchestratorHandoff` brief instead of reconstructing intent from raw lane metadata, Phase 29 bounded public start-truth consistency so authenticated shells stay tied to the real tenant catalog while preview/bootstrap shells remain review-only, and Phase 30 private post-outcome directives so child execution sees bounded engine follow-through for each allowed outcome state without leaking that contract into queue or public surfaces.
 - In this file, older MVP/post-MVP phase numbers are historical only; the active Phase 1+ numbering now belongs to the native replacement plan of record.
 - New execution sessions should enter through `wf-harness/HANDOFF.md` first, not treat this document as the current plan of record.
 
@@ -24,12 +24,24 @@ Before planning or editing sensitive seams such as runtime composition, worker/q
 Recommended workflow:
 
 - Set `GITNEXUS_HOME=E:\GitNexusHome`
+- At the start of every future phase, run `gitnexus status` first.
+- If `gitnexus status` reports stale, rebuild before planning or editing:
+  - `gitnexus clean --force`
+  - `GITNEXUS_WORKER_SUB_BATCH_TIMEOUT_MS=120000`
+  - `GITNEXUS_WORKER_SUB_BATCH_MAX_BYTES=4194304`
+  - `npx gitnexus analyze --index-only --skip-agents-md --skip-skills --no-stats --worker-timeout 120`
 - Use `git diff` / `git log` for exact commit truth
+- Use `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` at the beginning of each phase to map the live working-tree blast radius before edits.
 - Use `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope compare --base-ref HEAD~3` for recent symbol/process impact
 - Use `gitnexus cypher`, `gitnexus context`, and `gitnexus impact` for structure
 - On this Windows machine, prefer `node E:\GitNexusHome\tools\gitnexus-fts-query.mjs --repo-path E:\REPOS\spyderbyte_paperclip_saas --query "<terms>" --limit 8` for ranked keyword discovery until upstream FTS behavior is healthier
 
 This is a proactive step, not a replacement for tests or code review. Use it to reduce blind spots before implementation.
+
+Phase rule:
+
+- Every implementation phase must begin with a repo-scoped GitNexus preflight before any code edits start.
+- Record the preflight result in the phase summary/handoff, including whether the index was refreshed and the headline blast-radius result.
 
 ## Worker Rule
 
@@ -901,6 +913,7 @@ Mapping update from live Paperclip discovery:
 - the next secure direction is documented in `docs/paperclip-secret-ref-mapping.md`
 - Wealth Factory should remain the canonical tenant BYOK vault and trust boundary
 - Paperclip should receive synchronized managed secrets plus bound `secret_ref` runtime config, not plain issue-level secret values
+- active public workflow truth is now tenant-scoped and overlay-aware through the Wealth Factory runtime/dashboard seam; the next durable rule is that public workflow ids must persist with explicit provenance instead of being treated as implied template ids
 - before adapter cutover, fix the runtime-binding seam:
   - current run binding storage is effectively single-provider even though the product model assumes future multi-capability workflows
   - keep the normalized capability-label contract on `bound_provider_context` instead of drifting back to vendor-shaped values

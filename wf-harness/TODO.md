@@ -24,6 +24,25 @@ This file tracks the new harness subproject only.
   - [x] Phase 9: Third native harness workflow family migration.
   - [x] Phase 10: Bounded board exposure widening for `wf_package_followup`.
   - [x] Phase 11: Runtime-backed public dashboard start-path cutover for the widened native families.
+  - [x] Phase 12: Remove fake browser-only dashboard run-start success while keeping preview board fallback explicit.
+  - [x] Phase 13: Package-overlay workflow registration seam.
+  - [x] Phase 14: Codify `wf_connect_first_workflow`, `wf_tax_strategy`, and `wf_package_followup` as current intentional core exceptions, and keep future industry/package families on the overlay seam unless the design docs change.
+  - [x] Phase 15: Activate installed-package overlay definitions in the runtime-backed registry seam without widening core exceptions, board exposure, or native-default policy.
+  - [x] Phase 16: Complete bounded CEO approval-policy guidance so pending approvals inherit truthful defer guidance from completed-cycle and unresolved-governance pressure before the CEO clicks a decision.
+  - [x] Phase 17: Harden the governance-history export-ready bundle seam so closed-board snapshot immutability is explicitly proven on the real export path, not only in dry-run helpers.
+  - [x] Phase 18: Harden the package-bundle export-ready bundle seam so the persisted closed-board `completionPackage` snapshot is explicitly proven on the real export path, not only in the snapshot/read-model seam.
+  - [x] Phase 19: Codify the Obsidian memory boundary so runtime continuity memory stays Wealth Factory-only while governance-history and package-bundle records stay tenant-owned-later export candidates.
+  - [x] Phase 20: Resolve installed-package overlay workflows from a canonical package catalog without widening core registry truth, board exposure, or native-default policy.
+  - [x] Phase 21: Allow explicit installed-package overlay board exposure through canonical package opt-in without widening native-default policy or core registry truth.
+  - [x] Phase 22: Migrate the first explicitly native-enabled installed-package overlay workflow family onto the native executor seam without promoting overlays into core built-in truth.
+  - [x] Phase 23: Fence the public dashboard catalog/start seam so registry-only overlay ids fail closed until a later explicit public-start widening phase.
+  - [x] Phase 24: Resolve installed-package overlay workflow truth per tenant on the runtime-backed board and worker seams while keeping public dashboard catalog/start widening deferred.
+  - [x] Phase 25: Widen the public dashboard catalog/start seam for explicitly public installed-package overlays without promoting overlays into core workflow truth or treating board/native overlay truth as automatic public-start approval.
+  - [x] Phase 26: Clean up durable public workflow identity/template mapping so public overlay starts persist explicit public identity and provenance instead of assuming every started workflow is a tenant template UUID.
+  - [x] Phase 27: Split public dashboard visibility from per-workflow public-start eligibility so registry/runtime/dashboard/browser seams stay truthful, visible-but-not-startable workflows fail closed on dashboard start, and runtime-ready copy no longer hardcodes a media-calendar title.
+  - [x] Phase 28: Formalize the private worker `orchestratorHandoff` contract so native child execution receives explicit bounded handoff guidance without widening dashboard truth, queue payloads, or public policy seams.
+  - [x] Phase 29: Complete the bounded public start-truth consistency seam so authenticated runtime shells do not fall back to fake local workflow cards, preview/bootstrap shells stay review-only, installed-package overlays stay explicit and tenant-scoped, visible-but-not-startable workflows fail closed on public start, and the next phase can return to the private worker/native seam instead of widening public start again.
+  - [x] Phase 30: Add a private state-by-state `postOutcomeDirectives` contract to the worker execution envelope and native prompt path so child execution sees bounded engine follow-through without widening queue, dashboard, or public seams.
 
 ## V1 Build Targets
 
@@ -34,6 +53,8 @@ This file tracks the new harness subproject only.
   - [x] Add a guarded CEO approval mutation path for persisted proposals.
 - [x] Define resume-from-crash behavior and checkpoint policy.
 - [x] Define Wealth Factory to harness runtime contract for resolved BYOK context.
+- [x] Keep Wealth Factory core framework-agnostic while treating prebuilt business frameworks as overlays/packages rather than built-in product identity.
+- [x] Capture a future free-form tenant-authored business-model lane as a first-class requirement without widening core implementation before it is needed.
 - [x] Define Hermes-style dashboard information architecture for Wealth Factory.
 - [x] Define board columns, drawer behavior, and tenant-visible status language.
 - [x] Define migration slice boundary from the current Paperclip-backed runtime.
@@ -56,9 +77,10 @@ This file tracks the new harness subproject only.
 - [ ] Decide whether Docker-backed harness integration proofs need a CI lane or alternate local fallback so the deferred-FK contract is exercised outside Docker-capable machines too.
 - [x] Add transaction-client coverage proving the approval update and child-card insert share one leased transaction client and roll back together on failure.
 - [x] Expand beyond CEO direct-child creation into richer persisted card progression and result-recording mutation paths.
-- [ ] Add fuller CEO approval logic for sub-card requests and card-count discipline beyond the current duplicate-lane/open-cap guardrails.
+- [x] Add fuller CEO approval logic for sub-card requests and card-count discipline beyond the current duplicate-lane/open-cap guardrails.
   - [x] Make repeated unresolved requests reuse the latest earlier unresolved governance hold instead of opening fresh duplicate lanes when no active-lane reuse or valid handoff applies.
   - [x] Preserve direct CEO lane-cap requests as deferred governance instead of dropping them as hard conflicts when the board is already full.
+  - [x] Keep pending-approval recommendation metadata aligned with completed-cycle and inherited unresolved-governance defer pressure instead of defaulting every proposed item to `approve`.
 - [x] Persist structured absorbed-work state when the CEO folds a proposal into an existing lane, so lane reuse becomes real engine state instead of comment-only history.
 - [x] Add first-class board decision memory so approvals, deferrals, denials, lane opens, and CEO completion become durable harness records instead of inferred chatter.
 - [x] Widen board decision memory with bounded policy reasons and recommendation/objection summaries instead of introducing a second generic notes store.
@@ -83,7 +105,23 @@ This file tracks the new harness subproject only.
 
 ## Current Next Slice
 
-- [ ] Decide whether the next native-expansion seam should be the next worker/runtime family migration or a later cleanup/removal pass on the browser-only fallback start seam.
+- [x] Add a mandatory post-phase drift/alignment gate and enforce it before future phases are accepted.
+  - [x] Re-check completed work against the design doc, guardrails doc, active plan, TODO, and handoff before phase closeout.
+  - [x] Reject any phase that promotes package-overlay/demo content into core-platform seams without prior design approval.
+  - [x] Record the alignment result as part of each phase handoff, not as an optional afterthought.
+- [x] Add a mandatory pre-phase GitNexus seam/blast-radius gate and enforce it before future phases begin.
+  - [x] Run `gitnexus status` at the beginning of every phase.
+  - [x] If stale, use the known-good Windows recovery path: `gitnexus clean --force`, `GITNEXUS_WORKER_SUB_BATCH_TIMEOUT_MS=120000`, `GITNEXUS_WORKER_SUB_BATCH_MAX_BYTES=4194304`, and `npx gitnexus analyze --index-only --skip-agents-md --skip-skills --no-stats --worker-timeout 120`.
+  - [x] Run `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` before edits begin, and record the headline blast-radius result in the phase summary/handoff.
+- [x] Design the package-overlay workflow registration seam so industry-specific workflows can load from installed package context without entering the core built-in registry.
+- [x] Decide that `wf_connect_first_workflow`, `wf_tax_strategy`, and `wf_package_followup` remain the current intentional core built-in exceptions in the design docs.
+- [x] Require future industry-specific or package-specific workflow families to use the overlay seam unless the design docs are explicitly revised first.
+- [x] Keep runtime/dashboard/native widening out of scope for the docs-only exception-codification phase.
+- [x] Keep public dashboard workflow visibility separate from public-start eligibility per workflow, and fail closed when a workflow is visible but not start-enabled on that public seam.
+- [x] Keep runtime/dashboard/browser workflow copy truthful to the selected workflow instead of hardcoding a media-calendar title on generic runtime-ready messaging.
+- [x] Keep private worker/native post-outcome follow-through explicit with a state-by-state envelope contract so child execution does not reconstruct resume/review/dispatch posture from generic run-state heuristics.
+- [ ] Deepen the private worker/native execution seam beyond `orchestratorHandoff` plus `postOutcomeDirectives` into the next bounded orchestrator/child execution slice without reopening public dashboard/start behavior.
+- [x] Keep worker/native child execution bounded by a private orchestrator handoff contract instead of reconstructing orchestrator intent from raw lane metadata or public dispatch telemetry.
 
 - [x] Read `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md` before continuing the active native replacement track.
 - [x] Reconcile persisted run-state progression with the new child-card advancement seam so run-level status is no longer effectively bootstrap-only.
@@ -99,7 +137,7 @@ This file tracks the new harness subproject only.
 - [x] Surface absorbed follow-on work back through bounded board activity/detail views when a proposal is folded into an existing lane.
 - [x] Keep raw CEO decision notes out of the tenant-facing activity feed while preserving bounded public governance status.
 - [x] Make repeated defer decisions idempotent when no new note or policy context is introduced.
-- [ ] Decide which board-memory records should stay purely operational in Wealth Factory versus which ones should later export into tenant-owned Obsidian as long-memory business records.
+- [x] Decide which board-memory records should stay purely operational in Wealth Factory versus which ones should later export into tenant-owned Obsidian as long-memory business records.
 - [x] Keep grouped export-candidate write semantics contract-owned too, so payload shape, idempotency, replay safety, and conflict policy no longer need to be reconstructed from member buckets during later export work.
 - [x] Keep grouped export-candidate preparation semantics contract-owned too, so atomicity, derivation basis, revision policy, and freshness source no longer need to be reconstructed from member buckets during later export work.
 - [x] Keep grouped export-candidate validation and completeness posture contract-owned too, so validation boundary and completeness rule no longer need to be reconstructed from member buckets during later export work.
@@ -110,12 +148,13 @@ This file tracks the new harness subproject only.
 - [x] Decide whether completed-lane runs should reject or boundedly reopen new follow-on proposals instead of falling back to generic lane-creation rules.
 - [x] Decide whether a future explicit "start a fresh board cycle" command should reopen follow-on work from `completed_lanes_only` deferrals instead of keeping that recovery path manual.
 - [x] Deepen the fresh-cycle policy so the CEO can choose between reopening only deferred follow-on work versus starting a completely clean board cycle when no follow-through should carry forward.
-- [ ] Define the split between small harness continuity memory and larger tenant-owned long memory in Obsidian, including what gets written there and what must remain Wealth Factory runtime truth.
+- [x] Define the split between small harness continuity memory and larger tenant-owned long memory in Obsidian, including what gets written there and what must remain Wealth Factory runtime truth.
   - [x] Keep live lane continuity inside Wealth Factory as bounded operational snapshot state instead of reconstructing it only from card-event replay.
   - [x] Add a bounded continuity-source discriminator so runtime memory stays self-describing before any later Obsidian export seam exists.
   - [x] Decide whether the current continuity trio (`continuitySummary`, `latestResultSummary`, `absorbedWorkItems`) is the final bounded runtime-memory shape before any Obsidian export seam is added.
   - [x] Keep the refinement policy explicit in implementation: bounded changes to the same deliverable should stay in-lane, while broader directional changes should open a new lane or fresh cycle without losing institutional memory.
   - [x] Keep denied governance exportable only through the existing `governance_history_export` and `package_bundle_export` families, so tenant long memory gets the bounded board outcome without growing a third denial-only export path.
+  - [x] Keep lane continuity and pending-attention memory runtime-only and non-promotable, while governance-history and package-bundle records remain tenant-owned-later through the existing export candidate families only.
 - [ ] Deepen the worker-side harness execution seam beyond the current single-lane dispatch payload and into real orchestrator/child execution behavior without reopening the old Paperclip-style hotspot model.
   - [x] Require a durable worker claim/start boundary so harness-enabled jobs now move exactly one `approved` lane to `working` before dispatch and stay quiet when the claim race is lost.
   - [x] Keep raw `queued` child lanes fail-closed in the worker slice so execution still respects the CEO approval boundary until a later bounded promotion path exists.
@@ -241,6 +280,7 @@ This file tracks the new harness subproject only.
 - [x] Enable RLS on the harness-owned export delivery ledger with a tenant-member read policy, so later tenant-safe export records stay tenant-scoped even though runtime writes still flow through the private harness seam.
 - [x] Add the first bounded Obsidian filesystem writer adapter behind the private governance-history export-ready seam, with root-bound path resolution so tenant-safe bundles can actually land in a vault without turning the vault into runtime truth.
 - [x] Persist governance-history delivery outcomes (`delivered` / `delivery_failed`) plus writer receipts and bounded retry metadata in the harness-owned delivery ledger, so later export replay and support flows can reason about real delivery state instead of only `export_ready`.
+- [x] Prove the real governance-history export-ready bundle path stays frozen against post-closure governance noise, not only the dry-run preview path.
 - [x] Surface governance-history delivery posture back through the grouped export-candidate contract and board read model, so delivery support/replay state stays engine-owned instead of living only in private runtime callbacks or raw ledger rows.
 - [x] Add a bounded governance-history delivery replay action that reuses the persisted export-ready bundle through the same private writer seam, so later support/retry flows do not rebuild exports ad hoc or bypass delivery idempotency.
 - [x] Widen the first real export seam so `package_bundle_export` gains the same bounded preflight, dry-run, export-ready, delivery, and replay posture as `governance_history_export`, while still staying board-closure-gated and tenant-safe.
@@ -259,6 +299,7 @@ This file tracks the new harness subproject only.
 - [x] Persist the closed-board `completionPackage` as a bounded harness-owned snapshot so package export and completed-board reads stop depending on a fresh derived rebuild after closure.
 - [x] Rehydrate completed-board package reads from the persisted `completionPackage` snapshot so late proposal/decision noise cannot rewrite the already-closed tenant-facing package surface.
 - [x] Freeze `package_bundle_export` against the persisted `completionPackage` snapshot so package delivery remains revision-aware but no longer depends on mutable post-closure governance reads.
+- [x] Prove the real package-bundle export-ready bundle path stays frozen against post-closure governance noise, not only the persisted completion-package snapshot/read-model seam.
 - [x] Persist closed-board governance history (`recentDecisions` and `followThroughItems`) as a bounded harness-owned snapshot so later completed-board reads and governance export do not re-derive from mutable post-closure decision state.
 - [x] Rehydrate completed-board governance memory from the persisted governance-history snapshot so late post-closure proposal/decision noise cannot rewrite the already-closed tenant-facing governance surface.
 - [x] Freeze `governance_history_export` against the persisted closed-board governance-history snapshot so foundational export delivery no longer drifts after board closure.

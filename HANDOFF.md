@@ -8,7 +8,7 @@ Phases 0 through 11 are complete, tested, and reviewed locally.
 
 The first post-MVP productization slices are implemented locally: security baseline helpers, Wealth Factory boundary layer, package entitlements/provider requirements, temporary artifacts, expanded provider definitions, a Wealth Factory dashboard POC surface, the first API-backed dashboard foundation, and the first database-backed ACID/race-condition foundation.
 
-The next session should enter through the harness lane first, read the current phased native-replacement plan, and continue from the now-complete Phase 11 public run-start/API cutover for the widened native families into the next native-expansion seam instead of reopening Paperclip adapter dependency for already-migrated families. `wf_package_followup` is now native on the worker/runtime seam beside `wf_connect_first_workflow` and `wf_tax_strategy`, it is board-exposed through the explicit workflow selector seam, and the runtime-backed dashboard start path is now real for those widened families. The remaining distinction that must stay explicit is that the browser-only bootstrap/demo shell still uses a bounded local fallback path when no runtime API is present.
+The next session should enter through the harness lane first, read the current phased native-replacement plan, run a fresh GitNexus seam/blast-radius preflight plus drift/alignment check, and then continue from the now-complete Phase 30 private post-outcome directive seam into the next bounded private worker contract phase instead of reopening Paperclip adapter dependency for already-migrated families. `wf_package_followup` is now native on the worker/runtime seam beside `wf_connect_first_workflow` and `wf_tax_strategy`, the runtime-backed dashboard start path is real for the widened public families, durable public workflow identity is now persisted across reservation/run/outbox/worker recovery, public dashboard visibility is now explicitly separate from per-workflow public-start eligibility, authenticated shells now stay truthful to the real tenant-visible workflow catalog, preview/bootstrap shells remain review-only, and private child execution now receives both an explicit `orchestratorHandoff` brief and a private state-by-state `postOutcomeDirectives` map. The remaining distinction that must stay explicit is that the public dashboard/start seam is bounded and done for now, visible-but-not-startable workflows must continue to fail closed there, and the next work belongs on the private worker/native seam without leaking that contract into queue or public surfaces.
 
 ## Reference Docs
 
@@ -541,6 +541,7 @@ Nuances to preserve:
   - the repo still lacks a private runtime repository path that can resolve full provider bindings for worker/sync use without weakening customer-safe DTO paths
 - Immediate implication:
   - the next repo work should start with the runtime binding model and private resolver seam, not with a direct adapter rewrite
+  - active public workflow routing now also needs explicit durable public identity plus provenance across reservation/run/outbox seams, rather than treating overlay public ids as if they were always tenant template ids
 
 ## Hard Rules
 

@@ -211,6 +211,41 @@ Why:
 - repeated map checks keep blast radius visible
 - we use the map to confirm we are strengthening narrow seams instead of leaking into the hot zones
 
+### 11. Package overlays must not silently become platform truth
+
+Why:
+
+- demo/package adjacency can create misleading momentum under long builds
+- a useful example workflow is not automatically a core Wealth Factory workflow family
+- launch pressure makes “small” scope promotions especially dangerous when they reshape the roadmap
+
+Required behavior:
+
+- Wealth Factory core stays framework-agnostic; it does not silently become one specific business model
+- industry/package/demo workflow families stay in overlay seams unless the design docs explicitly move them
+- opinionated business frameworks land as optional overlays/packages, not as built-in core identity
+- a future tenant-authored blank-canvas path must reuse the same core seams rather than creating a special-case core framework
+- phase closeout must include a drift check against the source-of-truth docs
+- if code and docs disagree, fix both before moving on
+- installed package context is required for overlay registration
+- duplicate built-in workflow ids are rejected fail-closed
+- overlay registration alone is not board exposure
+- overlay board exposure requires explicit package-definition opt-in and active installed package context
+- overlay registration is not native cutover
+- overlay native cutover requires explicit package-definition opt-in and active installed package context
+- explicit overlay native cutover still does not promote that workflow into the core built-in registry
+- overlay board/native truth is not public dashboard start truth; the customer-facing dashboard catalog and start seam must opt in separately and fail closed when a workflow is not tenant-visible there
+- public dashboard visibility for installed-package overlays requires explicit package-definition opt-in plus active installed package context
+- public dashboard start for an installed-package overlay requires that same tenant-visible catalog presence; do not treat overlay registration, board exposure, or native execution alone as public-start approval
+- explicit public dashboard opt-in for an overlay still does not promote that workflow into the core built-in registry or core exception list
+- selector and deliverable fences remain workflow-specific
+
+Proof surface:
+
+- registry boundary tests
+- selector/runtime registry tests
+- board-selector and deliverable-fence tests
+
 ## Concrete Wealth Factory Patterns That Replace Paperclip Volatility
 
 These are some of the direct substitutions already in flight.
@@ -254,6 +289,8 @@ We now prefer bounded persisted lane continuity like:
 - `continuitySource`
 - `latestResultSummary`
 - absorbed-work snapshots
+
+Those bounded continuity fields are operational runtime memory only. They can shape resume behavior and tenant-safe board views, but they must not become direct long-memory exports just because an Obsidian seam exists elsewhere.
 
 ## Practical Design Rule
 

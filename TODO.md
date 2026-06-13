@@ -189,6 +189,11 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Phase 9: Third native workflow family migration is complete for `wf_package_followup` on the worker/runtime seam.
 - [x] Phase 10: `wf_package_followup` is now explicit-selector-safe on the board seam with bounded deliverable and demo/package wiring truth, while the deeper public run-start/API cutover remains a later phase.
 - [x] Phase 11: The runtime-backed public dashboard start path is now real for the widened native families, while the browser-only bootstrap/demo shell still uses a bounded fallback when no runtime API is present.
+- [x] Phases 12 through 26 in the active harness native-replacement plan are complete, including overlay registration/runtime/catalog/start fencing, tenant-scoped overlay resolution, public dashboard overlay widening, and durable public workflow identity/provenance.
+- [x] Phase 27: Public dashboard workflow visibility is now explicitly separate from per-workflow public-start eligibility, visible-but-not-startable workflows fail closed on the dashboard API seam, and runtime-ready dashboard copy stays workflow-truthful instead of hardcoding a media-calendar title.
+- [x] Phase 28: The private worker execution envelope now carries a bounded `orchestratorHandoff` contract so native child execution receives explicit scope/completion guidance without widening queue payloads or customer-facing seams.
+- [x] Phase 29: The bounded runtime-backed public dashboard/start seam is now truthful end to end: authenticated shells stay tied to the real tenant catalog, preview/bootstrap shells remain review-only with no fake queued runs, installed-package overlays stay explicit and tenant-scoped, visible-but-not-startable workflows fail closed on public start, and the next phase returns to the private worker/native seam instead of widening public start again.
+- [x] Phase 30: The private worker execution envelope now carries a state-by-state `postOutcomeDirectives` contract so native child execution sees bounded engine follow-through for `waiting`, `done`, `blocked`, and `cancelled` outcomes without widening queue payloads or customer-facing seams.
 
 ## Later Phases
 
@@ -221,6 +226,7 @@ This file tracks implementation progress. Keep it current after every phase.
   - [x] Add repo-owned live-drive scripts to seed current queue prerequisites, reserve one real workflow run, and inspect outbox/BullMQ state without improvised SQL.
   - [x] Add a live-runtime preflight so schema drift and missing migration blockers are reported before controlled queue tests begin.
   - [x] Apply the live DB migration that adds `workflow_runs.bound_secret_reference_id` and `workflow_runs.bound_provider_context`.
+  - [x] Make public workflow identity durable across reservations, workflow runs, queue outbox rows, and worker recovery so installed-package overlay starts no longer depend on a template-only UUID assumption.
   - [ ] Redeploy the live `wealth-factory-api` container with `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `REDIS_URL`, `PAPERCLIP_BASE_URL`, and `PAPERCLIP_SERVICE_TOKEN`.
   - [ ] Deploy/start the repo's `worker-main` process on the VPS and confirm it joins the Redis/BullMQ queue.
   - [ ] Seed a real `wfpc.paperclip_company_mappings` row with the target Paperclip company ID before rerunning the live drive.

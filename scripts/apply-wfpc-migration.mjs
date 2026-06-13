@@ -930,6 +930,60 @@ try {
       throw new Error("Harness card execution-claim migration did not produce the required schema shape");
     }
   }
+  const queryDurablePublicWorkflowIdentityReady = () =>
+    client.query(
+      `select
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'workflow_runs'
+            and column_name = 'public_workflow_id'
+            and is_nullable = 'NO'
+        ) as has_workflow_runs_public_id,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'workflow_runs'
+            and column_name = 'workflow_identity_kind'
+            and is_nullable = 'NO'
+        ) as has_workflow_runs_identity_kind,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'workflow_queue_outbox'
+            and column_name = 'public_workflow_id'
+            and is_nullable = 'NO'
+        ) as has_outbox_public_id,
+        exists (
+          select 1
+          from pg_indexes
+          where schemaname = 'wfpc'
+            and indexname = 'workflow_run_reservations_public_idempotency_unique'
+        ) as has_reservation_public_idempotency_unique,
+        exists (
+          select 1
+          from pg_constraint
+          where conname = 'workflow_queue_outbox_tenant_id_public_workflow_id_idempo_key'
+            and conrelid = to_regclass('wfpc.workflow_queue_outbox')
+        ) as has_outbox_public_idempotency_unique`
+    );
+  let durablePublicWorkflowIdentityExisting = await queryDurablePublicWorkflowIdentityReady();
+  let durablePublicWorkflowIdentityReady = Object.values(
+    durablePublicWorkflowIdentityExisting.rows[0] ?? {}
+  ).every(Boolean);
+  if (!durablePublicWorkflowIdentityReady) {
+    await client.query(readFileSync("supabase/migrations/0032_durable_public_workflow_identity.sql", "utf8"));
+    durablePublicWorkflowIdentityExisting = await queryDurablePublicWorkflowIdentityReady();
+    durablePublicWorkflowIdentityReady = Object.values(
+      durablePublicWorkflowIdentityExisting.rows[0] ?? {}
+    ).every(Boolean);
+    if (!durablePublicWorkflowIdentityReady) {
+      throw new Error("Durable public workflow identity migration did not produce the required schema shape");
+    }
+  }
   const { rows } = await client.query(
     "select table_schema, table_name from information_schema.tables where table_schema = 'wfpc' order by table_name"
   );
@@ -965,7 +1019,8 @@ try {
           !harnessExportDeliveryPackageBundleReady ||
           !harnessExportDeliveryClaimsReady ||
           !harnessCompletionPackageSnapshotsReady ||
-          !harnessGovernanceHistorySnapshotsReady,
+          !harnessGovernanceHistorySnapshotsReady ||
+          !durablePublicWorkflowIdentityReady,
         tableCount: rows.length,
         tables: rows.map((row) => row.table_name)
       },

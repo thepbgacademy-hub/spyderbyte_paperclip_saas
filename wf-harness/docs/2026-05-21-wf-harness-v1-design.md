@@ -10,6 +10,54 @@ Wealth Factory needs its own harness because the Paperclip-backed execution path
 
 The first custom harness should replace the `CEO orchestration + child-card workflow loop` while keeping Wealth Factory as the tenant-safe control plane. The harness is not a general agent operating system. It is a bounded, reliable orchestration engine for Wealth Factory businesses-in-a-box.
 
+## Design Freeze Rules
+
+These rules are intentionally strict because drift near launch is more expensive than deferring a tempting slice.
+
+- Wealth Factory is the base platform. Industry packages, overlays, and demo/example businesses must not be promoted into core-platform registry truth unless this design doc is explicitly revised first.
+- Wealth Factory core must stay framework-agnostic. The base platform should provide runtime, governance, board, memory, package seams, and native workflow execution without assuming one business model.
+- Package-specific workflows belong to package/install or overlay seams, not to the built-in platform baseline by default.
+- Opinionated business frameworks belong in optional overlays or installed packages, not in the built-in platform baseline.
+- Tenant-authored free-form business models are a first-class future requirement and must remain compatible with the same core seams instead of being forced into a prebuilt framework.
+- Fixture convenience is not architecture. Demo seed data, preview data, or test examples must not decide the next platform phase on their own.
+- Any phase that changes platform identity, core workflow registry truth, or next-phase direction must be checked back against this design doc before it is considered complete.
+
+## Package Overlay Rule
+
+Industry-specific workflows now enter through a package-overlay registration seam.
+
+- Core Wealth Factory registry should stay platform-level and package-agnostic.
+- Package-specific workflow families should be loaded from package/install or overlay registration context.
+- Prebuilt business frameworks should be installed as overlays/packages rather than embedded into core platform identity.
+- A later tenant-authored blank-canvas path should use the same package/overlay seam shape, while allowing a tenant to define a business model from scratch without changing the core platform baseline.
+- Demo/example packages may illustrate overlays, but they must not redefine the core platform baseline.
+
+### Registration Classes
+
+- Core built-ins:
+  Platform-level Wealth Factory workflows that are intentionally part of the built-in registry.
+- Installed-package overlays:
+  Package-scoped workflow definitions that are registered additively from installed package context.
+- Demo/fixture presets:
+  Example data that may illustrate packages or workflows, but must not redefine platform truth.
+
+Overlay registration rules:
+
+- Overlay registration is additive only.
+- Installed package context is required.
+- Overlay workflows may not override built-in workflow ids.
+- Overlay registration alone does not imply harness eligibility or native-default execution.
+- Overlay workflows remain off the board by default; board exposure requires an explicit package-definition opt-in plus active installed package context.
+- Overlay workflows remain off the native executor by default; native execution requires an explicit package-definition opt-in plus active installed package context, and that opt-in does not promote the workflow into core-platform truth.
+- Overlay board/native truth does not automatically imply public dashboard start availability; any later dashboard catalog or start-surface widening must be explicit and tenant-visible on that surface first.
+- Overlay example naming must stay neutral enough that test fixtures or package demos do not masquerade as built-in Wealth Factory product scope.
+
+Transition note:
+
+- `wf_connect_first_workflow`, `wf_tax_strategy`, and `wf_package_followup` remain the current intentional core built-in workflow-family exceptions in the active engine room.
+- This exception list is deliberately bounded. Future industry-specific or package-specific workflow families should use the overlay seam instead of joining the built-in registry by default unless this design doc is explicitly revised first.
+- Keeping these three families in core does not by itself widen runtime eligibility, dashboard exposure, public start surfaces, or native-default policy beyond what the active plan records phase by phase.
+
 ## Why This Subproject Exists
 
 The Paperclip-first build furnished valuable evidence:
@@ -400,6 +448,35 @@ So the intended split is:
 
 This preserves a leaner harness while turning tenant-owned memory into a feature rather than a storage burden.
 - the run continues from the last durable checkpoint
+
+### Memory Split
+
+The memory split is now explicit:
+
+- `lane_continuity` and `attention_state` stay operational runtime memory inside Wealth Factory.
+- Those operational seams remain Wealth Factory-owned only and never promote directly into tenant-owned long memory.
+- `governance_history_export` is the bounded tenant-owned-later promotion path for governance decisions and implemented follow-through.
+- `package_bundle_export` is the bounded tenant-owned-later promotion path for closed-board package governance and package deliverables.
+- Future tenant-authored free-form frameworks must still respect this split: operational runtime memory stays harness-owned, while any tenant-owned long-memory promotion remains explicit and bounded through approved export seams.
+
+This means Obsidian can own tenant records later, but only through the bounded export candidates and not by reading live continuity or attention state as execution truth.
+
+## Framework Model
+
+Wealth Factory should support three product layers without collapsing them into one another.
+
+- Core platform lane:
+  Framework-agnostic runtime, board, governance, memory, package, and native execution seams.
+- Prebuilt framework lane:
+  Optional installed overlays/packages that provide opinionated business models, workflows, and assets without redefining core platform truth.
+- Free-form tenant lane:
+  A later blank-canvas path where a tenant can define a business model from scratch while still using the same core runtime, governance, and memory seams.
+
+Working rule:
+
+- Do not bake one business framework into the Wealth Factory core.
+- Do not let package examples or launch demos read like the built-in default product identity.
+- When free-form tenant modeling is implemented later, it should compose through package/overlay-compatible seams instead of forcing special-case core exceptions.
 
 Version 1 should resume from saved card state automatically and keep going.
 
