@@ -1,4 +1,5 @@
 import type { ProviderCapability } from "../packages/package-types.js";
+import { listInstalledPackageDefinitions } from "../packages/package-catalog.js";
 import type { QueryClient } from "./supabase-repositories.js";
 
 export type TransactionRunner = {
@@ -8,9 +9,23 @@ export type TransactionRunner = {
 export type ReserveWorkflowRunInput = {
   tenantId: string;
   userId: string;
-  workflowTemplateId: string;
+  workflowId?: string;
+  workflowTemplateId?: string | null;
+  workflowIdentityKind?: "tenant_template" | "installed_package_overlay";
+  workflowPackageId?: string | null;
   runId: string;
   idempotencyKey: string;
+  workflowBinding?: {
+    packageId: string;
+    providerKind: string;
+  };
+  workflowDefinitionSnapshot?: {
+    publicWorkflowId: string;
+    packageId: string;
+    executionEngine: string;
+    requiredCapabilities: readonly ProviderCapability[];
+    providerKind?: string;
+  };
 };
 
 export type ReserveWorkflowRunResult =
@@ -33,7 +48,10 @@ export type QueueOutboxRecord = {
   id: string;
   tenantId: string;
   runId: string;
-  workflowTemplateId: string;
+  workflowId: string;
+  workflowTemplateId: string | null;
+  workflowIdentityKind: "tenant_template" | "installed_package_overlay";
+  workflowPackageId: string | null;
   userId: string;
   idempotencyKey: string;
   attempts: number;
@@ -50,6 +68,19 @@ export type BoundProviderContextRecord = {
 };
 
 export type BoundProviderLaunchBinding = BoundProviderContextRecord;
+export type WorkflowRunIdentityRecord = {
+  workflowId: string;
+  workflowTemplateId: string | null;
+  workflowIdentityKind: "tenant_template" | "installed_package_overlay";
+  workflowPackageId: string | null;
+  workflowDefinitionSnapshot: {
+    publicWorkflowId: string;
+    packageId: string;
+    executionEngine: string;
+    requiredCapabilities: readonly ProviderCapability[];
+    providerKind?: string;
+  } | null;
+};
 
 export function createAcidGuardRepository(runner: TransactionRunner) {
   return {
@@ -73,15 +104,27 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
           return { reserved: false, reason: "not_member" };
         }
 
-        const workflow = await transaction.query(
-          "select id, package_id, provider_kind from wfpc.workflow_templates where tenant_id = $1 and id = $2 and enabled = true for update",
-          [input.tenantId, input.workflowTemplateId]
-        );
-        if (workflow.rows.length === 0) {
+        const publicWorkflowId = input.workflowId ?? input.workflowTemplateId ?? "";
+        const workflowRow = input.workflowBinding
+          ? {
+              id: input.workflowTemplateId ?? null,
+              package_id: input.workflowBinding.packageId,
+              provider_kind: input.workflowBinding.providerKind
+            }
+          : await (async () => {
+              const workflowTemplateId = input.workflowTemplateId ?? input.workflowId;
+              const workflow = await transaction.query(
+                "select id, package_id, provider_kind from wfpc.workflow_templates where tenant_id = $1 and id = $2 and enabled = true for update",
+                [input.tenantId, workflowTemplateId]
+              );
+              if (workflow.rows.length === 0) {
+                return null;
+              }
+              return asRecord(workflow.rows[0]);
+            })();
+        if (!workflowRow) {
           return { reserved: false, reason: "workflow_unavailable" };
         }
-
-        const workflowRow = asRecord(workflow.rows[0]);
         if (workflowRow.package_id === null || workflowRow.package_id === undefined) {
           return { reserved: false, reason: "entitlement_denied" };
         }
@@ -134,13 +177,27 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
         }
         const credentialRow = asRecord(credential.rows[0]);
 
+        const workflowIdentityKind =
+          input.workflowIdentityKind ??
+          (input.workflowBinding ? "installed_package_overlay" : "tenant_template");
+        const workflowTemplateId = workflowIdentityKind === "tenant_template" ? (input.workflowTemplateId ?? input.workflowId ?? null) : null;
+        const workflowPackageId = input.workflowPackageId ?? String(workflowRow.package_id);
+        if (workflowIdentityKind === "installed_package_overlay") {
+          const overlayDefinitions = listInstalledPackageDefinitions({ installedPackageIds: [workflowPackageId] });
+          const matchedPackage = overlayDefinitions.find((entry) => entry.id === workflowPackageId);
+          const matchedWorkflow = matchedPackage?.workflowDefinitions?.find((definition) => definition.publicId === publicWorkflowId);
+          if (!matchedWorkflow) {
+            return { reserved: false, reason: "workflow_unavailable" };
+          }
+        }
+
         const reservation = await transaction.query(
           `insert into wfpc.workflow_run_reservations
-            (tenant_id, workflow_template_id, run_id, idempotency_key, reserved_by_user_id)
-           values ($1, $2, $3, $4, $5)
+            (tenant_id, public_workflow_id, workflow_template_id, workflow_identity_kind, workflow_package_id, run_id, idempotency_key, reserved_by_user_id)
+           values ($1, $2, $3, $4, $5::uuid, $6, $7, $8)
            on conflict do nothing
            returning id`,
-          [input.tenantId, input.workflowTemplateId, input.runId, input.idempotencyKey, input.userId]
+          [input.tenantId, publicWorkflowId, workflowTemplateId, workflowIdentityKind, workflowPackageId, input.runId, input.idempotencyKey, input.userId]
         );
         if (reservation.rows.length === 0) {
           return { reserved: false, reason: "duplicate" };
@@ -148,12 +205,26 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
 
         await transaction.query(
           `insert into wfpc.workflow_runs
-            (id, tenant_id, workflow_template_id, created_by_user_id, status, bound_secret_reference_id, bound_provider_context)
-           values ($1, $2, $3, $4, 'queued', $5::uuid, $6::jsonb)`,
+            (id, tenant_id, public_workflow_id, workflow_template_id, workflow_identity_kind, workflow_package_id, workflow_definition_snapshot, created_by_user_id, status, bound_secret_reference_id, bound_provider_context)
+           values ($1, $2, $3, $4, $5, $6::uuid, $7::jsonb, $8, 'queued', $9::uuid, $10::jsonb)`,
           [
             input.runId,
             input.tenantId,
-            input.workflowTemplateId,
+            publicWorkflowId,
+            workflowTemplateId,
+            workflowIdentityKind,
+            workflowPackageId,
+            JSON.stringify(
+              input.workflowDefinitionSnapshot && input.workflowDefinitionSnapshot.publicWorkflowId === publicWorkflowId
+                ? {
+                    publicWorkflowId: input.workflowDefinitionSnapshot.publicWorkflowId,
+                    packageId: input.workflowDefinitionSnapshot.packageId,
+                    executionEngine: input.workflowDefinitionSnapshot.executionEngine,
+                    requiredCapabilities: [...input.workflowDefinitionSnapshot.requiredCapabilities],
+                    ...(input.workflowDefinitionSnapshot.providerKind ? { providerKind: input.workflowDefinitionSnapshot.providerKind } : {})
+                  }
+                : {}
+            ),
             input.userId,
             String(credentialRow.id),
             JSON.stringify([
@@ -170,10 +241,10 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
 
         await transaction.query(
           `insert into wfpc.workflow_queue_outbox
-            (tenant_id, run_id, workflow_template_id, created_by_user_id, idempotency_key)
-           values ($1, $2, $3, $4, $5)
+            (tenant_id, run_id, public_workflow_id, workflow_template_id, workflow_identity_kind, workflow_package_id, created_by_user_id, idempotency_key)
+           values ($1, $2, $3, $4, $5, $6::uuid, $7, $8)
            on conflict (tenant_id, run_id) do nothing`,
-          [input.tenantId, input.runId, input.workflowTemplateId, input.userId, input.idempotencyKey]
+          [input.tenantId, input.runId, publicWorkflowId, workflowTemplateId, workflowIdentityKind, workflowPackageId, input.userId, input.idempotencyKey]
         );
 
         return { reserved: true, runId: input.runId };
@@ -211,20 +282,39 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
     async stageWorkflowRunRedispatch(input: {
       tenantId: string;
       runId: string;
-      workflowTemplateId: string;
       userId: string;
       idempotencyKey: string;
     }): Promise<{ staged: boolean; outboxId: string | null }> {
       return runner.withTransaction(async (transaction) => {
         const result = await transaction.query(
           `insert into wfpc.workflow_queue_outbox
-             (tenant_id, run_id, workflow_template_id, created_by_user_id, idempotency_key, status, available_at, claim_token, claimed_at, enqueued_at, last_error, updated_at)
-           values ($1, $2, $3, $4, $5, 'pending', now(), null, null, null, null, now())
-           on conflict (tenant_id, run_id) do update
-             set workflow_template_id = excluded.workflow_template_id,
+             (tenant_id, run_id, public_workflow_id, workflow_template_id, workflow_identity_kind, workflow_package_id, created_by_user_id, idempotency_key, status, available_at, claim_token, claimed_at, enqueued_at, last_error, updated_at)
+           select runs.tenant_id,
+                  runs.id,
+                  runs.public_workflow_id,
+                  runs.workflow_template_id,
+                  runs.workflow_identity_kind,
+                  runs.workflow_package_id,
+                  $3,
+                  $4,
+                  'pending',
+                  now(),
+                  null,
+                  null,
+                  null,
+                  null,
+                  now()
+           from wfpc.workflow_runs runs
+           where runs.tenant_id = $1
+             and runs.id = $2
+            on conflict (tenant_id, run_id) do update
+             set public_workflow_id = excluded.public_workflow_id,
+                 workflow_template_id = excluded.workflow_template_id,
+                 workflow_identity_kind = excluded.workflow_identity_kind,
+                 workflow_package_id = excluded.workflow_package_id,
                  idempotency_key = case
-                   when wfpc.workflow_queue_outbox.status = 'claimed' then wfpc.workflow_queue_outbox.idempotency_key
-                   else excluded.idempotency_key
+                    when wfpc.workflow_queue_outbox.status = 'claimed' then wfpc.workflow_queue_outbox.idempotency_key
+                    else excluded.idempotency_key
                  end,
                  status = case
                    when wfpc.workflow_queue_outbox.status = 'claimed' then wfpc.workflow_queue_outbox.status
@@ -249,7 +339,7 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
                  last_error = null,
                  updated_at = now()
            returning id`,
-          [input.tenantId, input.runId, input.workflowTemplateId, input.userId, input.idempotencyKey]
+          [input.tenantId, input.runId, input.userId, input.idempotencyKey]
         );
         return { staged: result.rows.length > 0, outboxId: result.rows.length > 0 ? String(asRecord(result.rows[0]).id) : null };
       });
@@ -312,16 +402,19 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
                updated_at = now()
            from next_jobs
            where outbox.id = next_jobs.id
-           returning outbox.id, outbox.tenant_id, outbox.run_id, outbox.workflow_template_id, outbox.created_by_user_id, outbox.idempotency_key, outbox.attempts, outbox.claim_token, next_jobs.previous_status`,
-          [input.limit, input.staleClaimSeconds ?? 300]
-        );
+           returning outbox.id, outbox.tenant_id, outbox.run_id, outbox.public_workflow_id, outbox.workflow_template_id, outbox.workflow_identity_kind, outbox.workflow_package_id, outbox.created_by_user_id, outbox.idempotency_key, outbox.attempts, outbox.claim_token, next_jobs.previous_status`,
+           [input.limit, input.staleClaimSeconds ?? 300]
+         );
         return result.rows.map((row) => {
           const record = asRecord(row);
           return {
             id: String(record.id),
             tenantId: String(record.tenant_id),
             runId: String(record.run_id),
-            workflowTemplateId: String(record.workflow_template_id),
+            workflowId: typeof record.public_workflow_id === "string" ? String(record.public_workflow_id) : String(record.workflow_template_id ?? ""),
+            workflowTemplateId: typeof record.workflow_template_id === "string" ? String(record.workflow_template_id) : null,
+            workflowIdentityKind: String(record.workflow_identity_kind) === "installed_package_overlay" ? "installed_package_overlay" : "tenant_template",
+            workflowPackageId: typeof record.workflow_package_id === "string" ? String(record.workflow_package_id) : null,
             userId: String(record.created_by_user_id),
             idempotencyKey: String(record.idempotency_key),
             attempts: Number(record.attempts),
@@ -473,6 +566,32 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
     async getBoundProviderLaunchBinding(input: { tenantId: string; runId: string }): Promise<BoundProviderLaunchBinding | null> {
       const context = await this.getBoundProviderContext(input);
       return context?.[0] ?? null;
+    },
+
+    async getWorkflowRunIdentity(input: { tenantId: string; runId: string }): Promise<WorkflowRunIdentityRecord | null> {
+      return runner.withTransaction(async (transaction) => {
+        const result = await transaction.query(
+          `select public_workflow_id, workflow_template_id, workflow_identity_kind, workflow_package_id
+                  , workflow_definition_snapshot
+           from wfpc.workflow_runs
+           where tenant_id = $1
+             and id = $2
+           limit 1`,
+          [input.tenantId, input.runId]
+        );
+        if (result.rows.length === 0) {
+          return null;
+        }
+
+        const record = asRecord(result.rows[0]);
+        return {
+          workflowId: String(record.public_workflow_id ?? ""),
+          workflowTemplateId: typeof record.workflow_template_id === "string" ? String(record.workflow_template_id) : null,
+          workflowIdentityKind: String(record.workflow_identity_kind) === "installed_package_overlay" ? "installed_package_overlay" : "tenant_template",
+          workflowPackageId: typeof record.workflow_package_id === "string" ? String(record.workflow_package_id) : null,
+          workflowDefinitionSnapshot: normalizeWorkflowDefinitionSnapshot(record.workflow_definition_snapshot)
+        };
+      });
     }
   };
 }
@@ -483,6 +602,31 @@ function asRecord(row: unknown): Record<string, unknown> {
 
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function normalizeWorkflowDefinitionSnapshot(
+  value: unknown
+): WorkflowRunIdentityRecord["workflowDefinitionSnapshot"] {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const publicWorkflowId = typeof record.publicWorkflowId === "string" ? record.publicWorkflowId : "";
+  const packageId = typeof record.packageId === "string" ? record.packageId : "";
+  const executionEngine = typeof record.executionEngine === "string" ? record.executionEngine : "";
+  const requiredCapabilities = Array.isArray(record.requiredCapabilities)
+    ? record.requiredCapabilities.filter((entry): entry is ProviderCapability => typeof entry === "string")
+    : [];
+  if (!publicWorkflowId || !packageId || !executionEngine) {
+    return null;
+  }
+  return {
+    publicWorkflowId,
+    packageId,
+    executionEngine,
+    requiredCapabilities,
+    ...(typeof record.providerKind === "string" ? { providerKind: record.providerKind } : {})
+  };
 }
 
 function toBoundProviderContext(value: unknown): readonly BoundProviderContextRecord[] {

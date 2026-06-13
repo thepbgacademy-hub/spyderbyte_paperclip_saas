@@ -6,7 +6,10 @@ const outboxRecord = {
   id: "outbox-1",
   tenantId: "tenant-1",
   runId: "run-1",
+  workflowId: "workflow-1",
   workflowTemplateId: "workflow-1",
+  workflowIdentityKind: "tenant_template" as const,
+  workflowPackageId: "package-1",
   userId: "user-1",
   idempotencyKey: "tenant-1:workflow-1:run-1",
   attempts: 1,
@@ -33,7 +36,10 @@ describe("queue outbox worker", () => {
     expect(enqueuer.enqueueOnce).toHaveBeenCalledWith({
       tenantId: "tenant-1",
       userId: "user-1",
+      workflowId: "workflow-1",
       workflowTemplateId: "workflow-1",
+      workflowIdentityKind: "tenant_template",
+      workflowPackageId: "package-1",
       runId: "run-1",
       idempotencyKey: "tenant-1:workflow-1:run-1"
     });
@@ -64,7 +70,10 @@ describe("queue outbox worker", () => {
     expect(enqueuer.enqueueOnce).toHaveBeenCalledWith({
       tenantId: "tenant-1",
       userId: "user-1",
+      workflowId: "workflow-1",
       workflowTemplateId: "workflow-1",
+      workflowIdentityKind: "tenant_template",
+      workflowPackageId: "package-1",
       runId: "run-1",
       idempotencyKey: "tenant-1:workflow-1:run-1"
     });

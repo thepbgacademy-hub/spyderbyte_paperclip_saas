@@ -64,7 +64,10 @@ export type WorkflowTemplateRow = {
 export type WorkflowRunRow = {
   id: string;
   tenantId: string;
-  workflowTemplateId: string;
+  workflowId: string;
+  workflowTemplateId: string | null;
+  workflowIdentityKind: "tenant_template" | "installed_package_overlay";
+  workflowPackageId: string | null;
   createdByUserId: string;
   status: WorkflowRunStatus;
   publicResult: Record<string, unknown>;

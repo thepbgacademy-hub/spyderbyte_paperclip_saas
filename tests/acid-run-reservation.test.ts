@@ -5,6 +5,7 @@ import { createAcidRunReservationService } from "../src/workflows/acid-run-reser
 const input = {
   tenantId: "tenant-1",
   userId: "user-1",
+  workflowId: "workflow-1",
   workflowTemplateId: "workflow-1",
   runId: "run-1",
   idempotencyKey: "tenant-1:workflow-1:run-1"

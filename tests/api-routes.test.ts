@@ -42,7 +42,7 @@ describe("authenticated dashboard API", () => {
     await expect(api.listDashboard({ authorization: "Bearer valid" })).resolves.toEqual({
       tenantId: "tenant-1",
       role: "member",
-      workflows: [{ id: "wf-social-calendar", name: "Wealth Factory Social Calendar" }],
+      workflows: [{ id: "wf-social-calendar", name: "Wealth Factory Social Calendar", startEnabled: true }],
       packages: [{ id: "pkg-social", name: "Social Media Agency" }],
       artifacts: [{ id: "artifact-1", filename: "post.png", expiresAt: "2026-05-11T00:00:00.000Z" }],
       providerConnections: [{ providerKind: "openai_api", label: "OpenAI", connected: true }],
@@ -95,5 +95,86 @@ describe("authenticated dashboard API", () => {
     });
 
     await expect(api.listDashboard({ authorization: "Bearer valid" })).rejects.toThrow("Forbidden customer-facing field");
+  });
+
+  it("fails closed when a run-start request targets a workflow outside the tenant-visible dashboard catalog", async () => {
+    const deps = {
+      authenticate: vi.fn().mockResolvedValue(session),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      listWorkflows: vi.fn().mockResolvedValue([{ id: "workflow-template-1", name: "Connect First Workflow", enabled: true }]),
+      listPackages: vi.fn().mockResolvedValue([]),
+      listArtifacts: vi.fn().mockResolvedValue([]),
+      listProviderConnections: vi.fn().mockResolvedValue([]),
+      listStorageConnectors: vi.fn().mockResolvedValue([]),
+      getPlatformLoad: vi.fn().mockResolvedValue({
+        level: "light",
+        summary: "Light traffic",
+        detail: "New workflows should begin processing quickly."
+      }),
+      startWorkflowRun: vi.fn()
+    };
+    const api = createDashboardApi(deps);
+
+    await expect(
+      api.startWorkflowRun({ authorization: "Bearer valid", workflowId: "wf-seo-audit" })
+    ).rejects.toMatchObject({ code: "invalid_request" });
+
+    expect(deps.startWorkflowRun).not.toHaveBeenCalled();
+  });
+
+  it("allows a run-start request when the workflow is present in the tenant-visible dashboard catalog", async () => {
+    const deps = {
+      authenticate: vi.fn().mockResolvedValue(session),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      listWorkflows: vi.fn().mockResolvedValue([{ id: "workflow-template-1", name: "Connect First Workflow", enabled: true }]),
+      listPackages: vi.fn().mockResolvedValue([]),
+      listArtifacts: vi.fn().mockResolvedValue([]),
+      listProviderConnections: vi.fn().mockResolvedValue([]),
+      listStorageConnectors: vi.fn().mockResolvedValue([]),
+      getPlatformLoad: vi.fn().mockResolvedValue({
+        level: "light",
+        summary: "Light traffic",
+        detail: "New workflows should begin processing quickly."
+      }),
+      startWorkflowRun: vi.fn().mockResolvedValue({ runId: "run-123", queued: true })
+    };
+    const api = createDashboardApi(deps);
+
+    await expect(
+      api.startWorkflowRun({ authorization: "Bearer valid", workflowId: "workflow-template-1" })
+    ).resolves.toEqual({ runId: "run-123", queued: true });
+
+    expect(deps.startWorkflowRun).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      userId: "user-1",
+      workflowId: "workflow-template-1"
+    });
+  });
+
+  it("fails closed when a workflow is visible in the dashboard catalog but not start-enabled on that public seam", async () => {
+    const deps = {
+      authenticate: vi.fn().mockResolvedValue(session),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      listWorkflows: vi.fn().mockResolvedValue([
+        { id: "wf-visible-review-only", name: "Visible Review Only Workflow", enabled: true, startEnabled: false }
+      ]),
+      listPackages: vi.fn().mockResolvedValue([]),
+      listArtifacts: vi.fn().mockResolvedValue([]),
+      listProviderConnections: vi.fn().mockResolvedValue([]),
+      listStorageConnectors: vi.fn().mockResolvedValue([]),
+      getPlatformLoad: vi.fn().mockResolvedValue({
+        level: "light",
+        summary: "Light traffic",
+        detail: "New workflows should begin processing quickly."
+      }),
+      startWorkflowRun: vi.fn()
+    };
+    const api = createDashboardApi(deps);
+
+    await expect(
+      api.startWorkflowRun({ authorization: "Bearer valid", workflowId: "wf-visible-review-only" })
+    ).rejects.toMatchObject({ code: "invalid_request" });
+
+    expect(deps.startWorkflowRun).not.toHaveBeenCalled();
   });
 });

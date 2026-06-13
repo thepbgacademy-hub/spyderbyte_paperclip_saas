@@ -28,7 +28,10 @@ export function createQueueOutboxWorker(options: { repository: QueueOutboxReposi
         const queueInput = {
           tenantId: record.tenantId,
           userId: record.userId,
+          workflowId: record.workflowId,
           workflowTemplateId: record.workflowTemplateId,
+          workflowIdentityKind: record.workflowIdentityKind,
+          workflowPackageId: record.workflowPackageId,
           runId: record.runId,
           idempotencyKey: record.idempotencyKey
         };

@@ -59,6 +59,7 @@ describe("bullmq workflow queue", () => {
       enqueuer.enqueueOnce({
         tenantId: "tenant-1",
         userId: "user-1",
+        workflowId: "workflow-1",
         workflowTemplateId: "workflow-1",
         runId: "run-1",
         idempotencyKey: "tenant-1:workflow-1:run-1"
@@ -107,6 +108,7 @@ describe("bullmq workflow queue", () => {
       enqueuer.enqueueOnce({
         tenantId: "tenant-1",
         userId: "user-1",
+        workflowId: "workflow-1",
         workflowTemplateId: "workflow-1",
         runId: "run-1",
         idempotencyKey: "tenant-1:workflow-1:run-1"
@@ -126,6 +128,7 @@ describe("bullmq workflow queue", () => {
       enqueuer.enqueueOnce({
         tenantId: "tenant-1",
         userId: "user-1",
+        workflowId: "workflow-1",
         workflowTemplateId: "workflow-1",
         runId: "run-1",
         idempotencyKey: "tenant-1:workflow-1:run-1:redispatch:resume_lane:abc123def456"

@@ -173,6 +173,27 @@ export function createSupabaseRepositories(client: QueryClient) {
       });
     },
 
+    async listActiveInstalledPackageIds(input: DashboardScope) {
+      const result = await client.query(
+        `select distinct installs.package_id
+         from wfpc.tenant_package_installs installs
+         join wfpc.tenant_package_purchases purchases
+           on purchases.tenant_id = installs.tenant_id
+          and purchases.package_id = installs.package_id
+          and purchases.status = 'active'
+          and purchases.starts_at <= now()
+          and (purchases.ends_at is null or purchases.ends_at > now())
+         where installs.tenant_id = $1
+           and installs.status = 'active'
+         order by installs.package_id`,
+        [input.tenantId]
+      );
+
+      return result.rows
+        .map((row) => readOptionalTrimmedString(asRecord(row).package_id))
+        .filter((value): value is string => value !== undefined);
+    },
+
     async listArtifacts(input: DashboardScope) {
       const result = await client.query(
         `select id, filename, artifact_type, expires_at

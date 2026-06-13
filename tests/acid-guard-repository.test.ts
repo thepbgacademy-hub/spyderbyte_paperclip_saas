@@ -165,13 +165,73 @@ describe("ACID guard repository", () => {
 
     const workflowRunInsertCall = client.query.mock.calls.find(([statement]) => String(statement).includes("insert into wfpc.workflow_runs"));
     expect(workflowRunInsertCall).toBeDefined();
-    const insertedContext = JSON.parse(String(workflowRunInsertCall?.[1]?.[5]));
+    const insertedContext = JSON.parse(String(workflowRunInsertCall?.[1]?.[9]));
     expect(insertedContext).toEqual([
       expect.objectContaining({
         capability: "text_generation",
         providerKind: "openai_api"
       })
     ]);
+  });
+
+  it("reserves an explicitly public installed-package overlay without requiring a workflow_templates row lookup", async () => {
+    const client = createSequencedClient([
+      [{ paused_at: null }],
+      [{ tenant_id: "tenant-1" }],
+      [{ id: "install-1", package_id: "pkg-brand-seo" }],
+      [{ id: "requirement-1", capability: "text_generation" }],
+      [{ id: "secret-1", secret_ref: "wf_secret_openai", label: "Primary OpenAI", metadata: {} }],
+      [{ id: "reservation-1" }],
+      []
+    ]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(
+      repository.reserveWorkflowRun({
+        tenantId: "tenant-1",
+        userId: "user-1",
+        workflowTemplateId: "wf-seo-audit",
+        runId: "run-1",
+        idempotencyKey: "idem-1",
+        workflowBinding: {
+          packageId: "pkg-brand-seo",
+          providerKind: "openai_api"
+        }
+      })
+    ).resolves.toEqual({ reserved: true, runId: "run-1" });
+
+    const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
+    expect(sql).not.toMatch(/from wfpc\.workflow_templates[\s\S]+for update/i);
+    expect(sql).toMatch(/from wfpc\.tenant_package_installs[\s\S]+join wfpc\.tenant_package_purchases/i);
+    expect(sql).toMatch(/insert into wfpc\.workflow_run_reservations/i);
+  });
+
+  it("fails closed when an overlay public workflow id is not present in the installed package catalog", async () => {
+    const client = createSequencedClient([
+      [{ paused_at: null }],
+      [{ tenant_id: "tenant-1" }],
+      [{ id: "install-1", package_id: "pkg-brand-seo" }],
+      [{ id: "requirement-1", capability: "text_generation" }],
+      [{ id: "secret-1", secret_ref: "wf_secret_openai", label: "Primary OpenAI", metadata: {} }]
+    ]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(
+      repository.reserveWorkflowRun({
+        tenantId: "tenant-1",
+        userId: "user-1",
+        workflowId: "wf-not-in-package",
+        workflowTemplateId: null,
+        workflowIdentityKind: "installed_package_overlay",
+        workflowPackageId: "pkg-brand-seo",
+        runId: "run-1",
+        idempotencyKey: "idem-1",
+        workflowBinding: {
+          packageId: "pkg-brand-seo",
+          providerKind: "openai_api"
+        }
+      })
+    ).resolves.toEqual({ reserved: false, reason: "workflow_unavailable" });
   });
 
   it("fails closed when multiple distinct capabilities match the same workflow provider requirement", async () => {
@@ -328,7 +388,6 @@ describe("ACID guard repository", () => {
       repository.stageWorkflowRunRedispatch({
         tenantId: "tenant-1",
         runId: "run-1",
-        workflowTemplateId: "workflow-1",
         userId: "user-1",
         idempotencyKey: "tenant-1:workflow-1:run-1:redispatch:resume_lane:abc123def456"
       })
@@ -336,6 +395,7 @@ describe("ACID guard repository", () => {
 
     const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
     expect(sql).toMatch(/insert into wfpc\.workflow_queue_outbox/i);
+    expect(sql).toMatch(/from wfpc\.workflow_runs runs/i);
     expect(sql).toMatch(/on conflict \(tenant_id, run_id\) do update/i);
     expect(sql).toMatch(/when wfpc\.workflow_queue_outbox\.status = 'claimed' then wfpc\.workflow_queue_outbox\.idempotency_key/i);
     expect(sql).toMatch(/else excluded\.idempotency_key/i);
@@ -368,7 +428,10 @@ describe("ACID guard repository", () => {
         id: "outbox-1",
         tenantId: "tenant-1",
         runId: "run-1",
+        workflowId: "workflow-1",
         workflowTemplateId: "workflow-1",
+        workflowIdentityKind: "tenant_template",
+        workflowPackageId: null,
         userId: "user-1",
         idempotencyKey: "idem-1",
         attempts: 1,

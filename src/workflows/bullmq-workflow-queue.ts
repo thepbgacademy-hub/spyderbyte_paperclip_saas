@@ -30,7 +30,7 @@ export function createBullmqWorkflowRunEnqueuer(options: WorkflowQueueConnection
       const payload = createWorkflowQueuePayload({
         tenantId: input.tenantId,
         runId: input.runId,
-        workflowId: input.workflowTemplateId,
+        workflowId: input.workflowId ?? input.workflowTemplateId ?? "",
         createdByUserId: input.userId
       });
 
