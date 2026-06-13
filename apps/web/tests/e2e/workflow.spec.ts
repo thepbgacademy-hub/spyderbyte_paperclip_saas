@@ -11,7 +11,7 @@ test("member connects providers by nav flow and runs a sanitized workflow", asyn
   await expect(page.getByTestId("page-home")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
   await expect(page.getByText("Wealth Factory")).toBeVisible();
-  await expect(page.getByText(/Social Media Agency \|/)).toBeVisible();
+  await expect(page.getByText(/Installed Package \|/)).toBeVisible();
 
   for (const [navKey, pageTestId, heading] of [
     ["workflows", "page-workflows", "Workflows"],
@@ -55,11 +55,12 @@ test("member connects providers by nav flow and runs a sanitized workflow", asyn
   await expect(page.getByLabel("API key")).toHaveValue("");
 
   await openPage(page, "workflows", "page-workflows");
-  await expect(page.getByRole("button", { name: /Start workflow/ })).toBeEnabled();
-  await page.getByRole("button", { name: /Start workflow/ }).click();
+  await expect(page.getByRole("button", { name: /Start workflow/ })).toBeDisabled();
+  await expect(page.getByText("Start workflow is available only from the authenticated runtime shell. Preview mode does not queue real runs.")).toBeVisible();
 
-  await expect(page.getByTestId("page-results")).toBeVisible();
-  await expect(page.getByTestId("workflow-result")).toContainText("Workflow queued");
+  await openPage(page, "home", "page-home");
+  await expect(page.getByRole("button", { name: "Open Workflows", exact: true })).toBeVisible();
+  await expect(page.getByText("This preview is useful for review, but real workflow starts are available only from the authenticated runtime shell.")).toBeVisible();
   await expect(page.locator("body")).not.toContainText("sk-test-secret");
 });
 

@@ -53,7 +53,9 @@ export interface DashboardPageState {
   mediaProviderSaved: boolean;
   googleDriveConnected: boolean;
   dropboxConnected: boolean;
+  runtimeShellEnabled: boolean;
   runStatus: RunStatus;
+  workflowStartAvailable: boolean;
   workflowsPaused: boolean;
   selectedWorkflowId: string;
   selectedResultId: string;
@@ -94,13 +96,14 @@ export function DashboardPages(props: DashboardPagesProps) {
   const requiresMediaProvider = props.dashboard.workflows.length === 0;
   const packageReady = providerReady && (!requiresMediaProvider || props.state.mediaProviderSaved);
   const workflowItems = getWorkflowCards(props.dashboard, {
-    connectedProviders: props.state.connectedProviders
+    connectedProviders: props.state.connectedProviders,
+    allowFallbackCatalog: !props.state.runtimeShellEnabled
   });
   const resultItems = getResultCards(props.dashboard, {
     googleDriveConnected: props.state.googleDriveConnected,
     dropboxConnected: props.state.dropboxConnected
   });
-  const selectedWorkflow = workflowItems.find((workflow) => workflow.id === props.state.selectedWorkflowId) ?? workflowItems[0]!;
+  const selectedWorkflow = workflowItems.find((workflow) => workflow.id === props.state.selectedWorkflowId) ?? workflowItems[0] ?? null;
   const selectedResult = resultItems.find((result) => result.id === props.state.selectedResultId) ?? resultItems[0]!;
   const fileItems = getFileRows(props.dashboard, {
     googleDriveConnected: props.state.googleDriveConnected,
@@ -110,6 +113,7 @@ export function DashboardPages(props: DashboardPagesProps) {
     connectedProviders: props.state.connectedProviders,
     googleDriveConnected: props.state.googleDriveConnected,
     dropboxConnected: props.state.dropboxConnected,
+    workflowStartAvailable: props.state.workflowStartAvailable,
     workflowsPaused: props.state.workflowsPaused,
     resultApprovalStates: props.state.resultApprovalStates
   };
@@ -117,19 +121,27 @@ export function DashboardPages(props: DashboardPagesProps) {
   const selectedRole = getSelectedRole(props.state.teamTab, props.state.selectedRoleId);
   const statusCopy = getStatusCopy({
     packageReady,
+    workflowStartAvailable: props.state.workflowStartAvailable,
     runStatus: props.state.runStatus,
     workflowsPaused: props.state.workflowsPaused
   });
   const currentFocus = getCurrentFocus({
     packageReady,
     providerReady,
+    workflowStartAvailable: props.state.workflowStartAvailable,
     runStatus: props.state.runStatus,
     workflowsPaused: props.state.workflowsPaused,
     selectedApprovalState,
     googleDriveConnected: props.state.googleDriveConnected,
     dropboxConnected: props.state.dropboxConnected
   });
-  const workflowLaunchReady = selectedWorkflow.readiness === "Available now" && packageReady && !props.state.workflowsPaused;
+  const workflowLaunchReady =
+    selectedWorkflow !== null &&
+    selectedWorkflow.readiness === "Available now" &&
+    selectedWorkflow.startEnabled &&
+    packageReady &&
+    !props.state.workflowsPaused &&
+    props.state.workflowStartAvailable;
   const homeNextSteps = getHomeNextSteps(props.dashboard, snapshotContext);
   const expiringDownloads = getExpiringDownloadItems(props.dashboard, {
     googleDriveConnected: props.state.googleDriveConnected,
@@ -310,10 +322,16 @@ export function DashboardPages(props: DashboardPagesProps) {
           <div className="panelHeader">
             <p className="eyebrow">Workflow Catalog</p>
           </div>
+          {workflowItems.length === 0 ? (
+            <div className="emptyState">
+              <strong>No workflows are available on this runtime shell yet.</strong>
+              <p>Installed package visibility is active, but no customer-startable or reviewable workflow catalog entries are exposed here right now.</p>
+            </div>
+          ) : null}
           {workflowItems.map((workflow) => (
             <button
               key={workflow.id}
-              className={`listCard${selectedWorkflow.id === workflow.id ? " selected" : ""}`}
+              className={`listCard${selectedWorkflow?.id === workflow.id ? " selected" : ""}`}
               onClick={() => props.actions.onSelectWorkflow(workflow.id)}
               type="button"
             >
@@ -329,30 +347,43 @@ export function DashboardPages(props: DashboardPagesProps) {
         <section className="panel detailPanel">
           <div className="panelHeader">
             <p className="eyebrow">Selected Workflow</p>
-            <span className="contextBadge">{selectedWorkflow.readiness}</span>
+            <span className="contextBadge">{selectedWorkflow?.readiness ?? "Unavailable"}</span>
           </div>
-          <h2>{selectedWorkflow.name}</h2>
-          <p className="bodyCopy">{selectedWorkflow.outcome}</p>
-          <div className="detailGrid">
-            <InfoBlock label="Be ready with" value={selectedWorkflow.inputs} />
-            <InfoBlock label="Required providers" value={selectedWorkflow.providerTags.join(" | ")} />
-            <InfoBlock label="Output type" value={selectedWorkflow.outputType} />
-            <InfoBlock label="Next milestone" value={selectedWorkflow.milestone} />
-          </div>
-          <div className="readinessCard">
-            <strong>{props.state.workflowsPaused ? "Try again in a moment" : selectedWorkflow.readiness}</strong>
-            <p>
-              {props.state.workflowsPaused
-                ? "Workflow launches are paused for this tenant right now."
-                : selectedWorkflow.readiness === "Available now"
-                  ? "The installed package is ready to launch this workflow."
-                  : "Finish the required provider setup before starting this workflow."}
-            </p>
-            <button className="primaryButton" disabled={!workflowLaunchReady} onClick={props.actions.onQueueRun} type="button">
-              <Play size={16} />
-              Start workflow
-            </button>
-          </div>
+          {selectedWorkflow ? (
+            <>
+              <h2>{selectedWorkflow.name}</h2>
+              <p className="bodyCopy">{selectedWorkflow.outcome}</p>
+              <div className="detailGrid">
+                <InfoBlock label="Be ready with" value={selectedWorkflow.inputs} />
+                <InfoBlock label="Required providers" value={selectedWorkflow.providerTags.join(" | ")} />
+                <InfoBlock label="Output type" value={selectedWorkflow.outputType} />
+                <InfoBlock label="Next milestone" value={selectedWorkflow.milestone} />
+              </div>
+              <div className="readinessCard">
+                <strong>{props.state.workflowsPaused ? "Try again in a moment" : selectedWorkflow.readiness}</strong>
+                <p>
+                  {props.state.workflowsPaused
+                    ? "Workflow launches are paused for this tenant right now."
+                    : !props.state.runtimeShellEnabled
+                      ? "Start workflow is available only from the authenticated runtime shell. Preview mode does not queue real runs."
+                    : !selectedWorkflow.startEnabled
+                      ? "This workflow is visible for review in the dashboard, but it cannot be started from this public surface."
+                    : selectedWorkflow.readiness === "Available now"
+                      ? "The installed package is ready to launch this workflow."
+                      : "Finish the required provider setup before starting this workflow."}
+                </p>
+                <button className="primaryButton" disabled={!workflowLaunchReady} onClick={props.actions.onQueueRun} type="button">
+                  <Play size={16} />
+                  Start workflow
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2>No workflow selected</h2>
+              <p className="bodyCopy">This runtime shell is authenticated, but there are no customer-visible workflow entries available here yet.</p>
+            </>
+          )}
         </section>
 
         <aside className="panel compact">

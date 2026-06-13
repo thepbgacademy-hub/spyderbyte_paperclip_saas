@@ -46,6 +46,7 @@ export interface WorkflowCard {
   inputs: string;
   outputType: string;
   milestone: string;
+  startEnabled: boolean;
 }
 
 export interface ResultCard {
@@ -111,6 +112,7 @@ export interface CurrentFocusCard {
 
 export interface StatusCopyOptions {
   packageReady: boolean;
+  workflowStartAvailable: boolean;
   runStatus: RunStatus;
   workflowsPaused: boolean;
 }
@@ -118,6 +120,7 @@ export interface StatusCopyOptions {
 export interface CurrentFocusOptions {
   packageReady: boolean;
   providerReady: boolean;
+  workflowStartAvailable: boolean;
   runStatus: RunStatus;
   workflowsPaused: boolean;
   selectedApprovalState: ApprovalState;
@@ -129,6 +132,7 @@ export interface DashboardSnapshotContext {
   connectedProviders: Record<ProviderKey, boolean>;
   googleDriveConnected: boolean;
   dropboxConnected: boolean;
+  workflowStartAvailable: boolean;
   workflowsPaused: boolean;
   resultApprovalStates: Record<string, ApprovalState>;
 }
@@ -246,7 +250,8 @@ export const workflowCards = [
     outcome: "A reviewed content calendar with deliverables ready to approve and send.",
     inputs: "Brand priorities, current offer, and campaign timing.",
     outputType: "Calendar, captions, and asset requests",
-    milestone: "Next milestone: approve the draft before exports are released."
+    milestone: "Next milestone: approve the draft before exports are released.",
+    startEnabled: true
   },
   {
     id: "wf-refresh",
@@ -257,7 +262,8 @@ export const workflowCards = [
     outcome: "Updated launch messaging with ready-to-review deliverables.",
     inputs: "Offer details, deadlines, and any required proof points.",
     outputType: "Copy deck and launch notes",
-    milestone: "Next milestone: connect a provider to unlock the run."
+    milestone: "Next milestone: connect a provider to unlock the run.",
+    startEnabled: true
   },
   {
     id: "wf-recap",
@@ -268,7 +274,8 @@ export const workflowCards = [
     outcome: "A concise weekly summary for review and export.",
     inputs: "Completed work, highlights, and delivery notes.",
     outputType: "Summary memo",
-    milestone: "Next milestone: results will appear in the review desk."
+    milestone: "Next milestone: results will appear in the review desk.",
+    startEnabled: true
   }
 ] as const;
 
@@ -429,12 +436,12 @@ export const fileRows = [
 ] as const;
 
 export const profileRows = [
-  { name: "Northstar Labs", family: "Social Media", state: "Active", note: "Current operating profile" },
-  { name: "Harbor Advisory", family: "Social Media", state: "Available", note: "Owner review complete" }
+  { name: "Northstar Labs", family: "Installed package", state: "Active", note: "Current operating profile" },
+  { name: "Harbor Advisory", family: "Alternate package", state: "Available", note: "Owner review complete" }
 ] as const;
 
 export const billingRows = [
-  { label: "Current plan", value: "Social Media Agency package" },
+  { label: "Current plan", value: "Installed package" },
   { label: "Account health", value: "Active" },
   { label: "Renewal date", value: "June 01" },
   { label: "Add-on hires", value: "Creative Director" }
@@ -509,8 +516,14 @@ export function hasConnectedStorage(snapshot: DashboardSnapshot, providerKind: "
   return snapshot.storageConnectors.some((connector) => connector.providerKind === providerKind && connector.connected !== false);
 }
 
-export function getWorkflowCards(snapshot: DashboardSnapshot, input: { connectedProviders: Record<ProviderKey, boolean> }): WorkflowCard[] {
+export function getWorkflowCards(snapshot: DashboardSnapshot, input: {
+  connectedProviders: Record<ProviderKey, boolean>;
+  allowFallbackCatalog?: boolean;
+}): WorkflowCard[] {
   if (snapshot.workflows.length === 0) {
+    if (input.allowFallbackCatalog === false) {
+      return [];
+    }
     return [...workflowCards];
   }
 
@@ -524,11 +537,17 @@ export function getWorkflowCards(snapshot: DashboardSnapshot, input: { connected
       name: workflow.name,
       description: `Runs the approved ${workflow.name} workflow inside your installed package boundary.`,
       providerTags: buildWorkflowProviderTags(providerLabel),
-      readiness: ready ? "Available now" : "Connection needed",
+      readiness: workflow.startEnabled === false ? "Review only" : ready ? "Available now" : "Connection needed",
       outcome: `A customer-safe ${workflow.name.toLowerCase()} result ready for review and delivery.`,
       inputs: "Approved package inputs and current business context.",
       outputType: "Review-ready deliverables",
-      milestone: ready ? "Next milestone: review the result before export." : "Next milestone: connect the required provider to unlock this workflow."
+      milestone:
+        workflow.startEnabled === false
+          ? "Next milestone: review this workflow from the dashboard or use an approved non-public start surface."
+          : ready
+            ? "Next milestone: review the result before export."
+            : "Next milestone: connect the required provider to unlock this workflow.",
+      startEnabled: workflow.startEnabled !== false
     };
   });
 }
@@ -592,9 +611,11 @@ export function getHomeNextSteps(snapshot: DashboardSnapshot, context: Dashboard
 
   if (items.length === 0) {
     items.push({
-      title: "Launch the next approved workflow",
+      title: context.workflowStartAvailable ? "Launch the next approved workflow" : "Open the runtime shell to launch workflows",
       detail: snapshot.workflows.some((workflow) => workflow.enabled !== false)
-        ? "The package boundary is ready for the next run"
+        ? context.workflowStartAvailable
+          ? "The package boundary is ready for the next run"
+          : "Preview mode is available for review, but authenticated runtime access is required to queue a real run"
         : "No workflow runs are available yet"
     });
   }
@@ -720,8 +741,8 @@ export function getHomeWorkQueue(snapshot: DashboardSnapshot, context: Dashboard
 
   if (!context.workflowsPaused && snapshot.workflows.some((workflow) => workflow.enabled !== false)) {
     queue.push({
-      task: "Launch the next approved workflow",
-      status: missingProvider ? "Blocked" : "Ready",
+      task: context.workflowStartAvailable ? "Launch the next approved workflow" : "Open the runtime shell to launch workflows",
+      status: missingProvider ? "Blocked" : context.workflowStartAvailable ? "Ready" : "Preview only",
       nextAction: "Open Workflows"
     });
   }
@@ -764,6 +785,9 @@ export function getStatusCopy(options: StatusCopyOptions): string {
   if (options.runStatus === "queued") {
     return "Workflow queued. Secure worker is preparing the approved result.";
   }
+  if (options.packageReady && !options.workflowStartAvailable) {
+    return "Preview mode is review-only. Open the authenticated runtime shell to queue a real workflow run.";
+  }
   return options.packageReady
     ? "Ready to run the installed package workflow."
     : "Connect package providers to unlock media workflows.";
@@ -795,9 +819,19 @@ export function getCurrentFocus(options: CurrentFocusOptions): CurrentFocusCard 
   }
 
   if (options.packageReady) {
+    if (!options.workflowStartAvailable) {
+      return {
+        title: "Open the runtime shell to launch workflows",
+        summary: "This preview is useful for review, but real workflow starts are available only from the authenticated runtime shell.",
+        chips: ["Preview mode", "Runtime shell required", "No fake runs"],
+        primary: "Open Workflows",
+        secondary: "Review workflow"
+      };
+    }
+
     return {
-      title: "Launch the media calendar",
-      summary: "The package-approved workflow is ready. Start now to keep next week's plan on schedule.",
+      title: "Launch the next approved workflow",
+      summary: "The package-approved workflow is ready. Start now to keep work moving inside the approved runtime boundary.",
       chips: ["Due today", "Ready to start", "No blockers"],
       primary: "Start workflow",
       secondary: "Review workflow"
@@ -925,7 +959,9 @@ export function getDefaultDashboardPageProps(snapshot: DashboardSnapshot) {
     mediaProviderSaved: false,
     googleDriveConnected: false,
     dropboxConnected: false,
+    runtimeShellEnabled: true,
     runStatus: "ready" as const,
+    workflowStartAvailable: true,
     workflowsPaused: false,
     selectedWorkflowId: workflowCards[0]!.id,
     selectedResultId: resultCards[0]!.id,

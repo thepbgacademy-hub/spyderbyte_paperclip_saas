@@ -10,12 +10,12 @@ describe("dashboard client", () => {
         Promise.resolve({
           tenantName: "Wealth Factory Company",
           role: "operator",
-          packages: [{ name: "Social Media Agency" }],
+          packages: [{ name: "Installed Package" }],
           providerConnections: [
             { label: "OpenAI", providerKind: "openai_api", connected: true, required: true },
             { label: "Anthropic", providerKind: "anthropic_api", connected: false, required: false }
           ],
-          workflows: [{ id: "wf-social-calendar", name: "Wealth Factory Social Calendar", providerKind: "openai_api", enabled: true }],
+          workflows: [{ id: "wf-social-calendar", name: "Wealth Factory Social Calendar", providerKind: "openai_api", enabled: true, startEnabled: false }],
           artifacts: [{ id: "artifact-1", filename: "post.png", artifactType: "image", expiresAt: "2026-05-11T00:00:00.000Z" }],
           storageConnectors: [
             { id: "storage-1", providerKind: "google_drive", displayName: "Company Drive", connected: true, publicTarget: { folderLabel: "Exports" } }
@@ -34,12 +34,12 @@ describe("dashboard client", () => {
 
     await expect(client.fetchSnapshot({ authorization: "Bearer valid" })).resolves.toEqual({
       tenantName: "Wealth Factory Company",
-      packageName: "Social Media Agency",
+      packageName: "Installed Package",
       requiredProviders: ["OpenAI"],
       optionalProviders: ["Anthropic", "customer-owned storage"],
       artifactTtlHours: 24,
       role: "operator",
-      workflows: [{ id: "wf-social-calendar", name: "Wealth Factory Social Calendar", providerKind: "openai_api", enabled: true }],
+      workflows: [{ id: "wf-social-calendar", name: "Wealth Factory Social Calendar", providerKind: "openai_api", enabled: true, startEnabled: false }],
       artifacts: [{ id: "artifact-1", filename: "post.png", artifactType: "image", expiresAt: "2026-05-11T00:00:00.000Z" }],
       providerConnections: [
         { label: "OpenAI", providerKind: "openai_api", connected: true, required: true },
@@ -106,7 +106,7 @@ describe("dashboard client", () => {
       __WF_DASHBOARD_BOOTSTRAP__: {
         initialSnapshot: {
           tenantName: "Injected Tenant",
-          packageName: "Social Media Agency",
+          packageName: "Installed Package",
           requiredProviders: ["OpenAI"],
           optionalProviders: ["customer-owned storage"],
           artifactTtlHours: 24,
@@ -133,12 +133,54 @@ describe("dashboard client", () => {
     expect(browserClient.client.getSnapshot().role).toBe("member");
   });
 
+  it("starts workflow runs when a runtime shell explicitly enables the runtime API", async () => {
+    const browserWindow = {
+      __WF_DASHBOARD_BOOTSTRAP__: {
+        runtimeApiEnabled: true,
+        initialSnapshot: {
+          tenantName: "Injected Tenant",
+          packageName: "Installed Package",
+          requiredProviders: ["OpenAI"],
+          optionalProviders: ["customer-owned storage"],
+          artifactTtlHours: 24,
+          role: "member" as const,
+          workflows: [],
+          artifacts: [],
+          providerConnections: [],
+          storageConnectors: [],
+          platformLoad: {
+            level: "light" as const,
+            summary: "Light traffic",
+            detail: "New workflows should begin processing quickly."
+          }
+        }
+      },
+      fetch: vi.fn().mockResolvedValue({
+        ok: true,
+        status: 202,
+        json: () => Promise.resolve({ runId: "run-from-shell", queued: true })
+      })
+    } as unknown as Window;
+
+    const browserClient = createBrowserDashboardClient(browserWindow);
+
+    await expect(
+      browserClient.client.startWorkflowRun({
+        authorization: "",
+        workflowId: "workflow-template-1"
+      })
+    ).resolves.toEqual({
+      runId: "run-from-shell",
+      queued: true
+    });
+  });
+
   it("uses the bootstrap snapshot role as the authoritative browser role", () => {
     const browserWindow = {
       __WF_DASHBOARD_BOOTSTRAP__: {
         initialSnapshot: {
           tenantName: "Operator Tenant",
-          packageName: "Social Media Agency",
+          packageName: "Installed Package",
           requiredProviders: ["OpenAI"],
           optionalProviders: ["customer-owned storage"],
           artifactTtlHours: 24,
@@ -167,10 +209,11 @@ describe("dashboard client", () => {
       document: {
         getElementById: vi.fn().mockReturnValue({
           textContent: JSON.stringify({
+            runtimeApiEnabled: true,
             initialResponse: {
               tenantId: "tenant-shell",
               role: "operator",
-              packages: [{ name: "Social Media Agency" }],
+              packages: [{ name: "Installed Package" }],
               providerConnections: [],
               workflows: [],
               artifacts: [],
@@ -205,5 +248,26 @@ describe("dashboard client", () => {
     } as unknown as Window;
 
     expect(() => createBrowserDashboardClient(browserWindow)).toThrow(/Invalid dashboard bootstrap/);
+  });
+
+  it("fails closed on workflow start when no runtime bootstrap or fetch path exists", async () => {
+    const browserWindow = {
+      document: {
+        getElementById: vi.fn().mockReturnValue(null)
+      }
+    } as unknown as Window;
+
+    const browserClient = createBrowserDashboardClient(browserWindow);
+
+    expect(browserClient.mode).toBe("bootstrap_only");
+    await expect(
+      browserClient.client.startWorkflowRun({
+        authorization: "",
+        workflowId: "workflow-template-1"
+      })
+    ).rejects.toMatchObject({
+      code: "service_unavailable",
+      status: 503
+    });
   });
 });

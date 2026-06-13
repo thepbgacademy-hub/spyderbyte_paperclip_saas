@@ -5,6 +5,7 @@ export type DashboardWorkflow = {
   name: string;
   providerKind: string;
   enabled: boolean;
+  startEnabled?: boolean;
 };
 
 export type DashboardArtifact = {
@@ -50,6 +51,7 @@ export type DashboardSnapshot = {
 };
 
 export type DashboardBootstrap = {
+  runtimeApiEnabled?: boolean;
   initialSnapshot?: DashboardSnapshot;
   initialResponse?: unknown;
 };
@@ -82,7 +84,7 @@ type DashboardClientOptions =
 
 const defaultSnapshot: DashboardSnapshot = {
   tenantName: "Northstar Labs",
-  packageName: "Social Media Agency",
+  packageName: "Installed Package",
   requiredProviders: ["OpenAI"],
   optionalProviders: ["image and video providers", "customer-owned storage"],
   artifactTtlHours: 24,
@@ -125,10 +127,7 @@ export function createDashboardClient(options: DashboardClientOptions) {
 
     async startWorkflowRun(request: { authorization: string; workflowId: string }): Promise<DashboardRunStartResponse> {
       if (!fetchImpl) {
-        return {
-          runId: "preview-local-run",
-          queued: true
-        };
+        throw new DashboardClientRequestError("service_unavailable", 503);
       }
 
       const response = await fetchImpl(`${apiBaseUrl}/api/dashboard/runs`, {
@@ -174,16 +173,21 @@ export function getBrowserDashboardBootstrap(browserWindow: Window = window): Da
 export function createBrowserDashboardClient(browserWindow: Window = window) {
   const bootstrap = getBrowserDashboardBootstrap(browserWindow);
   const fallbackSnapshot = bootstrap?.initialSnapshot ?? (bootstrap?.initialResponse ? mapDashboardResponse(bootstrap.initialResponse) : defaultSnapshot);
-  const mode = bootstrap?.initialResponse ? "runtime_api" : "bootstrap_only";
+  const hasRuntimeApi = bootstrap?.runtimeApiEnabled === true && typeof browserWindow.fetch === "function";
+  const mode = hasRuntimeApi ? "runtime_api" : "bootstrap_only";
+  const client =
+    mode === "runtime_api"
+      ? createDashboardClient({
+          apiBaseUrl: "",
+          fetchImpl: browserWindow.fetch.bind(browserWindow),
+          fallbackSnapshot
+        })
+      : createDashboardClient(fallbackSnapshot);
 
   return {
     authorization: null,
     mode,
-    client: createDashboardClient({
-      apiBaseUrl: "",
-      fetchImpl: browserWindow.fetch.bind(browserWindow),
-      fallbackSnapshot
-    })
+    client
   };
 }
 
@@ -233,7 +237,8 @@ function mapWorkflow(value: unknown): DashboardWorkflow {
     id: String(record.id ?? "workflow"),
     name: String(record.name ?? "Workflow"),
     providerKind: String(record.providerKind ?? record.provider_kind ?? "provider"),
-    enabled: record.enabled !== false
+    enabled: record.enabled !== false,
+    startEnabled: record.startEnabled !== false
   };
 }
 

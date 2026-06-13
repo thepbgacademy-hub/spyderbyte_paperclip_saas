@@ -42,6 +42,7 @@ export default function App() {
   const shellFeatureFlags = HIDDEN_SHELL_FLAGS;
   const dashboardRuntime = useMemo(() => createBrowserDashboardClient(), []);
   const [dashboard] = useState<DashboardSnapshot>(() => dashboardRuntime.client.getSnapshot());
+  const runtimeShellEnabled = dashboardRuntime.mode !== "bootstrap_only";
   const role: Role = dashboard.role;
   const [provider, setProvider] = useState("OpenAI");
   const [apiKeyInput, setApiKeyInput] = useState("");
@@ -54,7 +55,9 @@ export default function App() {
   const [dropboxConnected, setDropboxConnected] = useState(() => hasConnectedStorage(dashboardRuntime.client.getSnapshot(), "dropbox"));
   const [runStatus, setRunStatus] = useState<DashboardPageState["runStatus"]>("ready");
   const [workflowsPaused, setWorkflowsPaused] = useState(false);
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>(dashboardRuntime.client.getSnapshot().workflows[0]?.id ?? workflowCards[0]!.id);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>(
+    dashboardRuntime.client.getSnapshot().workflows[0]?.id ?? (!runtimeShellEnabled ? workflowCards[0]!.id : "")
+  );
   const [selectedResultId, setSelectedResultId] = useState<string>(dashboardRuntime.client.getSnapshot().artifacts[0]?.id ?? resultCards[0]!.id);
   const [teamTab, setTeamTab] = useState<TeamTab>("Included Team");
   const [selectedRoleId, setSelectedRoleId] = useState<string>(includedRoles[0]!.id);
@@ -62,6 +65,9 @@ export default function App() {
     "result-241": "Awaiting review",
     "result-238": "Revision needed"
   });
+  const workflowStartAvailable =
+    runtimeShellEnabled &&
+    dashboard.workflows.some((workflow) => workflow.enabled !== false && workflow.startEnabled !== false);
 
   const activeRoute = resolveShellRoute(location.pathname, shellFeatureFlags);
   const providerReady = connectedProviders.openai;
@@ -92,12 +98,14 @@ export default function App() {
       provider,
       projectIdInput,
       resultApprovalStates,
+      runtimeShellEnabled,
       runStatus,
       selectedResultId,
       selectedRoleId,
       selectedWorkflowId,
       teamTab,
       theme,
+      workflowStartAvailable,
       workflowsPaused
     }),
     [
@@ -110,12 +118,14 @@ export default function App() {
       provider,
       projectIdInput,
       resultApprovalStates,
+      runtimeShellEnabled,
       runStatus,
       selectedResultId,
       selectedRoleId,
       selectedWorkflowId,
       teamTab,
       theme,
+      workflowStartAvailable,
       workflowsPaused
     ]
   );
@@ -164,7 +174,13 @@ export default function App() {
   }
 
   async function handleQueueRun() {
-    const selectedWorkflow = getWorkflowCards(dashboard, { connectedProviders }).find((workflow) => workflow.id === selectedWorkflowId);
+    const selectedWorkflow = getWorkflowCards(dashboard, {
+      connectedProviders,
+      allowFallbackCatalog: !runtimeShellEnabled
+    }).find((workflow) => workflow.id === selectedWorkflowId);
+    if (!selectedWorkflow) {
+      return;
+    }
     const selectedWorkflowReady = selectedWorkflow?.readiness === "Available now";
 
     if (workflowsPaused) {
@@ -172,12 +188,6 @@ export default function App() {
       return;
     }
     if (!packageReady || !selectedWorkflowReady) {
-      return;
-    }
-
-    if (dashboardRuntime.mode === "bootstrap_only") {
-      setRunStatus("queued");
-      navigate("/results");
       return;
     }
 

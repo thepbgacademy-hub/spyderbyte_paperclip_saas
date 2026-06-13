@@ -2,17 +2,19 @@ import { describe, expect, it } from "vitest";
 
 import {
   createInitialConnectedProviders,
+  getCurrentFocus,
   getHomeWorkQueue,
   getInsightStats,
   getPlatformLoadVisual,
   getRecentArtifacts,
-  getResultCards
+  getResultCards,
+  getStatusCopy
 } from "../apps/web/src/pages/dashboard-data.js";
 import type { DashboardSnapshot } from "../apps/web/src/dashboard-client.js";
 
 const snapshot: DashboardSnapshot = {
   tenantName: "Northstar Labs",
-  packageName: "Social Media Agency",
+  packageName: "Installed Package",
   requiredProviders: ["OpenAI"],
   optionalProviders: ["customer-owned storage"],
   artifactTtlHours: 24,
@@ -50,6 +52,7 @@ describe("dashboard data helpers", () => {
       connectedProviders: createInitialConnectedProviders(),
       googleDriveConnected: false,
       dropboxConnected: false,
+      workflowStartAvailable: false,
       workflowsPaused: false,
       resultApprovalStates: {}
     });
@@ -58,7 +61,7 @@ describe("dashboard data helpers", () => {
       expect.objectContaining({ task: "Review Campaign Asset List", status: "Ready to review", nextAction: "Open Results" }),
       expect.objectContaining({ task: "Connect OpenAI", status: "Needs connection", nextAction: "Open Providers" }),
       expect.objectContaining({ task: "Reconnect export destination", status: "Needs connection", nextAction: "Open Files" }),
-      expect.objectContaining({ task: "Launch the next approved workflow", status: "Blocked", nextAction: "Open Workflows" })
+      expect.objectContaining({ task: "Open the runtime shell to launch workflows", status: "Blocked", nextAction: "Open Workflows" })
     ]);
   });
 
@@ -67,6 +70,7 @@ describe("dashboard data helpers", () => {
       connectedProviders: createInitialConnectedProviders(),
       googleDriveConnected: false,
       dropboxConnected: false,
+      workflowStartAvailable: false,
       workflowsPaused: false,
       resultApprovalStates: { "artifact-1": "Awaiting review" }
     });
@@ -120,6 +124,34 @@ describe("dashboard data helpers", () => {
       value: "Normal traffic",
       detail: "Slight delays are possible while current work clears.",
       gaugePercent: 56
+    });
+  });
+
+  it("keeps ready-state status copy truthful in preview-only shells", () => {
+    expect(
+      getStatusCopy({
+        packageReady: true,
+        workflowStartAvailable: false,
+        runStatus: "ready",
+        workflowsPaused: false
+      })
+    ).toBe("Preview mode is review-only. Open the authenticated runtime shell to queue a real workflow run.");
+  });
+
+  it("keeps the ready-state current focus generic instead of package-theme specific", () => {
+    expect(
+      getCurrentFocus({
+        packageReady: true,
+        providerReady: true,
+        workflowStartAvailable: true,
+        runStatus: "ready",
+        workflowsPaused: false,
+        selectedApprovalState: "Awaiting review",
+        googleDriveConnected: false,
+        dropboxConnected: false
+      })
+    ).toMatchObject({
+      title: "Launch the next approved workflow"
     });
   });
 });

@@ -256,7 +256,7 @@ export function ShellLayout(props: ShellLayoutProps) {
               fontSize: "0.88rem"
             }}
           >
-            Social Media Package
+            Installed Package
           </span>
         </div>
 

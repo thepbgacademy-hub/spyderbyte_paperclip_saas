@@ -31,7 +31,7 @@ test("operator can pause workflows while members cannot see pause controls", asy
     window.__WF_DASHBOARD_BOOTSTRAP__ = {
       initialSnapshot: {
         tenantName: "Northstar Labs",
-        packageName: "Social Media Agency",
+        packageName: "Installed Package",
         requiredProviders: ["OpenAI"],
         optionalProviders: ["customer-owned storage"],
         artifactTtlHours: 24,

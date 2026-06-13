@@ -28,7 +28,7 @@ export function createAppShellHandler(options: {
         authorization: request.headers.authorization ?? "",
         ...(request.headers.cookie ? { cookie: request.headers.cookie } : {})
       });
-      const bootstrap = { initialResponse };
+      const bootstrap = { runtimeApiEnabled: true, initialResponse };
       assertWealthFactoryResponse(bootstrap);
 
       return {

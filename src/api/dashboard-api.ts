@@ -84,7 +84,7 @@ export function createDashboardApi(deps: DashboardApiDeps) {
       const response = {
         tenantId: session.tenantId,
         role: session.role,
-        workflows,
+        workflows: toVisibleDashboardWorkflows(workflows),
         packages,
         artifacts,
         providerConnections,
@@ -109,6 +109,12 @@ export function createDashboardApi(deps: DashboardApiDeps) {
         throw new DashboardApiRequestError();
       }
 
+      const workflows = await deps.listWorkflows({ tenantId: session.tenantId, userId: session.userId });
+      const visibleWorkflow = toVisibleDashboardWorkflows(workflows).find((workflow) => String(workflow.id ?? "") === workflowId);
+      if (!visibleWorkflow || visibleWorkflow.startEnabled === false) {
+        throw new DashboardApiRequestError();
+      }
+
       if (!deps.startWorkflowRun) {
         throw new DashboardApiServiceUnavailableError();
       }
@@ -129,4 +135,15 @@ export function createDashboardApi(deps: DashboardApiDeps) {
       }
     }
   };
+}
+
+function toVisibleDashboardWorkflows(workflows: unknown[]): Record<string, unknown>[] {
+  return workflows
+    .filter((workflow) => workflow && typeof workflow === "object")
+    .map((workflow) => workflow as Record<string, unknown>)
+    .filter((workflow) => String(workflow.id ?? "").length > 0 && workflow.enabled !== false)
+    .map((workflow) => ({
+      ...workflow,
+      startEnabled: workflow.startEnabled !== false
+    }));
 }
