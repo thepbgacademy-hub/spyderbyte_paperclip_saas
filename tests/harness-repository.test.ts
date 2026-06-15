@@ -43,6 +43,11 @@ type DisposableHarnessDatabase = {
   stop(): Promise<void>;
 };
 
+type HarnessProofRepositoryClient = {
+  repository: ReturnType<typeof createPostgresHarnessRepository>;
+  close(): Promise<void>;
+};
+
 const describeIfDocker = dockerAvailable ? describe : describe.skip;
 
 let disposableHarnessDb: DisposableHarnessDatabase | null = null;
@@ -1197,6 +1202,125 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
   );
 
   it(
+    "isolates concurrent execution claims to one winner per lane while other runs remain claimable through the real Postgres repository mapping",
+    async () => {
+      const database = requireDisposableHarnessDatabase();
+      const setupClient = new Client({ connectionString: database.connectionString });
+      await setupClient.connect();
+      const primaryClaimer = await createDisposableHarnessProofRepositoryClient(database.connectionString);
+      const competingClaimer = await createDisposableHarnessProofRepositoryClient(database.connectionString);
+      const isolatedRunClaimer = await createDisposableHarnessProofRepositoryClient(database.connectionString);
+
+      try {
+        const tenantId = randomUUID();
+        const secondTenantId = randomUUID();
+        await resetHarnessProofDatabase(setupClient);
+        await seedHarnessProofPrerequisites(setupClient, tenantId);
+        await seedHarnessProofPrerequisites(setupClient, secondTenantId);
+
+        const firstRun = createHarnessRunRecord({
+          tenantId,
+          workflowId: "wf_connect_first_workflow",
+          packageId: "pkg_bib_connect",
+          orchestratorPersona: "ceo",
+          runtimeContext: {
+            providerKind: "openai_api",
+            credentialLabel: "Primary OpenAI"
+          }
+        });
+        const secondRun = createHarnessRunRecord({
+          tenantId: secondTenantId,
+          workflowId: "wf_connect_first_workflow",
+          packageId: "pkg_bib_connect",
+          orchestratorPersona: "ceo",
+          runtimeContext: {
+            providerKind: "openai_api",
+            credentialLabel: "Primary OpenAI"
+          }
+        });
+        const contestedCard = {
+          ...createHarnessCardRecord({
+            runId: firstRun.id,
+            persona: "cfo",
+            title: "Pressure-test the pricing lane",
+            deliverableType: "pricing_review"
+          }),
+          state: "approved" as const
+        };
+        const isolatedCard = {
+          ...createHarnessCardRecord({
+            runId: secondRun.id,
+            persona: "researcher",
+            title: "Research the launch lane",
+            deliverableType: "research_brief"
+          }),
+          state: "approved" as const
+        };
+
+        await primaryClaimer.repository.insertRun(firstRun);
+        await primaryClaimer.repository.insertRun(secondRun);
+        await primaryClaimer.repository.insertCard(contestedCard);
+        await primaryClaimer.repository.insertCard(isolatedCard);
+
+        const [firstClaim, duplicateClaim, isolatedClaim] = await Promise.all([
+          primaryClaimer.repository.claimCardForExecution({
+            cardId: contestedCard.id,
+            expectedState: "approved"
+          }),
+          competingClaimer.repository.claimCardForExecution({
+            cardId: contestedCard.id,
+            expectedState: "approved"
+          }),
+          isolatedRunClaimer.repository.claimCardForExecution({
+            cardId: isolatedCard.id,
+            expectedState: "approved"
+          })
+        ]);
+
+        expect([firstClaim, duplicateClaim].filter((candidate) => candidate !== null)).toHaveLength(1);
+        expect(firstClaim ?? duplicateClaim).toEqual(
+          expect.objectContaining({
+            id: contestedCard.id,
+            runId: firstRun.id,
+            state: "working",
+            executionClaimToken: expect.any(String),
+            executionClaimedAt: expect.any(String)
+          })
+        );
+        expect(isolatedClaim).toEqual(
+          expect.objectContaining({
+            id: isolatedCard.id,
+            runId: secondRun.id,
+            state: "working",
+            executionClaimToken: expect.any(String),
+            executionClaimedAt: expect.any(String)
+          })
+        );
+        await expect(primaryClaimer.repository.getCard(contestedCard.id)).resolves.toEqual(
+          expect.objectContaining({
+            id: contestedCard.id,
+            state: "working"
+          })
+        );
+        await expect(primaryClaimer.repository.getCard(isolatedCard.id)).resolves.toEqual(
+          expect.objectContaining({
+            id: isolatedCard.id,
+            state: "working"
+          })
+        );
+      } finally {
+        await Promise.all([
+          primaryClaimer.close(),
+          competingClaimer.close(),
+          isolatedRunClaimer.close(),
+          setupClient.end()
+        ]);
+      }
+    },
+    120_000
+  );
+
+  it(
     "round-trips harness card continuity snapshots through the real Postgres repository mapping",
     async () => {
       const database = requireDisposableHarnessDatabase();
@@ -1950,6 +2074,25 @@ function hasDockerRuntime() {
     return false;
   }
   return spawnSync("docker", ["info", "--format", "{{.ServerVersion}}"], { stdio: "ignore" }).status === 0;
+}
+
+async function createDisposableHarnessProofRepositoryClient(
+  connectionString: string
+): Promise<HarnessProofRepositoryClient> {
+  const client = new Client({ connectionString });
+  await client.connect();
+
+  return {
+    repository: createPostgresHarnessRepository({
+      query: async (sql: string, values: readonly unknown[]) => {
+        const result = await client.query(sql, [...values]);
+        return { rows: result.rows };
+      }
+    }),
+    async close() {
+      await client.end();
+    }
+  };
 }
 
 async function startDisposableHarnessDatabase(): Promise<DisposableHarnessDatabase> {

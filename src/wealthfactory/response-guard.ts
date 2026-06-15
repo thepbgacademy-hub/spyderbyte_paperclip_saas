@@ -19,11 +19,22 @@ const FORBIDDEN_FIELDS = new Set([
   "oauthTokenRef",
   "refreshTokenRef",
   "codexHome",
-  "authStateRef"
+  "authStateRef",
+  "orchestratorHandoff",
+  "boardContext",
+  "laneExecution",
+  "dispatchHandoff",
+  "executionClaim",
+  "continuityContext",
+  "outcomeContract",
+  "postOutcomeDirectives",
+  "attentionTransition",
+  "postOutcomeAction",
+  "nextDispatch"
 ]);
 
 const FORBIDDEN_TEXT =
-  /paperclip|prompt|skill|command|tool call|raw activity|internal log|service token|vault:\/\/|wf_secret_|access_token=|api[_-]?key[:=]|authorization[:=]|Bearer\s+|sk-[A-Za-z0-9_-]+|pc-(company|run|agent|goal|task)-/i;
+  /paperclip|prompt|skill|command|tool call|raw activity|internal log|service token|vault:\/\/|wf_secret_|access_token=|api[_-]?key[:=]|authorization[:=]|Bearer\s+|sk-[A-Za-z0-9_-]+|pc-(company|run|agent|goal|task)-|orchestratorhandoff|boardcontext|laneexecution|dispatchhandoff|executionclaim|continuitycontext|outcomecontract|postoutcomedirectives|attentiontransition|postoutcomeaction|nextdispatch/i;
 
 export function assertWealthFactoryResponse(value: unknown): void {
   visit(value);
@@ -77,7 +88,7 @@ function isForbiddenField(key: string): boolean {
   const normalized = key.toLowerCase().replace(/[_\-\s]/g, "");
   return (
     FORBIDDEN_FIELDS.has(key) ||
-    /paperclip|companyid|prompt|skill|command|agent|toolcall|rawactivity|internallog|secretref|servicetoken|apikey|token|password|credential|oauth|refresh|wfsecret|codexhome|authstateref/.test(
+    /paperclip|companyid|prompt|skill|command|agent|toolcall|rawactivity|internallog|secretref|servicetoken|apikey|token|password|credential|oauth|refresh|wfsecret|codexhome|authstateref|orchestratorhandoff|boardcontext|laneexecution|dispatchhandoff|executionclaim|continuitycontext|outcomecontract|postoutcomedirectives|attentiontransition|postoutcomeaction|nextdispatch/.test(
       normalized
     )
   );

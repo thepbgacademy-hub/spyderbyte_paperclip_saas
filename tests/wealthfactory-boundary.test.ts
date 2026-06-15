@@ -377,3 +377,51 @@ describe("Wealth Factory boundary layer", () => {
     expect(toPublicWorkflowError(new Error("prompt stack trace"))).toEqual({ code: "workflow_failed" });
   });
 });
+  it("blocks serialized harness and worker runtime envelope text on public payloads", () => {
+    expect(() => assertWealthFactoryResponse({ note: "boardContext should never be customer-facing" })).toThrow(
+      "Forbidden customer-facing text"
+    );
+    expect(() =>
+      assertWealthFactoryResponse({
+        note: JSON.stringify({
+          boardContext: { runState: "working" },
+          orchestratorHandoff: { dispatchReason: "resume" }
+        })
+      })
+    ).toThrow("Forbidden customer-facing text");
+  });
+
+  it("rejects harness and worker runtime envelope fields on public payloads", () => {
+    const publicResponse = {
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "queued"
+    };
+    const runtimeOnlyFields = [
+      "orchestratorHandoff",
+      "boardContext",
+      "laneExecution",
+      "dispatchHandoff",
+      "executionClaim",
+      "continuityContext",
+      "outcomeContract",
+      "postOutcomeDirectives",
+      "attentionTransition",
+      "postOutcomeAction",
+      "nextDispatch"
+    ];
+
+    for (const field of runtimeOnlyFields) {
+      expect(() =>
+        assertWealthFactoryResponse({
+          ...publicResponse,
+          runtimeLeak: {
+            [field]: {
+              leaked: true
+            }
+          }
+        })
+      ).toThrow("Forbidden customer-facing field");
+    }
+  });
+

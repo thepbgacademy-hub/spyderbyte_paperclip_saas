@@ -392,16 +392,17 @@ export function createWorkerRuntime(options: {
         installedPackages: listInstalledPackageDefinitions({ installedPackageIds: [workflowIdentity.workflowPackageId] })
       });
       const snapshot = workflowIdentity.workflowDefinitionSnapshot;
-      if (snapshot) {
-        const definition = registry.getDefinition(workflowIdentity.workflowId);
-        if (
-          definition.packageId !== snapshot.packageId ||
-          (definition.executionEngine ?? "paperclip") !== snapshot.executionEngine ||
-          JSON.stringify([...definition.requiredCapabilities]) !== JSON.stringify([...snapshot.requiredCapabilities]) ||
-          (definition.providerKind ?? null) !== (snapshot.providerKind ?? null)
-        ) {
-          throw new Error(`Stored workflow definition snapshot no longer matches the current overlay catalog for ${workflowIdentity.workflowId}`);
-        }
+      if (!snapshot) {
+        throw new Error(`Stored workflow definition snapshot missing for overlay workflow ${workflowIdentity.workflowId}`);
+      }
+      const definition = registry.getDefinition(workflowIdentity.workflowId);
+      if (
+        definition.packageId !== snapshot.packageId ||
+        (definition.executionEngine ?? "paperclip") !== snapshot.executionEngine ||
+        JSON.stringify([...definition.requiredCapabilities]) !== JSON.stringify([...snapshot.requiredCapabilities]) ||
+        (definition.providerKind ?? null) !== (snapshot.providerKind ?? null)
+      ) {
+        throw new Error(`Stored workflow definition snapshot no longer matches the current overlay catalog for ${workflowIdentity.workflowId}`);
       }
       return registry;
     }

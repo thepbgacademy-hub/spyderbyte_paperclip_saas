@@ -475,6 +475,39 @@ describe("worker runtime", () => {
     await expect(processPromise).resolves.toEqual({
       runId: "run-1",
       workflowId: "workflow-1",
+  it("fails closed when a persisted overlay workflow identity is missing its definition snapshot", async () => {
+    const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-example-audit",
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf-example-audit"
+      }),
+      workerInstanceId: "worker-test-overlay-missing-snapshot"
+    });
+    const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
+    acidRepository?.getWorkflowRunIdentity?.mockResolvedValueOnce({
+      workflowId: "wf-example-audit",
+      workflowTemplateId: null,
+      workflowIdentityKind: "installed_package_overlay",
+      workflowPackageId: "pkg-example-audit",
+      workflowDefinitionSnapshot: null
+    });
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf-example-audit",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf-example-audit:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).rejects.toThrow(/Stored workflow definition snapshot missing/i);
+
+    await runtime.close();
+  });
+
       status: "queued"
     });
     await Promise.all([closePromise, runtime.close()]);
@@ -859,11 +892,17 @@ describe("worker runtime", () => {
       })
     ).resolves.toEqual({
       runId: "run-1",
+    expect(publicLaneDispatch).not.toContain("\"boardContext\"");
+    expect(publicLaneDispatch).not.toContain("\"orchestratorHandoff\"");
       workflowId: "wf_connect_first_workflow",
+    expect(publicLaneDispatch).not.toContain("\"postOutcomeDirectives\"");
       status: "running"
     });
 
     expect(nativeExecutor.execute).toHaveBeenCalledWith(
+    expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"boardContext\""));
+    expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"orchestratorHandoff\""));
+    expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"postOutcomeDirectives\""));
       expect.objectContaining({
         tenantId: "tenant-1",
         runId: "run-1",
@@ -6223,6 +6262,203 @@ describe("worker runtime", () => {
       {
         id: "card_cmo",
         runId: "run-1",
+  it("keeps harness fairness and backpressure tenant-safe when one tenant already occupies its lane slot", async () => {
+    const firstDeferred = createDeferred<void>();
+    const thirdDeferred = createDeferred<void>();
+    const buildRun = (runId: string, tenantId: string) => ({
+      id: runId,
+      tenantId,
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      state: "active" as const,
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      },
+      createdAt: "2026-05-21T10:00:00.000Z",
+      updatedAt: "2026-05-21T10:00:00.000Z"
+    });
+    const buildPlanningCard = (runId: string) => ({
+      id: `card_ceo_${runId}`,
+      runId,
+      parentCardId: null,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan",
+      state: "planning" as const,
+      executionClaimToken: null,
+      executionClaimedAt: null,
+      createdAt: "2026-05-21T10:00:00.000Z",
+      updatedAt: "2026-05-21T10:00:00.000Z"
+    });
+    const buildWorkingCard = (runId: string, state: "approved" | "working" = "approved") => ({
+      id: `card_cfo_${runId}`,
+      runId,
+      parentCardId: `card_ceo_${runId}`,
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review",
+      state,
+      executionClaimToken: state === "working" ? `claim-${runId}` : null,
+      executionClaimedAt: state === "working" ? "2026-05-21T10:04:00.000Z" : null,
+      createdAt: "2026-05-21T10:01:00.000Z",
+      updatedAt: "2026-05-21T10:04:00.000Z"
+    });
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow",
+        WF_WORKER_CONCURRENCY: "2",
+        WF_WORKER_MAX_ACTIVE_PER_TENANT: "1"
+      }),
+      workerInstanceId: "worker-test-harness-fairness",
+      onHarnessLaneReady: vi.fn(async (payload) => {
+        if (payload.runId === "run-1") {
+          await firstDeferred.promise;
+        }
+        if (payload.runId === "run-3") {
+          await thirdDeferred.promise;
+        }
+      })
+    });
+
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.getRun.mockImplementation(async (runId: string) => buildRun(runId, runId === "run-3" ? "tenant-2" : "tenant-1"));
+    harnessRepository.listCardsForRun.mockImplementation(async (runId: string) => [
+      buildPlanningCard(runId),
+      buildWorkingCard(runId)
+    ]);
+    harnessRepository.claimCardForExecution.mockImplementation(async ({ cardId }) => {
+      const runId = String(cardId).replace("card_cfo_", "");
+      return buildWorkingCard(runId, "working");
+    });
+    harnessRepository.getCard.mockImplementation(async (cardId: string) => {
+      if (!String(cardId).startsWith("card_cfo_")) {
+        return null;
+      }
+      const runId = String(cardId).replace("card_cfo_", "");
+      return buildWorkingCard(runId, "working");
+    });
+    harnessRepository.transitionCardState.mockImplementation(async ({ cardId, state }) => {
+      const runId = String(cardId).replace("card_cfo_", "");
+      return {
+        ...buildWorkingCard(runId, state === "working" ? "working" : "approved"),
+        state,
+        executionClaimToken: state === "working" ? `claim-${runId}` : null,
+        executionClaimedAt: state === "working" ? "2026-05-21T10:04:00.000Z" : null
+      };
+    });
+    harnessRepository.getCardContinuity.mockImplementation(async (cardId: string) => {
+      const runId = String(cardId).replace("card_cfo_", "");
+      return {
+        cardId,
+        runId,
+        continuitySource: "state_transition",
+        continuitySummary: "CFO should continue this active pricing review lane: Pressure-test the pricing lane.",
+        latestResultSummary: "Initial pricing floor is stable.",
+        absorbedWorkItems: ["Re-check discount floor", "Verify competitor anchor notes"],
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      };
+    });
+    harnessRepository.listCardContinuityForRun.mockImplementation(async (runId: string) => [
+      {
+        cardId: `card_cfo_${runId}`,
+        runId,
+        continuitySource: "resume_override",
+        continuitySummary: "Resume the pricing lane from the revised assumptions workbook.",
+        latestResultSummary: "Initial pricing floor is stable.",
+        absorbedWorkItems: ["Re-check discount floor", "Verify competitor anchor notes"],
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      }
+    ]);
+
+    stdoutWrite.mockClear();
+    const startedRunIds = () =>
+      stdoutWrite.mock.calls
+        .map(([value]) => String(value))
+        .filter(
+          (value) =>
+            value.includes("\"type\":\"wealth_factory_worker_run\"") &&
+            value.includes("\"event\":\"started\"")
+        )
+        .map((value) => JSON.parse(value).runId as string);
+
+    const firstPromise = runtime.processQueuePayload({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      createdByUserId: "user-1",
+      idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+      createdAt: new Date().toISOString()
+    });
+    const secondPromise = runtime.processQueuePayload({
+      tenantId: "tenant-1",
+      runId: "run-2",
+      workflowId: "wf_connect_first_workflow",
+      createdByUserId: "user-1",
+      idempotencyKey: "tenant-1:wf_connect_first_workflow:run-2",
+      createdAt: new Date().toISOString()
+    });
+    const thirdPromise = runtime.processQueuePayload({
+      tenantId: "tenant-2",
+      runId: "run-3",
+      workflowId: "wf_connect_first_workflow",
+      createdByUserId: "user-2",
+      idempotencyKey: "tenant-2:wf_connect_first_workflow:run-3",
+      createdAt: new Date().toISOString()
+    });
+
+    while (startedRunIds().length < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    expect(startedRunIds().slice(0, 2)).toEqual(["run-1", "run-3"]);
+
+    const fairnessSnapshots = stdoutWrite.mock.calls
+      .map(([value]) => String(value))
+      .filter((value) => value.includes("\"type\":\"wealth_factory_worker_fairness\""))
+      .map((value) => JSON.parse(value));
+    expect(
+      fairnessSnapshots.some(
+        (snapshot) =>
+          snapshot.event === "queued" &&
+          snapshot.tenantId === "tenant-1" &&
+          snapshot.activeByTenant?.["tenant-1"] === 1 &&
+          snapshot.queuedByTenant?.["tenant-1"] === 1
+      )
+    ).toBe(true);
+
+    firstDeferred.resolve();
+    while (!startedRunIds().includes("run-2")) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    expect(startedRunIds().slice(0, 3)).toEqual(["run-1", "run-3", "run-2"]);
+
+    thirdDeferred.resolve();
+
+    await expect(Promise.all([firstPromise, secondPromise, thirdPromise])).resolves.toEqual([
+      {
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        status: "running"
+      },
+      {
+        runId: "run-2",
+        workflowId: "wf_connect_first_workflow",
+        status: "running"
+      },
+      {
+        runId: "run-3",
+        workflowId: "wf_connect_first_workflow",
+        status: "running"
+      }
+    ]);
+
+    await runtime.close();
+  }, 10_000);
+
         parentCardId: "card_ceo",
         persona: "cmo",
         title: "Prepare launch messaging",

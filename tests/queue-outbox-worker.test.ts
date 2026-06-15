@@ -134,6 +134,55 @@ describe("queue outbox worker", () => {
     expect(repository.markWorkflowRunQueued).toHaveBeenCalledOnce();
   });
 
+  it("re-enqueues stale installed-package overlay claims with the public workflow identity and package binding unchanged", async () => {
+    const overlayOutboxRecord = {
+      ...outboxRecord,
+      runId: "run-overlay-1",
+      workflowId: "wf-example-audit",
+      workflowTemplateId: null,
+      workflowIdentityKind: "installed_package_overlay" as const,
+      workflowPackageId: "pkg-example-audit",
+      idempotencyKey: "tenant-1:wf-example-audit:run-overlay-1",
+      claimSource: "stale_claim" as const
+    };
+    const repository = {
+      claimWorkflowQueueOutbox: vi.fn().mockResolvedValue([overlayOutboxRecord]),
+      markWorkflowRunQueued: vi.fn().mockResolvedValue({ marked: true }),
+      confirmWorkflowRunQueued: vi.fn().mockResolvedValue({ confirmed: false }),
+      releaseWorkflowQueueOutbox: vi.fn()
+    };
+    const enqueuer = {
+      enqueueOnce: vi.fn().mockResolvedValue("enqueued")
+    };
+    const worker = createQueueOutboxWorker({ repository, enqueuer });
+
+    await expect(worker.drain({ limit: 5 })).resolves.toEqual({ claimed: 1, enqueued: 1, failed: 0 });
+    expect(repository.confirmWorkflowRunQueued).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-overlay-1",
+      outboxId: "outbox-1",
+      claimToken: "11111111-1111-4111-8111-111111111111"
+    });
+    expect(enqueuer.enqueueOnce).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      userId: "user-1",
+      workflowId: "wf-example-audit",
+      workflowTemplateId: null,
+      workflowIdentityKind: "installed_package_overlay",
+      workflowPackageId: "pkg-example-audit",
+      runId: "run-overlay-1",
+      idempotencyKey: "tenant-1:wf-example-audit:run-overlay-1"
+    });
+    expect(repository.markWorkflowRunQueued).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-overlay-1",
+      outboxId: "outbox-1",
+      claimToken: "11111111-1111-4111-8111-111111111111",
+      idempotencyKey: "tenant-1:wf-example-audit:run-overlay-1"
+    });
+    expect(repository.releaseWorkflowQueueOutbox).not.toHaveBeenCalled();
+  });
+
   it("releases claimed outbox rows for retry when enqueue fails", async () => {
     const repository = {
       claimWorkflowQueueOutbox: vi.fn().mockResolvedValue([outboxRecord]),

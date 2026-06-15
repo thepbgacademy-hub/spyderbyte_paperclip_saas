@@ -448,6 +448,88 @@ describe("ACID guard repository", () => {
     expect(sql).toMatch(/status = 'claimed'[\s\S]+claimed_at < now\(\) - \(\$2::int \* interval '1 second'\)/i);
   });
 
+  it("maps template-only pre-cutover outbox rows onto the durable public identity shape when claiming work", async () => {
+    const client = createSequencedClient([
+      [
+        {
+          id: "outbox-legacy-1",
+          tenant_id: "tenant-1",
+          run_id: "run-legacy-1",
+          public_workflow_id: null,
+          workflow_template_id: "workflow-legacy-1",
+          workflow_identity_kind: null,
+          workflow_package_id: null,
+          created_by_user_id: "user-1",
+          idempotency_key: "tenant-1:workflow-legacy-1:run-legacy-1",
+          attempts: 2,
+          claim_token: "22222222-2222-4222-8222-222222222222",
+          previous_status: "pending"
+        }
+      ]
+    ]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(repository.claimWorkflowQueueOutbox({ limit: 1 })).resolves.toEqual([
+      {
+        id: "outbox-legacy-1",
+        tenantId: "tenant-1",
+        runId: "run-legacy-1",
+        workflowId: "workflow-legacy-1",
+        workflowTemplateId: "workflow-legacy-1",
+        workflowIdentityKind: "tenant_template",
+        workflowPackageId: null,
+        userId: "user-1",
+        idempotencyKey: "tenant-1:workflow-legacy-1:run-legacy-1",
+        attempts: 2,
+        claimToken: "22222222-2222-4222-8222-222222222222",
+        claimSource: "pending_retry"
+      }
+    ]);
+
+    const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
+    expect(sql).toMatch(/returning outbox\.id, outbox\.tenant_id, outbox\.run_id, outbox\.public_workflow_id/i);
+    expect(sql).toMatch(/outbox\.workflow_identity_kind/i);
+  });
+
+  it("preserves installed-package overlay public workflow identity when reclaiming stale outbox rows", async () => {
+    const client = createSequencedClient([
+      [
+        {
+          id: "outbox-overlay-1",
+          tenant_id: "tenant-1",
+          run_id: "run-overlay-1",
+          public_workflow_id: "wf-example-audit",
+          workflow_template_id: null,
+          workflow_identity_kind: "installed_package_overlay",
+          workflow_package_id: "pkg-example-audit",
+          created_by_user_id: "user-1",
+          idempotency_key: "tenant-1:wf-example-audit:run-overlay-1",
+          attempts: 4,
+          claim_token: "33333333-3333-4333-8333-333333333333",
+          previous_status: "claimed"
+        }
+      ]
+    ]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(repository.claimWorkflowQueueOutbox({ limit: 1, staleClaimSeconds: 60 })).resolves.toEqual([
+      {
+        id: "outbox-overlay-1",
+        tenantId: "tenant-1",
+        runId: "run-overlay-1",
+        workflowId: "wf-example-audit",
+        workflowTemplateId: null,
+        workflowIdentityKind: "installed_package_overlay",
+        workflowPackageId: "pkg-example-audit",
+        userId: "user-1",
+        idempotencyKey: "tenant-1:wf-example-audit:run-overlay-1",
+        attempts: 4,
+        claimToken: "33333333-3333-4333-8333-333333333333",
+        claimSource: "stale_claim"
+      }
+    ]);
+  });
+
   it("releases only the claimed outbox row that still owns the claim token", async () => {
     const client = createSequencedClient([[{ id: "outbox-1" }]]);
     const repository = createAcidGuardRepository(createTransactionRunner(client));

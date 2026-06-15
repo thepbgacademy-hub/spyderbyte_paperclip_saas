@@ -76,6 +76,33 @@ describe("authenticated dashboard API", () => {
     await expect(api.listDashboard({ authorization: "Bearer valid" })).rejects.toThrow("Forbidden customer-facing field");
   });
 
+  it("rejects dashboard payloads that leak harness worker envelope metadata", async () => {
+    const api = createDashboardApi({
+      authenticate: vi.fn().mockResolvedValue(session),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      listWorkflows: vi.fn().mockResolvedValue([
+        {
+          id: "wf-leak",
+          name: "Connect First Workflow",
+          boardContext: {
+            runState: "working"
+          }
+        }
+      ]),
+      listPackages: vi.fn().mockResolvedValue([]),
+      listArtifacts: vi.fn().mockResolvedValue([]),
+      listProviderConnections: vi.fn().mockResolvedValue([]),
+      listStorageConnectors: vi.fn().mockResolvedValue([]),
+      getPlatformLoad: vi.fn().mockResolvedValue({
+        level: "light",
+        summary: "Light traffic",
+        detail: "New workflows should begin processing quickly."
+      })
+    });
+
+    await expect(api.listDashboard({ authorization: "Bearer valid" })).rejects.toThrow("Forbidden customer-facing field");
+  });
+
   it("rejects storage connector summaries that leak private connector handles", async () => {
     const api = createDashboardApi({
       authenticate: vi.fn().mockResolvedValue(session),
