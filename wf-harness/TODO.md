@@ -12,7 +12,7 @@ This file tracks the new harness subproject only.
 - [x] Choose execution mode for implementing the first harness slice.
 - [x] Implement the first harness slice with subagent-driven execution.
 - [x] Verify the first harness slice with full lint/build/test/E2E fail-then-pass.
-- [ ] Execute the native replacement phases from `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`.
+- [x] Execute the native replacement phases from `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md`.
   - [x] Phase 1: Native executor skeleton.
   - [x] Phase 2: First native provider lane.
   - [x] Phase 3: First native workflow family.
@@ -43,6 +43,21 @@ This file tracks the new harness subproject only.
   - [x] Phase 28: Formalize the private worker `orchestratorHandoff` contract so native child execution receives explicit bounded handoff guidance without widening dashboard truth, queue payloads, or public policy seams.
   - [x] Phase 29: Complete the bounded public start-truth consistency seam so authenticated runtime shells do not fall back to fake local workflow cards, preview/bootstrap shells stay review-only, installed-package overlays stay explicit and tenant-scoped, visible-but-not-startable workflows fail closed on public start, and the next phase can return to the private worker/native seam instead of widening public start again.
   - [x] Phase 30: Add a private state-by-state `postOutcomeDirectives` contract to the worker execution envelope and native prompt path so child execution sees bounded engine follow-through without widening queue, dashboard, or public seams.
+  - [x] Phase 31: Add a private bounded `boardContext` snapshot to the worker execution envelope and native prompt path so child execution sees parent-lane and sibling-lane posture without widening queue, dashboard, or public seams.
+  - [x] Phase 32: Enforce the private native outcome contract end to end so `cancelled` stays a first-class native lane outcome instead of collapsing into invalid blocked fallback behavior.
+  - [x] Phase 33: Extract native workflow-family registry definitions from the executor implementation so future native-family additions stay bounded, lower-risk, and behavior-preserving.
+  - [x] Phase 34: Extract shared worker prompt-context formatting into one private utility used by the native executor and native OpenAI provider path, and fix truncated plain-text summary normalization so the shared path stays behavior-preserving and tenant-safe.
+  - [x] Phase 35: Harden the native decision parser so private worker/native execution accepts only the exact `{ state, summary }` JSON response contract, rejects extra fields and surrounding prose, and fail-closes invalid native decisions without widening runtime policy.
+  - [x] Phase 36: Extract the hardened native decision parser into a dedicated private worker module and pin the multi-block trailing-JSON fail-closed seam without widening runtime policy.
+- [x] Execute the audit correction phases from `wf-harness/docs/plans/2026-06-14-wf-audit-correction-plan.md`.
+  - [x] Phase A: Freeze deferred metadata and low-yield proof growth, lock the current `memoryBoundary` and thin-copy seams, record the Docker-backed proof portability decision, and keep overlay examples neutral.
+  - [x] Phase B: Complete remaining CEO governance rules.
+  - [x] Phase C: Build the first bounded AI CEO loop.
+  - [x] Phase D: Build the first multi-step native worker lane.
+  - [x] Phase E: Add CEO next-lane decisioning.
+  - [x] Phase F: Close the Hermes-style dashboard benchmark.
+  - [x] Phase G: Close harness-specific proof gaps.
+  - [x] Phase H: Collapse the `memoryBoundary` seam to a bounded launch-safe summary.
 
 ## V1 Build Targets
 
@@ -74,13 +89,14 @@ This file tracks the new harness subproject only.
 ## Progress Since Bootstrap
 
 - [x] Add true database-backed transaction coverage for the deferred proposal-approval seam so approval-before-card-insert ordering is proven against the real persistence layer.
-- [ ] Decide whether Docker-backed harness integration proofs need a CI lane or alternate local fallback so the deferred-FK contract is exercised outside Docker-capable machines too.
+- [x] Keep the deferred-FK integration proof Docker-backed as the canonical path, require a Docker-capable CI lane for portable shared evidence, and let Dockerless local machines rely on focused non-Docker fallback verification plus CI results instead of a second local integration harness.
 - [x] Add transaction-client coverage proving the approval update and child-card insert share one leased transaction client and roll back together on failure.
 - [x] Expand beyond CEO direct-child creation into richer persisted card progression and result-recording mutation paths.
 - [x] Add fuller CEO approval logic for sub-card requests and card-count discipline beyond the current duplicate-lane/open-cap guardrails.
   - [x] Make repeated unresolved requests reuse the latest earlier unresolved governance hold instead of opening fresh duplicate lanes when no active-lane reuse or valid handoff applies.
   - [x] Preserve direct CEO lane-cap requests as deferred governance instead of dropping them as hard conflicts when the board is already full.
   - [x] Keep pending-approval recommendation metadata aligned with completed-cycle and inherited unresolved-governance defer pressure instead of defaulting every proposed item to `approve`.
+  - [x] Keep same-persona / same-deliverable lane reuse bounded to true assignment refinements, so materially distinct follow-on work returns to CEO governance instead of silently folding into the active lane.
 - [x] Persist structured absorbed-work state when the CEO folds a proposal into an existing lane, so lane reuse becomes real engine state instead of comment-only history.
 - [x] Add first-class board decision memory so approvals, deferrals, denials, lane opens, and CEO completion become durable harness records instead of inferred chatter.
 - [x] Widen board decision memory with bounded policy reasons and recommendation/objection summaries instead of introducing a second generic notes store.
@@ -120,7 +136,11 @@ This file tracks the new harness subproject only.
 - [x] Keep public dashboard workflow visibility separate from public-start eligibility per workflow, and fail closed when a workflow is visible but not start-enabled on that public seam.
 - [x] Keep runtime/dashboard/browser workflow copy truthful to the selected workflow instead of hardcoding a media-calendar title on generic runtime-ready messaging.
 - [x] Keep private worker/native post-outcome follow-through explicit with a state-by-state envelope contract so child execution does not reconstruct resume/review/dispatch posture from generic run-state heuristics.
-- [ ] Deepen the private worker/native execution seam beyond `orchestratorHandoff` plus `postOutcomeDirectives` into the next bounded orchestrator/child execution slice without reopening public dashboard/start behavior.
+- [x] Deepen the private worker/native execution seam beyond `orchestratorHandoff` plus `postOutcomeDirectives` into the next bounded orchestrator/child execution slice without reopening public dashboard/start behavior.
+- [ ] Historical carry-forward after the audit-correction track resumes: continue deepening the private worker/native execution seam beyond `orchestratorHandoff`, `postOutcomeDirectives`, `boardContext`, full native outcome-state enforcement, bounded registry extraction, shared prompt-context extraction, parser-module extraction, and the first bounded multi-step worker lane without reopening public dashboard/start behavior.
+- [ ] Primary active track: run the audit correction phases in order, preserving the aligned safety rails while restoring the missing CEO-centered product loop and proof coverage.
+- [x] Next active slice after Phase E: close the Hermes-style dashboard benchmark by simplifying the board around current focus, active lanes, next actions, governance posture, and progress while keeping deferred `memoryBoundary` detail out of the primary launch surface.
+- [x] Next active slice after Phase F: close the remaining harness-specific proof gaps around tenant isolation under simultaneous harness activity, harness-specific fairness/backpressure, private metadata non-leakage, mixed-version/cutover safety, and the portable Docker-backed proof path.
 - [x] Keep worker/native child execution bounded by a private orchestrator handoff contract instead of reconstructing orchestrator intent from raw lane metadata or public dispatch telemetry.
 
 - [x] Read `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md` before continuing the active native replacement track.

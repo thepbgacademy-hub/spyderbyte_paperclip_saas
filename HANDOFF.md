@@ -331,7 +331,7 @@ Wealth Factory is sold in monthly subscription packages.
 - A workflow may never run outside the installed package/industry boundary.
 - A workflow may only pull prompts/rules/assets from the installed package's allowed asset registry.
 - A workflow may only use provider lanes allowed by the installed package and connected by the tenant.
-- Business Coach and Brand SEO are examples of separate packages with separate asset registries; they must not cross-load each other's prompts, rules, employees, templates, or Paperclip mappings.
+- Reference Advisory and Reference Audit are examples of separate packages with separate asset registries; they must not cross-load each other's prompts, rules, employees, templates, or Paperclip mappings.
 - Social Media is an example of a package that can require extra creative BYOK lanes such as image generation, video generation, social publishing, or media storage providers after install.
 - Wealth Factory ships with basic CEO/CFO-style employees.
 - Specialist employees are paid add-ons.

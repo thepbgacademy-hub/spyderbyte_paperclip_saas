@@ -274,6 +274,18 @@ describe("harness worker executor", () => {
           "Return exactly one bounded lane outcome: done only when this lane is complete, waiting when an explicit resume is needed, blocked when a prerequisite is missing, or cancelled when the lane should end without completion.",
         resumeDirective: "CFO should continue this active pricing review lane: Pressure-test the pricing lane."
       },
+      boardContext: {
+        runState: "active",
+        activeAttention: null,
+        parentLane: {
+          cardId: ceoCard.id,
+          persona: "ceo",
+          title: "Plan run",
+          deliverableType: "plan",
+          state: "queued"
+        },
+        siblingLanes: []
+      },
       dispatchHandoff: {
         kind: "initial_claim",
         kindLabel: "Initial lane claim",
@@ -489,6 +501,99 @@ describe("harness worker executor", () => {
     expect(secondEnvelope.executionClaim).toEqual(firstEnvelope.executionClaim);
   });
 
+  it("derives a bounded board context with parent lane, sibling posture, and active attention", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    const cmoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cmo",
+      title: "Draft launch messaging",
+      deliverableType: "launch_copy"
+    });
+    const cooCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "coo",
+      title: "Unblock delivery dependency",
+      deliverableType: "ops_handoff"
+    });
+    cfoCard.state = "approved";
+    cmoCard.state = "waiting";
+    cooCard.state = "blocked";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+    await repository.insertCard(cmoCard);
+    await repository.insertCard(cooCard);
+
+    const dispatchResolution = await buildHarnessWorkerDispatchResolution({
+      repository,
+      tenantId: "tenant-1",
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow"
+    });
+    const envelope = await buildHarnessWorkerExecutionEnvelope({
+      repository,
+      tenantId: "tenant-1",
+      dispatch: dispatchResolution.dispatch,
+      requiredCapabilities: ["text_generation"],
+      ...(dispatchResolution.lane ? { laneContext: dispatchResolution.lane } : {}),
+      ...(dispatchResolution.executionClaim ? { executionClaimContext: dispatchResolution.executionClaim } : {})
+    });
+
+    expect(envelope?.boardContext).toEqual({
+      runState: "active",
+      activeAttention: null,
+      parentLane: {
+        cardId: ceoCard.id,
+        persona: "ceo",
+        title: "Plan run",
+        deliverableType: "plan",
+        state: "queued"
+      },
+      siblingLanes: [
+        {
+          cardId: cmoCard.id,
+          persona: "cmo",
+          title: "Draft launch messaging",
+          deliverableType: "launch_copy",
+          state: "waiting"
+        },
+        {
+          cardId: cooCard.id,
+          persona: "coo",
+          title: "Unblock delivery dependency",
+          deliverableType: "ops_handoff",
+          state: "blocked"
+        }
+      ]
+    });
+  });
+
   it("derives private post-outcome directives for the current lane and next bounded dispatch", async () => {
     const repository = createInMemoryHarnessRepository();
     const run = createHarnessRunRecord({
@@ -563,10 +668,10 @@ describe("harness worker executor", () => {
       {
         outcomeState: "done",
         runState: "active",
-        actionKind: "dispatch_next_lane",
-        summary: `If this lane ends done, the next bounded handoff will dispatch CMO on card ${cmoCard.id}.`,
+        actionKind: "queue_ceo_review",
+        summary: "If this lane ends done, the board will queue CEO review (Next lane decision).",
         targetCardId: cmoCard.id,
-        targetPersona: "cmo"
+        reason: "next_lane_decision"
       },
       {
         outcomeState: "blocked",
@@ -1323,7 +1428,7 @@ describe("harness worker executor", () => {
     );
   });
 
-  it("claims one next approved lane after a worker commits a done outcome", async () => {
+  it("queues explicit CEO next-lane review after a worker commits a done outcome with another approved lane waiting", async () => {
     const repository = createInMemoryHarnessRepository();
     const run = createHarnessRunRecord({
       tenantId: "tenant-1",
@@ -1387,7 +1492,14 @@ describe("harness worker executor", () => {
         workflowId: "wf_connect_first_workflow",
         status: "committed",
         attentionTransition: {
-          kind: "none"
+          kind: "requested",
+          requestedAction: {
+            kind: "queue_ceo_review",
+            runState: "active",
+            reason: "next_lane_decision",
+            completedCardId: cfoCard.id,
+            nextCardId: cmoCard.id
+          }
         },
         laneExecution: {
           cardId: cfoCard.id,
@@ -1396,34 +1508,11 @@ describe("harness worker executor", () => {
           latestResultSummary: "Pricing review is complete and ready for board packaging."
         },
         postOutcomeAction: {
-          kind: "dispatch_next_lane",
+          kind: "queue_ceo_review",
           runState: "active",
-          cardId: cmoCard.id,
-          persona: "cmo"
-        },
-        nextDispatch: {
-          runId: run.id,
-          workflowId: "wf_connect_first_workflow",
-          status: "running",
-          dispatchHandoff: {
-            kind: "follow_on_dispatch",
-            kindLabel: "Follow-on dispatch",
-            executionStage: "post_outcome_follow_on",
-            executionStageLabel: "Post-outcome follow-on",
-            reactivatedRun: false,
-            triggeredByCardId: cfoCard.id,
-            triggeredByPersona: "cfo",
-            triggeredByOutcomeState: "done",
-            triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
-          },
-          laneExecution: {
-            cardId: cmoCard.id,
-            persona: "cmo",
-            title: "Prepare launch messaging",
-            deliverableType: "marketing_plan",
-            state: "working",
-            resumeFocus: "CMO should continue this active marketing plan lane: Prepare launch messaging."
-          }
+          reason: "next_lane_decision",
+          completedCardId: cfoCard.id,
+          nextCardId: cmoCard.id
         }
       })
     );
@@ -1437,7 +1526,7 @@ describe("harness worker executor", () => {
     await expect(repository.getCard(cmoCard.id)).resolves.toEqual(
       expect.objectContaining({
         id: cmoCard.id,
-        state: "working"
+        state: "approved"
       })
     );
     await expect(repository.getRun(run.id)).resolves.toEqual(
@@ -1489,21 +1578,28 @@ describe("harness worker executor", () => {
     await repository.insertCard(cfoCard);
     await repository.insertCard(cmoCard);
 
-    await expect(
-      commitHarnessWorkerLaneOutcome({
-        repository,
-        tenantId: "tenant-1",
-        runId: run.id,
-        workflowId: "wf_connect_first_workflow",
-        cardId: cfoCard.id,
-        executionClaimToken: cfoCard.executionClaimToken!,
-        state: "done",
-        resultSummary: "Pricing review is complete and the messaging lane can begin."
-      })
-    ).resolves.toEqual(
+    const result = await commitHarnessWorkerLaneOutcome({
+      repository,
+      tenantId: "tenant-1",
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow",
+      cardId: cfoCard.id,
+      executionClaimToken: cfoCard.executionClaimToken!,
+      state: "done",
+      resultSummary: "Pricing review is complete and the messaging lane can begin."
+    });
+
+    expect(result).toEqual(
       expect.objectContaining({
         attentionTransition: {
-          kind: "none"
+          kind: "requested",
+          requestedAction: {
+            kind: "queue_ceo_review",
+            runState: "active",
+            reason: "next_lane_decision",
+            completedCardId: cfoCard.id,
+            nextCardId: cmoCard.id
+          }
         },
         laneExecution: expect.objectContaining({
           cardId: cfoCard.id,
@@ -1512,30 +1608,15 @@ describe("harness worker executor", () => {
           latestResultSummary: "Pricing review is complete and the messaging lane can begin."
         }),
         postOutcomeAction: {
-          kind: "dispatch_next_lane",
+          kind: "queue_ceo_review",
           runState: "active",
-          cardId: cmoCard.id,
-          persona: "cmo"
-        },
-        nextDispatch: expect.objectContaining({
-          dispatchHandoff: {
-            kind: "follow_on_dispatch",
-            kindLabel: "Follow-on dispatch",
-            executionStage: "post_outcome_follow_on",
-            executionStageLabel: "Post-outcome follow-on",
-            reactivatedRun: true,
-            triggeredByCardId: cfoCard.id,
-            triggeredByPersona: "cfo",
-            triggeredByOutcomeState: "done",
-            triggeredByResultSummary: "Pricing review is complete and the messaging lane can begin."
-          },
-          laneExecution: expect.objectContaining({
-            cardId: cmoCard.id,
-            state: "working"
-          })
-        })
+          reason: "next_lane_decision",
+          completedCardId: cfoCard.id,
+          nextCardId: cmoCard.id
+        }
       })
     );
+    expect(result.nextDispatch).toBeUndefined();
   });
 
   it("commits a waiting worker outcome with a bounded resume summary", async () => {
@@ -1861,12 +1942,26 @@ describe("harness worker executor", () => {
     ).resolves.toEqual(
       expect.objectContaining({
         attentionTransition: {
-          kind: "resolved",
+          kind: "requested",
           resolvedAction: {
             kind: "queue_ceo_review",
             runState: "assembling",
             reason: "final_assembly"
+          },
+          requestedAction: {
+            kind: "queue_ceo_review",
+            runState: "active",
+            reason: "next_lane_decision",
+            completedCardId: cfoCard.id,
+            nextCardId: cmoCard.id
           }
+        },
+        postOutcomeAction: {
+          kind: "queue_ceo_review",
+          runState: "active",
+          reason: "next_lane_decision",
+          completedCardId: cfoCard.id,
+          nextCardId: cmoCard.id
         }
       })
     );
@@ -1884,6 +1979,16 @@ describe("harness worker executor", () => {
             reasonLabel: "Final assembly",
             targetPersona: "ceo"
           }
+        }),
+        expect.objectContaining({
+          eventKind: "attention_requested",
+          payload: expect.objectContaining({
+            actionKind: "queue_ceo_review",
+            runState: "active",
+            reason: "next_lane_decision",
+            completedCardId: cfoCard.id,
+            nextCardId: cmoCard.id
+          })
         })
       ])
     );
@@ -1958,11 +2063,18 @@ describe("harness worker executor", () => {
     ).resolves.toEqual(
       expect.objectContaining({
         attentionTransition: {
-          kind: "resolved",
+          kind: "requested",
           resolvedAction: {
             kind: "await_lane_resume",
             runState: "waiting",
             cardId: cmoCard.id
+          },
+          requestedAction: {
+            kind: "queue_ceo_review",
+            runState: "active",
+            reason: "next_lane_decision",
+            completedCardId: cfoCard.id,
+            nextCardId: cmoCard.id
           }
         }
       })
@@ -1981,6 +2093,20 @@ describe("harness worker executor", () => {
             targetPersona: "cmo",
             targetTitle: "Resume launch messaging"
           }
+        })
+      ])
+    );
+    await expect(repository.listEventsForCard(cfoCard.id)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventKind: "attention_requested",
+          payload: expect.objectContaining({
+            actionKind: "queue_ceo_review",
+            runState: "active",
+            reason: "next_lane_decision",
+            completedCardId: cfoCard.id,
+            nextCardId: cmoCard.id
+          })
         })
       ])
     );

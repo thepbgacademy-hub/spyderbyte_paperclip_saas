@@ -189,6 +189,90 @@ describe("harness HTTP boundary", () => {
     });
   });
 
+  it("routes tenant goal submissions through the CEO loop seam", async () => {
+    const submitTenantGoal = vi.fn().mockResolvedValue({
+      runId: "run_123",
+      workflowId: "wf_connect_first_workflow",
+      decision: "opened_lane",
+      message: "I opened a bounded research lane so we can answer this goal without widening the workflow.",
+      cardId: "card_research_1"
+    });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      decideProposal: vi.fn(),
+      completeRun: vi.fn(),
+      submitTenantGoal,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/ceo/goal",
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        cookie: "wf_session=abc"
+      },
+      body: {
+        goal: "Find the competitor pricing gap before we change the offer.",
+        workflowId: "wf_connect_first_workflow"
+      },
+      bodyByteLength: JSON.stringify({
+        goal: "Find the competitor pricing gap before we change the offer.",
+        workflowId: "wf_connect_first_workflow"
+      }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(submitTenantGoal).toHaveBeenCalledWith({
+      authorization: "Bearer valid",
+      cookie: "wf_session=abc",
+      goal: "Find the competitor pricing gap before we change the offer.",
+      workflowId: "wf_connect_first_workflow"
+    });
+    expect(response.body).toEqual({
+      runId: "run_123",
+      workflowId: "wf_connect_first_workflow",
+      decision: "opened_lane",
+      message: "I opened a bounded research lane so we can answer this goal without widening the workflow.",
+      cardId: "card_research_1"
+    });
+  });
+
+  it("rejects invalid tenant goal submissions before calling the CEO loop seam", async () => {
+    const submitTenantGoal = vi.fn();
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      decideProposal: vi.fn(),
+      completeRun: vi.fn(),
+      submitTenantGoal,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/ceo/goal",
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid"
+      },
+      body: { workflowId: "wf_connect_first_workflow" },
+      bodyByteLength: JSON.stringify({ workflowId: "wf_connect_first_workflow" }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ code: "invalid_request" });
+    expect(submitTenantGoal).not.toHaveBeenCalled();
+  });
+
   it("answers authenticated harness board preflight requests", async () => {
     const listBoardState = vi.fn();
     const createTopLevelChildCard = vi.fn();
@@ -1365,6 +1449,52 @@ describe("harness HTTP boundary", () => {
       mode: "clean"
     });
     expect(response.body).toEqual({ status: "fresh_cycle_started", runId: "run_124", reopenedProposalCount: 2 });
+  });
+
+  it("reviews pending CEO attention by explicitly starting the next lane through the guarded write route", async () => {
+    const reviewPendingAttention = vi
+      .fn()
+      .mockResolvedValue({ status: "next_lane_started", runId: "run_123", cardId: "card_cmo", state: "working" });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      reviewPendingAttention,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/review-attention",
+      body: {
+        decision: "start_next_lane",
+        actionToken: "test-review-token"
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        cookie: "wf_session=abc",
+        "content-type": "application/json"
+      },
+      bodyByteLength: JSON.stringify({
+        decision: "start_next_lane",
+        actionToken: "test-review-token"
+      }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(reviewPendingAttention).toHaveBeenCalledWith({
+      authorization: "Bearer valid",
+      cookie: "wf_session=abc",
+      runId: "run_123",
+      decision: "start_next_lane",
+      actionToken: "test-review-token"
+    });
+    expect(response.body).toEqual({ status: "next_lane_started", runId: "run_123", cardId: "card_cmo", state: "working" });
   });
 
   it("rejects invalid review-attention decisions before calling the service", async () => {

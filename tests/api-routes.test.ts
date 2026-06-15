@@ -143,7 +143,7 @@ describe("authenticated dashboard API", () => {
     const api = createDashboardApi(deps);
 
     await expect(
-      api.startWorkflowRun({ authorization: "Bearer valid", workflowId: "wf-seo-audit" })
+      api.startWorkflowRun({ authorization: "Bearer valid", workflowId: "wf-example-audit" })
     ).rejects.toMatchObject({ code: "invalid_request" });
 
     expect(deps.startWorkflowRun).not.toHaveBeenCalled();

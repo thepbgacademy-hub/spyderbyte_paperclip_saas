@@ -178,7 +178,7 @@ describe("ACID guard repository", () => {
     const client = createSequencedClient([
       [{ paused_at: null }],
       [{ tenant_id: "tenant-1" }],
-      [{ id: "install-1", package_id: "pkg-brand-seo" }],
+      [{ id: "install-1", package_id: "pkg-example-audit" }],
       [{ id: "requirement-1", capability: "text_generation" }],
       [{ id: "secret-1", secret_ref: "wf_secret_openai", label: "Primary OpenAI", metadata: {} }],
       [{ id: "reservation-1" }],
@@ -190,11 +190,11 @@ describe("ACID guard repository", () => {
       repository.reserveWorkflowRun({
         tenantId: "tenant-1",
         userId: "user-1",
-        workflowTemplateId: "wf-seo-audit",
+        workflowTemplateId: "wf-example-audit",
         runId: "run-1",
         idempotencyKey: "idem-1",
         workflowBinding: {
-          packageId: "pkg-brand-seo",
+          packageId: "pkg-example-audit",
           providerKind: "openai_api"
         }
       })
@@ -210,7 +210,7 @@ describe("ACID guard repository", () => {
     const client = createSequencedClient([
       [{ paused_at: null }],
       [{ tenant_id: "tenant-1" }],
-      [{ id: "install-1", package_id: "pkg-brand-seo" }],
+      [{ id: "install-1", package_id: "pkg-example-audit" }],
       [{ id: "requirement-1", capability: "text_generation" }],
       [{ id: "secret-1", secret_ref: "wf_secret_openai", label: "Primary OpenAI", metadata: {} }]
     ]);
@@ -223,11 +223,11 @@ describe("ACID guard repository", () => {
         workflowId: "wf-not-in-package",
         workflowTemplateId: null,
         workflowIdentityKind: "installed_package_overlay",
-        workflowPackageId: "pkg-brand-seo",
+        workflowPackageId: "pkg-example-audit",
         runId: "run-1",
         idempotencyKey: "idem-1",
         workflowBinding: {
-          packageId: "pkg-brand-seo",
+          packageId: "pkg-example-audit",
           providerKind: "openai_api"
         }
       })

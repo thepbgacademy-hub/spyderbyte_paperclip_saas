@@ -57,6 +57,7 @@ Transition note:
 - `wf_connect_first_workflow`, `wf_tax_strategy`, and `wf_package_followup` remain the current intentional core built-in workflow-family exceptions in the active engine room.
 - This exception list is deliberately bounded. Future industry-specific or package-specific workflow families should use the overlay seam instead of joining the built-in registry by default unless this design doc is explicitly revised first.
 - Keeping these three families in core does not by itself widen runtime eligibility, dashboard exposure, public start surfaces, or native-default policy beyond what the active plan records phase by phase.
+- Native worker deepening must stay equally bounded: richer internal execution may deepen one built-in family at a time, but the durable worker/runtime contract remains the same explicit `done` / `waiting` / `blocked` / `cancelled` outcome truth and must not widen board, queue, or public seams.
 
 ## Why This Subproject Exists
 
@@ -121,7 +122,7 @@ Concepts not to import directly:
 
 - coding-specific worktree/PR assumptions
 - GitHub-issue or code-review centric workflow defaults
-- broad “workflow builder” scope before the Wealth Factory engine room is settled
+- broad "workflow builder" scope before the Wealth Factory engine room is settled
 
 Working rule:
 
@@ -181,6 +182,12 @@ Hard UX requirements:
 - tenant theme and color-palette settings
 - polished drawer/detail behavior
 - no backend execution chatter in the tenant surface
+
+Phase-C implementation note:
+
+- Tenant goals now enter through one guarded CEO loop submission seam that maps free-form goal text into bounded board actions.
+- That seam must continue reusing the existing proposal/card/fresh-cycle governance mutations instead of creating a second orchestration state path.
+- CEO response text may be AI-authored, but it must remain tenant-facing, name the orchestration decision taken, and keep child personas non-tenant-facing.
 
 Intentional v1 differences:
 
@@ -311,6 +318,9 @@ Working rule:
 - same lane for bounded refinement of the same deliverable
 - new lane for related but materially distinct deliverable work
 - fresh cycle for broader directional or phase-change work
+- same-persona / same-deliverable reuse should stay bounded too: if the active lane is not the same assignment, do not silently fold the new request into it
+- when a same-persona / same-deliverable request is materially distinct while an active lane is still open, route it back through CEO governance instead of auto-reusing the lane
+- reserve fresh-cycle handling for packaged-run follow-on work or true phase-change redirection, not for ordinary active-run lane pressure
 
 Fresh cycle does not mean memory loss. A new run should still inherit the durable institutional memory of what was recommended, implemented, deferred, denied, and learned, while keeping execution state clean for the new board cycle.
 
@@ -359,6 +369,7 @@ Rules:
 - child personas may propose or draft sub-cards
 - CEO remains the approval gate
 - default bias is to reuse or update an existing card when possible
+- reuse means bounded refinement of the same assignment, not automatic folding of every same-persona / same-deliverable request into one lane
 - card fan-out should be constrained so the board remains comprehensible
 
 This preserves adaptability without letting the board explode into noise.

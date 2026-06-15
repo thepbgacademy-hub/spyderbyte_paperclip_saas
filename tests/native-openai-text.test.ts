@@ -76,6 +76,31 @@ describe("native OpenAI text generator", () => {
               "Return exactly one bounded lane outcome: done only when this lane is complete, waiting when an explicit resume is needed, blocked when a prerequisite is missing, or cancelled when the lane should end without completion.",
             resumeDirective: "Resume the pricing lane from the revised assumptions workbook."
           },
+          boardContext: {
+            runState: "active",
+            activeAttention: {
+              actionKind: "await_lane_resume",
+              summary: "The board is currently waiting on an explicit resume decision for CMO card card_cmo.",
+              targetCardId: "card_cmo",
+              targetPersona: "cmo"
+            },
+            parentLane: {
+              cardId: "card_ceo",
+              persona: "ceo",
+              title: "Plan run",
+              deliverableType: "plan",
+              state: "planning"
+            },
+            siblingLanes: [
+              {
+                cardId: "card_cmo",
+                persona: "cmo",
+                title: "Draft the launch narrative",
+                deliverableType: "launch_copy",
+                state: "waiting"
+              }
+            ]
+          },
           outcomeContract: {
             allowedStates: ["waiting", "done", "blocked", "cancelled"],
             resultSummaryRequiredStates: ["done"],
@@ -135,6 +160,11 @@ describe("native OpenAI text generator", () => {
     expect(body.input).toContain("Orchestrator persona: ceo");
     expect(body.input).toContain("Dispatch reason: The CEO approved this lane for its next bounded execution step.");
     expect(body.input).toContain("Scope guard: Stay inside this lane only. Do not open new lanes, widen package scope, or assume new governance approval beyond this execution handoff.");
+    expect(body.input).toContain("Run state: active");
+    expect(body.input).toContain("Parent lane: CEO | Plan run | plan | planning");
+    expect(body.input).toContain("Sibling lanes:");
+    expect(body.input).toContain("- CMO | Draft the launch narrative | launch_copy | waiting");
+    expect(body.input).toContain("Active board attention: The board is currently waiting on an explicit resume decision for CMO card card_cmo.");
     expect(body.input).toContain("Post-outcome contract:");
     expect(body.input).toContain("- waiting -> await_lane_resume (run state: waiting): If this lane ends waiting, the board will require an explicit resume decision on this lane. [target persona: cfo; target card: card_cfo]");
   });
@@ -186,6 +216,12 @@ describe("native OpenAI text generator", () => {
               "Return exactly one bounded lane outcome: done only when this lane is complete, waiting when an explicit resume is needed, blocked when a prerequisite is missing, or cancelled when the lane should end without completion.",
             resumeDirective: null
           },
+          boardContext: {
+            runState: "active",
+            activeAttention: null,
+            parentLane: null,
+            siblingLanes: []
+          },
           outcomeContract: {
             allowedStates: ["waiting", "done", "blocked", "cancelled"],
             resultSummaryRequiredStates: ["done"],
@@ -198,6 +234,72 @@ describe("native OpenAI text generator", () => {
       name: "NativeOpenAIExecutionError",
       reason: "provider_kind_unsupported"
     } satisfies Partial<NativeOpenAIExecutionError>);
+  });
+
+  it("requests JSON-object structured output when preserving structured native responses", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ output_text: "{\"state\":\"done\",\"summary\":\"ok\"}" })
+    });
+    const generator = createNativeOpenAITextGenerator({
+      fetch: fetch as unknown as typeof globalThis.fetch
+    });
+
+    await expect(
+      generator.generateText({
+        binding: {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Primary OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: {},
+          secretValues: { apiKey: "sk-tenant" }
+        },
+        prompt: "Return strict JSON only.",
+        preserveStructuredOutput: true
+      })
+    ).resolves.toEqual({
+      outputText: "{\"state\":\"done\",\"summary\":\"ok\"}",
+      model: "gpt-4.1-mini"
+    });
+
+    const request = fetch.mock.calls[0]?.[1];
+    expect(typeof request?.body).toBe("string");
+    const body = JSON.parse(String(request?.body));
+    expect(body.text).toEqual({
+      format: {
+        type: "json_object"
+      }
+    });
+  });
+
+  it("normalizes truncated plain-text summaries with a clean ASCII ellipsis", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        output_text: `${"A".repeat(520)}`
+      })
+    });
+    const generator = createNativeOpenAITextGenerator({
+      fetch: fetch as unknown as typeof globalThis.fetch
+    });
+
+    await expect(
+      generator.generateText({
+        binding: {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Primary OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: {},
+          secretValues: { apiKey: "sk-tenant" }
+        },
+        prompt: "Return one bounded lane summary."
+      })
+    ).resolves.toEqual({
+      outputText: `${"A".repeat(497)}...`,
+      model: "gpt-4.1-mini"
+    });
   });
 
   it("fails closed when the provider request returns a non-ok response", async () => {
@@ -251,6 +353,80 @@ describe("native OpenAI text generator", () => {
             completionRule:
               "Return exactly one bounded lane outcome: done only when this lane is complete, waiting when an explicit resume is needed, blocked when a prerequisite is missing, or cancelled when the lane should end without completion.",
             resumeDirective: null
+          },
+          boardContext: {
+            runState: "active",
+            activeAttention: null,
+            parentLane: null,
+            siblingLanes: []
+          },
+          outcomeContract: {
+            allowedStates: ["waiting", "done", "blocked", "cancelled"],
+            resultSummaryRequiredStates: ["done"],
+            resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"],
+            postOutcomeDirectives: []
+          }
+        }
+      })
+    ).rejects.toMatchObject({
+      name: "NativeOpenAIExecutionError",
+      reason: "request_failed"
+    } satisfies Partial<NativeOpenAIExecutionError>);
+  });
+
+  it("fails closed when the provider transport throws before a response is received", async () => {
+    const fetch = vi.fn().mockRejectedValue(new TypeError("socket hang up"));
+    const generator = createNativeOpenAITextGenerator({
+      fetch: fetch as unknown as typeof globalThis.fetch
+    });
+
+    await expect(
+      generator.generateLaneResult({
+        workflowId: "wf_connect_first_workflow",
+        binding: {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Primary OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: {},
+          secretValues: { apiKey: "sk-tenant" }
+        },
+        executionEnvelope: {
+          tenantId: "tenant-1",
+          runId: "run-1",
+          workflowId: "wf_connect_first_workflow",
+          requiredCapabilities: ["text_generation"],
+          runtimeContext: {
+            providerKind: "openai_api",
+            credentialLabel: "Primary OpenAI"
+          },
+          executionClaim: {
+            kind: "approved_claim",
+            token: "claim-cfo-1",
+            claimedAt: "2026-05-21T10:04:00.000Z",
+            previousClaimedAt: null
+          },
+          laneExecution: {
+            cardId: "card_cfo",
+            persona: "cfo",
+            title: "Pressure-test the pricing lane",
+            deliverableType: "pricing_review",
+            state: "working"
+          },
+          orchestratorHandoff: {
+            orchestratorPersona: "ceo",
+            dispatchReason: "The CEO approved this lane for its next bounded execution step.",
+            scopeGuard:
+              "Stay inside this lane only. Do not open new lanes, widen package scope, or assume new governance approval beyond this execution handoff.",
+            completionRule:
+              "Return exactly one bounded lane outcome: done only when this lane is complete, waiting when an explicit resume is needed, blocked when a prerequisite is missing, or cancelled when the lane should end without completion.",
+            resumeDirective: null
+          },
+          boardContext: {
+            runState: "active",
+            activeAttention: null,
+            parentLane: null,
+            siblingLanes: []
           },
           outcomeContract: {
             allowedStates: ["waiting", "done", "blocked", "cancelled"],
@@ -316,6 +492,12 @@ describe("native OpenAI text generator", () => {
             completionRule:
               "Return exactly one bounded lane outcome: done only when this lane is complete, waiting when an explicit resume is needed, blocked when a prerequisite is missing, or cancelled when the lane should end without completion.",
             resumeDirective: null
+          },
+          boardContext: {
+            runState: "active",
+            activeAttention: null,
+            parentLane: null,
+            siblingLanes: []
           },
           outcomeContract: {
             allowedStates: ["waiting", "done", "blocked", "cancelled"],

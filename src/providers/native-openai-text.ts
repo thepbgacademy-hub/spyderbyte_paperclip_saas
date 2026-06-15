@@ -1,5 +1,6 @@
 import type { RuntimeProviderExecutionBinding } from "./runtime-provider-execution.js";
 import type { HarnessWorkerExecutionEnvelope } from "../harness/worker-executor.js";
+import { buildWorkerPromptContextLines } from "../worker/native-prompt-context.js";
 
 const DEFAULT_NATIVE_OPENAI_MODEL = "gpt-4.1-mini";
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
@@ -58,19 +59,36 @@ export function createNativeOpenAITextGenerator(options?: {
         ? input.binding.metadata.projectId.trim()
         : undefined;
 
-      const response = await fetchImpl(OPENAI_RESPONSES_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-          ...(projectId ? { "OpenAI-Project": projectId } : {})
-        },
-        body: JSON.stringify({
-          model,
-          input: input.prompt,
-          max_output_tokens: input.maxOutputTokens ?? 220
-        })
-      });
+      let response: Response;
+      try {
+        response = await fetchImpl(OPENAI_RESPONSES_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+            ...(projectId ? { "OpenAI-Project": projectId } : {})
+          },
+          body: JSON.stringify({
+            model,
+            input: input.prompt,
+            max_output_tokens: input.maxOutputTokens ?? 220,
+            ...(input.preserveStructuredOutput
+              ? {
+                  text: {
+                    format: {
+                      type: "json_object"
+                    }
+                  }
+                }
+              : {})
+          })
+        });
+      } catch (error) {
+        throw new NativeOpenAIExecutionError(
+          "request_failed",
+          `Native OpenAI text generation request failed before a response was received: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
 
       if (!response.ok) {
         const body = await safeReadText(response);
@@ -82,7 +100,7 @@ export function createNativeOpenAITextGenerator(options?: {
 
       const payload = await response.json();
       const rawOutputText = extractOutputText(payload);
-      const outputText = input.preserveStructuredOutput ? rawOutputText.trim() : normalizeOutputText(rawOutputText);
+      const outputText = input.preserveStructuredOutput ? rawOutputText.trim() : normalizeOutputTextAscii(rawOutputText);
       if (!outputText) {
         throw new NativeOpenAIExecutionError(
           "response_invalid",
@@ -123,53 +141,16 @@ function buildLanePrompt(input: {
   workflowId: string;
   executionEnvelope: HarnessWorkerExecutionEnvelope;
 }): string {
-  const { executionEnvelope } = input;
-  const continuitySummary = executionEnvelope.continuityContext?.summary ?? executionEnvelope.laneExecution.resumeFocus ?? "No continuity summary recorded.";
-  const latestResultSummary = executionEnvelope.continuityContext?.latestResultSummary ?? executionEnvelope.laneExecution.latestResultSummary ?? "No prior result summary recorded.";
-  const absorbedWork =
-    executionEnvelope.continuityContext?.absorbedWorkTrail.map((item) => item.title).join("; ") ??
-    executionEnvelope.laneExecution.absorbedWorkItems?.join("; ") ??
-    "No absorbed work items recorded.";
-
   return [
     "You are Wealth Factory's native execution provider for one bounded harness lane.",
     "Return plain text only.",
     "Write one concise execution result summary for the current lane in 1-3 sentences.",
     "Do not mention Paperclip, prompts, tools, hidden system behavior, or internal runtime mechanics.",
-    `Workflow: ${input.workflowId}`,
-    `Persona: ${executionEnvelope.laneExecution.persona}`,
-    `Lane title: ${executionEnvelope.laneExecution.title}`,
-    `Deliverable type: ${executionEnvelope.laneExecution.deliverableType}`,
-    `Resume focus: ${executionEnvelope.laneExecution.resumeFocus ?? "None"}`,
-    `Continuity summary: ${continuitySummary}`,
-    `Latest result summary: ${latestResultSummary}`,
-    `Absorbed work items: ${absorbedWork}`,
-    `Orchestrator persona: ${executionEnvelope.orchestratorHandoff.orchestratorPersona}`,
-    `Dispatch reason: ${executionEnvelope.orchestratorHandoff.dispatchReason}`,
-    `Scope guard: ${executionEnvelope.orchestratorHandoff.scopeGuard}`,
-    `Completion rule: ${executionEnvelope.orchestratorHandoff.completionRule}`,
-    `Resume directive: ${executionEnvelope.orchestratorHandoff.resumeDirective ?? "None"}`,
-    "Post-outcome contract:",
-    ...(executionEnvelope.outcomeContract.postOutcomeDirectives ?? []).map((directive) =>
-      formatPostOutcomeDirectiveLine(directive)
-    )
+    ...buildWorkerPromptContextLines({
+      workflowId: input.workflowId,
+      executionEnvelope: input.executionEnvelope
+    })
   ].join("\n");
-}
-
-function formatPostOutcomeDirectiveLine(
-  directive: HarnessWorkerExecutionEnvelope["outcomeContract"]["postOutcomeDirectives"][number]
-): string {
-  const details: string[] = [];
-  if (directive.targetPersona) {
-    details.push(`target persona: ${directive.targetPersona}`);
-  }
-  if (directive.targetCardId) {
-    details.push(`target card: ${directive.targetCardId}`);
-  }
-  if (directive.reason) {
-    details.push(`reason: ${directive.reason}`);
-  }
-  return `- ${directive.outcomeState} -> ${directive.actionKind} (run state: ${directive.runState}): ${directive.summary}${details.length ? ` [${details.join("; ")}]` : ""}`;
 }
 
 function extractOutputText(value: unknown): string {
@@ -216,6 +197,14 @@ function normalizeOutputText(text: string): string {
     return collapsed;
   }
   return `${collapsed.slice(0, MAX_RESULT_SUMMARY_LENGTH - 1).trimEnd()}…`;
+}
+
+function normalizeOutputTextAscii(text: string): string {
+  const collapsed = text.replace(/\s+/g, " ").trim();
+  if (collapsed.length <= MAX_RESULT_SUMMARY_LENGTH) {
+    return collapsed;
+  }
+  return `${collapsed.slice(0, MAX_RESULT_SUMMARY_LENGTH - 3).trimEnd()}...`;
 }
 
 async function safeReadText(response: Response): Promise<string> {

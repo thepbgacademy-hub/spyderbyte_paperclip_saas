@@ -191,7 +191,7 @@ Required tests:
 - A tenant cannot run a workflow before installing a purchased package.
 - A tenant cannot run a workflow from another industry package.
 - A tenant cannot resolve prompts/rules/assets from another package.
-- Business Coach package assets cannot be pulled into a Brand SEO run, and Brand SEO assets cannot be pulled into a Business Coach run.
+- Reference Advisory package assets cannot be pulled into a Reference Audit run, and Reference Audit assets cannot be pulled into a Reference Advisory run.
 - A tenant can run workflows included in its installed package.
 - A tenant can run add-on specialist workflows only after purchasing the add-on.
 - The blank-canvas premium tier starts with no prebuilt workflows.

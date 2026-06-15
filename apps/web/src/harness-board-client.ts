@@ -4498,11 +4498,21 @@ function normalizeBoardResponse(
   board: HarnessBoardResponse | LegacyHarnessBoardResponse
 ): HarnessBoardResponse {
   if (board.memoryBoundary) {
+    const hasLegacyMemoryBoundaryLists =
+      Array.isArray((board.memoryBoundary as { operationalItems?: unknown }).operationalItems)
+      && Array.isArray((board.memoryBoundary as { exportReadyItems?: unknown }).exportReadyItems);
+
+    if (!hasLegacyMemoryBoundaryLists) {
+      return board as HarnessBoardResponse;
+    }
+
     return {
       ...board,
       memoryBoundary: normalizeMemoryBoundary(board.memoryBoundary, board)
     } as HarnessBoardResponse;
   }
+
+  return board as HarnessBoardResponse;
 
   const exportReadyItems: HarnessBoardResponse["memoryBoundary"]["exportReadyItems"] = [
     {

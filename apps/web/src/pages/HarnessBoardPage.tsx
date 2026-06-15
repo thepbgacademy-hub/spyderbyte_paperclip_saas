@@ -376,7 +376,6 @@ function isSameContractRefreshFeedback(
     && left.recoverySteps.length === right.recoverySteps.length
     && left.recoverySteps.every((step, index) => step === right.recoverySteps[index]);
 }
-
 export type HarnessBoardActionAttempt = {
   actionKey: string;
   actionPath: string;
@@ -449,1311 +448,6 @@ function renderActionOptions(
       })}
     </ul>
   );
-}
-
-function renderMemoryBoundary(board: HarnessBoardResponse) {
-  const memoryBoundary = board.memoryBoundary ?? {
-    summary:
-      "Wealth Factory runtime keeps bounded operational lane memory live while governance and package records stay ready for later tenant-owned export.",
-    exportSummary: "Export readiness is pending the latest board state.",
-    roleSummary: "The boundary split is pending the latest board state.",
-    ownershipSummary: "Ownership posture is pending the latest board state.",
-    promotionSummary: "Promotion path is pending the latest board state.",
-    recordTargetSummary: "Record target is pending the latest board state.",
-    blockerSummary: "Promotion blocker status is pending the latest board state.",
-    authoritySummary: "Promotion authority is pending the latest board state.",
-    triggerSummary: "Promotion trigger is pending the latest board state.",
-    nextStepSummary: "Promotion next-step guidance is pending the latest board state.",
-    actionFamilySummary: "Promotion action family guidance is pending the latest board state.",
-    assemblySummary: "Export assembly guidance is pending the latest board state.",
-    phaseSummary: "Export phase guidance is pending the latest board state.",
-    mutabilitySummary: "Export mutability guidance is pending the latest board state.",
-    scopeSummary: "Promotion scope guidance is pending the latest board state.",
-    identitySummary: "Identity stability guidance is pending the latest board state.",
-    auditSummary: "Audit backing guidance is pending the latest board state.",
-    concurrencySummary: "Concurrency boundary guidance is pending the latest board state.",
-    payloadShapeSummary: "Export payload shape guidance is pending the latest board state.",
-    idempotencySummary: "Idempotency guidance is pending the latest board state.",
-    replaySafetySummary: "Replay safety guidance is pending the latest board state.",
-    conflictPolicySummary: "Conflict policy guidance is pending the latest board state.",
-    atomicitySummary: "Export atomicity guidance is pending the latest board state.",
-    derivationSummary: "Export derivation guidance is pending the latest board state.",
-    revisionSummary: "Export revision guidance is pending the latest board state.",
-    freshnessSummary: "Export freshness guidance is pending the latest board state.",
-    validationSummary: "Export validation guidance is pending the latest board state.",
-    completenessSummary: "Export completeness guidance is pending the latest board state.",
-    sensitivitySummary: "Export sensitivity guidance is pending the latest board state.",
-    audienceSummary: "Export audience guidance is pending the latest board state.",
-    sanitizationSummary: "Export sanitization guidance is pending the latest board state.",
-    redactionSummary: "Export redaction guidance is pending the latest board state.",
-    sourceDisclosureSummary: "Export source-disclosure guidance is pending the latest board state.",
-    placementSummary: "Tenant memory placement guidance is pending the latest board state.",
-    syncStrategySummary: "Tenant sync strategy guidance is pending the latest board state.",
-    requestShapeSummary: "Export request-shape guidance is pending the latest board state.",
-    confirmationSummary: "Export confirmation guidance is pending the latest board state.",
-    recoveryPathSummary: "Export recovery-path guidance is pending the latest board state.",
-    exportCandidateSummary: "Export candidate grouping is pending the latest board state.",
-    exportCandidateConcurrencySummary: "Export candidate concurrency guidance is pending the latest board state.",
-    exportCandidateSensitivitySummary: "Export candidate sensitivity guidance is pending the latest board state.",
-    exportCandidateAudienceSummary: "Export candidate audience guidance is pending the latest board state.",
-    exportCandidateSanitizationSummary: "Export candidate sanitization guidance is pending the latest board state.",
-    exportCandidateRedactionSummary: "Export candidate redaction guidance is pending the latest board state.",
-    exportCandidateSourceDisclosureSummary: "Export candidate source-disclosure guidance is pending the latest board state.",
-    exportCandidateRequestShapeSummary: "Export candidate request-shape guidance is pending the latest board state.",
-    exportCandidateConfirmationSummary: "Export candidate confirmation guidance is pending the latest board state.",
-    exportCandidateRecoveryPathSummary: "Export candidate recovery guidance is pending the latest board state.",
-    exportCandidatePlacementSummary: "Export candidate placement guidance is pending the latest board state.",
-    exportCandidateSyncStrategySummary: "Export candidate sync-strategy guidance is pending the latest board state.",
-    exportCandidateStateSummary: "Export candidate state guidance is pending the latest board state.",
-    exportCandidateNextStepSummary: "Export candidate next-step guidance is pending the latest board state.",
-    exportCandidateActionFamilySummary: "Export candidate action-family guidance is pending the latest board state.",
-    exportCandidateClassSummary: "Export candidate class guidance is pending the latest board state.",
-    exportCandidateDurabilitySummary: "Export candidate durability guidance is pending the latest board state.",
-    exportCandidateOwnershipSummary: "Export candidate ownership guidance is pending the latest board state.",
-    exportCandidateRecordTargetSummary: "Export candidate record-target guidance is pending the latest board state.",
-    exportCandidateAuthoritySummary: "Export candidate authority guidance is pending the latest board state.",
-    exportCandidateEligibilitySummary: "Export candidate eligibility guidance is pending the latest board state.",
-    exportCandidateSourceSurfaceSummary: "Export candidate source-surface guidance is pending the latest board state.",
-    exportCandidatePathSummary: "Export candidate path guidance is pending the latest board state.",
-    exportCandidateBlockerSummary: "Export candidate blocker guidance is pending the latest board state.",
-    exportCandidateTriggerSummary: "Export candidate trigger guidance is pending the latest board state.",
-    exportCandidateAssemblySummary: "Export candidate assembly guidance is pending the latest board state.",
-    exportCandidatePhaseSummary: "Export candidate phase guidance is pending the latest board state.",
-    exportCandidateMutabilitySummary: "Export candidate mutability guidance is pending the latest board state.",
-    exportCandidateScopeSummary: "Export candidate scope guidance is pending the latest board state.",
-    exportCandidateIdentitySummary: "Export candidate identity guidance is pending the latest board state.",
-    exportCandidatePayloadShapeSummary: "Export candidate payload-shape guidance is pending the latest board state.",
-    exportCandidateIdempotencySummary: "Export candidate idempotency guidance is pending the latest board state.",
-    exportCandidateReplaySafetySummary: "Export candidate replay-safety guidance is pending the latest board state.",
-    exportCandidateConflictPolicySummary: "Export candidate conflict-policy guidance is pending the latest board state.",
-    exportCandidateAtomicitySummary: "Export candidate atomicity guidance is pending the latest board state.",
-    exportCandidateDerivationSummary: "Export candidate derivation guidance is pending the latest board state.",
-    exportCandidateRevisionSummary: "Export candidate revision guidance is pending the latest board state.",
-    exportCandidateFreshnessSummary: "Export candidate freshness guidance is pending the latest board state.",
-    exportCandidateValidationSummary: "Export candidate validation guidance is pending the latest board state.",
-    exportCandidateCompletenessSummary: "Export candidate completeness guidance is pending the latest board state.",
-    readyNowCount: 0,
-    waitingOnBoardClosureCount: 0,
-    governanceReadyCount: 0,
-    packagedReadyCount: 0,
-    packagedWaitingCount: 0,
-    blockedCandidateCount: 0,
-    tenantControlledCandidateCount: 0,
-    boardControlledCandidateCount: 0,
-    tenantExportTriggerCount: 0,
-    boardClosureTriggerCount: 0,
-    noAssemblyShapeCount: 0,
-    standaloneExportRecordCount: 0,
-    packageRecordSetCount: 0,
-    noExportPhaseCount: 0,
-    phaseOneExportCount: 0,
-    phaseTwoExportCount: 0,
-    runtimeMutableCount: 0,
-    appendOnlyHistoryCount: 0,
-    replaceableSnapshotCount: 0,
-    stableSnapshotCount: 0,
-    noPromotionScopeCount: 0,
-    singleRecordExportScopeCount: 0,
-    packageRecordSetExportScopeCount: 0,
-    transientIdentityCount: 0,
-    stableIdentityCount: 0,
-    closureFinalizedIdentityCount: 0,
-    runtimeStateOnlyAuditCount: 0,
-    decisionLedgerAuditCount: 0,
-    packageClosureAuditCount: 0,
-    runtimeOnlyConcurrencyCount: 0,
-    independentExportSafeCount: 0,
-    requiresBoardClosureSnapshotCount: 0,
-    noExportPayloadShapeCount: 0,
-    governanceHistoryPayloadCount: 0,
-    packageSnapshotBundleCount: 0,
-    noIdempotencyPolicyCount: 0,
-    deterministicUpsertCount: 0,
-    boardClosureSnapshotOnceCount: 0,
-    runtimeOnlyReplaySafetyCount: 0,
-    replaySafeCount: 0,
-    freshClosureSnapshotReplayCount: 0,
-    runtimeOnlyConflictPolicyCount: 0,
-    appendOrUpsertConflictCount: 0,
-    replaceLatestClosureSnapshotCount: 0,
-    noExportAtomicityCount: 0,
-    recordLevelAtomicCount: 0,
-    closureBundleAtomicCount: 0,
-    noExportDerivationBasisCount: 0,
-    decisionHistoryDerivedCount: 0,
-    boardClosureSnapshotDerivedCount: 0,
-    noExportRevisionPolicyCount: 0,
-    appendNewRevisionCount: 0,
-    replaceClosureBundleRevisionCount: 0,
-    noExportFreshnessSourceCount: 0,
-    latestRecordStateCount: 0,
-    latestBoardClosureSnapshotCount: 0,
-    noExportValidationBoundaryCount: 0,
-    recordLevelValidationCount: 0,
-    closureBundleValidationCount: 0,
-    noExportCompletenessRuleCount: 0,
-    selfContainedRecordCount: 0,
-    boardClosureCompleteBundleCount: 0,
-    noExportSensitivityCount: 0,
-    tenantBusinessContextCount: 0,
-    tenantDeliverableContextCount: 0,
-    runtimeOnlyAudienceCount: 0,
-    governanceHistoryAudienceCount: 0,
-    packageConsumerAudienceCount: 0,
-    noExportSanitizationCount: 0,
-    exportAsRecordedCount: 0,
-    sanitizeBeforePackageExportCount: 0,
-    runtimeInternalOnlyRedactionCount: 0,
-    governanceSafeRedactionCount: 0,
-    packageSafeRedactionCount: 0,
-    runtimeOnlySourceDisclosureCount: 0,
-    decisionSummaryOnlyCount: 0,
-    closureSnapshotSummaryOnlyCount: 0,
-    noMemoryPlacementCount: 0,
-    governanceHistoryNoteCount: 0,
-    packageRecordFolderCount: 0,
-    noSyncStrategyCount: 0,
-    appendHistoryEntryCount: 0,
-    replacePackageSnapshotAfterClosureCount: 0,
-    noExportRequestShapeCount: 0,
-    singleRecordExportRequestCount: 0,
-    packageBundleExportRequestCount: 0,
-    noExportConfirmationRequirementCount: 0,
-    tenantExportConfirmationCount: 0,
-    boardClosureThenTenantExportConfirmationCount: 0,
-    runtimeOnlyRecoveryPathCount: 0,
-    retryLatestRecordExportCount: 0,
-    rerunAfterBoardClosureSnapshotCount: 0,
-    exportCandidateGroupCount: 0,
-    readyExportCandidateGroupCount: 0,
-    waitingExportCandidateGroupCount: 0,
-    independentExportSafeCandidateGroupCount: 0,
-    requiresClosureSnapshotCandidateGroupCount: 0,
-    tenantBusinessContextCandidateGroupCount: 0,
-    tenantDeliverableContextCandidateGroupCount: 0,
-    governanceHistoryAudienceCandidateGroupCount: 0,
-    packageConsumerAudienceCandidateGroupCount: 0,
-    exportAsRecordedCandidateGroupCount: 0,
-    sanitizeBeforePackageExportCandidateGroupCount: 0,
-    governanceSafeRedactionCandidateGroupCount: 0,
-    packageSafeRedactionCandidateGroupCount: 0,
-    decisionSummaryOnlyCandidateGroupCount: 0,
-    closureSnapshotSummaryOnlyCandidateGroupCount: 0,
-    singleRecordExportRequestCandidateGroupCount: 0,
-    packageBundleExportRequestCandidateGroupCount: 0,
-    tenantExportConfirmationCandidateGroupCount: 0,
-    boardClosureThenTenantExportConfirmationCandidateGroupCount: 0,
-    retryLatestRecordExportCandidateGroupCount: 0,
-    rerunAfterBoardClosureSnapshotCandidateGroupCount: 0,
-    governanceHistoryNoteCandidateGroupCount: 0,
-    packageRecordFolderCandidateGroupCount: 0,
-    appendHistoryEntryCandidateGroupCount: 0,
-    replacePackageSnapshotAfterClosureCandidateGroupCount: 0,
-    readyForTenantExportCandidateGroupCount: 0,
-    awaitingBoardClosureCandidateGroupCount: 0,
-    tenantExportAvailableNextStepCandidateGroupCount: 0,
-    boardClosureThenTenantExportNextStepCandidateGroupCount: 0,
-    tenantExportActionFamilyCandidateGroupCount: 0,
-    boardClosureActionFamilyCandidateGroupCount: 0,
-    governanceHistoryCandidateGroupCount: 0,
-    packagedOutputCandidateGroupCount: 0,
-    stableWhenRecordedCandidateGroupCount: 0,
-    stableAfterBoardClosureCandidateGroupCount: 0,
-    tenantOwnedLaterCandidateGroupCount: 0,
-    governanceHistoryRecordCandidateGroupCount: 0,
-    packageBundleRecordCandidateGroupCount: 0,
-    tenantExplicitExportAuthorityCandidateGroupCount: 0,
-    boardClosureThenTenantExportAuthorityCandidateGroupCount: 0,
-    explicitExportLaterCandidateGroupCount: 0,
-    afterBoardClosesThenExportCandidateGroupCount: 0,
-    recentDecisionsSourceCandidateGroupCount: 0,
-    completionPackageSurfaceCandidateGroupCount: 0,
-    readyForExplicitExportCandidateGroupCount: 0,
-    afterBoardClosureThenExportCandidateGroupCount: 0,
-    noPromotionBlockerCandidateGroupCount: 0,
-    boardClosureRequiredCandidateGroupCount: 0,
-    tenantExportRequestCandidateGroupCount: 0,
-    boardClosureTriggerCandidateGroupCount: 0,
-    standaloneExportRecordCandidateGroupCount: 0,
-    packageRecordSetCandidateGroupCount: 0,
-    phaseOneExportCandidateGroupCount: 0,
-    phaseTwoExportCandidateGroupCount: 0,
-    appendOnlyHistoryCandidateGroupCount: 0,
-    replaceableSnapshotCandidateGroupCount: 0,
-    singleRecordExportScopeCandidateGroupCount: 0,
-    packageRecordSetExportScopeCandidateGroupCount: 0,
-    stableIdentityCandidateGroupCount: 0,
-    closureFinalizedIdentityCandidateGroupCount: 0,
-    governanceHistoryPayloadCandidateGroupCount: 0,
-    packageSnapshotBundleCandidateGroupCount: 0,
-    deterministicUpsertCandidateGroupCount: 0,
-    boardClosureSnapshotOnceCandidateGroupCount: 0,
-    replaySafeCandidateGroupCount: 0,
-    freshClosureSnapshotReplayCandidateGroupCount: 0,
-    appendOrUpsertConflictCandidateGroupCount: 0,
-    replaceLatestClosureSnapshotCandidateGroupCount: 0,
-    recordLevelAtomicCandidateGroupCount: 0,
-    closureBundleAtomicCandidateGroupCount: 0,
-    decisionHistoryDerivedCandidateGroupCount: 0,
-    boardClosureSnapshotDerivedCandidateGroupCount: 0,
-    appendNewRevisionCandidateGroupCount: 0,
-    replaceClosureBundleRevisionCandidateGroupCount: 0,
-    latestRecordStateCandidateGroupCount: 0,
-    latestBoardClosureSnapshotCandidateGroupCount: 0,
-    recordLevelValidationCandidateGroupCount: 0,
-    closureBundleValidationCandidateGroupCount: 0,
-    selfContainedRecordCandidateGroupCount: 0,
-    boardClosureCompleteBundleCandidateGroupCount: 0,
-    partitions: {
-      runtime: { itemCount: 0, summary: "Runtime memory partition is pending the latest board state." },
-      governanceHistoryCandidates: {
-        itemCount: 0,
-        summary: "Governance history candidate partition is pending the latest board state."
-      },
-      packagedOutputCandidates: {
-        itemCount: 0,
-        summary: "Packaged output candidate partition is pending the latest board state."
-      }
-    },
-    operationalItems: [],
-    exportReadyItems: [],
-    exportCandidates: []
-  };
-  const sections: Array<{
-    title: string;
-    destinationLabel: string;
-    items: typeof memoryBoundary.operationalItems;
-  }> = [
-    {
-      title: "Stays in runtime",
-      destinationLabel: "Wealth Factory runtime",
-      items: memoryBoundary.operationalItems
-    },
-    {
-      title: "Ready for export later",
-      destinationLabel: "Tenant record candidate",
-      items: memoryBoundary.exportReadyItems
-    }
-  ];
-  const exportCandidates = (memoryBoundary.exportCandidates ?? deriveMemoryBoundaryExportCandidates(memoryBoundary)).map(
-    (candidate) =>
-      candidate.id === "governance_history_export"
-        ? {
-            ...candidate,
-            eligibilityRule: candidate.eligibilityRule ?? "explicit_export_later",
-            eligibilityRuleLabel: candidate.eligibilityRuleLabel ?? "Explicit export later",
-            sourceSurface: candidate.sourceSurface ?? "recent_decisions",
-            sourceSurfaceLabel: candidate.sourceSurfaceLabel ?? "Recent decisions",
-            candidateClass: candidate.candidateClass ?? "governance_history",
-            candidateClassLabel: candidate.candidateClassLabel ?? "Governance history",
-            durabilityCondition: candidate.durabilityCondition ?? "stable_when_recorded",
-            durabilityConditionLabel: candidate.durabilityConditionLabel ?? "Stable when recorded",
-            ownershipBoundary: candidate.ownershipBoundary ?? "tenant_owned_later",
-            ownershipBoundaryLabel: candidate.ownershipBoundaryLabel ?? "Tenant-owned later",
-            promotionPath: candidate.promotionPath ?? "ready_for_explicit_export",
-            promotionPathLabel: candidate.promotionPathLabel ?? "Ready for explicit export",
-            recordTarget: candidate.recordTarget ?? "governance_history_record",
-            recordTargetLabel: candidate.recordTargetLabel ?? "Governance history record",
-            promotionBlocker: candidate.promotionBlocker ?? "none_ready_now",
-            promotionBlockerLabel: candidate.promotionBlockerLabel ?? "No promotion blocker",
-            promotionAuthority: candidate.promotionAuthority ?? "tenant_explicit_export",
-            promotionAuthorityLabel: candidate.promotionAuthorityLabel ?? "Tenant explicit export",
-            promotionTrigger: candidate.promotionTrigger ?? "tenant_export_request",
-            promotionTriggerLabel: candidate.promotionTriggerLabel ?? "Tenant export request",
-            exportPayloadShape: candidate.exportPayloadShape ?? "governance_history_record",
-            exportPayloadShapeLabel: candidate.exportPayloadShapeLabel ?? "Governance history record",
-            idempotencyPolicy: candidate.idempotencyPolicy ?? "deterministic_upsert",
-            idempotencyPolicyLabel: candidate.idempotencyPolicyLabel ?? "Deterministic upsert",
-            replaySafety: candidate.replaySafety ?? "replay_safe",
-            replaySafetyLabel: candidate.replaySafetyLabel ?? "Replay-safe",
-            conflictPolicy: candidate.conflictPolicy ?? "append_or_upsert",
-            conflictPolicyLabel: candidate.conflictPolicyLabel ?? "Append or upsert",
-            exportAtomicity: candidate.exportAtomicity ?? "record_level_atomic",
-            exportAtomicityLabel: candidate.exportAtomicityLabel ?? "Record-level atomic",
-            exportDerivationBasis: candidate.exportDerivationBasis ?? "decision_history_derived",
-            exportDerivationBasisLabel: candidate.exportDerivationBasisLabel ?? "Decision-history-derived",
-            exportRevisionPolicy: candidate.exportRevisionPolicy ?? "append_new_revision",
-            exportRevisionPolicyLabel: candidate.exportRevisionPolicyLabel ?? "Append new revision",
-            exportFreshnessSource: candidate.exportFreshnessSource ?? "latest_record_state",
-            exportFreshnessSourceLabel: candidate.exportFreshnessSourceLabel ?? "Latest record state",
-            exportValidationBoundary: candidate.exportValidationBoundary ?? "record_level_validation",
-            exportValidationBoundaryLabel: candidate.exportValidationBoundaryLabel ?? "Record-level validation",
-            exportCompletenessRule: candidate.exportCompletenessRule ?? "self_contained_record",
-            exportCompletenessRuleLabel: candidate.exportCompletenessRuleLabel ?? "Self-contained record",
-            exportSensitivity: candidate.exportSensitivity ?? "tenant_business_context",
-            exportSensitivityLabel: candidate.exportSensitivityLabel ?? "Tenant business context",
-            exportAudienceBoundary: candidate.exportAudienceBoundary ?? "tenant_governance_history_readers",
-            exportAudienceBoundaryLabel:
-              candidate.exportAudienceBoundaryLabel ?? "Tenant governance-history readers",
-            exportSanitizationPolicy: candidate.exportSanitizationPolicy ?? "export_as_recorded",
-            exportSanitizationPolicyLabel: candidate.exportSanitizationPolicyLabel ?? "Export as recorded",
-            exportRedactionBoundary: candidate.exportRedactionBoundary ?? "governance_safe_redaction",
-            exportRedactionBoundaryLabel: candidate.exportRedactionBoundaryLabel ?? "Governance-safe redaction",
-            exportSourceDisclosurePolicy:
-              candidate.exportSourceDisclosurePolicy ?? "decision_summary_only",
-            exportSourceDisclosurePolicyLabel:
-              candidate.exportSourceDisclosurePolicyLabel ?? "Decision summary only",
-            assemblyShape: candidate.assemblyShape ?? "standalone_export_record",
-            assemblyShapeLabel: candidate.assemblyShapeLabel ?? "Standalone export record",
-            promotionPhase: candidate.promotionPhase ?? "phase_one_governance_history",
-            promotionPhaseLabel: candidate.promotionPhaseLabel ?? "Phase-one export",
-            promotionMutability: candidate.promotionMutability ?? "append_only_history",
-            promotionMutabilityLabel: candidate.promotionMutabilityLabel ?? "Append-only history",
-            promotionScope: candidate.promotionScope ?? "single_record_export",
-            promotionScopeLabel: candidate.promotionScopeLabel ?? "Single-record export",
-            identityStability: candidate.identityStability ?? "stable_record_identity",
-            identityStabilityLabel: candidate.identityStabilityLabel ?? "Stable record identity",
-            auditBacking: candidate.auditBacking ?? "decision_ledger_backed",
-            auditBackingLabel: candidate.auditBackingLabel ?? "Decision-ledger-backed",
-            concurrencyBoundary: candidate.concurrencyBoundary ?? "independent_export_safe",
-            concurrencyBoundaryLabel: candidate.concurrencyBoundaryLabel ?? "Independent export safe",
-            exportSequence: candidate.exportSequence ?? "foundational_first",
-            exportSequenceLabel: candidate.exportSequenceLabel ?? "Foundational export sequence",
-            exportDependencyPolicy: candidate.exportDependencyPolicy ?? "independent_candidate",
-            exportDependencyPolicyLabel: candidate.exportDependencyPolicyLabel ?? "Independent export candidate",
-            dependsOnCandidateIds: candidate.dependsOnCandidateIds ?? [],
-            dependsOnCandidateLabels: candidate.dependsOnCandidateLabels ?? [],
-            exportActions: candidate.exportActions ?? buildFallbackExportCandidateActions({
-              runId: board.runId,
-              candidateId: "governance_history_export",
-              readiness: candidate.readiness
-            }),
-            dependencySummary:
-              candidate.dependencySummary
-              ?? "This governance history candidate can promote independently once the tenant requests export."
-          }
-        : {
-            ...candidate,
-            eligibilityRule: candidate.eligibilityRule ?? "after_board_closes_then_export",
-            eligibilityRuleLabel: candidate.eligibilityRuleLabel ?? "After board closes, then export",
-            sourceSurface: candidate.sourceSurface ?? "completion_package_deliverables",
-            sourceSurfaceLabel: candidate.sourceSurfaceLabel ?? "Completion package bundle",
-            candidateClass: candidate.candidateClass ?? "packaged_output",
-            candidateClassLabel: candidate.candidateClassLabel ?? "Packaged output",
-            durabilityCondition: candidate.durabilityCondition ?? "stable_after_board_closure",
-            durabilityConditionLabel: candidate.durabilityConditionLabel ?? "Stable after board closure",
-            ownershipBoundary: candidate.ownershipBoundary ?? "tenant_owned_later",
-            ownershipBoundaryLabel: candidate.ownershipBoundaryLabel ?? "Tenant-owned later",
-            promotionPath: candidate.promotionPath ?? "after_board_closure_then_export",
-            promotionPathLabel: candidate.promotionPathLabel ?? "After board closure, then export",
-            recordTarget: candidate.recordTarget ?? "package_deliverable_record",
-            recordTargetLabel: candidate.recordTargetLabel ?? "Package bundle export records",
-            promotionBlocker: candidate.promotionBlocker ?? "board_closure_required",
-            promotionBlockerLabel: candidate.promotionBlockerLabel ?? "Board closure required",
-            promotionAuthority: candidate.promotionAuthority ?? "board_closure_then_tenant_export",
-            promotionAuthorityLabel:
-              candidate.promotionAuthorityLabel ?? "Board closure, then tenant export",
-            promotionTrigger: candidate.promotionTrigger ?? "board_closure",
-            promotionTriggerLabel: candidate.promotionTriggerLabel ?? "Board closure",
-            exportPayloadShape: candidate.exportPayloadShape ?? "package_snapshot_bundle",
-            exportPayloadShapeLabel: candidate.exportPayloadShapeLabel ?? "Package snapshot bundle",
-            idempotencyPolicy: candidate.idempotencyPolicy ?? "board_closure_snapshot_once",
-            idempotencyPolicyLabel: candidate.idempotencyPolicyLabel ?? "Board-closure snapshot once",
-            replaySafety: candidate.replaySafety ?? "requires_fresh_board_closure_snapshot",
-            replaySafetyLabel: candidate.replaySafetyLabel ?? "Requires fresh board-closure snapshot",
-            conflictPolicy: candidate.conflictPolicy ?? "replace_latest_closure_snapshot",
-            conflictPolicyLabel: candidate.conflictPolicyLabel ?? "Replace latest closure snapshot",
-            exportAtomicity: candidate.exportAtomicity ?? "closure_bundle_atomic",
-            exportAtomicityLabel: candidate.exportAtomicityLabel ?? "Closure-bundle atomic",
-            exportDerivationBasis: candidate.exportDerivationBasis ?? "board_closure_snapshot_derived",
-            exportDerivationBasisLabel: candidate.exportDerivationBasisLabel ?? "Board-closure-snapshot-derived",
-            exportRevisionPolicy: candidate.exportRevisionPolicy ?? "replace_closure_bundle_revision",
-            exportRevisionPolicyLabel: candidate.exportRevisionPolicyLabel ?? "Replace closure-bundle revision",
-            exportFreshnessSource: candidate.exportFreshnessSource ?? "latest_board_closure_snapshot",
-            exportFreshnessSourceLabel: candidate.exportFreshnessSourceLabel ?? "Latest board-closure snapshot",
-            exportValidationBoundary: candidate.exportValidationBoundary ?? "closure_bundle_validation",
-            exportValidationBoundaryLabel: candidate.exportValidationBoundaryLabel ?? "Closure-bundle validation",
-            exportCompletenessRule: candidate.exportCompletenessRule ?? "board_closure_complete_bundle",
-            exportCompletenessRuleLabel: candidate.exportCompletenessRuleLabel ?? "Board-closure-complete bundle",
-            exportSensitivity: candidate.exportSensitivity ?? "tenant_deliverable_context",
-            exportSensitivityLabel: candidate.exportSensitivityLabel ?? "Tenant deliverable context",
-            exportAudienceBoundary: candidate.exportAudienceBoundary ?? "tenant_package_consumers",
-            exportAudienceBoundaryLabel: candidate.exportAudienceBoundaryLabel ?? "Tenant package consumers",
-            exportSanitizationPolicy:
-              candidate.exportSanitizationPolicy ?? "sanitize_before_package_export",
-            exportSanitizationPolicyLabel:
-              candidate.exportSanitizationPolicyLabel ?? "Sanitize before package export",
-            exportRedactionBoundary: candidate.exportRedactionBoundary ?? "package_safe_redaction",
-            exportRedactionBoundaryLabel: candidate.exportRedactionBoundaryLabel ?? "Package-safe redaction",
-            exportSourceDisclosurePolicy:
-              candidate.exportSourceDisclosurePolicy ?? "closure_snapshot_summary_only",
-            exportSourceDisclosurePolicyLabel:
-              candidate.exportSourceDisclosurePolicyLabel ?? "Closure snapshot summary only",
-            assemblyShape: candidate.assemblyShape ?? "package_record_set",
-            assemblyShapeLabel: candidate.assemblyShapeLabel ?? "Package record set",
-            promotionPhase: candidate.promotionPhase ?? "phase_two_package_export",
-            promotionPhaseLabel: candidate.promotionPhaseLabel ?? "Phase-two package export",
-            promotionMutability:
-              candidate.promotionMutability
-              ?? (candidate.readiness === "ready_now" ? "stable_snapshot" : "replaceable_until_board_closure"),
-            promotionMutabilityLabel:
-              candidate.promotionMutabilityLabel
-              ?? (candidate.readiness === "ready_now" ? "Stable snapshot" : "Replaceable until board closure"),
-            promotionScope: candidate.promotionScope ?? "package_record_set_export",
-            promotionScopeLabel: candidate.promotionScopeLabel ?? "Package record-set export",
-            identityStability:
-              candidate.identityStability
-              ?? (candidate.readiness === "ready_now" ? "stable_record_identity" : "finalized_after_board_closure"),
-            identityStabilityLabel:
-              candidate.identityStabilityLabel
-              ?? (candidate.readiness === "ready_now" ? "Stable record identity" : "Finalized after board closure"),
-            auditBacking: candidate.auditBacking ?? "package_closure_backed",
-            auditBackingLabel: candidate.auditBackingLabel ?? "Package-closure-backed",
-            concurrencyBoundary:
-              candidate.concurrencyBoundary
-              ?? (candidate.readiness === "ready_now" ? "independent_export_safe" : "requires_board_closure_snapshot"),
-            concurrencyBoundaryLabel:
-              candidate.concurrencyBoundaryLabel
-              ?? (candidate.readiness === "ready_now" ? "Independent export safe" : "Requires board-closure snapshot"),
-            exportSequence: candidate.exportSequence ?? "board_closure_following",
-            exportSequenceLabel: candidate.exportSequenceLabel ?? "Board-closure-following sequence",
-            exportDependencyPolicy:
-              candidate.exportDependencyPolicy ?? "depends_on_governance_history_export",
-            exportDependencyPolicyLabel:
-              candidate.exportDependencyPolicyLabel ?? "Depends on governance history export",
-            dependsOnCandidateIds: candidate.dependsOnCandidateIds ?? ["governance_history_export"],
-            dependsOnCandidateLabels: candidate.dependsOnCandidateLabels ?? ["Governance history export"],
-            exportActions: candidate.exportActions ?? buildFallbackExportCandidateActions({
-              runId: board.runId,
-              candidateId: "package_bundle_export",
-              readiness: candidate.readiness
-            }),
-            dependencySummary:
-              candidate.dependencySummary
-              ?? (candidate.readiness === "after_board_closes"
-                ? "This package bundle candidate still waits on board closure and later follows the governance history export candidate."
-                : "This package bundle candidate follows the governance history export candidate once the tenant reaches export time.")
-          }
-  );
-  const exportCandidateGroupCount = memoryBoundary.exportCandidateGroupCount ?? exportCandidates.length;
-  const readyExportCandidateGroupCount = memoryBoundary.readyExportCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.readiness === "ready_now").length;
-  const waitingExportCandidateGroupCount = memoryBoundary.waitingExportCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.readiness === "after_board_closes").length;
-  const foundationalExportCandidateCount = memoryBoundary.foundationalExportCandidateCount
-    ?? exportCandidates.filter((candidate) => candidate.exportSequence === "foundational_first").length;
-  const boardClosureFollowingExportCandidateCount = memoryBoundary.boardClosureFollowingExportCandidateCount
-    ?? exportCandidates.filter((candidate) => candidate.exportSequence === "board_closure_following").length;
-  const independentExportCandidateCount = memoryBoundary.independentExportCandidateCount
-    ?? exportCandidates.filter((candidate) => candidate.exportDependencyPolicy === "independent_candidate").length;
-  const dependentExportCandidateCount = memoryBoundary.dependentExportCandidateCount
-    ?? exportCandidates.filter((candidate) => candidate.exportDependencyPolicy === "depends_on_governance_history_export").length;
-  const independentExportSafeCandidateGroupCount = memoryBoundary.independentExportSafeCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.concurrencyBoundary === "independent_export_safe").length;
-  const requiresClosureSnapshotCandidateGroupCount = memoryBoundary.requiresClosureSnapshotCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.concurrencyBoundary === "requires_board_closure_snapshot").length;
-  const tenantBusinessContextCandidateGroupCount = memoryBoundary.tenantBusinessContextCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.exportSensitivity === "tenant_business_context").length;
-  const tenantDeliverableContextCandidateGroupCount = memoryBoundary.tenantDeliverableContextCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.exportSensitivity === "tenant_deliverable_context").length;
-  const governanceHistoryAudienceCandidateGroupCount = memoryBoundary.governanceHistoryAudienceCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.exportAudienceBoundary === "tenant_governance_history_readers").length;
-  const packageConsumerAudienceCandidateGroupCount = memoryBoundary.packageConsumerAudienceCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.exportAudienceBoundary === "tenant_package_consumers").length;
-  const exportAsRecordedCandidateGroupCount = memoryBoundary.exportAsRecordedCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.exportSanitizationPolicy === "export_as_recorded").length;
-  const sanitizeBeforePackageExportCandidateGroupCount = memoryBoundary.sanitizeBeforePackageExportCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.exportSanitizationPolicy === "sanitize_before_package_export").length;
-  const governanceSafeRedactionCandidateGroupCount = memoryBoundary.governanceSafeRedactionCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.exportRedactionBoundary === "governance_safe_redaction").length;
-  const packageSafeRedactionCandidateGroupCount = memoryBoundary.packageSafeRedactionCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.exportRedactionBoundary === "package_safe_redaction").length;
-  const decisionSummaryOnlyCandidateGroupCount = memoryBoundary.decisionSummaryOnlyCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.exportSourceDisclosurePolicy === "decision_summary_only").length;
-  const closureSnapshotSummaryOnlyCandidateGroupCount = memoryBoundary.closureSnapshotSummaryOnlyCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.exportSourceDisclosurePolicy === "closure_snapshot_summary_only").length;
-  const singleRecordExportRequestCandidateGroupCount = memoryBoundary.singleRecordExportRequestCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.exportRequestShape === "single_record_export_request").length;
-  const packageBundleExportRequestCandidateGroupCount = memoryBoundary.packageBundleExportRequestCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.exportRequestShape === "package_bundle_export_request").length;
-  const tenantExportConfirmationCandidateGroupCount = memoryBoundary.tenantExportConfirmationCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.exportConfirmationRequirement === "tenant_export_confirmation").length;
-  const boardClosureThenTenantExportConfirmationCandidateGroupCount = memoryBoundary.boardClosureThenTenantExportConfirmationCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.exportConfirmationRequirement === "board_closure_then_tenant_export_confirmation").length;
-  const retryLatestRecordExportCandidateGroupCount = memoryBoundary.retryLatestRecordExportCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.exportRecoveryPath === "retry_latest_record_export").length;
-  const rerunAfterBoardClosureSnapshotCandidateGroupCount = memoryBoundary.rerunAfterBoardClosureSnapshotCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.exportRecoveryPath === "rerun_after_board_closure_snapshot").length;
-  const governanceHistoryNoteCandidateGroupCount = memoryBoundary.governanceHistoryNoteCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.memoryPlacement === "governance_history_note").length;
-  const packageRecordFolderCandidateGroupCount = memoryBoundary.packageRecordFolderCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.memoryPlacement === "package_record_folder").length;
-  const appendHistoryEntryCandidateGroupCount = memoryBoundary.appendHistoryEntryCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.syncStrategy === "append_history_entry").length;
-  const replacePackageSnapshotAfterClosureCandidateGroupCount = memoryBoundary.replacePackageSnapshotAfterClosureCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.syncStrategy === "replace_package_snapshot_after_board_closure").length;
-  const readyForTenantExportCandidateGroupCount = memoryBoundary.readyForTenantExportCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.promotionState === "ready_for_tenant_export").length;
-  const awaitingBoardClosureCandidateGroupCount = memoryBoundary.awaitingBoardClosureCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.promotionState === "awaiting_board_closure").length;
-  const tenantExportAvailableNextStepCandidateGroupCount = memoryBoundary.tenantExportAvailableNextStepCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.promotionNextStep === "tenant_export_available").length;
-  const boardClosureThenTenantExportNextStepCandidateGroupCount = memoryBoundary.boardClosureThenTenantExportNextStepCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.promotionNextStep === "board_closure_then_tenant_export").length;
-  const tenantExportActionFamilyCandidateGroupCount = memoryBoundary.tenantExportActionFamilyCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.promotionActionFamily === "tenant_export_candidate").length;
-  const boardClosureActionFamilyCandidateGroupCount = memoryBoundary.boardClosureActionFamilyCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.promotionActionFamily === "board_closure_before_export").length;
-  const governanceHistoryCandidateGroupCount = memoryBoundary.governanceHistoryCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.candidateClass === "governance_history").length;
-  const packagedOutputCandidateGroupCount = memoryBoundary.packagedOutputCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.candidateClass === "packaged_output").length;
-  const stableWhenRecordedCandidateGroupCount = memoryBoundary.stableWhenRecordedCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.durabilityCondition === "stable_when_recorded").length;
-  const stableAfterBoardClosureCandidateGroupCount = memoryBoundary.stableAfterBoardClosureCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.durabilityCondition === "stable_after_board_closure").length;
-  const tenantOwnedLaterCandidateGroupCount = memoryBoundary.tenantOwnedLaterCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.ownershipBoundary === "tenant_owned_later").length;
-  const governanceHistoryRecordCandidateGroupCount = memoryBoundary.governanceHistoryRecordCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.recordTarget === "governance_history_record").length;
-  const packageBundleRecordCandidateGroupCount = memoryBoundary.packageBundleRecordCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.recordTarget === "package_deliverable_record").length;
-  const tenantExplicitExportAuthorityCandidateGroupCount = memoryBoundary.tenantExplicitExportAuthorityCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.promotionAuthority === "tenant_explicit_export").length;
-  const boardClosureThenTenantExportAuthorityCandidateGroupCount = memoryBoundary.boardClosureThenTenantExportAuthorityCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.promotionAuthority === "board_closure_then_tenant_export").length;
-  const explicitExportLaterCandidateGroupCount = memoryBoundary.explicitExportLaterCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.eligibilityRule === "explicit_export_later").length;
-  const afterBoardClosesThenExportCandidateGroupCount = memoryBoundary.afterBoardClosesThenExportCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.eligibilityRule === "after_board_closes_then_export").length;
-  const recentDecisionsSourceCandidateGroupCount = memoryBoundary.recentDecisionsSourceCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.sourceSurface === "recent_decisions").length;
-  const completionPackageSurfaceCandidateGroupCount = memoryBoundary.completionPackageSurfaceCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.sourceSurface === "completion_package_deliverables").length;
-  const readyForExplicitExportCandidateGroupCount = memoryBoundary.readyForExplicitExportCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.promotionPath === "ready_for_explicit_export").length;
-  const afterBoardClosureThenExportCandidateGroupCount = memoryBoundary.afterBoardClosureThenExportCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.promotionPath === "after_board_closure_then_export").length;
-  const noPromotionBlockerCandidateGroupCount = memoryBoundary.noPromotionBlockerCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.promotionBlocker === "none_ready_now").length;
-  const boardClosureRequiredCandidateGroupCount = memoryBoundary.boardClosureRequiredCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.promotionBlocker === "board_closure_required").length;
-  const tenantExportRequestCandidateGroupCount = memoryBoundary.tenantExportRequestCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.promotionTrigger === "tenant_export_request").length;
-  const boardClosureTriggerCandidateGroupCount = memoryBoundary.boardClosureTriggerCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.promotionTrigger === "board_closure").length;
-  const standaloneExportRecordCandidateGroupCount = memoryBoundary.standaloneExportRecordCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.assemblyShape === "standalone_export_record").length;
-  const packageRecordSetCandidateGroupCount = memoryBoundary.packageRecordSetCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.assemblyShape === "package_record_set").length;
-  const phaseOneExportCandidateGroupCount = memoryBoundary.phaseOneExportCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.promotionPhase === "phase_one_governance_history").length;
-  const phaseTwoExportCandidateGroupCount = memoryBoundary.phaseTwoExportCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.promotionPhase === "phase_two_package_export").length;
-  const appendOnlyHistoryCandidateGroupCount = memoryBoundary.appendOnlyHistoryCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.promotionMutability === "append_only_history").length;
-  const replaceableSnapshotCandidateGroupCount = memoryBoundary.replaceableSnapshotCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.promotionMutability === "replaceable_until_board_closure").length;
-  const singleRecordExportScopeCandidateGroupCount = memoryBoundary.singleRecordExportScopeCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.promotionScope === "single_record_export").length;
-  const packageRecordSetExportScopeCandidateGroupCount = memoryBoundary.packageRecordSetExportScopeCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.promotionScope === "package_record_set_export").length;
-  const stableIdentityCandidateGroupCount = memoryBoundary.stableIdentityCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.identityStability === "stable_record_identity").length;
-  const closureFinalizedIdentityCandidateGroupCount = memoryBoundary.closureFinalizedIdentityCandidateGroupCount
-    ?? exportCandidates.filter((candidate) => candidate.identityStability === "finalized_after_board_closure").length;
-  const exportCandidateSummary = memoryBoundary.exportCandidateSummary
-    ?? (waitingExportCandidateGroupCount > 0
-      ? `${readyExportCandidateGroupCount} export candidate group${readyExportCandidateGroupCount === 1 ? " is" : "s are"} ready for later tenant export, and ${waitingExportCandidateGroupCount} group${waitingExportCandidateGroupCount === 1 ? " still waits" : "s still wait"} on board closure first.`
-      : `${readyExportCandidateGroupCount} export candidate group${readyExportCandidateGroupCount === 1 ? " is" : "s are"} ready for later tenant export.`);
-  const sequenceSummary = memoryBoundary.sequenceSummary
-    ?? (boardClosureFollowingExportCandidateCount > 0
-      ? `${foundationalExportCandidateCount} export candidate group${foundationalExportCandidateCount === 1 ? " forms" : "s form"} the foundational export sequence, and ${boardClosureFollowingExportCandidateCount} group${boardClosureFollowingExportCandidateCount === 1 ? " follows" : "s follow"} after board closure.`
-      : `${foundationalExportCandidateCount} export candidate group${foundationalExportCandidateCount === 1 ? " forms" : "s form"} the foundational export sequence. No later board-closure-following candidate groups are waiting right now.`);
-  const dependencySummary = memoryBoundary.dependencySummary
-    ?? (dependentExportCandidateCount > 0
-      ? `${independentExportCandidateCount} export candidate group${independentExportCandidateCount === 1 ? " stands" : "s stand"} independently, while ${dependentExportCandidateCount} group${dependentExportCandidateCount === 1 ? " still depends" : "s still depend"} on the governance history export candidate.`
-      : `${independentExportCandidateCount} export candidate group${independentExportCandidateCount === 1 ? " stands" : "s stand"} independently. No grouped export candidates currently depend on governance history export.`);
-  const exportCandidateConcurrencySummary = memoryBoundary.exportCandidateConcurrencySummary
-    ?? (requiresClosureSnapshotCandidateGroupCount > 0
-      ? `${independentExportSafeCandidateGroupCount} export candidate group${independentExportSafeCandidateGroupCount === 1 ? " is" : "s are"} concurrency-safe for later independent export, and ${requiresClosureSnapshotCandidateGroupCount} group${requiresClosureSnapshotCandidateGroupCount === 1 ? " still needs" : "s still need"} a board-closure snapshot before export remains concurrency-safe.`
-      : `${independentExportSafeCandidateGroupCount} export candidate group${independentExportSafeCandidateGroupCount === 1 ? " is" : "s are"} concurrency-safe for later independent export.`);
-  const exportCandidateSensitivitySummary = memoryBoundary.exportCandidateSensitivitySummary
-    ?? (tenantDeliverableContextCandidateGroupCount > 0
-      ? `${tenantBusinessContextCandidateGroupCount} export candidate group${tenantBusinessContextCandidateGroupCount === 1 ? " carries" : "s carry"} tenant business context, and ${tenantDeliverableContextCandidateGroupCount} group${tenantDeliverableContextCandidateGroupCount === 1 ? " still carries" : "s still carry"} tenant deliverable context.`
-      : `${tenantBusinessContextCandidateGroupCount} export candidate group${tenantBusinessContextCandidateGroupCount === 1 ? " carries" : "s carry"} tenant business context.`);
-  const exportCandidateAudienceSummary = memoryBoundary.exportCandidateAudienceSummary
-    ?? (packageConsumerAudienceCandidateGroupCount > 0
-      ? `${governanceHistoryAudienceCandidateGroupCount} export candidate group${governanceHistoryAudienceCandidateGroupCount === 1 ? " is aimed" : "s are aimed"} at tenant governance-history readers, and ${packageConsumerAudienceCandidateGroupCount} group${packageConsumerAudienceCandidateGroupCount === 1 ? " still targets" : "s still target"} tenant package consumers.`
-      : `${governanceHistoryAudienceCandidateGroupCount} export candidate group${governanceHistoryAudienceCandidateGroupCount === 1 ? " is aimed" : "s are aimed"} at tenant governance-history readers.`);
-  const exportCandidateSanitizationSummary = memoryBoundary.exportCandidateSanitizationSummary
-    ?? (sanitizeBeforePackageExportCandidateGroupCount > 0
-      ? `${exportAsRecordedCandidateGroupCount} export candidate group${exportAsRecordedCandidateGroupCount === 1 ? " is exported" : "s are exported"} as recorded, and ${sanitizeBeforePackageExportCandidateGroupCount} group${sanitizeBeforePackageExportCandidateGroupCount === 1 ? " still requires" : "s still require"} sanitization before package export.`
-      : `${exportAsRecordedCandidateGroupCount} export candidate group${exportAsRecordedCandidateGroupCount === 1 ? " is exported" : "s are exported"} as recorded.`);
-  const exportCandidateRedactionSummary = memoryBoundary.exportCandidateRedactionSummary
-    ?? (packageSafeRedactionCandidateGroupCount > 0
-      ? `${governanceSafeRedactionCandidateGroupCount} export candidate group${governanceSafeRedactionCandidateGroupCount === 1 ? " uses" : "s use"} governance-safe redaction, and ${packageSafeRedactionCandidateGroupCount} group${packageSafeRedactionCandidateGroupCount === 1 ? " still requires" : "s still require"} package-safe redaction.`
-      : `${governanceSafeRedactionCandidateGroupCount} export candidate group${governanceSafeRedactionCandidateGroupCount === 1 ? " uses" : "s use"} governance-safe redaction.`);
-  const exportCandidateSourceDisclosureSummary = memoryBoundary.exportCandidateSourceDisclosureSummary
-    ?? (closureSnapshotSummaryOnlyCandidateGroupCount > 0
-      ? `${decisionSummaryOnlyCandidateGroupCount} export candidate group${decisionSummaryOnlyCandidateGroupCount === 1 ? " discloses" : "s disclose"} decision summaries only, and ${closureSnapshotSummaryOnlyCandidateGroupCount} group${closureSnapshotSummaryOnlyCandidateGroupCount === 1 ? " still discloses" : "s still disclose"} closure-snapshot summaries only.`
-      : `${decisionSummaryOnlyCandidateGroupCount} export candidate group${decisionSummaryOnlyCandidateGroupCount === 1 ? " discloses" : "s disclose"} decision summaries only.`);
-  const exportCandidateRequestShapeSummary = memoryBoundary.exportCandidateRequestShapeSummary
-    ?? (packageBundleExportRequestCandidateGroupCount > 0
-      ? `${singleRecordExportRequestCandidateGroupCount} export candidate group${singleRecordExportRequestCandidateGroupCount === 1 ? " uses" : "s use"} single-record export requests, and ${packageBundleExportRequestCandidateGroupCount} group${packageBundleExportRequestCandidateGroupCount === 1 ? " still uses" : "s still use"} package-bundle export requests.`
-      : `${singleRecordExportRequestCandidateGroupCount} export candidate group${singleRecordExportRequestCandidateGroupCount === 1 ? " uses" : "s use"} single-record export requests.`);
-  const exportCandidateConfirmationSummary = memoryBoundary.exportCandidateConfirmationSummary
-    ?? (boardClosureThenTenantExportConfirmationCandidateGroupCount > 0
-      ? `${tenantExportConfirmationCandidateGroupCount} export candidate group${tenantExportConfirmationCandidateGroupCount === 1 ? " requires" : "s require"} tenant export confirmation, and ${boardClosureThenTenantExportConfirmationCandidateGroupCount} group${boardClosureThenTenantExportConfirmationCandidateGroupCount === 1 ? " still requires" : "s still require"} board closure before tenant export confirmation.`
-      : `${tenantExportConfirmationCandidateGroupCount} export candidate group${tenantExportConfirmationCandidateGroupCount === 1 ? " requires" : "s require"} tenant export confirmation.`);
-  const exportCandidateRecoveryPathSummary = memoryBoundary.exportCandidateRecoveryPathSummary
-    ?? (rerunAfterBoardClosureSnapshotCandidateGroupCount > 0
-      ? `${retryLatestRecordExportCandidateGroupCount} export candidate group${retryLatestRecordExportCandidateGroupCount === 1 ? " retries" : "s retry"} the latest record export, and ${rerunAfterBoardClosureSnapshotCandidateGroupCount} group${rerunAfterBoardClosureSnapshotCandidateGroupCount === 1 ? " still reruns" : "s still rerun"} after the board-closure snapshot.`
-      : `${retryLatestRecordExportCandidateGroupCount} export candidate group${retryLatestRecordExportCandidateGroupCount === 1 ? " retries" : "s retry"} the latest record export.`);
-  const exportCandidatePlacementSummary = memoryBoundary.exportCandidatePlacementSummary
-    ?? (packageRecordFolderCandidateGroupCount > 0
-      ? `${governanceHistoryNoteCandidateGroupCount} export candidate group${governanceHistoryNoteCandidateGroupCount === 1 ? " lands" : "s land"} as governance history notes, and ${packageRecordFolderCandidateGroupCount} group${packageRecordFolderCandidateGroupCount === 1 ? " still lands" : "s still land"} in package record folders.`
-      : `${governanceHistoryNoteCandidateGroupCount} export candidate group${governanceHistoryNoteCandidateGroupCount === 1 ? " lands" : "s land"} as governance history notes.`);
-  const exportCandidateSyncStrategySummary = memoryBoundary.exportCandidateSyncStrategySummary
-    ?? (replacePackageSnapshotAfterClosureCandidateGroupCount > 0
-      ? `${appendHistoryEntryCandidateGroupCount} export candidate group${appendHistoryEntryCandidateGroupCount === 1 ? " appends" : "s append"} history entries, and ${replacePackageSnapshotAfterClosureCandidateGroupCount} group${replacePackageSnapshotAfterClosureCandidateGroupCount === 1 ? " still replaces" : "s still replace"} package snapshots after board closure.`
-      : `${appendHistoryEntryCandidateGroupCount} export candidate group${appendHistoryEntryCandidateGroupCount === 1 ? " appends" : "s append"} history entries.`);
-  const exportCandidateStateSummary = memoryBoundary.exportCandidateStateSummary
-    ?? (awaitingBoardClosureCandidateGroupCount > 0
-      ? `${readyForTenantExportCandidateGroupCount} export candidate group${readyForTenantExportCandidateGroupCount === 1 ? " is" : "s are"} ready for tenant export later, and ${awaitingBoardClosureCandidateGroupCount} group${awaitingBoardClosureCandidateGroupCount === 1 ? " is" : "s are"} still awaiting board closure.`
-      : `${readyForTenantExportCandidateGroupCount} export candidate group${readyForTenantExportCandidateGroupCount === 1 ? " is" : "s are"} ready for tenant export later.`);
-  const exportCandidateNextStepSummary = memoryBoundary.exportCandidateNextStepSummary
-    ?? (boardClosureThenTenantExportNextStepCandidateGroupCount > 0
-      ? `${tenantExportAvailableNextStepCandidateGroupCount} export candidate group${tenantExportAvailableNextStepCandidateGroupCount === 1 ? " is" : "s are"} ready for a later tenant export step, and ${boardClosureThenTenantExportNextStepCandidateGroupCount} group${boardClosureThenTenantExportNextStepCandidateGroupCount === 1 ? " still needs" : "s still need"} board closure before tenant export becomes the next step.`
-      : `${tenantExportAvailableNextStepCandidateGroupCount} export candidate group${tenantExportAvailableNextStepCandidateGroupCount === 1 ? " is" : "s are"} ready for a later tenant export step.`);
-  const exportCandidateActionFamilySummary = memoryBoundary.exportCandidateActionFamilySummary
-    ?? (boardClosureActionFamilyCandidateGroupCount > 0
-      ? `${tenantExportActionFamilyCandidateGroupCount} export candidate group${tenantExportActionFamilyCandidateGroupCount === 1 ? " sits" : "s sit"} in the tenant export family, and ${boardClosureActionFamilyCandidateGroupCount} group${boardClosureActionFamilyCandidateGroupCount === 1 ? " remains" : "s remain"} in the board-closure-first family.`
-      : `${tenantExportActionFamilyCandidateGroupCount} export candidate group${tenantExportActionFamilyCandidateGroupCount === 1 ? " sits" : "s sit"} in the tenant export family.`);
-  const exportCandidateClassSummary = memoryBoundary.exportCandidateClassSummary
-    ?? (packagedOutputCandidateGroupCount > 0
-      ? `${governanceHistoryCandidateGroupCount} export candidate group${governanceHistoryCandidateGroupCount === 1 ? " stays" : "s stay"} in governance history, and ${packagedOutputCandidateGroupCount} group${packagedOutputCandidateGroupCount === 1 ? " still stays" : "s still stay"} in packaged output.`
-      : `${governanceHistoryCandidateGroupCount} export candidate group${governanceHistoryCandidateGroupCount === 1 ? " stays" : "s stay"} in governance history.`);
-  const exportCandidateDurabilitySummary = memoryBoundary.exportCandidateDurabilitySummary
-    ?? (stableAfterBoardClosureCandidateGroupCount > 0
-      ? `${stableWhenRecordedCandidateGroupCount} export candidate group${stableWhenRecordedCandidateGroupCount === 1 ? " is" : "s are"} stable when recorded, and ${stableAfterBoardClosureCandidateGroupCount} group${stableAfterBoardClosureCandidateGroupCount === 1 ? " still stays" : "s still stay"} stable after board closure.`
-      : `${stableWhenRecordedCandidateGroupCount} export candidate group${stableWhenRecordedCandidateGroupCount === 1 ? " is" : "s are"} stable when recorded.`);
-  const exportCandidateOwnershipSummary = memoryBoundary.exportCandidateOwnershipSummary
-    ?? `${tenantOwnedLaterCandidateGroupCount} export candidate group${tenantOwnedLaterCandidateGroupCount === 1 ? " remains" : "s remain"} tenant-owned later.`;
-  const exportCandidateRecordTargetSummary = memoryBoundary.exportCandidateRecordTargetSummary
-    ?? (packageBundleRecordCandidateGroupCount > 0
-      ? `${governanceHistoryRecordCandidateGroupCount} export candidate group${governanceHistoryRecordCandidateGroupCount === 1 ? " becomes" : "s become"} governance history records, and ${packageBundleRecordCandidateGroupCount} group${packageBundleRecordCandidateGroupCount === 1 ? " still becomes" : "s still become"} package bundle export records.`
-      : `${governanceHistoryRecordCandidateGroupCount} export candidate group${governanceHistoryRecordCandidateGroupCount === 1 ? " becomes" : "s become"} governance history records.`);
-  const exportCandidateAuthoritySummary = memoryBoundary.exportCandidateAuthoritySummary
-    ?? (boardClosureThenTenantExportAuthorityCandidateGroupCount > 0
-      ? `${tenantExplicitExportAuthorityCandidateGroupCount} export candidate group${tenantExplicitExportAuthorityCandidateGroupCount === 1 ? " is" : "s are"} tenant-controlled for later explicit export, and ${boardClosureThenTenantExportAuthorityCandidateGroupCount} group${boardClosureThenTenantExportAuthorityCandidateGroupCount === 1 ? " still needs" : "s still need"} board closure before tenant export owns the next move.`
-      : `${tenantExplicitExportAuthorityCandidateGroupCount} export candidate group${tenantExplicitExportAuthorityCandidateGroupCount === 1 ? " is" : "s are"} tenant-controlled for later explicit export.`);
-  const exportCandidateEligibilitySummary = memoryBoundary.exportCandidateEligibilitySummary
-    ?? (afterBoardClosesThenExportCandidateGroupCount > 0
-      ? `${explicitExportLaterCandidateGroupCount} export candidate group${explicitExportLaterCandidateGroupCount === 1 ? " is" : "s are"} eligible for later explicit export, and ${afterBoardClosesThenExportCandidateGroupCount} group${afterBoardClosesThenExportCandidateGroupCount === 1 ? " still becomes" : "s still become"} eligible only after board closure.`
-      : `${explicitExportLaterCandidateGroupCount} export candidate group${explicitExportLaterCandidateGroupCount === 1 ? " is" : "s are"} eligible for later explicit export.`);
-  const exportCandidateSourceSurfaceSummary = memoryBoundary.exportCandidateSourceSurfaceSummary
-    ?? (completionPackageSurfaceCandidateGroupCount > 0
-      ? `${recentDecisionsSourceCandidateGroupCount} export candidate group${recentDecisionsSourceCandidateGroupCount === 1 ? " comes" : "s come"} from recent decisions, and ${completionPackageSurfaceCandidateGroupCount} group${completionPackageSurfaceCandidateGroupCount === 1 ? " still comes" : "s still come"} from the completion package bundle.`
-      : `${recentDecisionsSourceCandidateGroupCount} export candidate group${recentDecisionsSourceCandidateGroupCount === 1 ? " comes" : "s come"} from recent decisions.`);
-  const exportCandidatePathSummary = memoryBoundary.exportCandidatePathSummary
-    ?? (afterBoardClosureThenExportCandidateGroupCount > 0
-      ? `${readyForExplicitExportCandidateGroupCount} export candidate group${readyForExplicitExportCandidateGroupCount === 1 ? " follows" : "s follow"} the ready-for-explicit-export path, and ${afterBoardClosureThenExportCandidateGroupCount} group${afterBoardClosureThenExportCandidateGroupCount === 1 ? " still follows" : "s still follow"} the after-board-closure-then-export path.`
-      : `${readyForExplicitExportCandidateGroupCount} export candidate group${readyForExplicitExportCandidateGroupCount === 1 ? " follows" : "s follow"} the ready-for-explicit-export path.`);
-  const exportCandidateBlockerSummary = memoryBoundary.exportCandidateBlockerSummary
-    ?? (boardClosureRequiredCandidateGroupCount > 0
-      ? `${noPromotionBlockerCandidateGroupCount} export candidate group${noPromotionBlockerCandidateGroupCount === 1 ? " has" : "s have"} no promotion blocker, and ${boardClosureRequiredCandidateGroupCount} group${boardClosureRequiredCandidateGroupCount === 1 ? " still needs" : "s still need"} board closure as the blocker boundary.`
-      : `${noPromotionBlockerCandidateGroupCount} export candidate group${noPromotionBlockerCandidateGroupCount === 1 ? " has" : "s have"} no promotion blocker.`);
-  const exportCandidateTriggerSummary = memoryBoundary.exportCandidateTriggerSummary
-    ?? (boardClosureTriggerCandidateGroupCount > 0
-      ? `${tenantExportRequestCandidateGroupCount} export candidate group${tenantExportRequestCandidateGroupCount === 1 ? " waits" : "s wait"} on a later tenant export request, and ${boardClosureTriggerCandidateGroupCount} group${boardClosureTriggerCandidateGroupCount === 1 ? " still waits" : "s still wait"} on board closure first.`
-      : `${tenantExportRequestCandidateGroupCount} export candidate group${tenantExportRequestCandidateGroupCount === 1 ? " waits" : "s wait"} on a later tenant export request.`);
-  const exportCandidateAssemblySummary = memoryBoundary.exportCandidateAssemblySummary
-    ?? (packageRecordSetCandidateGroupCount > 0
-      ? `${standaloneExportRecordCandidateGroupCount} export candidate group${standaloneExportRecordCandidateGroupCount === 1 ? " assembles" : "s assemble"} as a standalone export record, and ${packageRecordSetCandidateGroupCount} group${packageRecordSetCandidateGroupCount === 1 ? " still assembles" : "s still assemble"} as a package record set.`
-      : `${standaloneExportRecordCandidateGroupCount} export candidate group${standaloneExportRecordCandidateGroupCount === 1 ? " assembles" : "s assemble"} as a standalone export record.`);
-  const exportCandidatePhaseSummary = memoryBoundary.exportCandidatePhaseSummary
-    ?? (phaseTwoExportCandidateGroupCount > 0
-      ? `${phaseOneExportCandidateGroupCount} export candidate group${phaseOneExportCandidateGroupCount === 1 ? " stays" : "s stay"} in phase-one governance export, and ${phaseTwoExportCandidateGroupCount} group${phaseTwoExportCandidateGroupCount === 1 ? " still stays" : "s still stay"} in phase-two package export.`
-      : `${phaseOneExportCandidateGroupCount} export candidate group${phaseOneExportCandidateGroupCount === 1 ? " stays" : "s stay"} in phase-one governance export.`);
-  const exportCandidateMutabilitySummary = memoryBoundary.exportCandidateMutabilitySummary
-    ?? (replaceableSnapshotCandidateGroupCount > 0
-      ? `${appendOnlyHistoryCandidateGroupCount} export candidate group${appendOnlyHistoryCandidateGroupCount === 1 ? " stays" : "s stay"} append-only history, and ${replaceableSnapshotCandidateGroupCount} group${replaceableSnapshotCandidateGroupCount === 1 ? " still stays" : "s still stay"} replaceable until board closure.`
-      : `${appendOnlyHistoryCandidateGroupCount} export candidate group${appendOnlyHistoryCandidateGroupCount === 1 ? " stays" : "s stay"} append-only history.`);
-  const exportCandidateScopeSummary = memoryBoundary.exportCandidateScopeSummary
-    ?? (packageRecordSetExportScopeCandidateGroupCount > 0
-      ? `${singleRecordExportScopeCandidateGroupCount} export candidate group${singleRecordExportScopeCandidateGroupCount === 1 ? " keeps" : "s keep"} a single-record export scope, and ${packageRecordSetExportScopeCandidateGroupCount} group${packageRecordSetExportScopeCandidateGroupCount === 1 ? " still keeps" : "s still keep"} a package record-set export scope.`
-      : `${singleRecordExportScopeCandidateGroupCount} export candidate group${singleRecordExportScopeCandidateGroupCount === 1 ? " keeps" : "s keep"} a single-record export scope.`);
-  const exportCandidateIdentitySummary = memoryBoundary.exportCandidateIdentitySummary
-    ?? (closureFinalizedIdentityCandidateGroupCount > 0
-      ? `${stableIdentityCandidateGroupCount} export candidate group${stableIdentityCandidateGroupCount === 1 ? " already has" : "s already have"} stable record identity, and ${closureFinalizedIdentityCandidateGroupCount} group${closureFinalizedIdentityCandidateGroupCount === 1 ? " still finalizes" : "s still finalize"} identity after board closure.`
-      : `${stableIdentityCandidateGroupCount} export candidate group${stableIdentityCandidateGroupCount === 1 ? " already has" : "s already have"} stable record identity.`);
-
-  return (
-    <section style={styles.panel}>
-      <h2 style={styles.panelTitle}>Memory boundary</h2>
-      <p style={styles.panelBody}>{memoryBoundary.summary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.exportSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.roleSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.ownershipSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.runtimeShapeSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.runtimeLongMemoryDispositionSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.promotionSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.recordTargetSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.blockerSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.authoritySummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.triggerSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.nextStepSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.actionFamilySummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.assemblySummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.phaseSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.mutabilitySummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.scopeSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.identitySummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.auditSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.concurrencySummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.payloadShapeSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.idempotencySummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.replaySafetySummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.conflictPolicySummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.atomicitySummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.derivationSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.revisionSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.freshnessSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.validationSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.completenessSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.sensitivitySummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.audienceSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.sanitizationSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.redactionSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.sourceDisclosureSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.placementSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.syncStrategySummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.requestShapeSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.confirmationSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.recoveryPathSummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateSummary}</p>
-      <p style={styles.actionSummary}>{sequenceSummary}</p>
-      <p style={styles.actionSummary}>{dependencySummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateConcurrencySummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateSensitivitySummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateAudienceSummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateSanitizationSummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateRedactionSummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateSourceDisclosureSummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateRequestShapeSummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateConfirmationSummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateRecoveryPathSummary}</p>
-      <p style={styles.actionSummary}>{exportCandidatePlacementSummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateSyncStrategySummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateStateSummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateNextStepSummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateActionFamilySummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateClassSummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateDurabilitySummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateOwnershipSummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateRecordTargetSummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateAuthoritySummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateEligibilitySummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateSourceSurfaceSummary}</p>
-      <p style={styles.actionSummary}>{exportCandidatePathSummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateBlockerSummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateTriggerSummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateAssemblySummary}</p>
-      <p style={styles.actionSummary}>{exportCandidatePhaseSummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateMutabilitySummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateScopeSummary}</p>
-      <p style={styles.actionSummary}>{exportCandidateIdentitySummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.exportCandidatePayloadShapeSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.exportCandidateIdempotencySummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.exportCandidateReplaySafetySummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.exportCandidateConflictPolicySummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.exportCandidateAtomicitySummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.exportCandidateDerivationSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.exportCandidateRevisionSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.exportCandidateFreshnessSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.exportCandidateValidationSummary}</p>
-      <p style={styles.actionSummary}>{memoryBoundary.exportCandidateCompletenessSummary}</p>
-      <ul style={styles.actionList}>
-        <li style={styles.actionItem}>
-          <p style={styles.contractMeta}>Runtime partition</p>
-          <p style={styles.actionHeading}>{`${memoryBoundary.partitions.runtime.itemCount} bucket${memoryBoundary.partitions.runtime.itemCount === 1 ? "" : "s"}`}</p>
-          <p style={styles.actionSummary}>{memoryBoundary.partitions.runtime.summary}</p>
-        </li>
-        <li style={styles.actionItem}>
-          <p style={styles.contractMeta}>Governance history candidates</p>
-          <p style={styles.actionHeading}>{`${memoryBoundary.partitions.governanceHistoryCandidates.itemCount} bucket${memoryBoundary.partitions.governanceHistoryCandidates.itemCount === 1 ? "" : "s"}`}</p>
-          <p style={styles.actionSummary}>{memoryBoundary.partitions.governanceHistoryCandidates.summary}</p>
-        </li>
-        <li style={styles.actionItem}>
-          <p style={styles.contractMeta}>Packaged output candidates</p>
-          <p style={styles.actionHeading}>{`${memoryBoundary.partitions.packagedOutputCandidates.itemCount} bucket${memoryBoundary.partitions.packagedOutputCandidates.itemCount === 1 ? "" : "s"}`}</p>
-          <p style={styles.actionSummary}>{memoryBoundary.partitions.packagedOutputCandidates.summary}</p>
-        </li>
-      </ul>
-      <div style={{ display: "grid", gap: "0.55rem" }}>
-        <p style={styles.contractMeta}>Export candidate groups</p>
-        <p style={styles.actionSummary}>{`${exportCandidateGroupCount} grouped export candidate${exportCandidateGroupCount === 1 ? "" : "s"} are currently visible in the board contract.`}</p>
-        <p style={styles.actionSummary}>{memoryBoundary.deliverySummary}</p>
-        <ul style={styles.actionList}>
-          {exportCandidates.map((candidate) => (
-            <li key={candidate.id} style={styles.actionItem}>
-              <p style={styles.actionMeta}>{`${candidate.itemCount} bucket${candidate.itemCount === 1 ? "" : "s"}`}</p>
-              <h3 style={styles.actionHeading}>{candidate.label}</h3>
-              <div style={styles.badgeList}>
-                <span style={styles.badge}>{candidate.readinessLabel}</span>
-                <span style={styles.badge}>{candidate.eligibilityRuleLabel}</span>
-                <span style={styles.badge}>{candidate.sourceSurfaceLabel}</span>
-                <span style={styles.badge}>{candidate.candidateClassLabel}</span>
-                <span style={styles.badge}>{candidate.durabilityConditionLabel}</span>
-                <span style={styles.badge}>{candidate.ownershipBoundaryLabel}</span>
-                <span style={styles.badge}>{candidate.promotionPathLabel}</span>
-                <span style={styles.badge}>{candidate.recordTargetLabel}</span>
-                <span style={styles.badge}>{candidate.promotionBlockerLabel}</span>
-                <span style={styles.badge}>{candidate.promotionAuthorityLabel}</span>
-                <span style={styles.badge}>{candidate.promotionTriggerLabel}</span>
-                <span style={styles.badge}>{candidate.promotionStateLabel}</span>
-                <span style={styles.badge}>{candidate.promotionNextStepLabel}</span>
-                <span style={styles.badge}>{candidate.promotionActionFamilyLabel}</span>
-                <span style={styles.badge}>{candidate.assemblyShapeLabel}</span>
-                <span style={styles.badge}>{candidate.promotionPhaseLabel}</span>
-                <span style={styles.badge}>{candidate.promotionMutabilityLabel}</span>
-                <span style={styles.badge}>{candidate.promotionScopeLabel}</span>
-                <span style={styles.badge}>{candidate.identityStabilityLabel}</span>
-                <span style={styles.badge}>{candidate.auditBackingLabel}</span>
-                <span style={styles.badge}>{candidate.concurrencyBoundaryLabel}</span>
-                <span style={styles.badge}>{candidate.memoryPlacementLabel}</span>
-                <span style={styles.badge}>{candidate.syncStrategyLabel}</span>
-                <span style={styles.badge}>{candidate.exportRequestShapeLabel}</span>
-                <span style={styles.badge}>{candidate.exportConfirmationRequirementLabel}</span>
-                <span style={styles.badge}>{candidate.exportRecoveryPathLabel}</span>
-                <span style={styles.badge}>{candidate.exportPayloadShapeLabel}</span>
-                <span style={styles.badge}>{candidate.idempotencyPolicyLabel}</span>
-                <span style={styles.badge}>{candidate.replaySafetyLabel}</span>
-                <span style={styles.badge}>{candidate.conflictPolicyLabel}</span>
-                <span style={styles.badge}>{candidate.exportAtomicityLabel}</span>
-                <span style={styles.badge}>{candidate.exportDerivationBasisLabel}</span>
-                <span style={styles.badge}>{candidate.exportRevisionPolicyLabel}</span>
-                <span style={styles.badge}>{candidate.exportFreshnessSourceLabel}</span>
-                <span style={styles.badge}>{candidate.exportValidationBoundaryLabel}</span>
-                <span style={styles.badge}>{candidate.exportCompletenessRuleLabel}</span>
-                <span style={styles.badge}>{candidate.exportSensitivityLabel}</span>
-                <span style={styles.badge}>{candidate.exportAudienceBoundaryLabel}</span>
-                <span style={styles.badge}>{candidate.exportSanitizationPolicyLabel}</span>
-                <span style={styles.badge}>{candidate.exportRedactionBoundaryLabel}</span>
-                <span style={styles.badge}>{candidate.exportSourceDisclosurePolicyLabel}</span>
-                {candidate.exportSequenceLabel ? <span style={styles.badge}>{candidate.exportSequenceLabel}</span> : null}
-                {candidate.exportDependencyPolicyLabel ? <span style={styles.badge}>{candidate.exportDependencyPolicyLabel}</span> : null}
-              </div>
-              <p style={styles.actionSummary}>{candidate.summary}</p>
-              {candidate.latestDelivery ? (
-                <div style={{ display: "grid", gap: "0.2rem" }}>
-                  <p style={styles.contractMeta}>{`Delivery posture: ${candidate.latestDelivery.statusLabel}`}</p>
-                  <p style={styles.contractMeta}>{`Delivery freshness: ${candidate.latestDelivery.contractFreshnessLabel}`}</p>
-                  <p style={styles.actionSummary}>{candidate.latestDelivery.summary}</p>
-                  <p style={styles.actionSummary}>{candidate.latestDelivery.contractFreshnessSummary}</p>
-                  <p style={styles.optionBody}>{`Attempts: ${candidate.latestDelivery.attemptCount}`}</p>
-                  {candidate.latestDelivery.writerKindLabel ? (
-                    <p style={styles.optionBody}>{`Writer: ${candidate.latestDelivery.writerKindLabel}`}</p>
-                  ) : null}
-                  {candidate.latestDelivery.primaryNotePath ? (
-                    <p style={styles.optionBody}>{`Primary note: ${candidate.latestDelivery.primaryNotePath}`}</p>
-                  ) : null}
-                  {candidate.latestDelivery.deliveredAtLabel ? (
-                    <p style={styles.optionBody}>{`Delivered: ${candidate.latestDelivery.deliveredAtLabel}`}</p>
-                  ) : null}
-                  {candidate.latestDelivery.lastAttemptedAtLabel ? (
-                    <p style={styles.optionBody}>{`Last attempted: ${candidate.latestDelivery.lastAttemptedAtLabel}`}</p>
-                  ) : null}
-                  {candidate.latestDelivery.lastErrorMessage ? (
-                    <p style={styles.actionSummary}>{`Last delivery error: ${candidate.latestDelivery.lastErrorMessage}`}</p>
-                  ) : null}
-                </div>
-              ) : null}
-              {candidate.dependencySummary ? <p style={styles.actionSummary}>{candidate.dependencySummary}</p> : null}
-              <p style={styles.optionBody}>{`Grouped buckets: ${candidate.itemLabels.join(", ")}`}</p>
-              {candidate.dependsOnCandidateLabels && candidate.dependsOnCandidateLabels.length > 0 ? (
-                <p style={styles.actionSummary}>{`Depends on: ${candidate.dependsOnCandidateLabels.join(", ")}`}</p>
-              ) : null}
-              {candidate.exportActions && candidate.exportActions.length > 0 ? (
-                <div style={{ display: "grid", gap: "0.35rem" }}>
-                  <p style={styles.contractMeta}>Available export actions</p>
-                  {candidate.exportActions.map((action) => (
-                    <div key={`${candidate.id}:${action.actionRoute}`} style={{ display: "grid", gap: "0.2rem" }}>
-                      <p style={styles.actionHeading}>{action.actionLabel}</p>
-                      <p style={styles.contractMeta}>{`Action family: ${formatActionRoute(action.actionRoute)}`}</p>
-                      <p style={styles.actionSummary}>{action.actionDescription}</p>
-                      <p style={styles.optionBody}>{`${action.actionMethod} ${action.actionPath}`}</p>
-                      {action.nextEffectSummary ? <p style={styles.actionSummary}>{action.nextEffectSummary}</p> : null}
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-              {candidate.nextEligibleSummary ? <p style={styles.actionSummary}>{candidate.nextEligibleSummary}</p> : null}
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div style={styles.rail}>
-        {sections.map((section) => (
-          <div key={section.title} style={{ display: "grid", gap: "0.55rem" }}>
-            <p style={styles.contractMeta}>{section.title}</p>
-            <p style={styles.actionSummary}>{section.destinationLabel}</p>
-            <ul style={styles.actionList}>
-              {section.items.map((item) => (
-                <li key={item.id} style={styles.actionItem}>
-                  <p style={styles.actionMeta}>{`${item.count} item${item.count === 1 ? "" : "s"}`}</p>
-                  <h3 style={styles.actionHeading}>{item.label}</h3>
-                  <div style={styles.badgeList}>
-                    <span style={styles.badge}>{item.readinessLabel ?? describeMemoryBoundaryReadiness(item.readiness)}</span>
-                    <span style={styles.badge}>{item.roleLabel}</span>
-                    <span style={styles.badge}>{item.eligibilityRuleLabel}</span>
-                    <span style={styles.badge}>{item.candidateClassLabel}</span>
-                    <span style={styles.badge}>{item.durabilityConditionLabel}</span>
-                    <span style={styles.badge}>{item.ownershipBoundaryLabel}</span>
-                    <span style={styles.badge}>{item.promotionPathLabel}</span>
-                    <span style={styles.badge}>{item.recordTargetLabel}</span>
-                    <span style={styles.badge}>{item.promotionBlockerLabel}</span>
-                    <span style={styles.badge}>{item.promotionAuthorityLabel}</span>
-                    <span style={styles.badge}>{item.promotionTriggerLabel}</span>
-                    <span style={styles.badge}>{item.promotionNextStepLabel}</span>
-                    <span style={styles.badge}>{item.promotionActionFamilyLabel}</span>
-                    <span style={styles.badge}>{item.assemblyShapeLabel}</span>
-                    <span style={styles.badge}>{item.promotionPhaseLabel}</span>
-                    <span style={styles.badge}>{item.promotionMutabilityLabel}</span>
-                    <span style={styles.badge}>{item.promotionScopeLabel}</span>
-                    <span style={styles.badge}>{item.identityStabilityLabel}</span>
-                    <span style={styles.badge}>{item.auditBackingLabel}</span>
-                    <span style={styles.badge}>{item.concurrencyBoundaryLabel}</span>
-                    <span style={styles.badge}>{item.exportPayloadShapeLabel}</span>
-                    <span style={styles.badge}>{item.idempotencyPolicyLabel}</span>
-                    <span style={styles.badge}>{item.replaySafetyLabel}</span>
-                    <span style={styles.badge}>{item.conflictPolicyLabel}</span>
-                    <span style={styles.badge}>{item.exportAtomicityLabel}</span>
-                    <span style={styles.badge}>{item.exportDerivationBasisLabel}</span>
-                    <span style={styles.badge}>{item.exportRevisionPolicyLabel}</span>
-                    <span style={styles.badge}>{item.exportFreshnessSourceLabel}</span>
-                    <span style={styles.badge}>{item.exportValidationBoundaryLabel}</span>
-                    <span style={styles.badge}>{item.exportCompletenessRuleLabel}</span>
-                    <span style={styles.badge}>{item.exportSensitivityLabel}</span>
-                    <span style={styles.badge}>{item.exportAudienceBoundaryLabel}</span>
-                    <span style={styles.badge}>{item.exportSanitizationPolicyLabel}</span>
-                    <span style={styles.badge}>{item.exportRedactionBoundaryLabel}</span>
-                    <span style={styles.badge}>{item.exportSourceDisclosurePolicyLabel}</span>
-                    <span style={styles.badge}>{item.memoryPlacementLabel}</span>
-                    <span style={styles.badge}>{item.syncStrategyLabel}</span>
-                    <span style={styles.badge}>{item.exportRequestShapeLabel}</span>
-                    <span style={styles.badge}>{item.exportConfirmationRequirementLabel}</span>
-                    <span style={styles.badge}>{item.exportRecoveryPathLabel}</span>
-                    {item.runtimeMemoryShapeLabel ? <span style={styles.badge}>{item.runtimeMemoryShapeLabel}</span> : null}
-                    {item.runtimeLongMemoryDispositionLabel ? (
-                      <span style={styles.badge}>{item.runtimeLongMemoryDispositionLabel}</span>
-                    ) : null}
-                  </div>
-                  <p style={styles.actionSummary}>{item.summary}</p>
-                  <p style={styles.optionBody}>{item.promotionActionDescription}</p>
-                  <p style={styles.optionBody}>{`Source surface: ${item.sourceSurfaceLabel}`}</p>
-                  {item.runtimeMemoryComponentLabels?.length ? (
-                    <p style={styles.optionBody}>{`Runtime components: ${item.runtimeMemoryComponentLabels.join(", ")}`}</p>
-                  ) : null}
-                  {item.nextEligibleSummary ? <p style={styles.actionSummary}>{item.nextEligibleSummary}</p> : null}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function describeMemoryBoundaryReadiness(
-  readiness: HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["readiness"] | undefined
-) {
-  if (!readiness) {
-    return "Readiness pending";
-  }
-  switch (readiness) {
-    case "live_runtime_only":
-      return "Live runtime only";
-    case "ready_now":
-      return "Ready now";
-    case "after_board_closes":
-      return "After board closes";
-    default:
-      return humanizeValue(readiness);
-  }
-}
-
-function buildFallbackExportCandidateActions(input: {
-  runId: string;
-  candidateId: NonNullable<HarnessBoardResponse["memoryBoundary"]["exportCandidates"]>[number]["id"];
-  readiness: HarnessBoardResponse["memoryBoundary"]["exportReadyItems"][number]["readiness"];
-}) {
-  const encodedRunId = encodeURIComponent(input.runId);
-  const encodedCandidateId = encodeURIComponent(input.candidateId);
-  const actions: NonNullable<NonNullable<HarnessBoardResponse["memoryBoundary"]["exportCandidates"]>[number]["exportActions"]> = [
-    {
-      actionRoute: "export-preflight",
-      actionPath: `/api/harness/runs/${encodedRunId}/export-candidates/${encodedCandidateId}/preflight`,
-      actionMethod: "POST",
-      actionToken: `preview-${input.candidateId}-preflight`,
-      actionLabel: "Run export preflight",
-      actionDescription: "Validate the current export candidate against the live board contract before any dry-run or tenant-facing export bundle is produced."
-    }
-  ];
-
-  if (input.candidateId === "governance_history_export" && input.readiness === "ready_now") {
-    actions.push(
-      {
-        actionRoute: "export-dry-run",
-        actionPath: `/api/harness/runs/${encodedRunId}/export-candidates/${encodedCandidateId}/dry-run`,
-        actionMethod: "POST",
-        actionToken: `preview-${input.candidateId}-dry-run`,
-        actionLabel: "Preview Obsidian export bundle",
-        actionDescription: "Render the tenant-safe governance-history markdown bundle without writing it anywhere yet."
-      },
-      {
-        actionRoute: "governance-history-export",
-        actionPath: `/api/harness/runs/${encodedRunId}/export-candidates/${encodedCandidateId}/export`,
-        actionMethod: "POST",
-        actionToken: `preview-${input.candidateId}-export`,
-        actionLabel: "Build governance history export",
-        actionDescription: "Produce the first real Obsidian-facing governance-history export bundle from the current board contract."
-      }
-    );
-  }
-
-  return actions;
-}
-
-function deriveMemoryBoundaryExportCandidates(
-  memoryBoundary: HarnessBoardResponse["memoryBoundary"]
-): NonNullable<HarnessBoardResponse["memoryBoundary"]["exportCandidates"]> {
-  const isGovernanceExportReadyItem = (
-    item: HarnessBoardResponse["memoryBoundary"]["exportReadyItems"][number]
-  ): item is HarnessBoardResponse["memoryBoundary"]["exportReadyItems"][number] & {
-    id: "governance_decisions" | "implemented_actions";
-  } => item.id === "governance_decisions" || item.id === "implemented_actions";
-  const isPackageExportReadyItem = (
-    item: HarnessBoardResponse["memoryBoundary"]["exportReadyItems"][number]
-  ): item is HarnessBoardResponse["memoryBoundary"]["exportReadyItems"][number] & {
-    id: "package_governance" | "package_deliverables";
-  } => item.id === "package_governance" || item.id === "package_deliverables";
-  const governanceItems = memoryBoundary.exportReadyItems.filter(
-    (item): item is HarnessBoardResponse["memoryBoundary"]["exportReadyItems"][number] & {
-      id: "governance_decisions" | "implemented_actions";
-    } => item.count > 0 && isGovernanceExportReadyItem(item)
-  );
-  const packageItems = memoryBoundary.exportReadyItems.filter(
-    (item): item is HarnessBoardResponse["memoryBoundary"]["exportReadyItems"][number] & {
-      id: "package_governance" | "package_deliverables";
-    } => item.count > 0 && isPackageExportReadyItem(item)
-  );
-  const candidates: NonNullable<HarnessBoardResponse["memoryBoundary"]["exportCandidates"]> = [];
-
-  if (governanceItems.length > 0) {
-    const representative = governanceItems[0]!;
-    candidates.push({
-      id: "governance_history_export",
-      label: "Governance history export",
-      itemCount: governanceItems.length,
-      itemIds: governanceItems.map((item) => item.id),
-      itemLabels: governanceItems.map((item) => item.label),
-      summary:
-        `${governanceItems.length} governance histor${governanceItems.length === 1 ? "y bucket is" : "y buckets are"} grouped into one later tenant export candidate that appends governance history notes.`,
-      readiness: representative.readiness,
-      readinessLabel: representative.readinessLabel,
-      eligibilityRule: "explicit_export_later",
-      eligibilityRuleLabel: "Explicit export later",
-      sourceSurface: "recent_decisions",
-      sourceSurfaceLabel: "Recent decisions",
-      candidateClass: "governance_history",
-      candidateClassLabel: "Governance history",
-      durabilityCondition: "stable_when_recorded",
-      durabilityConditionLabel: "Stable when recorded",
-      ownershipBoundary: "tenant_owned_later",
-      ownershipBoundaryLabel: "Tenant-owned later",
-      promotionPath: "ready_for_explicit_export",
-      promotionPathLabel: "Ready for explicit export",
-      recordTarget: "governance_history_record",
-      recordTargetLabel: "Governance history record",
-      promotionBlocker: "none_ready_now",
-      promotionBlockerLabel: "No promotion blocker",
-      promotionAuthority: "tenant_explicit_export",
-      promotionAuthorityLabel: "Tenant explicit export",
-      promotionTrigger: "tenant_export_request",
-      promotionTriggerLabel: "Tenant export request",
-      promotionState: representative.promotionState,
-      promotionStateLabel: representative.promotionStateLabel,
-      promotionNextStep: representative.promotionNextStep,
-      promotionNextStepLabel: representative.promotionNextStepLabel,
-      promotionActionFamily: representative.promotionActionFamily,
-      promotionActionFamilyLabel: representative.promotionActionFamilyLabel,
-      assemblyShape: "standalone_export_record",
-      assemblyShapeLabel: "Standalone export record",
-      promotionPhase: "phase_one_governance_history",
-      promotionPhaseLabel: "Phase-one export",
-      promotionMutability: "append_only_history",
-      promotionMutabilityLabel: "Append-only history",
-      promotionScope: "single_record_export",
-      promotionScopeLabel: "Single-record export",
-      identityStability: "stable_record_identity",
-      identityStabilityLabel: "Stable record identity",
-      auditBacking: "decision_ledger_backed",
-      auditBackingLabel: "Decision-ledger-backed",
-      concurrencyBoundary: "independent_export_safe",
-      concurrencyBoundaryLabel: "Independent export safe",
-      memoryPlacement: representative.memoryPlacement,
-      memoryPlacementLabel: representative.memoryPlacementLabel,
-      syncStrategy: representative.syncStrategy,
-      syncStrategyLabel: representative.syncStrategyLabel,
-      exportRequestShape: representative.exportRequestShape,
-      exportRequestShapeLabel: representative.exportRequestShapeLabel,
-      exportConfirmationRequirement: representative.exportConfirmationRequirement,
-      exportConfirmationRequirementLabel: representative.exportConfirmationRequirementLabel,
-      exportRecoveryPath: representative.exportRecoveryPath,
-      exportRecoveryPathLabel: representative.exportRecoveryPathLabel,
-      exportPayloadShape: representative.exportPayloadShape,
-      exportPayloadShapeLabel: representative.exportPayloadShapeLabel,
-      idempotencyPolicy: representative.idempotencyPolicy,
-      idempotencyPolicyLabel: representative.idempotencyPolicyLabel,
-      replaySafety: representative.replaySafety,
-      replaySafetyLabel: representative.replaySafetyLabel,
-      conflictPolicy: representative.conflictPolicy,
-      conflictPolicyLabel: representative.conflictPolicyLabel,
-      exportAtomicity: representative.exportAtomicity,
-      exportAtomicityLabel: representative.exportAtomicityLabel,
-      exportDerivationBasis: representative.exportDerivationBasis,
-      exportDerivationBasisLabel: representative.exportDerivationBasisLabel,
-      exportRevisionPolicy: representative.exportRevisionPolicy,
-      exportRevisionPolicyLabel: representative.exportRevisionPolicyLabel,
-      exportFreshnessSource: representative.exportFreshnessSource,
-      exportFreshnessSourceLabel: representative.exportFreshnessSourceLabel,
-      exportValidationBoundary: representative.exportValidationBoundary,
-      exportValidationBoundaryLabel: representative.exportValidationBoundaryLabel,
-      exportCompletenessRule: representative.exportCompletenessRule,
-      exportCompletenessRuleLabel: representative.exportCompletenessRuleLabel,
-      exportSensitivity: representative.exportSensitivity,
-      exportSensitivityLabel: representative.exportSensitivityLabel,
-      exportAudienceBoundary: representative.exportAudienceBoundary,
-      exportAudienceBoundaryLabel: representative.exportAudienceBoundaryLabel,
-      exportSanitizationPolicy: representative.exportSanitizationPolicy,
-      exportSanitizationPolicyLabel: representative.exportSanitizationPolicyLabel,
-      exportRedactionBoundary: representative.exportRedactionBoundary,
-      exportRedactionBoundaryLabel: representative.exportRedactionBoundaryLabel,
-      exportSourceDisclosurePolicy: representative.exportSourceDisclosurePolicy,
-      exportSourceDisclosurePolicyLabel: representative.exportSourceDisclosurePolicyLabel,
-      exportSequence: "foundational_first",
-      exportSequenceLabel: "Foundational export sequence",
-      exportDependencyPolicy: "independent_candidate",
-      exportDependencyPolicyLabel: "Independent export candidate",
-      dependsOnCandidateIds: [],
-      dependsOnCandidateLabels: [],
-      dependencySummary:
-        "This governance history candidate can promote independently once the tenant requests export."
-    });
-  }
-
-  if (packageItems.length > 0) {
-    const representative = packageItems.find((item) => item.readiness === "after_board_closes") ?? packageItems[0]!;
-    candidates.push({
-      id: "package_bundle_export",
-      label: "Package bundle export",
-      itemCount: packageItems.length,
-      itemIds: packageItems.map((item) => item.id),
-      itemLabels: packageItems.map((item) => item.label),
-      summary:
-        representative.readiness === "after_board_closes"
-          ? `${packageItems.length} packaged-output bucket${packageItems.length === 1 ? " still waits" : "s still wait"} on board closure before the tenant bundle can replace the latest package snapshot.`
-          : `${packageItems.length} packaged-output bucket${packageItems.length === 1 ? " is" : "s are"} grouped into one later tenant export candidate for the package bundle.`,
-      readiness: representative.readiness,
-      readinessLabel: representative.readinessLabel,
-      eligibilityRule: "after_board_closes_then_export",
-      eligibilityRuleLabel: "After board closes, then export",
-      sourceSurface: "completion_package_deliverables",
-      sourceSurfaceLabel: "Completion package bundle",
-      candidateClass: "packaged_output",
-      candidateClassLabel: "Packaged output",
-      durabilityCondition: "stable_after_board_closure",
-      durabilityConditionLabel: "Stable after board closure",
-      ownershipBoundary: "tenant_owned_later",
-      ownershipBoundaryLabel: "Tenant-owned later",
-      promotionPath: "after_board_closure_then_export",
-      promotionPathLabel: "After board closure, then export",
-      recordTarget: "package_deliverable_record",
-      recordTargetLabel: "Package bundle export records",
-      promotionBlocker: "board_closure_required",
-      promotionBlockerLabel: "Board closure required",
-      promotionAuthority: "board_closure_then_tenant_export",
-      promotionAuthorityLabel: "Board closure, then tenant export",
-      promotionTrigger: "board_closure",
-      promotionTriggerLabel: "Board closure",
-      promotionState: representative.promotionState,
-      promotionStateLabel: representative.promotionStateLabel,
-      promotionNextStep: representative.promotionNextStep,
-      promotionNextStepLabel: representative.promotionNextStepLabel,
-      promotionActionFamily: representative.promotionActionFamily,
-      promotionActionFamilyLabel: representative.promotionActionFamilyLabel,
-      assemblyShape: "package_record_set",
-      assemblyShapeLabel: "Package record set",
-      promotionPhase: "phase_two_package_export",
-      promotionPhaseLabel: "Phase-two package export",
-      promotionMutability: representative.promotionMutability,
-      promotionMutabilityLabel: representative.promotionMutabilityLabel,
-      promotionScope: "package_record_set_export",
-      promotionScopeLabel: "Package record-set export",
-      identityStability: representative.identityStability,
-      identityStabilityLabel: representative.identityStabilityLabel,
-      auditBacking: "package_closure_backed",
-      auditBackingLabel: "Package-closure-backed",
-      concurrencyBoundary: representative.concurrencyBoundary,
-      concurrencyBoundaryLabel: representative.concurrencyBoundaryLabel,
-      memoryPlacement: representative.memoryPlacement,
-      memoryPlacementLabel: representative.memoryPlacementLabel,
-      syncStrategy: representative.syncStrategy,
-      syncStrategyLabel: representative.syncStrategyLabel,
-      exportRequestShape: representative.exportRequestShape,
-      exportRequestShapeLabel: representative.exportRequestShapeLabel,
-      exportConfirmationRequirement: representative.exportConfirmationRequirement,
-      exportConfirmationRequirementLabel: representative.exportConfirmationRequirementLabel,
-      exportRecoveryPath: representative.exportRecoveryPath,
-      exportRecoveryPathLabel: representative.exportRecoveryPathLabel,
-      exportPayloadShape: representative.exportPayloadShape,
-      exportPayloadShapeLabel: representative.exportPayloadShapeLabel,
-      idempotencyPolicy: representative.idempotencyPolicy,
-      idempotencyPolicyLabel: representative.idempotencyPolicyLabel,
-      replaySafety: representative.replaySafety,
-      replaySafetyLabel: representative.replaySafetyLabel,
-      conflictPolicy: representative.conflictPolicy,
-      conflictPolicyLabel: representative.conflictPolicyLabel,
-      exportAtomicity: representative.exportAtomicity,
-      exportAtomicityLabel: representative.exportAtomicityLabel,
-      exportDerivationBasis: representative.exportDerivationBasis,
-      exportDerivationBasisLabel: representative.exportDerivationBasisLabel,
-      exportRevisionPolicy: representative.exportRevisionPolicy,
-      exportRevisionPolicyLabel: representative.exportRevisionPolicyLabel,
-      exportFreshnessSource: representative.exportFreshnessSource,
-      exportFreshnessSourceLabel: representative.exportFreshnessSourceLabel,
-      exportValidationBoundary: representative.exportValidationBoundary,
-      exportValidationBoundaryLabel: representative.exportValidationBoundaryLabel,
-      exportCompletenessRule: representative.exportCompletenessRule,
-      exportCompletenessRuleLabel: representative.exportCompletenessRuleLabel,
-      exportSensitivity: representative.exportSensitivity,
-      exportSensitivityLabel: representative.exportSensitivityLabel,
-      exportAudienceBoundary: representative.exportAudienceBoundary,
-      exportAudienceBoundaryLabel: representative.exportAudienceBoundaryLabel,
-      exportSanitizationPolicy: representative.exportSanitizationPolicy,
-      exportSanitizationPolicyLabel: representative.exportSanitizationPolicyLabel,
-      exportRedactionBoundary: representative.exportRedactionBoundary,
-      exportRedactionBoundaryLabel: representative.exportRedactionBoundaryLabel,
-      exportSourceDisclosurePolicy: representative.exportSourceDisclosurePolicy,
-      exportSourceDisclosurePolicyLabel: representative.exportSourceDisclosurePolicyLabel,
-      exportSequence: "board_closure_following",
-      exportSequenceLabel: "Board-closure-following sequence",
-      exportDependencyPolicy: "depends_on_governance_history_export",
-      exportDependencyPolicyLabel: "Depends on governance history export",
-      dependsOnCandidateIds: ["governance_history_export"],
-      dependsOnCandidateLabels: ["Governance history export"],
-      dependencySummary:
-        representative.readiness === "after_board_closes"
-          ? "This package bundle candidate still waits on board closure and later follows the governance history export candidate."
-          : "This package bundle candidate follows the governance history export candidate once the tenant reaches export time.",
-      ...(representative.nextEligibleSummary ? { nextEligibleSummary: representative.nextEligibleSummary } : {})
-    });
-  }
-
-  return candidates;
 }
 
 function getOptionButtonLabel(
@@ -2452,6 +1146,48 @@ function describeBacklogMode(
 
 function joinHeadingParts(left: string, right: string) {
   return `${left} - ${right}`;
+}
+
+function formatLowercaseList(values: string[]) {
+  if (values.length === 0) {
+    return "";
+  }
+
+  if (values.length === 1) {
+    return values[0]!.toLowerCase();
+  }
+
+  if (values.length === 2) {
+    return `${values[0]!.toLowerCase()} and ${values[1]!.toLowerCase()}`;
+  }
+
+  return `${values.slice(0, -1).map((value) => value.toLowerCase()).join(", ")}, and ${values.at(-1)!.toLowerCase()}`;
+}
+
+function describeNextActionsSummary(
+  pendingAttention: HarnessBoardResponse["pendingAttention"] | null,
+  pendingApprovals: HarnessBoardResponse["pendingApprovals"]
+) {
+  if (!pendingAttention && pendingApprovals.length === 0) {
+    return "No live review or approval items are shaping the next move.";
+  }
+
+  const approvalSummary = `${pendingApprovals.length} pending approval${pendingApprovals.length === 1 ? "" : "s"}`;
+  const withApprovals = (lead: string) =>
+    pendingApprovals.length > 0 ? `${lead} and ${approvalSummary} are shaping the next move.` : `${lead} is shaping the next move.`;
+
+  if (!pendingAttention) {
+    return `${approvalSummary} ${pendingApprovals.length === 1 ? "is" : "are"} shaping the next move.`;
+  }
+
+  switch (pendingAttention.kind) {
+    case "queue_ceo_review":
+      return withApprovals("1 CEO review");
+    case "await_lane_resume":
+      return withApprovals("1 lane follow-up");
+    default:
+      return withApprovals("1 live board action");
+  }
 }
 
 function describeSubmittedActionResult(result: HarnessBoardActionResult, fallbackLabel: string) {
@@ -3198,9 +1934,7 @@ export function HarnessBoardPage(props: {
     props.initialPreviewVariantLabel
       ?? (props.initialBoard ? null : fallbackState?.variantLabel ?? null)
   );
-  const [openCardId, setOpenCardId] = useState<string>(() =>
-    (props.initialBoard ?? fallbackState?.board ?? null)?.cards[0]?.id ?? ""
-  );
+  const [openCardId, setOpenCardId] = useState<string>("");
   const [loadError, setLoadError] = useState<HarnessBoardFeedback | null>(props.initialLoadFeedback ?? null);
   const [actionError, setActionError] = useState<HarnessBoardFeedback | null>(props.initialActionFeedback ?? null);
   const [actionFailureCause, setActionFailureCause] = useState<unknown>(props.initialActionFailureCause ?? null);
@@ -3235,7 +1969,7 @@ export function HarnessBoardPage(props: {
         ? preferredCardId
         : nextBoard.cards.some((card) => card.id === current)
           ? current
-          : nextBoard.cards[0]?.id || ""
+          : ""
     );
   }
 
@@ -3397,17 +2131,29 @@ export function HarnessBoardPage(props: {
   const pendingApprovals = board?.pendingApprovals ?? [];
   const pendingAttention = board?.pendingAttention ?? null;
   const activeCard = cards.find((card) => card.id === openCardId) ?? null;
+  const focusCard =
+    cards.find((card) => card.lane === "working")
+    ?? activeCard
+    ?? cards[0]
+    ?? null;
   const personaMetrics = useMemo(() => getPersonaMetrics(cards), [cards]);
-  const currentFocus = activeCard?.title ?? cards[0]?.title ?? "Preparing the next move";
+  const currentFocus = focusCard?.title ?? "Preparing the next move";
   const recentDecisionCount = board?.recentDecisions.length ?? 0;
   const followThroughCount = board?.followThroughItems.length ?? 0;
   const completionPackage = board?.completionPackage;
   const packageState = completionPackage?.status === "done" ? "Ready" : completionPackage ? "Assembling" : "Idle";
   const packageDeliverableCount = completionPackage?.deliverables.length ?? 0;
   const packageGovernanceCount = completionPackage?.governanceItems.length ?? 0;
-  const packageRecommendationCount = completionPackage?.recommendations.length ?? 0;
-  const packageObjectionCount = completionPackage?.objections.length ?? 0;
-  const memoryBoundary = board?.memoryBoundary ?? null;
+  const activeLanes = columns.filter((column) => column.cardIds.length > 0);
+  const activeLaneTitles = activeLanes.map((column) => column.title);
+  const activeLaneSummary = activeLanes.length > 0
+    ? `${activeLanes.length} visible lane${activeLanes.length === 1 ? " is" : "s are"} active across ${formatLowercaseList(activeLaneTitles)}.`
+    : "No visible lanes are active yet.";
+  const nextActionsSummary = describeNextActionsSummary(pendingAttention, pendingApprovals);
+  const governancePostureSummary = completionPackage
+    ? `Package ${packageState.toLowerCase()} with ${packageGovernanceCount} open governance item${packageGovernanceCount === 1 ? "" : "s"} still shaping the handoff.`
+    : "No package governance items are shaping the current handoff.";
+  const progressSummary = `${packageDeliverableCount} deliverable${packageDeliverableCount === 1 ? " is" : "s are"} packaged, ${followThroughCount} follow-through action${followThroughCount === 1 ? "" : "s"} landed, and ${recentDecisionCount} decision${recentDecisionCount === 1 ? " is" : "s are"} preserved.`;
   const isPreviewMode = controlMode === "preview";
   const liveActionsEnabled = Boolean(board && controlMode === "live");
   const pendingActionAttemptSupport = getBoardActionAttemptSupport(board, controlMode, pendingActionAttempt);
@@ -3424,46 +2170,31 @@ export function HarnessBoardPage(props: {
   const lastActionEffect = lastActionResult ? describeActionResultEffect(lastActionResult) : null;
   const boardPulseItems = [
     {
-      key: "controls",
-      heading: joinHeadingParts("Controls", isPreviewMode ? "Preview" : "Live"),
-      summary: isPreviewMode
-        ? previewVariantLabel
-          ? `Board actions stay read-only in localhost fallback mode while previewing ${previewVariantLabel.toLowerCase()}.`
-          : "Board actions stay read-only in localhost fallback mode."
-        : board
-        ? "Board actions are bound to live harness mutations through the engine contract."
-        : "Board actions will bind to the live harness contract once the board is loaded."
+      key: "current-focus",
+      heading: "Current focus",
+      summary: focusCard
+        ? `${focusCard.title} is carrying the clearest live business move right now.`
+        : "The board is preparing the next move."
     },
     {
-      key: "attention",
-      heading: joinHeadingParts("Attention", pendingAttention?.statusLabel ?? "Clear"),
-      summary: pendingAttention
-        ? pendingAttention.targetSummary
-          ? `${pendingAttention.summary} ${pendingAttention.targetSummary}.${pendingAttention.targetStatusLabel ? ` ${pendingAttention.targetStatusLabel}.` : ""}${describeBacklogMode(pendingAttention.backlogMode) ? ` ${describeBacklogMode(pendingAttention.backlogMode)}.` : ""}`
-          : pendingAttention.summary
-        : "No active board attention is currently waiting on the CEO."
+      key: "active-lanes",
+      heading: "Active lanes",
+      summary: activeLaneSummary
     },
     {
-      key: "approvals",
-      heading: joinHeadingParts("Approvals", String(pendingApprovals.length)),
-      summary:
-        pendingApprovals.length > 0
-          ? `${pendingApprovals.length} bounded approval request${pendingApprovals.length === 1 ? "" : "s"} still need CEO review.`
-          : "No pending approval requests are widening the board."
+      key: "next-actions",
+      heading: "Next actions",
+      summary: nextActionsSummary
     },
     {
-      key: "export",
-      heading: joinHeadingParts("Export", memoryBoundary ? `${memoryBoundary.readyNowCount} ready` : "Pending"),
-      summary: memoryBoundary
-        ? memoryBoundary.exportSummary
-        : "Export-readiness stays bounded to board memory once the board produces tenant-record candidates."
+      key: "governance-posture",
+      heading: "Governance posture",
+      summary: governancePostureSummary
     },
     {
-      key: "package",
-      heading: joinHeadingParts("Package", packageState),
-      summary: completionPackage
-        ? `${packageDeliverableCount} deliverable${packageDeliverableCount === 1 ? "" : "s"}, ${packageGovernanceCount} governance item${packageGovernanceCount === 1 ? "" : "s"}, ${packageRecommendationCount} recommendation${packageRecommendationCount === 1 ? "" : "s"}, ${packageObjectionCount} objection${packageObjectionCount === 1 ? "" : "s"}.`
-        : "No tenant-facing package is currently being assembled."
+      key: "progress",
+      heading: "Progress",
+      summary: progressSummary
     },
     ...(contractRefreshNotice
       ? [
@@ -3807,8 +2538,9 @@ export function HarnessBoardPage(props: {
         </div>
         <div style={styles.metricGrid}>
           <article style={styles.metricCard}>
-            <p style={styles.metricLabel}>Active cards</p>
-            <p style={styles.metricValue}>{cards.length}</p>
+            <p style={styles.metricLabel}>Active lanes</p>
+            <p style={styles.metricValue}>{activeLanes.length}</p>
+            <p style={styles.metricLabel}>{activeLaneSummary}</p>
           </article>
           <article style={styles.metricCard}>
             <p style={styles.metricLabel}>Current focus</p>
@@ -3830,17 +2562,14 @@ export function HarnessBoardPage(props: {
             ) : null}
           </article>
           <article style={styles.metricCard}>
-            <p style={styles.metricLabel}>Recent decisions</p>
-            <p style={styles.metricValue}>{recentDecisionCount}</p>
+            <p style={styles.metricLabel}>Governance posture</p>
+            <p style={styles.metricValue}>{completionPackage?.hasOpenGovernanceItems ? "Open item" : "Clear"}</p>
+            <p style={styles.metricLabel}>{`${packageGovernanceCount} governance item${packageGovernanceCount === 1 ? "" : "s"}`}</p>
           </article>
           <article style={styles.metricCard}>
-            <p style={styles.metricLabel}>Follow-through</p>
-            <p style={styles.metricValue}>{followThroughCount}</p>
-          </article>
-          <article style={styles.metricCard}>
-            <p style={styles.metricLabel}>Package state</p>
-            <p style={styles.metricValue}>{packageState}</p>
-            <p style={styles.metricLabel}>{`${packageDeliverableCount} deliverable${packageDeliverableCount === 1 ? "" : "s"}`}</p>
+            <p style={styles.metricLabel}>Progress</p>
+            <p style={styles.metricValue}>{packageDeliverableCount}</p>
+            <p style={styles.metricLabel}>{`${followThroughCount} follow-through action${followThroughCount === 1 ? "" : "s"} landed`}</p>
           </article>
         </div>
       </section>
@@ -3858,7 +2587,7 @@ export function HarnessBoardPage(props: {
             <section style={styles.panel}>
               <h2 style={styles.panelTitle}>Preview mode</h2>
               <p style={styles.panelBody}>
-                This board is using localhost fallback data, so action guidance stays visible but live mutations remain disabled.
+                This board is in preview mode, so action guidance stays visible but live mutations remain disabled.
               </p>
               {previewVariantLabel ? (
                 <p style={{ ...styles.contractMeta, marginTop: "0.55rem" }}>{`Preview variant: ${previewVariantLabel}`}</p>
@@ -3867,7 +2596,7 @@ export function HarnessBoardPage(props: {
           ) : null}
           <section style={styles.panel}>
             <h2 style={styles.panelTitle}>Board pulse</h2>
-            <p style={styles.panelBody}>A bounded summary of what the board is waiting on, packaging, and carrying forward.</p>
+            <p style={styles.panelBody}>A bounded launch cockpit summary of focus, lane state, next actions, governance, and progress.</p>
             <ul style={styles.actionList}>
               {boardPulseItems.map((item) => (
                 <li key={item.key} style={styles.actionItem}>
@@ -4020,7 +2749,7 @@ export function HarnessBoardPage(props: {
                         );
                       })}
                       {!liveActionsEnabled ? (
-                        <p style={styles.statusNotice}>Live board actions are unavailable in localhost fallback mode.</p>
+                        <p style={styles.statusNotice}>Live board actions are unavailable in preview mode.</p>
                       ) : null}
                     </>
                   ) : null}
@@ -4133,7 +2862,7 @@ export function HarnessBoardPage(props: {
                           );
                         })}
                         {!liveActionsEnabled ? (
-                          <p style={styles.statusNotice}>Live board actions are unavailable in localhost fallback mode.</p>
+                          <p style={styles.statusNotice}>Live board actions are unavailable in preview mode.</p>
                         ) : null}
                       </>
                     ) : null}
@@ -4142,6 +2871,56 @@ export function HarnessBoardPage(props: {
               </ul>
             </section>
           ) : null}
+
+          {board?.recentDecisions.length ? (
+            <section style={styles.panel}>
+              <h2 style={styles.panelTitle}>Recent decisions</h2>
+              <p style={styles.panelBody}>Recent bounded governance decisions preserved from the board contract.</p>
+              <p style={styles.contractMeta}>{`${board.recentDecisions.length} preserved decision${board.recentDecisions.length === 1 ? "" : "s"}`}</p>
+              <ul style={styles.actionList}>
+                {board.recentDecisions.map((decision) => (
+                  <li key={decision.id} style={styles.actionItem}>
+                    <p style={styles.actionMeta}>{decision.timestampLabel}</p>
+                    <h3 style={styles.actionHeading}>{decision.label}</h3>
+                    <p style={styles.actionSummary}>{`Decision kind: ${humanizeValue(decision.decisionKind)}`}</p>
+                    {decision.resolution ? <p style={styles.actionSummary}>{`Resolution: ${humanizeValue(decision.resolution)}`}</p> : null}
+                    {decision.policyReasonLabel ? <p style={styles.actionSummary}>{`Policy reason: ${decision.policyReasonLabel}`}</p> : null}
+                    {decision.recommendationSummary ? (
+                      <p style={styles.actionSummary}>{`Recommendation: ${decision.recommendationSummary}`}</p>
+                    ) : null}
+                    {decision.objectionSummary ? <p style={styles.actionSummary}>{`Objection: ${decision.objectionSummary}`}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {board?.followThroughItems.length ? (
+            <section style={styles.panel}>
+              <h2 style={styles.panelTitle}>Follow-through</h2>
+              <p style={styles.panelBody}>Implemented board actions that already made it through the governance seam.</p>
+              <p style={styles.contractMeta}>{`${board.followThroughItems.length} implemented action${board.followThroughItems.length === 1 ? "" : "s"}`}</p>
+              <ul style={styles.actionList}>
+                {board.followThroughItems.map((item) => (
+                  <li key={item.id} style={styles.actionItem}>
+                    <p style={styles.actionMeta}>{item.timestampLabel}</p>
+                    <h3 style={styles.actionHeading}>{item.summary}</h3>
+                    <p style={styles.actionSummary}>{`Action: ${humanizeValue(item.action)}`}</p>
+                    {item.persona ? <p style={styles.actionSummary}>{`Persona: ${item.persona}`}</p> : null}
+                    {item.deliverableLabel ? <p style={styles.actionSummary}>{`Deliverable: ${item.deliverableLabel}`}</p> : null}
+                    {item.policyReasonLabel ? <p style={styles.actionSummary}>{`Policy reason: ${item.policyReasonLabel}`}</p> : null}
+                    {item.recommendationSummary ? (
+                      <p style={styles.actionSummary}>{`Recommendation: ${item.recommendationSummary}`}</p>
+                    ) : null}
+                    {item.objectionSummary ? <p style={styles.actionSummary}>{`Objection: ${item.objectionSummary}`}</p> : null}
+                    {item.nextReviewTrigger ? <p style={styles.actionSummary}>{`Next review: ${item.nextReviewTrigger}`}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {board ? renderCompletionPackage(board) : null}
 
           {actionNotice ? <p style={styles.statusSuccess}>{actionNotice}</p> : null}
           {contractRefreshNotice ? (
@@ -4211,70 +2990,6 @@ export function HarnessBoardPage(props: {
               </ul>
             </section>
           ) : null}
-
-          {board?.recentDecisions.length ? (
-            <section style={styles.panel}>
-              <h2 style={styles.panelTitle}>Recent decisions</h2>
-              <p style={styles.panelBody}>Recent bounded governance decisions preserved from the board contract.</p>
-              <p style={styles.contractMeta}>{`${board.recentDecisions.length} preserved decision${board.recentDecisions.length === 1 ? "" : "s"}`}</p>
-              <ul style={styles.actionList}>
-                {board.recentDecisions.map((decision) => (
-                  <li key={decision.id} style={styles.actionItem}>
-                    <p style={styles.actionMeta}>{decision.timestampLabel}</p>
-                    <h3 style={styles.actionHeading}>{decision.label}</h3>
-                    <p style={styles.actionSummary}>{`Decision kind: ${humanizeValue(decision.decisionKind)}`}</p>
-                    {decision.resolution ? <p style={styles.actionSummary}>{`Resolution: ${humanizeValue(decision.resolution)}`}</p> : null}
-                    {decision.policyReasonLabel ? (
-                      <p style={styles.actionSummary}>{`Policy reason: ${decision.policyReasonLabel}`}</p>
-                    ) : null}
-                    {decision.recommendationSummary ? (
-                      <p style={styles.actionSummary}>{`Recommendation: ${decision.recommendationSummary}`}</p>
-                    ) : null}
-                    {decision.objectionSummary ? (
-                      <p style={styles.actionSummary}>{`Objection: ${decision.objectionSummary}`}</p>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          {board?.followThroughItems.length ? (
-            <section style={styles.panel}>
-              <h2 style={styles.panelTitle}>Follow-through</h2>
-              <p style={styles.panelBody}>Implemented board actions that already made it through the governance seam.</p>
-              <p style={styles.contractMeta}>{`${board.followThroughItems.length} implemented action${board.followThroughItems.length === 1 ? "" : "s"}`}</p>
-              <ul style={styles.actionList}>
-                {board.followThroughItems.map((item) => (
-                  <li key={item.id} style={styles.actionItem}>
-                    <p style={styles.actionMeta}>{item.timestampLabel}</p>
-                    <h3 style={styles.actionHeading}>{item.summary}</h3>
-                    <p style={styles.actionSummary}>{`Action: ${humanizeValue(item.action)}`}</p>
-                    {item.persona ? <p style={styles.actionSummary}>{`Persona: ${item.persona}`}</p> : null}
-                    {item.deliverableLabel ? (
-                      <p style={styles.actionSummary}>{`Deliverable: ${item.deliverableLabel}`}</p>
-                    ) : null}
-                    {item.policyReasonLabel ? (
-                      <p style={styles.actionSummary}>{`Policy reason: ${item.policyReasonLabel}`}</p>
-                    ) : null}
-                    {item.resolutionLabel ? (
-                      <p style={styles.actionSummary}>{`Resolution: ${item.resolutionLabel}`}</p>
-                    ) : null}
-                    {item.recommendationSummary ? (
-                      <p style={styles.actionSummary}>{`Recommendation: ${item.recommendationSummary}`}</p>
-                    ) : null}
-                    {item.objectionSummary ? (
-                      <p style={styles.actionSummary}>{`Objection: ${item.objectionSummary}`}</p>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          {board ? renderMemoryBoundary(board) : null}
-
-          {board ? renderCompletionPackage(board) : null}
 
           <HarnessCardDrawer card={activeCard} onClose={() => setOpenCardId("")} open={Boolean(activeCard)} />
         </aside>

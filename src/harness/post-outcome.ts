@@ -11,7 +11,9 @@ export type HarnessPostOutcomeAction =
   | {
       kind: "queue_ceo_review";
       runState: HarnessRunRecord["state"];
-      reason: "final_assembly" | "governance_backlog" | "governance_hold";
+      reason: "final_assembly" | "governance_backlog" | "governance_hold" | "next_lane_decision";
+      completedCardId?: string;
+      nextCardId?: string;
     }
   | {
       kind: "await_lane_resume";
@@ -49,6 +51,20 @@ export function determineHarnessPostOutcomeAction(input: {
   cards: readonly HarnessCardRecord[];
   proposals: readonly Pick<HarnessSubCardProposal, "status">[];
 }): HarnessPostOutcomeAction | null {
+  const readyForNextLaneReview =
+    input.runState === "active"
+      ? deriveNextLaneReviewTarget(input.cards, input.fallbackCardId)
+      : null;
+  if (readyForNextLaneReview) {
+    return {
+      kind: "queue_ceo_review",
+      runState: input.runState,
+      reason: "next_lane_decision",
+      completedCardId: readyForNextLaneReview.completedCardId,
+      nextCardId: readyForNextLaneReview.nextCardId
+    };
+  }
+
   const dispatchedLane = input.nextDispatchCard;
   if (dispatchedLane) {
     return {
@@ -154,6 +170,8 @@ export function humanizePostOutcomeReason(
       return "Governance backlog";
     case "governance_hold":
       return "Governance hold";
+    case "next_lane_decision":
+      return "Next lane decision";
     default:
       return reason;
   }
@@ -221,6 +239,13 @@ export function isSameAttentionAction(
   }
 
   if (left.kind === "queue_ceo_review" && right.kind === "queue_ceo_review") {
+    if (left.reason === "next_lane_decision" || right.reason === "next_lane_decision") {
+      return (
+        left.reason === right.reason
+        && left.completedCardId === right.completedCardId
+        && left.nextCardId === right.nextCardId
+      );
+    }
     return left.reason === right.reason;
   }
 
@@ -241,6 +266,8 @@ function describeCeoReviewSummary(
       return "The board needs CEO review because deferred governance is now the next bounded move.";
     case "governance_hold":
       return "The board needs CEO review because governance work is still shaping what can move next.";
+    case "next_lane_decision":
+      return "The board needs CEO review to decide the next bounded lane move after the latest completed child lane.";
     default:
       return "The board needs CEO review before work can continue.";
   }
@@ -248,7 +275,7 @@ function describeCeoReviewSummary(
 
 function selectObservedLaneForState(
   cards: readonly HarnessCardRecord[],
-  state: Extract<HarnessCardState, "waiting" | "blocked">,
+  state: Extract<HarnessCardState, "waiting" | "blocked" | "approved">,
   fallbackCardId?: string
 ): HarnessCardRecord | null {
   const matchingLanes = cards
@@ -279,11 +306,24 @@ function parseAttentionActionPayload(
 
   if (actionKind === "queue_ceo_review") {
     const reason = readOptionalString(payload.reason);
-    if (reason === "final_assembly" || reason === "governance_backlog" || reason === "governance_hold") {
+    const completedCardId = readOptionalString(payload.completedCardId);
+    const nextCardId = readOptionalString(payload.nextCardId);
+    if (
+      reason === "final_assembly"
+      || reason === "governance_backlog"
+      || reason === "governance_hold"
+      || reason === "next_lane_decision"
+    ) {
       return {
         kind: "queue_ceo_review",
         runState,
-        reason
+        reason,
+        ...(reason === "next_lane_decision"
+          ? {
+              ...(completedCardId ? { completedCardId } : {}),
+              ...(nextCardId ? { nextCardId } : {})
+            }
+          : {})
       };
     }
     return null;
@@ -332,6 +372,7 @@ function buildFallbackAttentionSnapshot(
       statusLabel: described.statusLabel,
       summary: described.summary,
       ...(described.reasonLabel ? { reasonLabel: described.reasonLabel } : {}),
+      ...(action.nextCardId ? { targetCardId: action.nextCardId } : {}),
       targetPersona: "ceo"
     };
   }
@@ -345,4 +386,45 @@ function buildFallbackAttentionSnapshot(
 
 function readOptionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function deriveNextLaneReviewTarget(
+  cards: readonly HarnessCardRecord[],
+  fallbackCardId?: string
+): { completedCardId: string; nextCardId: string } | null {
+  const hasInFlightChildLane = cards.some(
+    (card) =>
+      card.persona !== "ceo"
+      && (card.state === "working" || card.state === "waiting" || card.state === "blocked")
+  );
+  if (hasInFlightChildLane) {
+    return null;
+  }
+  const nextApprovedLane = selectObservedLaneForState(cards, "approved");
+  const completedLane = selectMostRecentlyCompletedLane(cards, fallbackCardId);
+  if (!nextApprovedLane || !completedLane) {
+    return null;
+  }
+  return {
+    completedCardId: completedLane.id,
+    nextCardId: nextApprovedLane.id
+  };
+}
+
+function selectMostRecentlyCompletedLane(
+  cards: readonly HarnessCardRecord[],
+  fallbackCardId?: string
+): HarnessCardRecord | null {
+  const completedLanes = cards
+    .filter((card) => card.persona !== "ceo" && card.state === "done")
+    .sort((left, right) => {
+      if (left.updatedAt !== right.updatedAt) {
+        return right.updatedAt.localeCompare(left.updatedAt);
+      }
+      return right.createdAt.localeCompare(left.createdAt);
+    });
+  if (fallbackCardId) {
+    return completedLanes.find((card) => card.id === fallbackCardId) ?? completedLanes[0] ?? null;
+  }
+  return completedLanes[0] ?? null;
 }

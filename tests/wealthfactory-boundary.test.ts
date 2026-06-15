@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import type { WealthFactoryPackage } from "../src/packages/package-types.js";
+import { WEALTH_FACTORY_PACKAGE_CATALOG } from "../src/packages/package-catalog.js";
+import { EXAMPLE_AUDIT_WORKFLOW_ID, NATIVE_WORKFLOW_DEFINITIONS } from "../src/worker/native-workflow-definitions.js";
 import {
   createHarnessWorkflowRegistry,
   createWorkflowRegistry,
@@ -13,6 +15,24 @@ import { assertWealthFactoryResponse } from "../src/wealthfactory/response-guard
 import { toPublicWorkflowError } from "../src/wealthfactory/public-errors.js";
 
 describe("Wealth Factory boundary layer", () => {
+  it("keeps the canonical installed-package overlay example neutral instead of product-specific", () => {
+    expect(WEALTH_FACTORY_PACKAGE_CATALOG).toContainEqual(
+      expect.objectContaining({
+        id: "pkg-example-audit",
+        name: "Example Audit",
+        includedWorkflowIds: ["wf-example-audit"],
+        allowedAssetIds: ["asset-example-rules"]
+      })
+    );
+    expect(EXAMPLE_AUDIT_WORKFLOW_ID).toBe("wf-example-audit");
+    expect(NATIVE_WORKFLOW_DEFINITIONS[EXAMPLE_AUDIT_WORKFLOW_ID]).toMatchObject({
+      familyName: "Example Audit Workflow",
+      completedPrefix: "Completed the Example Audit Workflow",
+      actionPrefix: "Example Audit Workflow",
+      invalidDecisionLabel: "Example Audit Workflow"
+    });
+  });
+
   it("keeps core exception workflow lists aligned across harness, native-default, and board exposure seams", () => {
     expect([...WF_HARNESS_ELIGIBLE_WORKFLOWS]).toEqual(["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"]);
     expect([...WF_NATIVE_DEFAULT_WORKFLOWS]).toEqual([...WF_HARNESS_ELIGIBLE_WORKFLOWS]);
@@ -137,24 +157,24 @@ describe("Wealth Factory boundary layer", () => {
     expect(enabledRegistry.getDefinition("wf_package_followup").privateMapping).toBeUndefined();
     expect(enabledRegistry.getDefinition("wf_package_followup").packageId).toBe("pkg_package_followup");
     expect(packageFollowupOnlyRegistry.listBoardExposedWorkflowIds()).toEqual(["wf_package_followup"]);
-    expect(() => disabledRegistry.getDefinition("wf_seo_audit")).toThrow(/Unknown Wealth Factory workflow/i);
+    expect(() => disabledRegistry.getDefinition("wf_example_audit")).toThrow(/Unknown Wealth Factory workflow/i);
   });
 
   it("registers package-overlay workflows only when installed package context supplies them", () => {
-    const brandSeoOverlayPackage: WealthFactoryPackage = {
-      id: "pkg-brand-seo",
-      name: "Brand SEO",
+    const exampleAuditOverlayPackage: WealthFactoryPackage = {
+      id: "pkg-example-audit",
+      name: "Example Audit",
       kind: "industry",
-      includedWorkflowIds: ["wf-seo-audit"],
+      includedWorkflowIds: ["wf-example-audit"],
       includedEmployeeIds: ["ceo"],
-      allowedAssetIds: ["asset-seo-rules"],
+      allowedAssetIds: ["asset-example-rules"],
       requiredProviderCapabilities: ["text_generation"],
       optionalProviderCapabilities: [],
       workflowDefinitions: [
         {
-          publicId: "wf-seo-audit",
-          publicName: "SEO Audit Workflow",
-          description: "Prepare a bounded SEO audit for the installed package.",
+          publicId: "wf-example-audit",
+          publicName: "Example Audit Workflow",
+          description: "Prepare a bounded example audit for the installed package.",
           allowedDeliverableTypes: ["plan", "launch_copy", "research_brief"],
           requiredProviderCapabilities: ["text_generation"],
           boardExposureEnabled: true,
@@ -167,45 +187,45 @@ describe("Wealth Factory boundary layer", () => {
 
     const builtInOnlyRegistry = createHarnessWorkflowRegistry({ harnessEnabledWorkflowIds: [] });
     const overlayRegistry = createHarnessWorkflowRegistry({
-      harnessEnabledWorkflowIds: ["wf-seo-audit"],
-      installedPackages: [brandSeoOverlayPackage]
+      harnessEnabledWorkflowIds: ["wf-example-audit"],
+      installedPackages: [exampleAuditOverlayPackage]
     });
 
-    expect(builtInOnlyRegistry.listPublicWorkflows().map((workflow) => workflow.id)).not.toContain("wf-seo-audit");
+    expect(builtInOnlyRegistry.listPublicWorkflows().map((workflow) => workflow.id)).not.toContain("wf-example-audit");
     expect(overlayRegistry.listPublicWorkflows()).toContainEqual({
-      id: "wf-seo-audit",
-      packageId: "pkg-brand-seo",
-      name: "SEO Audit Workflow",
-      description: "Prepare a bounded SEO audit for the installed package.",
+      id: "wf-example-audit",
+      packageId: "pkg-example-audit",
+      name: "Example Audit Workflow",
+      description: "Prepare a bounded example audit for the installed package.",
       requiredCapabilities: ["text_generation"]
     });
     expect(overlayRegistry.listPublicWorkflows().map((workflow) => workflow.id)).toEqual([
       "wf_connect_first_workflow",
       "wf_tax_strategy",
       "wf_package_followup",
-      "wf-seo-audit"
+      "wf-example-audit"
     ]);
-    expect(overlayRegistry.getDefinition("wf-seo-audit").executionEngine).toBe("wf_native_v1");
-    expect(overlayRegistry.getDefinition("wf-seo-audit").packageId).toBe("pkg-brand-seo");
+    expect(overlayRegistry.getDefinition("wf-example-audit").executionEngine).toBe("wf_native_v1");
+    expect(overlayRegistry.getDefinition("wf-example-audit").packageId).toBe("pkg-example-audit");
     expect(overlayRegistry.listHarnessEligibleWorkflowIds()).toEqual([
       "wf_connect_first_workflow",
       "wf_tax_strategy",
       "wf_package_followup",
-      "wf-seo-audit"
+      "wf-example-audit"
     ]);
     expect(overlayRegistry.listNativeExecutorWorkflowIds()).toEqual([
       "wf_connect_first_workflow",
       "wf_tax_strategy",
       "wf_package_followup",
-      "wf-seo-audit"
+      "wf-example-audit"
     ]);
-    expect(overlayRegistry.listBoardExposedWorkflowIds()).toEqual(["wf-seo-audit"]);
-    expect(overlayRegistry.isHarnessEligible("wf-seo-audit")).toBe(true);
+    expect(overlayRegistry.listBoardExposedWorkflowIds()).toEqual(["wf-example-audit"]);
+    expect(overlayRegistry.isHarnessEligible("wf-example-audit")).toBe(true);
     expect(overlayRegistry.listPublicDashboardWorkflowIds()).toEqual([
       "wf_connect_first_workflow",
       "wf_tax_strategy",
       "wf_package_followup",
-      "wf-seo-audit"
+      "wf-example-audit"
     ]);
   });
 
@@ -372,11 +392,6 @@ describe("Wealth Factory boundary layer", () => {
     );
   });
 
-  it("translates internal errors to public Wealth Factory errors", () => {
-    expect(toPublicWorkflowError({ code: "paperclip_disabled" })).toEqual({ code: "tenant_paused" });
-    expect(toPublicWorkflowError(new Error("prompt stack trace"))).toEqual({ code: "workflow_failed" });
-  });
-});
   it("blocks serialized harness and worker runtime envelope text on public payloads", () => {
     expect(() => assertWealthFactoryResponse({ note: "boardContext should never be customer-facing" })).toThrow(
       "Forbidden customer-facing text"
@@ -425,3 +440,8 @@ describe("Wealth Factory boundary layer", () => {
     }
   });
 
+  it("translates internal errors to public Wealth Factory errors", () => {
+    expect(toPublicWorkflowError({ code: "paperclip_disabled" })).toEqual({ code: "tenant_paused" });
+    expect(toPublicWorkflowError(new Error("prompt stack trace"))).toEqual({ code: "workflow_failed" });
+  });
+});

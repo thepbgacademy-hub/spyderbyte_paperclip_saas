@@ -330,11 +330,49 @@ afterAll(() => {
 beforeEach(() => {
   vi.clearAllMocks();
   harnessRepositoryRef.current = makeHarnessRepository();
-  fetchMock.mockResolvedValue({
-    ok: true,
-    json: async () => ({
-      output_text: "{\"state\":\"done\",\"summary\":\"Validated the pricing floor and preserved the next action.\"}"
-    })
+  fetchMock.mockImplementation(async (_url: string, request?: RequestInit) => {
+    const body = JSON.parse(String(request?.body));
+    const prompt = String(body.input ?? "");
+    if (prompt.includes("Step 1 of 3: interpret the lane")) {
+      return {
+        ok: true,
+        json: async () => ({
+          output_text: JSON.stringify({
+            state: "done",
+            analysis: "The pricing lane can complete once the revised floor is confirmed against the competitor anchor sheet.",
+            nextAction: "Return the bounded pricing review result."
+          })
+        })
+      };
+    }
+    if (prompt.includes("Step 2 of 3: draft the lane outcome")) {
+      return {
+        ok: true,
+        json: async () => ({
+          output_text: JSON.stringify({
+            state: "done",
+            summary: "Validated the pricing floor and preserved the next action."
+          })
+        })
+      };
+    }
+    if (prompt.includes("Step 3 of 3: validate the drafted lane outcome")) {
+      return {
+        ok: true,
+        json: async () => ({
+          output_text: JSON.stringify({
+            approved: true,
+            reason: "The drafted lane outcome stays bounded and tenant-safe."
+          })
+        })
+      };
+    }
+    return {
+      ok: true,
+      json: async () => ({
+        output_text: "{\"state\":\"done\",\"summary\":\"Validated the pricing floor and preserved the next action.\"}"
+      })
+    };
   });
 });
 
@@ -403,20 +441,20 @@ describe("worker runtime", () => {
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
-        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-seo-audit",
-        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf-seo-audit"
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-example-audit",
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf-example-audit"
       }),
       workerInstanceId: "worker-test-overlay-drift"
     });
     const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
     acidRepository?.getWorkflowRunIdentity?.mockResolvedValueOnce({
-      workflowId: "wf-seo-audit",
+      workflowId: "wf-example-audit",
       workflowTemplateId: null,
       workflowIdentityKind: "installed_package_overlay",
-      workflowPackageId: "pkg-brand-seo",
+      workflowPackageId: "pkg-example-audit",
       workflowDefinitionSnapshot: {
-        publicWorkflowId: "wf-seo-audit",
-        packageId: "pkg-brand-seo",
+        publicWorkflowId: "wf-example-audit",
+        packageId: "pkg-example-audit",
         executionEngine: "paperclip",
         requiredCapabilities: ["text_generation"],
         providerKind: "openai_api"
@@ -427,12 +465,45 @@ describe("worker runtime", () => {
       runtime.processQueuePayload({
         tenantId: "tenant-1",
         runId: "run-1",
-        workflowId: "wf-seo-audit",
+        workflowId: "wf-example-audit",
         createdByUserId: "user-1",
-        idempotencyKey: "tenant-1:wf-seo-audit:run-1",
+        idempotencyKey: "tenant-1:wf-example-audit:run-1",
         createdAt: new Date().toISOString()
       })
     ).rejects.toThrow(/Stored workflow definition snapshot no longer matches/i);
+
+    await runtime.close();
+  });
+
+  it("fails closed when a persisted overlay workflow identity is missing its definition snapshot", async () => {
+    const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-example-audit",
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf-example-audit"
+      }),
+      workerInstanceId: "worker-test-overlay-missing-snapshot"
+    });
+    const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
+    acidRepository?.getWorkflowRunIdentity?.mockResolvedValueOnce({
+      workflowId: "wf-example-audit",
+      workflowTemplateId: null,
+      workflowIdentityKind: "installed_package_overlay",
+      workflowPackageId: "pkg-example-audit",
+      workflowDefinitionSnapshot: null
+    });
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf-example-audit",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf-example-audit:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).rejects.toThrow(/Stored workflow definition snapshot missing/i);
 
     await runtime.close();
   });
@@ -475,39 +546,6 @@ describe("worker runtime", () => {
     await expect(processPromise).resolves.toEqual({
       runId: "run-1",
       workflowId: "workflow-1",
-  it("fails closed when a persisted overlay workflow identity is missing its definition snapshot", async () => {
-    const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
-    const runtime = createWorkerRuntime({
-      env: loadWorkerEnv({
-        ...validEnv,
-        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-example-audit",
-        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf-example-audit"
-      }),
-      workerInstanceId: "worker-test-overlay-missing-snapshot"
-    });
-    const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
-    acidRepository?.getWorkflowRunIdentity?.mockResolvedValueOnce({
-      workflowId: "wf-example-audit",
-      workflowTemplateId: null,
-      workflowIdentityKind: "installed_package_overlay",
-      workflowPackageId: "pkg-example-audit",
-      workflowDefinitionSnapshot: null
-    });
-
-    await expect(
-      runtime.processQueuePayload({
-        tenantId: "tenant-1",
-        runId: "run-1",
-        workflowId: "wf-example-audit",
-        createdByUserId: "user-1",
-        idempotencyKey: "tenant-1:wf-example-audit:run-1",
-        createdAt: new Date().toISOString()
-      })
-    ).rejects.toThrow(/Stored workflow definition snapshot missing/i);
-
-    await runtime.close();
-  });
-
       status: "queued"
     });
     await Promise.all([closePromise, runtime.close()]);
@@ -854,11 +892,17 @@ describe("worker runtime", () => {
     expect(publicLaneDispatch).toBeDefined();
     expect(publicLaneDispatch).not.toContain("\"absorbedWorkItems\"");
     expect(publicLaneDispatch).not.toContain("\"continuityContext\"");
+    expect(publicLaneDispatch).not.toContain("\"boardContext\"");
+    expect(publicLaneDispatch).not.toContain("\"orchestratorHandoff\"");
     expect(publicLaneDispatch).not.toContain("\"outcomeContract\"");
+    expect(publicLaneDispatch).not.toContain("\"postOutcomeDirectives\"");
     expect(publicLaneDispatch).not.toContain("\"requiredCapabilities\"");
     expect(publicLaneDispatch).not.toContain("\"runtimeContext\"");
     expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"requiredCapabilities\""));
     expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"runtimeContext\""));
+    expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"boardContext\""));
+    expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"orchestratorHandoff\""));
+    expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"postOutcomeDirectives\""));
 
     await runtime.close();
   });
@@ -892,17 +936,11 @@ describe("worker runtime", () => {
       })
     ).resolves.toEqual({
       runId: "run-1",
-    expect(publicLaneDispatch).not.toContain("\"boardContext\"");
-    expect(publicLaneDispatch).not.toContain("\"orchestratorHandoff\"");
       workflowId: "wf_connect_first_workflow",
-    expect(publicLaneDispatch).not.toContain("\"postOutcomeDirectives\"");
       status: "running"
     });
 
     expect(nativeExecutor.execute).toHaveBeenCalledWith(
-    expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"boardContext\""));
-    expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"orchestratorHandoff\""));
-    expect(stdoutWrite).not.toHaveBeenCalledWith(expect.stringContaining("\"postOutcomeDirectives\""));
       expect.objectContaining({
         tenantId: "tenant-1",
         runId: "run-1",
@@ -922,6 +960,68 @@ describe("worker runtime", () => {
       expectedExecutionClaimToken: "claim-cfo-1",
       state: "done"
     });
+
+    await runtime.close();
+  });
+
+  it("commits cancelled native outcomes through the harness seam without falling back to invalid blocked handling", async () => {
+    const { createPaperclipClient } = await import("../src/paperclip/client.js");
+    const nativeExecutor = {
+      execute: vi.fn().mockResolvedValue({
+        state: "cancelled",
+        resumeSummary: "The tenant withdrew the pricing request, so this lane should end without completion."
+      })
+    };
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow",
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-native-cancelled",
+      nativeExecutor
+    });
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+
+    expect(nativeExecutor.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowId: "wf_connect_first_workflow",
+        executionEnvelope: expect.objectContaining({
+          laneExecution: expect.objectContaining({
+            cardId: "card_cfo",
+            state: "working"
+          })
+        })
+      })
+    );
+    expect(createPaperclipClient).not.toHaveBeenCalled();
+    expect(harnessRepositoryRef.current.transitionCardState).toHaveBeenCalledWith({
+      cardId: "card_cfo",
+      expectedState: "working",
+      expectedExecutionClaimToken: "claim-cfo-1",
+      state: "cancelled"
+    });
+    const continuityWrites = harnessRepositoryRef.current.upsertCardContinuity.mock.calls.map(([payload]) => payload);
+    expect(continuityWrites).toContainEqual(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        continuitySummary: "The tenant withdrew the pricing request, so this lane should end without completion."
+      })
+    );
 
     await runtime.close();
   });
@@ -1012,6 +1112,10 @@ describe("worker runtime", () => {
         })
       })
     );
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(String(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)).input)).toContain("Step 1 of 3: interpret the lane");
+    expect(String(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)).input)).toContain("Step 2 of 3: draft the lane outcome");
+    expect(String(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body)).input)).toContain("Step 3 of 3: validate the drafted lane outcome");
     expect(harnessRepositoryRef.current.transitionCardState).toHaveBeenCalledWith({
       cardId: "card_cfo",
       expectedState: "working",
@@ -1035,6 +1139,49 @@ describe("worker runtime", () => {
         value.latestResultSummary?.includes("Completed the Connect First Workflow pricing review lane for CFO") &&
         Array.isArray(value.absorbedWorkItems) &&
         value.absorbedWorkItems.includes("Re-check discount floor")
+      )
+    ).toBe(true);
+
+    await runtime.close();
+  });
+
+  it("fails closed to a blocked native lane outcome when the provider transport throws", async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError("socket hang up"));
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow",
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-native-transport-failure"
+    });
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+
+    expect(harnessRepositoryRef.current.transitionCardState).toHaveBeenCalledWith({
+      cardId: "card_cfo",
+      expectedState: "working",
+      expectedExecutionClaimToken: "claim-cfo-1",
+      state: "blocked"
+    });
+    expect(
+      harnessRepositoryRef.current.upsertCardContinuity.mock.calls.some(([value]) =>
+        value.cardId === "card_cfo" &&
+        value.continuitySummary ===
+          "Native execution reached the provider lane but could not complete the provider call safely. Review the provider response and continue with workflow-specific native handling."
       )
     ).toBe(true);
 
@@ -1072,7 +1219,7 @@ describe("worker runtime", () => {
     });
 
     expect(vi.mocked(createPaperclipClient)).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
 
     await runtime.close();
   });
@@ -1106,7 +1253,7 @@ describe("worker runtime", () => {
     });
 
     expect(vi.mocked(createPaperclipClient)).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(
       stdoutWrite.mock.calls.some(([value]) =>
         String(value).includes("\"type\":\"wealth_factory_worker_run\"") &&
@@ -1534,17 +1681,17 @@ describe("worker runtime", () => {
     await runtime.close();
   });
 
-  it("runs the SEO overlay workflow natively when the installed package explicitly opts into native execution", async () => {
+  it("runs the example overlay workflow natively when the installed package explicitly opts into native execution", async () => {
     const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
     const { createPaperclipClient } = await import("../src/paperclip/client.js");
     const { createSupabaseRepositories } = await import("../src/db/supabase-repositories.js");
     harnessRepositoryRef.current.getRun.mockImplementation(async (runId: string) => {
-      if (runId === "run-seo-1") {
+      if (runId === "run-example-1") {
         return {
-          id: "run-seo-1",
+          id: "run-example-1",
           tenantId: "tenant-1",
-          workflowId: "wf-seo-audit",
-          packageId: "pkg-brand-seo",
+          workflowId: "wf-example-audit",
+          packageId: "pkg-example-audit",
           orchestratorPersona: "ceo",
           state: "active",
           runtimeContext: {
@@ -1571,16 +1718,16 @@ describe("worker runtime", () => {
         updatedAt: "2026-05-21T10:00:00.000Z"
       };
     });
-    let seoLaneState: "approved" | "working" | "waiting" = "approved";
+    let exampleLaneState: "approved" | "working" | "waiting" = "approved";
     harnessRepositoryRef.current.listCardsForRun.mockImplementation(async (runId: string) => {
-      if (runId === "run-seo-1") {
+      if (runId === "run-example-1") {
         return [
           {
             id: "card_ceo",
-            runId: "run-seo-1",
+            runId: "run-example-1",
             parentCardId: null,
             persona: "ceo",
-            title: "Plan SEO audit run",
+            title: "Plan example audit run",
             deliverableType: "plan",
             state: "planning",
             executionClaimToken: null,
@@ -1589,17 +1736,17 @@ describe("worker runtime", () => {
             updatedAt: "2026-05-21T10:00:00.000Z"
           },
           {
-            id: "card_cmo_seo",
-            runId: "run-seo-1",
+            id: "card_cmo_example",
+            runId: "run-example-1",
             parentCardId: "card_ceo",
             persona: "cmo",
-            title: "Draft the SEO findings brief",
+            title: "Draft the example findings brief",
             deliverableType: "research_brief",
-            state: seoLaneState,
-            executionClaimToken: seoLaneState === "approved" ? null : "claim-cmo-seo-1",
-            executionClaimedAt: seoLaneState === "approved" ? null : "2026-05-21T10:04:00.000Z",
+            state: exampleLaneState,
+            executionClaimToken: exampleLaneState === "approved" ? null : "claim-cmo-example-1",
+            executionClaimedAt: exampleLaneState === "approved" ? null : "2026-05-21T10:04:00.000Z",
             createdAt: "2026-05-21T10:01:00.000Z",
-            updatedAt: seoLaneState === "approved" ? "2026-05-21T10:02:00.000Z" : "2026-05-21T10:04:00.000Z"
+            updatedAt: exampleLaneState === "approved" ? "2026-05-21T10:02:00.000Z" : "2026-05-21T10:04:00.000Z"
           }
         ];
       }
@@ -1607,47 +1754,47 @@ describe("worker runtime", () => {
       return [];
     });
     harnessRepositoryRef.current.claimCardForExecution.mockImplementationOnce(async () => {
-      seoLaneState = "working";
+      exampleLaneState = "working";
       return {
-        id: "card_cmo_seo",
-        runId: "run-seo-1",
+        id: "card_cmo_example",
+        runId: "run-example-1",
         parentCardId: "card_ceo",
         persona: "cmo",
-        title: "Draft the SEO findings brief",
+        title: "Draft the example findings brief",
         deliverableType: "research_brief",
         state: "working",
-        executionClaimToken: "claim-cmo-seo-1",
+        executionClaimToken: "claim-cmo-example-1",
         executionClaimedAt: "2026-05-21T10:04:00.000Z",
         createdAt: "2026-05-21T10:01:00.000Z",
         updatedAt: "2026-05-21T10:04:00.000Z"
       };
     });
     harnessRepositoryRef.current.getCard.mockImplementation(async (cardId: string) => {
-      if (cardId !== "card_cmo_seo") {
+      if (cardId !== "card_cmo_example") {
         return null;
       }
       return {
-        id: "card_cmo_seo",
-        runId: "run-seo-1",
+        id: "card_cmo_example",
+        runId: "run-example-1",
         parentCardId: "card_ceo",
         persona: "cmo",
-        title: "Draft the SEO findings brief",
+        title: "Draft the example findings brief",
         deliverableType: "research_brief",
-        state: seoLaneState,
-        executionClaimToken: seoLaneState === "approved" ? null : "claim-cmo-seo-1",
-        executionClaimedAt: seoLaneState === "approved" ? null : "2026-05-21T10:04:00.000Z",
+        state: exampleLaneState,
+        executionClaimToken: exampleLaneState === "approved" ? null : "claim-cmo-example-1",
+        executionClaimedAt: exampleLaneState === "approved" ? null : "2026-05-21T10:04:00.000Z",
         createdAt: "2026-05-21T10:01:00.000Z",
         updatedAt: "2026-05-21T10:04:00.000Z"
       };
     });
     harnessRepositoryRef.current.transitionCardState.mockImplementationOnce(async ({ state }) => {
-      seoLaneState = state as "waiting";
+      exampleLaneState = state as "waiting";
       return {
-        id: "card_cmo_seo",
-        runId: "run-seo-1",
+        id: "card_cmo_example",
+        runId: "run-example-1",
         parentCardId: "card_ceo",
         persona: "cmo",
-        title: "Draft the SEO findings brief",
+        title: "Draft the example findings brief",
         deliverableType: "research_brief",
         state,
         executionClaimToken: null,
@@ -1657,16 +1804,16 @@ describe("worker runtime", () => {
       };
     });
     harnessRepositoryRef.current.getCardContinuity.mockImplementation(async (cardId: string) => {
-      if (cardId !== "card_cmo_seo") {
+      if (cardId !== "card_cmo_example") {
         return null;
       }
       return {
-        cardId: "card_cmo_seo",
-        runId: "run-seo-1",
+        cardId: "card_cmo_example",
+        runId: "run-example-1",
         continuitySource: "resume_override",
-        continuitySummary: "Resume the SEO audit lane from the current search visibility findings.",
-        latestResultSummary: "The latest SEO snapshot is ready for synthesis.",
-        absorbedWorkItems: ["Prioritize the top search visibility risks"],
+        continuitySummary: "Resume the example audit lane from the current findings summary.",
+        latestResultSummary: "The latest example snapshot is ready for synthesis.",
+        absorbedWorkItems: ["Prioritize the top findings risks"],
         updatedAt: "2026-05-21T10:03:00.000Z"
       };
     });
@@ -1674,34 +1821,34 @@ describe("worker runtime", () => {
       ok: true,
       json: async () => ({
         output_text:
-          "{\"state\":\"waiting\",\"summary\":\"Need the final prioritized SEO findings list before the audit brief can be approved.\"}"
+          "{\"state\":\"waiting\",\"summary\":\"Need the final prioritized example findings list before the audit brief can be approved.\"}"
       })
     });
     stdoutWrite.mockClear();
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
-        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-seo-audit",
-        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf-seo-audit"
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-example-audit",
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf-example-audit"
       }),
-      workerInstanceId: "worker-test-seo-overlay-native-default-start-path"
+      workerInstanceId: "worker-test-example-overlay-native-default-start-path"
     });
     const repositories = vi.mocked(createSupabaseRepositories).mock.results.at(-1)?.value;
-    repositories?.listActiveInstalledPackageIds.mockResolvedValue(["pkg-brand-seo"]);
+    repositories?.listActiveInstalledPackageIds.mockResolvedValue(["pkg-example-audit"]);
     const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
 
     await expect(
       runtime.processQueuePayload({
         tenantId: "tenant-1",
-        runId: "run-seo-1",
-        workflowId: "wf-seo-audit",
+        runId: "run-example-1",
+        workflowId: "wf-example-audit",
         createdByUserId: "user-1",
-        idempotencyKey: "tenant-1:wf-seo-audit:run-seo-1",
+        idempotencyKey: "tenant-1:wf-example-audit:run-example-1",
         createdAt: new Date().toISOString()
       })
     ).resolves.toEqual({
-      runId: "run-seo-1",
-      workflowId: "wf-seo-audit",
+      runId: "run-example-1",
+      workflowId: "wf-example-audit",
       status: "queued"
     });
 
@@ -1709,32 +1856,32 @@ describe("worker runtime", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual(
       expect.objectContaining({
-        input: expect.stringContaining("Workflow: wf-seo-audit")
+        input: expect.stringContaining("Workflow: wf-example-audit")
       })
     );
-    expect(String(fetchMock.mock.calls[0]?.[1]?.body)).toContain("Lane title: Draft the SEO findings brief");
+    expect(String(fetchMock.mock.calls[0]?.[1]?.body)).toContain("Lane title: Draft the example findings brief");
     expect(String(fetchMock.mock.calls[0]?.[1]?.body)).toContain(
-      "Continuity summary: Resume the SEO audit lane from the current search visibility findings."
+      "Continuity summary: Resume the example audit lane from the current findings summary."
     );
     expect(harnessRepositoryRef.current.transitionCardState).toHaveBeenCalledWith({
-      cardId: "card_cmo_seo",
+      cardId: "card_cmo_example",
       expectedState: "working",
-      expectedExecutionClaimToken: "claim-cmo-seo-1",
+      expectedExecutionClaimToken: "claim-cmo-example-1",
       state: "waiting"
     });
     expect(
       harnessRepositoryRef.current.upsertCardContinuity.mock.calls.some(([input]) =>
-        input.cardId === "card_cmo_seo" &&
-        input.runId === "run-seo-1" &&
+        input.cardId === "card_cmo_example" &&
+        input.runId === "run-example-1" &&
         input.continuitySource === "resume_override" &&
-        String(input.continuitySummary).includes("Need the final prioritized SEO findings list before the audit brief can be approved.") &&
-        input.latestResultSummary === "The latest SEO snapshot is ready for synthesis."
+        String(input.continuitySummary).includes("Need the final prioritized example findings list before the audit brief can be approved.") &&
+        input.latestResultSummary === "The latest example snapshot is ready for synthesis."
       )
     ).toBe(true);
     expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith(
       expect.objectContaining({
         tenantId: "tenant-1",
-        runId: "run-seo-1",
+        runId: "run-example-1",
         from: ["queued", "running"],
         to: "queued"
       })
@@ -1742,7 +1889,7 @@ describe("worker runtime", () => {
     expect(
       stdoutWrite.mock.calls.some(([value]) =>
         String(value).includes("\"type\":\"wealth_factory_worker_run\"") &&
-        String(value).includes("\"workflowId\":\"wf-seo-audit\"") &&
+        String(value).includes("\"workflowId\":\"wf-example-audit\"") &&
         String(value).includes("\"executionEngine\":\"wf_native_v1\"")
       )
     ).toBe(true);
@@ -3047,11 +3194,18 @@ describe("worker runtime", () => {
         workflowId: "wf_connect_first_workflow",
         status: "committed",
         attentionTransition: {
-          kind: "resolved",
+          kind: "requested",
           resolvedAction: {
             kind: "queue_ceo_review",
             runState: "assembling",
             reason: "final_assembly"
+          },
+          requestedAction: {
+            kind: "queue_ceo_review",
+            runState: "active",
+            reason: "next_lane_decision",
+            completedCardId: "card_cfo",
+            nextCardId: "card_cmo"
           }
         },
         laneExecution: {
@@ -3061,39 +3215,16 @@ describe("worker runtime", () => {
           latestResultSummary: "Pricing review is complete and ready for board packaging."
         },
         postOutcomeAction: {
-          kind: "dispatch_next_lane",
+          kind: "queue_ceo_review",
           runState: "active",
-          cardId: "card_cmo",
-          persona: "cmo"
-        },
-        nextDispatch: {
-          runId: "run-1",
-          workflowId: "wf_connect_first_workflow",
-          status: "running",
-          dispatchHandoff: {
-            kind: "follow_on_dispatch",
-            kindLabel: "Follow-on dispatch",
-            executionStage: "post_outcome_follow_on",
-            executionStageLabel: "Post-outcome follow-on",
-            reactivatedRun: false,
-            triggeredByCardId: "card_cfo",
-            triggeredByPersona: "cfo",
-            triggeredByOutcomeState: "done",
-            triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
-          },
-          laneExecution: {
-            cardId: "card_cmo",
-            persona: "cmo",
-            title: "Prepare launch messaging",
-            deliverableType: "marketing_plan",
-            state: "working",
-            resumeFocus: "CMO should continue this active marketing plan lane: Prepare launch messaging."
-          }
+          reason: "next_lane_decision",
+          completedCardId: "card_cfo",
+          nextCardId: "card_cmo"
         }
       })
     );
 
-    expect(harnessRepository.claimCardForExecution).toHaveBeenCalledWith({
+    expect(harnessRepository.claimCardForExecution).not.toHaveBeenCalledWith({
       cardId: "card_cmo",
       expectedState: "approved"
     });
@@ -3114,19 +3245,15 @@ describe("worker runtime", () => {
     );
     expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
       expect.objectContaining({
-        cardId: "card_cmo",
-        eventKind: "execution_dispatched",
-        payload: {
-          kind: "follow_on_dispatch",
-          kindLabel: "Follow-on dispatch",
-          executionStage: "post_outcome_follow_on",
-          executionStageLabel: "Post-outcome follow-on",
-          reactivatedRun: false,
-          triggeredByCardId: "card_cfo",
-          triggeredByPersona: "cfo",
-          triggeredByOutcomeState: "done",
-          triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
-        }
+        cardId: "card_cfo",
+        eventKind: "attention_requested",
+        payload: expect.objectContaining({
+          actionKind: "queue_ceo_review",
+          runState: "active",
+          reason: "next_lane_decision",
+          completedCardId: "card_cfo",
+          nextCardId: "card_cmo"
+        })
       })
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
@@ -3136,18 +3263,25 @@ describe("worker runtime", () => {
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_done\"")
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
-      expect.stringContaining("\"type\":\"wealth_factory_harness_attention_resolved\"")
+      expect.stringContaining("\"type\":\"wealth_factory_harness_ceo_review_requested\"")
     );
     expect(onHarnessLaneOutcomeCommitted).toHaveBeenCalledWith({
       tenantId: "tenant-1",
       runId: "run-1",
       workflowId: "wf_connect_first_workflow",
       attentionTransition: {
-        kind: "resolved",
+        kind: "requested",
         resolvedAction: {
           kind: "queue_ceo_review",
           runState: "assembling",
           reason: "final_assembly"
+        },
+        requestedAction: {
+          kind: "queue_ceo_review",
+          runState: "active",
+          reason: "next_lane_decision",
+          completedCardId: "card_cfo",
+          nextCardId: "card_cmo"
         }
       },
       laneExecution: {
@@ -3157,28 +3291,30 @@ describe("worker runtime", () => {
         latestResultSummary: "Pricing review is complete and ready for board packaging."
       },
       postOutcomeAction: {
-        kind: "dispatch_next_lane",
+        kind: "queue_ceo_review",
         runState: "active",
-        cardId: "card_cmo",
-        persona: "cmo"
-      },
-      nextDispatch: expect.objectContaining({
-        laneExecution: expect.objectContaining({
-          cardId: "card_cmo",
-          persona: "cmo"
-        })
-      })
+        reason: "next_lane_decision",
+        completedCardId: "card_cfo",
+        nextCardId: "card_cmo"
+      }
     });
     expect(onHarnessLaneDone).toHaveBeenCalledWith({
       tenantId: "tenant-1",
       runId: "run-1",
       workflowId: "wf_connect_first_workflow",
       attentionTransition: {
-        kind: "resolved",
+        kind: "requested",
         resolvedAction: {
           kind: "queue_ceo_review",
           runState: "assembling",
           reason: "final_assembly"
+        },
+        requestedAction: {
+          kind: "queue_ceo_review",
+          runState: "active",
+          reason: "next_lane_decision",
+          completedCardId: "card_cfo",
+          nextCardId: "card_cmo"
         }
       },
       laneExecution: {
@@ -3188,116 +3324,32 @@ describe("worker runtime", () => {
         latestResultSummary: "Pricing review is complete and ready for board packaging."
       },
       postOutcomeAction: {
-        kind: "dispatch_next_lane",
-        runState: "active",
-        cardId: "card_cmo",
-        persona: "cmo"
-      },
-      nextDispatch: expect.objectContaining({
-        laneExecution: expect.objectContaining({
-          cardId: "card_cmo",
-          persona: "cmo"
-        })
-      })
-    });
-    expect(onHarnessAttentionResolved).toHaveBeenCalledWith({
-      tenantId: "tenant-1",
-      runId: "run-1",
-      workflowId: "wf_connect_first_workflow",
-      action: {
         kind: "queue_ceo_review",
-        runState: "assembling",
-        reason: "final_assembly"
-      },
-      laneExecution: {
-        cardId: "card_cfo",
-        state: "done",
         runState: "active",
-        latestResultSummary: "Pricing review is complete and ready for board packaging."
+        reason: "next_lane_decision",
+        completedCardId: "card_cfo",
+        nextCardId: "card_cmo"
       }
     });
-    expect(stdoutWrite).toHaveBeenCalledWith(
+    expect(onHarnessAttentionResolved).not.toHaveBeenCalled();
+    expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_lane_dispatch\"")
     );
-    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+    expect(harnessRepository.insertEvent).not.toHaveBeenCalledWith(
       expect.objectContaining({
         cardId: "card_cmo",
-        eventKind: "execution_start_ready",
-        payload: expect.objectContaining({
-          kind: "follow_on_dispatch",
-          executionStage: "post_outcome_follow_on",
-          reactivatedRun: false,
-          claimKind: "approved_claim"
-        })
+        eventKind: "execution_start_ready"
       })
     );
-    expect(stdoutWrite).toHaveBeenCalledWith(
-      expect.stringContaining("\"dispatchHandoff\":{\"kind\":\"follow_on_dispatch\"")
-    );
-    expect(stdoutWrite).toHaveBeenCalledWith(
-      expect.stringContaining("\"postOutcomeAction\":{\"kind\":\"dispatch_next_lane\",\"runState\":\"active\",\"cardId\":\"card_cmo\",\"persona\":\"cmo\"}")
-    );
-    expect(stdoutWrite).toHaveBeenCalledWith(
-      expect.stringContaining("\"cardId\":\"card_cmo\"")
-    );
-    expect(onHarnessLaneReady).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tenantId: "tenant-1",
-        runId: "run-1",
-        workflowId: "wf_connect_first_workflow",
-        requiredCapabilities: ["text_generation"],
-        runtimeContext: {
-          providerKind: "openai_api",
-          credentialLabel: "Primary OpenAI"
-        },
-        executionClaim: {
-          kind: "approved_claim",
-          token: "claim-cmo-active",
-          claimedAt: "2026-05-21T10:07:30.000Z",
-          previousClaimedAt: null
-        },
-        continuityContext: {
-          source: "state_transition",
-          summary: "CMO should continue this active marketing plan lane: Prepare launch messaging.",
-          latestResultSummary: null,
-          absorbedWorkCount: 0,
-          absorbedWorkTrail: []
-        },
-        dispatchHandoff: {
-          kind: "follow_on_dispatch",
-          kindLabel: "Follow-on dispatch",
-          executionStage: "post_outcome_follow_on",
-          executionStageLabel: "Post-outcome follow-on",
-          reactivatedRun: false,
-          triggeredByCardId: "card_cfo",
-          triggeredByPersona: "cfo",
-          triggeredByOutcomeState: "done",
-          triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
-        },
-        laneExecution: expect.objectContaining({
-          cardId: "card_cmo",
-          persona: "cmo",
-          title: "Prepare launch messaging",
-          deliverableType: "marketing_plan",
-          state: "working",
-          resumeFocus: "CMO should continue this active marketing plan lane: Prepare launch messaging."
-        }),
-        outcomeContract: {
-          allowedStates: ["waiting", "done", "blocked", "cancelled"],
-          resultSummaryRequiredStates: ["done"],
-          resumeSummaryAllowedStates: ["waiting", "blocked", "cancelled"],
-          postOutcomeDirectives: expect.any(Array)
-        }
-      })
-    );
+    expect(onHarnessLaneReady).not.toHaveBeenCalled();
     const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
     expect(acidRepository.transitionWorkflowRunStatus).toHaveBeenCalledWith({
       tenantId: "tenant-1",
       runId: "run-1",
       from: ["queued", "running"],
-      to: "running"
+      to: "queued"
     });
-    expect(onHarnessLaneReady).toHaveBeenCalledTimes(1);
+    expect(onHarnessLaneReady).not.toHaveBeenCalled();
 
     await runtime.close();
   });
@@ -3308,50 +3360,50 @@ describe("worker runtime", () => {
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
-        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-seo-audit",
-        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf-seo-audit"
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-example-audit",
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf-example-audit"
       }),
       workerInstanceId: "worker-test-overlay-follow-on",
       onHarnessLaneReady
     });
 
     const repositories = vi.mocked(createSupabaseRepositories).mock.results.at(-1)?.value;
-    repositories?.listActiveInstalledPackageIds.mockResolvedValue(["pkg-brand-seo"]);
+    repositories?.listActiveInstalledPackageIds.mockResolvedValue(["pkg-example-audit"]);
 
     const harnessRepository = harnessRepositoryRef.current;
     harnessRepository.listCardsForRun.mockImplementation(async (runId: string) => {
-      if (runId === "run-seo-follow-on-1") {
+      if (runId === "run-example-follow-on-1") {
         return [
           {
             id: "card_ceo",
-            runId: "run-seo-follow-on-1",
+            runId: "run-example-follow-on-1",
             parentCardId: null,
             persona: "ceo",
-            title: "Plan SEO follow-on run",
+            title: "Plan example audit follow-on run",
             deliverableType: "plan",
             state: "planning",
             createdAt: "2026-05-21T10:00:00.000Z",
             updatedAt: "2026-05-21T10:00:00.000Z"
           },
           {
-            id: "card_cmo_seo_done",
-            runId: "run-seo-follow-on-1",
+            id: "card_cmo_example_done",
+            runId: "run-example-follow-on-1",
             parentCardId: "card_ceo",
             persona: "cmo",
-            title: "Finalize the SEO findings brief",
+            title: "Finalize the example findings brief",
             deliverableType: "research_brief",
             state: "working",
-            executionClaimToken: "claim-cmo-seo-done",
+            executionClaimToken: "claim-cmo-example-done",
             executionClaimedAt: "2026-05-21T10:06:00.000Z",
             createdAt: "2026-05-21T10:01:00.000Z",
             updatedAt: "2026-05-21T10:06:00.000Z"
           },
           {
-            id: "card_cfo_seo_next",
-            runId: "run-seo-follow-on-1",
+            id: "card_cfo_example_next",
+            runId: "run-example-follow-on-1",
             parentCardId: "card_ceo",
             persona: "cfo",
-            title: "Review the SEO remediation budget impact",
+            title: "Review the example remediation budget impact",
             deliverableType: "research_brief",
             state: "approved",
             createdAt: "2026-05-21T10:02:00.000Z",
@@ -3364,9 +3416,9 @@ describe("worker runtime", () => {
     });
     harnessRepository.listCardContinuityForRun.mockResolvedValue([
       {
-        cardId: "card_cfo_seo_next",
-        runId: "run-seo-follow-on-1",
-        continuitySummary: "Resume the SEO budget review from the finalized findings brief.",
+        cardId: "card_cfo_example_next",
+        runId: "run-example-follow-on-1",
+        continuitySummary: "Resume the example budget review from the finalized findings brief.",
         latestResultSummary: null,
         absorbedWorkItems: [],
         updatedAt: "2026-05-21T10:03:00.000Z"
@@ -3374,25 +3426,25 @@ describe("worker runtime", () => {
     ]);
     harnessRepository.listEventsForRun.mockResolvedValueOnce([]);
     harnessRepository.claimCardForExecution.mockResolvedValueOnce({
-      id: "card_cfo_seo_next",
-      runId: "run-seo-follow-on-1",
+      id: "card_cfo_example_next",
+      runId: "run-example-follow-on-1",
       parentCardId: "card_ceo",
       persona: "cfo",
-      title: "Review the SEO remediation budget impact",
+      title: "Review the example remediation budget impact",
       deliverableType: "research_brief",
       state: "working",
-      executionClaimToken: "claim-cfo-seo-next",
+      executionClaimToken: "claim-cfo-example-next",
       executionClaimedAt: "2026-05-21T10:07:30.000Z",
       createdAt: "2026-05-21T10:02:00.000Z",
       updatedAt: "2026-05-21T10:07:00.000Z"
     });
     harnessRepository.getRun.mockImplementation(async (runId: string) => {
-      if (runId === "run-seo-follow-on-1") {
+      if (runId === "run-example-follow-on-1") {
         return {
-          id: "run-seo-follow-on-1",
+          id: "run-example-follow-on-1",
           tenantId: "tenant-1",
-          workflowId: "wf-seo-audit",
-          packageId: "pkg-brand-seo",
+          workflowId: "wf-example-audit",
+          packageId: "pkg-example-audit",
           orchestratorPersona: "ceo",
           state: "active",
           runtimeContext: {
@@ -3406,31 +3458,31 @@ describe("worker runtime", () => {
       return null;
     });
     harnessRepository.getCard.mockImplementation(async (cardId: string) => {
-      if (cardId === "card_cmo_seo_done") {
+      if (cardId === "card_cmo_example_done") {
         return {
-          id: "card_cmo_seo_done",
-          runId: "run-seo-follow-on-1",
+          id: "card_cmo_example_done",
+          runId: "run-example-follow-on-1",
           parentCardId: "card_ceo",
           persona: "cmo",
-          title: "Finalize the SEO findings brief",
+          title: "Finalize the example findings brief",
           deliverableType: "research_brief",
           state: "working",
-          executionClaimToken: "claim-cmo-seo-done",
+          executionClaimToken: "claim-cmo-example-done",
           executionClaimedAt: "2026-05-21T10:06:00.000Z",
           createdAt: "2026-05-21T10:01:00.000Z",
           updatedAt: "2026-05-21T10:06:00.000Z"
         };
       }
-      if (cardId === "card_cfo_seo_next") {
+      if (cardId === "card_cfo_example_next") {
         return {
-          id: "card_cfo_seo_next",
-          runId: "run-seo-follow-on-1",
+          id: "card_cfo_example_next",
+          runId: "run-example-follow-on-1",
           parentCardId: "card_ceo",
           persona: "cfo",
-          title: "Review the SEO remediation budget impact",
+          title: "Review the example remediation budget impact",
           deliverableType: "research_brief",
           state: "working",
-          executionClaimToken: "claim-cfo-seo-next",
+          executionClaimToken: "claim-cfo-example-next",
           executionClaimedAt: "2026-05-21T10:07:30.000Z",
           createdAt: "2026-05-21T10:02:00.000Z",
           updatedAt: "2026-05-21T10:07:00.000Z"
@@ -3442,17 +3494,17 @@ describe("worker runtime", () => {
     await expect(
       runtime.commitHarnessLaneOutcome({
         tenantId: "tenant-1",
-        runId: "run-seo-follow-on-1",
-        workflowId: "wf-seo-audit",
-        cardId: "card_cmo_seo_done",
-        executionClaimToken: "claim-cmo-seo-done",
+        runId: "run-example-follow-on-1",
+        workflowId: "wf-example-audit",
+        cardId: "card_cmo_example_done",
+        executionClaimToken: "claim-cmo-example-done",
         state: "done",
-        resultSummary: "The prioritized SEO findings brief is complete and ready for budget review."
+        resultSummary: "The prioritized example findings brief is complete and ready for budget review."
       })
     ).resolves.toEqual(
       expect.objectContaining({
-        runId: "run-seo-follow-on-1",
-        workflowId: "wf-seo-audit",
+        runId: "run-example-follow-on-1",
+        workflowId: "wf-example-audit",
         status: "committed",
         postOutcomeAction: {
           kind: "dispatch_next_lane",
@@ -3461,7 +3513,7 @@ describe("worker runtime", () => {
           persona: expect.any(String)
         },
         nextDispatch: expect.objectContaining({
-          workflowId: "wf-seo-audit",
+          workflowId: "wf-example-audit",
           laneExecution: expect.objectContaining({
             deliverableType: "research_brief",
             state: "working"
@@ -3472,8 +3524,8 @@ describe("worker runtime", () => {
 
     expect(onHarnessLaneReady).toHaveBeenCalledWith(
       expect.objectContaining({
-        runId: "run-seo-follow-on-1",
-        workflowId: "wf-seo-audit",
+        runId: "run-example-follow-on-1",
+        workflowId: "wf-example-audit",
         laneExecution: expect.objectContaining({
           deliverableType: "research_brief"
         })
@@ -3481,7 +3533,7 @@ describe("worker runtime", () => {
     );
     expect(
       harnessRepository.insertEvent.mock.calls.some(
-        ([event]) => event.cardId === "card_cfo_seo_next" && event.eventKind === "execution_start_suppressed"
+        ([event]) => event.cardId === "card_cfo_example_next" && event.eventKind === "execution_start_suppressed"
       )
     ).toBe(false);
 
@@ -3585,24 +3637,28 @@ describe("worker runtime", () => {
       expect.objectContaining({
         status: "committed",
         attentionTransition: {
-          kind: "none"
+          kind: "requested",
+          requestedAction: {
+            kind: "queue_ceo_review",
+            runState: "active",
+            reason: "next_lane_decision",
+            completedCardId: "card_cfo",
+            nextCardId: "card_cmo"
+          }
         },
-        nextDispatch: expect.objectContaining({
-          dispatchHandoff: {
-            kind: "follow_on_dispatch",
-            kindLabel: "Follow-on dispatch",
-            executionStage: "post_outcome_follow_on",
-            executionStageLabel: "Post-outcome follow-on",
-            reactivatedRun: false,
-            triggeredByCardId: "card_cfo",
-            triggeredByPersona: "cfo",
-            triggeredByOutcomeState: "done",
-            triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
-          },
-          laneExecution: expect.objectContaining({
-            cardId: "card_cmo"
-          })
-        })
+        laneExecution: {
+          cardId: "card_cfo",
+          state: "done",
+          runState: "active",
+          latestResultSummary: "Pricing review is complete and ready for board packaging."
+        },
+        postOutcomeAction: {
+          kind: "queue_ceo_review",
+          runState: "active",
+          reason: "next_lane_decision",
+          completedCardId: "card_cfo",
+          nextCardId: "card_cmo"
+        }
       })
     );
 
@@ -3610,115 +3666,21 @@ describe("worker runtime", () => {
       expect.stringContaining("\"type\":\"wealth_factory_harness_attention_resolved\"")
     );
     expect(onHarnessAttentionResolved).not.toHaveBeenCalled();
-    expect(onHarnessLaneReady).toHaveBeenCalledWith(
-      expect.objectContaining({
-        dispatchHandoff: {
-          kind: "follow_on_dispatch",
-          kindLabel: "Follow-on dispatch",
-          executionStage: "post_outcome_follow_on",
-          executionStageLabel: "Post-outcome follow-on",
-          reactivatedRun: false,
-          triggeredByCardId: "card_cfo",
-          triggeredByPersona: "cfo",
-          triggeredByOutcomeState: "done",
-          triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
-        },
-        executionClaim: {
-          kind: "approved_claim",
-          token: "claim-cmo-active",
-          claimedAt: "2026-05-21T10:07:30.000Z",
-          previousClaimedAt: null
-        },
-        continuityContext: {
-          source: "state_transition",
-          summary: "CMO should continue this active marketing plan lane: Prepare launch messaging.",
-          latestResultSummary: null,
-          absorbedWorkCount: 0,
-          absorbedWorkTrail: []
-        },
-        laneExecution: expect.objectContaining({
-          cardId: "card_cmo"
-        })
-      })
-    );
-    expect(onHarnessExecutionClaimed).toHaveBeenCalledWith({
-      tenantId: "tenant-1",
-      runId: "run-1",
-      workflowId: "wf_connect_first_workflow",
-      executionClaim: {
-        kind: "approved_claim",
-        claimedAt: "2026-05-21T10:07:30.000Z",
-        previousClaimedAt: null
-      },
-      laneExecution: expect.objectContaining({
-        cardId: "card_cmo",
-        persona: "cmo"
-      })
-    });
-    expect(onHarnessApprovedExecutionClaim).toHaveBeenCalledWith({
-      tenantId: "tenant-1",
-      runId: "run-1",
-      workflowId: "wf_connect_first_workflow",
-      executionClaim: {
-        kind: "approved_claim",
-        claimedAt: "2026-05-21T10:07:30.000Z",
-        previousClaimedAt: null
-      },
-      laneExecution: expect.objectContaining({
-        cardId: "card_cmo",
-        persona: "cmo"
-      })
-    });
-    expect(onHarnessExecutionDispatched).toHaveBeenCalledWith({
-      tenantId: "tenant-1",
-      runId: "run-1",
-      workflowId: "wf_connect_first_workflow",
-      dispatchHandoff: {
-        kind: "follow_on_dispatch",
-        kindLabel: "Follow-on dispatch",
-        executionStage: "post_outcome_follow_on",
-        executionStageLabel: "Post-outcome follow-on",
-        reactivatedRun: false,
-        triggeredByCardId: "card_cfo",
-        triggeredByPersona: "cfo",
-        triggeredByOutcomeState: "done",
-        triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
-      },
-      laneExecution: expect.objectContaining({
-        cardId: "card_cmo",
-        persona: "cmo"
-      })
-    });
-    expect(onHarnessFollowOnDispatch).toHaveBeenCalledWith({
-      tenantId: "tenant-1",
-      runId: "run-1",
-      workflowId: "wf_connect_first_workflow",
-      dispatchHandoff: {
-        kind: "follow_on_dispatch",
-        kindLabel: "Follow-on dispatch",
-        executionStage: "post_outcome_follow_on",
-        executionStageLabel: "Post-outcome follow-on",
-        reactivatedRun: false,
-        triggeredByCardId: "card_cfo",
-        triggeredByPersona: "cfo",
-        triggeredByOutcomeState: "done",
-        triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
-      },
-      laneExecution: expect.objectContaining({
-        cardId: "card_cmo",
-        persona: "cmo"
-      })
-    });
-    expect(stdoutWrite).toHaveBeenCalledWith(
+    expect(onHarnessLaneReady).not.toHaveBeenCalled();
+    expect(onHarnessExecutionClaimed).not.toHaveBeenCalled();
+    expect(onHarnessApprovedExecutionClaim).not.toHaveBeenCalled();
+    expect(onHarnessExecutionDispatched).not.toHaveBeenCalled();
+    expect(onHarnessFollowOnDispatch).not.toHaveBeenCalled();
+    expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_execution_claimed\"")
     );
-    expect(stdoutWrite).toHaveBeenCalledWith(
+    expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_execution_claim_approved\"")
     );
-    expect(stdoutWrite).toHaveBeenCalledWith(
+    expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_execution_dispatched\"")
     );
-    expect(stdoutWrite).toHaveBeenCalledWith(
+    expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_execution_dispatch_follow_on\"")
     );
 
@@ -4298,49 +4260,27 @@ describe("worker runtime", () => {
       expect.objectContaining({
         runId: "run-1",
         workflowId: "wf_connect_first_workflow",
-        status: "committed"
+        status: "committed",
+        postOutcomeAction: {
+          kind: "queue_ceo_review",
+          runState: "active",
+          reason: "next_lane_decision",
+          completedCardId: "card_cfo",
+          nextCardId: "card_cmo"
+        }
       })
     );
 
-    expect(onHarnessExecutionDispatched).toHaveBeenCalledTimes(1);
-    expect(onHarnessReactivatedFollowOnDispatch).toHaveBeenCalledTimes(1);
-    expect(onHarnessFollowOnDispatch).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith(
-      "Harness specific execution-dispatch handler failed after durable lane claim",
-      expect.objectContaining({
-        runId: "run-1",
-        workflowId: "wf_connect_first_workflow",
-        cardId: "card_cmo",
-        dispatchKind: "follow_on_dispatch"
-      })
-    );
+    expect(onHarnessExecutionDispatched).not.toHaveBeenCalled();
+    expect(onHarnessReactivatedFollowOnDispatch).not.toHaveBeenCalled();
+    expect(onHarnessFollowOnDispatch).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
     const dispatchHookFailures = harnessRepository.insertEvent.mock.calls
       .map(([event]) => event)
       .filter(
         (event) => event.cardId === "card_cmo" && event.eventKind === "execution_hook_failed" && event.payload.hookFamily === "execution_dispatched"
       );
-    expect(dispatchHookFailures).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          payload: expect.objectContaining({
-            deliveryMode: "specific",
-            hookKind: "reactivated_follow_on_dispatch",
-            dispatchKind: "follow_on_dispatch",
-            executionStage: "post_outcome_follow_on",
-            failureMessage: "specific reactivated start unavailable"
-          })
-        }),
-        expect.objectContaining({
-          payload: expect.objectContaining({
-            deliveryMode: "specific",
-            hookKind: "follow_on_dispatch",
-            dispatchKind: "follow_on_dispatch",
-            executionStage: "post_outcome_follow_on",
-            failureMessage: "shared follow-on start unavailable"
-          })
-        })
-      ])
-    );
+    expect(dispatchHookFailures).toEqual([]);
 
     warn.mockRestore();
     await runtime.close();
@@ -4440,28 +4380,27 @@ describe("worker runtime", () => {
     ).resolves.toEqual(
       expect.objectContaining({
         status: "committed",
-        nextDispatch: expect.objectContaining({
-          laneExecution: expect.objectContaining({
-            cardId: "card_cmo"
-          })
-        })
-      })
-    );
-    expect(onHarnessLaneReady).toHaveBeenCalledWith(
-      expect.objectContaining({
-        executionClaim: {
-          kind: "approved_claim",
-          token: "claim-cmo-active",
-          claimedAt: "2026-05-21T10:07:30.000Z",
-          previousClaimedAt: null
+        attentionTransition: {
+          kind: "requested",
+          requestedAction: {
+            kind: "queue_ceo_review",
+            runState: "active",
+            reason: "next_lane_decision",
+            completedCardId: "card_cfo",
+            nextCardId: "card_cmo"
+          }
         },
-        laneExecution: expect.objectContaining({
-          cardId: "card_cmo",
-          persona: "cmo"
-        })
+        postOutcomeAction: {
+          kind: "queue_ceo_review",
+          runState: "active",
+          reason: "next_lane_decision",
+          completedCardId: "card_cfo",
+          nextCardId: "card_cmo"
+        }
       })
     );
-    expect(stdoutWrite).toHaveBeenCalledWith(
+    expect(onHarnessLaneReady).not.toHaveBeenCalled();
+    expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_execution_dispatch_follow_on\"")
     );
 
@@ -5958,33 +5897,21 @@ describe("worker runtime", () => {
         runId: "run-1",
         workflowId: "wf_connect_first_workflow",
         status: "committed",
-        nextDispatch: expect.objectContaining({
-          laneExecution: expect.objectContaining({
-            cardId: "card_cmo"
-          })
-        })
+        postOutcomeAction: {
+          kind: "queue_ceo_review",
+          runState: "active",
+          reason: "next_lane_decision",
+          completedCardId: "card_cfo",
+          nextCardId: "card_cmo"
+        }
       })
     );
 
-    expect(warn).toHaveBeenCalledWith(
-      "Harness lane-ready hook failed after durable follow-on dispatch",
-      expect.objectContaining({
-        runId: "run-1",
-        workflowId: "wf_connect_first_workflow",
-        cardId: "card_cmo"
-      })
-    );
-    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+    expect(warn).not.toHaveBeenCalled();
+    expect(harnessRepository.insertEvent).not.toHaveBeenCalledWith(
       expect.objectContaining({
         cardId: "card_cmo",
-        eventKind: "execution_hook_failed",
-        payload: expect.objectContaining({
-          hookFamily: "execution_start_ready",
-          deliveryMode: "generic",
-          dispatchKind: "follow_on_dispatch",
-          executionStage: "post_outcome_follow_on",
-          failureMessage: "hook unavailable"
-        })
+        eventKind: "execution_hook_failed"
       })
     );
     const acidRepository = vi.mocked(createAcidGuardRepository).mock.results.at(-1)?.value;
@@ -5992,7 +5919,7 @@ describe("worker runtime", () => {
       tenantId: "tenant-1",
       runId: "run-1",
       from: ["queued", "running"],
-      to: "running"
+      to: "queued"
     });
 
     warn.mockRestore();
@@ -6104,97 +6031,27 @@ describe("worker runtime", () => {
         runId: "run-1",
         workflowId: "wf_connect_first_workflow",
         status: "committed",
-        nextDispatch: expect.objectContaining({
-          laneExecution: expect.objectContaining({
-            cardId: "card_cmo"
-          })
-        })
+        postOutcomeAction: {
+          kind: "queue_ceo_review",
+          runState: "active",
+          reason: "next_lane_decision",
+          completedCardId: "card_cfo",
+          nextCardId: "card_cmo"
+        }
       })
     );
 
-    expect(warn).toHaveBeenCalledWith(
-      "Harness follow-on execution envelope reconstruction failed after durable dispatch",
-      expect.objectContaining({
-        runId: "run-1",
-        workflowId: "wf_connect_first_workflow",
-        cardId: "card_cmo"
-      })
-    );
+    expect(warn).not.toHaveBeenCalled();
     expect(onHarnessLaneReady).not.toHaveBeenCalled();
-    expect(onHarnessExecutionStartSuppressed).toHaveBeenCalledWith({
-      tenantId: "tenant-1",
-      runId: "run-1",
-      workflowId: "wf_connect_first_workflow",
-      dispatchHandoff: {
-        kind: "follow_on_dispatch",
-        kindLabel: "Follow-on dispatch",
-        executionStage: "post_outcome_follow_on",
-        executionStageLabel: "Post-outcome follow-on",
-        reactivatedRun: false,
-        triggeredByCardId: "card_cfo",
-        triggeredByPersona: "cfo",
-        triggeredByOutcomeState: "done",
-        triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
-      },
-      laneExecution: expect.objectContaining({
-        cardId: "card_cmo",
-        persona: "cmo"
-      }),
-      executionClaim: {
-        kind: "approved_claim",
-        claimedAt: "2026-05-21T10:07:30.000Z",
-        previousClaimedAt: undefined
-      },
-      failure: {
-        kind: "execution_envelope_reconstruction_failed",
-        message: "follow-on continuity unavailable"
-      }
-    });
-    expect(onHarnessFollowOnDispatchSuppressed).toHaveBeenCalledWith({
-      tenantId: "tenant-1",
-      runId: "run-1",
-      workflowId: "wf_connect_first_workflow",
-      dispatchHandoff: {
-        kind: "follow_on_dispatch",
-        kindLabel: "Follow-on dispatch",
-        executionStage: "post_outcome_follow_on",
-        executionStageLabel: "Post-outcome follow-on",
-        reactivatedRun: false,
-        triggeredByCardId: "card_cfo",
-        triggeredByPersona: "cfo",
-        triggeredByOutcomeState: "done",
-        triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
-      },
-      laneExecution: expect.objectContaining({
-        cardId: "card_cmo",
-        persona: "cmo"
-      }),
-      executionClaim: {
-        kind: "approved_claim",
-        claimedAt: "2026-05-21T10:07:30.000Z",
-        previousClaimedAt: undefined
-      },
-      failure: {
-        kind: "execution_envelope_reconstruction_failed",
-        message: "follow-on continuity unavailable"
-      }
-    });
-    expect(stdoutWrite).toHaveBeenCalledWith(
+    expect(onHarnessExecutionStartSuppressed).not.toHaveBeenCalled();
+    expect(onHarnessFollowOnDispatchSuppressed).not.toHaveBeenCalled();
+    expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_execution_start_suppressed\"")
     );
-    expect(stdoutWrite).toHaveBeenCalledWith(
-      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_start_suppressed_follow_on\"")
-    );
-    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+    expect(harnessRepository.insertEvent).not.toHaveBeenCalledWith(
       expect.objectContaining({
         cardId: "card_cmo",
-        eventKind: "execution_start_suppressed",
-        payload: expect.objectContaining({
-          kind: "follow_on_dispatch",
-          executionStage: "post_outcome_follow_on",
-          claimKind: "approved_claim",
-          failureKind: "execution_envelope_reconstruction_failed"
-        })
+        eventKind: "execution_start_suppressed"
       })
     );
 
@@ -6203,20 +6060,17 @@ describe("worker runtime", () => {
       tenantId: "tenant-1",
       runId: "run-1",
       from: ["queued", "running"],
-      to: "running"
+      to: "queued"
     });
 
     warn.mockRestore();
     await runtime.close();
   });
 
-  it("waits for an in-flight follow-on harness lane-ready callback before closing runtime dependencies", async () => {
+  it("does not create a follow-on lane-ready callback before closing runtime dependencies once CEO next-lane review is required", async () => {
     const { createPgPool } = await import("../src/db/postgres-client.js");
-    const deferred = createDeferred<void>();
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const onHarnessLaneReady = vi.fn(async () => {
-      await deferred.promise;
-    });
+    const onHarnessLaneReady = vi.fn();
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv({
         ...validEnv,
@@ -6262,6 +6116,152 @@ describe("worker runtime", () => {
       {
         id: "card_cmo",
         runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cmo",
+        title: "Prepare launch messaging",
+        deliverableType: "marketing_plan",
+        state: "approved",
+        createdAt: "2026-05-21T10:02:00.000Z",
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      }
+    ]);
+    harnessRepository.listCardContinuityForRun.mockResolvedValue([
+      {
+        cardId: "card_cmo",
+        runId: "run-1",
+        continuitySource: "resume_override",
+        continuitySummary: "Resume the launch messaging lane from the approved positioning draft.",
+        latestResultSummary: null,
+        absorbedWorkItems: [],
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      }
+    ]);
+    harnessRepository.claimCardForExecution.mockResolvedValueOnce({
+      id: "card_cmo",
+      runId: "run-1",
+      parentCardId: "card_ceo",
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "marketing_plan",
+      state: "working",
+      executionClaimToken: "claim-cmo-active",
+      executionClaimedAt: "2026-05-21T10:07:30.000Z",
+      createdAt: "2026-05-21T10:02:00.000Z",
+      updatedAt: "2026-05-21T10:07:00.000Z"
+    });
+
+    stdoutWrite.mockClear();
+    await expect(
+      runtime.commitHarnessLaneOutcome({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        cardId: "card_cfo",
+        executionClaimToken: "claim-cfo-1",
+        state: "done",
+        resultSummary: "Pricing review is complete and ready for board packaging."
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        status: "committed",
+        postOutcomeAction: {
+          kind: "queue_ceo_review",
+          runState: "active",
+          reason: "next_lane_decision",
+          completedCardId: "card_cfo",
+          nextCardId: "card_cmo"
+        }
+      })
+    );
+
+    const poolEnd = vi.mocked(createPgPool).mock.results.at(-1)?.value.end;
+    expect(onHarnessLaneReady).not.toHaveBeenCalled();
+    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cfo",
+        eventKind: "execution_outcome_committed"
+      })
+    );
+    expect(harnessRepository.insertEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        cardId: "card_cmo",
+        eventKind: "execution_start_ready"
+      })
+    );
+    expect(
+      stdoutWrite.mock.calls.some(([value]) =>
+        String(value).includes("\"type\":\"wealth_factory_harness_lane_dispatch\"")
+      )
+    ).toBe(false);
+    expect(
+      stdoutWrite.mock.calls.some(([value]) =>
+        String(value).includes("\"type\":\"wealth_factory_harness_execution_dispatch_follow_on\"")
+      )
+    ).toBe(false);
+
+    await runtime.close();
+    expect(poolEnd).toHaveBeenCalledTimes(1);
+    expect(warn).not.toHaveBeenCalled();
+
+    warn.mockRestore();
+  });
+
+  it("does not start queued-behind-gate harness work after shutdown begins", async () => {
+    const { createPgPool } = await import("../src/db/postgres-client.js");
+    const firstDeferred = createDeferred<void>();
+    const onHarnessLaneReady = vi.fn(async () => {
+      await firstDeferred.promise;
+    });
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow",
+        WF_WORKER_CONCURRENCY: "1"
+      }),
+      workerInstanceId: "worker-test-harness-close-gated-backlog",
+      onHarnessLaneReady
+    });
+
+    const firstPromise = runtime.processQueuePayload({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      createdByUserId: "user-1",
+      idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+      createdAt: new Date().toISOString()
+    });
+
+    while (onHarnessLaneReady.mock.calls.length === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    const secondPromise = runtime.processQueuePayload({
+      tenantId: "tenant-1",
+      runId: "run-2",
+      workflowId: "wf_connect_first_workflow",
+      createdByUserId: "user-1",
+      idempotencyKey: "tenant-1:wf_connect_first_workflow:run-2",
+      createdAt: new Date().toISOString()
+    });
+
+    const poolEnd = vi.mocked(createPgPool).mock.results.at(-1)?.value.end;
+    const closePromise = runtime.close();
+    firstDeferred.resolve();
+
+    await expect(firstPromise).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+    await expect(secondPromise).rejects.toThrow("Worker runtime is closing");
+    await closePromise;
+
+    expect(onHarnessLaneReady).toHaveBeenCalledTimes(2);
+    expect(poolEnd).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps harness fairness and backpressure tenant-safe when one tenant already occupies its lane slot", async () => {
     const firstDeferred = createDeferred<void>();
     const thirdDeferred = createDeferred<void>();
@@ -6459,168 +6459,6 @@ describe("worker runtime", () => {
     await runtime.close();
   }, 10_000);
 
-        parentCardId: "card_ceo",
-        persona: "cmo",
-        title: "Prepare launch messaging",
-        deliverableType: "marketing_plan",
-        state: "approved",
-        createdAt: "2026-05-21T10:02:00.000Z",
-        updatedAt: "2026-05-21T10:03:00.000Z"
-      }
-    ]);
-    harnessRepository.listCardContinuityForRun.mockResolvedValue([
-      {
-        cardId: "card_cmo",
-        runId: "run-1",
-        continuitySource: "resume_override",
-        continuitySummary: "Resume the launch messaging lane from the approved positioning draft.",
-        latestResultSummary: null,
-        absorbedWorkItems: [],
-        updatedAt: "2026-05-21T10:03:00.000Z"
-      }
-    ]);
-    harnessRepository.claimCardForExecution.mockResolvedValueOnce({
-      id: "card_cmo",
-      runId: "run-1",
-      parentCardId: "card_ceo",
-      persona: "cmo",
-      title: "Prepare launch messaging",
-      deliverableType: "marketing_plan",
-      state: "working",
-      executionClaimToken: "claim-cmo-active",
-      executionClaimedAt: "2026-05-21T10:07:30.000Z",
-      createdAt: "2026-05-21T10:02:00.000Z",
-      updatedAt: "2026-05-21T10:07:00.000Z"
-    });
-
-    stdoutWrite.mockClear();
-    const outcomePromise = runtime.commitHarnessLaneOutcome({
-      tenantId: "tenant-1",
-      runId: "run-1",
-      workflowId: "wf_connect_first_workflow",
-      cardId: "card_cfo",
-      executionClaimToken: "claim-cfo-1",
-      state: "done",
-      resultSummary: "Pricing review is complete and ready for board packaging."
-    });
-
-    while (onHarnessLaneReady.mock.calls.length === 0) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-
-    const poolEnd = vi.mocked(createPgPool).mock.results.at(-1)?.value.end;
-    let closeSettled = false;
-    const closePromise = runtime.close().then(() => {
-      closeSettled = true;
-    });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(closeSettled).toBe(false);
-    expect(poolEnd).not.toHaveBeenCalled();
-    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cardId: "card_cfo",
-        eventKind: "execution_outcome_committed"
-      })
-    );
-    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cardId: "card_cmo",
-        eventKind: "execution_start_ready"
-      })
-    );
-    deferred.resolve();
-
-    await expect(outcomePromise).resolves.toEqual(
-      expect.objectContaining({
-        runId: "run-1",
-        workflowId: "wf_connect_first_workflow",
-        status: "committed",
-        nextDispatch: expect.objectContaining({
-          laneExecution: expect.objectContaining({
-            cardId: "card_cmo"
-          })
-        })
-      })
-    );
-    await Promise.all([closePromise, runtime.close()]);
-
-    expect(closeSettled).toBe(true);
-    expect(poolEnd).toHaveBeenCalledTimes(1);
-    expect(
-      stdoutWrite.mock.calls.some(([value]) =>
-        String(value).includes("\"type\":\"wealth_factory_harness_lane_dispatch\"")
-      )
-    ).toBe(true);
-    expect(
-      stdoutWrite.mock.calls.some(([value]) =>
-        String(value).includes("\"type\":\"wealth_factory_harness_execution_dispatch_follow_on\"")
-      )
-    ).toBe(true);
-    expect(
-      stdoutWrite.mock.calls.filter(([value]) =>
-        String(value).includes("\"type\":\"wealth_factory_harness_execution_dispatch_follow_on\"")
-      )
-    ).toHaveLength(1);
-    expect(warn).not.toHaveBeenCalled();
-
-    warn.mockRestore();
-  });
-
-  it("does not start queued-behind-gate harness work after shutdown begins", async () => {
-    const { createPgPool } = await import("../src/db/postgres-client.js");
-    const firstDeferred = createDeferred<void>();
-    const onHarnessLaneReady = vi.fn(async () => {
-      await firstDeferred.promise;
-    });
-    const runtime = createWorkerRuntime({
-      env: loadWorkerEnv({
-        ...validEnv,
-        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow",
-        WF_WORKER_CONCURRENCY: "1"
-      }),
-      workerInstanceId: "worker-test-harness-close-gated-backlog",
-      onHarnessLaneReady
-    });
-
-    const firstPromise = runtime.processQueuePayload({
-      tenantId: "tenant-1",
-      runId: "run-1",
-      workflowId: "wf_connect_first_workflow",
-      createdByUserId: "user-1",
-      idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
-      createdAt: new Date().toISOString()
-    });
-
-    while (onHarnessLaneReady.mock.calls.length === 0) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-
-    const secondPromise = runtime.processQueuePayload({
-      tenantId: "tenant-1",
-      runId: "run-2",
-      workflowId: "wf_connect_first_workflow",
-      createdByUserId: "user-1",
-      idempotencyKey: "tenant-1:wf_connect_first_workflow:run-2",
-      createdAt: new Date().toISOString()
-    });
-
-    const poolEnd = vi.mocked(createPgPool).mock.results.at(-1)?.value.end;
-    const closePromise = runtime.close();
-    firstDeferred.resolve();
-
-    await expect(firstPromise).resolves.toEqual({
-      runId: "run-1",
-      workflowId: "wf_connect_first_workflow",
-      status: "running"
-    });
-    await expect(secondPromise).rejects.toThrow("Worker runtime is closing");
-    await closePromise;
-
-    expect(onHarnessLaneReady).toHaveBeenCalledTimes(2);
-    expect(poolEnd).toHaveBeenCalledTimes(1);
-  });
-
   it("bounds runtime close when an in-flight harness callback never resolves", async () => {
     const { createPgPool } = await import("../src/db/postgres-client.js");
     const deferred = createDeferred<void>();
@@ -6779,32 +6617,24 @@ describe("worker runtime", () => {
       expect.objectContaining({
         runId: "run-1",
         workflowId: "wf_connect_first_workflow",
-        status: "committed"
+        status: "committed",
+        postOutcomeAction: {
+          kind: "queue_ceo_review",
+          runState: "active",
+          reason: "next_lane_decision",
+          completedCardId: "card_cfo",
+          nextCardId: "card_cmo"
+        }
       })
     );
 
-    expect(onHarnessExecutionStartSuppressed).toHaveBeenCalledTimes(1);
-    expect(onHarnessFollowOnDispatchSuppressed).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith(
-      "Harness specific execution-start-suppressed hook failed after durable claim",
-      expect.objectContaining({
-        runId: "run-1",
-        workflowId: "wf_connect_first_workflow",
-        cardId: "card_cmo",
-        dispatchKind: "follow_on_dispatch"
-      })
-    );
-    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+    expect(onHarnessExecutionStartSuppressed).not.toHaveBeenCalled();
+    expect(onHarnessFollowOnDispatchSuppressed).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+    expect(harnessRepository.insertEvent).not.toHaveBeenCalledWith(
       expect.objectContaining({
         cardId: "card_cmo",
-        eventKind: "execution_hook_failed",
-        payload: expect.objectContaining({
-          hookFamily: "execution_start_suppressed",
-          deliveryMode: "specific",
-          dispatchKind: "follow_on_dispatch",
-          executionStage: "post_outcome_follow_on",
-          failureMessage: "specific suppressed unavailable"
-        })
+        eventKind: "execution_hook_failed"
       })
     );
 
@@ -6931,130 +6761,27 @@ describe("worker runtime", () => {
         runId: "run-1",
         workflowId: "wf_connect_first_workflow",
         status: "committed",
-        nextDispatch: expect.objectContaining({
-          dispatchHandoff: expect.objectContaining({
-            kind: "follow_on_dispatch",
-            reactivatedRun: true
-          }),
-          laneExecution: expect.objectContaining({
-            cardId: "card_cmo"
-          })
-        })
+        postOutcomeAction: {
+          kind: "queue_ceo_review",
+          runState: "active",
+          reason: "next_lane_decision",
+          completedCardId: "card_cfo",
+          nextCardId: "card_cmo"
+        }
       })
     );
 
-    expect(warn).toHaveBeenCalledWith(
-      "Harness follow-on execution envelope reconstruction failed after durable dispatch",
-      expect.objectContaining({
-        runId: "run-1",
-        workflowId: "wf_connect_first_workflow",
-        cardId: "card_cmo"
-      })
-    );
-    expect(onHarnessExecutionStartSuppressed).toHaveBeenCalledWith({
-      tenantId: "tenant-1",
-      runId: "run-1",
-      workflowId: "wf_connect_first_workflow",
-      dispatchHandoff: {
-        kind: "follow_on_dispatch",
-        kindLabel: "Follow-on dispatch",
-        executionStage: "post_outcome_follow_on",
-        executionStageLabel: "Post-outcome follow-on",
-        reactivatedRun: true,
-        triggeredByCardId: "card_cfo",
-        triggeredByPersona: "cfo",
-        triggeredByOutcomeState: "done",
-        triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
-      },
-      laneExecution: expect.objectContaining({
-        cardId: "card_cmo",
-        persona: "cmo"
-      }),
-      executionClaim: {
-        kind: "approved_claim",
-        claimedAt: "2026-05-21T10:07:30.000Z",
-        previousClaimedAt: undefined
-      },
-      failure: {
-        kind: "execution_envelope_reconstruction_failed",
-        message: "reactivated follow-on continuity unavailable"
-      }
-    });
-    expect(onHarnessFollowOnDispatchSuppressed).toHaveBeenCalledWith({
-      tenantId: "tenant-1",
-      runId: "run-1",
-      workflowId: "wf_connect_first_workflow",
-      dispatchHandoff: {
-        kind: "follow_on_dispatch",
-        kindLabel: "Follow-on dispatch",
-        executionStage: "post_outcome_follow_on",
-        executionStageLabel: "Post-outcome follow-on",
-        reactivatedRun: true,
-        triggeredByCardId: "card_cfo",
-        triggeredByPersona: "cfo",
-        triggeredByOutcomeState: "done",
-        triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
-      },
-      laneExecution: expect.objectContaining({
-        cardId: "card_cmo",
-        persona: "cmo"
-      }),
-      executionClaim: {
-        kind: "approved_claim",
-        claimedAt: "2026-05-21T10:07:30.000Z",
-        previousClaimedAt: undefined
-      },
-      failure: {
-        kind: "execution_envelope_reconstruction_failed",
-        message: "reactivated follow-on continuity unavailable"
-      }
-    });
-    expect(onHarnessReactivatedFollowOnDispatchSuppressed).toHaveBeenCalledWith({
-      tenantId: "tenant-1",
-      runId: "run-1",
-      workflowId: "wf_connect_first_workflow",
-      dispatchHandoff: {
-        kind: "follow_on_dispatch",
-        kindLabel: "Follow-on dispatch",
-        executionStage: "post_outcome_follow_on",
-        executionStageLabel: "Post-outcome follow-on",
-        reactivatedRun: true,
-        triggeredByCardId: "card_cfo",
-        triggeredByPersona: "cfo",
-        triggeredByOutcomeState: "done",
-        triggeredByResultSummary: "Pricing review is complete and ready for board packaging."
-      },
-      laneExecution: expect.objectContaining({
-        cardId: "card_cmo",
-        persona: "cmo"
-      }),
-      executionClaim: {
-        kind: "approved_claim",
-        claimedAt: "2026-05-21T10:07:30.000Z",
-        previousClaimedAt: undefined
-      },
-      failure: {
-        kind: "execution_envelope_reconstruction_failed",
-        message: "reactivated follow-on continuity unavailable"
-      }
-    });
-    expect(stdoutWrite).toHaveBeenCalledWith(
+    expect(warn).not.toHaveBeenCalled();
+    expect(onHarnessExecutionStartSuppressed).not.toHaveBeenCalled();
+    expect(onHarnessFollowOnDispatchSuppressed).not.toHaveBeenCalled();
+    expect(onHarnessReactivatedFollowOnDispatchSuppressed).not.toHaveBeenCalled();
+    expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_execution_start_suppressed\"")
     );
-    expect(stdoutWrite).toHaveBeenCalledWith(
-      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_start_suppressed_reactivated\"")
-    );
-    expect(harnessRepository.insertEvent).toHaveBeenCalledWith(
+    expect(harnessRepository.insertEvent).not.toHaveBeenCalledWith(
       expect.objectContaining({
         cardId: "card_cmo",
-        eventKind: "execution_start_suppressed",
-        payload: expect.objectContaining({
-          kind: "follow_on_dispatch",
-          executionStage: "post_outcome_follow_on",
-          reactivatedRun: true,
-          claimKind: "approved_claim",
-          failureKind: "execution_envelope_reconstruction_failed"
-        })
+        eventKind: "execution_start_suppressed"
       })
     );
 
@@ -7063,7 +6790,7 @@ describe("worker runtime", () => {
       tenantId: "tenant-1",
       runId: "run-1",
       from: ["queued", "running"],
-      to: "running"
+      to: "queued"
     });
 
     warn.mockRestore();
@@ -7190,22 +6917,21 @@ describe("worker runtime", () => {
       expect.objectContaining({
         runId: "run-1",
         workflowId: "wf_connect_first_workflow",
-        status: "committed"
+        status: "committed",
+        postOutcomeAction: {
+          kind: "queue_ceo_review",
+          runState: "active",
+          reason: "next_lane_decision",
+          completedCardId: "card_cfo",
+          nextCardId: "card_cmo"
+        }
       })
     );
 
-    expect(onHarnessExecutionStartSuppressed).toHaveBeenCalledTimes(1);
-    expect(onHarnessReactivatedFollowOnDispatchSuppressed).toHaveBeenCalledTimes(1);
-    expect(onHarnessFollowOnDispatchSuppressed).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith(
-      "Harness specific execution-start-suppressed hook failed after durable claim",
-      expect.objectContaining({
-        runId: "run-1",
-        workflowId: "wf_connect_first_workflow",
-        cardId: "card_cmo",
-        dispatchKind: "follow_on_dispatch"
-      })
-    );
+    expect(onHarnessExecutionStartSuppressed).not.toHaveBeenCalled();
+    expect(onHarnessReactivatedFollowOnDispatchSuppressed).not.toHaveBeenCalled();
+    expect(onHarnessFollowOnDispatchSuppressed).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
     const suppressedHookFailures = harnessRepository.insertEvent.mock.calls
       .map(([event]) => event)
       .filter(
@@ -7214,28 +6940,7 @@ describe("worker runtime", () => {
           event.eventKind === "execution_hook_failed" &&
           event.payload.hookFamily === "execution_start_suppressed"
       );
-    expect(suppressedHookFailures).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          payload: expect.objectContaining({
-            deliveryMode: "specific",
-            hookKind: "reactivated_follow_on_dispatch",
-            dispatchKind: "follow_on_dispatch",
-            executionStage: "post_outcome_follow_on",
-            failureMessage: "specific reactivated suppressed unavailable"
-          })
-        }),
-        expect.objectContaining({
-          payload: expect.objectContaining({
-            deliveryMode: "specific",
-            hookKind: "follow_on_dispatch",
-            dispatchKind: "follow_on_dispatch",
-            executionStage: "post_outcome_follow_on",
-            failureMessage: "shared follow-on suppression unavailable"
-          })
-        })
-      ])
-    );
+    expect(suppressedHookFailures).toEqual([]);
 
     warn.mockRestore();
     await runtime.close();

@@ -36,6 +36,12 @@ type HarnessApi = {
     title: string;
     deliverableType: string;
   }): Promise<{ cardId: string } | { status: "deferred"; proposalId: string }>;
+  submitTenantGoal?(request: {
+    authorization: string;
+    cookie?: string;
+    workflowId?: string;
+    goal: string;
+  }): Promise<import("../harness/board-service.js").HarnessTenantGoalResponse>;
   advanceChildCard(request: {
     authorization: string;
     cookie?: string;
@@ -71,6 +77,10 @@ type HarnessApi = {
   }): Promise<
     | { status: "done"; runId: string }
     | { status: "fresh_cycle_started"; runId: string; reopenedProposalCount: number }
+    | { status: "next_lane_started"; runId: string; cardId: string; state: "working" }
+    | { status: "changes_requested"; runId: string; cardId: string; state: "working" }
+    | { status: "deferred"; runId: string; cardId: string }
+    | { status: "moved_to_assembly"; runId: string; runState: "assembling" }
   >;
   resolvePendingAttention?(request: {
     authorization: string;
@@ -142,6 +152,7 @@ export function createHarnessHttpHandler(options: {
   allowedOrigins: readonly string[];
   listBoardState: HarnessApi["listBoardState"];
   createTopLevelChildCard: HarnessApi["createTopLevelChildCard"];
+  submitTenantGoal?: HarnessApi["submitTenantGoal"];
   advanceChildCard: HarnessApi["advanceChildCard"];
   decideProposal: HarnessApi["decideProposal"];
   completeRun: HarnessApi["completeRun"];
@@ -174,6 +185,7 @@ export function createHarnessHttpHandler(options: {
       (
         request.path === "/api/harness/board" ||
         request.path === "/api/harness/cards" ||
+        request.path === "/api/harness/ceo/goal" ||
         /^\/api\/harness\/cards\/[^/]+\/advance$/u.test(request.path) ||
         /^\/api\/harness\/runs\/[^/]+\/complete$/u.test(request.path) ||
         /^\/api\/harness\/runs\/[^/]+\/review-attention$/u.test(request.path) ||
@@ -200,6 +212,8 @@ export function createHarnessHttpHandler(options: {
         ? "harness-board"
       : request.method === "POST" && request.path === "/api/harness/cards"
         ? "harness-card-create"
+      : request.method === "POST" && request.path === "/api/harness/ceo/goal"
+        ? "harness-ceo-goal"
       : request.method === "POST" && /^\/api\/harness\/cards\/[^/]+\/advance$/u.test(request.path)
         ? "harness-card-advance"
       : request.method === "POST" && /^\/api\/harness\/runs\/[^/]+\/complete$/u.test(request.path)
@@ -269,6 +283,24 @@ export function createHarnessHttpHandler(options: {
         return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
       }
 
+      if (request.method === "POST" && request.path === "/api/harness/ceo/goal") {
+        const bodyInput = readJsonObject(request.body);
+        const goal = readRequiredString(bodyInput?.goal);
+        const workflowId = readOptionalString(bodyInput?.workflowId);
+        if (!goal || !options.submitTenantGoal) {
+          return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
+        }
+
+        const body = await options.submitTenantGoal({
+          authorization: request.headers.authorization ?? "",
+          ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
+          ...(workflowId ? { workflowId } : {}),
+          goal
+        });
+        assertWealthFactoryResponse(body);
+        return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
+      }
+
       const advanceMatch = /^\/api\/harness\/cards\/([^/]+)\/advance$/u.exec(request.path);
       if (advanceMatch) {
         const bodyInput = readJsonObject(request.body);
@@ -319,7 +351,14 @@ export function createHarnessHttpHandler(options: {
         const bodyInput = readJsonObject(request.body);
         const decision = readOptionalString(bodyInput?.decision);
         const actionToken = readRequiredString(bodyInput?.actionToken);
-        if (decision !== "complete_run" && decision !== "start_fresh_cycle") {
+        if (
+          decision !== "complete_run"
+          && decision !== "start_fresh_cycle"
+          && decision !== "start_next_lane"
+          && decision !== "request_changes"
+          && decision !== "defer"
+          && decision !== "move_to_assembly"
+        ) {
           return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
         }
         if (!actionToken) {

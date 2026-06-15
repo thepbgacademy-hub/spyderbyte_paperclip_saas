@@ -1124,7 +1124,6 @@ const resolveAttentionBoardResponse: HarnessBoardResponse = {
     targetCardId: "card-cfo-forecast",
     targetPersona: "CFO",
     targetTitle: "Pressure-test the pricing lane",
-    targetSummary: "Resume CFO lane: Pressure-test the pricing lane"
   }
 };
 
@@ -1566,7 +1565,7 @@ describe("harness board UI", () => {
     expect(markup).not.toContain("token");
   });
 
-  it("renders bounded governance-history delivery replay actions from the board contract", () => {
+  it("keeps deferred governance-history delivery replay actions off the main board surface", () => {
     const exportCandidates = [
       {
         id: "governance_history_export",
@@ -1627,14 +1626,15 @@ describe("harness board UI", () => {
       />
     );
 
-    expect(markup).toContain("Replay governance history delivery");
-    expect(markup).toContain("Action family: governance history export replay");
-    expect(markup).toContain("Delivery freshness: Current bundle");
-    expect(markup).toContain("Last delivery error: Disk was temporarily unavailable.");
-    expect(markup).toContain("/api/harness/runs/run_ui_test_1/export-candidates/governance_history_export/delivery-replay");
+    expect(markup).not.toContain("Replay governance history delivery");
+    expect(markup).not.toContain("Action family: governance history export replay");
+    expect(markup).not.toContain("Delivery freshness: Current bundle");
+    expect(markup).not.toContain("Last delivery error: Disk was temporarily unavailable.");
+    expect(markup).not.toContain("/api/harness/runs/run_ui_test_1/export-candidates/governance_history_export/delivery-replay");
+    expect(markup).toContain("Board pulse");
   });
 
-  it("renders bounded package-bundle delivery replay actions from the board contract", () => {
+  it("keeps deferred package-bundle delivery replay actions off the main board surface", () => {
     const exportCandidates = [
       {
         id: "package_bundle_export",
@@ -1687,12 +1687,13 @@ describe("harness board UI", () => {
       />
     );
 
-    expect(markup).toContain("Replay package bundle delivery");
-    expect(markup).toContain("Action family: package bundle export replay");
-    expect(markup).toContain("/api/harness/runs/run_ui_test_1/export-candidates/package_bundle_export/delivery-replay");
+    expect(markup).not.toContain("Replay package bundle delivery");
+    expect(markup).not.toContain("Action family: package bundle export replay");
+    expect(markup).not.toContain("/api/harness/runs/run_ui_test_1/export-candidates/package_bundle_export/delivery-replay");
+    expect(markup).toContain("Board pulse");
   });
 
-  it("does not render delivery replay controls while a governance-history export is already in progress", () => {
+  it("keeps delivery replay status off the main board surface while export work is deferred", () => {
     const exportCandidates = [
       {
         id: "governance_history_export",
@@ -1740,9 +1741,10 @@ describe("harness board UI", () => {
       />
     );
 
-    expect(markup).toContain("Delivery in progress");
+    expect(markup).not.toContain("Delivery in progress");
     expect(markup).not.toContain("Replay governance history delivery");
     expect(markup).not.toContain("Build governance history export");
+    expect(markup).toContain("Board pulse");
   });
 
   it("renders a simple drawer with only high-level details", () => {
@@ -1767,6 +1769,9 @@ describe("harness board UI", () => {
     expect(markup).toContain("CEO approvals");
     expect(markup).toContain("Control mode");
     expect(markup).toContain("Live");
+    expect(markup).not.toContain("Memory boundary");
+    expect(markup).not.toContain("Export candidate groups");
+    expect(markup).not.toContain("Card details");
     expect(markup).not.toContain("Preview mode");
     expect(markup).not.toContain("localhost fallback data");
     expect(markup).not.toContain("raw execution log");
@@ -1783,10 +1788,9 @@ describe("harness board UI", () => {
     expect(markup).toContain("Primary");
     expect(markup).toContain("Secondary");
     expect(markup).toContain("Caution");
-    expect(markup).toContain("Controls - Live");
     expect(markup).toContain("Control mode");
     expect(markup).toContain("Live");
-    expect(markup).toContain("Board actions are bound to live harness mutations through the engine contract.");
+    expect(markup).toContain("A bounded launch cockpit summary of focus, lane state, next actions, governance, and progress.");
     expect(markup).toContain("Start a new board cycle from this run?");
     expect(markup).toContain("Review proposal decision");
     expect(markup).toContain("Approve proposal");
@@ -1804,6 +1808,9 @@ describe("harness board UI", () => {
     expect(markup).toContain("Review decision");
     expect(markup).toContain("Fresh-cycle mode");
     expect(markup).toContain("Proposal decision");
+    expect(markup).not.toContain("Memory boundary");
+    expect(markup).not.toContain("Export candidate groups");
+    expect(markup).not.toContain("Build governance history export");
     expect(markup).toContain("Live request fields for Complete run");
     expect(markup).toContain("Open composer for Start fresh cycle");
     expect(markup).toContain("Composer hidden until needed.");
@@ -1827,296 +1834,28 @@ describe("harness board UI", () => {
     expect(markup).toContain("Next review trigger: Revisit after the CEO closes the current pricing board decisions.");
     expect(markup).toContain("Last decision: 11:11 AM");
     expect(markup).toContain("Board pulse");
-    expect(markup).toContain("Attention - CEO review required");
-    expect(markup).toContain("Approvals - 1");
-    expect(markup).toContain("Export - 2 ready");
-    expect(markup).toContain("Package - Assembling");
-    expect(markup).toContain("1 deliverable, 1 governance item, 2 recommendations, 1 objection.");
-    expect(markup).toContain("2 export candidates are ready now, and 2 still wait for board closure.");
-    expect(markup).toContain("2 governance record candidates are ready now, and 2 packaged output candidates still wait on board closure.");
-    expect(markup).toContain("2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later.");
-    expect(markup).toContain("2 runtime memory buckets never promote, 2 candidate buckets are ready for explicit export later, and 2 candidate buckets still wait on board closure first.");
-    expect(markup).toContain("2 governance history record candidates are ready, while 2 package record candidates stay package-shaped until board closure completes.");
+    expect(markup).toContain("Current focus");
+    expect(markup).toContain("Active lanes");
+    expect(markup).toContain("Next actions");
+    expect(markup).toContain("Governance posture");
+    expect(markup).toContain("Progress");
+    expect(markup).toContain("Pressure-test the pricing lane");
+    expect(markup).toContain("2 visible lanes are active across planning and working.");
+    expect(markup).toContain("1 CEO review and 1 pending approval are shaping the next move.");
+    expect(markup).toContain("Package assembling with 1 open governance item still shaping the handoff.");
+    expect(markup).toContain("1 deliverable is packaged, 1 follow-through action landed, and 1 decision is preserved.");
     expect(markup).toContain("Recent decisions");
     expect(markup).toContain("CEO kept the research expansion under bounded review.");
-    expect(markup).toContain("1 preserved decision");
-    expect(markup).toContain("Decision kind: proposal deferred");
-    expect(markup).toContain("Resolution: defer");
-    expect(markup).toContain("Recommendation: Hold the research expansion until the pricing package is stable.");
-    expect(markup).toContain("Objection: Do not widen the current board cycle yet.");
     expect(markup).toContain("Follow-through");
     expect(markup).toContain("CEO packaged the current pricing outcome for tenant-facing review.");
-    expect(markup).toContain("1 implemented action");
-    expect(markup).toContain("Action: packaged outcome");
-    expect(markup).toContain("Persona: CFO");
-    expect(markup).toContain("Deliverable: Margin review");
-    expect(markup).toContain("Policy reason: New lane approved");
-    expect(markup).toContain("Resolution: Create Lane");
-    expect(markup).toContain("Recommendation: Carry the pricing readout into the tenant-facing package.");
-    expect(markup).toContain("Objection: Do not widen the board cycle until the pricing package is finalized.");
     expect(markup).toContain("Completion package");
-    expect(markup).toContain("Memory boundary");
-    expect(markup).toContain("Wealth Factory runtime keeps bounded operational lane memory live");
-    expect(markup).toContain("Lane continuity");
-    expect(markup).toContain("Attention state");
-    expect(markup).toContain("Governance decisions");
-    expect(markup).toContain("Implemented actions");
-    expect(markup).toContain("Package governance");
-    expect(markup).toContain("Packaged deliverables");
-    expect(markup).toContain("Stays in runtime");
-    expect(markup).toContain("Ready for export later");
-    expect(markup).toContain("Live runtime only");
-    expect(markup).toContain("Ready now");
-    expect(markup).toContain("After board closes");
-    expect(markup).toContain("Runtime partition");
-    expect(markup).toContain("Governance history candidates");
-    expect(markup).toContain("Packaged output candidates");
-    expect(markup).toContain("Export candidate groups");
-    expect(markup).toContain("Governance history export");
-    expect(markup).toContain("Package bundle export");
-    expect(markup).toContain("Available export actions");
-    expect(markup).toContain("Run export preflight");
-    expect(markup).toContain("Preview Obsidian export bundle");
-    expect(markup).toContain("Build governance history export");
-    expect(markup).toContain("POST /api/harness/runs/run_ui_test_1/export-candidates/governance_history_export/preflight");
-    expect(markup).toContain("POST /api/harness/runs/run_ui_test_1/export-candidates/governance_history_export/dry-run");
-    expect(markup).toContain("POST /api/harness/runs/run_ui_test_1/export-candidates/governance_history_export/export");
-    expect(markup).toContain("Foundational export sequence");
-    expect(markup).toContain("Board-closure-following sequence");
-    expect(markup).toContain("Independent export candidate");
-    expect(markup).toContain("Depends on governance history export");
-    expect(markup).toContain("Deterministic upsert");
-    expect(markup).toContain("Board-closure snapshot once");
-    expect(markup).toContain("Replay-safe");
-    expect(markup).toContain("Requires fresh board-closure snapshot");
-    expect(markup).toContain("Append or upsert");
-    expect(markup).toContain("Replace latest closure snapshot");
-    expect(markup).toContain("Record-level atomic");
-    expect(markup).toContain("Closure-bundle atomic");
-    expect(markup).toContain("Decision-history-derived");
-    expect(markup).toContain("Board-closure-snapshot-derived");
-    expect(markup).toContain("Append new revision");
-    expect(markup).toContain("Replace closure-bundle revision");
-    expect(markup).toContain("Latest record state");
-    expect(markup).toContain("Latest board-closure snapshot");
-    expect(markup).toContain("Record-level validation");
-    expect(markup).toContain("Closure-bundle validation");
-    expect(markup).toContain("Self-contained record");
-    expect(markup).toContain("Board-closure-complete bundle");
-    expect(markup).toContain("Tenant business context");
-    expect(markup).toContain("Tenant deliverable context");
-    expect(markup).toContain("Tenant governance-history readers");
-    expect(markup).toContain("Tenant package consumers");
-    expect(markup).toContain("Export as recorded");
-    expect(markup).toContain("Sanitize before package export");
-    expect(markup).toContain("Governance-safe redaction");
-    expect(markup).toContain("Package-safe redaction");
-    expect(markup).toContain("Decision summary only");
-    expect(markup).toContain("Closure snapshot summary only");
-    expect(markup).toContain("Governance history");
-    expect(markup).toContain("Packaged output");
-    expect(markup).toContain("Stable when recorded");
-    expect(markup).toContain("Stable after board closure");
-    expect(markup).toContain("Tenant-owned later");
-    expect(markup).toContain("Governance history record");
-    expect(markup).toContain("Package bundle export records");
-    expect(markup).toContain("Tenant explicit export");
-    expect(markup).toContain("Board closure, then tenant export");
-    expect(markup).toContain("Tenant export request");
-    expect(markup).toContain("Board closure");
-    expect(markup).toContain("Depends on: Governance history export");
-    expect(markup).toContain("2 runtime memory buckets stay live only inside Wealth Factory orchestration.");
-    expect(markup).toContain("2 governance history candidates are stable enough for later tenant-owned export.");
-    expect(markup).toContain("2 packaged output candidates still wait on board closure before later export.");
-    expect(markup).toContain("Runtime memory");
-    expect(markup).toContain("Governance record candidate");
-    expect(markup).toContain("Packaged record candidate");
-    expect(markup).toContain("Runtime only");
-    expect(markup).toContain("Explicit export later");
-    expect(markup).toContain("After board closes, then export");
-    expect(markup).toContain("Runtime operational");
-    expect(markup).toContain("Governance history");
-    expect(markup).toContain("Packaged output");
-    expect(markup).toContain("Runtime ephemeral");
-    expect(markup).toContain("Stable when recorded");
-    expect(markup).toContain("Stable after board closure");
-    expect(markup).toContain("Wealth Factory only");
-    expect(markup).toContain("Tenant-owned later");
-    expect(markup).toContain("Never promotes");
-    expect(markup).toContain("Ready for explicit export");
-    expect(markup).toContain("After board closure, then export");
-    expect(markup).toContain("Append-only history");
-    expect(markup).toContain("Replaceable until board closure");
-    expect(markup).toContain("Single-record export");
-    expect(markup).toContain("Package record-set export");
-    expect(markup).toContain("Stable record identity");
-    expect(markup).toContain("Finalized after board closure");
-    expect(markup).toContain("Decision-ledger-backed");
-    expect(markup).toContain("Package-closure-backed");
-    expect(markup).toContain("Independent export safe");
-    expect(markup).toContain("Requires board-closure snapshot");
-    expect(markup).toContain("concurrency-safe for later independent export");
-    expect(markup).toContain("1 export candidate group carries tenant business context, and 1 group still carries tenant deliverable context.");
-    expect(markup).toContain("1 export candidate group is aimed at tenant governance-history readers, and 1 group still targets tenant package consumers.");
-    expect(markup).toContain("1 export candidate group is exported as recorded, and 1 group still requires sanitization before package export.");
-    expect(markup).toContain("1 export candidate group uses governance-safe redaction, and 1 group still requires package-safe redaction.");
-    expect(markup).toContain("1 export candidate group discloses decision summaries only, and 1 group still discloses closure-snapshot summaries only.");
-    expect(markup).toContain("1 export candidate group uses single-record export requests, and 1 group still uses package-bundle export requests.");
-    expect(markup).toContain("1 export candidate group requires tenant export confirmation, and 1 group still requires board closure before tenant export confirmation.");
-    expect(markup).toContain("1 export candidate group retries the latest record export, and 1 group still reruns after the board-closure snapshot.");
-    expect(markup).toContain("1 export candidate group lands as governance history notes, and 1 group still lands in package record folders.");
-    expect(markup).toContain("1 export candidate group appends history entries, and 1 group still replaces package snapshots after board closure.");
-    expect(markup).toContain("1 export candidate group is ready for tenant export later, and 1 group is still awaiting board closure.");
-    expect(markup).toContain("1 export candidate group is ready for a later tenant export step, and 1 group still needs board closure before tenant export becomes the next step.");
-    expect(markup).toContain("1 export candidate group sits in the tenant export family, and 1 group remains in the board-closure-first family.");
-    expect(markup).toContain("1 export candidate group stays in governance history, and 1 group still stays in packaged output.");
-    expect(markup).toContain("1 export candidate group is stable when recorded, and 1 group still stays stable after board closure.");
-    expect(markup).toContain("2 export candidate groups remain tenant-owned later.");
-    expect(markup).toContain("1 export candidate group becomes governance history records, and 1 group still becomes package bundle export records.");
-    expect(markup).toContain("1 export candidate group is tenant-controlled for later explicit export, and 1 group still needs board closure before tenant export owns the next move.");
-    expect(markup).toContain("1 export candidate group is eligible for later explicit export, and 1 group still becomes eligible only after board closure.");
-    expect(markup).toContain("1 export candidate group comes from recent decisions, and 1 group still comes from the completion package bundle.");
-    expect(markup).toContain("1 export candidate group follows the ready-for-explicit-export path, and 1 group still follows the after-board-closure-then-export path.");
-    expect(markup).toContain("1 export candidate group has no promotion blocker, and 1 group still needs board closure as the blocker boundary.");
-    expect(markup).toContain("1 export candidate group waits on a later tenant export request, and 1 group still waits on board closure first.");
-    expect(markup).toContain("1 export candidate group assembles as a standalone export record, and 1 group still assembles as a package record set.");
-    expect(markup).toContain("1 export candidate group stays in phase-one governance export, and 1 group still stays in phase-two package export.");
-    expect(markup).toContain("1 export candidate group stays append-only history, and 1 group still stays replaceable until board closure.");
-    expect(markup).toContain("1 export candidate group keeps a single-record export scope, and 1 group still keeps a package record-set export scope.");
-    expect(markup).toContain("1 export candidate group already has stable record identity, and 1 group still finalizes identity after board closure.");
-    expect(markup).toContain("1 export candidate group uses governance history record payloads, and 1 group still uses package snapshot bundle payloads.");
-    expect(markup).toContain("1 export candidate group uses deterministic upsert, and 1 group still depends on board-closure snapshot-once idempotency.");
-    expect(markup).toContain("1 export candidate group is replay-safe, and 1 group still requires a fresh board-closure snapshot before replay.");
-    expect(markup).toContain("1 export candidate group uses append-or-upsert conflict handling, and 1 group still replaces the latest board-closure snapshot on conflict.");
-    expect(markup).toContain("1 export candidate group commits as record-level atomic exports, and 1 group still depends on closure-bundle atomic export.");
-    expect(markup).toContain("1 export candidate group is derived from decision history, and 1 group is derived from the board-closure snapshot.");
-    expect(markup).toContain("1 export candidate group appends as new revisions, and 1 group still replaces the current closure-bundle revision.");
-    expect(markup).toContain("1 export candidate group uses the latest record state, and 1 group still depends on the latest board-closure snapshot.");
-    expect(markup).toContain("1 export candidate group validates at record level, and 1 group still validates at closure-bundle level.");
-    expect(markup).toContain("1 export candidate group is a self-contained record, and 1 group still completes as board-closure bundles.");
-    expect(markup).toContain("Runtime only");
-    expect(markup).toContain("Governance history record");
-    expect(markup).toContain("Package governance record");
-    expect(markup).toContain("Package deliverable record");
-    expect(markup).toContain("2 export candidate buckets are still blocked by board closure. Runtime memory stays non-promotable by design.");
-    expect(markup).toContain("2 export candidate buckets are already tenant-controlled for later explicit export, while 2 buckets still need board closure before tenant export can own the next step.");
-    expect(markup).toContain("2 export candidate buckets are waiting only on a later tenant export request, while 2 buckets still need board closure before that request can happen.");
-    expect(markup).toContain("2 runtime buckets have no promotion step, 2 export candidate buckets are ready for a later tenant export step, and 2 buckets still need board closure before tenant export becomes the next step.");
-    expect(markup).toContain("2 runtime buckets expose no promotion action, 2 export candidate buckets sit in the tenant export family, and 2 buckets remain in the board-closure-first family.");
-    expect(markup).toContain("2 runtime buckets have no promotion scope, 2 export candidate buckets are ready as single-record exports, and 2 buckets still belong to a package record-set export scope.");
-    expect(markup).toContain("2 runtime buckets keep transient runtime identity, 2 buckets already have stable record identity, and 2 buckets still finalize identity at board closure.");
-    expect(markup).toContain("2 runtime buckets stay runtime-state-backed, 2 buckets are decision-ledger-backed, and 2 buckets are package-closure-backed.");
-    expect(markup).toContain("2 runtime buckets stay runtime-only, 2 export candidate buckets are safe to promote independently, and 2 buckets still need a board-closure snapshot for concurrency-safe promotion.");
-    expect(markup).toContain("2 runtime buckets have no export payload shape, 2 export candidate buckets are shaped as governance history records, and 2 buckets still export as package snapshot bundles.");
-    expect(markup).toContain("2 runtime buckets have no idempotency policy, 2 export candidate buckets use deterministic upsert, and 2 buckets still depend on a board-closure snapshot-once policy.");
-    expect(markup).toContain("2 runtime buckets stay runtime-only, 2 export candidate buckets are replay-safe, and 2 buckets still require a fresh board-closure snapshot before replay.");
-    expect(markup).toContain("2 runtime buckets stay outside export conflicts, 2 export candidate buckets use append-or-upsert conflict handling, and 2 buckets still replace the latest board-closure snapshot when promoted.");
-    expect(markup).toContain("Not applicable in runtime");
-    expect(markup).toContain("No blocker");
-    expect(markup).toContain("Board closure required");
-    expect(markup).toContain("Wealth Factory runtime only");
-    expect(markup).toContain("Tenant explicit export");
-    expect(markup).toContain("Board closure, then tenant export");
-    expect(markup).toContain("No promotion trigger");
-    expect(markup).toContain("Tenant export request");
-    expect(markup).toContain("Board closure");
-    expect(markup).toContain("No promotion action");
-    expect(markup).toContain("Tenant export family");
-    expect(markup).toContain("Board closure first");
-    expect(markup).toContain("No promotion scope");
-    expect(markup).toContain("Single-record export");
-    expect(markup).toContain("Package record-set export");
-    expect(markup).toContain("Runtime transient identity");
-    expect(markup).toContain("Stable record identity");
-    expect(markup).toContain("Finalized after board closure");
-    expect(markup).toContain("Runtime-state-backed");
-    expect(markup).toContain("Decision-ledger-backed");
-    expect(markup).toContain("Package-closure-backed");
-    expect(markup).toContain("Independent export safe");
-    expect(markup).toContain("Requires board-closure snapshot");
-    expect(markup).toContain("No export payload");
-    expect(markup).toContain("Governance history record");
-    expect(markup).toContain("Package snapshot bundle");
-    expect(markup).toContain("No idempotency policy");
-    expect(markup).toContain("Deterministic upsert");
-    expect(markup).toContain("Board-closure snapshot once");
-    expect(markup).toContain("Replay-safe");
-    expect(markup).toContain("Requires fresh board-closure snapshot");
-    expect(markup).toContain("Append or upsert");
-    expect(markup).toContain("Replace latest closure snapshot");
-    expect(markup).toContain("No export atomicity");
-    expect(markup).toContain("Record-level atomic");
-    expect(markup).toContain("Closure-bundle atomic");
-    expect(markup).toContain("No export derivation");
-    expect(markup).toContain("Decision-history-derived");
-    expect(markup).toContain("Board-closure-snapshot-derived");
-    expect(markup).toContain("No export revision policy");
-    expect(markup).toContain("Append new revision");
-    expect(markup).toContain("Replace closure-bundle revision");
-    expect(markup).toContain("No export freshness source");
-    expect(markup).toContain("Latest record state");
-    expect(markup).toContain("Latest board-closure snapshot");
-    expect(markup).toContain("No export validation");
-    expect(markup).toContain("Record-level validation");
-    expect(markup).toContain("Closure-bundle validation");
-    expect(markup).toContain("No export completeness rule");
-    expect(markup).toContain("Self-contained record");
-    expect(markup).toContain("Board-closure-complete bundle");
-    expect(markup).toContain("No export sensitivity");
-    expect(markup).toContain("Tenant business context");
-    expect(markup).toContain("Tenant deliverable context");
-    expect(markup).toContain("Tenant governance-history readers");
-    expect(markup).toContain("Tenant package consumers");
-    expect(markup).toContain("No export sanitization");
-    expect(markup).toContain("Export as recorded");
-    expect(markup).toContain("Sanitize before package export");
-    expect(markup).toContain("Runtime internal only");
-    expect(markup).toContain("Governance-safe redaction");
-    expect(markup).toContain("Package-safe redaction");
-    expect(markup).toContain("Decision summary only");
-    expect(markup).toContain("Closure snapshot summary only");
-    expect(markup).toContain("No tenant memory placement");
-    expect(markup).toContain("Governance history note");
-    expect(markup).toContain("Package record folder");
-    expect(markup).toContain("No tenant sync strategy");
-    expect(markup).toContain("Append history entry");
-    expect(markup).toContain("Replace package snapshot after board closure");
-    expect(markup).toContain("No export request shape");
-    expect(markup).toContain("Single-record export request");
-    expect(markup).toContain("Package-bundle export request");
-    expect(markup).toContain("No export confirmation");
-    expect(markup).toContain("Tenant export confirmation");
-    expect(markup).toContain("Board closure, then tenant export confirmation");
-    expect(markup).toContain("Retry latest record export");
-    expect(markup).toContain("Rerun after board-closure snapshot");
-    expect(markup).toContain("This governance history is ready to sit behind a later bounded tenant export action.");
-    expect(markup).toContain("Board closure still gates this packaged deliverable before any later tenant export action can apply.");
-    expect(markup).toContain("Source surface: Continuity snapshots");
-    expect(markup).toContain("Source surface: Pending attention");
-    expect(markup).toContain("Source surface: Recent decisions");
-    expect(markup).toContain("Source surface: Follow-through history");
-    expect(markup).toContain("Source surface: Completion package governance");
-    expect(markup).toContain("Source surface: Completion package deliverables");
-    expect(markup).toContain("Board closure is still required before this package-shaped governance memory becomes a durable tenant record candidate.");
-    expect(markup).toContain("Board closure is still required before this packaged deliverable becomes a durable tenant record candidate.");
     expect(markup).toContain("Tenant-facing package state");
-    expect(markup).toContain("Keep the pricing package readable while the research expansion stays under review.");
-    expect(markup).toContain("Deferred approvals: 1");
-    expect(markup).toContain("Governance items: 1");
-    expect(markup).toContain("Deliverables: 1");
-    expect(markup).toContain("Recommendations: 2");
-    expect(markup).toContain("Objections: 1");
-    expect(markup).toContain("Open governance items still shape this package.");
-    expect(markup).toContain("Recommendations");
-    expect(markup).toContain("Objections");
-    expect(markup).toContain("Governance items (1)");
-    expect(markup).toContain("Deliverables (1)");
-    expect(markup).toContain("Approve only after the pricing package is stable.");
-    expect(markup).toContain("Revisit after the current pricing package is completed.");
-    expect(markup).toContain("Package state");
-    expect(markup).toContain("Assembling");
-    expect(markup).toContain("1 deliverable");
-    expect(markup).toContain("CFO · Pressure-test the pricing lane");
+    expect(markup).not.toContain("Attention - CEO review required");
+    expect(markup).not.toContain("Approvals - 1");
+    expect(markup).not.toContain("Export - 2 ready");
+    expect(markup).not.toContain("Package - Assembling");
+    expect(markup).not.toContain("Memory boundary");
+    expect(markup).not.toContain("Export candidate groups");
     expect(markup).toContain("&quot;decision&quot;:&quot;complete_run&quot;");
     expect(markup).toContain("&quot;decision&quot;:&quot;approve&quot;");
     expect(markup).toContain("&quot;decision&quot;:&quot;defer&quot;");
@@ -2131,16 +1870,28 @@ describe("harness board UI", () => {
 
     expect(markup).toContain("Resume lane");
     expect(markup).toContain("Waiting on lane resume");
+    expect(markup).toContain("1 lane follow-up and 1 pending approval are shaping the next move.");
     expect(markup).toContain("Resume the pricing lane once the tenant confirms the updated revenue assumption.");
     expect(markup).toContain("POST /api/harness/runs/run_ui_test_2/resolve-attention");
     expect(markup).toContain("Action family: resolve attention");
     expect(markup).toContain("Allowed commands: resume_lane");
     expect(markup).toContain("Resolution command");
     expect(markup).toContain("Resume summary");
-    expect(markup).toContain("Resume CFO lane: Pressure-test the pricing lane");
     expect(markup).toContain("Hide composer for Resume lane");
     expect(markup).toContain("Live request fields for Resume lane");
     expect(markup).toContain("&quot;command&quot;:&quot;resume_lane&quot;");
+  });
+
+  it("describes approval-only next actions without mislabeling them as CEO review", () => {
+    const { pendingAttention: _pendingAttention, ...approvalOnlyBoard } = boardResponse;
+    const markup = renderToStaticMarkup(
+      <HarnessBoardPage
+        initialBoard={approvalOnlyBoard}
+      />
+    );
+
+    expect(markup).toContain("1 pending approval is shaping the next move.");
+    expect(markup).not.toContain("1 CEO review");
   });
 
   it("renders bounded composer drift diagnostics when seeded drafts no longer fit the live contract", () => {
@@ -2238,9 +1989,9 @@ describe("harness board UI", () => {
     expect(markup).toContain("Preview");
     expect(markup).toContain("Preview mode");
     expect(markup).toContain("live mutations remain disabled");
-    expect(markup).toContain("Live board actions are unavailable in localhost fallback mode.");
-    expect(markup).toContain("2 runtime memory buckets stay Wealth Factory-only, while 4 tenant-record candidate buckets may become tenant-owned later.");
-    expect(markup).toContain("Controls - Preview");
+    expect(markup).toContain("Live board actions are unavailable in preview mode.");
+    expect(markup).toContain("Board pulse");
+    expect(markup).toContain("Current focus");
   });
 
   it("defaults prop-seeded board props to preview mode when no explicit control mode is provided", () => {
@@ -2248,8 +1999,8 @@ describe("harness board UI", () => {
 
     expect(markup).toContain("Control mode");
     expect(markup).toContain("Preview");
-    expect(markup).toContain("Controls - Preview");
-    expect(markup).toContain("Live board actions are unavailable in localhost fallback mode.");
+    expect(markup).toContain("Board pulse");
+    expect(markup).toContain("Live board actions are unavailable in preview mode.");
   });
 
   it("describes proposal-decision conflicts with contract-aware recovery guidance", () => {
@@ -2680,7 +2431,7 @@ describe("harness board UI", () => {
     );
 
     expect(markup).toContain("Preview variant: Lane resume");
-    expect(markup).toContain("while previewing lane resume.");
+    expect(markup).toContain("This board is in preview mode, so action guidance stays visible but live mutations remain disabled.");
     expect(markup).toContain("Resume lane");
   });
 
@@ -2694,7 +2445,7 @@ describe("harness board UI", () => {
     );
 
     expect(markup).toContain("Preview variant: Approval backlog");
-    expect(markup).toContain("while previewing approval backlog.");
+    expect(markup).toContain("This board is in preview mode, so action guidance stays visible but live mutations remain disabled.");
     expect(markup).toContain("Review pending approvals");
     expect(markup).toContain("Pending approvals in queue: 1");
     expect(markup).toContain("Backlog mode: New work waiting");

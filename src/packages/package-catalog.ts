@@ -2,15 +2,15 @@ import type { WealthFactoryPackage } from "./package-types.js";
 
 export const WEALTH_FACTORY_PACKAGE_CATALOG: readonly WealthFactoryPackage[] = [
   {
-    id: "pkg-brand-seo",
-    name: "Brand SEO",
+    id: "pkg-example-audit",
+    name: "Example Audit",
     kind: "industry",
-    includedWorkflowIds: ["wf-seo-audit"],
+    includedWorkflowIds: ["wf-example-audit"],
     workflowDefinitions: [
       {
-        publicId: "wf-seo-audit",
-        publicName: "SEO Audit Workflow",
-        description: "Bounded SEO audit workflow available only through an installed package overlay.",
+        publicId: "wf-example-audit",
+        publicName: "Example Audit Workflow",
+        description: "Bounded example audit workflow available only through an installed package overlay.",
         allowedDeliverableTypes: ["research_brief"],
         requiredProviderCapabilities: ["text_generation"],
         boardExposureEnabled: true,
@@ -21,7 +21,7 @@ export const WEALTH_FACTORY_PACKAGE_CATALOG: readonly WealthFactoryPackage[] = [
       }
     ],
     includedEmployeeIds: ["ceo"],
-    allowedAssetIds: ["asset-seo-rules"],
+    allowedAssetIds: ["asset-example-rules"],
     requiredProviderCapabilities: ["text_generation"],
     optionalProviderCapabilities: []
   }

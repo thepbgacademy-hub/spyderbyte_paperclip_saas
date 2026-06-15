@@ -23,6 +23,7 @@ import {
 } from "./types.js";
 import { deriveHarnessRunState, transitionHarnessCard, transitionHarnessRun } from "./state-machine.js";
 import { createHarnessRuntime } from "./runtime.js";
+import { buildHarnessWorkerDispatchResolution, type HarnessWorkerDispatchHandoff } from "./worker-executor.js";
 import type { HarnessRepository } from "./repository.js";
 import {
   deriveCurrentHarnessAttentionState,
@@ -44,6 +45,11 @@ import {
   mergeContinuityAbsorbedWorkItems,
   parseContinuityAbsorbedWorkItem
 } from "./continuity.js";
+import type {
+  HarnessCeoGoalExecutor,
+  HarnessCeoLoopBoardSnapshot,
+  HarnessCeoGoalPlan
+} from "./ceo-goal-executor.js";
 
 export type HarnessBoardActivityItem = {
   id: string;
@@ -952,7 +958,13 @@ export type HarnessPendingApprovalView = {
 export type HarnessCompletionPackageView = HarnessCompletionPackageSnapshot;
 
 export type HarnessFreshCycleMode = "reopen_deferred" | "clean";
-export type HarnessAttentionReviewDecision = "complete_run" | "start_fresh_cycle";
+export type HarnessAttentionReviewDecision =
+  | "complete_run"
+  | "start_fresh_cycle"
+  | "start_next_lane"
+  | "request_changes"
+  | "defer"
+  | "move_to_assembly";
 export type HarnessAttentionResolutionCommand = "resume_lane" | "unblock_lane";
 export type HarnessResolvedAttentionDispatch = {
   tenantId: string;
@@ -972,6 +984,25 @@ export type HarnessFreshCycleDispatch = {
   actionToken: string;
   mode: HarnessFreshCycleMode;
   reopenedProposalCount: number;
+};
+export type HarnessReviewedNextLaneDispatch = {
+  tenantId: string;
+  userId: string;
+  runId: string;
+  workflowId: string;
+  cardId: string;
+  actionToken: string;
+  decision: "start_next_lane" | "request_changes";
+  state: "working";
+};
+export type HarnessTenantGoalResponse = {
+  runId: string;
+  workflowId: string;
+  decision: "reused_lane" | "opened_lane" | "deferred" | "denied" | "fresh_cycle_started";
+  message: string;
+  cardId?: string;
+  proposalId?: string;
+  reopenedProposalCount?: number;
 };
 export type HarnessGovernanceHistoryExportReadyDispatch = {
   tenantId: string;
@@ -1198,8 +1229,10 @@ export function createHarnessBoardService(options: {
   resolveWorkflowRegistry?(input: { tenantId: string; userId: string }): Promise<HarnessWorkflowRegistry>;
   runAtomically?<T>(work: (repository: HarnessRepository) => Promise<T>): Promise<T>;
   audit?: HarnessAudit;
+  ceoGoalExecutor?: HarnessCeoGoalExecutor;
   onResolvedAttentionDispatch?: (dispatch: HarnessResolvedAttentionDispatch) => Promise<void> | void;
   onFreshCycleDispatch?: (dispatch: HarnessFreshCycleDispatch) => Promise<void> | void;
+  onReviewedNextLaneDispatch?: (dispatch: HarnessReviewedNextLaneDispatch) => Promise<void> | void;
   onGovernanceHistoryExportReady?: (dispatch: HarnessGovernanceHistoryExportReadyDispatch) => Promise<void> | void;
   onPackageBundleExportReady?: (dispatch: HarnessPackageBundleExportReadyDispatch) => Promise<void> | void;
 }) {
@@ -1247,6 +1280,145 @@ export function createHarnessBoardService(options: {
         ...(completionPackageSnapshot ? { completionPackageSnapshot } : {}),
         ...(governanceHistorySnapshot ? { governanceHistorySnapshot } : {})
       });
+    },
+
+    async submitTenantGoal(request: {
+      authorization: string;
+      cookie?: string;
+      workflowId?: string;
+      goal: string;
+    }): Promise<HarnessTenantGoalResponse> {
+      const access = await authorizeHarnessRequest({
+        authenticate: options.authenticate,
+        requireTenantMember: options.requireTenantMember,
+        requireActivePackageInstall: options.requireActivePackageInstall,
+        workflowRegistry: options.workflowRegistry,
+        ...(options.resolveWorkflowRegistry ? { resolveWorkflowRegistry: options.resolveWorkflowRegistry } : {}),
+        authorization: request.authorization,
+        ...(request.workflowId ? { requestedWorkflowId: request.workflowId } : {}),
+        ...(request.cookie ? { cookie: request.cookie } : {})
+      });
+
+      if (!options.ceoGoalExecutor) {
+        throw new Error("Harness CEO goal executor is not configured");
+      }
+      if (!options.runAtomically) {
+        throw new Error("Harness CEO goal mutations require atomic execution");
+      }
+
+      const initialBoard = await this.listBoardState({
+        authorization: request.authorization,
+        ...(request.cookie ? { cookie: request.cookie } : {}),
+        ...(request.workflowId ? { workflowId: request.workflowId } : {})
+      });
+      const initialRun = await options.repository.getRun(initialBoard.runId);
+      if (!initialRun || initialRun.tenantId !== access.session.tenantId) {
+        throw new ApiAuthError();
+      }
+
+      const plan = await options.ceoGoalExecutor.execute({
+        tenantId: access.session.tenantId,
+        userId: access.session.userId,
+        runId: initialBoard.runId,
+        workflowId: access.workflowDefinition.publicId,
+        workflowDefinition: access.workflowDefinition,
+        goal: request.goal,
+        board: toHarnessCeoLoopBoardSnapshot(initialBoard, initialRun.state)
+      });
+
+      if (plan.action === "start_fresh_cycle") {
+        const reviewed = await this.reviewPendingAttention({
+          authorization: request.authorization,
+          ...(request.cookie ? { cookie: request.cookie } : {}),
+          runId: initialBoard.runId,
+          decision: "start_fresh_cycle",
+          ...(initialBoard.pendingAttention?.actionToken
+            ? { actionToken: initialBoard.pendingAttention.actionToken }
+            : {}),
+          mode: plan.freshCycleMode ?? "clean"
+        });
+        return {
+          runId: reviewed.runId,
+          workflowId: access.workflowDefinition.publicId,
+          decision: "fresh_cycle_started",
+          message: selectTenantGoalResponseMessage({
+            plan,
+            actualDecision: "fresh_cycle_started"
+          }),
+          ...(reviewed.status === "fresh_cycle_started"
+            ? { reopenedProposalCount: reviewed.reopenedProposalCount }
+            : {})
+        };
+      }
+
+      const normalizedPersona = normalizeHarnessPersona(plan.persona ?? "");
+      const normalizedDeliverableType = normalizeHarnessDeliverableType(plan.deliverableType ?? "");
+      const normalizedTitle = plan.title?.trim() ?? "";
+      if (
+        !isHarnessChildPersona(normalizedPersona) ||
+        !isHarnessDeliverableType(normalizedDeliverableType) ||
+        !normalizedTitle ||
+        !access.workflowDefinition.allowedDeliverableTypes.includes(normalizedDeliverableType)
+      ) {
+        throw new HarnessCardCreationConflictError("Harness child-card request is outside the approved workflow boundary");
+      }
+
+      const proposalId = await options.runAtomically(async (repository) => {
+        const run = await getOrCreateCurrentRun({
+          repository,
+          runtime,
+          tenantId: access.session.tenantId,
+          workflowDefinition: access.workflowDefinition
+        });
+        if (run.tenantId !== access.session.tenantId) {
+          throw new ApiAuthError();
+        }
+        const cards = await repository.listCardsForRun(run.id);
+        const ceoCard = cards.find((card) => card.persona === "ceo" && card.parentCardId === null);
+        if (!ceoCard) {
+          throw new Error("Harness CEO card missing for tenant goal submission");
+        }
+        const proposal = runtime.proposeSubCard(ceoCard.id, {
+          persona: normalizedPersona,
+          title: normalizedTitle,
+          deliverableType: normalizedDeliverableType
+        });
+        await repository.insertProposal(proposal);
+        return proposal.id;
+      });
+
+      const decisionResult = await this.decideProposal({
+        authorization: request.authorization,
+        ...(request.cookie ? { cookie: request.cookie } : {}),
+        proposalId,
+        decision: plan.action === "deny" ? "deny" : plan.action === "defer" ? "defer" : "approve",
+        ...(plan.decisionNote ? { decisionNote: plan.decisionNote } : {})
+      });
+      const proposal = await options.repository.getProposal(proposalId);
+      const currentRun = await options.repository.getRun(initialBoard.runId);
+      if (!proposal || !currentRun) {
+        throw new Error("Harness CEO goal mutation did not persist correctly");
+      }
+      const decisions = await options.repository.listDecisionsForRun(currentRun.id);
+      const latestDecision = decisions.find((decision) => decision.proposalId === proposalId) ?? null;
+      const actualDecision = classifyTenantGoalDecision({
+        status: decisionResult.status,
+        latestDecision,
+        requestedAction: plan.action
+      });
+
+      return {
+        runId: currentRun.id,
+        workflowId: access.workflowDefinition.publicId,
+        decision: actualDecision,
+        message: selectTenantGoalResponseMessage({
+          plan,
+          actualDecision,
+          deliverableType: proposal.deliverableType
+        }),
+        ...(decisionResult.cardId ? { cardId: decisionResult.cardId } : {}),
+        ...(!decisionResult.cardId ? { proposalId } : {})
+      };
     },
 
     async createTopLevelChildCard(request: {
@@ -1661,7 +1833,13 @@ export function createHarnessBoardService(options: {
           persona: normalizedPersona,
           deliverableType: normalizedDeliverableType
         });
-        if (existingPersonaLane) {
+        if (
+          existingPersonaLane &&
+          isBoundedCardRefinement({
+            title: request.title,
+            candidateCard: existingPersonaLane
+          })
+        ) {
           if (earlierUnresolvedDirectRequest) {
             return approveEarlierDirectRequestIntoExistingLane({
               proposal: earlierUnresolvedDirectRequest,
@@ -1863,7 +2041,8 @@ export function createHarnessBoardService(options: {
             ]
           };
         }
-        if (findOpenChildCardByDeliverableType(cards, normalizedDeliverableType)) {
+        const conflictingDeliverableOwner = findOpenChildCardByDeliverableType(cards, normalizedDeliverableType);
+        if (conflictingDeliverableOwner && conflictingDeliverableOwner.persona !== normalizedPersona) {
           return deferDirectChildRequest({
             policyReason: "deliverable_owner_conflict",
             decisionNote: "CEO deferred this proposal because another active persona already owns that deliverable lane."
@@ -2493,22 +2672,20 @@ export function createHarnessBoardService(options: {
             ]
           };
         }
+        const existingPersonaLane = findOpenChildCardByPersonaDeliverable(cards, {
+          persona: proposal.persona,
+          deliverableType: proposal.deliverableType
+        });
         if (
-          findOpenChildCardByPersonaDeliverable(cards, {
-            persona: proposal.persona,
-            deliverableType: proposal.deliverableType
+          existingPersonaLane &&
+          isBoundedLaneRefinement({
+            proposal,
+            candidateCard: existingPersonaLane
           })
         ) {
-          const existingCard = findOpenChildCardByPersonaDeliverable(cards, {
-            persona: proposal.persona,
-            deliverableType: proposal.deliverableType
-          });
-          if (!existingCard) {
-            throw new HarnessCardCreationConflictError("Harness proposal approval conflicted");
-          }
           const approvalUpdate = await repository.markProposalApproved({
             proposalId: proposal.id,
-            approvedCardId: existingCard.id,
+            approvedCardId: existingPersonaLane.id,
             resolution: "update_existing_lane",
             ...(trimmedDecisionNote ? { decisionNote: trimmedDecisionNote } : {})
           });
@@ -2517,7 +2694,7 @@ export function createHarnessBoardService(options: {
           }
           await repository.insertEvent(
             createHarnessCardEventRecord({
-              cardId: existingCard.id,
+              cardId: existingPersonaLane.id,
               eventKind: "proposal_absorbed",
               payload: {
                 proposalId: proposal.id,
@@ -2531,7 +2708,7 @@ export function createHarnessBoardService(options: {
           );
           await repository.insertEvent(
             createHarnessCardEventRecord({
-              cardId: existingCard.id,
+              cardId: existingPersonaLane.id,
               eventKind: "comment_added",
               payload: {
                 message: `${proposal.requestedByPersona.toUpperCase()} added follow-on work to the existing ${humanizeDeliverableType(
@@ -2540,7 +2717,7 @@ export function createHarnessBoardService(options: {
               }
             })
           );
-          if (proposal.parentCardId !== existingCard.id) {
+          if (proposal.parentCardId !== existingPersonaLane.id) {
             await repository.insertEvent(
               createHarnessCardEventRecord({
                 cardId: proposal.parentCardId,
@@ -2555,7 +2732,7 @@ export function createHarnessBoardService(options: {
           }
           await recordAbsorbedLaneContinuity({
             repository,
-            card: existingCard,
+            card: existingPersonaLane,
             proposal,
             resolution: "update_existing_lane"
           });
@@ -2567,7 +2744,7 @@ export function createHarnessBoardService(options: {
               decisionKind: "proposal_approved",
               cardId: proposal.parentCardId,
               proposalId: proposal.id,
-              targetCardId: existingCard.id,
+              targetCardId: existingPersonaLane.id,
               persona: proposal.persona,
               deliverableType: proposal.deliverableType,
               policyReason: "reused_existing_lane",
@@ -2584,7 +2761,7 @@ export function createHarnessBoardService(options: {
 
           return {
             status: "approved",
-            cardId: existingCard.id,
+            cardId: existingPersonaLane.id,
             auditEvents: [
               createHarnessAuditEvent({
                 tenantId: access.session.tenantId,
@@ -2593,7 +2770,7 @@ export function createHarnessBoardService(options: {
                 entityId: proposal.id,
                 metadata: {
                   runId: run.id,
-                  approvedCardId: existingCard.id,
+                  approvedCardId: existingPersonaLane.id,
                   resolution: "update_existing_lane",
                   requestedByPersona: proposal.requestedByPersona,
                   targetPersona: proposal.persona,
@@ -2746,7 +2923,7 @@ export function createHarnessBoardService(options: {
             ]
           };
         }
-        if (findOpenChildCardByDeliverableType(cards, proposal.deliverableType)) {
+        if (proposalPolicyReason === "deliverable_owner_conflict") {
           const decisionNote =
             trimmedDecisionNote ??
             "CEO deferred this proposal because another active persona already owns that deliverable lane.";
@@ -3529,6 +3706,10 @@ export function createHarnessBoardService(options: {
     }): Promise<
       | { status: "done"; runId: string }
       | { status: "fresh_cycle_started"; runId: string; reopenedProposalCount: number }
+      | { status: "next_lane_started"; runId: string; cardId: string; state: "working" }
+      | { status: "changes_requested"; runId: string; cardId: string; state: "working" }
+      | { status: "deferred"; runId: string; cardId: string }
+      | { status: "moved_to_assembly"; runId: string; runState: "assembling" }
     > {
       const access = await authorizeHarnessRequest({
         authenticate: options.authenticate,
@@ -3575,6 +3756,282 @@ export function createHarnessBoardService(options: {
       }
       const resolvedAttention = currentAttention ?? buildDerivedAttentionState(pendingAttention);
 
+      if (pendingAttention.reason === "next_lane_decision") {
+        if (request.decision === "defer") {
+          return {
+            status: "deferred",
+            runId: run.id,
+            cardId: pendingAttention.nextCardId ?? pendingAttention.completedCardId ?? "unknown"
+          };
+        }
+        if (!options.runAtomically) {
+          throw new Error("Harness next-lane review mutations require atomic execution");
+        }
+        const result = await options.runAtomically(async (repository) => {
+          const atomicRun = await repository.getRun(request.runId);
+          if (!atomicRun || atomicRun.tenantId !== access.session.tenantId) {
+            throw new ApiAuthError();
+          }
+          const [atomicCards, atomicProposals, atomicEvents, atomicContinuity] = await Promise.all([
+            repository.listCardsForRun(atomicRun.id),
+            repository.listProposalsForRun(atomicRun.id),
+            repository.listEventsForRun(atomicRun.id),
+            repository.listCardContinuityForRun(atomicRun.id)
+          ]);
+          const atomicPendingAttention = determineHarnessPostOutcomeAction({
+            runState: atomicRun.state,
+            cards: atomicCards,
+            proposals: atomicProposals,
+            nextDispatchCard: null
+          });
+          const atomicCurrentAttention = deriveCurrentHarnessAttentionState(atomicEvents);
+          if (
+            !atomicPendingAttention
+            || atomicPendingAttention.kind !== "queue_ceo_review"
+            || atomicPendingAttention.reason !== "next_lane_decision"
+            || (atomicCurrentAttention && !isSameAttentionAction(atomicCurrentAttention.action, atomicPendingAttention))
+          ) {
+            throw new HarnessRunCompletionConflictError("Harness run is not waiting on CEO next-lane review");
+          }
+          if (request.actionToken) {
+            assertHarnessActionToken(
+              createPendingAttentionActionToken({
+                runId: atomicRun.id,
+                action: atomicPendingAttention
+              }),
+              request.actionToken
+            );
+          }
+          const resolvedAttentionActionToken =
+            request.actionToken
+            ?? createPendingAttentionActionToken({
+              runId: atomicRun.id,
+              action: atomicPendingAttention
+            });
+
+          const ceoCard = atomicCards.find((card) => card.persona === "ceo" && card.parentCardId === null) ?? null;
+          const completedCard =
+            atomicPendingAttention.completedCardId
+              ? atomicCards.find((card) => card.id === atomicPendingAttention.completedCardId) ?? null
+              : null;
+          const nextLaneCard =
+            atomicPendingAttention.nextCardId
+              ? atomicCards.find((card) => card.id === atomicPendingAttention.nextCardId) ?? null
+              : null;
+
+          let dispatchCardId: string | null = null;
+          let dispatchDecision: HarnessReviewedNextLaneDispatch["decision"] | null = null;
+          let nextRun = atomicRun;
+
+          if (request.decision === "start_next_lane") {
+            if (!nextLaneCard || nextLaneCard.state !== "approved") {
+              throw new HarnessRunCompletionConflictError("Harness next lane is no longer approved for explicit start");
+            }
+            const dispatchResolution = await buildHarnessWorkerDispatchResolution({
+              repository,
+              tenantId: access.session.tenantId,
+              runId: atomicRun.id,
+              workflowId: atomicRun.workflowId,
+              targetCardId: nextLaneCard.id,
+              dispatchHandoff: createReviewedNextLaneHandoff({
+                completedCard: completedCard ?? nextLaneCard,
+                continuity: atomicContinuity.find((record) => record.cardId === (completedCard?.id ?? nextLaneCard.id)) ?? null
+              })
+            });
+            if (!dispatchResolution?.lane || dispatchResolution.lane.state !== "working") {
+              throw new HarnessRunCompletionConflictError("Harness next lane start conflicted");
+            }
+            dispatchCardId = dispatchResolution.lane.id;
+            dispatchDecision = "start_next_lane";
+            nextRun = await repository.getRun(atomicRun.id) ?? atomicRun;
+          } else if (request.decision === "request_changes") {
+            if (!completedCard || completedCard.state !== "done") {
+              throw new HarnessRunCompletionConflictError("Completed lane is no longer available for requested changes");
+            }
+            const reopenedCard = await repository.transitionCardState({
+              cardId: completedCard.id,
+              expectedState: "done",
+              state: "approved"
+            });
+            if (!reopenedCard) {
+              throw new HarnessRunCompletionConflictError("Requested changes conflicted while reopening the completed lane");
+            }
+            await repository.insertEvent(
+              createHarnessCardEventRecord({
+                cardId: reopenedCard.id,
+                eventKind: "state_changed",
+                payload: { from: completedCard.state, to: reopenedCard.state }
+              })
+            );
+            const dispatchResolution = await buildHarnessWorkerDispatchResolution({
+              repository,
+              tenantId: access.session.tenantId,
+              runId: atomicRun.id,
+              workflowId: atomicRun.workflowId,
+              targetCardId: reopenedCard.id,
+              dispatchHandoff: createReviewedNextLaneHandoff({
+                completedCard: reopenedCard,
+                continuity: atomicContinuity.find((record) => record.cardId === reopenedCard.id) ?? null
+              })
+            });
+            if (!dispatchResolution?.lane || dispatchResolution.lane.state !== "working") {
+              throw new HarnessRunCompletionConflictError("Requested changes conflicted while restarting the completed lane");
+            }
+            dispatchCardId = dispatchResolution.lane.id;
+            dispatchDecision = "request_changes";
+            nextRun = await repository.getRun(atomicRun.id) ?? atomicRun;
+          } else if (request.decision === "move_to_assembly") {
+            for (const approvedLane of atomicCards.filter((card) => card.persona !== "ceo" && card.state === "approved")) {
+              const cancelledLane = await repository.transitionCardState({
+                cardId: approvedLane.id,
+                expectedState: "approved",
+                state: "cancelled"
+              });
+              if (!cancelledLane) {
+                throw new HarnessRunCompletionConflictError("Harness assembly move conflicted while cancelling an unstarted lane");
+              }
+              await repository.insertEvent(
+                createHarnessCardEventRecord({
+                  cardId: cancelledLane.id,
+                  eventKind: "state_changed",
+                  payload: { from: approvedLane.state, to: cancelledLane.state }
+                })
+              );
+            }
+            nextRun = await reconcileHarnessRunState({ repository, run: atomicRun }) ?? atomicRun;
+            if (nextRun.state !== "assembling") {
+              throw new HarnessRunCompletionConflictError("Harness board did not move into assembly after deferring the remaining approved lanes");
+            }
+          } else {
+            throw new HarnessRunCompletionConflictError("Harness run is not waiting on that CEO review decision");
+          }
+
+          const [cardsAfterReview, proposalsAfterReview, continuityAfterReview] = await Promise.all([
+            repository.listCardsForRun(atomicRun.id),
+            repository.listProposalsForRun(atomicRun.id),
+            repository.listCardContinuityForRun(atomicRun.id)
+          ]);
+          const nextAttentionCandidate = determineHarnessPostOutcomeAction({
+            runState: nextRun.state,
+            cards: cardsAfterReview,
+            proposals: proposalsAfterReview,
+            nextDispatchCard: null
+          });
+          const nextAttention =
+            nextAttentionCandidate && nextAttentionCandidate.kind !== "dispatch_next_lane"
+              ? nextAttentionCandidate
+              : null;
+
+          if (
+            atomicCurrentAttention
+            && (!nextAttention || !isSameAttentionAction(atomicCurrentAttention.action, nextAttention))
+          ) {
+            await repository.insertEvent(
+              createHarnessCardEventRecord({
+                cardId: ceoCard?.id ?? completedCard?.id ?? nextLaneCard?.id ?? atomicRun.id,
+                eventKind: "attention_resolved",
+                payload: buildResolvedAttentionPayload(atomicCurrentAttention)
+              })
+            );
+          }
+
+          if (
+            nextAttention
+            && (!atomicCurrentAttention || !isSameAttentionAction(atomicCurrentAttention.action, nextAttention))
+          ) {
+            const describedAttention = describeHarnessPostOutcomeActionKind(nextAttention);
+            const nextAttentionTarget =
+              nextAttention.kind === "await_lane_resume" || nextAttention.kind === "await_unblock"
+                ? cardsAfterReview.find((card) => card.id === nextAttention.cardId) ?? null
+                : nextAttention.kind === "queue_ceo_review" && nextAttention.nextCardId
+                  ? cardsAfterReview.find((card) => card.id === nextAttention.nextCardId) ?? null
+                  : null;
+            const nextAttentionContinuitySummary =
+              nextAttentionTarget
+                ? continuityAfterReview.find((record) => record.cardId === nextAttentionTarget.id)?.continuitySummary
+                : null;
+            await repository.insertEvent(
+              createHarnessCardEventRecord({
+                cardId: ceoCard?.id ?? nextAttentionTarget?.id ?? atomicRun.id,
+                eventKind: "attention_requested",
+                payload: {
+                  actionKind: nextAttention.kind,
+                  runState: nextAttention.runState,
+                  ...(nextAttention.kind === "queue_ceo_review"
+                    ? {
+                        reason: nextAttention.reason,
+                        ...(nextAttention.completedCardId ? { completedCardId: nextAttention.completedCardId } : {}),
+                        ...(nextAttention.nextCardId ? { nextCardId: nextAttention.nextCardId } : {}),
+                        targetPersona: "ceo"
+                      }
+                    : { targetCardId: nextAttention.cardId }),
+                  statusLabel: describedAttention.statusLabel,
+                  summary: nextAttentionContinuitySummary ?? describedAttention.summary,
+                  ...(describedAttention.reasonLabel ? { reasonLabel: describedAttention.reasonLabel } : {}),
+                  ...(nextAttentionTarget
+                    ? {
+                        targetCardId: nextAttentionTarget.id,
+                        targetPersona: nextAttentionTarget.persona,
+                        targetTitle: nextAttentionTarget.title
+                      }
+                    : {})
+                }
+              })
+            );
+          }
+
+          if (dispatchCardId && dispatchDecision) {
+            return {
+              status: dispatchDecision === "start_next_lane" ? "next_lane_started" as const : "changes_requested" as const,
+              tenantId: access.session.tenantId,
+              userId: access.session.userId,
+              runId: atomicRun.id,
+              workflowId: atomicRun.workflowId,
+              cardId: dispatchCardId,
+              actionToken: resolvedAttentionActionToken,
+              decision: dispatchDecision,
+              state: "working" as const
+            };
+          }
+
+          return {
+            status: "moved_to_assembly" as const,
+            runId: atomicRun.id,
+            runState: "assembling" as const
+          };
+        });
+
+        if (result.status === "next_lane_started" || result.status === "changes_requested") {
+          try {
+            await options.onReviewedNextLaneDispatch?.({
+              tenantId: result.tenantId,
+              userId: result.userId,
+              runId: result.runId,
+              workflowId: result.workflowId,
+              cardId: result.cardId,
+              actionToken: result.actionToken,
+              decision: result.decision,
+              state: result.state
+            });
+          } catch (error) {
+            console.warn("Reviewed harness next-lane dispatch hook failed after durable board mutation", {
+              runId: result.runId,
+              workflowId: result.workflowId,
+              cardId: result.cardId,
+              decision: result.decision,
+              error: error instanceof Error ? { name: error.name, message: error.message } : { message: String(error) }
+            });
+          }
+          return {
+            status: result.status,
+            runId: result.runId,
+            cardId: result.cardId,
+            state: result.state
+          };
+        }
+        return result;
+      }
+
       if (request.decision === "complete_run") {
         const completionSummary = request.completionSummary?.trim();
         if (!completionSummary) {
@@ -3592,6 +4049,10 @@ export function createHarnessBoardService(options: {
           status: "done",
           runId: completed.runId
         };
+      }
+
+      if (request.decision !== "start_fresh_cycle") {
+        throw new HarnessRunCompletionConflictError("Harness run is not waiting on that CEO review decision");
       }
 
       const reopened = await this.startFreshCycle({
@@ -5082,11 +5543,11 @@ function findLatestDoneChildCardByPersonaDeliverable(
 }
 
 function isBoundedLaneRefinement(input: {
-  proposal: HarnessSubCardProposal;
+  proposal: Pick<HarnessSubCardProposal, "title" | "parentCardId" | "requestedByCardId">;
   candidateCard: HarnessCardRecord;
 }): boolean {
   return (
-    titlesLikelySameAssignment(input.proposal.title, input.candidateCard.title) ||
+    isBoundedAssignmentContinuation(input.proposal.title, input.candidateCard.title) ||
     input.proposal.parentCardId === input.candidateCard.id ||
     input.proposal.requestedByCardId === input.candidateCard.id
   );
@@ -5096,7 +5557,28 @@ function isBoundedCardRefinement(input: {
   title: string;
   candidateCard: HarnessCardRecord;
 }): boolean {
-  return titlesLikelySameAssignment(input.title, input.candidateCard.title);
+  return isBoundedAssignmentContinuation(input.title, input.candidateCard.title);
+}
+
+function isBoundedAssignmentContinuation(left: string, right: string): boolean {
+  return titlesLikelySameAssignment(left, right) || hasMeaningfulAssignmentTokenOverlap(left, right);
+}
+
+function hasMeaningfulAssignmentTokenOverlap(left: string, right: string): boolean {
+  const leftMeaningfulTokens = uniqueMeaningfulAssignmentTokens(left);
+  const rightMeaningfulTokens = uniqueMeaningfulAssignmentTokens(right);
+  const leftSet = new Set(leftMeaningfulTokens);
+  const sharedTokens = rightMeaningfulTokens.filter((token) => leftSet.has(token));
+
+  if (sharedTokens.length >= 2) {
+    return true;
+  }
+  return (
+    sharedTokens.length === 1 &&
+    sharedTokens[0]!.length >= 6 &&
+    leftMeaningfulTokens.length === 1 &&
+    rightMeaningfulTokens.length === 1
+  );
 }
 
 function titlesLikelySameAssignment(left: string, right: string): boolean {
@@ -5135,7 +5617,8 @@ function tokenizeAssignmentTitle(title: string): string[] {
 
 function normalizeAssignmentToken(token: string): string {
   if (token.endsWith("ing") && token.length > 5) {
-    return token.slice(0, -3);
+    const base = token.slice(0, -3);
+    return base.endsWith("c") ? `${base}e` : base;
   }
   if (token.endsWith("es") && token.length > 4) {
     return token.slice(0, -2);
@@ -5144,6 +5627,33 @@ function normalizeAssignmentToken(token: string): string {
     return token.slice(0, -1);
   }
   return token;
+}
+
+const GENERIC_ASSIGNMENT_TOKENS = new Set([
+  "add",
+  "build",
+  "check",
+  "create",
+  "draft",
+  "gather",
+  "improve",
+  "make",
+  "memo",
+  "note",
+  "plan",
+  "prepare",
+  "refresh",
+  "review",
+  "revise",
+  "summary",
+  "task",
+  "update",
+  "work",
+  "write"
+]);
+
+function uniqueMeaningfulAssignmentTokens(title: string): string[] {
+  return [...new Set(tokenizeAssignmentTitle(title).filter((token) => !GENERIC_ASSIGNMENT_TOKENS.has(token)))];
 }
 
 function findEarlierUnresolvedSiblingProposal(
@@ -7188,7 +7698,7 @@ function buildMemoryBoundaryView(input: {
     (candidate) => candidate.exportCompletenessRule === "board_closure_complete_bundle"
   ).length;
 
-  return {
+  const fullView: HarnessMemoryBoundaryView = {
     summary:
       "Wealth Factory runtime keeps bounded operational lane memory live while governance and package records stay ready for later tenant-owned export.",
     exportSummary:
@@ -7739,6 +8249,53 @@ function buildMemoryBoundaryView(input: {
     exportReadyItems,
     exportCandidates
   };
+  const collapsedExportCandidates = (fullView.exportCandidates ?? []).map((candidate) =>
+    collapseMemoryBoundaryExportCandidate(candidate)
+  );
+  return {
+    summary:
+      waitingOnBoardClosureCount > 0
+        ? `${operationalItems.length} runtime ${operationalItems.length === 1 ? "memory bucket stays" : "memory buckets stay"} inside Wealth Factory while ${collapsedExportCandidates.length} export candidate${collapsedExportCandidates.length === 1 ? " remains" : "s remain"} bounded for later tenant export; ${waitingOnBoardClosureCount} still wait${waitingOnBoardClosureCount === 1 ? "s" : ""} on board closure.`
+        : `${operationalItems.length} runtime ${operationalItems.length === 1 ? "memory bucket stays" : "memory buckets stay"} inside Wealth Factory while ${collapsedExportCandidates.length} export candidate${collapsedExportCandidates.length === 1 ? " remains" : "s remain"} bounded for later tenant export.`,
+    exportCandidates: collapsedExportCandidates
+  } as HarnessMemoryBoundaryView;
+}
+
+function collapseMemoryBoundaryExportCandidate(
+  candidate: HarnessMemoryBoundaryExportCandidateView
+): HarnessMemoryBoundaryExportCandidateView {
+  return {
+    id: candidate.id,
+    label: candidate.label,
+    itemCount: candidate.itemCount,
+    itemIds: [...candidate.itemIds],
+    itemLabels: [...candidate.itemLabels],
+    summary: candidate.summary,
+    readiness: candidate.readiness,
+    readinessLabel: candidate.readinessLabel,
+    eligibilityRule: candidate.eligibilityRule,
+    eligibilityRuleLabel: candidate.eligibilityRuleLabel,
+    promotionBlocker: candidate.promotionBlocker,
+    promotionBlockerLabel: candidate.promotionBlockerLabel,
+    promotionState: candidate.promotionState,
+    promotionStateLabel: candidate.promotionStateLabel,
+    promotionNextStep: candidate.promotionNextStep,
+    promotionNextStepLabel: candidate.promotionNextStepLabel,
+    syncStrategy: candidate.syncStrategy,
+    syncStrategyLabel: candidate.syncStrategyLabel,
+    exportConfirmationRequirement: candidate.exportConfirmationRequirement,
+    exportConfirmationRequirementLabel: candidate.exportConfirmationRequirementLabel,
+    exportRedactionBoundary: candidate.exportRedactionBoundary,
+    exportRedactionBoundaryLabel: candidate.exportRedactionBoundaryLabel,
+    exportSourceDisclosurePolicy: candidate.exportSourceDisclosurePolicy,
+    exportSourceDisclosurePolicyLabel: candidate.exportSourceDisclosurePolicyLabel,
+    ...(candidate.latestDelivery ? { latestDelivery: { ...candidate.latestDelivery } } : {}),
+    ...(candidate.exportActions
+      ? {
+          exportActions: candidate.exportActions.map((action) => ({ ...action }))
+        }
+      : {})
+  } as HarnessMemoryBoundaryExportCandidateView;
 }
 
 function toExportCandidateDeliveryView(
@@ -8713,7 +9270,11 @@ function buildResolvedAttentionPayload(attention: HarnessAttentionState): Record
     actionKind: attention.action.kind,
     runState: attention.action.runState,
     ...(attention.action.kind === "queue_ceo_review"
-      ? { reason: attention.action.reason }
+      ? {
+          reason: attention.action.reason,
+          ...(attention.action.completedCardId ? { completedCardId: attention.action.completedCardId } : {}),
+          ...(attention.action.nextCardId ? { nextCardId: attention.action.nextCardId } : {})
+        }
       : { targetCardId: attention.action.cardId }),
     ...attention.snapshot
   };
@@ -8729,8 +9290,28 @@ function buildDerivedAttentionState(
     snapshot: {
       statusLabel: described.statusLabel,
       summary: described.summary,
-      ...(described.reasonLabel ? { reasonLabel: described.reasonLabel } : {})
+      ...(described.reasonLabel ? { reasonLabel: described.reasonLabel } : {}),
+      ...(action.kind === "queue_ceo_review" && action.nextCardId ? { targetCardId: action.nextCardId } : {})
     }
+  };
+}
+
+function createReviewedNextLaneHandoff(input: {
+  completedCard: HarnessCardRecord;
+  continuity: HarnessCardContinuityRecord | null;
+}): HarnessWorkerDispatchHandoff {
+  return {
+    kind: "follow_on_dispatch",
+    kindLabel: "Follow-on dispatch",
+    executionStage: "post_outcome_follow_on",
+    executionStageLabel: "Post-outcome follow-on",
+    reactivatedRun: false,
+    triggeredByCardId: input.completedCard.id,
+    triggeredByPersona: input.completedCard.persona,
+    triggeredByOutcomeState: "done",
+    ...(input.continuity?.latestResultSummary
+      ? { triggeredByResultSummary: input.continuity.latestResultSummary }
+      : {})
   };
 }
 
@@ -8757,14 +9338,23 @@ function buildPendingAttentionView(input: {
     currentAttention && isSameAttentionAction(currentAttention.action, action)
       ? currentAttention.snapshot
       : null;
-  const targetCard = "cardId" in action
-    ? input.cards.find((card) => card.id === action.cardId) ?? null
+  const targetCardId =
+    "cardId" in action
+      ? action.cardId
+      : action.kind === "queue_ceo_review"
+        ? action.nextCardId ?? null
+        : null;
+  const targetCard = targetCardId
+    ? input.cards.find((card) => card.id === targetCardId) ?? null
     : null;
   const continuitySummary =
     targetCard ? input.continuityByCardId.get(targetCard.id)?.continuitySummary ?? null : null;
   const attentionReasonLabel = persistedSnapshot?.reasonLabel ?? described.reasonLabel;
   const attentionTargetCardId = persistedSnapshot?.targetCardId ?? targetCard?.id;
-  const attentionTargetPersona = persistedSnapshot?.targetPersona ?? (targetCard ? targetCard.persona.toUpperCase() : undefined);
+  const attentionTargetPersona =
+    persistedSnapshot?.targetPersona
+      ? persistedSnapshot.targetPersona.toUpperCase()
+      : (targetCard ? targetCard.persona.toUpperCase() : undefined);
   const attentionTargetTitle = persistedSnapshot?.targetTitle ?? targetCard?.title;
   const pendingApprovalCount = input.proposals.filter(
     (proposal) => proposal.status === "proposed" || proposal.status === "deferred"
@@ -8787,9 +9377,78 @@ function buildPendingAttentionView(input: {
     kind: action.kind,
     runState: action.runState,
     statusLabel: persistedSnapshot?.statusLabel ?? described.statusLabel,
-    summary: persistedSnapshot?.summary ?? continuitySummary ?? described.summary,
+    summary:
+      persistedSnapshot?.summary
+      ?? (action.kind === "queue_ceo_review" ? described.summary : continuitySummary ?? described.summary),
     ...(action.kind === "queue_ceo_review"
-      ? (action.runState === "assembling"
+      ? (action.reason === "next_lane_decision"
+          ? {
+              actionRoute: "review-attention" as const,
+              actionPath: `/api/harness/runs/${encodeURIComponent(input.run.id)}/review-attention`,
+              actionMethod: "POST" as const,
+              actionToken: createPendingAttentionActionToken({
+                runId: input.run.id,
+                action
+              }),
+              actionLabel: "Sequence next lane",
+              actionDescription: "Choose the next bounded move before another child lane starts.",
+              requestFields: [
+                {
+                  name: "decision",
+                  label: "Review decision",
+                  description: "Choose how the CEO wants the board to proceed after this completed child lane.",
+                  required: true,
+                  allowedValues: ["start_next_lane", "request_changes", "defer", "move_to_assembly"]
+                }
+              ] satisfies HarnessActionRequestFieldView[],
+              actionOptions: [
+                {
+                  value: "start_next_lane",
+                  label: "Start next lane",
+                  description: "Approve the waiting child lane and send it into execution now.",
+                  emphasis: "primary",
+                  nextEffectSummary: "The next approved lane becomes active and re-enters the worker queue through the guarded runtime path.",
+                  exampleRequest: {
+                    decision: "start_next_lane"
+                  }
+                },
+                {
+                  value: "request_changes",
+                  label: "Request changes",
+                  description: "Send the completed child lane back into execution for one more bounded revision pass.",
+                  emphasis: "secondary",
+                  nextEffectSummary: "The completed lane is reopened and re-dispatched as the next bounded work item.",
+                  exampleRequest: {
+                    decision: "request_changes"
+                  }
+                },
+                {
+                  value: "defer",
+                  label: "Defer decision",
+                  description: "Hold the board at this review checkpoint without starting new work yet.",
+                  emphasis: "secondary",
+                  nextEffectSummary: "No additional lane starts until the CEO comes back and chooses the next bounded move.",
+                  exampleRequest: {
+                    decision: "defer"
+                  }
+                },
+                {
+                  value: "move_to_assembly",
+                  label: "Move to assembly",
+                  description: "Stop the remaining unstarted approved lanes and push the board toward packaging.",
+                  emphasis: "secondary",
+                  requiresConfirmation: true,
+                  confirmationLabel: "Skip the remaining approved lanes and move this board toward assembly?",
+                  nextEffectSummary: "The board cancels the remaining unstarted approved lanes and enters the assembly review path.",
+                  exampleRequest: {
+                    decision: "move_to_assembly"
+                  }
+                }
+              ] satisfies HarnessActionOptionView[],
+              recommendedOptionValue: "start_next_lane" as const,
+              allowedDecisions: ["start_next_lane", "request_changes", "defer", "move_to_assembly"] as HarnessAttentionReviewDecision[]
+            }
+          : action.runState === "assembling"
           ? {
               actionRoute: "review-attention" as const,
               actionPath: `/api/harness/runs/${encodeURIComponent(input.run.id)}/review-attention`,
@@ -8947,7 +9606,9 @@ function buildPendingAttentionView(input: {
                 targetSummary:
                   action.kind === "await_lane_resume"
                     ? `Resume ${attentionTargetPersona} lane: ${attentionTargetTitle}`
-                    : `Unblock ${attentionTargetPersona} lane: ${attentionTargetTitle}`
+                    : action.kind === "await_unblock"
+                      ? `Unblock ${attentionTargetPersona} lane: ${attentionTargetTitle}`
+                      : `Next lane target: ${attentionTargetPersona} · ${attentionTargetTitle}`
               }
             : {})
         }
@@ -9227,6 +9888,116 @@ function createHarnessActionToken(parts: readonly string[]) {
     .slice(0, 24);
 }
 
+function toHarnessCeoLoopBoardSnapshot(
+  board: HarnessBoardResponse,
+  runState: HarnessRunRecord["state"]
+): HarnessCeoLoopBoardSnapshot {
+  return {
+    runId: board.runId,
+    workflowId: board.workflowId,
+    runState,
+    cards: board.cards.map((card) => ({
+      id: card.id,
+      persona: card.persona,
+      title: card.title,
+      lane: card.lane,
+      statusLabel: card.statusLabel,
+      deliverableLabel: card.deliverableLabel,
+      outcome: card.outcome
+    })),
+    pendingApprovals: board.pendingApprovals.map((proposal) => ({
+      id: proposal.id,
+      title: proposal.title,
+      targetPersona: proposal.targetPersona,
+      deliverableLabel: proposal.deliverableLabel,
+      statusLabel: proposal.statusLabel
+    })),
+    ...(board.pendingAttention
+      ? {
+          pendingAttention: {
+            kind: board.pendingAttention.kind,
+            statusLabel: board.pendingAttention.statusLabel,
+            summary: board.pendingAttention.summary
+          }
+        }
+      : {}),
+    recentDecisions: board.recentDecisions.map((decision) => ({
+      summary: decision.label
+    }))
+  };
+}
+
+function classifyTenantGoalDecision(input: {
+  status: HarnessProposalStatus;
+  latestDecision: HarnessBoardDecisionRecord | null;
+  requestedAction: HarnessCeoGoalPlan["action"];
+}): HarnessTenantGoalResponse["decision"] {
+  if (input.status === "deferred") {
+    return "deferred";
+  }
+  if (input.status === "denied") {
+    return "denied";
+  }
+  if (input.latestDecision?.resolution === "create_lane") {
+    return "opened_lane";
+  }
+  if (
+    input.latestDecision?.resolution === "update_existing_lane" ||
+    input.latestDecision?.resolution === "reopen_completed_lane" ||
+    input.latestDecision?.resolution === "handoff_existing_lane"
+  ) {
+    return "reused_lane";
+  }
+  return input.requestedAction === "open_new_lane" ? "opened_lane" : "reused_lane";
+}
+
+function selectTenantGoalResponseMessage(input: {
+  plan: HarnessCeoGoalPlan;
+  actualDecision: HarnessTenantGoalResponse["decision"];
+  deliverableType?: string;
+}): string {
+  const tenantResponse = input.plan.tenantResponse.trim();
+  if (tenantResponse.length > 0 && responseMatchesTenantGoalDecision(input.plan.action, input.actualDecision)) {
+    return tenantResponse;
+  }
+
+  const deliverable =
+    input.deliverableType && input.deliverableType.length > 0
+      ? humanizeDeliverableType(input.deliverableType).toLowerCase()
+      : "workflow";
+
+  switch (input.actualDecision) {
+    case "opened_lane":
+      return `I opened a bounded ${deliverable} lane so we can address this goal inside the current workflow.`;
+    case "reused_lane":
+      return `I folded this into the existing ${deliverable} lane so the current run stays focused.`;
+    case "deferred":
+      return "I’m deferring this request for now so the board stays inside the current workflow boundary.";
+    case "denied":
+      return "I’m not approving this request in the current workflow because it would widen the boundary.";
+    case "fresh_cycle_started":
+      return "I started a fresh cycle so we can take this up without distorting the packaged run.";
+  }
+}
+
+function responseMatchesTenantGoalDecision(
+  requestedAction: HarnessCeoGoalPlan["action"],
+  actualDecision: HarnessTenantGoalResponse["decision"]
+): boolean {
+  switch (requestedAction) {
+    case "reuse_lane":
+      return actualDecision === "reused_lane";
+    case "open_new_lane":
+      return actualDecision === "opened_lane";
+    case "defer":
+      return actualDecision === "deferred";
+    case "deny":
+      return actualDecision === "denied";
+    case "start_fresh_cycle":
+      return actualDecision === "fresh_cycle_started";
+  }
+}
+
 function createPendingApprovalActionToken(input: {
   proposal: HarnessSubCardProposal;
   policyReason: string;
@@ -9256,7 +10027,9 @@ function createPendingAttentionActionToken(input: {
     input.action.kind,
     input.action.runState,
     "reason" in input.action ? input.action.reason : "",
-    "cardId" in input.action ? input.action.cardId : ""
+    "cardId" in input.action ? input.action.cardId : "",
+    "completedCardId" in input.action ? input.action.completedCardId ?? "" : "",
+    "nextCardId" in input.action ? input.action.nextCardId ?? "" : ""
   ]);
 }
 
@@ -10412,10 +11185,23 @@ function createGovernanceObjectionSummary(input: {
 function determineProposalPolicyReason(input: {
   run: Pick<HarnessRunRecord, "state">;
   cards: readonly HarnessCardRecord[];
-  proposal: Pick<HarnessSubCardProposal, "persona" | "deliverableType">;
+  proposal: Pick<HarnessSubCardProposal, "persona" | "deliverableType" | "title" | "parentCardId" | "requestedByCardId">;
 }): "persona_lane_cap" | "deliverable_owner_conflict" | "lane_cap" | "scope_guardrail" | "completed_lanes_only" {
   if (input.run.state === "assembling" || input.run.state === "done") {
     return "completed_lanes_only";
+  }
+  const samePersonaLane = findOpenChildCardByPersonaDeliverable(input.cards, {
+    persona: input.proposal.persona,
+    deliverableType: input.proposal.deliverableType
+  });
+  if (
+    samePersonaLane &&
+    !isBoundedLaneRefinement({
+      proposal: input.proposal,
+      candidateCard: samePersonaLane
+    })
+  ) {
+    return "persona_lane_cap";
   }
   if (
     findOpenChildCardByDeliverableType(input.cards, input.proposal.deliverableType) &&

@@ -98,14 +98,14 @@ describe("loadEnv", () => {
     ).toBe(false);
   });
 
-  it("keeps startup validation conservative for the SEO overlay workflow and still requires Paperclip launch env without a tenant-scoped runtime check", () => {
+  it("keeps startup validation conservative for the example overlay workflow and still requires Paperclip launch env without a tenant-scoped runtime check", () => {
     expect(() =>
       loadEnv({
         ...validEnv,
         PAPERCLIP_BASE_URL: undefined,
         PAPERCLIP_SERVICE_TOKEN: undefined,
-        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-seo-audit",
-        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf-seo-audit"
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-example-audit",
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf-example-audit"
       })
     ).toThrow(EnvValidationError);
     expect(
@@ -113,8 +113,8 @@ describe("loadEnv", () => {
         ...validEnv,
         PAPERCLIP_BASE_URL: undefined,
         PAPERCLIP_SERVICE_TOKEN: undefined,
-        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-seo-audit",
-        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf-seo-audit"
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-example-audit",
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf-example-audit"
       })
     ).toBe(true);
   });

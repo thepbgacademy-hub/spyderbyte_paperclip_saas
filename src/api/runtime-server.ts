@@ -38,6 +38,9 @@ import { createEncryptedSecretVault } from "../secrets/encrypted-vault.js";
 import { createAcidSecretRevokeService } from "../secrets/acid-secret-revoke-service.js";
 import { createPostgresEncryptedVaultStore } from "../secrets/postgres-vault-store.js";
 import { createProviderCredentialService } from "../secrets/provider-credential-service.js";
+import { createRuntimeProviderExecutionContextResolver } from "../providers/runtime-provider-execution.js";
+import type { RuntimeProviderBinding } from "../providers/runtime-provider-resolution.js";
+import { createRuntimeHarnessCeoGoalExecutor } from "../harness/ceo-goal-executor.js";
 
 function coerceExportWriterFailure(error: unknown): {
   code: string;
@@ -374,6 +377,9 @@ export function createDashboardRuntime(options: {
     runtimeEnv: options.env.runtimeEnv
   }).register;
   const rotateProviderCredential = secretService.rotate;
+  const providerExecutionResolver = createRuntimeProviderExecutionContextResolver({
+    accessSecretRef: (input) => secretService.access(input)
+  });
   const acidRepository = createAcidGuardRepository(transactionRunner);
   const revokeProviderCredential = createAcidSecretRevokeService({
     repository: { revokeCredential: acidRepository.revokeCredential },
@@ -624,6 +630,28 @@ export function createDashboardRuntime(options: {
     deliveredEventType: "harness.package_bundle_export_delivered",
     failedEventType: "harness.package_bundle_export_delivery_failed"
   });
+  const ceoGoalExecutor = createRuntimeHarnessCeoGoalExecutor({
+    loadBoundProviderContext: async ({ tenantId, runId }) => {
+      const binding = await acidRepository.getBoundProviderLaunchBinding({ tenantId, runId });
+      return binding
+        ? ([{
+            capability: binding.capability,
+            providerKind: binding.providerKind as RuntimeProviderBinding["providerKind"],
+            label: binding.label,
+            secretRef: binding.secretRef,
+            metadata: binding.metadata
+          }] as const)
+        : null;
+    },
+    hydrateProviderContext: ({ tenantId, runId, workflowId, providerBindings }) =>
+      providerExecutionResolver.resolveForRun({
+        tenantId,
+        runId,
+        workflowId,
+        providerBindings
+      }),
+    ...(options.env.runtimeEnv.OPENAI_MODEL ? { openAIModel: options.env.runtimeEnv.OPENAI_MODEL } : {})
+  });
   const harnessBoardApi = createHarnessBoardService({
     authenticate: options.auth.authenticate,
     requireTenantMember: repositories.requireTenantMember,
@@ -639,6 +667,7 @@ export function createDashboardRuntime(options: {
         installedPackages: await resolveTenantInstalledOverlayPackages({ tenantId, repositories })
       }),
     audit,
+    ceoGoalExecutor,
     ...(options.workflowQueueEnqueuer
       ? {
           onResolvedAttentionDispatch: async (dispatch: {
@@ -703,6 +732,38 @@ export function createDashboardRuntime(options: {
                 reopenedProposalCount: dispatch.reopenedProposalCount
               });
             }
+          },
+          onReviewedNextLaneDispatch: async (dispatch: {
+            tenantId: string;
+            userId: string;
+            runId: string;
+            workflowId: string;
+            cardId: string;
+            actionToken: string;
+            decision: "start_next_lane" | "request_changes";
+            state: "working";
+          }) => {
+            const redispatchQueueJobId = createRedispatchQueueJobId({
+              tenantId: dispatch.tenantId,
+              workflowId: dispatch.workflowId,
+              runId: dispatch.runId,
+              dispatchKind: `reviewed_${dispatch.decision}`,
+              actionToken: dispatch.actionToken
+            });
+            const stagedRedispatch = await acidRepository.stageWorkflowRunRedispatch({
+              tenantId: dispatch.tenantId,
+              runId: dispatch.runId,
+              userId: dispatch.userId,
+              idempotencyKey: redispatchQueueJobId
+            });
+            if (!stagedRedispatch.staged) {
+              console.warn("Reviewed harness next-lane redispatch staging did not return an outbox row", {
+                runId: dispatch.runId,
+                workflowId: dispatch.workflowId,
+                cardId: dispatch.cardId,
+                decision: dispatch.decision
+              });
+            }
           }
         }
       : {}),
@@ -722,6 +783,7 @@ export function createDashboardRuntime(options: {
     allowedOrigins: options.env.allowedOrigins,
     listBoardState: harnessBoardApi.listBoardState,
     createTopLevelChildCard: harnessBoardApi.createTopLevelChildCard,
+    submitTenantGoal: harnessBoardApi.submitTenantGoal,
     advanceChildCard: harnessBoardApi.advanceChildCard,
     decideProposal: harnessBoardApi.decideProposal,
     completeRun: harnessBoardApi.completeRun,

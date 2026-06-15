@@ -188,10 +188,10 @@ Package assets can include:
 
 Examples:
 
-- A Business Coach package can include business coaching prompts, discovery workflows, advisory scorecards, meeting templates, and coaching-specific employees.
-- A Brand SEO package can include SEO audit prompts, keyword workflows, brand voice assets, content planning templates, and SEO/content specialist employees.
+- A Reference Advisory package can include advisory prompts, discovery workflows, scorecards, meeting templates, and specialist employees.
+- A Reference Audit package can include audit prompts, review workflows, brand-voice-style assets, planning templates, and audit/content specialist employees.
 
-Those two packages must not share runtime assets unless the asset is explicitly marked as common/global and permitted by entitlement. A tenant with the Business Coach package cannot pull Brand SEO prompts, rules, employees, templates, or Paperclip mappings.
+Those two packages must not share runtime assets unless the asset is explicitly marked as common/global and permitted by entitlement. A tenant with the Reference Advisory package cannot pull Reference Audit prompts, rules, employees, templates, or Paperclip mappings.
 
 The package asset registry should live in Supabase/app database tables and be resolved by Wealth Factory before Paperclip is called. Paperclip may store or execute the underlying prompts/rules/assets privately, but the browser and public API see only Wealth Factory package/workflow/employee/result DTOs.
 

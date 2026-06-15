@@ -14,6 +14,7 @@ import {
   createHarnessCardContinuityRecord,
   createHarnessCardEventRecord,
   type HarnessCardContinuityRecord,
+  type HarnessCardEventRecord,
   type HarnessCardRecord,
   type HarnessCardState,
   type HarnessRunRecord,
@@ -106,6 +107,30 @@ export type HarnessWorkerOrchestratorHandoff = {
   resumeDirective: string | null;
 };
 
+export type HarnessWorkerBoardContext = {
+  runState: HarnessRunRecord["state"];
+  activeAttention: {
+    actionKind: Exclude<HarnessPostOutcomeAction["kind"], "dispatch_next_lane">;
+    summary: string;
+    targetCardId?: string;
+    targetPersona?: string;
+  } | null;
+  parentLane: {
+    cardId: string;
+    persona: string;
+    title: string;
+    deliverableType: string;
+    state: HarnessCardState;
+  } | null;
+  siblingLanes: readonly {
+    cardId: string;
+    persona: string;
+    title: string;
+    deliverableType: string;
+    state: HarnessCardState;
+  }[];
+};
+
 export type HarnessWorkerExecutionEnvelope = {
   tenantId: string;
   runId: string;
@@ -119,6 +144,7 @@ export type HarnessWorkerExecutionEnvelope = {
     previousClaimedAt: string | null;
   };
   orchestratorHandoff: HarnessWorkerOrchestratorHandoff;
+  boardContext: HarnessWorkerBoardContext;
   laneExecution: HarnessWorkerLaneExecution;
   continuityContext?: HarnessWorkerContinuityContext;
   dispatchHandoff?: HarnessWorkerDispatchHandoff;
@@ -260,6 +286,7 @@ export async function buildHarnessWorkerDispatchResolution(input: {
   runId: string;
   workflowId: string;
   dispatchHandoff?: HarnessWorkerDispatchHandoff;
+  targetCardId?: string;
   runAtomically?: <T>(work: (repository: HarnessDispatchRepository) => Promise<T>) => Promise<T>;
 }): Promise<HarnessWorkerDispatchResolution> {
   const runWork = input.runAtomically ?? (async <T>(work: (repository: HarnessDispatchRepository) => Promise<T>) => work(input.repository));
@@ -294,7 +321,10 @@ export async function buildHarnessWorkerDispatchResolution(input: {
     const runtime = createHarnessRuntime();
     runtime.resumeRun({ run, cards, proposals, continuity });
 
-    const lane = selectNextActionableLane(cards);
+    const lane =
+      input.targetCardId
+        ? cards.find((card) => card.id === input.targetCardId && card.persona !== "ceo") ?? null
+        : selectNextActionableLane(cards);
     if (!lane) {
       return {
         dispatch: {
@@ -552,8 +582,25 @@ export async function commitHarnessWorkerLaneOutcome(input: {
       run
     });
     const nextRun = reconciledRun ?? run;
+    let shouldHoldForCeoNextLaneReview = false;
+    if (input.state === "done" && !NON_EXECUTABLE_RUN_STATES.has(nextRun.state)) {
+      const [cardsBeforeDispatch, proposalsBeforeDispatch] = await Promise.all([
+        repository.listCardsForRun(run.id),
+        repository.listProposalsForRun(run.id)
+      ]);
+      const preDispatchAction = determineHarnessPostOutcomeAction({
+        runState: nextRun.state,
+        fallbackCardId: updatedCard.id,
+        nextDispatchCard: null,
+        cards: cardsBeforeDispatch,
+        proposals: proposalsBeforeDispatch
+      });
+      shouldHoldForCeoNextLaneReview =
+        preDispatchAction?.kind === "queue_ceo_review"
+        && preDispatchAction.reason === "next_lane_decision";
+    }
     const nextDispatchResolution =
-      NON_EXECUTABLE_RUN_STATES.has(nextRun.state)
+      NON_EXECUTABLE_RUN_STATES.has(nextRun.state) || shouldHoldForCeoNextLaneReview
         ? null
         : await buildHarnessWorkerDispatchResolution({
             repository,
@@ -668,7 +715,7 @@ export async function commitHarnessWorkerLaneOutcome(input: {
 }
 
 export async function buildHarnessWorkerExecutionEnvelope(input: {
-  repository: Pick<HarnessRepository, "getRun" | "getCard" | "getCardContinuity" | "listCardsForRun" | "listProposalsForRun">;
+  repository: Pick<HarnessRepository, "getRun" | "getCard" | "getCardContinuity" | "listCardsForRun" | "listProposalsForRun" | "listEventsForRun">;
   tenantId: string;
   dispatch: HarnessWorkerDispatch;
   requiredCapabilities: readonly ProviderCapability[];
@@ -691,9 +738,10 @@ export async function buildHarnessWorkerExecutionEnvelope(input: {
     throw new Error(`Unknown harness child lane for worker execution envelope: ${input.dispatch.laneExecution.cardId}`);
   }
   const continuity = await input.repository.getCardContinuity(lane.id);
-  const [cardsForRun, proposalsForRun] = await Promise.all([
+  const [cardsForRun, proposalsForRun, eventsForRun] = await Promise.all([
     input.repository.listCardsForRun(run.id),
-    input.repository.listProposalsForRun(run.id)
+    input.repository.listProposalsForRun(run.id),
+    input.repository.listEventsForRun(run.id)
   ]);
   if (!lane.executionClaimToken || !lane.executionClaimedAt) {
     throw new Error(`Missing harness execution claim for worker execution envelope: ${lane.id}`);
@@ -724,6 +772,13 @@ export async function buildHarnessWorkerExecutionEnvelope(input: {
         executionStage: "initial_lane_start",
         executionStageLabel: "Initial lane start"
       }
+    }),
+    boardContext: buildWorkerBoardContext({
+      run,
+      lane,
+      cards: cardsForRun,
+      proposals: proposalsForRun,
+      events: eventsForRun
     }),
     ...(continuity
       ? {
@@ -761,6 +816,77 @@ export async function buildHarnessWorkerExecutionEnvelope(input: {
       ...(continuity?.latestResultSummary ? { latestResultSummary: continuity.latestResultSummary } : {}),
       ...(continuity?.absorbedWorkItems?.length ? { absorbedWorkItems: [...continuity.absorbedWorkItems] } : {})
     }
+  };
+}
+
+function buildWorkerBoardContext(input: {
+  run: HarnessRunRecord;
+  lane: HarnessCardRecord;
+  cards: readonly HarnessCardRecord[];
+  proposals: readonly HarnessSubCardProposal[];
+  events: readonly HarnessCardEventRecord[];
+}): HarnessWorkerBoardContext {
+  const parentLane =
+    input.lane.parentCardId
+      ? input.cards.find((card) => card.id === input.lane.parentCardId) ?? null
+      : null;
+  const siblingLanes = input.cards
+    .filter((card) =>
+      card.id !== input.lane.id
+      && card.persona !== "ceo"
+      && card.parentCardId === input.lane.parentCardId
+      && (card.state === "working" || card.state === "approved" || card.state === "waiting" || card.state === "blocked")
+    )
+    .sort(compareWorkerBoardContextLanes)
+    .map((card) => ({
+      cardId: card.id,
+      persona: card.persona,
+      title: card.title,
+      deliverableType: card.deliverableType,
+      state: card.state
+    }));
+
+  const persistedAttention = deriveCurrentHarnessAttentionState(input.events);
+  const derivedAttention =
+    persistedAttention
+    ?? (() => {
+      const action = determineHarnessPostOutcomeAction({
+        runState: input.run.state,
+        fallbackCardId: input.lane.id,
+        nextDispatchCard: null,
+        cards: input.cards,
+        proposals: input.proposals
+      });
+      if (!action || action.kind === "dispatch_next_lane") {
+        return null;
+      }
+      return {
+        action,
+        requestedAt: input.run.updatedAt,
+        snapshot: buildWorkerDerivedAttentionSnapshot({ action, cards: input.cards })
+      };
+    })();
+
+  return {
+    runState: input.run.state,
+    activeAttention: derivedAttention
+      ? {
+          actionKind: derivedAttention.action.kind,
+          summary: describeWorkerBoardAttentionSummary(derivedAttention.action, derivedAttention.snapshot),
+          ...(derivedAttention.snapshot.targetCardId ? { targetCardId: derivedAttention.snapshot.targetCardId } : {}),
+          ...(derivedAttention.snapshot.targetPersona ? { targetPersona: derivedAttention.snapshot.targetPersona } : {})
+        }
+      : null,
+    parentLane: parentLane
+      ? {
+          cardId: parentLane.id,
+          persona: parentLane.persona,
+          title: parentLane.title,
+          deliverableType: parentLane.deliverableType,
+          state: parentLane.state
+        }
+      : null,
+    siblingLanes
   };
 }
 
@@ -849,7 +975,11 @@ function deriveWorkerPostOutcomeDirective(input: {
       action,
       targetCard
     }),
-    ...("cardId" in (action ?? {}) ? { targetCardId: (action as Extract<HarnessPostOutcomeAction, { cardId: string }>).cardId } : {}),
+    ...("cardId" in (action ?? {})
+      ? { targetCardId: (action as Extract<HarnessPostOutcomeAction, { cardId: string }>).cardId }
+      : action?.kind === "queue_ceo_review" && action.nextCardId
+        ? { targetCardId: action.nextCardId }
+        : {}),
     ...("persona" in (action ?? {}) ? { targetPersona: (action as Extract<HarnessPostOutcomeAction, { persona: string }>).persona } : {}),
     ...(action?.kind === "queue_ceo_review" ? { reason: action.reason } : {})
   };
@@ -891,6 +1021,73 @@ function describeWorkerDispatchReason(dispatchHandoff: HarnessWorkerDispatchHand
   return dispatchHandoff.triggeredByResultSummary
     ? `${triggeredByPersona} finished a ${outcomeState} lane, so the CEO handed this next bounded step forward: ${dispatchHandoff.triggeredByResultSummary}`
     : `${triggeredByPersona} finished a ${outcomeState} lane, so the CEO handed this next bounded step forward.`;
+}
+
+function buildWorkerDerivedAttentionSnapshot(input: {
+  action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
+  cards: readonly HarnessCardRecord[];
+}): HarnessAttentionSnapshot {
+  const targetCardId =
+    "cardId" in input.action
+      ? input.action.cardId
+      : input.action.kind === "queue_ceo_review"
+        ? input.action.nextCardId ?? null
+        : null;
+  const targetCard =
+    targetCardId
+      ? input.cards.find((card) => card.id === targetCardId) ?? null
+      : null;
+  const described = describeHarnessPostOutcomeActionKind(input.action);
+
+  return {
+    statusLabel: described.statusLabel,
+    summary: described.summary,
+    ...(described.reasonLabel ? { reasonLabel: described.reasonLabel } : {}),
+    ...(targetCardId ? { targetCardId } : {}),
+    ...(targetCard?.persona ? { targetPersona: targetCard.persona } : {}),
+    ...(targetCard?.title ? { targetTitle: targetCard.title } : {})
+  };
+}
+
+function describeWorkerBoardAttentionSummary(
+  action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>,
+  snapshot: HarnessAttentionSnapshot
+): string {
+  if (snapshot.targetCardId && snapshot.targetPersona) {
+    if (action.kind === "await_lane_resume") {
+      return `The board is currently waiting on an explicit resume decision for ${snapshot.targetPersona.toUpperCase()} card ${snapshot.targetCardId}.`;
+    }
+    if (action.kind === "await_unblock") {
+      return `The board is currently waiting on an explicit unblock decision for ${snapshot.targetPersona.toUpperCase()} card ${snapshot.targetCardId}.`;
+    }
+  }
+  return snapshot.summary;
+}
+
+function compareWorkerBoardContextLanes(left: HarnessCardRecord, right: HarnessCardRecord): number {
+  const priority = (card: HarnessCardRecord) => {
+    switch (card.state) {
+      case "working":
+        return 0;
+      case "approved":
+        return 1;
+      case "waiting":
+        return 2;
+      case "blocked":
+        return 3;
+      default:
+        return 4;
+    }
+  };
+
+  const priorityDelta = priority(left) - priority(right);
+  if (priorityDelta !== 0) {
+    return priorityDelta;
+  }
+  if (left.updatedAt !== right.updatedAt) {
+    return left.updatedAt.localeCompare(right.updatedAt);
+  }
+  return left.createdAt.localeCompare(right.createdAt);
 }
 
 function buildIgnoredOutcomeEvent(input: {
@@ -1202,6 +1399,8 @@ function createAttentionRequestedPayload(input: {
         actionKind: input.action.kind,
         runState: input.action.runState,
         reason: input.action.reason,
+        ...(input.action.completedCardId ? { completedCardId: input.action.completedCardId } : {}),
+        ...(input.action.nextCardId ? { nextCardId: input.action.nextCardId } : {}),
         ...snapshot
       };
     case "await_lane_resume":
@@ -1225,6 +1424,8 @@ function createAttentionResolvedPayload(input: {
         actionKind: input.action.kind,
         runState: input.action.runState,
         reason: input.action.reason,
+        ...(input.action.completedCardId ? { completedCardId: input.action.completedCardId } : {}),
+        ...(input.action.nextCardId ? { nextCardId: input.action.nextCardId } : {}),
         ...input.snapshot
       };
     case "await_lane_resume":
@@ -1245,18 +1446,24 @@ function buildAttentionSnapshot(input: {
 }): HarnessAttentionSnapshot {
   const described = describeHarnessPostOutcomeActionKind(input.action);
   let targetCard: HarnessCardRecord | null = null;
+  const nextCardId = "nextCardId" in input.action ? input.action.nextCardId : undefined;
   if (input.action.kind === "await_lane_resume" || input.action.kind === "await_unblock") {
     const targetCardId = input.action.cardId;
     targetCard = input.cards.find((card) => card.id === targetCardId) ?? null;
+  } else if (input.action.kind === "queue_ceo_review" && nextCardId) {
+    targetCard = input.cards.find((card) => card.id === nextCardId) ?? null;
   }
   const continuitySummary =
     targetCard ? input.continuity.find((record) => record.cardId === targetCard.id)?.continuitySummary ?? null : null;
 
   return {
     statusLabel: described.statusLabel,
-    summary: continuitySummary ?? described.summary,
+    summary:
+      input.action.kind === "queue_ceo_review"
+        ? described.summary
+        : continuitySummary ?? described.summary,
     ...(described.reasonLabel ? { reasonLabel: described.reasonLabel } : {}),
-    ...(input.action.kind === "queue_ceo_review" ? { targetPersona: "ceo" } : {}),
+    ...(input.action.kind === "queue_ceo_review" && !targetCard ? { targetPersona: "ceo" } : {}),
     ...(targetCard
       ? {
           targetCardId: targetCard.id,

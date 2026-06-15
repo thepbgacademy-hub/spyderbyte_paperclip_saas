@@ -15,20 +15,20 @@ const clientOpsPackage: WealthFactoryPackage = {
   optionalProviderCapabilities: ["image_generation", "video_generation", "media_storage"]
 };
 
-const brandSeoPackage: WealthFactoryPackage = {
-  id: "pkg-brand-seo",
-  name: "Brand SEO",
+const exampleAuditPackage: WealthFactoryPackage = {
+  id: "pkg-example-audit",
+  name: "Example Audit",
   kind: "industry",
-  includedWorkflowIds: ["wf-seo-audit"],
+  includedWorkflowIds: ["wf-example-audit"],
   includedEmployeeIds: ["ceo"],
-  allowedAssetIds: ["asset-seo-rules"],
+  allowedAssetIds: ["asset-example-rules"],
   requiredProviderCapabilities: ["text_generation"],
   optionalProviderCapabilities: []
 };
 
 describe("package entitlements", () => {
   it("allows only workflows and assets from the installed package", () => {
-    const service = createEntitlementService({ packages: [clientOpsPackage, brandSeoPackage] });
+    const service = createEntitlementService({ packages: [clientOpsPackage, exampleAuditPackage] });
     const tenant: TenantPackageState = {
       tenantId: "tenant-1",
       subscriptionStatus: "active",
@@ -38,14 +38,14 @@ describe("package entitlements", () => {
     };
 
     expect(service.canRunWorkflow(tenant, "wf-client-ops-brief")).toEqual({ allowed: true });
-    expect(service.canRunWorkflow(tenant, "wf-seo-audit")).toMatchObject({ allowed: false, reason: "workflow_not_in_package" });
+    expect(service.canRunWorkflow(tenant, "wf-example-audit")).toMatchObject({ allowed: false, reason: "workflow_not_in_package" });
 
     const assets = createPackageAssetRegistry([
       { id: "asset-client-ops-rules", packageId: "pkg-client-ops", type: "rules", privateRef: "pc-client-ops-rules" },
-      { id: "asset-seo-rules", packageId: "pkg-brand-seo", type: "rules", privateRef: "pc-seo-rules" }
+      { id: "asset-example-rules", packageId: "pkg-example-audit", type: "rules", privateRef: "pc-example-rules" }
     ]);
     expect(assets.resolveAllowedAsset(clientOpsPackage, "asset-client-ops-rules")).toMatchObject({ id: "asset-client-ops-rules" });
-    expect(() => assets.resolveAllowedAsset(clientOpsPackage, "asset-seo-rules")).toThrow("Asset is not allowed for this package");
+    expect(() => assets.resolveAllowedAsset(clientOpsPackage, "asset-example-rules")).toThrow("Asset is not allowed for this package");
   });
 
   it("requires active subscription and package-specific provider capabilities", () => {

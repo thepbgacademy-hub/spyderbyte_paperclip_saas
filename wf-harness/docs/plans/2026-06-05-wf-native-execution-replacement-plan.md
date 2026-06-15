@@ -1048,6 +1048,207 @@ Completed outcome:
 - Native prompt builders now include that state-by-state post-outcome contract directly in the private child-execution brief, alongside the existing `orchestratorHandoff`.
 - The phase deepened the engine-room worker seam without widening dashboard truth, public start policy, queue payloads, or overlay/core registry boundaries.
 
+## Phase 31: Private Board-Context Snapshot Contract
+
+Status: `completed`
+
+Goal:
+- Deepen the private worker/orchestrator-child execution contract with a bounded board-context snapshot so native child execution can see parent-lane posture and sibling-lane state without widening into child-to-child coordination, queue payload growth, or public DTO changes.
+
+Scope:
+- Add a private `boardContext` contract to the worker execution envelope.
+- Hydrate that contract from durable run/card/proposal truth already available on the worker seam.
+- Keep the snapshot bounded to run state, parent lane, non-terminal sibling posture, and current attention truth.
+- Thread the new private snapshot into the native prompt builders so child execution can reason with board posture directly instead of reconstructing it from sparse lane metadata.
+
+Required outputs:
+- Worker execution envelopes carry a private `boardContext` snapshot.
+- Native prompt builders include that board-context snapshot in the private child-execution brief.
+- The snapshot remains read-only, tenant-safe, and bounded; it does not authorize cross-lane execution or direct child-to-child coordination.
+
+Non-goals:
+- No public dashboard/start behavior changes.
+- No queue/outbox payload widening.
+- No overlay/core-registry policy changes.
+- No child-to-child autonomy or swarm-style execution broadening.
+
+Exit criteria:
+- Focused harness worker and native prompt tests prove the bounded `boardContext` contract and prompt composition.
+- Full verification remains green.
+- Handoff and TODO surfaces record that the contract stayed private to the worker/native seam.
+
+Completed outcome:
+- The worker execution envelope now carries a private `boardContext` snapshot with run state, parent lane, sibling posture, and bounded active-attention truth.
+- Native prompt builders now include that board-context snapshot alongside `orchestratorHandoff` and `postOutcomeDirectives`.
+- The phase deepened the orchestrator/child execution contract without widening queue payloads, public DTOs, or any customer-facing start/policy seams.
+
+## Phase 32: Native Outcome-State Contract Enforcement
+
+Status: `completed`
+
+Goal:
+- Keep the private native child-execution contract truthful end to end so every bounded worker outcome already allowed by the harness contract, including `cancelled`, is also honored by native prompt instructions, parser acceptance, and runtime-backed commit coverage.
+
+Scope:
+- Update native workflow prompt builders so their strict JSON contract includes `cancelled`.
+- Accept `cancelled` in the native structured-response parser.
+- Keep native resume-summary formatting explicit for `waiting`, `blocked`, and `cancelled` outcomes instead of collapsing non-`done` paths into the same copy.
+- Prove the contract on the runtime seam with focused native executor and worker-runtime regressions.
+
+Required outputs:
+- Native prompt text advertises the full bounded outcome-state contract.
+- Native parsing accepts `cancelled` as a first-class structured outcome.
+- Focused runtime proof shows a native `cancelled` outcome commits through the harness seam instead of falling back to invalid blocked handling.
+
+Non-goals:
+- No new public dashboard/start behavior.
+- No queue/outbox payload widening.
+- No overlay/core-registry policy changes.
+- No new child autonomy or multi-lane execution broadening.
+
+Exit criteria:
+- Focused native executor tests prove `cancelled` prompt + parse behavior.
+- Focused runtime tests prove `cancelled` native outcomes commit through the harness seam.
+- Full verification remains green.
+
+Completed outcome:
+- Native workflow prompt builders now advertise `done|waiting|blocked|cancelled` explicitly and explain when `cancelled` is the correct bounded outcome.
+- The native structured parser now accepts `cancelled`, and non-`done` summary formatting now keeps cancel semantics explicit instead of pretending every non-complete path is a wait or unblock.
+- Focused runtime coverage now proves a native `cancelled` outcome commits through the private harness seam without falling back to invalid blocked handling.
+
+## Phase 33: Native Workflow Registry Extraction
+
+Status: `completed`
+
+Goal:
+- Separate static native workflow-family metadata from executor behavior so future native-family additions stay lower-risk and easier to review without turning a bounded cleanup into a behavioral redesign.
+
+Scope:
+- Extract workflow-family ids, prompt-definition metadata, and formatter metadata into a dedicated worker-private registry module.
+- Keep prompt assembly, parsing, runtime fallbacks, and result formatting behavior inside the executor implementation.
+- Add one regression that proves an extracted registry-backed workflow family still composes the right prompt and final resume wording.
+
+Required outputs:
+- A dedicated native workflow-definition module exists under the worker-private seam.
+- The executor imports registry metadata instead of owning it inline.
+- Focused tests prove the extracted registry still drives real workflow-family behavior.
+
+Non-goals:
+- No new workflow families.
+- No prompt wording changes beyond location-preserving extraction.
+- No public/dashboard/runtime policy widening.
+- No queue/outbox/schema changes.
+
+Exit criteria:
+- Native executor behavior remains unchanged under focused verification.
+- Build stays green after extraction.
+- Docs/TODO/handoff record the cleanup as a bounded private seam improvement, not a feature phase.
+
+Completed outcome:
+- Static native workflow-family ids plus prompt/formatter definitions now live in `src/worker/native-workflow-definitions.ts`.
+- `src/worker/native-executor.ts` now focuses on execution behavior, prompt assembly, parsing, and fallback handling instead of mixing registry data with engine logic.
+- Focused regressions now prove the extracted SEO native family still emits the correct family-specific prompt guidance and resume summary wording.
+
+## Phase 34: Shared Worker Prompt-Context Extraction
+
+Status: `completed`
+
+Goal:
+- Remove the duplicated worker prompt-context formatting seam from the native executor and native OpenAI provider path so both bounded native callers assemble the same private execution-envelope context from one source of truth.
+
+Scope:
+- Extract shared workflow-context, board-context, post-outcome directive, and absorbed-work formatting into one worker-private utility.
+- Repoint `src/worker/native-executor.ts` and `src/providers/native-openai-text.ts` at that shared utility without changing prompt meaning or widening any public/runtime policy seam.
+- Fix the touched provider truncation path so bounded plain-text summaries end with a clean ASCII ellipsis instead of broken mojibake output.
+
+Required outputs:
+- One worker-private prompt-context utility exists and is covered directly by focused tests.
+- Both native caller paths use the same shared context-line formatter.
+- Truncated provider summaries normalize to a clean tenant-safe ASCII suffix.
+
+Non-goals:
+- No new workflow families.
+- No changes to native decision parsing or worker outcome policy.
+- No public/dashboard/queue/runtime widening.
+- No overlay/core registry policy changes.
+
+Exit criteria:
+- New focused utility tests are green.
+- Existing native executor, native OpenAI, and worker-runtime regressions stay green.
+- Build stays green.
+- Drift/alignment notes confirm this stayed inside the private worker/native seam.
+
+Completed outcome:
+- Shared worker prompt-context formatting now lives in `src/worker/native-prompt-context.ts`.
+- Both the native executor and native OpenAI provider path now assemble private envelope context through the same utility instead of maintaining duplicated line-formatting logic.
+- Truncated provider summaries now end with `...` instead of broken ellipsis text, keeping persisted/native-facing summary output clean.
+
+## Phase 35: Strict Native Decision Contract Enforcement
+
+Status: `completed`
+
+Goal:
+- Tighten the private native decision parser so the provider response must be the exact `{ state, summary }` JSON contract after optional fence stripping, rather than merely containing a valid-looking decision substring.
+
+Scope:
+- Keep the allowed native outcome states unchanged.
+- Fail closed when the parsed object includes extra top-level fields.
+- Fail closed when valid-looking decision JSON is wrapped in surrounding prose.
+- Keep the hardening inside `src/worker/native-executor.ts` plus focused executor tests only.
+
+Required outputs:
+- The native executor rejects extra top-level keys on structured decisions.
+- The native executor rejects surrounding prose outside the strict JSON object envelope.
+- Existing valid fenced JSON behavior remains green.
+
+Non-goals:
+- No runtime/provider/dashboard/queue widening.
+- No new outcome states or parser-module extraction.
+- No changes to provider transport or prompt-context formatting seams.
+
+Exit criteria:
+- Focused `tests/native-executor.test.ts`, `tests/native-openai-text.test.ts`, and `tests/worker-runtime.test.ts` stay green.
+- Build stays green.
+- Reviewer pass confirms the strict response-envelope gap is closed without scope creep.
+
+Completed outcome:
+- `tryParseWorkflowDecision` now enforces the exact top-level `{ state, summary }` shape.
+- `extractJsonObjectText` now requires the full provider output, after optional fence stripping, to be the JSON object itself instead of accepting arbitrary surrounding prose.
+- Focused regressions now prove both “extra keys” and “wrapped in prose” responses fail closed into the existing invalid-decision blocked fallback.
+
+## Phase 36: Native Decision Parser Extraction
+
+Status: `completed`
+
+Goal:
+- Extract the already-hardened native decision parser into a dedicated private worker module while pinning the remaining multi-block trailing-JSON seam at the real Responses-path boundary.
+
+Scope:
+- Move the pure decision-parsing helpers out of `src/worker/native-executor.ts` into a private parser module.
+- Keep executor policy, prompt assembly, workflow-definition lookup, and result/resume formatting inside the executor.
+- Add one bounded regression proving a valid fenced decision followed by trailing JSON in a second Responses text block still fails closed.
+
+Required outputs:
+- A dedicated private parser module owns the strict `{ state, summary }` parsing helpers.
+- The executor imports that parser without changing native outcome semantics.
+- Focused regressions prove multi-block trailing JSON still fails closed through the executor seam.
+
+Non-goals:
+- No new outcome states or prompt wording changes.
+- No provider transport redesign.
+- No runtime/dashboard/queue/public widening.
+- No overlay/core registry policy changes.
+
+Exit criteria:
+- Focused `tests/native-executor.test.ts`, `tests/native-openai-text.test.ts`, and `tests/worker-runtime.test.ts` stay green.
+- Build stays green.
+- Handoff, TODO, and plan notes record that the GitNexus preflight kept the blast radius inside the private worker/native seam.
+
+Completed outcome:
+- Strict decision parsing now lives in `src/worker/native-workflow-decision-parser.ts`.
+- `src/worker/native-executor.ts` now consumes that private parser module while keeping executor behavior unchanged.
+- Focused regressions now prove a fenced valid decision followed by trailing JSON in a second Responses block still fails closed into the existing invalid-decision fallback.
+
 ## Immediate Execution Order
 
 1. Keep the migrated `wf_connect_first_workflow` native path green under the full verification bar.
@@ -1059,10 +1260,14 @@ Completed outcome:
 7. Keep the durable public workflow identity seam green across reservation, outbox, queue, and worker recovery before widening any additional public surfaces.
 8. Keep the private worker/orchestrator handoff explicit and bounded so child execution never has to reconstruct orchestrator intent from public telemetry or queue payloads.
 9. Keep the new private `postOutcomeDirectives` contract explicit and bounded so child execution never has to reconstruct post-outcome follow-through from run-state heuristics, generic `nextDispatch` absence, or public telemetry.
-10. Continue the next bounded engine-room phase on the private worker/orchestrator-child execution contract rather than reopening public dashboard/start behavior.
-11. Re-run focused and full repo verification before each additional native-family cutover or public-surface widening.
-12. Keep package-overlay and demo-package seams out of the core platform registry unless the design docs are intentionally revised first.
-13. If industry-specific workflow families are needed later, implement a package-overlay registration seam first instead of promoting them into the core registry.
-14. Use the landed overlay seam for future industry workflows rather than expanding the built-in registry.
-15. Treat `wf_connect_first_workflow`, `wf_tax_strategy`, and `wf_package_followup` as the current intentional core built-in exceptions only; any future industry/package family stays overlay-scoped unless the design docs are explicitly revised first.
-16. Do not treat this exception codification as approval to widen runtime eligibility, dashboard/start exposure, native-default policy, or public-start approval outside later dedicated phases.
+10. Keep the new private `boardContext` contract explicit and bounded so child execution can see parent/sibling board posture without widening into child-to-child autonomy or public telemetry drift.
+11. Keep the native child-outcome contract explicit and truthful end to end so prompt instructions, parser acceptance, and runtime commit behavior never disagree about allowed bounded outcome states.
+12. Keep native workflow-family registry metadata separate from executor behavior so future native-family additions touch bounded definition seams before any deeper engine refactor is attempted.
+13. Keep strict native decision parsing isolated behind the private parser module so future executor cleanup does not quietly loosen the fail-closed contract.
+14. Continue the next bounded engine-room phase on the private worker/orchestrator-child execution contract rather than reopening public dashboard/start behavior.
+15. Re-run focused and full repo verification before each additional native-family cutover or public-surface widening.
+16. Keep package-overlay and demo-package seams out of the core platform registry unless the design docs are intentionally revised first.
+17. If industry-specific workflow families are needed later, implement a package-overlay registration seam first instead of promoting them into the core registry.
+18. Use the landed overlay seam for future industry workflows rather than expanding the built-in registry.
+19. Treat `wf_connect_first_workflow`, `wf_tax_strategy`, and `wf_package_followup` as the current intentional core built-in exceptions only; any future industry/package family stays overlay-scoped unless the design docs are explicitly revised first.
+20. Do not treat this exception codification as approval to widen runtime eligibility, dashboard/start exposure, native-default policy, or public-start approval outside later dedicated phases.
