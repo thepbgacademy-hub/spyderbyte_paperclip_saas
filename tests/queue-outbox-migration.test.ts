@@ -32,7 +32,8 @@ describe("workflow queue outbox migration", () => {
     expect(helper).toMatch(/workflow_queue_outbox/i);
     expect(helper).toMatch(/workflow_queue_outbox_pending_idx/i);
     expect(helper).toMatch(/workflow_queue_outbox_claimed_idx/i);
-    expect(helper).toMatch(/pg_get_constraintdef\(oid\) like '%claimed%'/i);
+    expect(helper).toMatch(/workflow_queue_outbox_status_check/i);
+    expect(helper).toMatch(/has_status_check/i);
     expect(helper).toMatch(/has_primary_key/i);
     expect(helper).toMatch(/has_run_fk/i);
     expect(helper).toMatch(/has_workflow_template_fk/i);
