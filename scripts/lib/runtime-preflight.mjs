@@ -22,17 +22,17 @@ export async function loadRuntimePreflight({ client, tenantId, workflowId }) {
          from pg_constraint
          where conname = 'workflow_runs_bound_provider_context_single_entry_check'
            and conrelid = to_regclass('wfpc.workflow_runs')
-           and pg_get_constraintdef(oid) like '%jsonb_array_length(bound_provider_context) <= 1%'
+           and lower(pg_get_constraintdef(oid)) like '%jsonb_array_length(bound_provider_context) <= 1%'
        ) as has_single_provider_bound_context_guard,
        exists (
          select 1
          from pg_constraint
          where conname = 'workflow_runs_bound_provider_context_binding_check'
            and conrelid = to_regclass('wfpc.workflow_runs')
-           and pg_get_constraintdef(oid) like '%bound_secret_reference_id is null%'
-           and pg_get_constraintdef(oid) like '%jsonb_array_length(bound_provider_context) = 0%'
-           and pg_get_constraintdef(oid) like '%bound_secret_reference_id is not null%'
-           and pg_get_constraintdef(oid) like '%jsonb_array_length(bound_provider_context) = 1%'
+           and lower(pg_get_constraintdef(oid)) like '%bound_secret_reference_id is null%'
+           and lower(pg_get_constraintdef(oid)) like '%jsonb_array_length(bound_provider_context) = 0%'
+           and lower(pg_get_constraintdef(oid)) like '%bound_secret_reference_id is not null%'
+           and lower(pg_get_constraintdef(oid)) like '%jsonb_array_length(bound_provider_context) = 1%'
        ) as has_bound_provider_binding_shape_guard,
        exists (
          select 1
