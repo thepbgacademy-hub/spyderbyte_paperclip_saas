@@ -512,6 +512,82 @@ describe("runtime server", () => {
     expect(response.body).toBe(JSON.stringify({ ok: true }));
   });
 
+  it("preserves same-origin fetch metadata for guarded browser requests", async () => {
+    const handler = vi.fn().mockResolvedValue({
+      status: 200,
+      headers: { "x-content-type-options": "nosniff" },
+      body: { ok: true }
+    });
+    const request = createRequest({
+      method: "GET",
+      url: "/api/harness/board?workflowId=wf_connect_first_workflow",
+      headers: {
+        authorization: "Bearer token",
+        "sec-fetch-site": "same-origin",
+        "content-length": "0",
+        "x-forwarded-for": "203.0.113.7, 10.0.0.1"
+      }
+    });
+    const response = createResponse();
+
+    createNodeRequestListener(handler)(request as unknown as IncomingMessage, response as unknown as ServerResponse);
+    await response.finished;
+
+    expect(handler).toHaveBeenCalledWith({
+      method: "GET",
+      path: "/api/harness/board",
+      headers: {
+        authorization: "Bearer token",
+        "sec-fetch-site": "same-origin"
+      },
+      query: { workflowId: "wf_connect_first_workflow" },
+      bodyByteLength: 0,
+      ip: "203.0.113.7"
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toBe(JSON.stringify({ ok: true }));
+  });
+
+  it("preserves host and referer headers needed to prove same-origin browser API reads", async () => {
+    const handler = vi.fn().mockResolvedValue({
+      status: 200,
+      headers: { "x-content-type-options": "nosniff" },
+      body: { ok: true }
+    });
+    const request = createRequest({
+      method: "GET",
+      url: "/api/harness/board?workflowId=wf_connect_first_workflow",
+      headers: {
+        authorization: "Bearer token",
+        host: "wf-api.wealthfactory.test",
+        referer: "https://wf-api.wealthfactory.test/board?workflowId=wf_connect_first_workflow",
+        "x-forwarded-proto": "https",
+        "content-length": "0",
+        "x-forwarded-for": "203.0.113.7, 10.0.0.1"
+      }
+    });
+    const response = createResponse();
+
+    createNodeRequestListener(handler)(request as unknown as IncomingMessage, response as unknown as ServerResponse);
+    await response.finished;
+
+    expect(handler).toHaveBeenCalledWith({
+      method: "GET",
+      path: "/api/harness/board",
+      headers: {
+        authorization: "Bearer token",
+        host: "wf-api.wealthfactory.test",
+        referer: "https://wf-api.wealthfactory.test/board?workflowId=wf_connect_first_workflow",
+        "x-forwarded-proto": "https"
+      },
+      query: { workflowId: "wf_connect_first_workflow" },
+      bodyByteLength: 0,
+      ip: "203.0.113.7"
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toBe(JSON.stringify({ ok: true }));
+  });
+
   it("rejects oversized chunked request bodies based on bytes actually read", async () => {
     const handler = vi.fn();
     const request = createRequest({

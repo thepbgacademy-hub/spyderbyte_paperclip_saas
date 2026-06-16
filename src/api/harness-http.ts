@@ -1,6 +1,6 @@
 import type { DashboardHttpRequest, DashboardHttpResponse } from "./dashboard-http.js";
 import { ApiAuthError } from "./dashboard-api.js";
-import { assertAllowedOrigin, createSecurityHeaders, validateRequestBodySize } from "../security/cors.js";
+import { assertAllowedBrowserOrigin, createSecurityHeaders, validateRequestBodySize } from "../security/cors.js";
 import {
   type HarnessAttentionResolutionCommand,
   type HarnessAttentionReviewDecision,
@@ -174,7 +174,9 @@ export function createHarnessHttpHandler(options: {
     const securityHeaders = createSecurityHeaders();
     let corsHeaders: Record<string, string>;
     try {
-      corsHeaders = assertAllowedOrigin(request.headers.origin, options.allowedOrigins);
+      corsHeaders = assertAllowedBrowserOrigin(request.headers, options.allowedOrigins, {
+        allowSameOriginWithoutOrigin: request.method !== "OPTIONS"
+      });
       validateRequestBodySize(request.bodyByteLength, maxBodyBytes);
     } catch {
       return { status: 403, headers: securityHeaders, body: { code: "request_rejected" } };

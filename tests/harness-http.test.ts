@@ -36,6 +36,86 @@ describe("harness HTTP boundary", () => {
     expect(listBoardState).not.toHaveBeenCalled();
   });
 
+  it("allows same-origin browser board reads without an explicit origin header", async () => {
+    const listBoardState = vi.fn().mockResolvedValue({
+      runId: "run_123",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      columns: [],
+      cards: [],
+      pendingApprovals: [],
+      followThroughItems: [],
+      recentDecisions: []
+    });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState,
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      decideProposal: vi.fn(),
+      completeRun: vi.fn(),
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
+    });
+
+    const response = await handler({
+      method: "GET",
+      path: "/api/harness/board",
+      headers: {
+        authorization: "Bearer valid",
+        "sec-fetch-site": "same-origin"
+      },
+      bodyByteLength: 0,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers["access-control-allow-origin"]).toBeUndefined();
+    expect(listBoardState).toHaveBeenCalledWith({
+      authorization: "Bearer valid"
+    });
+  });
+
+  it("allows same-origin browser board reads when the referer proves the request stayed on the API origin", async () => {
+    const listBoardState = vi.fn().mockResolvedValue({
+      runId: "run_123",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      columns: [],
+      cards: [],
+      pendingApprovals: [],
+      followThroughItems: [],
+      recentDecisions: []
+    });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState,
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      decideProposal: vi.fn(),
+      completeRun: vi.fn(),
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
+    });
+
+    const response = await handler({
+      method: "GET",
+      path: "/api/harness/board",
+      headers: {
+        authorization: "Bearer valid",
+        referer: "https://wf-api.wealthfactory.test/board?workflowId=wf_connect_first_workflow",
+        host: "wf-api.wealthfactory.test",
+        "x-forwarded-proto": "https"
+      },
+      bodyByteLength: 0,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers["access-control-allow-origin"]).toBeUndefined();
+    expect(listBoardState).toHaveBeenCalledWith({
+      authorization: "Bearer valid"
+    });
+  });
+
   it("returns high-level board data without backend chatter fields", async () => {
     const listBoardState = vi.fn().mockResolvedValue({
       runId: "run_123",

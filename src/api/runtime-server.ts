@@ -965,7 +965,11 @@ function normalizeHeaders(request: IncomingMessage): Record<string, string | und
   return {
     authorization: readHeader(request, "authorization"),
     cookie: readHeader(request, "cookie"),
-    origin: readHeader(request, "origin")
+    host: readHeader(request, "host"),
+    origin: readHeader(request, "origin"),
+    referer: readHeader(request, "referer"),
+    "sec-fetch-site": readHeader(request, "sec-fetch-site"),
+    "x-forwarded-proto": readHeader(request, "x-forwarded-proto")
   };
 }
 
