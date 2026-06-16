@@ -126,7 +126,7 @@ select runs.tenant_id,
        runs.created_by_user_id,
        reservations.idempotency_key,
        'pending',
-       reservations.reserved_at,
+       reservations.created_at,
        now()
 from wfpc.workflow_runs runs
 join wfpc.workflow_run_reservations reservations
