@@ -87,14 +87,14 @@ try {
       exists (select 1 from pg_constraint where conname = 'workflow_queue_outbox_tenant_id_run_id_key' and conrelid = to_regclass('wfpc.workflow_queue_outbox')) as has_run_unique,
       exists (select 1 from pg_constraint where conname = 'workflow_queue_outbox_tenant_id_workflow_template_id_idempo_key' and conrelid = to_regclass('wfpc.workflow_queue_outbox')) as has_idempotency_unique,
       exists (select 1 from pg_constraint where conrelid = to_regclass('wfpc.workflow_queue_outbox') and contype = 'p') as has_primary_key,
-      exists (select 1 from pg_constraint where conrelid = to_regclass('wfpc.workflow_queue_outbox') and pg_get_constraintdef(oid) like '%wfpc.workflow_runs%') as has_run_fk,
-      exists (select 1 from pg_constraint where conrelid = to_regclass('wfpc.workflow_queue_outbox') and pg_get_constraintdef(oid) like '%workflow_template_id, tenant_id%') as has_workflow_template_fk,
+      exists (select 1 from pg_constraint where conrelid = to_regclass('wfpc.workflow_queue_outbox') and lower(pg_get_constraintdef(oid)) like '%wfpc.workflow_runs%') as has_run_fk,
+      exists (select 1 from pg_constraint where conrelid = to_regclass('wfpc.workflow_queue_outbox') and lower(pg_get_constraintdef(oid)) like '%workflow_template_id, tenant_id%') as has_workflow_template_fk,
       exists (
         select 1
         from pg_constraint
         where conname = 'workflow_queue_outbox_status_check'
           and conrelid = to_regclass('wfpc.workflow_queue_outbox')
-          and pg_get_constraintdef(oid) like '%claimed%'
+          and lower(pg_get_constraintdef(oid)) like '%claimed%'
       ) as has_status_check,
       exists (select 1 from pg_constraint where conname = 'workflow_queue_outbox_attempts_check' and conrelid = to_regclass('wfpc.workflow_queue_outbox')) as has_attempts_check,
       exists (select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'wfpc' and c.relname = 'workflow_queue_outbox' and c.relrowsecurity) as has_rls`
@@ -112,7 +112,7 @@ try {
           from pg_constraint
           where conname = 'workflow_runs_bound_secret_reference_id_fkey'
             and conrelid = to_regclass('wfpc.workflow_runs')
-            and pg_get_constraintdef(oid) like '%references wfpc.secret_references(id)%'
+            and lower(pg_get_constraintdef(oid)) like '%references wfpc.secret_references(id)%'
         ) as has_secret_reference_fk,
         exists (select 1 from information_schema.columns where table_schema = 'wfpc' and table_name = 'workflow_runs' and column_name = 'bound_provider_context' and is_nullable = 'NO') as has_provider_context,
         exists (
@@ -120,24 +120,24 @@ try {
           from pg_constraint
           where conname = 'workflow_runs_bound_provider_context_object_check'
             and conrelid = to_regclass('wfpc.workflow_runs')
-            and pg_get_constraintdef(oid) like '%jsonb_typeof(bound_provider_context) = ''array''%'
+            and lower(pg_get_constraintdef(oid)) like '%jsonb_typeof(bound_provider_context) = ''array''%'
         ) as has_context_check,
         exists (
           select 1
           from pg_constraint
           where conname = 'workflow_runs_bound_provider_context_single_entry_check'
             and conrelid = to_regclass('wfpc.workflow_runs')
-            and pg_get_constraintdef(oid) like '%jsonb_array_length(bound_provider_context) <= 1%'
+            and lower(pg_get_constraintdef(oid)) like '%jsonb_array_length(bound_provider_context) <= 1%'
         ) as has_single_entry_check,
         exists (
           select 1
           from pg_constraint
           where conname = 'workflow_runs_bound_provider_context_binding_check'
             and conrelid = to_regclass('wfpc.workflow_runs')
-            and pg_get_constraintdef(oid) like '%bound_secret_reference_id is null%'
-            and pg_get_constraintdef(oid) like '%jsonb_array_length(bound_provider_context) = 0%'
-            and pg_get_constraintdef(oid) like '%bound_secret_reference_id is not null%'
-            and pg_get_constraintdef(oid) like '%jsonb_array_length(bound_provider_context) = 1%'
+            and lower(pg_get_constraintdef(oid)) like '%bound_secret_reference_id is null%'
+            and lower(pg_get_constraintdef(oid)) like '%jsonb_array_length(bound_provider_context) = 0%'
+            and lower(pg_get_constraintdef(oid)) like '%bound_secret_reference_id is not null%'
+            and lower(pg_get_constraintdef(oid)) like '%jsonb_array_length(bound_provider_context) = 1%'
         ) as has_binding_shape_check,
         exists (select 1 from pg_indexes where schemaname = 'wfpc' and indexname = 'workflow_runs_bound_secret_reference_idx') as has_secret_reference_idx`
     );
@@ -271,7 +271,7 @@ try {
         from pg_constraint
         where conname = 'paperclip_secret_bindings_binding_status_check'
           and conrelid = to_regclass('wfpc.paperclip_secret_bindings')
-          and pg_get_constraintdef(oid) like '%synced%'
+          and lower(pg_get_constraintdef(oid)) like '%synced%'
       ) as has_synced_status`
   );
   const paperclipSecretBindingStatusReady = Object.values(paperclipSecretBindingStatusExisting.rows[0] ?? {}).every(Boolean);
@@ -296,8 +296,8 @@ try {
         from pg_constraint
         where conname = 'harness_subcard_proposals_status_check'
           and conrelid = to_regclass('wfpc.harness_subcard_proposals')
-          and pg_get_constraintdef(oid) like '%deferred%'
-          and pg_get_constraintdef(oid) like '%denied%'
+          and lower(pg_get_constraintdef(oid)) like '%deferred%'
+          and lower(pg_get_constraintdef(oid)) like '%denied%'
       ) as has_wide_status_check,
       exists (
         select 1
@@ -318,9 +318,9 @@ try {
         from pg_constraint
         where conname = 'harness_subcard_proposals_resolution_check'
           and conrelid = to_regclass('wfpc.harness_subcard_proposals')
-          and pg_get_constraintdef(oid) like '%create_lane%'
-          and pg_get_constraintdef(oid) like '%update_existing_lane%'
-          and pg_get_constraintdef(oid) like '%handoff_existing_lane%'
+          and lower(pg_get_constraintdef(oid)) like '%create_lane%'
+          and lower(pg_get_constraintdef(oid)) like '%update_existing_lane%'
+          and lower(pg_get_constraintdef(oid)) like '%handoff_existing_lane%'
       ) as has_resolution_check,
       exists (
         select 1
@@ -363,30 +363,30 @@ try {
           from pg_constraint
           where conname like '%resolution%'
             and conrelid = to_regclass('wfpc.harness_board_decisions')
-            and pg_get_constraintdef(oid) like '%create_lane%'
-            and pg_get_constraintdef(oid) like '%update_existing_lane%'
-            and pg_get_constraintdef(oid) like '%handoff_existing_lane%'
+            and lower(pg_get_constraintdef(oid)) like '%create_lane%'
+            and lower(pg_get_constraintdef(oid)) like '%update_existing_lane%'
+            and lower(pg_get_constraintdef(oid)) like '%handoff_existing_lane%'
         ) as has_resolution_check,
         exists (
           select 1
           from pg_constraint
           where conname like '%decision_kind%'
             and conrelid = to_regclass('wfpc.harness_board_decisions')
-            and pg_get_constraintdef(oid) like '%proposal_denied%'
-            and pg_get_constraintdef(oid) like '%run_completed%'
+            and lower(pg_get_constraintdef(oid)) like '%proposal_denied%'
+            and lower(pg_get_constraintdef(oid)) like '%run_completed%'
         ) as has_kind_check,
         exists (
           select 1
           from pg_constraint
           where conrelid = to_regclass('wfpc.harness_board_decisions')
-            and pg_get_constraintdef(oid) like '%references wfpc.harness_subcard_proposals(id)%'
+            and lower(pg_get_constraintdef(oid)) like '%references wfpc.harness_subcard_proposals(id)%'
         ) as has_proposal_fk,
         exists (
           select 1
           from pg_constraint
           where conrelid = to_regclass('wfpc.harness_board_decisions')
-            and pg_get_constraintdef(oid) like '%target_card_id%'
-            and pg_get_constraintdef(oid) like '%references wfpc.harness_cards(id)%'
+            and lower(pg_get_constraintdef(oid)) like '%target_card_id%'
+            and lower(pg_get_constraintdef(oid)) like '%references wfpc.harness_cards(id)%'
         ) as has_target_card_fk,
         exists (
           select 1
@@ -440,12 +440,12 @@ try {
           from pg_constraint
           where conname = 'harness_board_decisions_policy_reason_check'
             and conrelid = to_regclass('wfpc.harness_board_decisions')
-            and pg_get_constraintdef(oid) like '%created_new_lane%'
-            and pg_get_constraintdef(oid) like '%reused_existing_lane%'
-            and pg_get_constraintdef(oid) like '%deliverable_owner_conflict%'
-            and pg_get_constraintdef(oid) like '%lane_cap%'
-            and pg_get_constraintdef(oid) like '%scope_guardrail%'
-            and pg_get_constraintdef(oid) like '%completed_lanes_only%'
+            and lower(pg_get_constraintdef(oid)) like '%created_new_lane%'
+            and lower(pg_get_constraintdef(oid)) like '%reused_existing_lane%'
+            and lower(pg_get_constraintdef(oid)) like '%deliverable_owner_conflict%'
+            and lower(pg_get_constraintdef(oid)) like '%lane_cap%'
+            and lower(pg_get_constraintdef(oid)) like '%scope_guardrail%'
+            and lower(pg_get_constraintdef(oid)) like '%completed_lanes_only%'
         ) as has_policy_reason_check`
     );
   let harnessBoardMemoryExisting = await queryHarnessBoardMemoryReady();
@@ -465,14 +465,14 @@ try {
         from pg_constraint
         where conname = 'harness_subcard_proposals_resolution_check'
           and conrelid = to_regclass('wfpc.harness_subcard_proposals')
-          and pg_get_constraintdef(oid) like '%handoff_existing_lane%'
+          and lower(pg_get_constraintdef(oid)) like '%handoff_existing_lane%'
       ) as has_proposal_handoff_resolution,
       exists (
         select 1
         from pg_constraint
         where conname like '%resolution%'
           and conrelid = to_regclass('wfpc.harness_board_decisions')
-          and pg_get_constraintdef(oid) like '%handoff_existing_lane%'
+          and lower(pg_get_constraintdef(oid)) like '%handoff_existing_lane%'
       ) as has_decision_handoff_resolution`
   );
   const harnessLaneHandoffReady = Object.values(harnessLaneHandoffExisting.rows[0] ?? {}).every(Boolean);
@@ -521,17 +521,17 @@ try {
           from pg_constraint
           where conrelid = to_regclass('wfpc.harness_card_continuity')
             and conname = 'harness_card_continuity_source_check'
-            and pg_get_constraintdef(oid) like '%state_transition%'
-            and pg_get_constraintdef(oid) like '%resume_override%'
-            and pg_get_constraintdef(oid) like '%proposal_absorbed%'
-            and pg_get_constraintdef(oid) like '%lane_handoff%'
-            and pg_get_constraintdef(oid) like '%result_recorded%'
+            and lower(pg_get_constraintdef(oid)) like '%state_transition%'
+            and lower(pg_get_constraintdef(oid)) like '%resume_override%'
+            and lower(pg_get_constraintdef(oid)) like '%proposal_absorbed%'
+            and lower(pg_get_constraintdef(oid)) like '%lane_handoff%'
+            and lower(pg_get_constraintdef(oid)) like '%result_recorded%'
         ) as has_continuity_source_check,
         exists (
           select 1
           from pg_constraint
           where conrelid = to_regclass('wfpc.harness_card_continuity')
-            and pg_get_constraintdef(oid) like '%jsonb_typeof(absorbed_work_items)%'
+            and lower(pg_get_constraintdef(oid)) like '%jsonb_typeof(absorbed_work_items)%'
         ) as has_absorbed_work_items_check,
         exists (
           select 1
@@ -585,13 +585,13 @@ try {
           select 1
           from pg_constraint
           where conrelid = to_regclass('wfpc.harness_export_deliveries')
-            and pg_get_constraintdef(oid) like '%jsonb_typeof(placement_manifest)%'
+            and lower(pg_get_constraintdef(oid)) like '%jsonb_typeof(placement_manifest)%'
         ) as has_placement_manifest_check,
         exists (
           select 1
           from pg_constraint
           where conrelid = to_regclass('wfpc.harness_export_deliveries')
-            and pg_get_constraintdef(oid) like '%jsonb_typeof(files)%'
+            and lower(pg_get_constraintdef(oid)) like '%jsonb_typeof(files)%'
         ) as has_files_check,
         exists (
           select 1
@@ -673,13 +673,13 @@ try {
           select 1
           from pg_constraint
           where conrelid = to_regclass('wfpc.harness_export_deliveries')
-            and pg_get_constraintdef(oid) like '%delivery_failed%'
+            and lower(pg_get_constraintdef(oid)) like '%delivery_failed%'
         ) as has_status_widening,
         exists (
           select 1
           from pg_constraint
           where conrelid = to_regclass('wfpc.harness_export_deliveries')
-            and pg_get_constraintdef(oid) like '%jsonb_typeof(delivery_receipt)%'
+            and lower(pg_get_constraintdef(oid)) like '%jsonb_typeof(delivery_receipt)%'
         ) as has_delivery_receipt_check`
     );
   let harnessExportDeliveryResultsExisting = await queryHarnessExportDeliveryResultsReady();
@@ -699,13 +699,13 @@ try {
           select 1
           from pg_constraint
           where conrelid = to_regclass('wfpc.harness_export_deliveries')
-            and pg_get_constraintdef(oid) like '%package_bundle_export%'
+            and lower(pg_get_constraintdef(oid)) like '%package_bundle_export%'
         ) as has_package_bundle_candidate,
         exists (
           select 1
           from pg_constraint
           where conrelid = to_regclass('wfpc.harness_export_deliveries')
-            and pg_get_constraintdef(oid) like '%package_deliverable_record%'
+            and lower(pg_get_constraintdef(oid)) like '%package_deliverable_record%'
         ) as has_package_bundle_record_target`
     );
   let harnessExportDeliveryPackageBundleExisting = await queryHarnessExportDeliveryPackageBundleReady();
@@ -729,7 +729,7 @@ try {
           select 1
           from pg_constraint
           where conrelid = to_regclass('wfpc.harness_export_deliveries')
-            and pg_get_constraintdef(oid) like '%delivery_in_progress%'
+            and lower(pg_get_constraintdef(oid)) like '%delivery_in_progress%'
         ) as has_delivery_in_progress_status`
     );
   let harnessExportDeliveryClaimsExisting = await queryHarnessExportDeliveryClaimsReady();
@@ -800,7 +800,7 @@ try {
           select 1
           from pg_constraint
           where conrelid = to_regclass('wfpc.harness_completion_package_snapshots')
-            and pg_get_constraintdef(oid) like '%jsonb_typeof(snapshot_payload) = ''object''%'
+            and lower(pg_get_constraintdef(oid)) like '%jsonb_typeof(snapshot_payload) = ''object''%'
         ) as has_completion_package_snapshot_check,
         exists (
           select 1
@@ -853,7 +853,7 @@ try {
           select 1
           from pg_constraint
           where conrelid = to_regclass('wfpc.harness_governance_history_snapshots')
-            and pg_get_constraintdef(oid) like '%jsonb_typeof(snapshot_payload) = ''object''%'
+            and lower(pg_get_constraintdef(oid)) like '%jsonb_typeof(snapshot_payload) = ''object''%'
         ) as has_governance_history_snapshot_check,
         exists (
           select 1
