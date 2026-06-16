@@ -120,6 +120,8 @@ export function createSupabaseRepositories(client: QueryClient) {
       const result = await client.query(
         `select installs.id
          from wfpc.tenant_package_installs installs
+         join wfpc.wealth_factory_packages packages
+           on packages.id = installs.package_id
          join wfpc.tenant_package_purchases purchases
            on purchases.tenant_id = installs.tenant_id
           and purchases.package_id = installs.package_id
@@ -127,7 +129,7 @@ export function createSupabaseRepositories(client: QueryClient) {
           and purchases.starts_at <= now()
           and (purchases.ends_at is null or purchases.ends_at > now())
          where installs.tenant_id = $1
-           and installs.package_id = $2
+           and packages.package_key = $2
            and installs.status = 'active'
          limit 1`,
         [input.tenantId, input.packageId]
@@ -175,8 +177,10 @@ export function createSupabaseRepositories(client: QueryClient) {
 
     async listActiveInstalledPackageIds(input: DashboardScope) {
       const result = await client.query(
-        `select distinct installs.package_id
+        `select distinct packages.package_key
          from wfpc.tenant_package_installs installs
+         join wfpc.wealth_factory_packages packages
+           on packages.id = installs.package_id
          join wfpc.tenant_package_purchases purchases
            on purchases.tenant_id = installs.tenant_id
           and purchases.package_id = installs.package_id
@@ -185,12 +189,12 @@ export function createSupabaseRepositories(client: QueryClient) {
           and (purchases.ends_at is null or purchases.ends_at > now())
          where installs.tenant_id = $1
            and installs.status = 'active'
-         order by installs.package_id`,
+         order by packages.package_key`,
         [input.tenantId]
       );
 
       return result.rows
-        .map((row) => readOptionalTrimmedString(asRecord(row).package_id))
+        .map((row) => readOptionalTrimmedString(asRecord(row).package_key))
         .filter((value): value is string => value !== undefined);
     },
 

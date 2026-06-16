@@ -15,9 +15,9 @@ function createQuery(rowsBySql: Record<string, unknown[]>) {
 describe("Supabase wfpc repositories", () => {
   it("maps dashboard repositories from wfpc schema without exposing secret handles", async () => {
     const query = createQuery({
-      "from wfpc.workflow_templates": [{ id: "wf-social-calendar", name: "Wealth Factory Social Calendar", provider_kind: "openai_api", enabled: true }],
+      "from wfpc.workflow_templates": [{ id: "wf-connect-first", name: "Connect First Workflow", provider_kind: "openai_api", enabled: true }],
       "from wfpc.paperclip_company_mappings": [{ paperclip_company_id: "pc-company-1", paperclip_issue_agent_id: "pc-agent-1" }],
-      "from wfpc.tenant_package_installs": [{ id: "pkg-social", name: "Social Media Agency", kind: "industry", status: "active" }],
+      "from wfpc.tenant_package_installs": [{ id: "pkg-bib-connect", name: "Connect First", kind: "industry", status: "active" }],
       "from wfpc.artifact_metadata": [
         { id: "artifact-1", filename: "post.png", artifact_type: "image", expires_at: "2026-05-11T00:00:00.000Z" }
       ],
@@ -53,14 +53,14 @@ describe("Supabase wfpc repositories", () => {
     await expect(repositories.requireTenantMember({ tenantId: "tenant-1", userId: "user-1" })).resolves.toBeUndefined();
     await expect(repositories.listWorkflows({ tenantId: "tenant-1" })).resolves.toEqual([
       {
-        id: "wf-social-calendar",
-        name: "Wealth Factory Social Calendar",
+        id: "wf-connect-first",
+        name: "Connect First Workflow",
         providerKind: "openai_api",
         enabled: true
       }
     ]);
     await expect(repositories.listPackages({ tenantId: "tenant-1" })).resolves.toEqual([
-      { id: "pkg-social", name: "Social Media Agency", kind: "industry", status: "active" }
+      { id: "pkg-bib-connect", name: "Connect First", kind: "industry", status: "active" }
     ]);
     await expect(repositories.listArtifacts({ tenantId: "tenant-1" })).resolves.toEqual([
       { id: "artifact-1", filename: "post.png", artifactType: "image", expiresAt: "2026-05-11T00:00:00.000Z" }
@@ -254,6 +254,42 @@ describe("Supabase wfpc repositories", () => {
     await expect(repositories.requireTenantMember({ tenantId: "tenant-2", userId: "user-1" })).rejects.toThrow(
       "Tenant membership is required"
     );
+  });
+
+  it("requires active package installs by public package key instead of raw package uuid identity", async () => {
+    const query = createQuery({
+      "from wfpc.tenant_package_installs installs": [{ id: "install-1" }]
+    });
+    const repositories = createSupabaseRepositories({ query });
+
+    await expect(
+      repositories.requireActivePackageInstall({
+        tenantId: "tenant-1",
+        packageId: "pkg_bib_connect"
+      })
+    ).resolves.toBeUndefined();
+
+    expect(String(query.mock.calls[0]?.[0])).toMatch(/join wfpc\.wealth_factory_packages packages\s+on packages\.id = installs\.package_id/i);
+    expect(String(query.mock.calls[0]?.[0])).toMatch(/packages\.package_key = \$2/i);
+    expect(query.mock.calls[0]?.[1]).toEqual(["tenant-1", "pkg_bib_connect"]);
+  });
+
+  it("lists active installed package public keys for overlay registry resolution", async () => {
+    const query = createQuery({
+      "from wfpc.tenant_package_installs installs": [
+        { package_key: "pkg-example-audit" },
+        { package_key: "pkg_bib_connect" }
+      ]
+    });
+    const repositories = createSupabaseRepositories({ query });
+
+    await expect(repositories.listActiveInstalledPackageIds({ tenantId: "tenant-1" })).resolves.toEqual([
+      "pkg-example-audit",
+      "pkg_bib_connect"
+    ]);
+
+    expect(String(query.mock.calls[0]?.[0])).toMatch(/join wfpc\.wealth_factory_packages packages\s+on packages\.id = installs\.package_id/i);
+    expect(String(query.mock.calls[0]?.[0])).toMatch(/select distinct packages\.package_key/i);
   });
 
   it("persists provider credential references without raw secret values", async () => {
