@@ -22,6 +22,8 @@ describe("workflow queue outbox migration", () => {
     expect(migration).toMatch(/insert into wfpc\.workflow_queue_outbox[\s\S]+from wfpc\.workflow_runs runs[\s\S]+join wfpc\.workflow_run_reservations reservations/i);
     expect(migration).toMatch(/reservations\.created_at/i);
     expect(migration).not.toMatch(/reservations\.reserved_at/i);
+    expect(migration).toMatch(/public_workflow_id/i);
+    expect(migration).toMatch(/workflow_identity_kind/i);
     expect(migration).toMatch(/unique \(tenant_id, run_id\)/i);
     expect(migration).toMatch(/unique \(tenant_id, workflow_template_id, idempotency_key\)/i);
   });

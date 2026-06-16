@@ -118,22 +118,62 @@ where outbox.created_by_user_id is null
   and runs.id = outbox.run_id
   and runs.tenant_id = outbox.tenant_id;
 
-insert into wfpc.workflow_queue_outbox
-  (tenant_id, run_id, workflow_template_id, created_by_user_id, idempotency_key, status, created_at, updated_at)
-select runs.tenant_id,
-       runs.id,
-       runs.workflow_template_id,
-       runs.created_by_user_id,
-       reservations.idempotency_key,
-       'pending',
-       reservations.created_at,
-       now()
-from wfpc.workflow_runs runs
-join wfpc.workflow_run_reservations reservations
-  on reservations.tenant_id = runs.tenant_id
- and reservations.run_id = runs.id
-where runs.status = 'queued'
-on conflict (tenant_id, run_id) do nothing;
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'wfpc'
+      and table_name = 'workflow_queue_outbox'
+      and column_name = 'public_workflow_id'
+  ) and exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'wfpc'
+      and table_name = 'workflow_queue_outbox'
+      and column_name = 'workflow_identity_kind'
+  ) then
+    execute $migration$
+      insert into wfpc.workflow_queue_outbox
+        (tenant_id, run_id, workflow_template_id, public_workflow_id, workflow_identity_kind, created_by_user_id, idempotency_key, status, created_at, updated_at)
+      select runs.tenant_id,
+             runs.id,
+             runs.workflow_template_id,
+             coalesce(runs.workflow_template_id::text, reservations.workflow_template_id::text),
+             'tenant_template',
+             runs.created_by_user_id,
+             reservations.idempotency_key,
+             'pending',
+             reservations.created_at,
+             now()
+      from wfpc.workflow_runs runs
+      join wfpc.workflow_run_reservations reservations
+        on reservations.tenant_id = runs.tenant_id
+       and reservations.run_id = runs.id
+      where runs.status = 'queued'
+      on conflict (tenant_id, run_id) do nothing
+    $migration$;
+  else
+    execute $migration$
+      insert into wfpc.workflow_queue_outbox
+        (tenant_id, run_id, workflow_template_id, created_by_user_id, idempotency_key, status, created_at, updated_at)
+      select runs.tenant_id,
+             runs.id,
+             runs.workflow_template_id,
+             runs.created_by_user_id,
+             reservations.idempotency_key,
+             'pending',
+             reservations.created_at,
+             now()
+      from wfpc.workflow_runs runs
+      join wfpc.workflow_run_reservations reservations
+        on reservations.tenant_id = runs.tenant_id
+       and reservations.run_id = runs.id
+      where runs.status = 'queued'
+      on conflict (tenant_id, run_id) do nothing
+    $migration$;
+  end if;
+end $$;
 
 do $$
 begin
