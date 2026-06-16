@@ -2,7 +2,7 @@ import type { RuntimeProviderExecutionBinding } from "../providers/runtime-provi
 import type { RuntimeProviderBinding } from "../providers/runtime-provider-resolution.js";
 import { RuntimeProviderResolutionError } from "../providers/runtime-provider-resolution.js";
 import type { ProviderExecutionMode } from "../providers/runtime-provider-fallback.js";
-import type { StartWorkflowRunInput } from "./run-service.js";
+import type { StartWorkflowRunInput } from "./run-input.js";
 
 export type DebugSharedProviderResolver = (input: StartWorkflowRunInput) => Promise<readonly RuntimeProviderExecutionBinding[]>;
 

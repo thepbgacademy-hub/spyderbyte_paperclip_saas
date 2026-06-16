@@ -1,6 +1,3 @@
-import { isPaperclipExecutionRequired } from "../harness/execution-selector.js";
-import { WF_HARNESS_ELIGIBLE_WORKFLOWS, WF_NATIVE_DEFAULT_WORKFLOWS } from "../wealthfactory/workflow-registry.js";
-
 export type AppEnv = {
   nodeEnv: "development" | "test" | "production";
   supabaseUrl: string;
@@ -63,19 +60,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   const harnessEnabledWorkflowIds = parseCommaSeparatedValues(source.WF_HARNESS_ENABLED_WORKFLOW_IDS);
   const nativeExecutorEnabledWorkflowIds = parseCommaSeparatedValues(source.WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS);
   const nativeOpenAIModel = source.WF_NATIVE_OPENAI_MODEL?.trim() || "gpt-4.1-mini";
-  const configuredWorkflowIds = [...new Set([...harnessEnabledWorkflowIds, ...nativeExecutorEnabledWorkflowIds])];
-  const paperclipExecutionRequired = isPaperclipExecutionRequired({
-    configuredWorkflowIds,
-    harnessEnabledWorkflowIds,
-    nativeExecutorEnabledWorkflowIds,
-    harnessEligibleWorkflowIds: [...WF_HARNESS_ELIGIBLE_WORKFLOWS],
-    nativeDefaultWorkflowIds: [...WF_NATIVE_DEFAULT_WORKFLOWS]
-  });
   const missingKeys = [
     ...baseMissingKeys,
-    ...(paperclipExecutionRequired
-      ? (["PAPERCLIP_BASE_URL", "PAPERCLIP_SERVICE_TOKEN"] as const).filter((key) => !hasValue(source[key]))
-      : [])
   ];
 
   if (hasValue(source.SUPABASE_URL) && !isHttpUrl(source.SUPABASE_URL)) {
@@ -224,22 +210,8 @@ export function validatePaperclipLaunchEnv(source: NodeJS.ProcessEnv = process.e
 }
 
 export function requiresPaperclipLaunchEnv(source: NodeJS.ProcessEnv = process.env): boolean {
-  const harnessEnabledWorkflowIds = parseCommaSeparatedValues(source.WF_HARNESS_ENABLED_WORKFLOW_IDS);
-  const nativeExecutorEnabledWorkflowIds = parseCommaSeparatedValues(source.WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS);
-  const configuredWorkflowIds = [...new Set([...harnessEnabledWorkflowIds, ...nativeExecutorEnabledWorkflowIds])];
-  if (
-    isPaperclipExecutionRequired({
-      configuredWorkflowIds,
-      harnessEnabledWorkflowIds,
-      nativeExecutorEnabledWorkflowIds,
-      harnessEligibleWorkflowIds: [...WF_HARNESS_ELIGIBLE_WORKFLOWS],
-      nativeDefaultWorkflowIds: [...WF_NATIVE_DEFAULT_WORKFLOWS]
-    })
-  ) {
-    return true;
-  }
-
-  return hasValue(source.PAPERCLIP_BASE_URL) || hasValue(source.PAPERCLIP_SERVICE_TOKEN);
+  void source;
+  return false;
 }
 
 export function loadWorkflowQueueEnv(source: NodeJS.ProcessEnv = process.env): WorkflowQueueEnv {

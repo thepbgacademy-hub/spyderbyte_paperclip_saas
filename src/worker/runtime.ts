@@ -19,16 +19,7 @@ import { type HarnessPostOutcomeAction } from "../harness/post-outcome.js";
 import { createPostgresHarnessRepository } from "../harness/repository.js";
 import { listInstalledPackageDefinitions } from "../packages/package-catalog.js";
 import type { ProviderCapability } from "../packages/package-types.js";
-import { createPaperclipClient } from "../paperclip/client.js";
 import type { PaperclipRunStatus } from "../paperclip/types.js";
-import {
-  createPaperclipSecretAdminHttpClient,
-  createPaperclipSecretBindingRepository,
-  createPaperclipSecretSyncService,
-  toPaperclipEnvBindings,
-  toPaperclipSecretRefBinding
-} from "../paperclip/secret-sync.js";
-import { type ProviderKind } from "../providers/provider-types.js";
 import { createRuntimeProviderExecutionContextResolver } from "../providers/runtime-provider-execution.js";
 import { createDebugSharedProviderFallbackResolver } from "../providers/runtime-provider-fallback.js";
 import { RuntimeProviderExecutionError, type RuntimeProviderExecutionBinding } from "../providers/runtime-provider-execution.js";
@@ -38,7 +29,6 @@ import { createEncryptedSecretVault } from "../secrets/encrypted-vault.js";
 import { createPostgresEncryptedVaultStore } from "../secrets/postgres-vault-store.js";
 import { createSecretService } from "../secrets/secret-service.js";
 import { createHarnessWorkflowRegistry } from "../wealthfactory/workflow-registry.js";
-import { processWorkflowJob } from "../workflows/worker.js";
 import { validateWorkflowQueuePayload } from "../workflows/queue.js";
 import { createAcidWorkflowStatusRecorder } from "../workflows/acid-status-recorder.js";
 import { createTenantExecutionGate } from "./tenant-execution-gate.js";
@@ -301,29 +291,9 @@ export function createWorkerRuntime(options: {
   const nativeExecutor = options.nativeExecutor ?? createDefaultNativeExecutor({
     openAIModel: options.env.nativeOpenAIModel
   });
-  const paperclipSecretBindings = createPaperclipSecretBindingRepository(queryClient);
-  const paperclipSecretSync =
-    options.env.paperclipBoardSessionToken && options.env.paperclipBaseUrl && options.env.paperclipLaunchMode === "issues"
-      ? createPaperclipSecretSyncService({
-          adminClient: createPaperclipSecretAdminHttpClient({
-            baseUrl: options.env.paperclipBoardOrigin ?? options.env.paperclipBaseUrl,
-            adminToken: options.env.paperclipBoardSessionToken,
-            ...(options.env.paperclipBoardOrigin
-              ? {
-                  origin: options.env.paperclipBoardOrigin,
-                  referer: `${options.env.paperclipBoardOrigin.replace(/\/+$/, "")}/`
-                }
-              : {})
-          }),
-          bindings: paperclipSecretBindings
-        })
-      : null;
   const audit = createDurableAuditSink(queryClient);
   const acidRepository = createAcidGuardRepository(transactionRunner);
   const recordWorkflowStatus = createAcidWorkflowStatusRecorder(acidRepository);
-  const companyIdToTenantId = new Map<string, string>();
-  const companyIdToIssueAgentId = new Map<string, string>();
-  const companyIdToServiceToken = new Map<string, string>();
   const vault = createEncryptedSecretVault({
     masterKey: options.env.vaultMasterKey,
     store: createPostgresEncryptedVaultStore(queryClient)
@@ -347,7 +317,6 @@ export function createWorkerRuntime(options: {
     ...(options.env.runtimeEnv.OPENAI_PROJECT_ID ? { projectId: options.env.runtimeEnv.OPENAI_PROJECT_ID } : {}),
     label: "Operator Debug Provider"
   });
-  const inFlightPaperclipSecretBindings = new Map<string, Promise<{ type: "secret_ref"; secretId: string; version: string | number }>>();
   const inFlightRuntimeOperations = new Set<Promise<unknown>>();
   let isClosing = false;
   let closingPromise: Promise<void> | null = null;
@@ -383,26 +352,34 @@ export function createWorkerRuntime(options: {
     return registryPromise;
   }
 
-  async function resolveHarnessWorkflowRegistryForRun(input: { tenantId: string; runId: string }) {
-    const workflowIdentity = await acidRepository.getWorkflowRunIdentity(input);
-    if (workflowIdentity?.workflowIdentityKind === "installed_package_overlay" && workflowIdentity.workflowPackageId) {
+  async function resolveHarnessWorkflowRegistryForRun(
+    input: { tenantId: string; runId: string },
+    workflowIdentity: Awaited<ReturnType<typeof acidRepository.getWorkflowRunIdentity>> | null = null
+  ) {
+    const resolvedWorkflowIdentity = workflowIdentity ?? await acidRepository.getWorkflowRunIdentity(input);
+    if (
+      resolvedWorkflowIdentity?.workflowIdentityKind === "installed_package_overlay"
+      && resolvedWorkflowIdentity.workflowPackageId
+    ) {
+      const snapshot = resolvedWorkflowIdentity.workflowDefinitionSnapshot;
       const registry = createHarnessWorkflowRegistry({
         harnessEnabledWorkflowIds: options.env.harnessEnabledWorkflowIds,
         nativeExecutorEnabledWorkflowIds: options.env.nativeExecutorEnabledWorkflowIds,
-        installedPackages: listInstalledPackageDefinitions({ installedPackageIds: [workflowIdentity.workflowPackageId] })
+        installedPackages: listInstalledPackageDefinitions({
+          installedPackageIds: [snapshot?.packageId ?? resolvedWorkflowIdentity.workflowPackageId]
+        })
       });
-      const snapshot = workflowIdentity.workflowDefinitionSnapshot;
       if (!snapshot) {
-        throw new Error(`Stored workflow definition snapshot missing for overlay workflow ${workflowIdentity.workflowId}`);
+        throw new Error(`Stored workflow definition snapshot missing for overlay workflow ${resolvedWorkflowIdentity.workflowId}`);
       }
-      const definition = registry.getDefinition(workflowIdentity.workflowId);
+      const definition = registry.getDefinition(resolvedWorkflowIdentity.workflowId);
       if (
         definition.packageId !== snapshot.packageId ||
         (definition.executionEngine ?? "paperclip") !== snapshot.executionEngine ||
         JSON.stringify([...definition.requiredCapabilities]) !== JSON.stringify([...snapshot.requiredCapabilities]) ||
         (definition.providerKind ?? null) !== (snapshot.providerKind ?? null)
       ) {
-        throw new Error(`Stored workflow definition snapshot no longer matches the current overlay catalog for ${workflowIdentity.workflowId}`);
+        throw new Error(`Stored workflow definition snapshot no longer matches the current overlay catalog for ${resolvedWorkflowIdentity.workflowId}`);
       }
       return registry;
     }
@@ -428,220 +405,6 @@ export function createWorkerRuntime(options: {
     return "drained";
   }
 
-  async function resolveExistingPaperclipSecretRefBinding(input: {
-    tenantId: string;
-    companyId: string;
-    agentId: string;
-    envKey: string;
-    secretRef: string;
-  }) {
-    const existing =
-      await paperclipSecretBindings.findActiveBySecretRef({
-        tenantId: input.tenantId,
-        paperclipCompanyId: input.companyId,
-        paperclipAgentId: input.agentId,
-        paperclipEnvKey: input.envKey,
-        secretRef: input.secretRef
-      })
-      ?? await paperclipSecretBindings.findActiveBySecretRef({
-        tenantId: input.tenantId,
-        paperclipCompanyId: input.companyId,
-        paperclipEnvKey: input.envKey,
-        secretRef: input.secretRef
-      });
-    if (!existing) {
-      return null;
-    }
-    if (!existing.paperclipSecretVersion) {
-      throw new Error(`Missing Paperclip secret version for ${input.envKey}`);
-    }
-    return toPaperclipSecretRefBinding({
-      paperclipSecretId: existing.paperclipSecretId,
-      paperclipSecretVersion: existing.paperclipSecretVersion
-    });
-  }
-
-  function createPaperclipBindingKey(input: {
-    tenantId: string;
-    companyId: string;
-    agentId: string;
-    envKey: string;
-    secretRef: string;
-  }) {
-    return `${input.tenantId}:${input.companyId}:${input.agentId}:${input.envKey}:${input.secretRef}`;
-  }
-
-  function isRetryablePaperclipSecretSyncError(error: unknown) {
-    if (!(error instanceof Error)) {
-      return false;
-    }
-    if (error.name === "PaperclipBoardSessionHttpError" && /\b(500|502|503|504)\b/.test(error.message)) {
-      return true;
-    }
-    return /Paperclip board-session request failed: (500|502|503|504)\b/.test(error.message);
-  }
-
-  async function resolveOrSyncPaperclipSecretRefBinding(input: {
-    tenantId: string;
-    companyId: string;
-    agentId: string;
-    envKey: string;
-    secretRef: string;
-    providerKind: ProviderKind;
-    secretValue: string;
-  }) {
-    const existingBinding = await resolveExistingPaperclipSecretRefBinding({
-      tenantId: input.tenantId,
-      companyId: input.companyId,
-      agentId: input.agentId,
-      envKey: input.envKey,
-      secretRef: input.secretRef
-    });
-    if (existingBinding) {
-      return existingBinding;
-    }
-    if (!paperclipSecretSync) {
-      throw new Error(`Missing Paperclip secret binding for ${input.providerKind}:${input.envKey}`);
-    }
-
-    const bindingKey = createPaperclipBindingKey(input);
-    const inFlightBinding = inFlightPaperclipSecretBindings.get(bindingKey);
-    if (inFlightBinding) {
-      return inFlightBinding;
-    }
-
-    const refreshPromise = (async () => {
-      const recoveredBeforeSync = await resolveExistingPaperclipSecretRefBinding({
-        tenantId: input.tenantId,
-        companyId: input.companyId,
-        agentId: input.agentId,
-        envKey: input.envKey,
-        secretRef: input.secretRef
-      });
-      if (recoveredBeforeSync) {
-        return recoveredBeforeSync;
-      }
-
-      const runningRunCount = await repositories.countRunningWorkflowRuns({ tenantId: input.tenantId });
-      if (runningRunCount > 1) {
-        throw new Error(
-          `Paperclip secret binding refresh deferred for ${input.providerKind}:${input.envKey} while another tenant run is still active`
-        );
-      }
-
-      for (let attempt = 1; attempt <= 3; attempt += 1) {
-        try {
-          const synced = await paperclipSecretSync.syncBinding({
-            tenantId: input.tenantId,
-            wealthFactorySecretReferenceId: await repositories.findSecretReferenceId({
-              tenantId: input.tenantId,
-              secretRef: input.secretRef
-            }),
-            paperclipCompanyId: input.companyId,
-            paperclipAgentId: input.agentId,
-            paperclipEnvKey: input.envKey,
-            providerKind: input.providerKind,
-            secretValue: input.secretValue,
-            paperclipSecretKey: input.envKey
-          });
-          return toPaperclipSecretRefBinding({
-            paperclipSecretId: synced.paperclipSecretId,
-            paperclipSecretVersion: synced.paperclipSecretVersion
-          });
-        } catch (error) {
-          const recoveredBinding = await resolveExistingPaperclipSecretRefBinding({
-            tenantId: input.tenantId,
-            companyId: input.companyId,
-            agentId: input.agentId,
-            envKey: input.envKey,
-            secretRef: input.secretRef
-          });
-          if (recoveredBinding) {
-            return recoveredBinding;
-          }
-          if (attempt >= 3 || !isRetryablePaperclipSecretSyncError(error)) {
-            throw error;
-          }
-        }
-      }
-
-      throw new Error(`Paperclip secret binding refresh exhausted retries for ${input.providerKind}:${input.envKey}`);
-    })();
-
-    const trackedBindingPromise = refreshPromise.finally(() => {
-      if (inFlightPaperclipSecretBindings.get(bindingKey) === trackedBindingPromise) {
-        inFlightPaperclipSecretBindings.delete(bindingKey);
-      }
-    });
-    inFlightPaperclipSecretBindings.set(bindingKey, trackedBindingPromise);
-    return trackedBindingPromise;
-  }
-
-  let paperclipClientCache: ReturnType<typeof createPaperclipClient> | null = null;
-  function getPaperclipClient() {
-    if (paperclipClientCache) {
-      return paperclipClientCache;
-    }
-    if (!options.env.paperclipBaseUrl || !options.env.paperclipServiceToken) {
-      throw new Error("Paperclip launch client is not configured for this runtime.");
-    }
-
-    paperclipClientCache = createPaperclipClient({
-      baseUrl: options.env.paperclipBaseUrl,
-      serviceToken: options.env.paperclipServiceToken,
-      launchMode: options.env.paperclipLaunchMode,
-      ...(options.env.paperclipLaunchMode === "issues"
-        ? {
-            issueLaunch: {
-              resolveServiceToken: async ({ companyId }) => {
-                const mappedToken = companyIdToServiceToken.get(companyId);
-                if (mappedToken) {
-                  return mappedToken;
-                }
-                return options.env.paperclipServiceToken as string;
-              },
-              resolveLaunchTarget: async ({ companyId }) => {
-                const mappedAgentId = companyIdToIssueAgentId.get(companyId) ?? options.env.paperclipIssueAgentId;
-                if (!mappedAgentId) {
-                  throw new Error(`Missing Paperclip issue agent mapping for company ${companyId}`);
-                }
-                return {
-                  agentId: mappedAgentId
-                };
-              },
-              syncProviderSecretRefs: async ({ companyId, agentId, providerContext }) => {
-                const tenantId = companyIdToTenantId.get(companyId) ?? "";
-                const adapterEnv: Record<string, { type: "secret_ref"; secretId: string; version: string | number }> = {};
-                for (const binding of providerContext) {
-                  for (const bindingTarget of toPaperclipEnvBindings(binding.providerKind as ProviderKind, binding.secretValues ?? {})) {
-                    if (!tenantId) {
-                      throw new Error(`Missing tenant context for Paperclip company ${companyId}`);
-                    }
-                    adapterEnv[bindingTarget.envKey] = await resolveOrSyncPaperclipSecretRefBinding({
-                      tenantId,
-                      companyId: companyId,
-                      agentId: agentId,
-                      envKey: bindingTarget.envKey,
-                      secretRef: binding.secretRef,
-                      providerKind: binding.providerKind as ProviderKind,
-                      secretValue: bindingTarget.secretValue
-                    });
-                  }
-                }
-                return {
-                  adapterConfig: {
-                    env: adapterEnv
-                  }
-                };
-              },
-              pollIntervalMs: options.env.paperclipIssuePollIntervalMs,
-              maxPollAttempts: options.env.paperclipIssueMaxPollAttempts
-            }
-          }
-        : {})
-    });
-    return paperclipClientCache;
-  }
   const executionGate = createTenantExecutionGate({
     maxConcurrentRuns: options.env.workerConcurrency,
     maxConcurrentRunsPerTenant: options.env.workerMaxActivePerTenant,
@@ -663,25 +426,70 @@ export function createWorkerRuntime(options: {
         throw new WorkerRuntimeClosingError();
       }
       const validatedPayload = validateWorkflowQueuePayload(payload);
-      const tenantHarnessWorkflowRegistry = await resolveHarnessWorkflowRegistryForRun({
+      const workflowIdentity = await acidRepository.getWorkflowRunIdentity({
         tenantId: validatedPayload.tenantId,
         runId: validatedPayload.runId
       });
+      const tenantHarnessWorkflowRegistry = await resolveHarnessWorkflowRegistryForRun({
+        tenantId: validatedPayload.tenantId,
+        runId: validatedPayload.runId
+      }, workflowIdentity);
+      if (
+        workflowIdentity?.workflowIdentityKind === "tenant_template"
+        && workflowIdentity.workflowTemplateId
+        && validatedPayload.workflowId !== workflowIdentity.workflowId
+        && validatedPayload.workflowId !== workflowIdentity.workflowTemplateId
+      ) {
+        throw new Error(
+          `Queued workflow id ${validatedPayload.workflowId} does not match durable tenant-template identity for run ${validatedPayload.runId}`
+        );
+      }
+      const routedWorkflowId =
+        workflowIdentity?.workflowId
+        && workflowIdentity.workflowIdentityKind === "tenant_template"
+        && workflowIdentity.workflowTemplateId === validatedPayload.workflowId
+        && workflowIdentity.workflowId !== validatedPayload.workflowId
+        && resolveWorkerExecutionEngine(workflowIdentity.workflowId, tenantHarnessWorkflowRegistry) === "wf_native_v1"
+          ? workflowIdentity.workflowId
+          : validatedPayload.workflowId;
+      const routedPayload =
+        routedWorkflowId === validatedPayload.workflowId
+          ? validatedPayload
+          : {
+              ...validatedPayload,
+              workflowId: routedWorkflowId
+            };
+      if (
+        workflowIdentity?.workflowId
+        && resolveWorkerExecutionEngine(workflowIdentity.workflowId, tenantHarnessWorkflowRegistry) === "paperclip"
+      ) {
+        throw new Error(
+          `Durable workflow identity ${workflowIdentity.workflowId} is not mapped to a supported native or harness execution engine`
+        );
+      }
       const workerExecutionEngine = resolveWorkerExecutionEngine(
-        validatedPayload.workflowId,
+        routedPayload.workflowId,
         tenantHarnessWorkflowRegistry
       );
+      if (
+        !workflowIdentity
+        && workerExecutionEngine === "paperclip"
+      ) {
+        throw new Error(
+          `Legacy Paperclip execution adapter has been retired for workflow id ${routedPayload.workflowId}`
+        );
+      }
 
       return executionGate.run({
         tenantId: validatedPayload.tenantId,
-        onStarted: (snapshot) => emitWorkerRunEvent("started", validatedPayload, snapshot, workerExecutionEngine),
-        onReleased: (snapshot) => emitWorkerRunEvent("released", validatedPayload, snapshot, workerExecutionEngine),
+        onStarted: (snapshot) => emitWorkerRunEvent("started", routedPayload, snapshot, workerExecutionEngine),
+        onReleased: (snapshot) => emitWorkerRunEvent("released", routedPayload, snapshot, workerExecutionEngine),
         operation: async () => {
           if (isClosing) {
             throw new WorkerRuntimeClosingError();
           }
-          const workflowDefinition = tenantHarnessWorkflowRegistry.isHarnessEligible(validatedPayload.workflowId)
-            ? tenantHarnessWorkflowRegistry.getDefinition(validatedPayload.workflowId)
+          const workflowDefinition = tenantHarnessWorkflowRegistry.isHarnessEligible(routedPayload.workflowId)
+            ? tenantHarnessWorkflowRegistry.getDefinition(routedPayload.workflowId)
             : null;
           const harnessExecutionEngine =
             workflowDefinition?.executionEngine === "wf_native_v1"
@@ -689,10 +497,13 @@ export function createWorkerRuntime(options: {
               : workflowDefinition?.executionEngine === "wf_harness_v1"
                 ? "wf_harness_v1"
                 : null;
+          if (!workflowDefinition || !harnessExecutionEngine) {
+            throw new Error(`Harness workflow definition is required for runtime execution: ${routedPayload.workflowId}`);
+          }
+
           return trackRuntimeOperation(
-            workflowDefinition && harnessExecutionEngine
-              ? processHarnessWorkflowJob({
-                payload: validatedPayload,
+            processHarnessWorkflowJob({
+                payload: routedPayload,
                 repository: harnessRepository,
                 runAtomically: (work) =>
                   transactionRunner.withTransaction((transaction) =>
@@ -772,54 +583,11 @@ export function createWorkerRuntime(options: {
                     options,
                     ...(options.workerInstanceId ? { workerInstanceId: options.workerInstanceId } : {}),
                     tenantId: validatedPayload.tenantId,
-                    workflowId: validatedPayload.workflowId,
+                    workflowId: routedPayload.workflowId,
                     dispatch,
                     ...(executionClaim ? { executionClaim } : {}),
                     executionEnvelope
                   });
-                }
-              })
-              : processWorkflowJob({
-                payload: validatedPayload,
-                paperclipClient: getPaperclipClient(),
-                tenantResolver: async (tenantId) => {
-                  const mapping = await repositories.resolvePaperclipCompanyMapping({ tenantId });
-                  companyIdToTenantId.set(mapping.paperclipCompanyId, tenantId);
-                  if (mapping.paperclipIssueAgentId) {
-                    companyIdToIssueAgentId.set(mapping.paperclipCompanyId, mapping.paperclipIssueAgentId);
-                  } else {
-                    companyIdToIssueAgentId.delete(mapping.paperclipCompanyId);
-                  }
-                  const mappedToken = options.env.paperclipServiceTokensByCompany[mapping.paperclipCompanyId];
-                  if (mappedToken) {
-                    companyIdToServiceToken.set(mapping.paperclipCompanyId, mappedToken);
-                  } else {
-                    companyIdToServiceToken.delete(mapping.paperclipCompanyId);
-                  }
-                  return {
-                    paperclipCompanyId: mapping.paperclipCompanyId,
-                    ...(mapping.paperclipIssueAgentId ? { paperclipIssueAgentId: mapping.paperclipIssueAgentId } : {})
-                  };
-                },
-                authorizeRunStart: async () => true,
-                isPaperclipEnabled: async () => true,
-                checkEntitlement: async () => ({ allowed: true }),
-                providerExecutionMode: options.env.providerExecutionMode,
-                loadBoundProviderContext: async ({ tenantId, runId }) => {
-                  const binding = await acidRepository.getBoundProviderLaunchBinding({ tenantId, runId });
-                  return binding ? ([binding] as readonly RuntimeProviderBinding[]) : null;
-                },
-                hydrateProviderContext: async ({ tenantId, runId, workflowId, providerBindings }) =>
-                  providerExecutionResolver.resolveForRun({
-                    tenantId,
-                    runId,
-                    workflowId,
-                    providerBindings
-                  }),
-                resolveDebugSharedProvider: async ({ requiredCapabilities = ["text_generation"] }) =>
-                  debugFallbackResolver.resolveForRun({ requiredCapabilities }),
-                recordStatus: async (status) => {
-                  await recordWorkflowStatus(status);
                 }
               })
           );

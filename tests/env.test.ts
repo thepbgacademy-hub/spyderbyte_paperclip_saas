@@ -98,7 +98,24 @@ describe("loadEnv", () => {
     ).toBe(false);
   });
 
-  it("keeps startup validation conservative for the example overlay workflow and still requires Paperclip launch env without a tenant-scoped runtime check", () => {
+  it("does not require the full Paperclip launch pair for native-only workflow sets just because a legacy base url is still present", () => {
+    expect(() =>
+      loadEnv({
+        ...validEnv,
+        PAPERCLIP_SERVICE_TOKEN: undefined,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_tax_strategy"
+      })
+    ).not.toThrow();
+    expect(
+      requiresPaperclipLaunchEnv({
+        ...validEnv,
+        PAPERCLIP_SERVICE_TOKEN: undefined,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_tax_strategy"
+      })
+    ).toBe(false);
+  });
+
+  it("allows the example overlay workflow family to start without Paperclip launch env when the catalog marks it native-capable", () => {
     expect(() =>
       loadEnv({
         ...validEnv,
@@ -107,7 +124,7 @@ describe("loadEnv", () => {
         WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-example-audit",
         WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf-example-audit"
       })
-    ).toThrow(EnvValidationError);
+    ).not.toThrow();
     expect(
       requiresPaperclipLaunchEnv({
         ...validEnv,
@@ -116,7 +133,23 @@ describe("loadEnv", () => {
         WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-example-audit",
         WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf-example-audit"
       })
-    ).toBe(true);
+    ).toBe(false);
+  });
+
+  it("does not require legacy Paperclip launch env for retired workflow-template ids", () => {
+    expect(
+      requiresPaperclipLaunchEnv({
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "workflow-legacy-1"
+      })
+    ).toBe(false);
+    expect(() =>
+      validatePaperclipLaunchEnv({
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "workflow-legacy-1",
+        PAPERCLIP_BASE_URL: "not-a-url",
+        WF_PAPERCLIP_LAUNCH_MODE: "issues",
+        WF_PAPERCLIP_BOARD_SESSION_TOKEN: "board-session-cookie"
+      })
+    ).not.toThrow();
   });
 
   it("throws with missing required keys", () => {
@@ -214,55 +247,13 @@ describe("loadEnv", () => {
     expect(() => loadEnv({ ...validEnv, WF_PAPERCLIP_LAUNCH_MODE: "issues" })).toThrow(/WF_PAPERCLIP_ISSUE_AGENT_ID/);
   });
 
-  it("validates the issue-launch env seam without requiring the full app env set", () => {
+  it("treats legacy issue-launch env validation as a retired no-op", () => {
     expect(() =>
       validatePaperclipLaunchEnv({
-        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_tax_strategy"
-      })
-    ).not.toThrow();
-
-    expect(() =>
-      validatePaperclipLaunchEnv({
-        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_social_campaign_builder",
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "workflow-legacy-1",
         PAPERCLIP_BASE_URL: "not-a-url",
-        PAPERCLIP_SERVICE_TOKEN: "paperclip-service-token",
         WF_PAPERCLIP_LAUNCH_MODE: "issues",
         WF_PAPERCLIP_BOARD_SESSION_TOKEN: "board-session-cookie",
-        WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-1"
-      })
-    ).toThrow(/PAPERCLIP_BASE_URL/);
-
-    expect(() =>
-      validatePaperclipLaunchEnv({
-        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_social_campaign_builder",
-        PAPERCLIP_BASE_URL: "https://paperclip-internal.spyderbyte.cloud/",
-        PAPERCLIP_SERVICE_TOKEN: "paperclip-service-token",
-        WF_PAPERCLIP_LAUNCH_MODE: "issues",
-        WF_PAPERCLIP_BOARD_SESSION_TOKEN: "board-session-cookie",
-        WF_PAPERCLIP_BOARD_ORIGIN: "ftp://paperclip-board.internal.local",
-        WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-1"
-      })
-    ).toThrow(/WF_PAPERCLIP_BOARD_ORIGIN/);
-
-    expect(() =>
-      validatePaperclipLaunchEnv({
-        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_social_campaign_builder",
-        PAPERCLIP_BASE_URL: "https://paperclip-internal.spyderbyte.cloud/",
-        PAPERCLIP_SERVICE_TOKEN: "paperclip-service-token",
-        WF_PAPERCLIP_LAUNCH_MODE: "issues",
-        WF_PAPERCLIP_BOARD_SESSION_TOKEN: "board-session-cookie",
-        WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-1"
-      })
-    ).toThrow(/WF_PAPERCLIP_BOARD_ORIGIN/);
-
-    expect(() =>
-      validatePaperclipLaunchEnv({
-        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_social_campaign_builder",
-        PAPERCLIP_BASE_URL: "https://paperclip-internal.spyderbyte.cloud/",
-        PAPERCLIP_SERVICE_TOKEN: "paperclip-service-token",
-        WF_PAPERCLIP_LAUNCH_MODE: "issues",
-        WF_PAPERCLIP_BOARD_SESSION_TOKEN: "board-session-cookie",
-        WF_PAPERCLIP_BOARD_ORIGIN: "https://paperclip-board.internal.local",
         WF_PAPERCLIP_ISSUE_AGENT_ID: "agent-1"
       })
     ).not.toThrow();
