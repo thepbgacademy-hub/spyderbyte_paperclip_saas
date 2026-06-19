@@ -26,6 +26,23 @@ export function shouldInspectQueueState({ runStatus, previousObservation }) {
   return runStatus === "queued" && !previousObservation?.observedFirstProgressAt;
 }
 
+export function applyQueuedRunIdentity({ request, queueResult }) {
+  if (!queueResult?.ok) {
+    return queueResult;
+  }
+
+  const queuedRunId = typeof queueResult?.result?.runId === "string"
+    ? queueResult.result.runId.trim()
+    : "";
+  if (!queuedRunId) {
+    return queueResult;
+  }
+
+  request.runId = queuedRunId;
+  request.idempotencyKey = `${request.tenantId}:${request.workflowId}:${queuedRunId}`;
+  return queueResult;
+}
+
 export function updateSuccessWindow({
   summaryOk,
   nowMs,
@@ -60,7 +77,8 @@ export function buildProofOutput({
   snapshots,
   queueSnapshots,
   observationDurationMs,
-  postSuccessObservationMs
+  postSuccessObservationMs,
+  additionalNotes = []
 }) {
   const base = {
     requestedMode: modeConfig.requestedMode,
@@ -69,7 +87,7 @@ export function buildProofOutput({
     snapshots,
     queueSnapshots,
     summary,
-    notes: modeConfig.captureNotes,
+    notes: [...modeConfig.captureNotes, ...additionalNotes],
     observationDurationMs,
     postSuccessObservationMs
   };

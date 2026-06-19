@@ -264,7 +264,7 @@ export function summarizePressureProof(input) {
     .filter((request) => !(snapshots.get(request.runId)?.observedFirstProgressAt))
     .map((request) => `${request.lane}:${request.runId}`);
   const incompleteDrains = requests
-    .filter((request) => !reachedDrainCheckpoint(snapshots.get(request.runId)))
+    .filter((request) => !reachedDrainCheckpoint(snapshots.get(request.runId), { allowStartedWithoutQueueState: true }))
     .map((request) => `${request.lane}:${request.runId}`);
 
   if (laneWithoutProgress.length > 0) {
@@ -551,14 +551,20 @@ function summarizeQueueHighWaterMarks(queueSnapshots) {
   };
 }
 
-function reachedDrainCheckpoint(snapshot) {
+function reachedDrainCheckpoint(snapshot, options = {}) {
   if (!snapshot) {
     return false;
   }
 
-  const runStatusReached = snapshot.runStatus === "running" || snapshot.runStatus === "completed";
+  const workerBackedCompletion = snapshot.queueState === "completed" && snapshot.observedFirstProgressAt !== null;
+  const runStatusReached = snapshot.runStatus === "running" || snapshot.runStatus === "completed" || workerBackedCompletion;
   const outboxReached = snapshot.outboxStatus === "enqueued";
-  const queueReached = snapshot.queueState === "active" || snapshot.queueState === "completed" || snapshot.queueReachable === false;
+  const allowStartedWithoutQueueState = options.allowStartedWithoutQueueState === true;
+  const queueReached =
+    snapshot.queueState === "active" ||
+    snapshot.queueState === "completed" ||
+    snapshot.queueReachable === false ||
+    (allowStartedWithoutQueueState && (snapshot.observedFirstStartedAt !== null || snapshot.observedCompletedAt !== null));
 
   return runStatusReached && outboxReached && queueReached;
 }

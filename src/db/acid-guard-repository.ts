@@ -1,5 +1,6 @@
 import type { ProviderCapability } from "../packages/package-types.js";
 import { listInstalledPackageDefinitions } from "../packages/package-catalog.js";
+import type { ProviderKind } from "../providers/provider-types.js";
 import type { QueryClient } from "./supabase-repositories.js";
 
 export type TransactionRunner = {
@@ -26,6 +27,13 @@ export type ReserveWorkflowRunInput = {
     requiredCapabilities: readonly ProviderCapability[];
     providerKind?: string;
   };
+  onReserved?: (input: {
+    transaction: QueryClient;
+    publicWorkflowId: string;
+    workflowPackageId: string;
+    providerKind: ProviderKind;
+    credentialLabel: string;
+  }) => Promise<void>;
 };
 
 export type ReserveWorkflowRunResult =
@@ -105,12 +113,36 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
         }
 
         const publicWorkflowId = input.workflowId ?? input.workflowTemplateId ?? "";
-        const workflowRow = input.workflowBinding
-          ? {
-              id: input.workflowTemplateId ?? null,
-              package_id: input.workflowBinding.packageId,
-              provider_kind: input.workflowBinding.providerKind
-            }
+        const workflowBinding = input.workflowBinding;
+        const workflowRow = workflowBinding
+          ? await (async () => {
+              const install = await transaction.query(
+                `select i.id, i.package_id
+                 from wfpc.tenant_package_installs i
+                 join wfpc.wealth_factory_packages packages
+                   on packages.id = i.package_id
+                 join wfpc.tenant_package_purchases p
+                   on p.tenant_id = i.tenant_id
+                  and p.package_id = i.package_id
+                 where i.tenant_id = $1
+                   and packages.package_key = $2
+                   and i.status = 'active'
+                   and p.status = 'active'
+                   and p.starts_at <= now()
+                   and (p.ends_at is null or p.ends_at > now())
+                 limit 1
+                 for update`,
+                [input.tenantId, workflowBinding.packageId]
+              );
+              if (install.rows.length === 0) {
+                return null;
+              }
+              return {
+                id: input.workflowTemplateId ?? null,
+                package_id: String(asRecord(install.rows[0]).package_id ?? ""),
+                provider_kind: workflowBinding.providerKind
+              };
+            })()
           : await (async () => {
               const workflowTemplateId = input.workflowTemplateId ?? input.workflowId;
               const workflow = await transaction.query(
@@ -129,24 +161,26 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
           return { reserved: false, reason: "entitlement_denied" };
         }
 
-        const install = await transaction.query(
-          `select i.id
-           from wfpc.tenant_package_installs i
-           join wfpc.tenant_package_purchases p
-             on p.tenant_id = i.tenant_id
-            and p.package_id = i.package_id
-           where i.tenant_id = $1
-             and i.package_id = $2
-             and i.status = 'active'
-             and p.status = 'active'
-             and p.starts_at <= now()
-             and (p.ends_at is null or p.ends_at > now())
-           limit 1
-           for update`,
-          [input.tenantId, workflowRow.package_id]
-        );
-        if (install.rows.length === 0) {
-          return { reserved: false, reason: "entitlement_denied" };
+        if (!input.workflowBinding) {
+          const install = await transaction.query(
+            `select i.id
+             from wfpc.tenant_package_installs i
+             join wfpc.tenant_package_purchases p
+               on p.tenant_id = i.tenant_id
+              and p.package_id = i.package_id
+             where i.tenant_id = $1
+               and i.package_id = $2
+               and i.status = 'active'
+               and p.status = 'active'
+               and p.starts_at <= now()
+               and (p.ends_at is null or p.ends_at > now())
+             limit 1
+             for update`,
+            [input.tenantId, workflowRow.package_id]
+          );
+          if (install.rows.length === 0) {
+            return { reserved: false, reason: "entitlement_denied" };
+          }
         }
 
         const providerRequirement = await transaction.query(
@@ -183,8 +217,9 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
         const workflowTemplateId = workflowIdentityKind === "tenant_template" ? (input.workflowTemplateId ?? input.workflowId ?? null) : null;
         const workflowPackageId = input.workflowPackageId ?? String(workflowRow.package_id);
         if (workflowIdentityKind === "installed_package_overlay") {
-          const overlayDefinitions = listInstalledPackageDefinitions({ installedPackageIds: [workflowPackageId] });
-          const matchedPackage = overlayDefinitions.find((entry) => entry.id === workflowPackageId);
+          const publicPackageId = input.workflowDefinitionSnapshot?.packageId ?? input.workflowBinding?.packageId ?? workflowPackageId;
+          const overlayDefinitions = listInstalledPackageDefinitions({ installedPackageIds: [publicPackageId] });
+          const matchedPackage = overlayDefinitions.find((entry) => entry.id === publicPackageId);
           const matchedWorkflow = matchedPackage?.workflowDefinitions?.find((definition) => definition.publicId === publicWorkflowId);
           if (!matchedWorkflow) {
             return { reserved: false, reason: "workflow_unavailable" };
@@ -246,6 +281,14 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
            on conflict (tenant_id, run_id) do nothing`,
           [input.tenantId, input.runId, publicWorkflowId, workflowTemplateId, workflowIdentityKind, workflowPackageId, input.userId, input.idempotencyKey]
         );
+
+        await input.onReserved?.({
+          transaction,
+          publicWorkflowId,
+          workflowPackageId,
+          providerKind: String(workflowRow.provider_kind) as ProviderKind,
+          credentialLabel: String(credentialRow.label)
+        });
 
         return { reserved: true, runId: input.runId };
       });

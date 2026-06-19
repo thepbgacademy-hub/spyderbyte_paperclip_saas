@@ -2,9 +2,15 @@ export const CONNECT_FIRST_WORKFLOW_ID = "wf_connect_first_workflow";
 export const TAX_STRATEGY_WORKFLOW_ID = "wf_tax_strategy";
 export const PACKAGE_FOLLOWUP_WORKFLOW_ID = "wf_package_followup";
 export const EXAMPLE_AUDIT_WORKFLOW_ID = "wf-example-audit";
+export const CURRENT_CORE_NATIVE_WORKFLOW_IDS = [
+  CONNECT_FIRST_WORKFLOW_ID,
+  TAX_STRATEGY_WORKFLOW_ID,
+  PACKAGE_FOLLOWUP_WORKFLOW_ID
+] as const;
 export const NATIVE_DECISION_JSON_SHAPE = "{\"state\":\"done|waiting|blocked|cancelled\",\"summary\":\"...\"}";
 
 export type NativeWorkflowDefinition = {
+  executionStrategy: "single_step" | "staged_review";
   familyName: string;
   laneDecisionLine: string;
   doneInstruction: string;
@@ -15,10 +21,17 @@ export type NativeWorkflowDefinition = {
   actionPrefix: string;
   invalidDecisionLabel: string;
   extraGuidance?: string;
+  domainContext?: {
+    roleInstruction: string;
+    interpretationFocus: string;
+    draftConstraint: string;
+    validationGate: string;
+  };
 };
 
 export const NATIVE_WORKFLOW_DEFINITIONS: Record<string, NativeWorkflowDefinition> = {
   [CONNECT_FIRST_WORKFLOW_ID]: {
+    executionStrategy: "staged_review",
     familyName: "Connect First Workflow",
     laneDecisionLine: "Decide whether the current lane is complete, needs more information, is blocked, or should be cancelled.",
     doneInstruction: "Use state \"done\" only when the lane is actually complete and the next operator can treat it as finished.",
@@ -27,9 +40,19 @@ export const NATIVE_WORKFLOW_DEFINITIONS: Record<string, NativeWorkflowDefinitio
     cancelledInstruction: "Use state \"cancelled\" when the lane should end without completion and return control to the harness.",
     completedPrefix: "Completed the Connect First Workflow",
     actionPrefix: "Connect First Workflow",
-    invalidDecisionLabel: "Connect First Workflow"
+    invalidDecisionLabel: "Connect First Workflow",
+    domainContext: {
+      roleInstruction: "Operate as a bounded commercial-readiness reviewer for the Connect First family.",
+      interpretationFocus:
+        "Focus on revised assumptions, competitor anchors, pricing pressure, and the clearest next bounded operator move.",
+      draftConstraint:
+        "Keep the drafted outcome anchored to the current pricing or commercial-readiness lane and one bounded operator handoff.",
+      validationGate:
+        "Approve only when the outcome reflects the current lane evidence, stays commercially bounded, and does not imply wider package approval or strategy completion."
+    }
   },
   [TAX_STRATEGY_WORKFLOW_ID]: {
+    executionStrategy: "staged_review",
     familyName: "Tax Strategy Workflow",
     laneDecisionLine: "Decide whether the current lane is complete, needs more information, is blocked, or should be cancelled.",
     doneInstruction: "Use state \"done\" only when the lane is actually complete and the next operator can treat it as finished.",
@@ -39,9 +62,19 @@ export const NATIVE_WORKFLOW_DEFINITIONS: Record<string, NativeWorkflowDefinitio
     completedPrefix: "Completed the Tax Strategy Workflow",
     actionPrefix: "Tax Strategy Workflow",
     invalidDecisionLabel: "Tax Strategy Workflow",
-    extraGuidance: "Focus on tax-position readiness, open assumptions, and the clearest next bounded operator action."
+    extraGuidance: "Focus on tax-position readiness, open assumptions, and the clearest next bounded operator action.",
+    domainContext: {
+      roleInstruction: "Operate as a bounded tax-posture reviewer for the Tax Strategy family.",
+      interpretationFocus:
+        "Focus on tax-position readiness, restructuring assumptions, and the next bounded recommendation or evidence request.",
+      draftConstraint:
+        "Keep the drafted outcome anchored to the current tax strategy review lane, open assumptions, and one bounded advisor-ready next step.",
+      validationGate:
+        "Approve only when the outcome stays inside the current tax review lane and does not overstate finalized tax recommendations beyond the evidence."
+    }
   },
   [PACKAGE_FOLLOWUP_WORKFLOW_ID]: {
+    executionStrategy: "staged_review",
     familyName: "Package Follow-up Workflow",
     laneDecisionLine: "Decide whether the current lane is complete, needs more information, is blocked, or should be cancelled.",
     doneInstruction: "Use state \"done\" only when the follow-up lane is ready to hand a bounded customer-facing next step back to the operator.",
@@ -51,9 +84,19 @@ export const NATIVE_WORKFLOW_DEFINITIONS: Record<string, NativeWorkflowDefinitio
     completedPrefix: "Completed the Package Follow-up Workflow",
     actionPrefix: "Package Follow-up Workflow",
     invalidDecisionLabel: "Package Follow-up Workflow",
-    extraGuidance: "Focus on the next bounded package follow-up, not on reopening the entire workflow scope."
+    extraGuidance: "Focus on the next bounded package follow-up, not on reopening the entire workflow scope.",
+    domainContext: {
+      roleInstruction: "Operate as a bounded package follow-up operator for the Package Follow-up family.",
+      interpretationFocus:
+        "Focus on packaged customer-facing outcomes, follow-up positioning, and the next bounded customer-facing action.",
+      draftConstraint:
+        "Keep the drafted outcome anchored to the current package follow-up lane and one concise customer-facing next step.",
+      validationGate:
+        "Approve only when the outcome stays inside the current follow-up lane and does not reopen full workflow scope or broader package strategy."
+    }
   },
   [EXAMPLE_AUDIT_WORKFLOW_ID]: {
+    executionStrategy: "single_step",
     familyName: "Example Audit Workflow",
     laneDecisionLine: "Decide whether the current lane is complete, needs more information, is blocked, or should be cancelled.",
     doneInstruction: "Use state \"done\" only when the example audit lane is ready to hand a bounded findings brief back to the operator.",

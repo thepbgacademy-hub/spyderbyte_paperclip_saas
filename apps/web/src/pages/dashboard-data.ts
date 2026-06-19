@@ -242,38 +242,38 @@ export const dashboardNavigationGroups = [
 
 export const workflowCards = [
   {
-    id: "wf-calendar",
-    name: "Media calendar",
-    description: "Plans a package-approved week of channel-ready campaign work.",
-    providerTags: ["OpenAI required", "Media provider required"],
+    id: "wf-connect-first",
+    name: "Connect First Workflow",
+    description: "Launches the approved first-workflow setup inside the Wealth Factory harness.",
+    providerTags: ["OpenAI required"],
     readiness: "Available now",
-    outcome: "A reviewed content calendar with deliverables ready to approve and send.",
-    inputs: "Brand priorities, current offer, and campaign timing.",
-    outputType: "Calendar, captions, and asset requests",
-    milestone: "Next milestone: approve the draft before exports are released.",
+    outcome: "A reviewed onboarding plan with next actions ready for approval and delivery.",
+    inputs: "Current priorities, business context, and approved package inputs.",
+    outputType: "Plan, brief, and handoff steps",
+    milestone: "Next milestone: approve the first-workflow handoff before exports are released.",
     startEnabled: true
   },
   {
-    id: "wf-refresh",
-    name: "Promotion refresh",
-    description: "Reworks an active offer into package-safe launch copy and support assets.",
-    providerTags: ["OpenAI required", "Storage optional"],
+    id: "wf-tax-strategy",
+    name: "Tax Strategy Workflow",
+    description: "Runs the bounded tax strategy review inside the Wealth Factory harness.",
+    providerTags: ["OpenAI required"],
     readiness: "Connection needed",
-    outcome: "Updated launch messaging with ready-to-review deliverables.",
-    inputs: "Offer details, deadlines, and any required proof points.",
-    outputType: "Copy deck and launch notes",
+    outcome: "A reviewed tax strategy summary with ready-to-approve recommendations.",
+    inputs: "Tax priorities, context, and approved package inputs.",
+    outputType: "Review memo and action notes",
     milestone: "Next milestone: connect a provider to unlock the run.",
     startEnabled: true
   },
   {
-    id: "wf-recap",
-    name: "Weekly recap",
-    description: "Packages completed work into a calm owner-facing update.",
+    id: "wf-package-followup",
+    name: "Package Follow-up Workflow",
+    description: "Advances the bounded package follow-up lane inside the Wealth Factory harness.",
     providerTags: ["OpenAI required"],
     readiness: "Ready to start",
-    outcome: "A concise weekly summary for review and export.",
-    inputs: "Completed work, highlights, and delivery notes.",
-    outputType: "Summary memo",
+    outcome: "A concise follow-up summary with the next approved owner actions.",
+    inputs: "Completed work, open decisions, and delivery notes.",
+    outputType: "Follow-up memo",
     milestone: "Next milestone: results will appear in the review desk.",
     startEnabled: true
   }
@@ -312,9 +312,9 @@ export const includedRoles = [
 export const hiredRoles = [
   {
     id: "hire-creative",
-    name: "Creative Director",
-    resume: "Shapes campaign voice and premium asset guidance.",
-    outcome: "Improves content quality before delivery.",
+    name: "Implementation Director",
+    resume: "Shapes rollout timing, handoffs, and premium execution guidance.",
+    outcome: "Improves delivery quality before final handoff.",
     status: "Hired and active",
     action: "Activate lane",
     providerNeed: "Needs provider"
@@ -324,18 +324,18 @@ export const hiredRoles = [
 export const powerPlays = [
   {
     id: "power-launch",
-    name: "Launch Week Push",
-    resume: "Unlocks a coordinated sprint for high-priority launch windows.",
+    name: "Priority Execution Window",
+    resume: "Unlocks a coordinated sprint for a high-priority business milestone.",
     outcome: "Bundles planning, approvals, and delivery timing.",
     status: "Unlock power play",
     action: "Unlock",
-    providerNeed: "OpenAI plus media provider"
+    providerNeed: "OpenAI plus customer storage"
   },
   {
     id: "power-library",
-    name: "Evergreen Library",
-    resume: "Builds a reusable reserve of approved package-safe content.",
-    outcome: "Creates breathing room between active launch cycles.",
+    name: "Reusable Operations Library",
+    resume: "Builds a reusable reserve of approved package-safe briefs and handoffs.",
+    outcome: "Creates breathing room between active execution cycles.",
     status: "Available",
     action: "Review unlock",
     providerNeed: "Customer-owned storage recommended"
@@ -345,18 +345,18 @@ export const powerPlays = [
 export const resultCards = [
   {
     id: "result-241",
-    title: "Summer campaign calendar",
-    workflow: "Media calendar",
-    summary: "Seven channel-ready posts with matching asset prompts already translated into customer-safe delivery notes.",
+    title: "Connect-first onboarding brief",
+    workflow: "Connect First Workflow",
+    summary: "A reviewed onboarding brief with the first approved actions already translated into customer-safe delivery notes.",
     timestamp: "Updated 18 minutes ago",
     status: "Awaiting review",
     exportState: "Ready to download"
   },
   {
     id: "result-238",
-    title: "Offer refresh summary",
-    workflow: "Promotion refresh",
-    summary: "Launch copy package is ready once the storage destination is reconnected.",
+    title: "Tax strategy review summary",
+    workflow: "Tax Strategy Workflow",
+    summary: "The tax strategy review is ready once the storage destination is reconnected.",
     timestamp: "Updated 2 hours ago",
     status: "Revision needed",
     exportState: "Reconnect storage"
@@ -430,9 +430,9 @@ export const packageSummary = [
 ] as const;
 
 export const fileRows = [
-  { title: "Campaign asset list", type: "XLSX", state: "Ready to download", expiry: "Expires in 18 hours" },
-  { title: "Approval deck", type: "PDF", state: "Ready to download", expiry: "Expires in 22 hours" },
-  { title: "Post previews", type: "PNG", state: "Reconnect storage", expiry: "Needs attention" }
+  { title: "Onboarding action plan", type: "DOCX", state: "Ready to download", expiry: "Expires in 18 hours" },
+  { title: "Tax review summary", type: "PDF", state: "Ready to download", expiry: "Expires in 22 hours" },
+  { title: "Follow-up next steps", type: "XLSX", state: "Reconnect storage", expiry: "Needs attention" }
 ] as const;
 
 export const profileRows = [
@@ -790,7 +790,7 @@ export function getStatusCopy(options: StatusCopyOptions): string {
   }
   return options.packageReady
     ? "Ready to run the installed package workflow."
-    : "Connect package providers to unlock media workflows.";
+    : "Connect package providers to unlock approved workflows.";
 }
 
 export function getCurrentFocus(options: CurrentFocusOptions): CurrentFocusCard {

@@ -19,6 +19,8 @@ const request = createLiveRunRequest({
   tenantId: args.tenant,
   userId: args.user,
   workflowId: args.workflow,
+  ...(args["workflow-template"] ? { workflowTemplateId: args["workflow-template"] } : {}),
+  ...(args["fresh-run"] === "true" ? { skipExistingHarnessReuse: true } : {}),
   ...(args.run ? { runId: args.run } : {})
 });
 
@@ -39,7 +41,7 @@ try {
   const preflight = await loadRuntimePreflight({
     client,
     tenantId: request.tenantId,
-    workflowId: request.workflowId
+    workflowId: request.workflowTemplateId ?? request.workflowId
   });
   const summary = summarizeRuntimePreflight(preflight);
   if (!summary.ok) {

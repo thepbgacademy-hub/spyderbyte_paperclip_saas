@@ -1,4 +1,4 @@
-import { assertAllowedOrigin, createSecurityHeaders, validateRequestBodySize } from "../security/cors.js";
+import { assertAllowedBrowserOrigin, createSecurityHeaders, validateRequestBodySize } from "../security/cors.js";
 import {
   ApiAuthError,
   DashboardApiConflictError,
@@ -44,7 +44,9 @@ export function createDashboardHttpHandler(options: {
     const securityHeaders = createSecurityHeaders();
     let corsHeaders: Record<string, string>;
     try {
-      corsHeaders = assertAllowedOrigin(request.headers.origin, options.allowedOrigins);
+      corsHeaders = assertAllowedBrowserOrigin(request.headers, options.allowedOrigins, {
+        allowSameOriginWithoutOrigin: request.method !== "OPTIONS"
+      });
       validateRequestBodySize(request.bodyByteLength, maxBodyBytes);
     } catch {
       return { status: 403, headers: securityHeaders, body: { code: "request_rejected" } };

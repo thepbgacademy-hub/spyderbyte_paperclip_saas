@@ -3,7 +3,9 @@ declare module "../../scripts/lib/live-run-drive.mjs" {
     tenantId: string;
     userId: string;
     workflowId: string;
+    workflowTemplateId?: string;
     runId?: string;
+    skipExistingHarnessReuse?: boolean;
   };
 
   export type ProviderContextSnapshot = {
@@ -39,8 +41,10 @@ declare module "../../scripts/lib/live-run-drive.mjs" {
     tenantId: string;
     userId: string;
     workflowId: string;
+    workflowTemplateId?: string;
     runId: string;
     idempotencyKey: string;
+    skipExistingHarnessReuse?: boolean;
   };
 
   export function loadWorkflowRunSnapshot(input: {

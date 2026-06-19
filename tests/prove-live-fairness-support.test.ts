@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const require = createRequire(import.meta.url);
 const {
+  applyQueuedRunIdentity,
   buildProofOutput,
   parseModeArg,
   shouldInspectQueueState,
@@ -93,5 +94,30 @@ describe("prove-live-fairness support helpers", () => {
         previousObservation: null
       })
     ).toBe(false);
+  });
+
+  it("rebinds fallback proof polling to the actual queued run id", () => {
+    const request = {
+      tenantId: "tenant-a",
+      workflowId: "wf_connect_first_workflow",
+      runId: "generated-run-id",
+      idempotencyKey: "tenant-a:wf_connect_first_workflow:generated-run-id"
+    };
+
+    applyQueuedRunIdentity({
+      request,
+      queueResult: {
+        ok: true,
+        result: {
+          queued: true,
+          runId: "durable-run-id"
+        }
+      }
+    });
+
+    expect(request).toMatchObject({
+      runId: "durable-run-id",
+      idempotencyKey: "tenant-a:wf_connect_first_workflow:durable-run-id"
+    });
   });
 });

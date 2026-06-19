@@ -6,12 +6,20 @@ export function createLiveRunRequest(input) {
     tenantId: input.tenantId,
     userId: input.userId,
     workflowId: input.workflowId,
+    ...(input.workflowTemplateId ? { workflowTemplateId: input.workflowTemplateId } : {}),
+    ...(input.skipExistingHarnessReuse ? { skipExistingHarnessReuse: true } : {}),
     runId,
     idempotencyKey: `${input.tenantId}:${input.workflowId}:${runId}`
   };
 }
 
 export async function reserveLiveWorkflowRun(input) {
+  const workflowTemplateId = await resolveWorkflowTemplateId({
+    client: input.client,
+    tenantId: input.tenantId,
+    workflowTemplateId: input.workflowTemplateId,
+    workflowId: input.workflowId
+  });
   const tenant = await input.client.query("select paused_at from wfpc.tenants where id = $1 for update", [input.tenantId]);
   if (tenant.rows.length === 0) {
     return { reserved: false, reason: "tenant_not_found" };
@@ -27,7 +35,7 @@ export async function reserveLiveWorkflowRun(input) {
 
   const workflow = await input.client.query(
     "select id, package_id, provider_kind from wfpc.workflow_templates where tenant_id = $1 and id = $2 and enabled = true for update",
-    [input.tenantId, input.workflowId]
+    [input.tenantId, workflowTemplateId]
   );
   if (workflow.rows.length === 0) {
     return { reserved: false, reason: "workflow_unavailable" };
@@ -86,13 +94,30 @@ export async function reserveLiveWorkflowRun(input) {
   if (!boundCapability) {
     return { reserved: false, reason: "entitlement_denied" };
   }
+  const existingNativePublicRun = input.skipExistingHarnessReuse
+    ? null
+    : await reuseExistingNativePublicRunIfPresent({
+        client: input.client,
+        tenantId: input.tenantId,
+        userId: input.userId,
+        workflowId: input.workflowId,
+        workflowTemplateId,
+        workflowPackageId: String(workflowRow.package_id),
+        providerKind: String(workflowRow.provider_kind),
+        credentialRow,
+        boundCapability,
+        idempotencyKey: input.idempotencyKey
+      });
+  if (existingNativePublicRun) {
+    return existingNativePublicRun;
+  }
   const reservation = await input.client.query(
     `insert into wfpc.workflow_run_reservations
       (tenant_id, public_workflow_id, workflow_template_id, workflow_identity_kind, workflow_package_id, run_id, idempotency_key, reserved_by_user_id)
      values ($1, $2, $3, 'tenant_template', $4::uuid, $5, $6, $7)
      on conflict do nothing
      returning id`,
-    [input.tenantId, input.workflowId, input.workflowId, workflowRow.package_id, input.runId, input.idempotencyKey, input.userId]
+    [input.tenantId, input.workflowId, workflowTemplateId, workflowRow.package_id, input.runId, input.idempotencyKey, input.userId]
   );
   if (reservation.rows.length === 0) {
     return { reserved: false, reason: "duplicate" };
@@ -106,7 +131,7 @@ export async function reserveLiveWorkflowRun(input) {
       input.runId,
       input.tenantId,
       input.workflowId,
-      input.workflowId,
+      workflowTemplateId,
       workflowRow.package_id,
       input.userId,
       String(credentialRow.id),
@@ -127,8 +152,15 @@ export async function reserveLiveWorkflowRun(input) {
       (tenant_id, run_id, public_workflow_id, workflow_template_id, workflow_identity_kind, workflow_package_id, created_by_user_id, idempotency_key)
      values ($1, $2, $3, $4, 'tenant_template', $5::uuid, $6, $7)
      on conflict (tenant_id, run_id) do nothing`,
-    [input.tenantId, input.runId, input.workflowId, input.workflowId, workflowRow.package_id, input.userId, input.idempotencyKey]
+    [input.tenantId, input.runId, input.workflowId, workflowTemplateId, workflowRow.package_id, input.userId, input.idempotencyKey]
   );
+
+  await bootstrapNativePublicRunIfNeeded({
+    ...input,
+    packageId: String(workflowRow.package_id),
+    providerKind: String(workflowRow.provider_kind),
+    credentialLabel: String(credentialRow.label)
+  });
 
   return { reserved: true, runId: input.runId };
 }
@@ -139,11 +171,15 @@ export async function loadWorkflowRunSnapshot({ client, tenantId, runId }) {
         run.id as run_id,
         run.status as run_status,
         run.created_at as run_created_at,
+        run.public_workflow_id,
+        run.workflow_template_id,
         run.bound_secret_reference_id,
         run.bound_provider_context,
         outbox.id as outbox_id,
         outbox.status as outbox_status,
         outbox.created_at as outbox_created_at,
+        outbox.public_workflow_id as outbox_public_workflow_id,
+        outbox.workflow_template_id as outbox_workflow_template_id,
         outbox.attempts as outbox_attempts,
         outbox.last_error as outbox_last_error
      from wfpc.workflow_runs run
@@ -163,6 +199,8 @@ export async function loadWorkflowRunSnapshot({ client, tenantId, runId }) {
       id: String(row.run_id ?? ""),
       status: String(row.run_status ?? ""),
       createdAt: coerceTimestamp(row.run_created_at),
+      publicWorkflowId: String(row.public_workflow_id ?? ""),
+      workflowTemplateId: typeof row.workflow_template_id === "string" ? row.workflow_template_id : "",
       boundSecretReferenceId: String(row.bound_secret_reference_id ?? ""),
       providerContext: toProviderContext(row.bound_provider_context)
     },
@@ -170,6 +208,8 @@ export async function loadWorkflowRunSnapshot({ client, tenantId, runId }) {
       id: String(row.outbox_id ?? ""),
       status: String(row.outbox_status ?? ""),
       createdAt: coerceTimestamp(row.outbox_created_at),
+      publicWorkflowId: String(row.outbox_public_workflow_id ?? ""),
+      workflowTemplateId: typeof row.outbox_workflow_template_id === "string" ? row.outbox_workflow_template_id : "",
       attempts: Number(row.outbox_attempts ?? 0),
       lastError: typeof row.outbox_last_error === "string" ? row.outbox_last_error : null
     }
@@ -314,4 +354,180 @@ function inferCapabilityFromProviderKind(providerKind) {
     providerKind === "generic_api"
     ? "text_generation"
     : null;
+}
+
+async function bootstrapNativePublicRunIfNeeded(input) {
+  if (isUuid(input.workflowId)) {
+    return;
+  }
+  const bootstrapper = await loadNativePublicRunBootstrapper(input.bootstrapNativePublicRun);
+  if (!bootstrapper || !bootstrapper.hasWorkflowBootstrap(input.workflowId)) {
+    return;
+  }
+  await bootstrapper.seedRun({
+    client: input.client,
+    tenantId: input.tenantId,
+    runId: input.runId,
+    workflowId: input.workflowId,
+    packageId: input.packageId,
+    providerKind: input.providerKind,
+    credentialLabel: input.credentialLabel
+  });
+}
+
+async function loadNativePublicRunBootstrapper(override) {
+  if (override) {
+    return {
+      hasWorkflowBootstrap(workflowId) {
+        return !isUuid(workflowId);
+      },
+      seedRun: override
+    };
+  }
+  const [{ createPostgresHarnessRepository }, bootstrapModule] = await Promise.all([
+    import("../../dist/harness/repository.js"),
+    import("../../dist/harness/public-run-bootstrap.js")
+  ]);
+  if (typeof bootstrapModule.hasPublicWorkflowHarnessBootstrap !== "function" || typeof bootstrapModule.seedPublicWorkflowHarnessRun !== "function") {
+    return null;
+  }
+  return {
+    hasWorkflowBootstrap(workflowId) {
+      return bootstrapModule.hasPublicWorkflowHarnessBootstrap(workflowId);
+    },
+    async seedRun(input) {
+      await bootstrapModule.seedPublicWorkflowHarnessRun({
+        repository: createPostgresHarnessRepository(input.client),
+        tenantId: input.tenantId,
+        runId: input.runId,
+        workflowId: input.workflowId,
+        packageId: input.packageId,
+        providerKind: input.providerKind,
+        credentialLabel: input.credentialLabel
+      });
+    }
+  };
+}
+
+async function reuseExistingNativePublicRunIfPresent(input) {
+  if (isUuid(input.workflowId)) {
+    return null;
+  }
+  const bootstrapper = await loadNativePublicRunBootstrapper();
+  if (!bootstrapper || !bootstrapper.hasWorkflowBootstrap(input.workflowId)) {
+    return null;
+  }
+
+  const existingHarnessRun = await input.client.query(
+    `select id
+     from wfpc.harness_runs
+     where tenant_id = $1
+       and workflow_id = $2
+     order by updated_at desc, created_at desc
+     limit 1`,
+    [input.tenantId, input.workflowId]
+  );
+  const runId = String(existingHarnessRun.rows[0]?.id ?? "");
+  if (!runId) {
+    return null;
+  }
+  const workflowIdentityKind = input.workflowTemplateId ? "tenant_template" : "installed_package_overlay";
+
+  await input.client.query(
+    `insert into wfpc.workflow_runs
+      (id, tenant_id, public_workflow_id, workflow_template_id, workflow_identity_kind, workflow_package_id, created_by_user_id, status, bound_secret_reference_id, bound_provider_context)
+     values ($1, $2, $3, $4, $5, $6::uuid, $7, 'queued', $8::uuid, $9::jsonb)
+     on conflict (id) do update
+     set public_workflow_id = excluded.public_workflow_id,
+         workflow_template_id = excluded.workflow_template_id,
+         workflow_identity_kind = excluded.workflow_identity_kind,
+         workflow_package_id = excluded.workflow_package_id,
+         created_by_user_id = excluded.created_by_user_id,
+         status = 'queued',
+         bound_secret_reference_id = excluded.bound_secret_reference_id,
+         bound_provider_context = excluded.bound_provider_context,
+         updated_at = now()`,
+    [
+      runId,
+      input.tenantId,
+      input.workflowId,
+      input.workflowTemplateId,
+      workflowIdentityKind,
+      input.workflowPackageId,
+      input.userId,
+      String(input.credentialRow.id),
+      JSON.stringify([
+        {
+          capability: input.boundCapability,
+          providerKind: input.providerKind,
+          label: String(input.credentialRow.label),
+          secretRef: String(input.credentialRow.secret_ref),
+          metadata: input.credentialRow.metadata && typeof input.credentialRow.metadata === "object" ? input.credentialRow.metadata : {}
+        }
+      ])
+    ]
+  );
+
+  await input.client.query(
+    `insert into wfpc.workflow_queue_outbox
+      (tenant_id, run_id, public_workflow_id, workflow_template_id, workflow_identity_kind, workflow_package_id, created_by_user_id, idempotency_key, status, available_at, claim_token, claimed_at, enqueued_at, last_error, updated_at)
+     values ($1, $2, $3, $4, $5, $6::uuid, $7, $8, 'pending', now(), null, null, null, null, now())
+     on conflict (tenant_id, run_id) do update
+     set public_workflow_id = excluded.public_workflow_id,
+         workflow_template_id = excluded.workflow_template_id,
+         workflow_identity_kind = excluded.workflow_identity_kind,
+         workflow_package_id = excluded.workflow_package_id,
+         created_by_user_id = excluded.created_by_user_id,
+         idempotency_key = case
+           when wfpc.workflow_queue_outbox.status = 'claimed' then wfpc.workflow_queue_outbox.idempotency_key
+           else excluded.idempotency_key
+         end,
+         status = case
+           when wfpc.workflow_queue_outbox.status = 'claimed' then wfpc.workflow_queue_outbox.status
+           else 'pending'
+         end,
+         available_at = case
+           when wfpc.workflow_queue_outbox.status = 'claimed' then wfpc.workflow_queue_outbox.available_at
+           else now()
+         end,
+         claim_token = case
+           when wfpc.workflow_queue_outbox.status = 'claimed' then wfpc.workflow_queue_outbox.claim_token
+           else null
+         end,
+         claimed_at = case
+           when wfpc.workflow_queue_outbox.status = 'claimed' then wfpc.workflow_queue_outbox.claimed_at
+           else null
+         end,
+         enqueued_at = case
+           when wfpc.workflow_queue_outbox.status = 'claimed' then wfpc.workflow_queue_outbox.enqueued_at
+           else null
+         end,
+         last_error = null,
+         updated_at = now()`,
+    [input.tenantId, runId, input.workflowId, input.workflowTemplateId, workflowIdentityKind, input.workflowPackageId, input.userId, input.idempotencyKey]
+  );
+
+  return { reserved: true, runId };
+}
+
+async function resolveWorkflowTemplateId({ client, tenantId, workflowTemplateId, workflowId }) {
+  if (workflowTemplateId && isUuid(workflowTemplateId)) {
+    return workflowTemplateId;
+  }
+  if (isUuid(workflowId)) {
+    return workflowId;
+  }
+  const result = await client.query(
+    `select id
+     from wfpc.workflow_templates
+     where tenant_id = $1
+     order by created_at desc
+     limit 1`,
+    [tenantId]
+  );
+  return String(result.rows[0]?.id ?? workflowId);
+}
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value ?? ""));
 }

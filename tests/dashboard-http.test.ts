@@ -29,13 +29,53 @@ describe("dashboard HTTP boundary", () => {
     expect(dashboardApi.listDashboard).not.toHaveBeenCalled();
   });
 
+  it("allows same-origin browser dashboard reads without an explicit origin header", async () => {
+    const dashboardApi = {
+      startWorkflowRun: vi.fn(),
+      listDashboard: vi.fn().mockResolvedValue({
+        tenantId: session.tenantId,
+        role: session.role,
+        workflows: [],
+        packages: [],
+        artifacts: [],
+        providerConnections: [],
+        storageConnectors: [],
+        platformLoad: {
+          level: "light",
+          summary: "Light traffic",
+          detail: "New workflows should begin processing quickly."
+        }
+      })
+    };
+    const handler = createDashboardHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      dashboardApi,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
+    });
+
+    const response = await handler({
+      method: "GET",
+      path: "/api/dashboard",
+      headers: {
+        authorization: "Bearer valid",
+        "sec-fetch-site": "same-origin"
+      },
+      bodyByteLength: 0,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers["access-control-allow-origin"]).toBeUndefined();
+    expect(dashboardApi.listDashboard).toHaveBeenCalledWith({ authorization: "Bearer valid" });
+  });
+
   it("returns guarded dashboard data with CORS and security headers", async () => {
     const dashboardApi = {
       startWorkflowRun: vi.fn(),
       listDashboard: vi.fn().mockResolvedValue({
         tenantId: session.tenantId,
         role: session.role,
-        workflows: [{ id: "wf-social-calendar", name: "Wealth Factory Social Calendar" }],
+        workflows: [{ id: "wf-connect-first", name: "Connect First Workflow" }],
         packages: [],
         artifacts: [],
         providerConnections: [],

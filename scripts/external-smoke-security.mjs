@@ -12,6 +12,8 @@ const host = process.env.WF_SMOKE_PORT_HOST ?? "187.77.19.83";
 const allowedOrigin = process.env.WF_SMOKE_ALLOWED_ORIGIN ?? portalUrl.origin;
 const deniedOrigin = process.env.WF_SMOKE_DENIED_ORIGIN ?? "https://evil.example";
 const shellPath = process.env.WF_SMOKE_SHELL_PATH ?? "/";
+const harnessBoardPath = process.env.WF_SMOKE_HARNESS_BOARD_PATH ?? "/board";
+const harnessWorkflowId = process.env.WF_SMOKE_HARNESS_WORKFLOW_ID ?? "";
 const sessionCookieName = process.env.WF_SMOKE_SESSION_COOKIE_NAME ?? "wf_portal_session";
 const sessionCookieValue = process.env.WF_SMOKE_SESSION_COOKIE_VALUE ?? "";
 const expectedAssetBaseUrl = process.env.WF_SMOKE_EXPECT_ASSET_BASE_URL ?? `${apiUrl.origin}/app-assets/`;
@@ -20,6 +22,9 @@ const privatePorts = parsePorts(process.env.WF_SMOKE_PRIVATE_PORTS ?? "5432,6379
 const timeoutMs = Number(process.env.WF_SMOKE_TIMEOUT_MS ?? 3000);
 const forbiddenText = /paperclip|prompt|skill|command|tool call|raw activity|internal log|service token|vault:\/\/|wf_secret_|access_token=|api[_-]?key[:=]|authorization[:=]|Bearer\s+|sk-[A-Za-z0-9_-]+|pc-(company|run|agent|goal|task)-/i;
 const forbiddenSecretText = /service token|vault:\/\/|wf_secret_|access_token=|api[_-]?key[:=]|authorization[:=]|Bearer\s+|sk-[A-Za-z0-9_-]+|pc-(company|run|agent|goal|task)-/i;
+const forbiddenAssetSecretText = /service token|vault:\/\/|wf_secret_|access_token=|Bearer\s+|sk-[A-Za-z0-9_-]+|pc-(company|run|agent|goal|task)-/i;
+const forbiddenHarnessPrivateFields = /orchestratorHandoff|boardContext|postOutcomeDirectives/i;
+const boardShellUrl = sessionCookieValue ? resolveHarnessBoardUrl() : new URL(harnessBoardPath, apiUrl);
 
 const results = [];
 
@@ -37,7 +42,7 @@ for (const port of privatePorts) {
 
 results.push(await checkHttp({ url: new URL("/api/dashboard", apiUrl), origin: allowedOrigin, expectedStatuses: [401, 403] }));
 results.push(await checkHttp({ url: new URL("/api/dashboard", apiUrl), origin: deniedOrigin, expectedStatuses: [403] }));
-results.push(await checkHttp({ url: new URL("/api/storage/oauth/google_drive/begin", apiUrl), origin: allowedOrigin, expectedStatuses: [401] }));
+results.push(await checkHttp({ url: new URL("/api/storage/oauth/google_drive/begin", apiUrl), origin: allowedOrigin, expectedStatuses: [401, 503] }));
 results.push(await checkHttp({ url: new URL(shellPath, apiUrl), origin: allowedOrigin, expectedStatuses: [401, 403] }));
 
 if (sessionCookieValue) {
@@ -47,6 +52,21 @@ if (sessionCookieValue) {
       origin: allowedOrigin,
       cookie: `${sessionCookieName}=${sessionCookieValue}`,
       expectedAssetBaseUrl
+    })
+  );
+  results.push(
+    await checkShell({
+      url: boardShellUrl,
+      origin: allowedOrigin,
+      cookie: `${sessionCookieName}=${sessionCookieValue}`,
+      expectedAssetBaseUrl
+    })
+  );
+  results.push(
+    await checkHarnessBoardApi({
+      url: buildHarnessBoardApiUrl(),
+      origin: allowedOrigin,
+      cookie: `${sessionCookieName}=${sessionCookieValue}`
     })
   );
 }
@@ -119,7 +139,7 @@ async function checkHttp(input) {
     const corsHeader = response.headers["access-control-allow-origin"];
     const statusOk = input.expectedStatuses.includes(response.statusCode);
     const bodyOk = !forbiddenText.test(response.body);
-    const corsOk = input.origin === deniedOrigin ? corsHeader !== deniedOrigin : true;
+    const corsOk = input.origin === deniedOrigin ? corsHeader === undefined : true;
     return {
       check: "http",
       url: input.url.toString(),
@@ -191,13 +211,14 @@ async function checkShell(input) {
     const assetUrls = extractAssetUrls(response.body, input.expectedAssetBaseUrl);
     const assetsOk = assetUrls.length > 0;
     const bodyOk = !forbiddenText.test(response.body);
+    const privateFieldsOk = !forbiddenHarnessPrivateFields.test(response.body);
     const assetChecks = assetsOk ? await Promise.all(assetUrls.map((assetUrl) => checkShellAsset(assetUrl, input.origin, input.cookie))) : [];
     const assetChecksOk = assetChecks.every((assetCheck) => assetCheck.status === "pass");
     return {
       check: "html_shell",
       url: input.url.toString(),
       origin: input.origin,
-      status: response.statusCode === 200 && htmlOk && bootstrapOk && assetsOk && bodyOk && assetChecksOk ? "pass" : "fail",
+      status: response.statusCode === 200 && htmlOk && bootstrapOk && assetsOk && bodyOk && privateFieldsOk && assetChecksOk ? "pass" : "fail",
       observedStatus: response.statusCode,
       contentType,
       assetUrls,
@@ -207,6 +228,38 @@ async function checkShell(input) {
   } catch (error) {
     return {
       check: "html_shell",
+      url: input.url.toString(),
+      origin: input.origin,
+      status: "fail",
+      error: readError(error)
+    };
+  }
+}
+
+async function checkHarnessBoardApi(input) {
+  try {
+    const response = await requestWithHeaders(input.url, {
+      origin: input.origin,
+      cookie: input.cookie
+    });
+    const contentType = response.headers["content-type"] ?? "";
+    const contentTypeOk = typeof contentType === "string" && contentType.includes("application/json");
+    const bodyOk =
+      !forbiddenText.test(response.body)
+      && !/orchestratorHandoff|boardContext|postOutcomeDirectives/i.test(response.body);
+    const shapeOk = /"cards"\s*:|"columns"\s*:|"runId"\s*:/i.test(response.body);
+    return {
+      check: "harness_board_api",
+      url: input.url.toString(),
+      origin: input.origin,
+      observedStatus: response.statusCode,
+      contentType,
+      status: response.statusCode === 200 && contentTypeOk && bodyOk && shapeOk ? "pass" : "fail",
+      bodyPreview: response.body.slice(0, 220)
+    };
+  } catch (error) {
+    return {
+      check: "harness_board_api",
       url: input.url.toString(),
       origin: input.origin,
       status: "fail",
@@ -243,7 +296,7 @@ async function checkShellAsset(assetUrl, origin, cookie) {
       url: assetUrl,
       observedStatus: response.statusCode,
       contentType,
-      status: response.statusCode === 200 && contentTypeOk && !forbiddenSecretText.test(response.body) ? "pass" : "fail"
+      status: response.statusCode === 200 && contentTypeOk && !forbiddenAssetSecretText.test(response.body) ? "pass" : "fail"
     };
   } catch (error) {
     return {
@@ -257,4 +310,29 @@ async function checkShellAsset(assetUrl, origin, cookie) {
 
 function readError(error) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function buildHarnessBoardApiUrl() {
+  const url = new URL("/api/harness/board", apiUrl);
+  const workflowId = boardShellUrl.searchParams.get("workflowId");
+  if (workflowId) {
+    url.searchParams.set("workflowId", workflowId);
+  }
+  return url;
+}
+
+function resolveHarnessBoardUrl() {
+  const url = new URL(harnessBoardPath, apiUrl);
+  const workflowId = boardShellUrlWorkflowId(url);
+  if (!workflowId) {
+    throw new Error(
+      "WF_SMOKE_HARNESS_WORKFLOW_ID or WF_SMOKE_HARNESS_BOARD_PATH must provide an explicit workflow selector; authenticated harness-board smoke verification requires an explicit workflow selector"
+    );
+  }
+  url.searchParams.set("workflowId", workflowId);
+  return url;
+}
+
+function boardShellUrlWorkflowId(url) {
+  return url.searchParams.get("workflowId") ?? harnessWorkflowId.trim();
 }

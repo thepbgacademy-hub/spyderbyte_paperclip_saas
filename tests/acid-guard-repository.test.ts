@@ -178,7 +178,7 @@ describe("ACID guard repository", () => {
     const client = createSequencedClient([
       [{ paused_at: null }],
       [{ tenant_id: "tenant-1" }],
-      [{ id: "install-1", package_id: "pkg-example-audit" }],
+      [{ id: "install-1", package_id: "11111111-1111-4111-8111-111111111111" }],
       [{ id: "requirement-1", capability: "text_generation" }],
       [{ id: "secret-1", secret_ref: "wf_secret_openai", label: "Primary OpenAI", metadata: {} }],
       [{ id: "reservation-1" }],
@@ -202,8 +202,113 @@ describe("ACID guard repository", () => {
 
     const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
     expect(sql).not.toMatch(/from wfpc\.workflow_templates[\s\S]+for update/i);
+    expect(sql).toMatch(/join wfpc\.wealth_factory_packages packages[\s\S]+packages\.package_key = \$2/i);
     expect(sql).toMatch(/from wfpc\.tenant_package_installs[\s\S]+join wfpc\.tenant_package_purchases/i);
     expect(sql).toMatch(/insert into wfpc\.workflow_run_reservations/i);
+
+    const reservationInsertCall = client.query.mock.calls.find(([statement]) => String(statement).includes("insert into wfpc.workflow_run_reservations"));
+    expect(reservationInsertCall?.[1]?.[4]).toBe("11111111-1111-4111-8111-111111111111");
+  });
+
+  it("invokes the reserved callback on the same transaction before commit so native public starts can seed harness state atomically", async () => {
+    const client = createSequencedClient([
+      [{ paused_at: null }],
+      [{ tenant_id: "tenant-1" }],
+      [{ id: "install-1", package_id: "11111111-1111-4111-8111-111111111111" }],
+      [{ id: "requirement-1", capability: "text_generation" }],
+      [{ id: "secret-1", secret_ref: "wf_secret_openai", label: "Primary OpenAI", metadata: {} }],
+      [{ id: "reservation-1" }],
+      [],
+      [],
+      []
+    ]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+    const onReserved = vi.fn(async ({ transaction }) => {
+      await transaction.query("insert into wfpc.harness_runs /* test bootstrap */ values ('run-1')", []);
+    });
+
+    await expect(
+      repository.reserveWorkflowRun({
+        tenantId: "tenant-1",
+        userId: "user-1",
+        workflowTemplateId: "wf-example-audit",
+        runId: "run-1",
+        idempotencyKey: "idem-1",
+        workflowBinding: {
+          packageId: "pkg-example-audit",
+          providerKind: "openai_api"
+        },
+        workflowDefinitionSnapshot: {
+          publicWorkflowId: "wf-example-audit",
+          packageId: "pkg-example-audit",
+          executionEngine: "wf_native_v1",
+          requiredCapabilities: ["text_generation"],
+          providerKind: "openai_api"
+        },
+        onReserved
+      })
+    ).resolves.toEqual({ reserved: true, runId: "run-1" });
+
+    expect(onReserved).toHaveBeenCalledTimes(1);
+    expect(onReserved).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transaction: client,
+        publicWorkflowId: "wf-example-audit",
+        workflowPackageId: "11111111-1111-4111-8111-111111111111",
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      })
+    );
+
+    const sqlCalls = client.query.mock.calls.map(([statement]) => String(statement));
+    const outboxInsertIndex = sqlCalls.findIndex((statement) => statement.includes("insert into wfpc.workflow_queue_outbox"));
+    const harnessBootstrapIndex = sqlCalls.findIndex((statement) => statement.includes("insert into wfpc.harness_runs /* test bootstrap */"));
+    const commitIndex = sqlCalls.findIndex((statement) => statement === "commit");
+
+    expect(outboxInsertIndex).toBeGreaterThan(-1);
+    expect(harnessBootstrapIndex).toBeGreaterThan(outboxInsertIndex);
+    expect(commitIndex).toBeGreaterThan(harnessBootstrapIndex);
+  });
+
+  it("rolls the reservation transaction back when native bootstrap seeding throws", async () => {
+    const client = createSequencedClient([
+      [{ paused_at: null }],
+      [{ tenant_id: "tenant-1" }],
+      [{ id: "install-1", package_id: "11111111-1111-4111-8111-111111111111" }],
+      [{ id: "requirement-1", capability: "text_generation" }],
+      [{ id: "secret-1", secret_ref: "wf_secret_openai", label: "Primary OpenAI", metadata: {} }],
+      [{ id: "reservation-1" }],
+      []
+    ]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(
+      repository.reserveWorkflowRun({
+        tenantId: "tenant-1",
+        userId: "user-1",
+        workflowTemplateId: "wf-example-audit",
+        runId: "run-1",
+        idempotencyKey: "idem-1",
+        workflowBinding: {
+          packageId: "pkg-example-audit",
+          providerKind: "openai_api"
+        },
+        workflowDefinitionSnapshot: {
+          publicWorkflowId: "wf-example-audit",
+          packageId: "pkg-example-audit",
+          executionEngine: "wf_native_v1",
+          requiredCapabilities: ["text_generation"],
+          providerKind: "openai_api"
+        },
+        onReserved: async () => {
+          throw new Error("bootstrap failed");
+        }
+      })
+    ).rejects.toThrow("bootstrap failed");
+
+    const sqlCalls = client.query.mock.calls.map(([statement]) => String(statement));
+    expect(sqlCalls).toContain("rollback");
+    expect(sqlCalls).not.toContain("commit");
   });
 
   it("fails closed when an overlay public workflow id is not present in the installed package catalog", async () => {

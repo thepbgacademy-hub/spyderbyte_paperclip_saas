@@ -3,6 +3,7 @@ import type { ExecutionEngine } from "../harness/execution-selector.js";
 import { selectExecutionEngine } from "../harness/execution-selector.js";
 import type { HarnessDeliverableType } from "../harness/types.js";
 import type { ProviderKind } from "../providers/provider-types.js";
+import { CURRENT_CORE_NATIVE_WORKFLOW_IDS } from "../worker/native-workflow-definitions.js";
 
 export type PrivateWorkflowMapping = {
   paperclipWorkflowId: string;
@@ -33,7 +34,7 @@ export type WealthFactoryWorkflowListItem = {
   startEnabled?: boolean;
 };
 
-const WF_CORE_BUILTIN_EXCEPTION_WORKFLOWS = ["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"] as const;
+const WF_CORE_BUILTIN_EXCEPTION_WORKFLOWS = CURRENT_CORE_NATIVE_WORKFLOW_IDS;
 export const WF_HARNESS_ELIGIBLE_WORKFLOWS = WF_CORE_BUILTIN_EXCEPTION_WORKFLOWS;
 export const WF_NATIVE_DEFAULT_WORKFLOWS = WF_CORE_BUILTIN_EXCEPTION_WORKFLOWS;
 export const WF_BOARD_EXPOSED_WORKFLOWS = WF_CORE_BUILTIN_EXCEPTION_WORKFLOWS;

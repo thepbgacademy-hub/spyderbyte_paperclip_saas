@@ -70,6 +70,57 @@ describe("queue inspection helpers", () => {
     });
   });
 
+  it("falls back to locating a queue job by payload run id when the BullMQ job id differs", async () => {
+    class FakeJob {
+      constructor(
+        public readonly data: { runId: string }
+      ) {}
+
+      async getState() {
+        return "completed";
+      }
+    }
+
+    class FakeRedis {
+      async connect() {}
+      disconnect() {}
+      on() {}
+    }
+
+    class FakeQueue {
+      async getJob(jobId: string) {
+        expect(jobId).toBe("tenant:workflow:run");
+        return null;
+      }
+
+      async getJobs() {
+        return [
+          new FakeJob({ runId: "other-run" }),
+          new FakeJob({ runId: "run-1" })
+        ];
+      }
+
+      async close() {}
+    }
+
+    await expect(
+      inspectQueueState({
+        redisUrl: "redis://localhost:6379",
+        queueName: "wfpc-workflow-runs",
+        jobId: "tenant:workflow:run",
+        runId: "run-1",
+        RedisClass: FakeRedis,
+        QueueClass: FakeQueue
+      })
+    ).resolves.toEqual({
+      queueName: "wfpc-workflow-runs",
+      jobId: "tenant:workflow:run",
+      state: "completed",
+      reachable: true,
+      error: null
+    });
+  });
+
   it("captures BullMQ queue-level counts when Redis is reachable", async () => {
     class FakeRedis {
       async connect() {}

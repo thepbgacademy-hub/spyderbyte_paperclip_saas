@@ -6,8 +6,10 @@ import { promisify } from "node:util";
 import pg from "pg";
 
 import { createLiveRunRequest, loadWorkflowRunSnapshot } from "./lib/live-run-drive.mjs";
+import { alignDurableHarnessProofPlan } from "./lib/native-proof-lane-model.mjs";
 import { buildPressureLanes, expandPressureRequests, summarizePressureProof } from "./lib/pressure-drive.mjs";
 import {
+  applyQueuedRunIdentity,
   buildProofOutput,
   parseModeArg,
   shouldInspectQueueState,
@@ -25,28 +27,7 @@ const lanes = buildPressureLanes({
 });
 const execFileAsync = promisify(execFile);
 const modeConfig = parseModeArg(args.mode);
-const requests = expandPressureRequests({
-  lanes,
-  order: parseOrderArg(args.order),
-  cycles: parsePositiveInteger(args.cycles, 1, "cycles")
-}).map((request, index) => {
-  const run = createLiveRunRequest({
-    tenantId: request.tenantId,
-    userId: request.userId,
-    workflowId: request.workflowId
-  });
-  return {
-    lane: request.lane,
-    tenantId: request.tenantId,
-    userId: request.userId,
-    workflowId: request.workflowId,
-    runId: run.runId,
-    idempotencyKey: run.idempotencyKey,
-    sequence: request.sequence,
-    ...(Number.isInteger(request.cycle) ? { cycle: request.cycle } : {}),
-    ordinal: index + 1
-  };
-});
+const dashboardStartContext = await createDashboardStartContext(env);
 
 const client = new pg.Client({
   connectionString: env.SUPABASE_DB_URL,
@@ -63,12 +44,57 @@ client.on("error", (error) => {
 await client.connect();
 
 try {
-  const preflightResults = [];
+  const resolvedLanes = [];
   for (const lane of lanes) {
+    resolvedLanes.push({
+      ...lane,
+      workflowTemplateId: await resolveTemplateWorkflowId({
+        client,
+        tenantId: lane.tenantId,
+        workflowId: lane.workflowId
+      })
+    });
+  }
+  const workflowTemplateIdByLane = new Map(
+    resolvedLanes.map((lane) => [`${lane.lane}:${lane.tenantId}:${lane.userId}:${lane.workflowId}`, lane.workflowTemplateId])
+  );
+  const alignedProofPlan = alignDurableHarnessProofPlan({
+    lanes: resolvedLanes,
+    cycles: parsePositiveInteger(args.cycles, 1, "cycles")
+  });
+  const requests = expandPressureRequests({
+    lanes: alignedProofPlan.lanes,
+    order: parseOrderArg(args.order),
+    cycles: alignedProofPlan.cycles
+  }).map((request, index) => {
+    const workflowTemplateId = workflowTemplateIdByLane.get(
+      `${request.lane}:${request.tenantId}:${request.userId}:${request.workflowId}`
+    );
+    const run = createLiveRunRequest({
+      tenantId: request.tenantId,
+      userId: request.userId,
+      workflowId: request.workflowId,
+      ...(workflowTemplateId ? { workflowTemplateId } : {})
+    });
+    return {
+      lane: request.lane,
+      tenantId: request.tenantId,
+      userId: request.userId,
+      workflowId: request.workflowId,
+      ...(workflowTemplateId ? { workflowTemplateId } : {}),
+      runId: run.runId,
+      idempotencyKey: run.idempotencyKey,
+      sequence: request.sequence,
+      ...(Number.isInteger(request.cycle) ? { cycle: request.cycle } : {}),
+      ordinal: index + 1
+    };
+  });
+  const preflightResults = [];
+  for (const lane of resolvedLanes) {
     const preflight = await loadRuntimePreflight({
       client,
       tenantId: lane.tenantId,
-      workflowId: lane.workflowId
+      workflowId: lane.workflowTemplateId
     });
     preflightResults.push({
       lane: lane.lane,
@@ -96,7 +122,7 @@ try {
       if (requestIndex > 0 && queueIntervalMs > 0 && !crossedCycleBoundary) {
         await delay(queueIntervalMs);
       }
-      const queueResult = await queuePressureRun(request);
+      const queueResult = await queuePressureRun(request, dashboardStartContext);
       if (!queueResult.ok) {
         queueFailure = true;
         process.exitCode = 1;
@@ -148,7 +174,8 @@ try {
             ? await inspectQueueState({
                 redisUrl: env.REDIS_URL,
                 queueName: env.WF_WORKFLOW_QUEUE_NAME?.trim() || "wfpc-workflow-runs",
-                jobId: `${request.tenantId}:${request.workflowId}:${request.runId}`
+                jobId: `${request.tenantId}:${request.workflowId}:${request.runId}`,
+                runId: request.runId
               })
             : {
                 queueName: env.WF_WORKFLOW_QUEUE_NAME?.trim() || "wfpc-workflow-runs",
@@ -203,15 +230,16 @@ try {
             JSON.stringify(
               buildProofOutput({
                 modeConfig,
-                summary,
-                requests,
-                snapshots: [...observations.values()],
-                queueSnapshots,
-                observationDurationMs: Date.now() - startedAt,
-                postSuccessObservationMs
-              }),
-              null,
-              2
+              summary,
+              requests,
+              snapshots: [...observations.values()],
+              queueSnapshots,
+              observationDurationMs: Date.now() - startedAt,
+              postSuccessObservationMs,
+              additionalNotes: alignedProofPlan.notes
+            }),
+            null,
+            2
             ) + "\n"
           );
           emittedResult = true;
@@ -240,10 +268,11 @@ try {
               snapshots: [...observations.values()],
               queueSnapshots,
               observationDurationMs: Date.now() - startedAt,
-              postSuccessObservationMs
+              postSuccessObservationMs,
+              additionalNotes: alignedProofPlan.notes
             }),
             null,
-              2
+            2
             ) + "\n"
           );
       }
@@ -254,7 +283,10 @@ try {
   await client.end();
 }
 
-async function queuePressureRun(request) {
+async function queuePressureRun(request, dashboardStartContext) {
+  if (dashboardStartContext) {
+    return queuePressureRunViaDashboardApi(request, dashboardStartContext);
+  }
   const { stdout } = await execFileAsync(
     process.execPath,
     [
@@ -265,6 +297,7 @@ async function queuePressureRun(request) {
       request.userId,
       "--workflow",
       request.workflowId,
+      ...(request.workflowTemplateId ? ["--workflow-template", request.workflowTemplateId] : []),
       "--run",
       request.runId
     ],
@@ -274,7 +307,56 @@ async function queuePressureRun(request) {
     }
   );
 
-  return JSON.parse(stdout);
+  return applyQueuedRunIdentity({
+    request,
+    queueResult: JSON.parse(stdout)
+  });
+}
+
+async function queuePressureRunViaDashboardApi(request, dashboardStartContext) {
+  const sessionToken = dashboardStartContext.getSessionToken({
+    tenantId: request.tenantId,
+    userId: request.userId
+  });
+  const response = await fetch(`${dashboardStartContext.baseUrl}/api/dashboard/runs`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin: dashboardStartContext.portalOrigin,
+      cookie: `${dashboardStartContext.sessionCookieName}=${sessionToken}`
+    },
+    body: JSON.stringify({
+      workflowId: request.workflowTemplateId ?? request.workflowId
+    })
+  });
+
+  let body = null;
+  try {
+    body = await response.json();
+  } catch {
+    body = null;
+  }
+
+  if (response.status !== 202 || !body || body.queued !== true || typeof body.runId !== "string" || body.runId.trim().length === 0) {
+    return {
+      ok: false,
+      error: {
+        status: response.status,
+        body
+      }
+    };
+  }
+
+  return applyQueuedRunIdentity({
+    request,
+    queueResult: {
+      ok: true,
+      result: {
+        queued: true,
+        runId: body.runId.trim()
+      }
+    }
+  });
 }
 
 function parseArgs(values) {
@@ -345,4 +427,69 @@ function toArray(value) {
     return value;
   }
   return value ? [value] : [];
+}
+
+async function resolveTemplateWorkflowId({ client, tenantId, workflowId }) {
+  if (isUuid(workflowId)) {
+    return workflowId;
+  }
+  const result = await client.query(
+    `select id
+     from wfpc.workflow_templates
+     where tenant_id = $1
+     order by created_at desc`,
+    [tenantId]
+  );
+  if (result.rows.length !== 1) {
+    throw new Error(
+      `Expected exactly one workflow template for tenant ${tenantId} when resolving public workflow ${workflowId}, found ${result.rows.length}`
+    );
+  }
+  return String(result.rows[0]?.id ?? "");
+}
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value ?? ""));
+}
+
+async function createDashboardStartContext(source) {
+  const baseUrl = normalizeHttpOrigin(source.WF_LIVE_BASE_URL ?? source.WF_STAGE_API_ORIGIN);
+  const portalOrigin = normalizeHttpOrigin(source.WF_SMOKE_PORTAL_URL ?? source.WF_STAGE_PORTAL_ORIGIN);
+  const sessionCookieName = typeof source.WF_PORTAL_SESSION_COOKIE_NAME === "string" && source.WF_PORTAL_SESSION_COOKIE_NAME.trim().length > 0
+    ? source.WF_PORTAL_SESSION_COOKIE_NAME.trim()
+    : "wf_portal_session";
+  if (!baseUrl || !portalOrigin) {
+    return null;
+  }
+
+  try {
+    const { createRuntimeSessionToken, loadRuntimeSessionAuthEnv } = await import("../dist/api/runtime-auth.js");
+    const runtimeAuthEnv = loadRuntimeSessionAuthEnv(source);
+    return {
+      baseUrl,
+      portalOrigin,
+      sessionCookieName,
+      getSessionToken({ tenantId, userId }) {
+        return createRuntimeSessionToken({
+          signingKey: runtimeAuthEnv.signingKey,
+          issuer: runtimeAuthEnv.issuer,
+          audience: runtimeAuthEnv.audience,
+          session: {
+            tenantId,
+            userId,
+            role: "member"
+          },
+          expiresAt: new Date(Date.now() + 15 * 60_000)
+        });
+      }
+    };
+  } catch {
+    return null;
+  }
+}
+
+function normalizeHttpOrigin(value) {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim().replace(/\/$/, "")
+    : null;
 }

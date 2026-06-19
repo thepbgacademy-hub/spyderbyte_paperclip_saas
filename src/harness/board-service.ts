@@ -927,6 +927,7 @@ export type HarnessFollowThroughView = {
   policyReasonLabel?: string;
   recommendationSummary?: string;
   objectionSummary?: string;
+  nextReviewTrigger?: string;
 };
 
 export type HarnessPendingApprovalView = {
@@ -3821,7 +3822,7 @@ export function createHarnessBoardService(options: {
 
           let dispatchCardId: string | null = null;
           let dispatchDecision: HarnessReviewedNextLaneDispatch["decision"] | null = null;
-          let nextRun = atomicRun;
+          let nextRun: HarnessRunRecord;
 
           if (request.decision === "start_next_lane") {
             if (!nextLaneCard || nextLaneCard.state !== "approved") {

@@ -6,7 +6,9 @@ const compose = normalizeLineEndings(readFileSync("deploy/docker-compose.yml", "
 const nginx = normalizeLineEndings(readFileSync("deploy/nginx/spyderbyte.conf", "utf8"));
 const runbook = normalizeLineEndings(readFileSync("deploy/runbooks/deploy-poc.md", "utf8"));
 const apiDockerfile = normalizeLineEndings(readFileSync("Dockerfile.api", "utf8"));
+const webDockerfile = normalizeLineEndings(readFileSync("Dockerfile.web", "utf8"));
 const workerDockerfile = normalizeLineEndings(readFileSync("Dockerfile.worker", "utf8"));
+const webNginx = normalizeLineEndings(readFileSync("deploy/nginx/web.conf", "utf8"));
 
 describe("deployment POC config", () => {
   it("keeps Redis and the internal workflow engine off public host ports", () => {
@@ -30,6 +32,7 @@ describe("deployment POC config", () => {
     expect(nonProxyPortBlocks).toEqual([]);
     expect(publicPortBlocks.join("\n")).toContain("\"80:80\"");
     expect(publicPortBlocks.join("\n")).toContain("\"443:443\"");
+    expect(compose).toContain('command: ["nginx", "-g", "daemon off;"]');
     expect(nginx).toContain("server_name www.spyderbyte.cloud");
     expect(nginx).toContain("server_name api.spyderbyte.cloud");
     expect(nginx).toContain("location /app-assets/");
@@ -91,6 +94,14 @@ describe("deployment POC config", () => {
   it("ships explicit server and worker container entrypoints for deployment", () => {
     expect(apiDockerfile).toContain('CMD ["node", "dist/api/server-main.js"]');
     expect(apiDockerfile).toContain("COPY scripts ./scripts");
+    expect(webDockerfile).toContain("RUN npm run build:web");
+    expect(webDockerfile).toContain("COPY deploy/nginx/web.conf /etc/nginx/conf.d/default.conf");
+    expect(webDockerfile).toContain("COPY --from=build /app/apps/web/dist ./");
+    expect(webDockerfile).toContain('EXPOSE 3000');
+    expect(webDockerfile).toContain('CMD ["nginx", "-g", "daemon off;"]');
+    expect(webNginx).toContain("listen 3000;");
+    expect(webNginx).toContain("location /assets/");
+    expect(webNginx).toContain("try_files $uri $uri/ /index.html;");
     expect(workerDockerfile).toContain('CMD ["node", "dist/worker/worker-main.js"]');
     expect(workerDockerfile).toContain('HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD ["node", "dist/worker/healthcheck.js"]');
     expect(workerDockerfile).toContain("npm run build:server");

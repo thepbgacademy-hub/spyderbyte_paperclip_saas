@@ -371,6 +371,7 @@ afterAll(() => {
 beforeEach(() => {
   vi.clearAllMocks();
   harnessRepositoryRef.current = makeHarnessRepository();
+  fetchMock.mockReset();
   fetchMock.mockImplementation(async (_url: string, request?: RequestInit) => {
     const body = JSON.parse(String(request?.body));
     const prompt = String(body.input ?? "");
@@ -1539,13 +1540,14 @@ describe("worker runtime", () => {
       }
       return null;
     });
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        output_text:
-          "{\"state\":\"blocked\",\"summary\":\"Need the finalized restructuring assumptions workbook before the tax recommendation can be finalized.\"}"
-      })
-    });
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          output_text:
+            "{\"state\":\"blocked\",\"analysis\":\"The tax lane cannot finish until the finalized restructuring assumptions workbook is confirmed.\",\"nextAction\":\"Request the finalized restructuring assumptions workbook before continuing.\"}"
+        })
+      });
     stdoutWrite.mockClear();
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv(nativeOnlyEnv),
@@ -1568,7 +1570,8 @@ describe("worker runtime", () => {
     });
 
     expect(vi.mocked(createPaperclipClient)).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[1]).toBeUndefined();
     expect(harnessRepositoryRef.current.transitionCardState).toHaveBeenCalledWith({
       cardId: "card_cfo",
       expectedState: "working",
@@ -1734,13 +1737,14 @@ describe("worker runtime", () => {
       }
       return null;
     });
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        output_text:
-          "{\"state\":\"waiting\",\"summary\":\"Need the final customer-facing package summary before the follow-up brief can be approved.\"}"
-      })
-    });
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          output_text:
+            "{\"state\":\"waiting\",\"analysis\":\"The follow-up lane still needs the final customer-facing package summary before the brief can be approved.\",\"nextAction\":\"Request the final customer-facing package summary before resuming this lane.\"}"
+        })
+      });
     stdoutWrite.mockClear();
     const runtime = createWorkerRuntime({
       env: loadWorkerEnv(nativeOnlyEnv),
@@ -1764,16 +1768,17 @@ describe("worker runtime", () => {
     });
 
     expect(vi.mocked(createPaperclipClient)).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual(
       expect.objectContaining({
-        input: expect.stringContaining("Workflow: wf_package_followup")
+        input: expect.stringContaining("Step 1 of 3: interpret the lane")
       })
     );
     expect(String(fetchMock.mock.calls[0]?.[1]?.body)).toContain("Lane title: Draft the package follow-up narrative");
     expect(String(fetchMock.mock.calls[0]?.[1]?.body)).toContain(
       "Continuity summary: Resume the package follow-up lane from the packaged customer-facing outcome."
     );
+    expect(fetchMock.mock.calls[1]).toBeUndefined();
     expect(harnessRepositoryRef.current.transitionCardState).toHaveBeenCalledWith({
       cardId: "card_cmo",
       expectedState: "working",
@@ -1785,7 +1790,9 @@ describe("worker runtime", () => {
         input.cardId === "card_cmo" &&
         input.runId === "run-followup-1" &&
         input.continuitySource === "resume_override" &&
-        String(input.continuitySummary).includes("Need the final customer-facing package summary before the follow-up brief can be approved.") &&
+        String(input.continuitySummary).includes(
+          "The follow-up lane still needs the final customer-facing package summary before the brief can be approved."
+        ) &&
         input.latestResultSummary === "The latest package outcome is ready for follow-up positioning."
       )
     ).toBe(true);
@@ -3309,7 +3316,7 @@ describe("worker runtime", () => {
         updatedAt: "2026-05-21T10:03:00.000Z"
       }
     ]);
-    harnessRepository.listEventsForRun.mockResolvedValueOnce([
+    harnessRepository.listEventsForRun.mockResolvedValue([
       {
         id: "event_attention_requested",
         cardId: "card_cfo",
@@ -4087,6 +4094,175 @@ describe("worker runtime", () => {
       expect.stringContaining("\"type\":\"wealth_factory_harness_execution_claim_existing_working\"")
     );
     expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_dispatch_initial\"")
+    );
+
+    await runtime.close();
+  });
+
+  it("keeps reviewed follow-on dispatch provenance when a later worker pickup resumes an already-working next lane", async () => {
+    const onHarnessLaneReady = vi.fn();
+    const onHarnessExecutionClaimed = vi.fn();
+    const onHarnessExistingWorkingExecutionClaim = vi.fn();
+    const onHarnessExecutionDispatched = vi.fn();
+    const onHarnessInitialLaneStart = vi.fn();
+    const onHarnessFollowOnDispatch = vi.fn();
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-reviewed-follow-on-resume",
+      onHarnessLaneReady,
+      onHarnessExecutionClaimed,
+      onHarnessExistingWorkingExecutionClaim,
+      onHarnessExecutionDispatched,
+      onHarnessInitialLaneStart,
+      onHarnessFollowOnDispatch
+    });
+
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.listCardsForRun.mockResolvedValueOnce([
+      {
+        id: "card_ceo",
+        runId: "run-1",
+        parentCardId: null,
+        persona: "ceo",
+        title: "Plan run",
+        deliverableType: "plan",
+        state: "planning",
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      },
+      {
+        id: "card_cfo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Pressure-test the pricing lane",
+        deliverableType: "pricing_review",
+        state: "done",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:06:00.000Z"
+      },
+      {
+        id: "card_cmo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cmo",
+        title: "Prepare launch messaging",
+        deliverableType: "marketing_plan",
+        state: "working",
+        executionClaimToken: "claim-cmo-active",
+        executionClaimedAt: "2026-05-21T10:07:30.000Z",
+        createdAt: "2026-05-21T10:02:00.000Z",
+        updatedAt: "2026-05-21T10:07:30.000Z"
+      }
+    ]);
+    harnessRepository.listEventsForRun.mockResolvedValue([
+      {
+        id: "event_follow_on_dispatch_prior",
+        cardId: "card_cmo",
+        eventKind: "execution_dispatched",
+        payload: {
+          kind: "follow_on_dispatch",
+          kindLabel: "Follow-on dispatch",
+          executionStage: "post_outcome_follow_on",
+          executionStageLabel: "Post-outcome follow-on",
+          reactivatedRun: false,
+          triggeredByCardId: "card_cfo",
+          triggeredByPersona: "cfo",
+          triggeredByOutcomeState: "done",
+          triggeredByResultSummary: "Pricing floor is stable enough for launch."
+        },
+        createdAt: "2026-05-21T10:07:30.000Z"
+      }
+    ]);
+
+    stdoutWrite.mockClear();
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+
+    expect(harnessRepository.refreshCardExecutionClaim).not.toHaveBeenCalled();
+    expect(onHarnessExecutionClaimed).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      executionClaim: {
+        kind: "existing_working_claim",
+        claimedAt: "2026-05-21T10:07:30.000Z",
+        previousClaimedAt: "2026-05-21T10:07:30.000Z"
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cmo",
+        persona: "cmo"
+      })
+    });
+    expect(onHarnessExistingWorkingExecutionClaim).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      executionClaim: {
+        kind: "existing_working_claim",
+        claimedAt: "2026-05-21T10:07:30.000Z",
+        previousClaimedAt: "2026-05-21T10:07:30.000Z"
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cmo",
+        persona: "cmo"
+      })
+    });
+    expect(onHarnessExecutionDispatched).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      dispatchHandoff: {
+        kind: "follow_on_dispatch",
+        kindLabel: "Follow-on dispatch",
+        executionStage: "post_outcome_follow_on",
+        executionStageLabel: "Post-outcome follow-on",
+        reactivatedRun: false,
+        triggeredByCardId: "card_cfo",
+        triggeredByPersona: "cfo",
+        triggeredByOutcomeState: "done",
+        triggeredByResultSummary: "Pricing floor is stable enough for launch."
+      },
+      laneExecution: expect.objectContaining({
+        cardId: "card_cmo",
+        persona: "cmo"
+      })
+    });
+    expect(onHarnessFollowOnDispatch).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      dispatchHandoff: expect.objectContaining({
+        kind: "follow_on_dispatch",
+        executionStage: "post_outcome_follow_on",
+        triggeredByCardId: "card_cfo"
+      }),
+      laneExecution: expect.objectContaining({
+        cardId: "card_cmo",
+        persona: "cmo"
+      })
+    });
+    expect(onHarnessInitialLaneStart).not.toHaveBeenCalled();
+    expect(stdoutWrite).toHaveBeenCalledWith(
+      expect.stringContaining("\"type\":\"wealth_factory_harness_execution_dispatch_follow_on\"")
+    );
+    expect(stdoutWrite).not.toHaveBeenCalledWith(
       expect.stringContaining("\"type\":\"wealth_factory_harness_execution_dispatch_initial\"")
     );
 
@@ -4914,7 +5090,7 @@ describe("worker runtime", () => {
         updatedAt: "2026-05-21T10:05:00.000Z"
       }
     ]);
-    harnessRepository.listEventsForRun.mockResolvedValueOnce([
+    harnessRepository.listEventsForRun.mockResolvedValue([
       {
         id: "event_attention_requested",
         cardId: "card_cfo",
@@ -5134,7 +5310,7 @@ describe("worker runtime", () => {
       }
     ]);
     harnessRepository.claimCardForExecution.mockResolvedValueOnce(null);
-    harnessRepository.listEventsForRun.mockResolvedValueOnce([
+    harnessRepository.listEventsForRun.mockResolvedValue([
       {
         id: "event_attention_requested",
         cardId: "card_cfo",
@@ -5749,7 +5925,7 @@ describe("worker runtime", () => {
       }
     ]);
     harnessRepository.claimCardForExecution.mockResolvedValueOnce(null);
-    harnessRepository.listEventsForRun.mockResolvedValueOnce([
+    harnessRepository.listEventsForRun.mockResolvedValue([
       {
         id: "event_attention_requested",
         cardId: "card_cfo",

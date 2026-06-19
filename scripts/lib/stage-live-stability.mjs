@@ -4,6 +4,7 @@ import {
   DEFAULT_STAGE_SSH_ENV_FILE,
   buildStageProofPlan
 } from "./stage-live-proof.mjs";
+import { alignDurableHarnessProofPlan } from "./native-proof-lane-model.mjs";
 
 export const DEFAULT_STAGE_STABILITY_ENV_FILE = DEFAULT_STAGE_PROOF_ENV_FILE;
 export const DEFAULT_STAGE_STABILITY_SSH_ENV_FILE = DEFAULT_STAGE_SSH_ENV_FILE;
@@ -14,8 +15,7 @@ export const DEFAULT_STAGE_STABILITY_LANES = ["primary", "secondary", "tertiary"
 export const DEFAULT_STAGE_STABILITY_FOCUS_CONTAINERS = [
   "wf-stage-api",
   "wf-stage-worker",
-  "wf-stage-web",
-  "paperclip"
+  "wf-stage-web"
 ];
 
 export function parseStageStabilityArgs(argv) {
@@ -43,14 +43,25 @@ export function parseStageStabilityArgs(argv) {
 }
 
 export function buildStageStabilityPlan({ args, env }) {
-  const envFilePath = normalizeValue(args["env-file"] ?? env.WF_STAGE_ENV_FILE) ?? DEFAULT_STAGE_STABILITY_ENV_FILE;
-  const sshEnvFilePath = normalizeValue(args["ssh-env-file"] ?? env.WF_STAGE_SSH_ENV_FILE) ?? DEFAULT_STAGE_STABILITY_SSH_ENV_FILE;
+  const envFilePath =
+    resolveSingleOptionValue({ args, key: "env-file", envValue: env.WF_STAGE_ENV_FILE }) ?? DEFAULT_STAGE_STABILITY_ENV_FILE;
+  const sshEnvFilePath =
+    resolveSingleOptionValue({ args, key: "ssh-env-file", envValue: env.WF_STAGE_SSH_ENV_FILE }) ?? DEFAULT_STAGE_STABILITY_SSH_ENV_FILE;
   const sudoPasswordFilePath =
-    normalizeValue(args["sudo-password-file"] ?? env.WF_STAGE_SUDO_PASSWORD_FILE) ?? DEFAULT_STAGE_STABILITY_SUDO_PASSWORD_FILE;
+    resolveSingleOptionValue({ args, key: "sudo-password-file", envValue: env.WF_STAGE_SUDO_PASSWORD_FILE })
+    ?? DEFAULT_STAGE_STABILITY_SUDO_PASSWORD_FILE;
   const queueContainer =
-    normalizeValue(args["queue-container"] ?? env.WF_STAGE_QUEUE_CONTAINER) ?? DEFAULT_STAGE_STABILITY_QUEUE_CONTAINER;
+    validateContainerToken(
+      resolveSingleOptionValue({ args, key: "queue-container", envValue: env.WF_STAGE_QUEUE_CONTAINER })
+      ?? DEFAULT_STAGE_STABILITY_QUEUE_CONTAINER,
+      "queue-container"
+    );
   const proofContainer =
-    normalizeValue(args["proof-container"] ?? env.WF_STAGE_PROOF_CONTAINER) ?? DEFAULT_STAGE_STABILITY_PROOF_CONTAINER;
+    validateContainerToken(
+      resolveSingleOptionValue({ args, key: "proof-container", envValue: env.WF_STAGE_PROOF_CONTAINER })
+      ?? DEFAULT_STAGE_STABILITY_PROOF_CONTAINER,
+      "proof-container"
+    );
   const focusContainers = parseFocusContainers(args["focus-container"] ?? env.WF_STAGE_FOCUS_CONTAINERS);
   const laneNames = parseLaneNames(args.lanes ?? env.WF_STAGE_STABILITY_LANES);
   const lanes = laneNames.map((laneName) => {
@@ -73,12 +84,21 @@ export function buildStageStabilityPlan({ args, env }) {
     env
   });
   const sshTarget =
-    normalizeValue(args["ssh-target"] ?? env.WF_STAGE_SSH_TARGET)
+    resolveSingleOptionValue({ args, key: "ssh-target", envValue: env.WF_STAGE_SSH_TARGET })
     ?? stageProofPlan.preflightDb.sshTarget
     ?? null;
   if (!sshTarget) {
     throw new Error("WF_STAGE_SSH_TARGET or VPS2_USER/VPS2_HOST is required for stage stability proof");
   }
+
+  const fairnessProofPlan = alignDurableHarnessProofPlan({
+    lanes: lanes.map((lane) => ({ ...lane, runs: 3 })),
+    cycles: 3
+  });
+  const soakProofPlan = alignDurableHarnessProofPlan({
+    lanes: lanes.map((lane) => ({ ...lane, runs: soakRunCount(lane.laneName) })),
+    cycles: 8
+  });
 
   return {
     envFilePath,
@@ -91,6 +111,7 @@ export function buildStageStabilityPlan({ args, env }) {
     preflightDb: stageProofPlan.preflightDb,
     dryRun: args["dry-run"] === true,
     lanes,
+    proofModelNotes: [...new Set([...fairnessProofPlan.notes, ...soakProofPlan.notes])],
     steps: [
       {
         id: "stage-live-proof",
@@ -121,7 +142,7 @@ export function buildStageStabilityPlan({ args, env }) {
           "--order",
           "staggered",
           "--cycles",
-          "3",
+          String(fairnessProofPlan.cycles),
           "--cycle-interval-ms",
           "500",
           "--queue-interval-ms",
@@ -130,7 +151,7 @@ export function buildStageStabilityPlan({ args, env }) {
           "240000",
           "--post-success-observation-ms",
           "15000",
-          ...lanes.flatMap((lane) => ["--lane", formatLaneSpec(lane, 3)])
+          ...fairnessProofPlan.lanes.flatMap((lane) => ["--lane", formatLaneSpec(lane, lane.runs)])
         ]
       },
       {
@@ -170,7 +191,7 @@ export function buildStageStabilityPlan({ args, env }) {
           "--order",
           "staggered",
           "--cycles",
-          "8",
+          String(soakProofPlan.cycles),
           "--cycle-interval-ms",
           "1500",
           "--queue-interval-ms",
@@ -179,37 +200,11 @@ export function buildStageStabilityPlan({ args, env }) {
           "240000",
           "--post-success-observation-ms",
           "120000",
-          ...lanes.flatMap((lane) => ["--lane", formatLaneSpec(lane, soakRunCount(lane.laneName))])
+          ...soakProofPlan.lanes.flatMap((lane) => ["--lane", formatLaneSpec(lane, lane.runs)])
         ]
       }
     ]
   };
-}
-
-export function rewriteStageStabilityLaneSpecs({ stepArgs, workflowTemplateIdByLane }) {
-  const args = Array.isArray(stepArgs) ? [...stepArgs] : [];
-  if (!(workflowTemplateIdByLane instanceof Map) || workflowTemplateIdByLane.size === 0) {
-    return args;
-  }
-
-  for (let index = 0; index < args.length; index += 1) {
-    if (args[index] !== "--lane") {
-      continue;
-    }
-    const laneSpec = args[index + 1];
-    const parsedLane = parseStageStabilityLaneSpec(laneSpec);
-    const resolvedWorkflowTemplateId = workflowTemplateIdByLane.get(stageStabilityLaneKey(parsedLane));
-    if (!resolvedWorkflowTemplateId) {
-      continue;
-    }
-    args[index + 1] = formatStageStabilityLaneSpec({
-      ...parsedLane,
-      workflowId: resolvedWorkflowTemplateId
-    });
-    index += 1;
-  }
-
-  return args;
 }
 
 function parseLaneNames(value) {
@@ -245,27 +240,32 @@ function buildDefaultAuditPath(filename) {
   return `audit/${date}/${filename}`;
 }
 
-function parseStageStabilityLaneSpec(spec) {
-  const parts = String(spec ?? "").split(":");
-  if (parts.length !== 5) {
-    throw new Error("Stage stability lane specs must be formatted as lane:tenant:user:workflow:runs");
+function resolveSingleOptionValue({ args, key, envValue }) {
+  if (Object.hasOwn(args, key)) {
+    return parseSingleOptionValue(args[key], key, { rejectBlank: true });
   }
-  const [lane, tenantId, userId, workflowId, runs] = parts;
-  return {
-    lane,
-    tenantId,
-    userId,
-    workflowId,
-    runs
-  };
+  return parseSingleOptionValue(envValue, key);
 }
 
-function formatStageStabilityLaneSpec(lane) {
-  return [lane.lane, lane.tenantId, lane.userId, lane.workflowId, lane.runs].join(":");
+function parseSingleOptionValue(value, optionName, options = {}) {
+  const { rejectBlank = false } = options;
+  if (value === true) {
+    throw new Error(`Stage stability option --${optionName} requires a value`);
+  }
+  if (Array.isArray(value)) {
+    throw new Error(`Stage stability option --${optionName} may only be provided once`);
+  }
+  if (rejectBlank && typeof value === "string" && value.trim().length === 0) {
+    throw new Error(`Stage stability option --${optionName} cannot be blank`);
+  }
+  return normalizeValue(value);
 }
 
-function stageStabilityLaneKey(lane) {
-  return `${lane.lane}:${lane.tenantId}:${lane.userId}:${lane.workflowId}`;
+function validateContainerToken(value, optionName) {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)) {
+    throw new Error(`Stage stability option --${optionName} must be a shell-safe container token`);
+  }
+  return value;
 }
 
 function normalizeValue(value) {

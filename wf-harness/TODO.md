@@ -58,6 +58,8 @@ This file tracks the new harness subproject only.
   - [x] Phase F: Close the Hermes-style dashboard benchmark.
   - [x] Phase G: Close harness-specific proof gaps.
   - [x] Phase H: Collapse the `memoryBoundary` seam to a bounded launch-safe summary.
+- [x] Complete the launch-closeout verification pass against the combined Phase F/G/H proof surface.
+- [x] Add a stage-owned VPS stability proof wrapper so the isolated `wf-api.spyderbyte.cloud` lane can rerun canonical stage proof, drain fairness, and bounded soak with stage-safe defaults and a dry-run plan mode.
 
 ## V1 Build Targets
 
@@ -125,10 +127,20 @@ This file tracks the new harness subproject only.
   - [x] Re-check completed work against the design doc, guardrails doc, active plan, TODO, and handoff before phase closeout.
   - [x] Reject any phase that promotes package-overlay/demo content into core-platform seams without prior design approval.
   - [x] Record the alignment result as part of each phase handoff, not as an optional afterthought.
+- [x] Add a mandatory post-local-green live validation gate for stage/runtime/deploy slices when the seam can be exercised safely on the isolated VPS lane.
+  - [x] After local tests/build/proof go green, run the matching non-destructive VPS-backed validation before reviewer closeout and phase acceptance.
+  - [x] Keep that live validation on the isolated Wealth Factory stage lane when possible, and do not treat unrelated shared-host containers or ports as a product regression if they are already part of the approved exception posture.
+  - [x] If a slice is purely local and has no safe live seam to exercise, record that explicitly in the phase summary instead of silently skipping the live check.
 - [x] Add a mandatory pre-phase GitNexus seam/blast-radius gate and enforce it before future phases begin.
   - [x] Run `gitnexus status` at the beginning of every phase.
   - [x] If stale, use the known-good Windows recovery path: `gitnexus clean --force`, `GITNEXUS_WORKER_SUB_BATCH_TIMEOUT_MS=120000`, `GITNEXUS_WORKER_SUB_BATCH_MAX_BYTES=4194304`, and `npx gitnexus analyze --index-only --skip-agents-md --skip-skills --no-stats --worker-timeout 120`.
   - [x] Run `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` before edits begin, and record the headline blast-radius result in the phase summary/handoff.
+- [x] Close the bounded native runtime-proof cleanup slice so `tests/worker-runtime.test.ts` matches the current native staged/single-step contract end to end.
+  - [x] Reset per-test `fetchMock` queues in `beforeEach` so stale staged responses cannot bleed into later runtime proofs.
+  - [x] Keep the package-followup waiting proof aligned to the real stage-1 interpretation resume summary instead of unused downstream staged responses.
+  - [x] Keep the example overlay waiting proof tenant-scoped by preventing stale package-followup mock carry-over.
+  - [x] Restore the cut-over connect-first proof to the staged three-call native path instead of a single-step fetch expectation.
+  - [x] Keep this proof-cleanup slice local-only because it changes test harness expectations only, not deploy/runtime/public behavior.
 - [x] Design the package-overlay workflow registration seam so industry-specific workflows can load from installed package context without entering the core built-in registry.
 - [x] Decide that `wf_connect_first_workflow`, `wf_tax_strategy`, and `wf_package_followup` remain the current intentional core built-in exceptions in the design docs.
 - [x] Require future industry-specific or package-specific workflow families to use the overlay seam unless the design docs are explicitly revised first.
@@ -138,10 +150,55 @@ This file tracks the new harness subproject only.
 - [x] Keep private worker/native post-outcome follow-through explicit with a state-by-state envelope contract so child execution does not reconstruct resume/review/dispatch posture from generic run-state heuristics.
 - [x] Deepen the private worker/native execution seam beyond `orchestratorHandoff` plus `postOutcomeDirectives` into the next bounded orchestrator/child execution slice without reopening public dashboard/start behavior.
 - [ ] Historical carry-forward after the audit-correction track resumes: continue deepening the private worker/native execution seam beyond `orchestratorHandoff`, `postOutcomeDirectives`, `boardContext`, full native outcome-state enforcement, bounded registry extraction, shared prompt-context extraction, parser-module extraction, and the first bounded multi-step worker lane without reopening public dashboard/start behavior.
-- [ ] Primary active track: run the audit correction phases in order, preserving the aligned safety rails while restoring the missing CEO-centered product loop and proof coverage.
+- [x] Primary active track: run the audit correction phases in order, preserving the aligned safety rails while restoring the missing CEO-centered product loop and proof coverage.
+- [x] Run the launch-closeout verification pass with fresh GitNexus preflight, combined Phase F/G/H proof, build/web build, browser proof, and reviewer closeout.
+- [x] Execute the new authenticated harness-board live-route proof in a configured live runtime environment, then decide whether to ship from the current branch.
+  - [x] Add the authenticated harness-board browser proof to `apps/web/tests/live/deployment.spec.ts`.
+  - [x] Extend `scripts/external-smoke-security.mjs` so the authenticated smoke path now checks the harness-board shell route and authenticated `/api/harness/board` API response.
+  - [x] Reconcile the handoff wording so the overall board page vs compact `harness-board` cockpit split is described consistently.
+  - [x] Make the authenticated harness-board smoke/browser proof resolve shell and API checks from one canonical board selector, and require an explicit workflow selector for the live browser proof.
+  - [x] Record the isolated VPS 2 stage-host rollout path in `deploy/runbooks/vps2-isolated-wealth-factory-stage-rollout.md` so live proof can proceed on `wf-api.spyderbyte.cloud` without disturbing the shared `api.spyderbyte.cloud` route.
+  - [x] Run `npm run prove:stage-live` against the isolated `wf-api.spyderbyte.cloud` lane with the real stage env from `E:/the_secrets/projects/wealth-factory-stage/wf-stage.vps2.env`.
+    - [x] Keep `api.spyderbyte.cloud` unchanged while the isolated proof lane is the canonical launch validation surface.
+  - [x] Record the current shared-host exception explicitly: on June 15, 2026 the proof stayed green with `WF_SMOKE_PRIVATE_PORTS=6379,9000,3000,5173,8080,8081,2375` because unrelated VPS 2 test lanes still intentionally held ports `5432`, `8000`, and `8443` open, and that setting is now the codified stage-proof posture rather than a one-off operator workaround.
+  - [x] Decide the bounded shipping posture from the current branch: the branch is launch-proof-ready on `wf-api.spyderbyte.cloud`, while any cutover from `api.spyderbyte.cloud` stays a separate deliberate operator decision.
+- [x] Close the bounded authenticated dashboard-run live acceptance slice on the isolated stage lane so the runtime-backed public start seam is proven through HTTP `202` plus durable engine state, not only shell/browser proof.
+  - [x] Add a reusable dashboard-run proof helper in `scripts/lib/live-dashboard-run-proof.mjs` that posts an authenticated `/api/dashboard/runs` request and verifies the requested workflow selector plus durable workflow-run, outbox, and bound-provider state.
+  - [x] Add focused TDD coverage in `tests/live-dashboard-run-proof.test.ts`, including the remote snapshot-loader override and one bounded retry for immediate post-`202` durable-row timing.
+  - [x] Add `scripts/prove-live-dashboard-run.mjs` so the isolated stage lane can run the proof against `wf-api.spyderbyte.cloud` with a generated runtime session and a read-only remote verifier inside `wf-stage-api`.
+  - [x] Record the live selector truth explicitly: on June 18, 2026 the authenticated dashboard lane accepted the visible workflow-template UUID `44444444-4444-4444-8444-444444444444` for the demo workflow instead of the older public id string assumption.
+  - [x] Keep the stage verification path read-only and host-safe by querying durable state through `ssh + sudo + docker exec` inside `wf-stage-api` instead of reviving the invalid local DB-tunnel compatibility path for this environment.
+- [x] Add a repo-owned `npm run prove:stage-stability` wrapper so VPS 2 launch-stability checks use isolated-stage defaults, the approved shared-host private-port exception posture, stage-owned focus containers, canonical demo lanes, and a safe dry-run inspection path instead of operator-rebuilt generic commands.
+- [x] Remove the dead wrapper-side workflow-template compatibility lookup from `npm run prove:stage-stability` and replace the old source-text-only proof with a behavioral orchestration test, so the wrapper stays thin while `prove:live-fairness` continues to own template resolution.
+- [x] Close the bounded repo-verification cleanup slice so repo-wide TypeScript/build and the nearby native/public proof gates return green again without introducing new runtime-scope widening.
+  - [x] Keep the production fix narrow to the already-landed private staged native executor seam by adding only a typed incomplete-interpretation guard around the existing early-exit behavior instead of changing public/runtime contracts again.
+  - [x] Realign stale proof expectations in the runtime-server, worker-healthcheck, and `.mjs`-backed proof tests to the current native/public bootstrap truth.
+  - [x] Prefer the repo's existing `createRequire()` pattern for `.mjs` proof helpers and remove redundant ambient shim drift instead of carrying two import strategies.
+  - [x] Keep this cleanup slice local-only because it repairs verification drift only and does not change VPS/runtime/deploy/public behavior.
+- [x] Canonicalize the current core family set for the bounded pre-pack cleanup slice, so registry exception lists and nearby bootstrap/proof checks all point at the same source of truth before the later matched domain-specific data-pack phase touches the full set.
 - [x] Next active slice after Phase E: close the Hermes-style dashboard benchmark by simplifying the board around current focus, active lanes, next actions, governance posture, and progress while keeping deferred `memoryBoundary` detail out of the primary launch surface.
 - [x] Next active slice after Phase F: close the remaining harness-specific proof gaps around tenant isolation under simultaneous harness activity, harness-specific fairness/backpressure, private metadata non-leakage, mixed-version/cutover safety, and the portable Docker-backed proof path.
 - [x] Keep worker/native child execution bounded by a private orchestrator handoff contract instead of reconstructing orchestrator intent from raw lane metadata or public dispatch telemetry.
+- [x] Widen the bounded staged native executor path from the first `wf_connect_first_workflow` lane to all current intentional core built-in workflow families after VPS/runtime stability proof, while keeping the neutral overlay example on the single-step seam.
+- [x] Complete one bounded staged-native proof/cleanup slice across the remaining guided staged families before any later domain-specific prompt/data-pack work.
+  - [x] Prove `wf_tax_strategy` and `wf_package_followup` now match the existing `wf_connect_first_workflow` proof posture for staged `waiting`, truthful `blocked`, `cancelled`, validation-rejected, state-divergence, and invalid structured stage-payload outcomes.
+  - [x] Prove the staged prompt surface keeps per-family `extraGuidance` and `doneInstruction` lines present across interpret, draft, and validate for the current guided staged families.
+  - [x] Record this slice as proof-only with no safe VPS/live seam to exercise because it does not change runtime, deploy, or public-surface behavior.
+- [x] Now that VPS runtime/deployment stability is proven, decide whether to deepen the current core built-in workflow families from native shells into real domain-specific prompt/data packs.
+  - [x] Do not deepen `wf_tax_strategy` alone before VPS stability is complete.
+  - [x] If we build a real domain-specific prompt/data pack for one current intentional core family, build the matched bounded prompt/data packs for all current intentional core families in the same planned track instead of deepening one family in isolation.
+  - [x] Keep that future track bounded to the current intentional core set unless the design docs are explicitly revised first.
+  - [x] Complete the bounded pre-pack widening step first: `wf_connect_first_workflow`, `wf_tax_strategy`, and `wf_package_followup` now all use the same staged native `interpret -> draft -> validate -> return` executor path, while `wf-example-audit` remains the explicit single-step parser host.
+  - [x] Complete the matched domain-specific prompt/data-pack phase across the current core family set without widening queue, dashboard, runtime-server, or public seams.
+    - [x] Add family-scoped staged `domainContext` packs for `wf_connect_first_workflow`, `wf_tax_strategy`, and `wf_package_followup`.
+    - [x] Thread role, interpretation, draft, and validation domain lines through the staged prompt builders while keeping executor flow unchanged.
+    - [x] Prove definition completeness plus prompt injection/isolation through focused native executor and worker-runtime tests.
+    - [x] Record this slice as local-only with no safe VPS/live seam because it changes prompt content only, not deploy/runtime/public behavior.
+  - [x] Complete one bounded private native-executor cleanup slice so non-draftable staged outcomes stop after interpretation instead of always paying draft and validate provider calls.
+    - [x] Keep the code change inside `src/worker/native-executor.ts` plus focused test updates only.
+    - [x] Preserve the existing `done -> draft -> validate` path and fail-closed invalid/stage-divergence behavior.
+    - [x] Record this slice as local-only because it changes executor cost/failure posture only, not deploy/runtime/public behavior.
+  - [x] Close the earlier `wf_package_followup` / `wf-example-audit` worker-runtime proof drift and restore the full `tests/worker-runtime.test.ts` file as a valid phase-closeout gate again.
 
 - [x] Read `wf-harness/docs/plans/2026-06-05-wf-native-execution-replacement-plan.md` before continuing the active native replacement track.
 - [x] Reconcile persisted run-state progression with the new child-card advancement seam so run-level status is no longer effectively bootstrap-only.
@@ -198,6 +255,8 @@ This file tracks the new harness subproject only.
   - [x] Persist a bounded `attention_resolved` event when a previously requested CEO review / resume / unblock state is cleared by later durable lane progress.
   - [x] Keep the board attention read model current by clearing stale `pendingAttention` after durable resolution while preserving bounded historical activity for the resolved attention path.
   - [x] Return explicit attention-transition metadata from worker lane outcomes so runtime consumers can distinguish newly requested, resolved, unchanged, and absent attention without diffing event history.
+  - [x] Rehydrate durable follow-on dispatch provenance when a later worker pickup resumes an already-`working` next lane, so reviewed next-lane handoff truth no longer collapses back to `initial_claim`.
+  - [x] Fail closed back to `initial_claim` when persisted dispatch history is absent, non-follow-on, or malformed, so resumed-worker provenance stays bounded instead of guessing.
 - [x] Suppress duplicate runtime post-outcome events and hooks when the same unresolved attention need remains active after a later durable lane outcome.
 - [x] Emit a dedicated bounded runtime `attention_resolved` handoff/event when later durable lane progress clears an earlier CEO-review / resume / unblock need.
 - [x] Persist bounded attention snapshot metadata with `attention_requested` / `attention_resolved` events so the board can reuse durable labels and target metadata later.

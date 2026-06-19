@@ -27,8 +27,13 @@ describe("worker healthcheck", () => {
     const pingRedis = vi.fn().mockResolvedValue(undefined);
     const checkPaperclip = vi.fn().mockResolvedValue(true);
     const verifyPaperclipAuth = vi.fn().mockResolvedValue(undefined);
+    const legacyDependencies = {
+      pingRedis,
+      checkPaperclip,
+      verifyPaperclipAuth
+    };
 
-    await expect(createWorkerHealthcheck({ pingRedis, checkPaperclip, verifyPaperclipAuth })()).resolves.toBeUndefined();
+    await expect(createWorkerHealthcheck(legacyDependencies)()).resolves.toBeUndefined();
 
     expect(checkPaperclip).not.toHaveBeenCalled();
     expect(verifyPaperclipAuth).not.toHaveBeenCalled();

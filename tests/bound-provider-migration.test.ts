@@ -34,6 +34,7 @@ describe("bound provider context migration", () => {
     expect(helper).toMatch(/0005_bound_provider_context\.sql/i);
     expect(helper).toMatch(/0030_bound_provider_context_single_entry\.sql/i);
     expect(helper).toMatch(/0031_bound_provider_context_binding_shape\.sql/i);
+    expect(helper).toMatch(/lower\(pg_get_constraintdef\(oid\)\) like '%references wfpc\.secret_references\(id\)%'/i);
     expect(helper).toMatch(/workflow_runs_bound_secret_reference_id_fkey/i);
     expect(helper).toMatch(/references wfpc\.secret_references\(id\)/i);
     expect(helper).toMatch(/workflow_runs_bound_provider_context_object_check/i);

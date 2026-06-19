@@ -191,7 +191,7 @@ function extractOutputText(value: unknown): string {
   return textParts.join("\n");
 }
 
-function normalizeOutputText(text: string): string {
+function _normalizeOutputText(text: string): string {
   const collapsed = text.replace(/\s+/g, " ").trim();
   if (collapsed.length <= MAX_RESULT_SUMMARY_LENGTH) {
     return collapsed;

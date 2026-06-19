@@ -2,6 +2,7 @@ services:
   web:
     image: spyderbyte/web:${SPYDERBYTE_IMAGE_TAG:?set SPYDERBYTE_IMAGE_TAG}
     restart: unless-stopped
+    command: ["nginx", "-g", "daemon off;"]
     expose:
       - "3000"
     environment:

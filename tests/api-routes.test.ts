@@ -24,8 +24,8 @@ describe("authenticated dashboard API", () => {
     const deps = {
       authenticate: vi.fn().mockResolvedValue(session),
       requireTenantMember: vi.fn().mockResolvedValue(undefined),
-      listWorkflows: vi.fn().mockResolvedValue([{ id: "wf-social-calendar", name: "Wealth Factory Social Calendar" }]),
-      listPackages: vi.fn().mockResolvedValue([{ id: "pkg-social", name: "Social Media Agency" }]),
+      listWorkflows: vi.fn().mockResolvedValue([{ id: "wf-connect-first", name: "Connect First Workflow" }]),
+      listPackages: vi.fn().mockResolvedValue([{ id: "pkg-bib-connect", name: "Connect First" }]),
       listArtifacts: vi.fn().mockResolvedValue([{ id: "artifact-1", filename: "post.png", expiresAt: "2026-05-11T00:00:00.000Z" }]),
       listProviderConnections: vi.fn().mockResolvedValue([{ providerKind: "openai_api", label: "OpenAI", connected: true }]),
       listStorageConnectors: vi
@@ -42,8 +42,8 @@ describe("authenticated dashboard API", () => {
     await expect(api.listDashboard({ authorization: "Bearer valid" })).resolves.toEqual({
       tenantId: "tenant-1",
       role: "member",
-      workflows: [{ id: "wf-social-calendar", name: "Wealth Factory Social Calendar", startEnabled: true }],
-      packages: [{ id: "pkg-social", name: "Social Media Agency" }],
+      workflows: [{ id: "wf-connect-first", name: "Connect First Workflow", startEnabled: true }],
+      packages: [{ id: "pkg-bib-connect", name: "Connect First" }],
       artifacts: [{ id: "artifact-1", filename: "post.png", expiresAt: "2026-05-11T00:00:00.000Z" }],
       providerConnections: [{ providerKind: "openai_api", label: "OpenAI", connected: true }],
       storageConnectors: [{ id: "storage-1", providerKind: "google_drive", displayName: "Company Drive", connected: true, publicTarget: { folderLabel: "Exports" } }],

@@ -138,6 +138,70 @@ describe("live soak capacity helpers", () => {
     expect(summary.concerningContainers).toEqual([]);
   });
 
+  it("resolves focus container aliases against observed container names before scoring hotspots", () => {
+    const summary = summarizeCapacityPressure({
+      dockerSamples: [
+        {
+          name: "paperclip-gwry-paperclip-1",
+          observedAt: "2026-05-21T12:00:00.000Z",
+          cpuPercent: 280,
+          memoryUsageBytes: 2_350_000_000,
+          memoryPercent: 14.8,
+          pids: 820
+        },
+        {
+          name: "paperclip-gwry-paperclip-1",
+          observedAt: "2026-05-21T12:00:10.000Z",
+          cpuPercent: 305,
+          memoryUsageBytes: 2_420_000_000,
+          memoryPercent: 15.0,
+          pids: 850
+        },
+        {
+          name: "paperclip-gwry-paperclip-1",
+          observedAt: "2026-05-21T12:00:20.000Z",
+          cpuPercent: 330,
+          memoryUsageBytes: 2_510_000_000,
+          memoryPercent: 15.5,
+          pids: 910
+        }
+      ],
+      queueSnapshots: [],
+      focusContainers: ["paperclip"]
+    });
+
+    expect(Object.keys(summary.focus)).toEqual(["paperclip-gwry-paperclip-1"]);
+    expect(summary.concerningContainers).toEqual(["paperclip-gwry-paperclip-1"]);
+  });
+
+  it("deduplicates overlapping focus aliases after resolving observed container names", () => {
+    const summary = summarizeCapacityPressure({
+      dockerSamples: [
+        {
+          name: "paperclip-gwry-paperclip-1",
+          observedAt: "2026-05-21T12:00:00.000Z",
+          cpuPercent: 280,
+          memoryUsageBytes: 2_350_000_000,
+          memoryPercent: 14.8,
+          pids: 820
+        },
+        {
+          name: "paperclip-gwry-paperclip-1",
+          observedAt: "2026-05-21T12:00:10.000Z",
+          cpuPercent: 305,
+          memoryUsageBytes: 2_420_000_000,
+          memoryPercent: 15.0,
+          pids: 850
+        }
+      ],
+      queueSnapshots: [],
+      focusContainers: ["paperclip", "paperclip-gwry-paperclip-1"]
+    });
+
+    expect(Object.keys(summary.focus)).toEqual(["paperclip-gwry-paperclip-1"]);
+    expect(summary.concerningContainers).toEqual(["paperclip-gwry-paperclip-1"]);
+  });
+
   it("defaults verdict scope to all observed containers when no focus override is supplied", () => {
     const summary = summarizeCapacityPressure({
       dockerSamples: [

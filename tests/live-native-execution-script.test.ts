@@ -1,0 +1,57 @@
+import { readFileSync } from "node:fs";
+
+import { describe, expect, it } from "vitest";
+
+describe("live native execution proof script", () => {
+  it("reuses the stage dashboard proof seam and verifies bounded native advancement through dashboard or direct reservation starts", () => {
+    const script = readFileSync("scripts/prove-live-native-execution.mjs", "utf8");
+
+    expect(script).toContain("postDashboardRunAndVerifyDurableBinding");
+    expect(script).toContain("parseStageProofArgs");
+    expect(script).toContain("loadScriptEnv");
+    expect(script).toContain("resolveNativeProofStartSelector");
+    expect(script).toContain("workflow_definition_snapshot");
+    expect(script).toContain("installed_package_overlay");
+    expect(script).toContain("executionEngine");
+    expect(script).toContain("wf_native_v1");
+    expect(script).toContain("wf-stage-api");
+    expect(script).toContain("native_execution_verified");
+    expect(script).toContain("expectedExecutionEngine");
+    expect(script).toContain("execution_outcome_committed");
+    expect(script).toContain("execution_claimed_at");
+    expect(script).toContain("card.persona <> 'ceo'");
+    expect(script).toContain("created_at > $3");
+    expect(script).toContain("advanceNativeExecutionProof");
+    expect(script).toContain("waitForNativeExecutionAcceptance");
+    expect(script).toContain("loadRemoteNativeExecutionState");
+    expect(script).toContain("workflow_templates");
+    expect(script).toContain("workflowTemplateOverride");
+    expect(script).toContain("WF_STAGE_WORKFLOW_TEMPLATE_ID");
+    expect(script).toContain("resolvedStartWorkflowId");
+    expect(script).toContain("direct_public_reservation");
+    expect(script).toContain("reserveDirectNativePublicRun");
+    expect(script).toContain("createAcidGuardRepository");
+    expect(script).toContain("createQueueOutboxWorker");
+    expect(script).toContain("createBullmqWorkflowRunEnqueuer");
+    expect(script).toContain("stageWorkflowRunRedispatch");
+    expect(script).toContain("reserveWorkflowRun");
+    expect(script).toContain("WF_WORKFLOW_QUEUE_NAME must be set");
+    expect(script).toContain("tenant_template");
+    expect(script).toContain("workflow_identity_kind");
+    expect(script).toContain("seedPublicWorkflowHarnessRun");
+    expect(script).toContain("buildRemoteVerificationConfig");
+    expect(script).toContain("verifyDirectNativeReservation");
+    expect(script).toContain("startPath === \"dashboard_public_start\"");
+    expect(script).toContain("attemptedAt");
+    expect(script).toContain("childLane");
+    expect(script).toContain("fresh outcome");
+    expect(script).toContain("JSON.stringify");
+    expect(script).not.toContain("canonicalizeDirectNativePublicRun");
+    expect(script).not.toContain("ensureRemoteDirectProofQueueJob");
+    expect(script).not.toContain("buildInstalledPackageOverlaySnapshot");
+    expect(script).not.toContain("resolveDirectProofWorkflowIdentityKind");
+    expect(script).not.toContain("limit 2");
+    expect(script).not.toContain("queue-live-workflow-run.mjs");
+    expect(script).not.toContain("process.env.WF_WORKFLOW_QUEUE_NAME || 'wfpc-workflow-runs'");
+  });
+});

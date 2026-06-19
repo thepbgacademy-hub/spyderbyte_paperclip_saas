@@ -23,6 +23,7 @@ import {
   type HarnessGovernanceHistoryExportReadyDispatch,
   type HarnessPackageBundleExportReadyDispatch
 } from "../harness/board-service.js";
+import { hasPublicWorkflowHarnessBootstrap, seedPublicWorkflowHarnessRun } from "../harness/public-run-bootstrap.js";
 import { createPostgresHarnessRepository } from "../harness/repository.js";
 import {
   createFilesystemGovernanceHistoryExportWriter,
@@ -451,7 +452,6 @@ export function createDashboardRuntime(options: {
     ...(workflowRunReservation
       ? {
           startWorkflowRun: async (input: { tenantId: string; userId: string; workflowId: string }) => {
-            const runId = randomUUID();
             const installedPackages = await resolveTenantInstalledOverlayPackages({ tenantId: input.tenantId, repositories });
             const registry = createHarnessWorkflowRegistry({
               harnessEnabledWorkflowIds:
@@ -467,6 +467,42 @@ export function createDashboardRuntime(options: {
                 return null;
               }
             })();
+            const existingNativePublicRun =
+              definition &&
+              definition.publicStartEnabled === true &&
+              definition.executionEngine === "wf_native_v1" &&
+              hasPublicWorkflowHarnessBootstrap(input.workflowId)
+                ? await harnessRepository.findLatestRunForTenantWorkflow({
+                    tenantId: input.tenantId,
+                    workflowId: input.workflowId
+                  })
+                : null;
+            if (existingNativePublicRun && definition && definition.publicStartEnabled === true && definition.providerKind) {
+              await acidRepository.transitionWorkflowRunStatus({
+                tenantId: input.tenantId,
+                runId: existingNativePublicRun.id,
+                from: ["queued", "running", "completed", "failed", "cancelled"],
+                to: "queued"
+              });
+              const actionToken = randomUUID();
+              const redispatchQueueJobId = createRedispatchQueueJobId({
+                tenantId: input.tenantId,
+                workflowId: input.workflowId,
+                runId: existingNativePublicRun.id,
+                dispatchKind: "public_start",
+                actionToken
+              });
+              const stagedRedispatch = await acidRepository.stageWorkflowRunRedispatch({
+                tenantId: input.tenantId,
+                runId: existingNativePublicRun.id,
+                userId: input.userId,
+                idempotencyKey: redispatchQueueJobId
+              });
+              if (stagedRedispatch.staged) {
+                return { runId: existingNativePublicRun.id, queued: true };
+              }
+            }
+            const runId = existingNativePublicRun?.id ?? randomUUID();
             return workflowRunReservation.reserveAndEnqueue({
               tenantId: input.tenantId,
               userId: input.userId,
@@ -495,6 +531,24 @@ export function createDashboardRuntime(options: {
                     workflowBinding: {
                       packageId: definition.packageId,
                       providerKind: definition.providerKind
+                    }
+                  }
+                : {}),
+              ...(definition &&
+              definition.executionEngine === "wf_native_v1" &&
+              hasPublicWorkflowHarnessBootstrap(input.workflowId) &&
+              !existingNativePublicRun
+                ? {
+                    onReserved: async ({ transaction, publicWorkflowId, workflowPackageId, providerKind, credentialLabel }) => {
+                      await seedPublicWorkflowHarnessRun({
+                        repository: createPostgresHarnessRepository(transaction),
+                        tenantId: input.tenantId,
+                        runId,
+                        workflowId: publicWorkflowId,
+                        packageId: workflowPackageId,
+                        providerKind,
+                        credentialLabel
+                      });
                     }
                   }
                 : {})

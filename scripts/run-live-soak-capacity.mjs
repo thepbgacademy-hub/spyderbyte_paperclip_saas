@@ -35,6 +35,8 @@ const thresholds = {
 };
 const focusContainers = toArray(args["focus-container"]);
 const queueContainer = readRequiredString(args["queue-container"] ?? "wealth-factory-api-stage2", "queue-container");
+const proofSshTarget = readOptionalString(args["proof-ssh-target"]);
+const proofContainer = readOptionalString(args["proof-container"]);
 const proofOutPath = resolvePath(args["proof-out"] ?? defaultAuditPath("live-soak-capacity-proof.json"));
 const sudoPasswordFile = args["sudo-password-file"] ? resolvePath(args["sudo-password-file"]) : null;
 const sudoPassword = sudoPasswordFile ? parseSecretFileContents(await readFile(sudoPasswordFile, "utf8")) : null;
@@ -47,12 +49,11 @@ await mkdir(dirname(dockerStatsPath), { recursive: true });
 await mkdir(dirname(queueSnapshotsPath), { recursive: true });
 await mkdir(dirname(proofOutPath), { recursive: true });
 
-const proofChild = spawn(process.execPath, ["scripts/prove-live-fairness.mjs", ...proofArgs], {
-  cwd: process.cwd(),
-  env: {
-    ...process.env
-  },
-  stdio: ["ignore", "pipe", "pipe"]
+const proofChild = createProofProcess({
+  proofArgs,
+  proofSshTarget,
+  proofContainer,
+  sudoPassword
 });
 
 const proofStdoutChunks = [];
@@ -342,6 +343,11 @@ function readRequiredString(value, key) {
   return normalized;
 }
 
+function readOptionalString(value) {
+  const normalized = String(value ?? "").trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
 function parseArgs(values) {
   const parsed = {};
   for (let index = 0; index < values.length; index += 1) {
@@ -424,4 +430,35 @@ function parseProofStdout(stdout) {
       proofParseError: error instanceof Error ? error.message : "Failed to parse prove-live-fairness output"
     };
   }
+}
+
+function createProofProcess({ proofArgs, proofSshTarget, proofContainer, sudoPassword }) {
+  if (!proofSshTarget || !proofContainer) {
+    return spawn(process.execPath, ["scripts/prove-live-fairness.mjs", ...proofArgs], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env
+      },
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+  }
+
+  return spawn("ssh", [proofSshTarget, buildRemoteProofCommand({ proofArgs, proofContainer, sudoPassword })], {
+    cwd: process.cwd(),
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+}
+
+function buildRemoteProofCommand({ proofArgs, proofContainer, sudoPassword }) {
+  const escapedProofArgs = proofArgs.map((value) => `'${shellEscapeSingleQuotes(value)}'`).join(" ");
+  const innerCommand = `cd /app && node scripts/prove-live-fairness.mjs ${escapedProofArgs}`.trim();
+  const dockerCommand = `docker exec ${shellEscapeSingleQuotes(proofContainer)} sh -lc '${shellEscapeSingleQuotes(innerCommand)}'`;
+  if (!sudoPassword) {
+    return dockerCommand;
+  }
+  return `printf '%s\\n' '${shellEscapeSingleQuotes(sudoPassword)}' | sudo -S -p '' ${dockerCommand}`;
+}
+
+function shellEscapeSingleQuotes(value) {
+  return String(value).replace(/'/g, `'\"'\"'`);
 }

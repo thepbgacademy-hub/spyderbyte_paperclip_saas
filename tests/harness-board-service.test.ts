@@ -13744,7 +13744,6 @@ describe("harness board service", () => {
 
   it("fails closed when tenant-goal fresh-cycle review carries a stale explicit-review token", async () => {
     const repository = createInMemoryHarnessRepository();
-    let service: ReturnType<typeof createHarnessBoardService>;
     const ceoGoalExecutor = {
       execute: vi.fn().mockImplementation(async ({ runId }: { runId: string }) => {
         const cards = await repository.listCardsForRun(runId);
@@ -13770,7 +13769,7 @@ describe("harness board service", () => {
         };
       })
     };
-    service = createHarnessBoardService({
+    const service = createHarnessBoardService({
       authenticate: vi.fn().mockResolvedValue({
         tenantId: "tenant_123",
         userId: "user_123",

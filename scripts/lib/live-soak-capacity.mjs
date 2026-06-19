@@ -138,7 +138,16 @@ function normalizeThresholds(thresholds) {
 
 function normalizeFocusContainers(focusContainers, byContainer) {
   if (Array.isArray(focusContainers) && focusContainers.length > 0) {
-    return [...new Set(focusContainers.map((value) => String(value ?? "").trim()).filter(Boolean))];
+    const normalizedEntries = [...new Set(focusContainers.map((value) => String(value ?? "").trim()).filter(Boolean))];
+    const availableContainers = Object.keys(byContainer);
+    return [...new Set(normalizedEntries.flatMap((entry) => {
+      const exactMatches = availableContainers.filter((name) => name === entry);
+      if (exactMatches.length > 0) {
+        return exactMatches;
+      }
+      const partialMatches = availableContainers.filter((name) => name.includes(entry));
+      return partialMatches.length > 0 ? partialMatches : [entry];
+    }))];
   }
   return Object.keys(byContainer).sort();
 }

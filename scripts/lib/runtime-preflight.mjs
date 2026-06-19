@@ -60,8 +60,10 @@ export async function loadRuntimePreflight({ client, tenantId, workflowId }) {
   );
   const tenantRows = await client.query("select id, paused_at from wfpc.tenants where id = $1 limit 1", [tenantId]);
   const workflowRows = await client.query(
-    "select id, tenant_id, enabled, provider_kind, package_id from wfpc.workflow_templates where tenant_id = $1 and id = $2 limit 1",
-    [tenantId, workflowId]
+    isUuid(workflowId)
+      ? "select id, tenant_id, enabled, provider_kind, package_id from wfpc.workflow_templates where tenant_id = $1 and id = $2 limit 1"
+      : "select id, tenant_id, enabled, provider_kind, package_id from wfpc.workflow_templates where tenant_id = $1 order by created_at desc limit 1",
+    isUuid(workflowId) ? [tenantId, workflowId] : [tenantId]
   );
   const mappingRows = asRecord(workerSignals.rows[0]).has_company_mapping
     ? await client.query(
@@ -161,4 +163,8 @@ export function summarizeRuntimePreflight(preflight) {
 
 function asRecord(value) {
   return value && typeof value === "object" ? value : {};
+}
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value ?? ""));
 }

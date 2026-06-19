@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import type { WealthFactoryPackage } from "../src/packages/package-types.js";
 import { WEALTH_FACTORY_PACKAGE_CATALOG } from "../src/packages/package-catalog.js";
-import { EXAMPLE_AUDIT_WORKFLOW_ID, NATIVE_WORKFLOW_DEFINITIONS } from "../src/worker/native-workflow-definitions.js";
+import {
+  CURRENT_CORE_NATIVE_WORKFLOW_IDS,
+  EXAMPLE_AUDIT_WORKFLOW_ID,
+  NATIVE_WORKFLOW_DEFINITIONS
+} from "../src/worker/native-workflow-definitions.js";
 import {
   createHarnessWorkflowRegistry,
   createWorkflowRegistry,
@@ -34,7 +38,7 @@ describe("Wealth Factory boundary layer", () => {
   });
 
   it("keeps core exception workflow lists aligned across harness, native-default, and board exposure seams", () => {
-    expect([...WF_HARNESS_ELIGIBLE_WORKFLOWS]).toEqual(["wf_connect_first_workflow", "wf_tax_strategy", "wf_package_followup"]);
+    expect([...WF_HARNESS_ELIGIBLE_WORKFLOWS]).toEqual([...CURRENT_CORE_NATIVE_WORKFLOW_IDS]);
     expect([...WF_NATIVE_DEFAULT_WORKFLOWS]).toEqual([...WF_HARNESS_ELIGIBLE_WORKFLOWS]);
     expect([...WF_BOARD_EXPOSED_WORKFLOWS]).toEqual([...WF_HARNESS_ELIGIBLE_WORKFLOWS]);
   });

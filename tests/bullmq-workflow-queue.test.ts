@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createBullmqWorkflowConsumer, createBullmqWorkflowRunEnqueuer } from "../src/workflows/bullmq-workflow-queue.js";
+import {
+  createBullmqSafeJobId,
+  createBullmqWorkflowConsumer,
+  createBullmqWorkflowRunEnqueuer
+} from "../src/workflows/bullmq-workflow-queue.js";
 import { WorkerRuntimeClosingError } from "../src/worker/runtime-closing-error.js";
 
 const mocks = vi.hoisted(() => ({
@@ -49,6 +53,7 @@ afterEach(() => {
 describe("bullmq workflow queue", () => {
   it("maps reservation inputs to safe BullMQ payloads", async () => {
     mocks.add.mockResolvedValue({ id: "job-1" });
+    const idempotencyKey = "tenant-1:workflow-1:run-1";
 
     const enqueuer = createBullmqWorkflowRunEnqueuer({
       redisUrl: "redis://localhost:6379",
@@ -62,7 +67,7 @@ describe("bullmq workflow queue", () => {
         workflowId: "workflow-1",
         workflowTemplateId: "workflow-1",
         runId: "run-1",
-        idempotencyKey: "tenant-1:workflow-1:run-1"
+        idempotencyKey
       })
     ).resolves.toBe("enqueued");
 
@@ -76,7 +81,7 @@ describe("bullmq workflow queue", () => {
         idempotencyKey: "tenant-1:workflow-1:run-1"
       }),
       {
-        jobId: "tenant-1:workflow-1:run-1"
+        jobId: createBullmqSafeJobId(idempotencyKey)
       }
     );
     expect(mocks.queueCtor).toHaveBeenCalledWith(
@@ -116,8 +121,9 @@ describe("bullmq workflow queue", () => {
     ).resolves.toBe("already_queued");
   });
 
-  it("uses the enqueue request idempotency key as the BullMQ job id while preserving the safe payload run key", async () => {
+  it("uses a BullMQ-safe deterministic job id while preserving the original idempotency key in the payload", async () => {
     mocks.add.mockResolvedValue({ id: "job-redispatch-1" });
+    const idempotencyKey = "tenant-1:workflow-1:run-1:redispatch:resume_lane:abc123def456";
 
     const enqueuer = createBullmqWorkflowRunEnqueuer({
       redisUrl: "redis://localhost:6379",
@@ -131,7 +137,7 @@ describe("bullmq workflow queue", () => {
         workflowId: "workflow-1",
         workflowTemplateId: "workflow-1",
         runId: "run-1",
-        idempotencyKey: "tenant-1:workflow-1:run-1:redispatch:resume_lane:abc123def456"
+        idempotencyKey
       })
     ).resolves.toBe("enqueued");
 
@@ -145,7 +151,7 @@ describe("bullmq workflow queue", () => {
         idempotencyKey: "tenant-1:workflow-1:run-1"
       }),
       {
-        jobId: "tenant-1:workflow-1:run-1:redispatch:resume_lane:abc123def456"
+        jobId: createBullmqSafeJobId(idempotencyKey)
       }
     );
   });

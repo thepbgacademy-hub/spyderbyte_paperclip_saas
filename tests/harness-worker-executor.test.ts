@@ -979,6 +979,317 @@ describe("harness worker executor", () => {
     );
   });
 
+  it("rehydrates reviewed follow-on dispatch provenance when resuming an already-working next lane", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "done";
+    const cmoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "marketing_plan"
+    });
+    markCardWorkingWithClaim(cmoCard, "claim-cmo-active", "2026-05-21T10:07:30.000Z");
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+    await repository.insertCard(cmoCard);
+    await repository.upsertCardContinuity(
+      createHarnessCardContinuityRecord({
+        cardId: cfoCard.id,
+        runId: run.id,
+        continuitySource: "result_recorded",
+        continuitySummary: "Pricing review is complete and ready for launch messaging.",
+        latestResultSummary: "Pricing floor is stable enough for launch.",
+        absorbedWorkItems: []
+      })
+    );
+    await repository.insertEvent(
+      createHarnessCardEventRecord({
+        cardId: cmoCard.id,
+        eventKind: "execution_dispatched",
+        payload: {
+          kind: "follow_on_dispatch",
+          kindLabel: "Follow-on dispatch",
+          executionStage: "post_outcome_follow_on",
+          executionStageLabel: "Post-outcome follow-on",
+          reactivatedRun: false,
+          triggeredByCardId: cfoCard.id,
+          triggeredByPersona: "cfo",
+          triggeredByOutcomeState: "done",
+          triggeredByResultSummary: "Pricing floor is stable enough for launch."
+        }
+      })
+    );
+
+    const beforeEvents = await repository.listEventsForCard(cmoCard.id);
+    const dispatch = await buildHarnessWorkerDispatch({
+      repository,
+      tenantId: "tenant-1",
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow"
+    });
+    const afterEvents = await repository.listEventsForCard(cmoCard.id);
+
+    expect(dispatch).toEqual(
+      expect.objectContaining({
+        runId: run.id,
+        workflowId: "wf_connect_first_workflow",
+        status: "running",
+        dispatchHandoff: expect.objectContaining({
+          kind: "follow_on_dispatch",
+          executionStage: "post_outcome_follow_on",
+          reactivatedRun: false,
+          triggeredByCardId: cfoCard.id,
+          triggeredByPersona: "cfo",
+          triggeredByOutcomeState: "done",
+          triggeredByResultSummary: "Pricing floor is stable enough for launch."
+        }),
+        laneExecution: expect.objectContaining({
+          cardId: cmoCard.id,
+          persona: "cmo",
+          state: "working"
+        })
+      })
+    );
+    expect(afterEvents).toEqual(
+      beforeEvents.concat([
+        expect.objectContaining({
+          eventKind: "execution_dispatched",
+          payload: expect.objectContaining({
+            kind: "follow_on_dispatch",
+            executionStage: "post_outcome_follow_on",
+            triggeredByCardId: cfoCard.id
+          })
+        })
+      ])
+    );
+  });
+
+  it("falls back to initial-claim provenance when the latest prior dispatch event is not a follow-on handoff", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    markCardWorkingWithClaim(cfoCard, "claim-cfo-active", "2026-05-21T10:04:30.000Z");
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+    await repository.upsertCardContinuity(
+      createHarnessCardContinuityRecord({
+        cardId: cfoCard.id,
+        runId: run.id,
+        continuitySource: "resume_override",
+        continuitySummary: "Resume from the board-approved pricing override note.",
+        latestResultSummary: null,
+        absorbedWorkItems: []
+      })
+    );
+    await repository.insertEvent(
+      createHarnessCardEventRecord({
+        cardId: cfoCard.id,
+        eventKind: "execution_dispatched",
+        payload: {
+          kind: "initial_claim",
+          kindLabel: "Initial lane claim",
+          executionStage: "initial_lane_start",
+          executionStageLabel: "Initial lane start"
+        }
+      })
+    );
+
+    const beforeEvents = await repository.listEventsForCard(cfoCard.id);
+    const dispatch = await buildHarnessWorkerDispatch({
+      repository,
+      tenantId: "tenant-1",
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow"
+    });
+    const afterEvents = await repository.listEventsForCard(cfoCard.id);
+
+    expect(dispatch).toEqual({
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow",
+      status: "running",
+      dispatchHandoff: {
+        kind: "initial_claim",
+        kindLabel: "Initial lane claim",
+        executionStage: "initial_lane_start",
+        executionStageLabel: "Initial lane start"
+      },
+      laneExecution: expect.objectContaining({
+        cardId: cfoCard.id,
+        state: "working",
+        resumeFocus: "Resume from the board-approved pricing override note."
+      })
+    });
+    expect(afterEvents).toEqual(
+      beforeEvents.concat([
+        expect.objectContaining({
+          eventKind: "execution_dispatched",
+          payload: {
+            kind: "initial_claim",
+            kindLabel: "Initial lane claim",
+            executionStage: "initial_lane_start",
+            executionStageLabel: "Initial lane start"
+          }
+        })
+      ])
+    );
+  });
+
+  it("prefers the newest valid follow-on dispatch over later initial-claim noise on an already-working lane", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "done";
+    const cmoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "marketing_plan"
+    });
+    markCardWorkingWithClaim(cmoCard, "claim-cmo-active", "2026-05-21T10:07:30.000Z");
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+    await repository.insertCard(cmoCard);
+    await repository.upsertCardContinuity(
+      createHarnessCardContinuityRecord({
+        cardId: cfoCard.id,
+        runId: run.id,
+        continuitySource: "result_recorded",
+        continuitySummary: "Pricing review is complete and ready for launch messaging.",
+        latestResultSummary: "Pricing floor is stable enough for launch.",
+        absorbedWorkItems: []
+      })
+    );
+    await repository.insertEvent({
+      ...createHarnessCardEventRecord({
+        cardId: cmoCard.id,
+        eventKind: "execution_dispatched",
+        payload: {
+          kind: "follow_on_dispatch",
+          kindLabel: "Follow-on dispatch",
+          executionStage: "post_outcome_follow_on",
+          executionStageLabel: "Post-outcome follow-on",
+          reactivatedRun: false,
+          triggeredByCardId: cfoCard.id,
+          triggeredByPersona: "cfo",
+          triggeredByOutcomeState: "done",
+          triggeredByResultSummary: "Pricing floor is stable enough for launch."
+        }
+      }),
+      createdAt: "2026-05-21T10:07:30.000Z"
+    });
+    await repository.insertEvent({
+      ...createHarnessCardEventRecord({
+        cardId: cmoCard.id,
+        eventKind: "execution_dispatched",
+        payload: {
+          kind: "initial_claim",
+          kindLabel: "Initial lane claim",
+          executionStage: "initial_lane_start",
+          executionStageLabel: "Initial lane start"
+        }
+      }),
+      createdAt: "2026-05-21T10:09:30.000Z"
+    });
+
+    const dispatch = await buildHarnessWorkerDispatch({
+      repository,
+      tenantId: "tenant-1",
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow"
+    });
+
+    expect(dispatch).toEqual(
+      expect.objectContaining({
+        dispatchHandoff: expect.objectContaining({
+          kind: "follow_on_dispatch",
+          executionStage: "post_outcome_follow_on",
+          triggeredByCardId: cfoCard.id,
+          triggeredByPersona: "cfo",
+          triggeredByOutcomeState: "done",
+          triggeredByResultSummary: "Pricing floor is stable enough for launch."
+        }),
+        laneExecution: expect.objectContaining({
+          cardId: cmoCard.id,
+          persona: "cmo",
+          state: "working"
+        })
+      })
+    );
+  });
+
   it("does not dispatch child lanes that are still in planning", async () => {
     const repository = createInMemoryHarnessRepository();
     const run = createHarnessRunRecord({

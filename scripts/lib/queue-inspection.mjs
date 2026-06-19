@@ -6,6 +6,8 @@ export async function inspectQueueState({
   redisUrl,
   queueName,
   jobId,
+  runId = null,
+  fallbackScanLimit = 1000,
   connectTimeoutMs = 3000,
   QueueClass = Queue,
   RedisClass = Redis
@@ -24,7 +26,13 @@ export async function inspectQueueState({
   try {
     await withTimeout(connection.connect(), connectTimeoutMs, "Redis connection timed out during queue inspection");
     queue = new QueueClass(queueName, { connection });
-    const job = await withTimeout(queue.getJob(jobId), connectTimeoutMs, "BullMQ job lookup timed out");
+    const job = await resolveQueueJob({
+      queue,
+      jobId,
+      runId,
+      fallbackScanLimit,
+      connectTimeoutMs
+    });
     const state = job ? await withTimeout(job.getState(), connectTimeoutMs, "BullMQ state lookup timed out") : null;
     return {
       queueName,
@@ -107,6 +115,26 @@ export async function inspectQueueSnapshot({
       connection.disconnect();
     }
   }
+}
+
+async function resolveQueueJob({
+  queue,
+  jobId,
+  runId,
+  fallbackScanLimit,
+  connectTimeoutMs
+}) {
+  const job = await withTimeout(queue.getJob(jobId), connectTimeoutMs, "BullMQ job lookup timed out");
+  if (job || !runId || typeof queue.getJobs !== "function" || fallbackScanLimit < 1) {
+    return job;
+  }
+
+  const jobs = await withTimeout(
+    queue.getJobs(["active", "waiting", "completed", "failed", "delayed", "prioritized", "waiting-children"], 0, fallbackScanLimit - 1, true),
+    connectTimeoutMs,
+    "BullMQ fallback job scan timed out"
+  );
+  return jobs.find((entry) => entry?.data?.runId === runId) ?? null;
 }
 
 async function withTimeout(promise, timeoutMs, message) {

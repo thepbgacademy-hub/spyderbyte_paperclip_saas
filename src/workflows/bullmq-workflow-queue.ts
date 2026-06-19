@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { Queue, UnrecoverableError, Worker } from "bullmq";
 import { Redis } from "ioredis";
 
@@ -36,7 +38,7 @@ export function createBullmqWorkflowRunEnqueuer(options: WorkflowQueueConnection
 
       try {
         await queue.add("workflow-run", payload, {
-          jobId: input.idempotencyKey
+          jobId: createBullmqSafeJobId(input.idempotencyKey)
         });
         return "enqueued";
       } catch (error) {
@@ -52,6 +54,10 @@ export function createBullmqWorkflowRunEnqueuer(options: WorkflowQueueConnection
       await connection.quit();
     }
   };
+}
+
+export function createBullmqSafeJobId(idempotencyKey: string): string {
+  return `wfq_${createHash("sha256").update(idempotencyKey).digest("hex")}`;
 }
 
 export function createBullmqWorkflowConsumer(options: WorkflowQueueConnectionOptions & {

@@ -12,6 +12,8 @@ Reference docs: `docs/design.md`, `docs/build.md`, `TODO.md`.
 
 The portal and API are treated as separate sites. The browser may call only the Wealth Factory API over HTTPS. It must not call Paperclip, Redis, workers, Docker, Supabase service-role endpoints, admin panels, or private ports.
 
+If `api.spyderbyte.cloud` is already serving a shared or older Wealth Factory lane and you need a low-blast-radius stage proof first, use the isolated-host rollout in `deploy/runbooks/vps2-isolated-wealth-factory-stage-rollout.md` instead of repointing the shared API hostname in place.
+
 ## Required Secrets
 
 Set these on the VPS as root-owned environment files or deployment secrets. Do not place real values in Git.
@@ -174,8 +176,11 @@ npm run create:runtime-session-token -- --tenant tenant-demo --user deploy-opera
 $env:WF_SMOKE_SESSION_COOKIE_NAME="wf_portal_session"
 $env:WF_SMOKE_SESSION_COOKIE_VALUE="<signed-session-token>"
 $env:WF_SMOKE_EXPECT_ASSET_BASE_URL="https://api.spyderbyte.cloud/app-assets/"
+$env:WF_SMOKE_HARNESS_BOARD_PATH="/board?workflowId=<public-workflow-id>"
 npm run smoke:external
 ```
+
+For the authenticated harness-board smoke path, `WF_SMOKE_HARNESS_BOARD_PATH` must resolve to one explicit workflow selector. Prefer embedding `workflowId` directly in that board path; `WF_SMOKE_HARNESS_WORKFLOW_ID` is only a fallback when the board path omits it and does not override a selector already embedded in the path.
 
 Then run:
 
@@ -184,7 +189,7 @@ npm run e2e:live
 npm run e2e
 ```
 
-For deployed-browser verification, set `WF_LIVE_BASE_URL` to the API origin before running `npm run e2e:live`. If you have a deploy-safe same-site session token, also set `WF_LIVE_SESSION_COOKIE_VALUE` to exercise the authenticated shell path. The live Playwright config now fails fast when `WF_LIVE_BASE_URL` is omitted so it does not probe a deployment by accident.
+For deployed-browser verification, set `WF_LIVE_BASE_URL` to the API origin before running `npm run e2e:live`. If you have a deploy-safe same-site session token, also set `WF_LIVE_SESSION_COOKIE_VALUE` to exercise the authenticated shell path. For the authenticated harness-board proof, provide an explicit workflow selector on the board URL, ideally through `WF_LIVE_HARNESS_BOARD_PATH="/board?workflowId=<public-workflow-id>"`; `WF_LIVE_HARNESS_WORKFLOW_ID` may fill a missing selector but does not override a selector already embedded in the board path. The live Playwright config now fails fast when `WF_LIVE_BASE_URL` is omitted so it does not probe a deployment by accident.
 
 ## Temporary Public Paperclip Test Drive
 
@@ -238,6 +243,11 @@ Current observed blocker on 2026-05-19:
 - the VPS process list still shows the Wealth Factory API running, but not the
   repo's `worker-main` process yet
 - a real `wfpc.paperclip_company_mappings` row still needs to be seeded with
+
+Historical note:
+
+- the isolated host lane documented in `deploy/runbooks/vps2-isolated-wealth-factory-stage-rollout.md` supersedes this older blocker for launch proof work
+- on June 15, 2026 `npm run prove:stage-live` passed on `wf-api.spyderbyte.cloud` with the current isolated Wealth Factory stage stack while `api.spyderbyte.cloud` remained unchanged
   the Paperclip company ID that Wealth Factory should target during controlled
   testing
 

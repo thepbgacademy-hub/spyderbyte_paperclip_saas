@@ -16,10 +16,14 @@ test("board route shows clean persona progress and opens the drawer", async ({ p
   await expect(boardSurface).toContainText("first three moves");
   await expect(boardSurface).toContainText("clean three-step sequence");
   await expect(boardPage).not.toContainText("Memory boundary");
-  await expect(boardPage).not.toContainText("Completion package");
+  await expect(boardPage).toContainText("Completion package");
+  await expect(boardPage).toContainText("Recent decisions");
+  await expect(boardPage).toContainText("Follow-through");
   await expect(boardSurface).not.toContainText("Memory boundary");
-  await expect(boardSurface).not.toContainText("Completion package");
   await expect(boardSurface).not.toContainText("later tenant-owned export");
+  await expect(boardSurface).not.toContainText("Completion package");
+  await expect(boardSurface).not.toContainText("Recent decisions");
+  await expect(boardSurface).not.toContainText("Follow-through");
   await expect(boardSurface).not.toContainText("Continuity memory");
   await expect(page.locator("body")).not.toContainText("Paperclip");
   await expect(page.locator("body")).not.toContainText("prompt");

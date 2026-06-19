@@ -8,6 +8,7 @@ import {
   getPlatformLoadVisual,
   getRecentArtifacts,
   getResultCards,
+  getWorkflowCards,
   getStatusCopy
 } from "../apps/web/src/pages/dashboard-data.js";
 import type { DashboardSnapshot } from "../apps/web/src/dashboard-client.js";
@@ -45,6 +46,41 @@ describe("dashboard data helpers", () => {
         exportState: "Reconnect storage"
       })
     ]);
+  });
+
+  it("keeps fallback workflow and result catalog copy aligned to the core build instead of the retired social-media branch", () => {
+    const emptySnapshot: DashboardSnapshot = {
+      ...snapshot,
+      workflows: [],
+      artifacts: []
+    };
+
+    const workflowCards = getWorkflowCards(emptySnapshot, {
+      connectedProviders: createInitialConnectedProviders()
+    });
+    const resultCards = getResultCards(emptySnapshot, {
+      googleDriveConnected: false,
+      dropboxConnected: false
+    });
+
+    expect(workflowCards.map((workflow) => workflow.name)).toEqual([
+      "Connect First Workflow",
+      "Tax Strategy Workflow",
+      "Package Follow-up Workflow"
+    ]);
+    expect(resultCards.map((result) => result.workflow)).toEqual([
+      "Connect First Workflow",
+      "Tax Strategy Workflow"
+    ]);
+    expect(
+      getStatusCopy({
+        packageReady: false,
+        workflowStartAvailable: false,
+        runStatus: "ready",
+        workflowsPaused: false
+      })
+    ).toBe("Connect package providers to unlock approved workflows.");
+    expect(JSON.stringify({ workflowCards, resultCards })).not.toMatch(/media|campaign|social/i);
   });
 
   it("builds a home queue from snapshot blockers and available work", () => {

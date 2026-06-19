@@ -223,6 +223,7 @@ type HarnessDispatchRepository = Pick<
   HarnessRepository,
   | "getRun"
   | "listCardsForRun"
+  | "listEventsForRun"
   | "listProposalsForRun"
   | "listCardContinuityForRun"
   | "claimCardForExecution"
@@ -291,12 +292,6 @@ export async function buildHarnessWorkerDispatchResolution(input: {
 }): Promise<HarnessWorkerDispatchResolution> {
   const runWork = input.runAtomically ?? (async <T>(work: (repository: HarnessDispatchRepository) => Promise<T>) => work(input.repository));
   return runWork(async (repository) => {
-    const dispatchHandoff: HarnessWorkerDispatchHandoff = input.dispatchHandoff ?? {
-      kind: "initial_claim",
-      kindLabel: "Initial lane claim",
-      executionStage: "initial_lane_start",
-      executionStageLabel: "Initial lane start"
-    };
     const run = await repository.getRun(input.runId);
     if (!run || run.tenantId !== input.tenantId || run.workflowId !== input.workflowId) {
       throw new Error(`Unknown harness run for worker dispatch: ${input.runId}`);
@@ -312,8 +307,9 @@ export async function buildHarnessWorkerDispatchResolution(input: {
       };
     }
 
-    const [cards, proposals, continuity] = await Promise.all([
+    const [cards, events, proposals, continuity] = await Promise.all([
       repository.listCardsForRun(run.id),
+      repository.listEventsForRun(run.id),
       repository.listProposalsForRun(run.id),
       repository.listCardContinuityForRun(run.id)
     ]);
@@ -351,6 +347,12 @@ export async function buildHarnessWorkerDispatchResolution(input: {
       };
     }
     const claimedLane = claimedExecution.lane;
+    const dispatchHandoff = deriveDispatchHandoffForClaimedLane({
+      ...(input.dispatchHandoff ? { explicitDispatchHandoff: input.dispatchHandoff } : {}),
+      claimKind: claimedExecution.claimKind,
+      laneId: claimedLane.id,
+      events
+    });
 
     const updatedContinuity = await persistWorkerStartState({
       repository,
@@ -398,6 +400,109 @@ export async function buildHarnessWorkerDispatchResolution(input: {
       }
     };
   });
+}
+
+function createInitialLaneClaimHandoff(): Extract<HarnessWorkerDispatchHandoff, { kind: "initial_claim" }> {
+  return {
+    kind: "initial_claim",
+    kindLabel: "Initial lane claim",
+    executionStage: "initial_lane_start",
+    executionStageLabel: "Initial lane start"
+  };
+}
+
+function deriveDispatchHandoffForClaimedLane(input: {
+  explicitDispatchHandoff?: HarnessWorkerDispatchHandoff;
+  claimKind: ClaimedHarnessLane["claimKind"];
+  laneId: string;
+  events: readonly HarnessCardEventRecord[];
+}): HarnessWorkerDispatchHandoff {
+  if (input.explicitDispatchHandoff) {
+    return input.explicitDispatchHandoff;
+  }
+
+  if (input.claimKind === "approved_claim") {
+    return createInitialLaneClaimHandoff();
+  }
+
+  return findLatestPersistedFollowOnDispatchHandoff({
+    cardId: input.laneId,
+    events: input.events
+  }) ?? createInitialLaneClaimHandoff();
+}
+
+function findLatestPersistedFollowOnDispatchHandoff(input: {
+  cardId: string;
+  events: readonly HarnessCardEventRecord[];
+}): Extract<HarnessWorkerDispatchHandoff, { kind: "follow_on_dispatch" }> | null {
+  const dispatchEvents = input.events
+    .filter((event) => event.cardId === input.cardId && event.eventKind === "execution_dispatched")
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+
+  for (const event of dispatchEvents) {
+    const handoff = readFollowOnDispatchHandoffFromEventPayload(event.payload);
+    if (handoff) {
+      return handoff;
+    }
+  }
+
+  return null;
+}
+
+function readFollowOnDispatchHandoffFromEventPayload(
+  payload: Record<string, unknown>
+): Extract<HarnessWorkerDispatchHandoff, { kind: "follow_on_dispatch" }> | null {
+  const kind = readWorkerEventStringField(payload, "kind");
+  const kindLabel = readWorkerEventStringField(payload, "kindLabel");
+  const executionStage = readWorkerEventStringField(payload, "executionStage");
+  const executionStageLabel = readWorkerEventStringField(payload, "executionStageLabel");
+  const triggeredByCardId = readWorkerEventStringField(payload, "triggeredByCardId");
+  const triggeredByPersona = readWorkerEventStringField(payload, "triggeredByPersona");
+  const triggeredByOutcomeState = readWorkerEventStringField(payload, "triggeredByOutcomeState");
+  const reactivatedRun = payload.reactivatedRun;
+  const triggeredByResultSummary = readWorkerEventOptionalStringField(payload, "triggeredByResultSummary");
+
+  if (
+    kind !== "follow_on_dispatch"
+    || kindLabel !== "Follow-on dispatch"
+    || executionStage !== "post_outcome_follow_on"
+    || executionStageLabel !== "Post-outcome follow-on"
+    || !triggeredByCardId
+    || !triggeredByPersona
+    || !isHarnessFollowOnOutcomeState(triggeredByOutcomeState)
+    || typeof reactivatedRun !== "boolean"
+    || (triggeredByResultSummary && triggeredByOutcomeState !== "done")
+  ) {
+    return null;
+  }
+
+  return {
+    kind,
+    kindLabel,
+    executionStage,
+    executionStageLabel,
+    reactivatedRun,
+    triggeredByCardId,
+    triggeredByPersona,
+    triggeredByOutcomeState,
+    ...(triggeredByResultSummary ? { triggeredByResultSummary } : {})
+  };
+}
+
+function readWorkerEventStringField(payload: Record<string, unknown>, key: string): string | null {
+  const value = payload[key];
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function readWorkerEventOptionalStringField(payload: Record<string, unknown>, key: string): string | null {
+  const value = payload[key];
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function isHarnessFollowOnOutcomeState(
+  value: string | null
+): value is Extract<HarnessCardState, "waiting" | "done" | "blocked" | "cancelled"> {
+  return value === "waiting" || value === "done" || value === "blocked" || value === "cancelled";
 }
 
 export async function commitHarnessWorkerLaneOutcome(input: {

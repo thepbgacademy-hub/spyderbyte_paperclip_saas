@@ -414,6 +414,62 @@ describe("pressure drive helpers", () => {
     });
   });
 
+  it("treats a started run as drained even after the per-job queue lookup has already disappeared", () => {
+    const summary = summarizePressureProof({
+      requests: [
+        { lane: "primary", tenantId: "tenant-1", runId: "run-1" }
+      ],
+      snapshots: [
+        {
+          lane: "primary",
+          tenantId: "tenant-1",
+          runId: "run-1",
+          runStatus: "running",
+          outboxStatus: "enqueued",
+          queueState: null,
+          outboxAttempts: 1,
+          queueReachable: true,
+          queuedAt: "2026-05-20T06:00:00.000Z",
+          observedFirstProgressAt: "2026-05-20T06:00:02.000Z",
+          observedFirstStartedAt: "2026-05-20T06:00:02.000Z",
+          observedCompletedAt: null
+        }
+      ],
+      mode: "drain"
+    });
+
+    expect(summary.ok).toBe(true);
+    expect(summary.phase).toBe("burst_drain_observed");
+  });
+
+  it("treats a completed queue checkpoint as drained even when workflow status still reads queued", () => {
+    const summary = summarizePressureProof({
+      requests: [
+        { lane: "primary", tenantId: "tenant-1", runId: "run-1" }
+      ],
+      snapshots: [
+        {
+          lane: "primary",
+          tenantId: "tenant-1",
+          runId: "run-1",
+          runStatus: "queued",
+          outboxStatus: "enqueued",
+          queueState: "completed",
+          outboxAttempts: 1,
+          queueReachable: true,
+          queuedAt: "2026-05-20T06:00:00.000Z",
+          observedFirstProgressAt: "2026-05-20T06:00:02.000Z",
+          observedFirstStartedAt: null,
+          observedCompletedAt: null
+        }
+      ],
+      mode: "drain"
+    });
+
+    expect(summary.ok).toBe(true);
+    expect(summary.phase).toBe("burst_drain_observed");
+  });
+
   it("summarizes queue and worker saturation alongside a successful proof", () => {
     const summary = summarizePressureProof({
       requests: [
