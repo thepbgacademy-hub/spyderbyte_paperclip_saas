@@ -13,6 +13,7 @@ import {
 
 const STAGE_STABILITY_SEQUENCE = [
   "npm run prove:stage-live",
+  "npm run prove:stage-live-native-execution",
   "npm run prove:live-fairness",
   "npm run prove:live-soak-capacity"
 ];
@@ -43,9 +44,37 @@ const baseEnv = {
   WF_STAGE_ENV_FILE: plan.envFilePath,
   WF_STAGE_SSH_ENV_FILE: plan.sshEnvFilePath
 };
-const sudoPassword = parseSecretFileContents(readFileSync(plan.sudoPasswordFilePath, "utf8"));
-await runStageStabilityPlan({
-  plan,
-  baseEnv,
-  sudoPassword
-});
+
+try {
+  const sudoPassword = resolveSudoPassword(plan.sudoPasswordFilePath);
+  await runStageStabilityPlan({
+    plan,
+    baseEnv,
+    sudoPassword
+  });
+} catch (error) {
+  process.stderr.write(`${formatStageStabilityError(error)}\n`);
+  process.exit(resolveStageStabilityExitCode(error));
+}
+
+function resolveSudoPassword(path) {
+  try {
+    return parseSecretFileContents(readFileSync(path, "utf8"));
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      throw new Error(`Stage stability sudo password file '${path}' is not readable`);
+    }
+    if (error instanceof Error && /Secret file did not contain a usable value/.test(error.message)) {
+      throw new Error(`Stage stability sudo password file '${path}' did not contain a usable value`);
+    }
+    throw error;
+  }
+}
+
+function formatStageStabilityError(error) {
+  return error instanceof Error ? error.message : "Stage stability failed";
+}
+
+function resolveStageStabilityExitCode(error) {
+  return typeof error?.status === "number" ? error.status : 1;
+}

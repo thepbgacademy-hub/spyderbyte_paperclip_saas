@@ -841,7 +841,7 @@ export type HarnessMemoryBoundaryView = {
 };
 
 export type HarnessActionRequestFieldView = {
-  name: "decision" | "decisionNote" | "targetCardId" | "command" | "resumeSummary" | "completionSummary" | "mode";
+  name: "decision" | "decisionNote" | "targetCardId" | "resolution" | "resumeSummary" | "completionSummary" | "mode";
   label: string;
   description?: string;
   required: boolean;
@@ -878,7 +878,7 @@ export type HarnessExportCandidateActionView = {
   actionRoute: HarnessExportCandidateActionRoute;
   actionPath: string;
   actionMethod: "POST";
-  actionToken: string;
+  actionHandle: string;
   actionLabel: string;
   actionDescription: string;
   nextEffectSummary?: string;
@@ -892,14 +892,14 @@ export type HarnessPendingAttentionView = {
   actionRoute?: "review-attention" | "resolve-attention" | "pending-approvals";
   actionPath?: string;
   actionMethod?: "POST";
-  actionToken?: string;
+  actionHandle?: string;
   actionLabel?: string;
   actionDescription?: string;
   requestFields?: HarnessActionRequestFieldView[];
   actionOptions?: HarnessActionOptionView[];
   recommendedOptionValue?: string;
   allowedDecisions?: HarnessAttentionReviewDecision[];
-  allowedCommands?: HarnessAttentionResolutionCommand[];
+  allowedResolutions?: HarnessAttentionResolutionCommand[];
   pendingApprovalCount?: number;
   proposedApprovalCount?: number;
   deferredApprovalCount?: number;
@@ -940,7 +940,7 @@ export type HarnessPendingApprovalView = {
   actionRoute: "proposal-decision";
   actionPath: string;
   actionMethod: "POST";
-  actionToken: string;
+  actionHandle: string;
   actionLabel: string;
   actionDescription: string;
   requestFields: HarnessActionRequestFieldView[];
@@ -1333,8 +1333,8 @@ export function createHarnessBoardService(options: {
           ...(request.cookie ? { cookie: request.cookie } : {}),
           runId: initialBoard.runId,
           decision: "start_fresh_cycle",
-          ...(initialBoard.pendingAttention?.actionToken
-            ? { actionToken: initialBoard.pendingAttention.actionToken }
+          ...(initialBoard.pendingAttention?.actionHandle
+            ? { actionToken: initialBoard.pendingAttention.actionHandle }
             : {}),
           mode: plan.freshCycleMode ?? "clean"
         });
@@ -4554,7 +4554,7 @@ export function createHarnessBoardService(options: {
       const candidate = findExportCandidateOrThrow(board.response.memoryBoundary.exportCandidates, request.candidateId);
       const action = findExportActionOrThrow(candidate, "export-preflight");
       if (request.actionToken) {
-        assertHarnessActionToken(action.actionToken, request.actionToken);
+        assertHarnessActionToken(action.actionHandle, request.actionToken);
       }
 
       const result: HarnessExportPreflightResult = {
@@ -4636,7 +4636,7 @@ export function createHarnessBoardService(options: {
       const candidate = findExportCandidateOrThrow(board.response.memoryBoundary.exportCandidates, request.candidateId);
       const action = findExportActionOrThrow(candidate, "export-dry-run");
       if (request.actionToken) {
-        assertHarnessActionToken(action.actionToken, request.actionToken);
+        assertHarnessActionToken(action.actionHandle, request.actionToken);
       }
 
       const result = candidate.id === "governance_history_export"
@@ -4693,7 +4693,7 @@ export function createHarnessBoardService(options: {
       }
       const action = findExportActionOrThrow(candidate, "governance-history-export");
       if (request.actionToken) {
-        assertHarnessActionToken(action.actionToken, request.actionToken);
+        assertHarnessActionToken(action.actionHandle, request.actionToken);
       }
 
       const dryRun = buildGovernanceHistoryExportDryRun(board.response, candidate);
@@ -4795,7 +4795,7 @@ export function createHarnessBoardService(options: {
       }
       const action = findExportActionOrThrow(candidate, "package-bundle-export");
       if (request.actionToken) {
-        assertHarnessActionToken(action.actionToken, request.actionToken);
+        assertHarnessActionToken(action.actionHandle, request.actionToken);
       }
 
       const dryRun = buildPackageBundleExportDryRun(board.response, candidate);
@@ -4888,7 +4888,7 @@ export function createHarnessBoardService(options: {
       }
       const action = findExportActionOrThrow(candidate, "governance-history-export-replay");
       if (request.actionToken) {
-        assertHarnessActionToken(action.actionToken, request.actionToken);
+        assertHarnessActionToken(action.actionHandle, request.actionToken);
       }
       const exportDelivery = findLatestExportDeliveryRecordOrThrow(board.exportDeliveries, candidate.id);
       if (exportDelivery.status === "delivered") {
@@ -5002,7 +5002,7 @@ export function createHarnessBoardService(options: {
       }
       const action = findExportActionOrThrow(candidate, "package-bundle-export-replay");
       if (request.actionToken) {
-        assertHarnessActionToken(action.actionToken, request.actionToken);
+        assertHarnessActionToken(action.actionHandle, request.actionToken);
       }
       const exportDelivery = findLatestExportDeliveryRecordOrThrow(board.exportDeliveries, candidate.id);
       if (exportDelivery.status === "delivered") {
@@ -5950,7 +5950,7 @@ function buildHarnessBoardResponse(input: {
           actionRoute: "proposal-decision",
           actionPath: `/api/harness/proposals/${encodeURIComponent(proposal.id)}/decision`,
           actionMethod: "POST" as const,
-          actionToken: createPendingApprovalActionToken({
+          actionHandle: createPendingApprovalActionToken({
             proposal,
             policyReason: proposalPolicyReason,
             ...(policyView.handoffTargetCardId ? { handoffTargetCardId: policyView.handoffTargetCardId } : {}),
@@ -9387,7 +9387,7 @@ function buildPendingAttentionView(input: {
               actionRoute: "review-attention" as const,
               actionPath: `/api/harness/runs/${encodeURIComponent(input.run.id)}/review-attention`,
               actionMethod: "POST" as const,
-              actionToken: createPendingAttentionActionToken({
+              actionHandle: createPendingAttentionActionToken({
                 runId: input.run.id,
                 action
               }),
@@ -9454,7 +9454,7 @@ function buildPendingAttentionView(input: {
               actionRoute: "review-attention" as const,
               actionPath: `/api/harness/runs/${encodeURIComponent(input.run.id)}/review-attention`,
               actionMethod: "POST" as const,
-              actionToken: createPendingAttentionActionToken({
+              actionHandle: createPendingAttentionActionToken({
                 runId: input.run.id,
                 action
               }),
@@ -9541,7 +9541,7 @@ function buildPendingAttentionView(input: {
           actionRoute: "resolve-attention" as const,
           actionPath: `/api/harness/runs/${encodeURIComponent(input.run.id)}/resolve-attention`,
           actionMethod: "POST" as const,
-          actionToken: createPendingAttentionActionToken({
+          actionHandle: createPendingAttentionActionToken({
             runId: input.run.id,
             action
           }),
@@ -9552,9 +9552,9 @@ function buildPendingAttentionView(input: {
               : "Clear the blocked lane when the missing dependency has been resolved.",
           requestFields: [
             {
-              name: "command",
-              label: "Resolution command",
-              description: "Choose the single bounded command that resolves this attention state.",
+              name: "resolution",
+              label: "Resolution choice",
+              description: "Choose the single bounded step that resolves this attention state.",
               required: true,
               allowedValues: [action.kind === "await_lane_resume" ? "resume_lane" : "unblock_lane"]
             },
@@ -9580,12 +9580,12 @@ function buildPendingAttentionView(input: {
                   : "The lane leaves its blocked state and re-enters the worker queue through the existing harness path.",
               exampleRequest:
                 action.kind === "await_lane_resume"
-                  ? { command: "resume_lane" }
-                  : { command: "unblock_lane" }
+                  ? { resolution: "resume_lane" }
+                  : { resolution: "unblock_lane" }
             }
           ] satisfies HarnessActionOptionView[],
           recommendedOptionValue: action.kind === "await_lane_resume" ? "resume_lane" : "unblock_lane",
-          allowedCommands: [action.kind === "await_lane_resume" ? "resume_lane" : "unblock_lane"] as HarnessAttentionResolutionCommand[]
+          allowedResolutions: [action.kind === "await_lane_resume" ? "resume_lane" : "unblock_lane"] as HarnessAttentionResolutionCommand[]
         }),
     ...(currentAttention && isSameAttentionAction(currentAttention.action, action)
       ? { requestedAtLabel: formatBoardTimestamp(currentAttention.requestedAt) }
@@ -9745,7 +9745,7 @@ function buildExportCandidateActions(input: {
       actionRoute: "export-preflight",
       actionPath: `/api/harness/runs/${encodeURIComponent(input.runId)}/export-candidates/${encodeURIComponent(input.candidateId)}/preflight`,
       actionMethod: "POST",
-      actionToken: createHarnessActionToken(["export-preflight", ...baseParts]),
+      actionHandle: createHarnessActionToken(["export-preflight", ...baseParts]),
       actionLabel: "Run export preflight",
       actionDescription: "Validate the current export candidate against the live board contract before any dry-run or tenant-facing export bundle is produced.",
       nextEffectSummary:
@@ -9767,7 +9767,7 @@ function buildExportCandidateActions(input: {
         actionRoute: "export-dry-run",
         actionPath: `/api/harness/runs/${encodeURIComponent(input.runId)}/export-candidates/${encodeURIComponent(input.candidateId)}/dry-run`,
         actionMethod: "POST",
-        actionToken: createHarnessActionToken(["export-dry-run", ...baseParts]),
+        actionHandle: createHarnessActionToken(["export-dry-run", ...baseParts]),
         actionLabel: "Preview Obsidian export bundle",
         actionDescription: "Render the tenant-safe governance-history markdown bundle without writing it anywhere yet.",
         nextEffectSummary: "This returns the exact bounded note content and metadata that a later tenant export would use."
@@ -9776,7 +9776,7 @@ function buildExportCandidateActions(input: {
         actionRoute: "governance-history-export",
         actionPath: `/api/harness/runs/${encodeURIComponent(input.runId)}/export-candidates/${encodeURIComponent(input.candidateId)}/export`,
         actionMethod: "POST",
-        actionToken: createHarnessActionToken(["governance-history-export", ...baseParts]),
+        actionHandle: createHarnessActionToken(["governance-history-export", ...baseParts]),
         actionLabel: "Build governance history export",
         actionDescription: "Produce the first real Obsidian-facing governance-history export bundle from the current board contract, including bounded denied or deferred governance items when the closed-board package carries them.",
         nextEffectSummary: "This returns a tenant-safe markdown bundle for later vault placement without turning Obsidian into live runtime state."
@@ -9793,7 +9793,7 @@ function buildExportCandidateActions(input: {
         actionRoute: "governance-history-export-replay",
         actionPath: `/api/harness/runs/${encodeURIComponent(input.runId)}/export-candidates/${encodeURIComponent(input.candidateId)}/delivery-replay`,
         actionMethod: "POST",
-        actionToken: createHarnessActionToken(["governance-history-export-replay", ...baseParts]),
+        actionHandle: createHarnessActionToken(["governance-history-export-replay", ...baseParts]),
         actionLabel:
           claimRecoverySupported
             ? "Recover governance history delivery"
@@ -9826,7 +9826,7 @@ function buildExportCandidateActions(input: {
         actionRoute: "export-dry-run",
         actionPath: `/api/harness/runs/${encodeURIComponent(input.runId)}/export-candidates/${encodeURIComponent(input.candidateId)}/dry-run`,
         actionMethod: "POST",
-        actionToken: createHarnessActionToken(["export-dry-run", ...baseParts]),
+        actionHandle: createHarnessActionToken(["export-dry-run", ...baseParts]),
         actionLabel: "Preview package bundle export",
         actionDescription: "Render the tenant-safe package-bundle export without writing it anywhere yet.",
         nextEffectSummary: "This returns the exact bounded package bundle that a later tenant export would deliver."
@@ -9838,7 +9838,7 @@ function buildExportCandidateActions(input: {
         actionRoute: "package-bundle-export",
         actionPath: `/api/harness/runs/${encodeURIComponent(input.runId)}/export-candidates/${encodeURIComponent(input.candidateId)}/export`,
         actionMethod: "POST",
-        actionToken: createHarnessActionToken(["package-bundle-export", ...baseParts]),
+        actionHandle: createHarnessActionToken(["package-bundle-export", ...baseParts]),
         actionLabel: "Build package bundle export",
         actionDescription: "Produce the first real Obsidian-facing package bundle export from the current closed-board contract, keeping denied governance inside the existing package-governance surface instead of branching into a separate export path.",
         nextEffectSummary: "This returns a tenant-safe package bundle for later vault placement without turning Obsidian into live runtime state."
@@ -9856,7 +9856,7 @@ function buildExportCandidateActions(input: {
         actionRoute: "package-bundle-export-replay",
         actionPath: `/api/harness/runs/${encodeURIComponent(input.runId)}/export-candidates/${encodeURIComponent(input.candidateId)}/delivery-replay`,
         actionMethod: "POST",
-        actionToken: createHarnessActionToken(["package-bundle-export-replay", ...baseParts]),
+        actionHandle: createHarnessActionToken(["package-bundle-export-replay", ...baseParts]),
         actionLabel:
           claimRecoverySupported
             ? "Recover package bundle delivery"

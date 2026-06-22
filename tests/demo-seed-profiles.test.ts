@@ -12,6 +12,7 @@ describe("demo seed profiles", () => {
       packageId: "pkg_bib_connect",
       packageKey: "connect-first",
       packageName: "Connect First",
+      workflowTemplateId: "44444444-4444-4444-8444-444444444444",
       workflowName: "Connect First Workflow",
       workflowDescription: "CEO-led first-workflow setup run inside the Wealth Factory harness."
     });
@@ -36,6 +37,7 @@ describe("demo seed profiles", () => {
       userId: "11111111-1111-4111-8111-666666666666",
       packageId: "pkg_package_followup",
       workflowId: "wf_package_followup",
+      workflowTemplateId: undefined,
       providerReferenceId: "55555555-5555-4555-8555-aaaaaaaaaaaa",
       purchaseId: "66666666-6666-4666-8666-bbbbbbbbbbbb",
       providerSecretRef: "wf_secret_demo_six_openai"
@@ -48,6 +50,7 @@ describe("demo seed profiles", () => {
       packageId: "pkg_tax_strategy",
       packageKey: "tax-strategy",
       packageName: "Tax Strategy",
+      workflowTemplateId: undefined,
       workflowId: "wf_tax_strategy",
       workflowName: "Tax Strategy Workflow",
       workflowDescription: "Bounded tax strategy review run inside the Wealth Factory harness."
@@ -60,6 +63,7 @@ describe("demo seed profiles", () => {
       packageId: "pkg_package_followup",
       packageKey: "package-followup",
       packageName: "Package Follow-up",
+      workflowTemplateId: undefined,
       workflowId: "wf_package_followup",
       workflowName: "Package Follow-up Workflow",
       workflowDescription: "Bounded package follow-up run inside the Wealth Factory harness."

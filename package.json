@@ -16,6 +16,7 @@
     "create:runtime-session-token": "npm run build:server && node scripts/create-runtime-session-token.mjs",
     "check:live-runtime": "node scripts/check-live-runtime-readiness.mjs",
     "prove:stage-live": "node scripts/prove-stage-live-deployment.mjs",
+    "prove:stage-live-native-execution": "node scripts/prove-stage-live-native-execution.mjs",
     "prove:stage-stability": "node scripts/prove-stage-live-stability.mjs",
     "seed:demo": "node scripts/seed-wfpc-demo.mjs",
     "prove:provider-lifecycle": "npm run build:server && node dist/tools/prove-provider-credential-lifecycle.js",

@@ -34,6 +34,7 @@ const CORE_PACKAGE_FOLLOWUP = {
 export const DEMO_PROFILES = {
   primary: {
     ...CORE_CONNECT_FIRST,
+    workflowTemplateId: "44444444-4444-4444-8444-444444444444",
     userId: "11111111-1111-4111-8111-111111111111",
     tenantId: "22222222-2222-4222-8222-222222222222",
     providerReferenceId: "55555555-5555-4555-8555-555555555555",
@@ -60,6 +61,7 @@ export const DEMO_PROFILES = {
   },
   tertiary: {
     ...CORE_TAX_STRATEGY,
+    workflowTemplateId: "44444444-4444-4444-8444-666666666666",
     userId: "11111111-1111-4111-8111-333333333333",
     tenantId: "22222222-2222-4222-8222-444444444444",
     providerReferenceId: "55555555-5555-4555-8555-777777777777",
@@ -86,6 +88,7 @@ export const DEMO_PROFILES = {
   },
   quinary: {
     ...CORE_PACKAGE_FOLLOWUP,
+    workflowTemplateId: "44444444-4444-4444-8444-888888888888",
     userId: "11111111-1111-4111-8111-555555555555",
     tenantId: "22222222-2222-4222-8222-666666666666",
     providerReferenceId: "55555555-5555-4555-8555-999999999999",
@@ -154,6 +157,7 @@ function buildResolvedProfile({ laneName, preset, args, source }) {
     tenantId: args.tenant ?? source.WF_DEMO_TENANT_ID ?? preset.tenantId,
     packageId: args.package ?? source.WF_DEMO_PACKAGE_ID ?? preset.packageId,
     workflowId: args.workflow ?? source.WF_DEMO_WORKFLOW_ID ?? preset.workflowId,
+    workflowTemplateId: args["workflow-template"] ?? source.WF_DEMO_WORKFLOW_TEMPLATE_ID ?? preset.workflowTemplateId,
     providerReferenceId: args["provider-reference"] ?? source.WF_DEMO_PROVIDER_REFERENCE_ID ?? preset.providerReferenceId,
     purchaseId: args.purchase ?? source.WF_DEMO_PURCHASE_ID ?? preset.purchaseId,
     tenantName: args["tenant-name"] ?? source.WF_DEMO_TENANT_NAME ?? preset.tenantName,

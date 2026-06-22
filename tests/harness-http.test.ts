@@ -567,8 +567,8 @@ describe("harness HTTP boundary", () => {
         cookie: "wf_session=abc",
         "content-type": "application/json"
       },
-      body: { actionToken: "candidate-token" },
-      bodyByteLength: JSON.stringify({ actionToken: "candidate-token" }).length,
+      body: { actionHandle: "candidate-token" },
+      bodyByteLength: JSON.stringify({ actionHandle: "candidate-token" }).length,
       ip: "203.0.113.10"
     };
 
@@ -734,8 +734,8 @@ describe("harness HTTP boundary", () => {
         cookie: "wf_session=abc",
         "content-type": "application/json"
       },
-      body: { actionToken: "candidate-token" },
-      bodyByteLength: JSON.stringify({ actionToken: "candidate-token" }).length,
+      body: { actionHandle: "candidate-token" },
+      bodyByteLength: JSON.stringify({ actionHandle: "candidate-token" }).length,
       ip: "203.0.113.10"
     };
 
@@ -798,7 +798,7 @@ describe("harness HTTP boundary", () => {
     expect(response.body).toEqual({ code: "stale_contract" });
   });
 
-  it("approves a persisted proposal through the guarded write route", async () => {
+  it("approves a persisted proposal through the guarded write route with the public actionHandle field", async () => {
     const decideProposal = vi.fn().mockResolvedValue({ status: "approved", cardId: "card_new_1" });
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
@@ -820,10 +820,10 @@ describe("harness HTTP boundary", () => {
         "content-type": "application/json"
       },
       body: {
-        actionToken: "test-proposal-token"
+        actionHandle: "test-proposal-token"
       },
       bodyByteLength: JSON.stringify({
-        actionToken: "test-proposal-token"
+        actionHandle: "test-proposal-token"
       }).length,
       ip: "203.0.113.10"
     });
@@ -1435,7 +1435,7 @@ describe("harness HTTP boundary", () => {
     expect(response.body).toEqual({ code: "stale_contract" });
   });
 
-  it("reviews pending CEO attention by completing the run through the guarded write route", async () => {
+  it("reviews pending CEO attention by completing the run through the guarded write route with the public actionHandle field", async () => {
     const reviewPendingAttention = vi.fn().mockResolvedValue({ status: "done", runId: "run_123" });
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
@@ -1453,7 +1453,7 @@ describe("harness HTTP boundary", () => {
       path: "/api/harness/runs/run_123/review-attention",
       body: {
         decision: "complete_run",
-        actionToken: "test-review-token",
+        actionHandle: "test-review-token",
         completionSummary: "The CEO accepted the board output and packaged the business-facing result."
       },
       headers: {
@@ -1464,7 +1464,7 @@ describe("harness HTTP boundary", () => {
       },
       bodyByteLength: JSON.stringify({
         decision: "complete_run",
-        actionToken: "test-review-token",
+        actionHandle: "test-review-token",
         completionSummary: "The CEO accepted the board output and packaged the business-facing result."
       }).length,
       ip: "203.0.113.10"
@@ -1767,7 +1767,7 @@ describe("harness HTTP boundary", () => {
     expect(response.body).toEqual({ code: "stale_contract" });
   });
 
-  it("resolves pending lane-resume attention through the guarded write route", async () => {
+  it("resolves pending lane-resume attention through the guarded write route with the public resolution field", async () => {
     const resolvePendingAttention = vi
       .fn()
       .mockResolvedValue({ status: "resumed", cardId: "card_waiting_1", state: "working" });
@@ -1786,8 +1786,8 @@ describe("harness HTTP boundary", () => {
       method: "POST",
       path: "/api/harness/runs/run_123/resolve-attention",
       body: {
-        command: "resume_lane",
-        actionToken: "test-resolve-token",
+        resolution: "resume_lane",
+        actionHandle: "test-resolve-token",
         resumeSummary: "Resume the pricing review with the confirmed revenue assumption."
       },
       headers: {
@@ -1797,7 +1797,7 @@ describe("harness HTTP boundary", () => {
         "content-type": "application/json"
       },
       bodyByteLength: JSON.stringify({
-        command: "resume_lane",
+        resolution: "resume_lane",
         resumeSummary: "Resume the pricing review with the confirmed revenue assumption."
       }).length,
       ip: "203.0.113.10"
@@ -1815,7 +1815,7 @@ describe("harness HTTP boundary", () => {
     expect(response.body).toEqual({ status: "resumed", cardId: "card_waiting_1", state: "working" });
   });
 
-  it("resolves pending lane-unblock attention through the guarded write route", async () => {
+  it("resolves pending lane-unblock attention through the guarded write route with the public resolution field", async () => {
     const resolvePendingAttention = vi
       .fn()
       .mockResolvedValue({ status: "unblocked", cardId: "card_blocked_1", state: "approved" });
@@ -1834,8 +1834,8 @@ describe("harness HTTP boundary", () => {
       method: "POST",
       path: "/api/harness/runs/run_123/resolve-attention",
       body: {
-        command: "unblock_lane",
-        actionToken: "test-resolve-token",
+        resolution: "unblock_lane",
+        actionHandle: "test-resolve-token",
         resumeSummary: "The blocker is cleared and this lane can return to the board queue."
       },
       headers: {
@@ -1845,7 +1845,7 @@ describe("harness HTTP boundary", () => {
         "content-type": "application/json"
       },
       bodyByteLength: JSON.stringify({
-        command: "unblock_lane",
+        resolution: "unblock_lane",
         resumeSummary: "The blocker is cleared and this lane can return to the board queue."
       }).length,
       ip: "203.0.113.10"
@@ -1880,14 +1880,14 @@ describe("harness HTTP boundary", () => {
       method: "POST",
       path: "/api/harness/runs/run_123/resolve-attention",
       body: {
-        command: "invented"
+        resolution: "invented"
       },
       headers: {
         origin: "https://portal.wealthfactory.test",
         authorization: "Bearer valid",
         "content-type": "application/json"
       },
-      bodyByteLength: JSON.stringify({ command: "invented" }).length,
+      bodyByteLength: JSON.stringify({ resolution: "invented" }).length,
       ip: "203.0.113.10"
     });
 
@@ -1917,8 +1917,8 @@ describe("harness HTTP boundary", () => {
       method: "POST" as const,
       path: "/api/harness/runs/run_123/resolve-attention",
       body: {
-        command: "resume_lane",
-        actionToken: "test-resolve-token"
+        resolution: "resume_lane",
+        actionHandle: "test-resolve-token"
       },
       headers: {
         origin: "https://portal.wealthfactory.test",
@@ -1926,8 +1926,8 @@ describe("harness HTTP boundary", () => {
         "content-type": "application/json"
       },
       bodyByteLength: JSON.stringify({
-        command: "resume_lane",
-        actionToken: "test-resolve-token"
+        resolution: "resume_lane",
+        actionHandle: "test-resolve-token"
       }).length,
       ip: "203.0.113.10"
     };
@@ -1962,8 +1962,8 @@ describe("harness HTTP boundary", () => {
       method: "POST",
       path: "/api/harness/runs/run_123/resolve-attention",
       body: {
-        command: "resume_lane",
-        actionToken: "stale-resolve-token"
+        resolution: "resume_lane",
+        actionHandle: "stale-resolve-token"
       },
       headers: {
         origin: "https://portal.wealthfactory.test",
@@ -1971,8 +1971,8 @@ describe("harness HTTP boundary", () => {
         "content-type": "application/json"
       },
       bodyByteLength: JSON.stringify({
-        command: "resume_lane",
-        actionToken: "stale-resolve-token"
+        resolution: "resume_lane",
+        actionHandle: "stale-resolve-token"
       }).length,
       ip: "203.0.113.10"
     });
@@ -1981,7 +1981,7 @@ describe("harness HTTP boundary", () => {
     expect(response.body).toEqual({ code: "stale_contract" });
   });
 
-  it("starts a fresh board cycle through the guarded write route", async () => {
+  it("starts a fresh board cycle through the guarded write route with the public actionHandle field", async () => {
     const startFreshCycle = vi.fn().mockResolvedValue({ runId: "run_124", reopenedProposalCount: 2 });
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
@@ -2003,8 +2003,8 @@ describe("harness HTTP boundary", () => {
         cookie: "wf_session=abc",
         "content-type": "application/json"
       },
-      body: { mode: "clean", actionToken: "test-review-token" },
-      bodyByteLength: JSON.stringify({ mode: "clean", actionToken: "test-review-token" }).length,
+      body: { mode: "clean", actionHandle: "test-review-token" },
+      bodyByteLength: JSON.stringify({ mode: "clean", actionHandle: "test-review-token" }).length,
       ip: "203.0.113.10"
     });
 

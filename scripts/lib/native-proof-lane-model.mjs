@@ -3,18 +3,9 @@ const DURABLE_NATIVE_PUBLIC_WORKFLOW_IDS = new Set([
   "wf_tax_strategy",
   "wf_package_followup"
 ]);
-const TENANT_TEMPLATE_DIRECT_NATIVE_PROOF_WORKFLOW_IDS = new Set([
-  "wf_connect_first_workflow",
-  "wf_tax_strategy",
-  "wf_package_followup"
-]);
 
 export function isDurableNativePublicWorkflowId(workflowId) {
   return DURABLE_NATIVE_PUBLIC_WORKFLOW_IDS.has(String(workflowId ?? "").trim());
-}
-
-export function isTenantTemplateDirectNativeProofWorkflowId(workflowId) {
-  return TENANT_TEMPLATE_DIRECT_NATIVE_PROOF_WORKFLOW_IDS.has(String(workflowId ?? "").trim());
 }
 
 export function resolveNativeProofStartSelector(input) {
@@ -42,10 +33,8 @@ export function resolveNativeProofStartSelector(input) {
     };
   }
 
-  if (isTenantTemplateDirectNativeProofWorkflowId(workflowId)) {
-    throw new Error(
-      "Direct native proof for core tenant-template workflows requires --workflow-template or WF_STAGE_WORKFLOW_TEMPLATE_ID. The proof harness no longer guesses tenant template rows."
-    );
+  if (isDurableNativePublicWorkflowId(workflowId)) {
+    throw new Error(`workflowTemplateId is required for durable native public workflow ${workflowId}`);
   }
 
   return {

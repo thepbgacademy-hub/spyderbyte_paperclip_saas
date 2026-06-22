@@ -73,9 +73,28 @@ describe("stage live stability helper", () => {
 
     expect(plan.steps.map((step: { id: string }) => step.id)).toEqual([
       "stage-live-proof",
+      "stage-live-native-execution",
       "stage-live-fairness",
       "stage-live-soak"
     ]);
+
+    const nativeExecutionStep = plan.steps.find((step: { id: string }) => step.id === "stage-live-native-execution");
+    expect(nativeExecutionStep.command).toBe("npm");
+    expect(nativeExecutionStep.args).toEqual(expect.arrayContaining([
+      "run",
+      "prove:stage-live-native-execution",
+      "--",
+      "--env-file",
+      DEFAULT_STAGE_STABILITY_ENV_FILE,
+      "--ssh-env-file",
+      DEFAULT_STAGE_STABILITY_SSH_ENV_FILE,
+      "--sudo-password-file",
+      DEFAULT_STAGE_STABILITY_SUDO_PASSWORD_FILE,
+      "--preflight-container",
+      DEFAULT_STAGE_STABILITY_PROOF_CONTAINER,
+      "--ssh-target",
+      "deploy@187.77.19.83"
+    ]));
 
     const fairnessStep = plan.steps.find((step: { id: string }) => step.id === "stage-live-fairness");
     expect(fairnessStep.command).toBe("npm");

@@ -329,7 +329,7 @@ export function createHarnessHttpHandler(options: {
       if (completeMatch) {
         const bodyInput = readJsonObject(request.body);
         const completionSummary = readRequiredString(bodyInput?.completionSummary);
-        const actionToken = readRequiredString(bodyInput?.actionToken);
+        const actionToken = readRequiredActionHandle(bodyInput);
         if (!completionSummary || !actionToken) {
           return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
         }
@@ -352,7 +352,7 @@ export function createHarnessHttpHandler(options: {
         }
         const bodyInput = readJsonObject(request.body);
         const decision = readOptionalString(bodyInput?.decision);
-        const actionToken = readRequiredString(bodyInput?.actionToken);
+        const actionToken = readRequiredActionHandle(bodyInput);
         if (
           decision !== "complete_run"
           && decision !== "start_fresh_cycle"
@@ -395,8 +395,8 @@ export function createHarnessHttpHandler(options: {
           return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
         }
         const bodyInput = readJsonObject(request.body);
-        const command = readOptionalString(bodyInput?.command);
-        const actionToken = readRequiredString(bodyInput?.actionToken);
+        const command = readOptionalString(bodyInput?.resolution ?? bodyInput?.command);
+        const actionToken = readRequiredActionHandle(bodyInput);
         if (command !== "resume_lane" && command !== "unblock_lane") {
           return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
         }
@@ -423,7 +423,7 @@ export function createHarnessHttpHandler(options: {
           return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
         }
         const bodyInput = readJsonObject(request.body);
-        const actionToken = readRequiredString(bodyInput?.actionToken);
+        const actionToken = readRequiredActionHandle(bodyInput);
         const freshCycleMode = readOptionalString(bodyInput?.mode);
         if (!actionToken || (freshCycleMode && freshCycleMode !== "reopen_deferred" && freshCycleMode !== "clean")) {
           return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
@@ -449,7 +449,7 @@ export function createHarnessHttpHandler(options: {
       const exportCandidateMatch = /^\/api\/harness\/runs\/([^/]+)\/export-candidates\/([^/]+)\/(preflight|dry-run|export|delivery-replay)$/u.exec(request.path);
       if (exportCandidateMatch) {
         const bodyInput = readJsonObject(request.body);
-        const actionToken = readRequiredString(bodyInput?.actionToken);
+        const actionToken = readRequiredActionHandle(bodyInput);
         if (!actionToken) {
           return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
         }
@@ -531,7 +531,7 @@ export function createHarnessHttpHandler(options: {
       }
       const bodyInput = readJsonObject(request.body);
       const decision = readOptionalString(bodyInput?.decision);
-      const actionToken = readRequiredString(bodyInput?.actionToken);
+      const actionToken = readRequiredActionHandle(bodyInput);
       const routeDecision = proposalMatch[2] === "approve" ? "approve" : decision ?? "";
       if (!routeDecision || !["approve", "defer", "deny"].includes(routeDecision)) {
         return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
@@ -596,6 +596,10 @@ function readRequiredString(value: unknown): string {
 
 function readOptionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function readRequiredActionHandle(value: Record<string, unknown> | undefined): string {
+  return readRequiredString(value?.actionHandle ?? value?.actionToken);
 }
 
 function retryAfterSeconds(resetAt: number): number {

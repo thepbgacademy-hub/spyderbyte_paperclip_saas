@@ -1102,6 +1102,131 @@ describe("default native executor", () => {
   );
 
   it.each(STAGED_FAMILY_PROOF_CASES)(
+    "fails closed when $testLabel interpretation returns a whitespace-only analysis",
+    async ({ workflowId, buildExecutionEnvelope, laneLabel, invalidDecisionLabel }) => {
+      const fetch = createConnectFirstRawMultiStepFetch({
+        step1Output:
+          "{\"state\":\"done\",\"analysis\":\"   \",\"nextAction\":\"Return the result to the operator.\"}",
+        step2Output:
+          "{\"state\":\"done\",\"summary\":\"Validated the bounded lane result.\"}",
+        step3Output: "{\"approved\":true,\"reason\":\"The drafted lane outcome stays bounded and tenant-safe.\"}"
+      });
+      const executor = createDefaultNativeExecutor({
+        fetch: fetch as unknown as typeof globalThis.fetch
+      });
+
+      await expect(
+        executor.execute({
+          tenantId: "tenant-1",
+          runId: `run-${workflowId}-blank-analysis-1`,
+          workflowId,
+          executionEnvelope: buildExecutionEnvelope(),
+          providerBinding: buildProviderBinding()
+        })
+      ).resolves.toEqual({
+        state: "blocked",
+        resumeSummary: `${laneLabel} needs an explicit unblock action. Native multi-step interpretation returned an invalid ${invalidDecisionLabel} decision. Keep this lane blocked until the native multi-step decision contract is repaired.`
+      });
+
+      expect(fetch).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it.each(STAGED_FAMILY_PROOF_CASES)(
+    "fails closed when $testLabel interpretation returns a whitespace-only nextAction",
+    async ({ workflowId, buildExecutionEnvelope, laneLabel, invalidDecisionLabel }) => {
+      const fetch = createConnectFirstRawMultiStepFetch({
+        step1Output:
+          "{\"state\":\"done\",\"analysis\":\"The lane is ready for a bounded result.\",\"nextAction\":\"   \"}",
+        step2Output:
+          "{\"state\":\"done\",\"summary\":\"Validated the bounded lane result.\"}",
+        step3Output: "{\"approved\":true,\"reason\":\"The drafted lane outcome stays bounded and tenant-safe.\"}"
+      });
+      const executor = createDefaultNativeExecutor({
+        fetch: fetch as unknown as typeof globalThis.fetch
+      });
+
+      await expect(
+        executor.execute({
+          tenantId: "tenant-1",
+          runId: `run-${workflowId}-blank-next-action-1`,
+          workflowId,
+          executionEnvelope: buildExecutionEnvelope(),
+          providerBinding: buildProviderBinding()
+        })
+      ).resolves.toEqual({
+        state: "blocked",
+        resumeSummary: `${laneLabel} needs an explicit unblock action. Native multi-step interpretation returned an invalid ${invalidDecisionLabel} decision. Keep this lane blocked until the native multi-step decision contract is repaired.`
+      });
+
+      expect(fetch).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it.each(STAGED_FAMILY_PROOF_CASES)(
+    "fails closed when $testLabel interpretation wraps the staged decision in surrounding prose",
+    async ({ workflowId, buildExecutionEnvelope, laneLabel, invalidDecisionLabel }) => {
+      const fetch = createConnectFirstRawMultiStepFetch({
+        step1Output:
+          "Here is the staged interpretation result: " +
+          "{\"state\":\"done\",\"analysis\":\"The lane is ready for a bounded result.\",\"nextAction\":\"Return the result to the operator.\"}",
+        step2Output:
+          "{\"state\":\"done\",\"summary\":\"Validated the bounded lane result.\"}",
+        step3Output: "{\"approved\":true,\"reason\":\"The drafted lane outcome stays bounded and tenant-safe.\"}"
+      });
+      const executor = createDefaultNativeExecutor({
+        fetch: fetch as unknown as typeof globalThis.fetch
+      });
+
+      await expect(
+        executor.execute({
+          tenantId: "tenant-1",
+          runId: `run-${workflowId}-prose-interpretation-1`,
+          workflowId,
+          executionEnvelope: buildExecutionEnvelope(),
+          providerBinding: buildProviderBinding()
+        })
+      ).resolves.toEqual({
+        state: "blocked",
+        resumeSummary: `${laneLabel} needs an explicit unblock action. Native multi-step interpretation returned an invalid ${invalidDecisionLabel} decision. Keep this lane blocked until the native multi-step decision contract is repaired.`
+      });
+
+      expect(fetch).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it.each(STAGED_FAMILY_PROOF_CASES)(
+    "fails closed when $testLabel draft returns a whitespace-only summary",
+    async ({ workflowId, buildExecutionEnvelope, laneLabel, invalidDecisionLabel }) => {
+      const fetch = createConnectFirstRawMultiStepFetch({
+        step1Output:
+          "{\"state\":\"done\",\"analysis\":\"The lane is ready for a bounded result.\",\"nextAction\":\"Return the result to the operator.\"}",
+        step2Output:
+          "{\"state\":\"done\",\"summary\":\"   \"}",
+        step3Output: "{\"approved\":true,\"reason\":\"The drafted lane outcome stays bounded and tenant-safe.\"}"
+      });
+      const executor = createDefaultNativeExecutor({
+        fetch: fetch as unknown as typeof globalThis.fetch
+      });
+
+      await expect(
+        executor.execute({
+          tenantId: "tenant-1",
+          runId: `run-${workflowId}-blank-draft-summary-1`,
+          workflowId,
+          executionEnvelope: buildExecutionEnvelope(),
+          providerBinding: buildProviderBinding()
+        })
+      ).resolves.toEqual({
+        state: "blocked",
+        resumeSummary: `${laneLabel} needs an explicit unblock action. Native multi-step draft returned an invalid ${invalidDecisionLabel} decision. Keep this lane blocked until the native multi-step decision contract is repaired.`
+      });
+
+      expect(fetch).toHaveBeenCalledTimes(2);
+    }
+  );
+
+  it.each(STAGED_FAMILY_PROOF_CASES)(
     "fails closed when $testLabel draft returns invalid structured JSON",
     async ({ workflowId, buildExecutionEnvelope, laneLabel, invalidDecisionLabel }) => {
       const fetch = createConnectFirstRawMultiStepFetch({
@@ -1151,6 +1276,70 @@ describe("default native executor", () => {
         executor.execute({
           tenantId: "tenant-1",
           runId: `run-${workflowId}-invalid-validation-2`,
+          workflowId,
+          executionEnvelope: buildExecutionEnvelope(),
+          providerBinding: buildProviderBinding()
+        })
+      ).resolves.toEqual({
+        state: "blocked",
+        resumeSummary: `${laneLabel} needs an explicit unblock action. Native multi-step validation returned an invalid ${invalidDecisionLabel} decision. Keep this lane blocked until the native multi-step decision contract is repaired.`
+      });
+
+      expect(fetch).toHaveBeenCalledTimes(3);
+    }
+  );
+
+  it.each(STAGED_FAMILY_PROOF_CASES)(
+    "fails closed when $testLabel validation returns approved as a non-boolean string",
+    async ({ workflowId, buildExecutionEnvelope, laneLabel, invalidDecisionLabel }) => {
+      const fetch = createConnectFirstRawMultiStepFetch({
+        step1Output:
+          "{\"state\":\"done\",\"analysis\":\"The lane is ready for a bounded result.\",\"nextAction\":\"Return the result to the operator.\"}",
+        step2Output:
+          "{\"state\":\"done\",\"summary\":\"Validated the bounded lane result.\"}",
+        step3Output:
+          "{\"approved\":\"true\",\"reason\":\"The drafted lane outcome stays bounded and tenant-safe.\"}"
+      });
+      const executor = createDefaultNativeExecutor({
+        fetch: fetch as unknown as typeof globalThis.fetch
+      });
+
+      await expect(
+        executor.execute({
+          tenantId: "tenant-1",
+          runId: `run-${workflowId}-string-approved-1`,
+          workflowId,
+          executionEnvelope: buildExecutionEnvelope(),
+          providerBinding: buildProviderBinding()
+        })
+      ).resolves.toEqual({
+        state: "blocked",
+        resumeSummary: `${laneLabel} needs an explicit unblock action. Native multi-step validation returned an invalid ${invalidDecisionLabel} decision. Keep this lane blocked until the native multi-step decision contract is repaired.`
+      });
+
+      expect(fetch).toHaveBeenCalledTimes(3);
+    }
+  );
+
+  it.each(STAGED_FAMILY_PROOF_CASES)(
+    "fails closed when $testLabel validation returns a whitespace-only reason",
+    async ({ workflowId, buildExecutionEnvelope, laneLabel, invalidDecisionLabel }) => {
+      const fetch = createConnectFirstRawMultiStepFetch({
+        step1Output:
+          "{\"state\":\"done\",\"analysis\":\"The lane is ready for a bounded result.\",\"nextAction\":\"Return the result to the operator.\"}",
+        step2Output:
+          "{\"state\":\"done\",\"summary\":\"Validated the bounded lane result.\"}",
+        step3Output:
+          "{\"approved\":true,\"reason\":\"   \"}"
+      });
+      const executor = createDefaultNativeExecutor({
+        fetch: fetch as unknown as typeof globalThis.fetch
+      });
+
+      await expect(
+        executor.execute({
+          tenantId: "tenant-1",
+          runId: `run-${workflowId}-blank-reason-1`,
           workflowId,
           executionEnvelope: buildExecutionEnvelope(),
           providerBinding: buildProviderBinding()

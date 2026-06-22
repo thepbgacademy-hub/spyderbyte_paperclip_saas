@@ -188,7 +188,7 @@ const fallbackBoardBase: HarnessBoardResponse = {
       actionRoute: "proposal-decision",
       actionPath: "/api/harness/proposals/proposal-fallback-1/decision",
       actionMethod: "POST",
-      actionToken: "preview-proposal-fallback-1",
+      actionHandle: "preview-proposal-fallback-1",
       actionLabel: "Review proposal decision",
       actionDescription: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
       requestFields: [
@@ -250,7 +250,7 @@ const fallbackBoardBase: HarnessBoardResponse = {
     actionRoute: "review-attention",
     actionPath: "/api/harness/runs/harness-browser-fallback/review-attention",
     actionMethod: "POST",
-    actionToken: "preview-review-attention",
+    actionHandle: "preview-review-attention",
     actionLabel: "Review final assembly",
     actionDescription: "Finish the current board cycle or intentionally start the next one.",
     requestFields: [
@@ -1152,14 +1152,14 @@ const fallbackBoardResponsesRaw: Record<HarnessBoardFallbackVariant, HarnessBoar
       actionRoute: "resolve-attention",
       actionPath: "/api/harness/runs/harness-browser-fallback-resolve/resolve-attention",
       actionMethod: "POST",
-      actionToken: "preview-resolve-attention",
+      actionHandle: "preview-resolve-attention",
       actionLabel: "Resume lane",
       actionDescription: "Resume the waiting lane when the required board input is ready.",
       requestFields: [
         {
-          name: "command",
-          label: "Resolution command",
-          description: "Choose the single bounded command that resolves this attention state.",
+          name: "resolution",
+          label: "Resolution choice",
+          description: "Choose the single bounded step that resolves this attention state.",
           required: true,
           allowedValues: ["resume_lane"]
         },
@@ -1177,11 +1177,11 @@ const fallbackBoardResponsesRaw: Record<HarnessBoardFallbackVariant, HarnessBoar
           description: "Return the lane to active execution with an optional bounded resume note.",
           emphasis: "primary",
           nextEffectSummary: "The lane returns to active execution and re-enters the worker queue through the existing harness path.",
-          exampleRequest: { command: "resume_lane" }
+          exampleRequest: { resolution: "resume_lane" }
         }
       ],
       recommendedOptionValue: "resume_lane",
-      allowedCommands: ["resume_lane"],
+      allowedResolutions: ["resume_lane"],
       requestedAtLabel: "recently",
       reasonLabel: "Awaiting tenant confirmation",
       targetCardId: "card-cfo-forecast",
@@ -1241,6 +1241,103 @@ const DEFAULT_HARNESS_BOARD_REQUEST_TIMEOUT_MS = 8_000;
 type LegacyHarnessBoardResponse = Omit<HarnessBoardResponse, "memoryBoundary"> & {
   memoryBoundary?: HarnessBoardResponse["memoryBoundary"] | undefined;
 };
+
+function normalizeLegacyActionRequestField(field: Record<string, unknown>) {
+  if (field.name !== "command") {
+    return field;
+  }
+
+  return {
+    ...field,
+    name: "resolution"
+  };
+}
+
+function normalizeLegacyActionExampleRequest(exampleRequest: Record<string, unknown> | undefined) {
+  if (!exampleRequest || typeof exampleRequest.resolution === "string" || typeof exampleRequest.command !== "string") {
+    return exampleRequest;
+  }
+
+  const { command, ...rest } = exampleRequest;
+  return {
+    ...rest,
+    resolution: command
+  };
+}
+
+function normalizeLegacyActionContract<T extends Record<string, unknown>>(value: T): T {
+  const normalized = {
+    ...value,
+    actionHandle:
+      typeof value.actionHandle === "string"
+        ? value.actionHandle
+        : typeof value.actionToken === "string"
+          ? value.actionToken
+          : value.actionHandle
+  } as T & {
+    requestFields?: unknown;
+    actionOptions?: unknown;
+    allowedResolutions?: unknown;
+    allowedCommands?: unknown;
+  };
+
+  if (Array.isArray(normalized.requestFields)) {
+    normalized.requestFields = normalized.requestFields.map((field) =>
+      normalizeLegacyActionRequestField(field as Record<string, unknown>)
+    );
+  }
+
+  if (Array.isArray(normalized.actionOptions)) {
+    normalized.actionOptions = normalized.actionOptions.map((option) => {
+      const normalizedOption = option as Record<string, unknown>;
+      return {
+        ...normalizedOption,
+        exampleRequest: normalizeLegacyActionExampleRequest(
+          normalizedOption.exampleRequest as Record<string, unknown> | undefined
+        )
+      };
+    });
+  }
+
+  if (!Array.isArray(normalized.allowedResolutions) && Array.isArray(normalized.allowedCommands)) {
+    normalized.allowedResolutions = normalized.allowedCommands;
+  }
+
+  return normalized as T;
+}
+
+function normalizeLegacyBoardActionFields(board: LegacyHarnessBoardResponse): LegacyHarnessBoardResponse {
+  return {
+    ...board,
+    pendingApprovals: board.pendingApprovals.map((approval) =>
+      normalizeLegacyActionContract(approval as unknown as Record<string, unknown>)
+    ) as HarnessBoardResponse["pendingApprovals"],
+    ...(board.memoryBoundary
+      ? {
+          memoryBoundary: {
+            ...board.memoryBoundary,
+            ...(Array.isArray(board.memoryBoundary.exportCandidates)
+              ? {
+                  exportCandidates: board.memoryBoundary.exportCandidates.map((candidate) => ({
+                    ...candidate,
+                    ...(Array.isArray(candidate.exportActions)
+                      ? {
+                          exportActions: candidate.exportActions.map((action) =>
+                            normalizeLegacyActionContract(action as unknown as Record<string, unknown>)
+                          )
+                        }
+                      : {})
+                  }))
+                }
+              : {})
+          }
+        }
+      : {}),
+    pendingAttention: board.pendingAttention
+      ? normalizeLegacyActionContract(board.pendingAttention as unknown as Record<string, unknown>) as NonNullable<HarnessBoardResponse["pendingAttention"]>
+      : board.pendingAttention
+  } as LegacyHarnessBoardResponse;
+}
 
 function humanizeMemoryBoundaryReadiness(
   readiness: NonNullable<HarnessBoardResponse["memoryBoundary"]["operationalItems"][number]["readiness"]>
@@ -4497,22 +4594,24 @@ function normalizeMemoryBoundary(
 function normalizeBoardResponse(
   board: HarnessBoardResponse | LegacyHarnessBoardResponse
 ): HarnessBoardResponse {
-  if (board.memoryBoundary) {
+  const normalizedBoard = normalizeLegacyBoardActionFields(board as LegacyHarnessBoardResponse);
+
+  if (normalizedBoard.memoryBoundary) {
     const hasLegacyMemoryBoundaryLists =
-      Array.isArray((board.memoryBoundary as { operationalItems?: unknown }).operationalItems)
-      && Array.isArray((board.memoryBoundary as { exportReadyItems?: unknown }).exportReadyItems);
+      Array.isArray((normalizedBoard.memoryBoundary as { operationalItems?: unknown }).operationalItems)
+      && Array.isArray((normalizedBoard.memoryBoundary as { exportReadyItems?: unknown }).exportReadyItems);
 
     if (!hasLegacyMemoryBoundaryLists) {
-      return board as HarnessBoardResponse;
+      return normalizedBoard as HarnessBoardResponse;
     }
 
     return {
-      ...board,
-      memoryBoundary: normalizeMemoryBoundary(board.memoryBoundary, board)
+      ...normalizedBoard,
+      memoryBoundary: normalizeMemoryBoundary(normalizedBoard.memoryBoundary, normalizedBoard)
     } as HarnessBoardResponse;
   }
 
-  return board as HarnessBoardResponse;
+  return normalizedBoard as HarnessBoardResponse;
 
   const exportReadyItems: HarnessBoardResponse["memoryBoundary"]["exportReadyItems"] = [
     {

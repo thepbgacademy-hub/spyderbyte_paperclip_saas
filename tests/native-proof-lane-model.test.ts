@@ -7,7 +7,6 @@ const require = createRequire(import.meta.url);
 const {
   alignDurableHarnessProofPlan,
   isDurableNativePublicWorkflowId,
-  isTenantTemplateDirectNativeProofWorkflowId,
   resolveNativeProofStartSelector
 } = require("../scripts/lib/native-proof-lane-model.mjs");
 
@@ -24,23 +23,25 @@ describe("native proof lane model helpers", () => {
     expect(isDurableNativePublicWorkflowId("workflow-uuid-like-value")).toBe(false);
   });
 
-  it("limits direct tenant-template proof reservation to the core native workflow family", () => {
-    expect(isTenantTemplateDirectNativeProofWorkflowId("wf_connect_first_workflow")).toBe(true);
-    expect(isTenantTemplateDirectNativeProofWorkflowId("wf_tax_strategy")).toBe(true);
-    expect(isTenantTemplateDirectNativeProofWorkflowId("wf_package_followup")).toBe(true);
-    expect(isTenantTemplateDirectNativeProofWorkflowId("wf-example-audit")).toBe(false);
-    expect(isTenantTemplateDirectNativeProofWorkflowId("workflow-uuid-like-value")).toBe(false);
-  });
-
-  it("fails closed for core tenant-template workflows unless an explicit template id is supplied", () => {
+  it("fails closed when a durable native public workflow id omits the explicit template override", () => {
     expect(() =>
       resolveNativeProofStartSelector({
         workflowId: "wf_connect_first_workflow"
       })
-    ).toThrow(/requires --workflow-template or WF_STAGE_WORKFLOW_TEMPLATE_ID/i);
+    ).toThrow(/workflowTemplateId is required/);
+    expect(() =>
+      resolveNativeProofStartSelector({
+        workflowId: "wf_tax_strategy"
+      })
+    ).toThrow(/workflowTemplateId is required/);
+    expect(() =>
+      resolveNativeProofStartSelector({
+        workflowId: "wf_package_followup"
+      })
+    ).toThrow(/workflowTemplateId is required/);
   });
 
-  it("uses the dashboard surface for non-core public workflow ids when no template override is given", () => {
+  it("still uses the dashboard surface for non-durable public workflow ids when no template override is given", () => {
     expect(
       resolveNativeProofStartSelector({
         workflowId: "wf-example-audit"

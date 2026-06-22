@@ -123,6 +123,30 @@ This file tracks the new harness subproject only.
 
 ## Current Next Slice
 
+- [x] Close the bounded stage native-execution runner proof gap without reopening broader stage-stability, board-contract, or launch-lane scope.
+  - [x] Keep the pre-phase GitNexus gate explicit: on June 22, 2026 `gitnexus status` stayed current at commit `7370811`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` still reported a branch-wide critical tree centered in the harness board/client area plus stage-proof tooling.
+  - [x] Treat the larger board and stage-stability seams as already closed for their current bounded phases, and choose only the thinnest remaining meaningful gap: execution-level behavioral proof for `scripts/prove-stage-live-native-execution.mjs`.
+  - [x] Add a failing runner-level test first for the three core-family lane invocations and explicit `--workflow-template` propagation.
+  - [x] Extract the minimal runner helper behind `scripts/prove-stage-live-native-execution.mjs` so the script loop is behavior-testable without changing its public command surface.
+  - [x] Keep the existing script-level proof aligned to the refactor by checking the wrapper seam and npm exposure instead of the inlined loop body.
+  - [x] Verify the focused local proof surface for the native-execution runner seam and nearby stage-proof tests.
+  - [x] Verify `npm run build -- --pretty false`.
+  - [x] Run the non-destructive isolated live acceptance gate with `npm run prove:stage-live-native-execution` against `wf-api.spyderbyte.cloud`.
+  - [x] Keep `api.spyderbyte.cloud` unchanged; this phase validated the isolated Wealth Factory lane only.
+  - [x] Keep the phase accounting explicit: the older completed items that follow in this section remain historical branch context from prior bounded slices, not additional work performed by this runner-proof phase.
+- [x] Close the bounded isolated stage-stability acceptance gate for the already-landed wrapper/native-execution widening without reopening broader launch scope.
+  - [x] Keep the pre-phase GitNexus gate explicit: on June 22, 2026 `gitnexus status` stayed current at commit `7370811`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` still reported a branch-wide critical tree centered in the harness board/client area.
+  - [x] Treat that critical tree as a reason to finish-and-verify the already-landed bounded phase instead of adding a new low-yield proof-only slice or widening deploy/public scope.
+  - [x] Verify the focused local proof surface across the stage-stability wrapper, stage native-execution proof script, live board action contract seam, native executor seam, worker-runtime seam, and nearby docs/tests.
+  - [x] Verify `npm run build -- --pretty false`.
+  - [x] Run the non-destructive isolated live acceptance gate with `npm run prove:stage-stability` against `wf-api.spyderbyte.cloud`.
+  - [x] Keep `api.spyderbyte.cloud` unchanged; this acceptance phase validated the isolated Wealth Factory lane only.
+  - [x] Keep the phase accounting explicit: the older completed items that follow in this section remain historical branch context from prior bounded slices, not additional work performed by this June 22 acceptance pass.
+- [x] Close the bounded local-only staged-field-blank-contract proof slice so the staged native worker-runtime seam keeps fail-closed trim/rejection truth explicit without widening deploy/public posture.
+  - [x] Add focused staged native proof coverage for `wf_tax_strategy` and `wf_package_followup` when stage-1 interpretation returns a whitespace-only `analysis`.
+  - [x] Add focused staged native proof coverage for `wf_tax_strategy` and `wf_package_followup` when stage-1 interpretation returns a whitespace-only `nextAction`.
+  - [x] Add focused staged native proof coverage for `wf_tax_strategy` and `wf_package_followup` when stage-2 draft returns a whitespace-only `summary`.
+  - [x] Keep this slice local-only and proof-only because the existing parsers already enforce those trims/rejections.
 - [x] Add a mandatory post-phase drift/alignment gate and enforce it before future phases are accepted.
   - [x] Re-check completed work against the design doc, guardrails doc, active plan, TODO, and handoff before phase closeout.
   - [x] Reject any phase that promotes package-overlay/demo content into core-platform seams without prior design approval.
@@ -149,6 +173,33 @@ This file tracks the new harness subproject only.
 - [x] Keep runtime/dashboard/browser workflow copy truthful to the selected workflow instead of hardcoding a media-calendar title on generic runtime-ready messaging.
 - [x] Keep private worker/native post-outcome follow-through explicit with a state-by-state envelope contract so child execution does not reconstruct resume/review/dispatch posture from generic run-state heuristics.
 - [x] Deepen the private worker/native execution seam beyond `orchestratorHandoff` plus `postOutcomeDirectives` into the next bounded orchestrator/child execution slice without reopening public dashboard/start behavior.
+- [x] Pin the malformed stage-1 blocked-path worker-runtime event contract for the staged-review families without widening deploy/public seams.
+  - [x] Keep the proof local-only and test-focused.
+  - [x] Assert the durable `execution_outcome_committed` blocked payload fields.
+  - [x] Assert the matching `attention_requested` `await_unblock` payload fields.
+  - [x] Keep the fixture aligned with the real post-blocked run read-model instead of a stale pre-block snapshot.
+- [x] Tighten the malformed stage-1 blocked-path worker-runtime proof from event presence to exact per-lane event cardinality without widening deploy/public seams.
+  - [x] Keep the proof local-only and test-focused.
+  - [x] Require exactly one `execution_outcome_committed` event for the target lane card.
+  - [x] Require exactly one `attention_requested` `await_unblock` event for the target lane card.
+  - [x] Key the uniqueness filter on both the envelope card id and `payload.targetCardId` so the proof closes the targeted duplicate-emission blind spot.
+- [x] Extend the malformed staged-step worker-runtime blocked-path proof from stage-1 interpretation to stage-2 draft and stage-3 validation without widening deploy/public seams.
+  - [x] Keep the proof local-only and test-focused.
+  - [x] Add focused runtime proof that tax-strategy and package-followup fail closed when stage-2 draft returns malformed structured JSON.
+  - [x] Add focused runtime proof that tax-strategy and package-followup fail closed when stage-3 validation returns malformed structured JSON.
+  - [x] Reuse the same blocked transition, continuity persistence, event cardinality, and queued-run contract already pinned for malformed stage-1 interpretation.
+  - [x] Keep runtime continuity assertions stage-specific but copy-light so executor-owned English wording can evolve without breaking runtime-owned seam proofs.
+- [x] Extend the staged validation-contract worker-runtime blocked-path proof posture to non-boolean `approved` and whitespace-only `reason` outcomes without widening deploy/public seams.
+  - [x] Keep the proof local-only and test-focused.
+  - [x] Add focused runtime proof that `wf_tax_strategy` and `wf_package_followup` fail closed when stage-3 validation returns `approved` as a non-boolean string.
+  - [x] Add focused runtime proof that `wf_tax_strategy` and `wf_package_followup` fail closed when stage-3 validation returns a whitespace-only `reason`.
+  - [x] Reuse the same blocked transition, continuity persistence, event cardinality, and queued-run contract already pinned for earlier staged-step failures.
+  - [x] Keep runtime assertions contract-owned and copy-light so executor-owned English wording can evolve without breaking runtime-owned seam proofs.
+- [x] Close the bounded local-only worker-runtime stage-1 prose-threading pin without reopening worker-runtime behavior, VPS proof lanes, or public launch posture.
+  - [x] Add focused worker-runtime prose-threading proofs that `wf_tax_strategy` and `wf_package_followup` keep stage-1 interpretation prose threaded into the stage-2 draft prompt on the staged native path.
+  - [x] Keep production code unchanged because the current executor already threads those stage-1 interpretation fields into the stage-2 draft prompt correctly.
+  - [x] Keep anti-drift/no-scope-creep explicit: this slice pins the two staged-review families on existing private worker/native prompt-threading truth only and does not widen blocked-path handling, executor policy, or deploy/runtime/public seams.
+  - [x] Keep this slice local-only because it adds worker-runtime proof coverage and docs only, not deploy/runtime/public behavior changes.
 - [ ] Historical carry-forward after the audit-correction track resumes: continue deepening the private worker/native execution seam beyond `orchestratorHandoff`, `postOutcomeDirectives`, `boardContext`, full native outcome-state enforcement, bounded registry extraction, shared prompt-context extraction, parser-module extraction, and the first bounded multi-step worker lane without reopening public dashboard/start behavior.
 - [x] Primary active track: run the audit correction phases in order, preserving the aligned safety rails while restoring the missing CEO-centered product loop and proof coverage.
 - [x] Run the launch-closeout verification pass with fresh GitNexus preflight, combined Phase F/G/H proof, build/web build, browser proof, and reviewer closeout.
@@ -170,11 +221,39 @@ This file tracks the new harness subproject only.
   - [x] Keep the stage verification path read-only and host-safe by querying durable state through `ssh + sudo + docker exec` inside `wf-stage-api` instead of reviving the invalid local DB-tunnel compatibility path for this environment.
 - [x] Add a repo-owned `npm run prove:stage-stability` wrapper so VPS 2 launch-stability checks use isolated-stage defaults, the approved shared-host private-port exception posture, stage-owned focus containers, canonical demo lanes, and a safe dry-run inspection path instead of operator-rebuilt generic commands.
 - [x] Remove the dead wrapper-side workflow-template compatibility lookup from `npm run prove:stage-stability` and replace the old source-text-only proof with a behavioral orchestration test, so the wrapper stays thin while `prove:live-fairness` continues to own template resolution.
+- [x] Re-run the full isolated-lane launch-readiness gate on the current branch after the board-wire compatibility cleanup, and keep the result evidence-only: `prove:stage-live`, `prove:stage-live-native-execution`, `prove:live-fairness`, and `prove:live-soak-capacity` all passed on June 22, 2026 against `wf-api.spyderbyte.cloud` without changing `api.spyderbyte.cloud`.
+- [x] Write the bounded shared-host cutover-plumbing plan so any later move of `api.spyderbyte.cloud` onto the proven isolated stack is executed as reverse-proxy/operator work with explicit preconditions, verification, and rollback, not as an ad hoc application slice.
+- [x] Freeze the live harness board action-request seam to the current public contract without reopening runtime, worker, or VPS scope.
+  - [x] Keep outbound live board actions on the current public request shape: bounded action payload plus `actionHandle`, with no new legacy `actionToken` or `command` shadow fields added by the page.
+  - [x] Keep read-side and server-side compatibility intact for older mixed-schema inputs so this slice reduces write-path drift without forcing a broader cutover.
+  - [x] Prove the narrowed request shape through focused `tests/harness-ui.test.tsx`, while keeping `tests/harness-board-client.test.ts` and `tests/harness-http.test.ts` green on the same seam.
+  - [x] Keep this slice local-only because it changes only the browser write payload shape and nearby verification, not live deploy/runtime/VPS behavior.
 - [x] Close the bounded repo-verification cleanup slice so repo-wide TypeScript/build and the nearby native/public proof gates return green again without introducing new runtime-scope widening.
   - [x] Keep the production fix narrow to the already-landed private staged native executor seam by adding only a typed incomplete-interpretation guard around the existing early-exit behavior instead of changing public/runtime contracts again.
   - [x] Realign stale proof expectations in the runtime-server, worker-healthcheck, and `.mjs`-backed proof tests to the current native/public bootstrap truth.
   - [x] Prefer the repo's existing `createRequire()` pattern for `.mjs` proof helpers and remove redundant ambient shim drift instead of carrying two import strategies.
   - [x] Keep this cleanup slice local-only because it repairs verification drift only and does not change VPS/runtime/deploy/public behavior.
+- [x] Historical context marker: the nearby older launch-readiness, shared-host cutover, board-wire, and stage-stability items in this section were completed in earlier phases and are not part of the later local-only proof slices recorded here.
+- [x] Close the bounded private worker/native provider-hydration fail-closed proof slice without reopening runtime behavior, VPS proof lanes, or public launch posture.
+  - [x] Add focused worker-runtime proof that native execution fails closed before provider calls when the bound provider secret becomes unavailable at execution time.
+  - [x] Add focused worker-runtime proof that native execution fails closed before provider calls when the bound provider secret payload is invalid for execution.
+  - [x] Keep production code unchanged because the current runtime already satisfies both fail-closed branches.
+  - [x] Keep this slice local-only because it adds proof coverage and docs only, not deploy/runtime/public behavior changes.
+- [x] Close the bounded staged-native validation-contract proof slice without reopening worker-runtime behavior, VPS proof lanes, or public launch posture.
+  - [x] Add focused staged-review proof that tax-strategy and package-followup fail closed when validation returns `approved` as a non-boolean string.
+  - [x] Add focused staged-review proof that tax-strategy and package-followup fail closed when validation returns a whitespace-only `reason`.
+  - [x] Keep production code unchanged because the current staged parser already rejects both malformed validation shapes.
+  - [x] Keep this slice local-only because it adds staged native proof coverage and docs only, not deploy/runtime/public behavior changes.
+- [x] Close the bounded staged-native interpretation-contract proof slice without reopening worker-runtime behavior, VPS proof lanes, or public launch posture.
+  - [x] Add focused staged-review proof that tax-strategy and package-followup fail closed when stage-1 interpretation wraps an otherwise valid staged decision in surrounding prose.
+  - [x] Keep production code unchanged because the current staged parser already rejects prose-wrapped interpretation payloads.
+  - [x] Keep the phase accounting explicit: `tests/native-executor.test.ts` in the current working tree still also contains the immediately prior staged-validation proof additions from the earlier local-only validation-contract slice; this later slice adds only the prose-wrapped interpretation proofs on top of that file.
+  - [x] Keep this slice local-only because it adds staged native proof coverage and docs only, not deploy/runtime/public behavior changes.
+- [x] Close the bounded worker-runtime staged-interpretation commitment proof slice without reopening deploy/runtime behavior beyond the private native seam, VPS proof lanes, or public launch posture.
+  - [x] Add focused worker-runtime proof that tax-strategy and package-followup fail closed when stage-1 interpretation returns malformed structured JSON.
+  - [x] Keep production code unchanged because the current runtime/native seam already commits these malformed interpretation outcomes correctly.
+  - [x] Keep the phase accounting explicit: `tests/worker-runtime.test.ts` in the current working tree still also contains the immediately prior provider-hydration proof additions from the earlier local-only slice; this later slice adds only the malformed stage-1 interpretation runtime proofs on top of that file.
+  - [x] Keep this slice local-only because it adds worker-runtime native proof coverage and docs only, not deploy/runtime/public behavior changes.
 - [x] Canonicalize the current core family set for the bounded pre-pack cleanup slice, so registry exception lists and nearby bootstrap/proof checks all point at the same source of truth before the later matched domain-specific data-pack phase touches the full set.
 - [x] Next active slice after Phase E: close the Hermes-style dashboard benchmark by simplifying the board around current focus, active lanes, next actions, governance posture, and progress while keeping deferred `memoryBoundary` detail out of the primary launch surface.
 - [x] Next active slice after Phase F: close the remaining harness-specific proof gaps around tenant isolation under simultaneous harness activity, harness-specific fairness/backpressure, private metadata non-leakage, mixed-version/cutover safety, and the portable Docker-backed proof path.

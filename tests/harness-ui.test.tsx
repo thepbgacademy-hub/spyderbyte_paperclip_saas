@@ -8,6 +8,7 @@ import {
 } from "../apps/web/src/components/HarnessBoard.js";
 import { HarnessCardDrawer } from "../apps/web/src/components/HarnessCardDrawer.js";
 import {
+  buildLiveActionRequest,
   buildContractActionPayload,
   canSubmitContractActionState,
   canResetBoardActionComposerAfterError,
@@ -21,6 +22,7 @@ import {
   getBoardContractActionDescriptorMap,
   getBoardContractActionFieldMap,
   inspectBoardContractRefreshImpact,
+  normalizeCurrentActionRequestBody,
   pruneActionDraftsForBoard,
   pruneOpenActionComposerKeysForBoard,
   resolveBoardLoadFailure,
@@ -115,7 +117,7 @@ const boardResponse: HarnessBoardResponse = {
       actionRoute: "proposal-decision",
       actionPath: "/api/harness/proposals/proposal_ui_test_1/decision",
       actionMethod: "POST",
-      actionToken: "test-proposal-token",
+      actionHandle: "test-proposal-token",
       actionLabel: "Review proposal decision",
       actionDescription: "Choose whether this proposed follow-on work should be approved, deferred, or denied.",
       requestFields: [
@@ -177,7 +179,7 @@ const boardResponse: HarnessBoardResponse = {
     actionRoute: "review-attention",
     actionPath: "/api/harness/runs/run_ui_test_1/review-attention",
     actionMethod: "POST",
-    actionToken: "test-review-token",
+    actionHandle: "test-review-token",
     actionLabel: "Review final assembly",
     actionDescription: "Finish the current board cycle or intentionally start the next one.",
     requestFields: [
@@ -1089,14 +1091,14 @@ const resolveAttentionBoardResponse: HarnessBoardResponse = {
     actionRoute: "resolve-attention",
     actionPath: "/api/harness/runs/run_ui_test_2/resolve-attention",
     actionMethod: "POST",
-    actionToken: "test-resolve-token",
+    actionHandle: "test-resolve-token",
     actionLabel: "Resume lane",
     actionDescription: "Resume the waiting lane when the required board input is ready.",
     requestFields: [
       {
-        name: "command",
-        label: "Resolution command",
-        description: "Choose the single bounded command that resolves this attention state.",
+        name: "resolution",
+        label: "Resolution choice",
+        description: "Choose the single bounded step that resolves this attention state.",
         required: true,
         allowedValues: ["resume_lane"]
       },
@@ -1114,11 +1116,11 @@ const resolveAttentionBoardResponse: HarnessBoardResponse = {
         description: "Return the lane to active execution with an optional bounded resume note.",
         emphasis: "primary",
         nextEffectSummary: "The lane returns to active execution and re-enters the worker queue through the existing harness path.",
-        exampleRequest: { command: "resume_lane" }
+        exampleRequest: { resolution: "resume_lane" }
       }
     ],
     recommendedOptionValue: "resume_lane",
-    allowedCommands: ["resume_lane"],
+    allowedResolutions: ["resume_lane"],
     requestedAtLabel: "11:41 AM",
     reasonLabel: "Awaiting tenant confirmation",
     targetCardId: "card-cfo-forecast",
@@ -1596,7 +1598,7 @@ describe("harness board UI", () => {
             actionRoute: "export-preflight" as const,
             actionPath: "/api/harness/runs/run_ui_test_1/export-candidates/governance_history_export/preflight",
             actionMethod: "POST" as const,
-            actionToken: "preview-governance-history-export-preflight",
+            actionHandle: "preview-governance-history-export-preflight",
             actionLabel: "Run export preflight",
             actionDescription: "Validate the current export candidate against the live board contract before any dry-run or tenant-facing export bundle is produced."
           },
@@ -1604,7 +1606,7 @@ describe("harness board UI", () => {
             actionRoute: "governance-history-export-replay" as const,
             actionPath: "/api/harness/runs/run_ui_test_1/export-candidates/governance_history_export/delivery-replay",
             actionMethod: "POST" as const,
-            actionToken: "preview-governance-history-export-replay",
+            actionHandle: "preview-governance-history-export-replay",
             actionLabel: "Replay governance history delivery",
             actionDescription: "Re-dispatch the persisted tenant-safe governance-history bundle through the bounded private writer seam.",
             nextEffectSummary: "This reuses the stored export-ready bundle instead of rebuilding a new tenant package."
@@ -1665,7 +1667,7 @@ describe("harness board UI", () => {
             actionRoute: "package-bundle-export-replay" as const,
             actionPath: "/api/harness/runs/run_ui_test_1/export-candidates/package_bundle_export/delivery-replay",
             actionMethod: "POST" as const,
-            actionToken: "preview-package-bundle-export-replay",
+            actionHandle: "preview-package-bundle-export-replay",
             actionLabel: "Replay package bundle delivery",
             actionDescription: "Re-dispatch the persisted tenant-safe package bundle through the bounded private writer seam.",
             nextEffectSummary: "This reuses the stored package bundle instead of rebuilding a new tenant package."
@@ -1720,7 +1722,7 @@ describe("harness board UI", () => {
             actionRoute: "export-preflight" as const,
             actionPath: "/api/harness/runs/run_ui_test_1/export-candidates/governance_history_export/preflight",
             actionMethod: "POST" as const,
-            actionToken: "preview-governance-history-export-preflight",
+            actionHandle: "preview-governance-history-export-preflight",
             actionLabel: "Run export preflight",
             actionDescription: "Validate the current export candidate against the live board contract before any dry-run or tenant-facing export bundle is produced."
           }
@@ -1874,12 +1876,12 @@ describe("harness board UI", () => {
     expect(markup).toContain("Resume the pricing lane once the tenant confirms the updated revenue assumption.");
     expect(markup).toContain("POST /api/harness/runs/run_ui_test_2/resolve-attention");
     expect(markup).toContain("Action family: resolve attention");
-    expect(markup).toContain("Allowed commands: resume_lane");
-    expect(markup).toContain("Resolution command");
+    expect(markup).toContain("Allowed resolutions: resume_lane");
+    expect(markup).toContain("Resolution choice");
     expect(markup).toContain("Resume summary");
     expect(markup).toContain("Hide composer for Resume lane");
     expect(markup).toContain("Live request fields for Resume lane");
-    expect(markup).toContain("&quot;command&quot;:&quot;resume_lane&quot;");
+    expect(markup).toContain("&quot;resolution&quot;:&quot;resume_lane&quot;");
   });
 
   it("describes approval-only next actions without mislabeling them as CEO review", () => {
@@ -2040,7 +2042,7 @@ describe("harness board UI", () => {
     expect(feedback.message).toContain("no longer matches the live board contract");
     expect(feedback.recoverySteps).toEqual([
       "Reset this action composer to the contract defaults.",
-      "Review the required fields again before retrying the lane recovery command."
+      "Review the required fields again before retrying the lane recovery step."
     ]);
   });
 
@@ -2133,7 +2135,7 @@ describe("harness board UI", () => {
           actionPath: "/api/harness/proposals/proposal_ui_test_1/decision",
           actionRoute: "proposal-decision",
           actionMethod: "POST",
-          actionToken: "test-proposal-token",
+          actionHandle: "test-proposal-token",
           requestBody: { decision: "approve" },
           noticeLabel: "Approve proposal"
         }}
@@ -2173,7 +2175,7 @@ describe("harness board UI", () => {
           actionPath: "/api/harness/proposals/proposal_old/decision",
           actionRoute: "proposal-decision",
           actionMethod: "POST",
-          actionToken: "test-proposal-old-token",
+          actionHandle: "test-proposal-old-token",
           requestBody: { decision: "approve" },
           noticeLabel: "Approve proposal"
         }}
@@ -2216,8 +2218,8 @@ describe("harness board UI", () => {
           actionPath: "/api/harness/runs/run_ui_test_2/resolve-attention",
           actionRoute: "resolve-attention",
           actionMethod: "POST",
-          actionToken: "test-resolve-token",
-          requestBody: { command: "resume_lane", resumeSummary: "Resume CFO lane" },
+          actionHandle: "test-resolve-token",
+          requestBody: { resolution: "resume_lane", resumeSummary: "Resume CFO lane" },
           noticeLabel: "Resume lane"
         }}
       />
@@ -2257,7 +2259,7 @@ describe("harness board UI", () => {
           actionPath: "/api/harness/runs/run_ui_test_1/review-attention",
           actionRoute: "review-attention",
           actionMethod: "POST",
-          actionToken: "test-review-token",
+          actionHandle: "test-review-token",
           requestBody: { decision: "start_fresh_cycle", mode: "invalid_mode" },
           noticeLabel: "Start fresh cycle"
         }}
@@ -2301,8 +2303,8 @@ describe("harness board UI", () => {
           actionPath: "/api/harness/runs/run_ui_test_2/resolve-attention",
           actionRoute: "resolve-attention",
           actionMethod: "POST",
-          actionToken: "test-resolve-token",
-          requestBody: { command: "unblock_lane" },
+          actionHandle: "test-resolve-token",
+          requestBody: { resolution: "unblock_lane" },
           noticeLabel: "Unblock lane"
         }}
       />
@@ -2342,7 +2344,7 @@ describe("harness board UI", () => {
           actionPath: "/api/harness/proposals/proposal_ui_test_1/decision",
           actionRoute: "proposal-decision",
           actionMethod: "POST",
-          actionToken: "test-proposal-token",
+          actionHandle: "test-proposal-token",
           requestBody: { decision: "approve" },
           noticeLabel: "Approve proposal"
         }}
@@ -2384,7 +2386,7 @@ describe("harness board UI", () => {
           actionPath: "/api/harness/proposals/proposal_ui_test_1/decision",
           actionRoute: "proposal-decision",
           actionMethod: "POST",
-          actionToken: "test-proposal-token",
+          actionHandle: "test-proposal-token",
           requestBody: { decision: "approve" },
           noticeLabel: "Approve proposal"
         }}
@@ -2563,6 +2565,68 @@ describe("harness board UI", () => {
         })
       )
     ).toBe(false);
+  });
+
+  it("builds live action requests with the current public action schema only", () => {
+    expect(
+      buildLiveActionRequest({
+        requestBody: { decision: "approve" },
+        actionHandle: "test-proposal-token"
+      })
+    ).toEqual({
+      decision: "approve",
+      actionHandle: "test-proposal-token"
+    });
+
+    expect(
+      buildLiveActionRequest({
+        requestBody: { resolution: "resume_lane", resumeSummary: "Resume CFO lane" },
+        actionHandle: "test-resolve-token"
+      })
+    ).toEqual({
+      resolution: "resume_lane",
+      resumeSummary: "Resume CFO lane",
+      actionHandle: "test-resolve-token"
+    });
+  });
+
+  it("does not shadow live action requests with legacy actionToken or command fields", () => {
+    const request = buildLiveActionRequest({
+      requestBody: {
+        resolution: "resume_lane",
+        resumeSummary: "Resume CFO lane",
+        actionToken: "legacy-token",
+        command: "resume_lane"
+      },
+      actionHandle: "test-resolve-token"
+    }) as Record<string, unknown>;
+
+    expect(request.actionHandle).toBe("test-resolve-token");
+    expect(request).not.toHaveProperty("actionToken");
+    expect(request).not.toHaveProperty("command");
+  });
+
+  it("normalizes stored live action request bodies to contract-owned payload fields only", () => {
+    expect(
+      normalizeCurrentActionRequestBody({
+        decision: "approve",
+        actionHandle: "test-proposal-token",
+        actionToken: "legacy-token"
+      })
+    ).toEqual({
+      decision: "approve"
+    });
+
+    expect(
+      normalizeCurrentActionRequestBody({
+        command: "resume_lane",
+        resumeSummary: "Resume CFO lane",
+        actionHandle: "test-resolve-token"
+      })
+    ).toEqual({
+      resolution: "resume_lane",
+      resumeSummary: "Resume CFO lane"
+    });
   });
 
   it("keeps localhost fallback usable while preserving bounded live-load feedback", () => {

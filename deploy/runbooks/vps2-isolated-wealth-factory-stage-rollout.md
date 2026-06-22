@@ -35,9 +35,20 @@ On June 15, 2026 the isolated host `https://wf-api.spyderbyte.cloud` passed the 
 - `api.spyderbyte.cloud` remained unchanged; `wf-api.spyderbyte.cloud` is the canonical proof lane until a later explicit cutover decision is made.
 - Because VPS 2 is still a shared host, the successful June 15, 2026 proof used `WF_SMOKE_PRIVATE_PORTS=6379,9000,3000,5173,8080,8081,2375`. Ports `5432`, `8000`, and `8443` were intentionally left open for unrelated test lanes and are now treated as approved stage-proof host-level exceptions rather than Wealth Factory regressions.
 
+On June 22, 2026 the same isolated host passed the full repo-side `npm run prove:stage-stability` acceptance gate against that same real stage env.
+
+- `npm run prove:stage-live` passed again on the current branch.
+- `npm run prove:stage-live-native-execution` passed again on the current branch.
+- `npm run prove:live-fairness` passed again on the isolated lane with the canonical six demo lanes.
+- `npm run prove:live-soak-capacity` passed again on the isolated lane with the bounded focus-container set:
+  - `wf-stage-api`
+  - `wf-stage-worker`
+  - `wf-stage-web`
+- `api.spyderbyte.cloud` remained unchanged during this rerun; the June 22, 2026 result is launch-readiness evidence for `wf-api.spyderbyte.cloud`, not a shared-host cutover.
+
 ## Goal
 
-Bring up a fully wired Wealth Factory stage host on VPS 2 without changing the current `api.spyderbyte.cloud` route until Wealth Factory browser proof is green.
+Keep the fully wired Wealth Factory stage host on VPS 2 as the active public API lane without changing the current `api.spyderbyte.cloud` route unless operators deliberately choose a later cutover slice.
 
 ## Recommendation
 
@@ -331,7 +342,7 @@ If the isolated proof fails:
 If the isolated proof passes:
 
 - record the result
-- decide separately whether to keep `wf-api.spyderbyte.cloud` as the permanent Wealth Factory API host or to perform a later deliberate cutover
+- keep `wf-api.spyderbyte.cloud` as the active Wealth Factory API host unless operators deliberately choose a later cutover
 
 ### 9. Run The Stage Stability Plan
 
@@ -346,6 +357,7 @@ npm run prove:stage-stability -- --dry-run
 That dry-run should show:
 
 - `npm run prove:stage-live`
+- `npm run prove:stage-live-native-execution`
 - `npm run prove:live-fairness`
 - `npm run prove:live-soak-capacity`
 - the canonical six demo lanes for staged stability proof
@@ -406,11 +418,16 @@ Before you treat harness-board proof failures as runtime regressions, confirm al
 
 Only consider repointing `api.spyderbyte.cloud` after all isolated-host proofs are green.
 
-At that point choose one of three paths explicitly:
+The current operator posture as of June 22, 2026 is to keep `wf-api.spyderbyte.cloud` as the active Wealth Factory public API lane.
+The cutover paths below remain available only if operators later choose to change host posture.
+
+If operators later choose to change host posture, choose one of these paths explicitly:
 
 - keep Wealth Factory on the dedicated hostname permanently
 - move `api.spyderbyte.cloud` to the isolated Wealth Factory stack
 - keep both lanes alive with the old route preserved for any remaining dependency window
+
+If the second path is chosen, follow the bounded deployment-plumbing plan in `deploy/runbooks/vps2-shared-host-cutover-plan.md` instead of improvising the route change live.
 
 ## Non-Goals
 
@@ -428,5 +445,6 @@ The application/runtime/browser proof is now green on the isolated host:
 
 - the isolated `wf-stage-web`, `wf-stage-api`, and `wf-stage-worker` lane is live on VPS 2
 - `npm run prove:stage-live` passed on June 15, 2026 against `wf-api.spyderbyte.cloud`
+- `npm run prove:stage-stability` passed on June 22, 2026 against that same isolated host, including `prove:stage-live`, `prove:stage-live-native-execution`, `prove:live-fairness`, and `prove:live-soak-capacity`
 - the public shared host `api.spyderbyte.cloud` was left unchanged on purpose
-- the remaining decision is deployment posture, not application correctness on the isolated lane
+- the remaining host-posture choice is optional operator plumbing, not application correctness on the isolated lane

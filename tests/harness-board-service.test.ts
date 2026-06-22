@@ -793,15 +793,15 @@ describe("harness board service", () => {
       summary: "CFO should resume this lane once the tenant confirms the latest revenue assumption.",
       actionRoute: "resolve-attention",
       actionPath: `/api/harness/runs/${board.runId}/resolve-attention`,
-      actionToken: expect.any(String),
+      actionHandle: expect.any(String),
       actionMethod: "POST",
       actionLabel: "Resume lane",
       actionDescription: "Resume the waiting lane when the required board input is ready.",
       requestFields: [
         {
-          name: "command",
-          label: "Resolution command",
-          description: "Choose the single bounded command that resolves this attention state.",
+          name: "resolution",
+          label: "Resolution choice",
+          description: "Choose the single bounded step that resolves this attention state.",
           required: true,
           allowedValues: ["resume_lane"]
         },
@@ -819,11 +819,11 @@ describe("harness board service", () => {
           description: "Return the lane to active execution with an optional bounded resume note.",
           emphasis: "primary",
           nextEffectSummary: "The lane returns to active execution and re-enters the worker queue through the existing harness path.",
-          exampleRequest: { command: "resume_lane" }
+          exampleRequest: { resolution: "resume_lane" }
         }
       ],
       recommendedOptionValue: "resume_lane",
-      allowedCommands: ["resume_lane"],
+      allowedResolutions: ["resume_lane"],
       targetCardId: created.cardId,
       targetPersona: "CFO",
       targetTitle: "Pressure-test the pricing lane",
@@ -912,9 +912,9 @@ describe("harness board service", () => {
         actionDescription: "Resume the waiting lane when the required board input is ready.",
         requestFields: [
           {
-            name: "command",
-            label: "Resolution command",
-            description: "Choose the single bounded command that resolves this attention state.",
+            name: "resolution",
+            label: "Resolution choice",
+            description: "Choose the single bounded step that resolves this attention state.",
             required: true,
             allowedValues: ["resume_lane"]
           },
@@ -932,11 +932,11 @@ describe("harness board service", () => {
             description: "Return the lane to active execution with an optional bounded resume note.",
             emphasis: "primary",
             nextEffectSummary: "The lane returns to active execution and re-enters the worker queue through the existing harness path.",
-            exampleRequest: { command: "resume_lane" }
+            exampleRequest: { resolution: "resume_lane" }
           }
         ],
         recommendedOptionValue: "resume_lane",
-        allowedCommands: ["resume_lane"],
+        allowedResolutions: ["resume_lane"],
         targetCardId: created.cardId,
         targetPersona: "ANALYST",
         targetTitle: "Persisted handoff lane",
@@ -1054,7 +1054,7 @@ describe("harness board service", () => {
       summary: "The board is ready for final assembly before the tenant-facing package is closed.",
       actionRoute: "review-attention",
       actionPath: `/api/harness/runs/${board.runId}/review-attention`,
-      actionToken: expect.any(String),
+      actionHandle: expect.any(String),
       actionMethod: "POST",
       actionLabel: "Review final assembly",
       actionDescription: "Finish the current board cycle or intentionally start the next one.",
@@ -1472,7 +1472,7 @@ describe("harness board service", () => {
         authorization: "Bearer valid",
         runId: board.runId,
         decision: "complete_run",
-        actionToken: `${assemblingBoard.pendingAttention?.actionToken ?? "missing"}-stale`,
+        actionToken: `${assemblingBoard.pendingAttention?.actionHandle ?? "missing"}-stale`,
         completionSummary: "This should fail because the contract token is stale."
       })
     ).rejects.toThrow(/action token no longer matches/i);
@@ -1616,8 +1616,8 @@ describe("harness board service", () => {
         authorization: "Bearer valid",
         runId: board.runId,
         decision: "defer",
-        ...(assemblingBoard.pendingAttention?.actionToken
-          ? { actionToken: assemblingBoard.pendingAttention.actionToken }
+        ...(assemblingBoard.pendingAttention?.actionHandle
+          ? { actionToken: assemblingBoard.pendingAttention.actionHandle }
           : {})
       })
     ).rejects.toThrow(/not waiting on that CEO review decision/i);
@@ -1668,7 +1668,7 @@ describe("harness board service", () => {
     });
 
     const reviewBoard = await service.listBoardState({ authorization: "Bearer valid" });
-    const actionToken = reviewBoard.pendingAttention?.actionToken;
+    const actionToken = reviewBoard.pendingAttention?.actionHandle;
     const reviewed = await service.reviewPendingAttention({
       authorization: "Bearer valid",
       runId: board.runId,
@@ -1739,7 +1739,7 @@ describe("harness board service", () => {
     });
 
     const reviewBoard = await service.listBoardState({ authorization: "Bearer valid" });
-    const actionToken = reviewBoard.pendingAttention?.actionToken;
+    const actionToken = reviewBoard.pendingAttention?.actionHandle;
     const reviewed = await service.reviewPendingAttention({
       authorization: "Bearer valid",
       runId: board.runId,
@@ -1805,7 +1805,7 @@ describe("harness board service", () => {
     });
 
     const reviewBoard = await service.listBoardState({ authorization: "Bearer valid" });
-    const actionToken = reviewBoard.pendingAttention?.actionToken;
+    const actionToken = reviewBoard.pendingAttention?.actionHandle;
     const reviewed = await service.reviewPendingAttention({
       authorization: "Bearer valid",
       runId: board.runId,
@@ -1870,7 +1870,7 @@ describe("harness board service", () => {
     });
 
     const reviewBoard = await service.listBoardState({ authorization: "Bearer valid" });
-    const actionToken = reviewBoard.pendingAttention?.actionToken;
+    const actionToken = reviewBoard.pendingAttention?.actionHandle;
     const reviewed = await service.reviewPendingAttention({
       authorization: "Bearer valid",
       runId: board.runId,
@@ -1931,7 +1931,7 @@ describe("harness board service", () => {
     });
 
     const assemblingBoard = await service.listBoardState({ authorization: "Bearer valid" });
-    const actionToken = assemblingBoard.pendingAttention?.actionToken;
+    const actionToken = assemblingBoard.pendingAttention?.actionHandle;
     expect(actionToken).toEqual(expect.any(String));
 
     const freshCycle = await service.reviewPendingAttention({
@@ -2164,7 +2164,7 @@ describe("harness board service", () => {
         authorization: "Bearer valid",
         runId: board.runId,
         command: "resume_lane",
-        actionToken: `${waitingBoard.pendingAttention?.actionToken ?? "missing"}-stale`
+        actionToken: `${waitingBoard.pendingAttention?.actionHandle ?? "missing"}-stale`
       })
     ).rejects.toThrow(/action token no longer matches/i);
 
@@ -2217,7 +2217,7 @@ describe("harness board service", () => {
         authorization: "Bearer valid",
         runId: board.runId,
         command: "unblock_lane",
-        actionToken: `${blockedBoard.pendingAttention?.actionToken ?? "missing"}-stale`
+        actionToken: `${blockedBoard.pendingAttention?.actionHandle ?? "missing"}-stale`
       })
     ).rejects.toThrow(/action token no longer matches/i);
 
@@ -2272,8 +2272,8 @@ describe("harness board service", () => {
         authorization: "Bearer valid",
         runId: board.runId,
         command: "resume_lane",
-        ...(waitingBoard.pendingAttention?.actionToken
-          ? { actionToken: waitingBoard.pendingAttention.actionToken }
+        ...(waitingBoard.pendingAttention?.actionHandle
+          ? { actionToken: waitingBoard.pendingAttention.actionHandle }
           : {})
       })
     ).rejects.toThrow(/progression conflicted/i);
@@ -8649,7 +8649,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: hydrated.runId,
       candidateId: "governance_history_export",
-      actionToken: preflightAction!.actionToken
+      actionToken: preflightAction!.actionHandle
     })).resolves.toMatchObject({
       candidateId: "governance_history_export",
       status: "ready",
@@ -8661,7 +8661,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: hydrated.runId,
       candidateId: "governance_history_export",
-      actionToken: dryRunAction!.actionToken
+      actionToken: dryRunAction!.actionHandle
     })).resolves.toMatchObject({
       candidateId: "governance_history_export",
       status: "ready",
@@ -8692,7 +8692,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: hydrated.runId,
       candidateId: "governance_history_export",
-      actionToken: exportAction!.actionToken
+      actionToken: exportAction!.actionHandle
     })).resolves.toMatchObject({
       candidateId: "governance_history_export",
       status: "export_ready",
@@ -8739,7 +8739,7 @@ describe("harness board service", () => {
       ?.find((entry) => entry.id === "governance_history_export")
       ?.exportActions
       ?.find((entry) => entry.actionRoute === "export-preflight")
-      ?.actionToken;
+      ?.actionHandle;
 
     await expectCreatedCard(service.createTopLevelChildCard({
       authorization: "Bearer valid",
@@ -8797,19 +8797,19 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: hydrated.runId,
       candidateId: "governance_history_export",
-      actionToken: preflightAction!.actionToken
+      actionToken: preflightAction!.actionHandle
     });
     await service.dryRunExportCandidate({
       authorization: "Bearer valid",
       runId: hydrated.runId,
       candidateId: "governance_history_export",
-      actionToken: dryRunAction!.actionToken
+      actionToken: dryRunAction!.actionHandle
     });
     await service.exportGovernanceHistoryCandidate({
       authorization: "Bearer valid",
       runId: hydrated.runId,
       candidateId: "governance_history_export",
-      actionToken: exportAction!.actionToken
+      actionToken: exportAction!.actionHandle
     });
 
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({
@@ -8883,7 +8883,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: hydrated.runId,
       candidateId: "governance_history_export",
-      actionToken: exportAction!.actionToken
+      actionToken: exportAction!.actionHandle
     });
 
     expect(onGovernanceHistoryExportReady).toHaveBeenCalledWith(expect.objectContaining({
@@ -8939,7 +8939,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: initialBoard.runId,
       candidateId: "governance_history_export",
-      actionToken: initialExportAction!.actionToken
+      actionToken: initialExportAction!.actionHandle
     });
 
     await repository.insertDecision(createHarnessBoardDecisionRecord({
@@ -8966,7 +8966,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: refreshedBoard.runId,
       candidateId: "governance_history_export",
-      actionToken: refreshedExportAction!.actionToken
+      actionToken: refreshedExportAction!.actionHandle
     });
 
     expect(secondExport.bundleId).not.toBe(firstExport.bundleId);
@@ -9008,7 +9008,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: board.runId,
       candidateId: "governance_history_export",
-      actionToken: dryRunAction!.actionToken
+      actionToken: dryRunAction!.actionHandle
     });
     await repository.upsertExportDelivery({
       id: "delivery_replay_test_1",
@@ -9165,7 +9165,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: board.runId,
       candidateId: "governance_history_export",
-      actionToken: dryRunAction!.actionToken
+      actionToken: dryRunAction!.actionHandle
     });
     await repository.upsertExportDelivery({
       id: "delivery_replay_test_2",
@@ -9212,7 +9212,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: hydrated.runId,
       candidateId: "governance_history_export",
-      actionToken: replayAction!.actionToken
+      actionToken: replayAction!.actionHandle
     })).resolves.toMatchObject({
       candidateId: "governance_history_export",
       status: "delivery_replayed",
@@ -9272,7 +9272,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: board.runId,
       candidateId: "governance_history_export",
-      actionToken: exportAction!.actionToken
+      actionToken: exportAction!.actionHandle
     });
     await repository.upsertExportDelivery({
       id: "delivery_replay_stale_governance_1",
@@ -9389,7 +9389,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: hydrated.runId,
       candidateId: "governance_history_export",
-      actionToken: governanceExportAction!.actionToken
+      actionToken: governanceExportAction!.actionHandle
     });
     await repository.upsertExportDelivery({
       id: "delivery_governance_dependency_test_1",
@@ -9441,7 +9441,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: hydrated.runId,
       candidateId: "package_bundle_export",
-      actionToken: dryRunAction!.actionToken
+      actionToken: dryRunAction!.actionHandle
     })).resolves.toMatchObject({
       candidateId: "package_bundle_export",
       status: "ready",
@@ -9466,7 +9466,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: hydrated.runId,
       candidateId: "package_bundle_export",
-      actionToken: exportAction!.actionToken
+      actionToken: exportAction!.actionHandle
     })).resolves.toMatchObject({
       candidateId: "package_bundle_export",
       status: "export_ready",
@@ -9529,7 +9529,7 @@ describe("harness board service", () => {
     expect(packageCandidate?.exportActions?.find((entry) => entry.actionRoute === "package-bundle-export")).toBeUndefined();
 
     const packagePreflightToken =
-      packageCandidate?.exportActions?.find((entry) => entry.actionRoute === "export-preflight")?.actionToken;
+      packageCandidate?.exportActions?.find((entry) => entry.actionRoute === "export-preflight")?.actionHandle;
 
     await expect(service.preflightExportCandidate({
       authorization: "Bearer valid",
@@ -9603,7 +9603,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: hydrated.runId,
       candidateId: "governance_history_export",
-      actionToken: governanceExportAction!.actionToken
+      actionToken: governanceExportAction!.actionHandle
     });
     await repository.upsertExportDelivery({
       id: "delivery_governance_dependency_test_2",
@@ -9652,7 +9652,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: deliveryReadyBoard.runId,
       candidateId: "package_bundle_export",
-      actionToken: dryRunAction!.actionToken
+      actionToken: dryRunAction!.actionHandle
     });
     await repository.upsertExportDelivery({
       id: "delivery_package_replay_test_1",
@@ -9699,7 +9699,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: replayBoard.runId,
       candidateId: "package_bundle_export",
-      actionToken: replayAction!.actionToken
+      actionToken: replayAction!.actionHandle
     })).resolves.toMatchObject({
       candidateId: "package_bundle_export",
       status: "delivery_replayed",
@@ -9763,7 +9763,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: completedBoard.runId,
       candidateId: "governance_history_export",
-      actionToken: governanceExportAction!.actionToken
+      actionToken: governanceExportAction!.actionHandle
     });
     await repository.upsertExportDelivery({
       id: "delivery_governance_dependency_test_3",
@@ -9812,7 +9812,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: dependencyReadyBoard.runId,
       candidateId: "package_bundle_export",
-      actionToken: exportAction!.actionToken
+      actionToken: exportAction!.actionHandle
     });
     await repository.upsertExportDelivery({
       id: "delivery_replay_stale_package_1",
@@ -12212,7 +12212,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: board.runId,
       candidateId: "governance_history_export",
-      actionToken: dryRunAction!.actionToken
+      actionToken: dryRunAction!.actionHandle
     });
 
     await repository.insertProposal({
@@ -12259,7 +12259,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: board.runId,
       candidateId: "governance_history_export",
-      actionToken: refreshedDryRunAction!.actionToken
+      actionToken: refreshedDryRunAction!.actionHandle
     });
     expect(hydratedDryRun.bundleId).toBe(completedDryRun.bundleId);
     expect(hydratedDryRun.bundleRevision).toBe(completedDryRun.bundleRevision);
@@ -12317,7 +12317,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: board.runId,
       candidateId: "governance_history_export",
-      actionToken: exportAction!.actionToken
+      actionToken: exportAction!.actionHandle
     });
 
     await repository.insertProposal({
@@ -12360,7 +12360,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: board.runId,
       candidateId: "governance_history_export",
-      actionToken: refreshedExportAction!.actionToken
+      actionToken: refreshedExportAction!.actionHandle
     });
 
     expect(secondExport.bundleId).toBe(firstExport.bundleId);
@@ -12422,7 +12422,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: board.runId,
       candidateId: "governance_history_export",
-      actionToken: governanceExportAction!.actionToken
+      actionToken: governanceExportAction!.actionHandle
     });
     await repository.upsertExportDelivery({
       id: "delivery_governance_dependency_phase18_1",
@@ -12472,7 +12472,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: board.runId,
       candidateId: "package_bundle_export",
-      actionToken: packageExportAction!.actionToken
+      actionToken: packageExportAction!.actionHandle
     });
 
     await repository.insertProposal({
@@ -12515,7 +12515,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: board.runId,
       candidateId: "package_bundle_export",
-      actionToken: refreshedPackageExportAction!.actionToken
+      actionToken: refreshedPackageExportAction!.actionHandle
     });
 
     expect(secondExport.bundleId).toBe(firstExport.bundleId);
@@ -12598,7 +12598,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: board.runId,
       candidateId: "governance_history_export",
-      actionToken: governanceExportAction!.actionToken
+      actionToken: governanceExportAction!.actionHandle
     });
     expect(governanceExport.content).not.toContain(runtimeOnlyContinuitySummary);
     await repository.upsertExportDelivery({
@@ -12648,7 +12648,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: board.runId,
       candidateId: "package_bundle_export",
-      actionToken: packageExportAction!.actionToken
+      actionToken: packageExportAction!.actionHandle
     });
     expect(packageExport.content).not.toContain(runtimeOnlyContinuitySummary);
   });
@@ -12852,7 +12852,7 @@ describe("harness board service", () => {
       authorization: "Bearer valid",
       runId: board.runId,
       candidateId: "governance_history_export",
-      actionToken: dryRunAction!.actionToken
+      actionToken: dryRunAction!.actionHandle
     });
 
     expect(dryRun.governanceItemCount).toBe(1);

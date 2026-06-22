@@ -20,6 +20,8 @@ const expectedAssetBaseUrl = process.env.WF_SMOKE_EXPECT_ASSET_BASE_URL ?? `${ap
 const publicPorts = parsePorts(process.env.WF_SMOKE_PUBLIC_PORTS ?? "80,443");
 const privatePorts = parsePorts(process.env.WF_SMOKE_PRIVATE_PORTS ?? "5432,6379,8000,8443,9000,3000,5173,8080,8081,2375");
 const timeoutMs = Number(process.env.WF_SMOKE_TIMEOUT_MS ?? 3000);
+const transientRetryCount = Number(process.env.WF_SMOKE_TRANSIENT_RETRY_COUNT ?? 3);
+const transientRetryDelayMs = Number(process.env.WF_SMOKE_TRANSIENT_RETRY_DELAY_MS ?? 250);
 const forbiddenText = /paperclip|prompt|skill|command|tool call|raw activity|internal log|service token|vault:\/\/|wf_secret_|access_token=|api[_-]?key[:=]|authorization[:=]|Bearer\s+|sk-[A-Za-z0-9_-]+|pc-(company|run|agent|goal|task)-/i;
 const forbiddenSecretText = /service token|vault:\/\/|wf_secret_|access_token=|api[_-]?key[:=]|authorization[:=]|Bearer\s+|sk-[A-Za-z0-9_-]+|pc-(company|run|agent|goal|task)-/i;
 const forbiddenAssetSecretText = /service token|vault:\/\/|wf_secret_|access_token=|Bearer\s+|sk-[A-Za-z0-9_-]+|pc-(company|run|agent|goal|task)-/i;
@@ -103,7 +105,10 @@ async function checkDns(hostname) {
 }
 
 async function checkPort(input) {
-  const open = await canConnect(input.host, input.port);
+  const open = await retryTransient(
+    () => canConnect(input.host, input.port),
+    (value) => input.expectedOpen && value === false
+  );
   const expected = input.expectedOpen ? "open" : "closed";
   return {
     check: "tcp_port",
@@ -172,31 +177,34 @@ function request(url, origin) {
 }
 
 function requestWithHeaders(url, headers) {
-  return new Promise((resolve, reject) => {
-    const req = https.request(
-      url,
-      {
-        method: "GET",
-        timeout: timeoutMs,
-        headers,
-        rejectUnauthorized: false
-      },
-      (res) => {
-        const chunks = [];
-        res.on("data", (chunk) => chunks.push(chunk));
-        res.on("end", () => {
-          resolve({
-            statusCode: res.statusCode ?? 0,
-            headers: res.headers,
-            body: Buffer.concat(chunks).toString("utf8")
+  return retryTransient(
+    () => new Promise((resolve, reject) => {
+      const req = https.request(
+        url,
+        {
+          method: "GET",
+          timeout: timeoutMs,
+          headers,
+          rejectUnauthorized: false
+        },
+        (res) => {
+          const chunks = [];
+          res.on("data", (chunk) => chunks.push(chunk));
+          res.on("end", () => {
+            resolve({
+              statusCode: res.statusCode ?? 0,
+              headers: res.headers,
+              body: Buffer.concat(chunks).toString("utf8")
+            });
           });
-        });
-      }
-    );
-    req.once("timeout", () => req.destroy(new Error("request_timeout")));
-    req.once("error", reject);
-    req.end();
-  });
+        }
+      );
+      req.once("timeout", () => req.destroy(new Error("request_timeout")));
+      req.once("error", reject);
+      req.end();
+    }),
+    (error) => error instanceof Error && error.message === "request_timeout"
+  );
 }
 
 async function checkShell(input) {
@@ -310,6 +318,29 @@ async function checkShellAsset(assetUrl, origin, cookie) {
 
 function readError(error) {
   return error instanceof Error ? error.message : String(error);
+}
+
+async function retryTransient(run, shouldRetry) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const result = await run();
+      if (attempt < transientRetryCount && shouldRetry(result)) {
+        await sleep(transientRetryDelayMs);
+        continue;
+      }
+      return result;
+    } catch (error) {
+      if (attempt < transientRetryCount && shouldRetry(error)) {
+        await sleep(transientRetryDelayMs);
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function buildHarnessBoardApiUrl() {

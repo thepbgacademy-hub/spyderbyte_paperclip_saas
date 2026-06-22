@@ -9,6 +9,8 @@ describe("external smoke security script", () => {
   it("checks only intended public ports and common private service ports", () => {
     expect(script).toContain('WF_SMOKE_PUBLIC_PORTS ?? "80,443"');
     expect(script).toContain("5432,6379,8000,8443,9000,3000,5173,8080,8081,2375");
+    expect(script).toContain('WF_SMOKE_TRANSIENT_RETRY_COUNT ?? 3');
+    expect(script).toContain('WF_SMOKE_TRANSIENT_RETRY_DELAY_MS ?? 250');
   });
 
   it("checks CORS/auth routes and customer-facing response leaks", () => {
@@ -33,6 +35,8 @@ describe("external smoke security script", () => {
     expect(script).toContain("corsHeader === undefined");
     expect(script).toContain("paperclip|prompt|skill|command");
     expect(script).toContain("authenticated harness-board smoke verification requires an explicit workflow selector");
+    expect(script).toContain('error.message === "request_timeout"');
+    expect(script).toContain("retryTransient");
   });
 
   it("is exposed as an npm smoke command", () => {

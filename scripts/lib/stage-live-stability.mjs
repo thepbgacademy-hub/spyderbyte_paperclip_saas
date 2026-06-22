@@ -130,6 +130,26 @@ export function buildStageStabilityPlan({ args, env }) {
         ]
       },
       {
+        id: "stage-live-native-execution",
+        label: "npm run prove:stage-live-native-execution",
+        command: "npm",
+        args: [
+          "run",
+          "prove:stage-live-native-execution",
+          "--",
+          "--env-file",
+          envFilePath,
+          "--ssh-env-file",
+          sshEnvFilePath,
+          "--sudo-password-file",
+          sudoPasswordFilePath,
+          "--preflight-container",
+          proofContainer,
+          "--ssh-target",
+          sshTarget
+        ]
+      },
+      {
         id: "stage-live-fairness",
         label: "npm run prove:live-fairness",
         command: "npm",

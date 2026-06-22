@@ -1421,9 +1421,9 @@ describe("runtime server", () => {
         authorization: "Bearer token",
         origin: "https://www.spyderbyte.cloud",
         "content-type": "application/json",
-        "content-length": String(JSON.stringify({ mode: "clean", actionToken: "test-review-token" }).length)
+        "content-length": String(JSON.stringify({ mode: "clean", actionHandle: "test-review-token" }).length)
       },
-      body: JSON.stringify({ mode: "clean", actionToken: "test-review-token" })
+      body: JSON.stringify({ mode: "clean", actionHandle: "test-review-token" })
     });
     const response = createResponse();
 

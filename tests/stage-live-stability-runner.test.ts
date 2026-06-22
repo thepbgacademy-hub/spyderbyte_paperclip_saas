@@ -30,7 +30,7 @@ const { runStageStabilityPlan } = require("../scripts/lib/stage-live-stability-r
 };
 
 describe("stage live stability runner", () => {
-  it("runs local proof, remote fairness, and local soak without wrapper-side workflow-template lookup", async () => {
+  it("runs local proof, local native execution acceptance, remote fairness, and local soak without wrapper-side workflow-template lookup", async () => {
     const plan = buildStageStabilityPlan({
       args: parseStageStabilityArgs([]),
       env: {
@@ -63,11 +63,12 @@ describe("stage live stability runner", () => {
     expect(result).toEqual({
       ok: true,
       phase: "stage_stability_complete",
-      steps: ["stage-live-proof", "stage-live-fairness", "stage-live-soak"]
+      steps: ["stage-live-proof", "stage-live-native-execution", "stage-live-fairness", "stage-live-soak"]
     });
     expect(stderr).toEqual([]);
-    expect(spawn).toHaveBeenCalledTimes(3);
+    expect(spawn).toHaveBeenCalledTimes(4);
     expect(spawn.mock.calls.map(([command]) => command)).toEqual([
+      "resolved:npm",
       "resolved:npm",
       "ssh",
       "resolved:npm"
@@ -79,14 +80,20 @@ describe("stage live stability runner", () => {
       "prove:stage-live"
     ]));
 
-    const fairnessArgs = spawn.mock.calls[1]?.[1] as string[];
+    const nativeExecutionArgs = spawn.mock.calls[1]?.[1] as string[];
+    expect(nativeExecutionArgs).toEqual(expect.arrayContaining([
+      "run",
+      "prove:stage-live-native-execution"
+    ]));
+
+    const fairnessArgs = spawn.mock.calls[2]?.[1] as string[];
     expect(fairnessArgs[0]).toBe("deploy@187.77.19.83");
     expect(fairnessArgs[1]).toContain("cd /app && node scripts/prove-live-fairness.mjs");
     expect(fairnessArgs[1]).toContain("wf_connect_first_workflow");
     expect(fairnessArgs[1]).toContain("wf_package_followup");
     expect(fairnessArgs[1]).not.toContain("workflow_templates");
 
-    const soakArgs = spawn.mock.calls[2]?.[1] as string[];
+    const soakArgs = spawn.mock.calls[3]?.[1] as string[];
     expect(soakArgs).toEqual(expect.arrayContaining([
       "run",
       "prove:live-soak-capacity"
@@ -119,5 +126,53 @@ describe("stage live stability runner", () => {
     ).rejects.toThrow("Stage stability proof-container must be a shell-safe container token");
 
     expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("rejects with step context instead of exiting when a child step returns a non-zero status", async () => {
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(((code?: string | number | null) => {
+      throw new Error(`process.exit unexpectedly called with code ${code}`);
+    }) as never);
+    const spawn = vi
+      .fn()
+      .mockReturnValueOnce({ status: 0, error: null })
+      .mockReturnValueOnce({ status: 17, error: null });
+
+    try {
+      await expect(() =>
+        runStageStabilityPlan({
+          plan: {
+            sshTarget: "deploy@187.77.19.83",
+            proofContainer: "wf-stage-api",
+            steps: [
+              {
+                id: "stage-live-proof",
+                label: "npm run prove:stage-live",
+                command: "npm",
+                args: ["run", "prove:stage-live"]
+              },
+              {
+                id: "stage-live-soak",
+                label: "npm run prove:live-soak-capacity",
+                command: "npm",
+                args: ["run", "prove:live-soak-capacity"]
+              }
+            ]
+          },
+          baseEnv: {},
+          sudoPassword: "super-secret",
+          stdout: { write: () => {} },
+          cwd: "E:/REPOS/spyderbyte_paperclip_saas",
+          spawn,
+          resolveCommand: (command: string) => command
+        })
+      ).rejects.toMatchObject({
+        name: "StageStabilityStepError",
+        stepId: "stage-live-soak",
+        stepLabel: "npm run prove:live-soak-capacity",
+        status: 17
+      });
+    } finally {
+      exitSpy.mockRestore();
+    }
   });
 });

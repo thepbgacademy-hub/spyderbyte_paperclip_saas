@@ -381,7 +381,7 @@ export type HarnessBoardActionAttempt = {
   actionPath: string;
   actionRoute?: HarnessBoardResponse["pendingApprovals"][number]["actionRoute"] | NonNullable<HarnessBoardResponse["pendingAttention"]>["actionRoute"];
   actionMethod: "POST";
-  actionToken: string;
+  actionHandle: string;
   requestBody: Record<string, unknown>;
   noticeLabel: string;
 };
@@ -534,8 +534,10 @@ function fieldAppliesToOption(field: HarnessActionFieldView, option?: HarnessAct
   const optionValue =
     typeof option.exampleRequest.decision === "string"
       ? option.exampleRequest.decision
-      : typeof option.exampleRequest.command === "string"
-        ? option.exampleRequest.command
+      : typeof option.exampleRequest.resolution === "string"
+        ? option.exampleRequest.resolution
+        : typeof (option.exampleRequest as { command?: unknown }).command === "string"
+          ? (option.exampleRequest as { command: string }).command
         : null;
 
   if (field.requiredWhenValue) {
@@ -607,7 +609,7 @@ export function getContractActionState(input: {
   const visibleFieldNames = new Set<string>(visibleFields.map((field) => field.name));
   const contractFieldMap = new Map<string, HarnessActionFieldView>(allFields.map((field) => [field.name, field]));
   const controlFieldNames = new Set<string>(
-    ["decision", "command"].filter((fieldName) => typeof payload[fieldName] === "string")
+    ["decision", "resolution"].filter((fieldName) => typeof payload[fieldName] === "string")
   );
   const missingRequiredFields: string[] = [];
   const driftedFields: HarnessContractActionIssue[] = [];
@@ -733,8 +735,12 @@ function getOptionControlFieldName(option: HarnessActionOptionView) {
     return "decision";
   }
 
-  if (typeof option.exampleRequest?.command === "string") {
-    return "command";
+  if (typeof option.exampleRequest?.resolution === "string") {
+    return "resolution";
+  }
+
+  if (typeof (option.exampleRequest as { command?: unknown } | undefined)?.command === "string") {
+    return "resolution";
   }
 
   return null;
@@ -1414,7 +1420,7 @@ export function describeBoardActionFeedback(
       recoverySteps: [
         "Reset this action composer to the contract defaults.",
         context.actionRoute === "resolve-attention"
-          ? "Review the required fields again before retrying the lane recovery command."
+          ? "Review the required fields again before retrying the lane recovery step."
           : "Review the required fields again before retrying this bounded board action."
       ]
     };
@@ -1474,7 +1480,7 @@ export function describeBoardActionFeedback(
         : context.actionRoute === "resolve-attention"
           ? [
               "Refresh the board and confirm the lane still needs resume or unblock attention.",
-              "Retry the lane recovery command only if the same bounded attention is still active."
+              "Retry the lane recovery step only if the same bounded attention is still active."
             ]
           : context.actionRoute === "review-attention"
             ? [
@@ -1529,11 +1535,52 @@ function getActionAttemptControlValue(requestBody: Record<string, unknown>) {
     return requestBody.decision;
   }
 
+  if (typeof requestBody.resolution === "string") {
+    return requestBody.resolution;
+  }
+
   if (typeof requestBody.command === "string") {
     return requestBody.command;
   }
 
   return null;
+}
+
+export function buildLiveActionRequest(input: {
+  requestBody: Record<string, unknown>;
+  actionHandle: string;
+}) {
+  const normalizedRequestBody = normalizeCurrentActionRequestBody(input.requestBody);
+  return {
+    ...normalizedRequestBody,
+    actionHandle: input.actionHandle
+  };
+}
+
+export function normalizeCurrentActionRequestBody(requestBody: Record<string, unknown>) {
+  const {
+    actionHandle: _actionHandle,
+    actionToken: _actionToken,
+    command,
+    resolution,
+    ...rest
+  } = requestBody;
+
+  if (typeof resolution === "string") {
+    return {
+      ...rest,
+      resolution
+    };
+  }
+
+  if (typeof command === "string") {
+    return {
+      ...rest,
+      resolution: command
+    };
+  }
+
+  return rest;
 }
 
 export function describeActionAttemptSupport(
@@ -1556,7 +1603,7 @@ export function describeActionAttemptSupport(
     case "contract_changed":
       return {
         label: "Contract changed",
-        summary: `${noticeLabel} is still present at this route, but the current board contract issued a newer action token for it, so replay would push stale operator intent.`
+        summary: `${noticeLabel} is still present at this route, but the current board contract issued a newer action handle for it, so replay would push stale operator intent.`
       };
     case "missing":
       return {
@@ -1583,7 +1630,7 @@ function actionPayloadMatchesCurrentContract(input: {
   const visibleFieldNames = new Set<string>(visibleFields.map((field) => field.name));
   const optionExampleRequest = (input.option.exampleRequest ?? {}) as Record<string, unknown>;
   const controlFieldNames = new Set<string>(
-    ["decision", "command"].filter((fieldName) => typeof optionExampleRequest[fieldName] === "string")
+    ["decision", "resolution", "command"].filter((fieldName) => typeof optionExampleRequest[fieldName] === "string")
   );
 
   for (const [fieldName, fieldValue] of Object.entries(input.requestBody)) {
@@ -1658,7 +1705,7 @@ function getBoardActionAttemptSupport(
       : undefined;
 
   if (matchingAttentionOption) {
-    if (board.pendingAttention?.actionToken !== attempt.actionToken) {
+    if (board.pendingAttention?.actionHandle !== attempt.actionHandle) {
       return "contract_changed";
     }
     return actionPayloadMatchesCurrentContract({
@@ -1684,7 +1731,7 @@ function getBoardActionAttemptSupport(
       continue;
     }
 
-    if (approval.actionToken !== attempt.actionToken) {
+    if (approval.actionHandle !== attempt.actionHandle) {
       return "contract_changed";
     }
 
@@ -1728,7 +1775,7 @@ function decorateActionFeedbackForCurrentContract(
       ...feedback,
       recoverySteps: [
         ...feedback.recoverySteps,
-        `The current board still exposes ${noticeLabel.toLowerCase()}, but it now carries a newer engine-issued action token. Reload and choose the refreshed contract action instead of replaying the stale request.`
+        `The current board still exposes ${noticeLabel.toLowerCase()}, but it now carries a newer engine-issued action handle. Reload and choose the refreshed contract action instead of replaying the stale request.`
       ]
     };
   }
@@ -2047,7 +2094,10 @@ export function HarnessBoardPage(props: {
     try {
       const actionResult = await harnessBoardClient.submitAction(
         attempt.actionPath,
-        attempt.requestBody,
+        buildLiveActionRequest({
+          requestBody: attempt.requestBody,
+          actionHandle: attempt.actionHandle
+        }),
         attempt.actionMethod
       );
       const nextBoard = await harnessBoardClient.fetchBoard();
@@ -2354,12 +2404,12 @@ export function HarnessBoardPage(props: {
     actionPath: string;
     actionRoute?: HarnessBoardResponse["pendingApprovals"][number]["actionRoute"] | NonNullable<HarnessBoardResponse["pendingAttention"]>["actionRoute"];
     actionMethod: "POST" | undefined;
-    actionToken: string | undefined;
+    actionHandle: string | undefined;
     exampleRequest: Record<string, unknown> | undefined;
     confirmationLabel: string | undefined;
     noticeLabel: string;
   }) {
-    if (!liveActionsEnabled || !input.exampleRequest || !input.actionToken) {
+    if (!liveActionsEnabled || !input.exampleRequest || !input.actionHandle) {
       return;
     }
 
@@ -2377,11 +2427,8 @@ export function HarnessBoardPage(props: {
       actionPath: input.actionPath,
       actionRoute: input.actionRoute,
       actionMethod: input.actionMethod ?? "POST",
-      actionToken: input.actionToken,
-      requestBody: {
-        ...input.exampleRequest,
-        actionToken: input.actionToken
-      },
+      actionHandle: input.actionHandle,
+      requestBody: normalizeCurrentActionRequestBody(input.exampleRequest),
       noticeLabel: input.noticeLabel
     });
   }
@@ -2682,8 +2729,8 @@ export function HarnessBoardPage(props: {
                     <p style={styles.contractMeta}>{`Action family: ${formatActionRoute(pendingAttention.actionRoute)}`}</p>
                   ) : null}
                   {renderActionConstraintSummary({
-                    allowedValues: pendingAttention.allowedDecisions ?? pendingAttention.allowedCommands,
-                    label: pendingAttention.allowedDecisions ? "Allowed decisions" : "Allowed commands"
+                    allowedValues: pendingAttention.allowedDecisions ?? pendingAttention.allowedResolutions,
+                    label: pendingAttention.allowedDecisions ? "Allowed decisions" : "Allowed resolutions"
                   })}
                   {renderRequestFields(pendingAttention.requestFields)}
                   {renderActionOptions(pendingAttention.actionOptions, pendingAttention.recommendedOptionValue)}
@@ -2718,7 +2765,7 @@ export function HarnessBoardPage(props: {
                                   actionPath: pendingAttention.actionPath!,
                                   actionRoute: pendingAttention.actionRoute,
                                   actionMethod: pendingAttention.actionMethod,
-                                  actionToken: pendingAttention.actionToken,
+                                  actionHandle: pendingAttention.actionHandle,
                                   exampleRequest: actionState.payload,
                                   confirmationLabel: option.requiresConfirmation ? option.confirmationLabel : undefined,
                                   noticeLabel: option.label
@@ -2831,7 +2878,7 @@ export function HarnessBoardPage(props: {
                                     actionPath: approval.actionPath,
                                     actionRoute: approval.actionRoute,
                                     actionMethod: approval.actionMethod,
-                                    actionToken: approval.actionToken,
+                                    actionHandle: approval.actionHandle,
                                     exampleRequest: actionState.payload,
                                     confirmationLabel: option.requiresConfirmation ? option.confirmationLabel : undefined,
                                     noticeLabel: option.label

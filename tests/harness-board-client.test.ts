@@ -232,6 +232,72 @@ describe("harness board client", () => {
     expect(board.pendingApprovals).toEqual(legacyShape.pendingApprovals);
     expect(board).not.toHaveProperty("memoryBoundary");
   });
+
+  it("normalizes legacy public board action fields on live payloads", async () => {
+    const previewClient = createHarnessBoardClient(
+      fetch,
+      { location: { hostname: "127.0.0.1", search: "?harnessPreview=resolve-attention" } as Window["location"] }
+    );
+    const fallback = previewClient.getFallback();
+    const legacyShape = {
+      ...fallback,
+      pendingApprovals: fallback.pendingApprovals.map((approval) => ({
+        ...approval,
+        actionToken: approval.actionHandle,
+        actionHandle: undefined
+      })),
+      memoryBoundary: {
+        ...fallback.memoryBoundary,
+        exportCandidates: (fallback.memoryBoundary.exportCandidates ?? []).map((candidate) => ({
+          ...candidate,
+          exportActions: (candidate.exportActions ?? []).map((action) => ({
+            ...action,
+            actionToken: action.actionHandle,
+            actionHandle: undefined
+          }))
+        }))
+      },
+      pendingAttention: fallback.pendingAttention
+        ? {
+            ...fallback.pendingAttention,
+            actionToken: fallback.pendingAttention.actionHandle,
+            actionHandle: undefined,
+            allowedCommands: fallback.pendingAttention.allowedResolutions,
+            allowedResolutions: undefined,
+            requestFields: fallback.pendingAttention.requestFields?.map((field) => ({
+              ...field,
+              name: field.name === "resolution" ? "command" : field.name
+            })),
+            actionOptions: fallback.pendingAttention.actionOptions?.map((option) => ({
+              ...option,
+              exampleRequest:
+                typeof option.exampleRequest?.resolution === "string"
+                  ? { command: option.exampleRequest.resolution }
+                  : option.exampleRequest
+            }))
+          }
+        : null
+    };
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => legacyShape
+    });
+    const client = createHarnessBoardClient(
+      fetchImpl as unknown as typeof fetch,
+      { location: { hostname: "app.spyderbyte.cloud" } as Window["location"] }
+    );
+
+    const board = await client.fetchBoard();
+
+    expect(board.pendingApprovals[0]?.actionHandle).toBe("preview-proposal-fallback-1");
+    expect(board.pendingAttention?.actionHandle).toBe("preview-resolve-attention");
+    expect(board.pendingAttention?.allowedResolutions).toEqual(["resume_lane"]);
+    expect(board.memoryBoundary.exportCandidates?.[0]?.exportActions?.[0]?.actionHandle).toBe(
+      fallback.memoryBoundary.exportCandidates?.[0]?.exportActions?.[0]?.actionHandle
+    );
+    expect(board.pendingAttention?.requestFields?.some((field) => field.name === "resolution")).toBe(true);
+    expect(board.pendingAttention?.actionOptions?.every((option) => !("command" in (option.exampleRequest ?? {})))).toBe(true);
+  });
   it("fills missing readiness fields when a reduced live payload still includes memoryBoundary", async () => {
     const previewClient = createHarnessBoardClient(
       fetch,
@@ -505,7 +571,7 @@ describe("harness board client", () => {
         actionRoute: "resolve-attention",
         actionPath: expect.stringContaining("/resolve-attention"),
         actionLabel: "Resume lane",
-        allowedCommands: ["resume_lane"],
+        allowedResolutions: ["resume_lane"],
         targetSummary: expect.stringContaining("Resume CFO lane")
       })
     );

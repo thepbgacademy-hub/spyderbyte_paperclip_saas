@@ -46,6 +46,16 @@ export async function runStageStabilityPlan(input) {
   return result;
 }
 
+class StageStabilityStepError extends Error {
+  constructor(step, status) {
+    super(`Stage stability step "${step.id}" failed with exit status ${status}`);
+    this.name = "StageStabilityStepError";
+    this.stepId = step.id;
+    this.stepLabel = step.label;
+    this.status = status;
+  }
+}
+
 function runStep(input) {
   const { step, env, stdout, cwd, spawn, resolveCommand } = input;
   stdout.write(`\n>> ${step.label}\n`);
@@ -57,7 +67,7 @@ function runStep(input) {
     shell: process.platform === "win32" && /\.cmd$/i.test(command)
   });
   if (typeof result.status === "number" && result.status !== 0) {
-    process.exit(result.status);
+    throw new StageStabilityStepError(step, result.status);
   }
   if (result.error) {
     throw result.error;
@@ -80,7 +90,7 @@ function runRemoteFairnessStep(input) {
     stdio: "inherit"
   });
   if (typeof result.status === "number" && result.status !== 0) {
-    process.exit(result.status);
+    throw new StageStabilityStepError(step, result.status);
   }
   if (result.error) {
     throw result.error;

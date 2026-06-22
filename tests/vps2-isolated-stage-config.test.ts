@@ -104,6 +104,7 @@ describe("VPS2 isolated Wealth Factory stage rollout", () => {
     expect(isolatedRunbook).toContain("npm run prove:stage-live");
     expect(isolatedRunbook).toContain("npm run prove:stage-stability -- --dry-run");
     expect(isolatedRunbook).toContain("npm run prove:stage-stability");
+    expect(isolatedRunbook).toContain("npm run prove:stage-live-native-execution");
     expect(isolatedRunbook).toContain("`WF_STAGE_SMOKE_PRIVATE_PORTS`");
     expect(isolatedRunbook).toContain("`npm run prove:stage-stability` inherits that same stage-owned private-port exception list automatically.");
     expect(isolatedRunbook).toContain("- `wf-stage-api`");
@@ -113,6 +114,22 @@ describe("VPS2 isolated Wealth Factory stage rollout", () => {
     expect(isolatedRunbook).not.toContain("WF_SMOKE_PRIVATE_PORTS=\"6379,9000,3000,5173,8080,8081,2375\"");
     expect(isolatedRunbook).toContain("If the isolated proof fails:");
     expect(isolatedRunbook).toContain("leave `api.spyderbyte.cloud` unchanged");
+  });
+
+  it("states that wf-api remains the active launch lane while cutover stays optional", () => {
+    expect(isolatedRunbook).toContain(
+      "The current operator posture"
+    );
+    expect(isolatedRunbook).toContain(
+      "`wf-api.spyderbyte.cloud` as the active Wealth Factory public API lane."
+    );
+    expect(isolatedRunbook).toContain(
+      "The cutover paths below remain available only if operators later choose to change host posture."
+    );
+    expect(isolatedRunbook).not.toContain("At that point choose one of three paths explicitly:");
+    expect(isolatedRunbook).not.toContain(
+      "decide separately whether to keep `wf-api.spyderbyte.cloud` as the permanent Wealth Factory API host or to perform a later deliberate cutover"
+    );
   });
 });
 

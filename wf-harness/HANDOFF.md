@@ -20,6 +20,24 @@ The first harness implementation slice is now built and verified:
 
 - `codex/wf-harness-design`
 
+## Latest Phase
+
+- Closed the bounded stage native-execution runner proof gap instead of reopening the already-green board-contract seam, broader stage-stability acceptance seam, or shared-host launch plumbing.
+- Ran the required GitNexus preflight first on June 22, 2026. `gitnexus status` was current at commit `7370811`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` still reported a branch-wide critical tree centered in the harness board/client area plus stage-proof tooling. That result was treated as a reason to choose only the thinnest remaining meaningful local proof gap.
+- Confirmed via bounded scout/review that the larger public board contract rename/normalization seam is already locally complete and that the broader isolated stage-stability acceptance seam is already closed; the remaining worthwhile gap was execution-level behavioral proof for `scripts/prove-stage-live-native-execution.mjs`.
+- Added a new focused runner-level proof in `tests/stage-live-native-execution-runner.test.ts`, starting red first and then going green after extracting the minimal helper `scripts/lib/stage-live-native-execution-runner.mjs`.
+- Kept the wrapper command surface unchanged on purpose: `scripts/prove-stage-live-native-execution.mjs` still owns env loading, secret loading, lane/template resolution, and public command exposure, while the new helper owns only the three-lane invocation loop plus typed step-context surfacing for non-zero or signaled child failures.
+- Re-aligned the existing wrapper proof in `tests/stage-live-native-execution-script.test.ts` so it now checks the extracted wrapper seam instead of overfitting to the old inlined loop body.
+- Local verification for this phase is green across:
+  - `npx vitest run tests/stage-live-native-execution-runner.test.ts tests/stage-live-native-execution-script.test.ts`
+  - `npx vitest run tests/stage-live-stability-runner.test.ts tests/stage-live-stability-script.test.ts tests/stage-live-stability.test.ts tests/native-proof-lane-model.test.ts tests/demo-seed-profiles.test.ts tests/external-smoke-script.test.ts tests/runtime-server.test.ts tests/vps2-isolated-stage-config.test.ts tests/vps2-shared-host-cutover-plan.test.ts tests/handoff-docs.test.ts`
+  - `npm run build -- --pretty false`
+- Ran the matching non-destructive isolated live acceptance gate with `npm run prove:stage-live-native-execution`, and it passed on June 22, 2026 against `wf-api.spyderbyte.cloud` for `wf_connect_first_workflow`, `wf_tax_strategy`, and `wf_package_followup`.
+- That live runner proof stayed on the isolated Wealth Factory lane and verified the expected direct public reservation -> bounded native execution advancement path without changing `api.spyderbyte.cloud`.
+- Kept the seam anti-drift and no-scope-creep on purpose: this phase added one behavior-testable runner extraction and matching proof only; it did not widen worker/runtime policy, board contracts, queue topology, public dashboard behavior, or shared-host cutover posture.
+- Kept `api.spyderbyte.cloud` unchanged on purpose: this runner-proof phase validated the isolated Wealth Factory lane only and did not execute the separate shared-host cutover plan.
+- The next continuation point is to isolate the next meaningful bounded build slice from the still-critical working tree, not to reopen already-green board normalization or stage-stability acceptance without a new reason.
+
 ## Key Design Commitments
 
 - CEO is the only tenant-facing conversational actor
@@ -178,9 +196,10 @@ The first harness implementation slice is now built and verified:
 - The live-route proof is now closed on the isolated low-blast-radius host `wf-api.spyderbyte.cloud`; on June 15, 2026 the repo-side `npm run prove:stage-live` command passed remote runtime preflight, authenticated shell smoke, and live Playwright harness-board proof across `wf_connect_first_workflow`, `wf_tax_strategy`, and `wf_package_followup`.
 - That proof used the real stage env from `E:/the_secrets/projects/wealth-factory-stage/wf-stage.vps2.env`, resolved each tenant's live `workflow_templates.id` UUID inside `wf-stage-api` for preflight, and kept the browser-facing shell/API checks on the public workflow ids so the runtime and public identity seams both stayed truthful.
 - The proof remained private-metadata-clean: authenticated shell HTML, asset responses, and `/api/harness/board?workflowId=...` JSON stayed free of `orchestratorHandoff`, `boardContext`, `postOutcomeDirectives`, and the broader forbidden secret/worker leakage patterns.
-- The current branch is launch-proof-ready on `wf-api.spyderbyte.cloud`; keep `api.spyderbyte.cloud` unchanged until there is an explicit operator decision to cut over or to keep the isolated host as the permanent Wealth Factory public API lane.
+- The current branch is launch-proof-ready on `wf-api.spyderbyte.cloud`; `wf-api.spyderbyte.cloud` is the active Wealth Factory public API lane for this branch, and `api.spyderbyte.cloud` remains unchanged unless operators deliberately execute the separate shared-host cutover plan.
 - The current host-level caveat is now codified rather than ad hoc: the June 15, 2026 proof used `WF_SMOKE_PRIVATE_PORTS=6379,9000,3000,5173,8080,8081,2375` because unrelated VPS 2 test lanes still intentionally exposed `5432`, `8000`, and `8443`, and the stage proof path now treats those three ports as approved shared-host exceptions instead of Wealth Factory regressions.
 - The repo now also has a stage-owned stability wrapper, `npm run prove:stage-stability`, which keeps the low-level fairness and soak primitives generic while codifying the isolated `wf-api.spyderbyte.cloud` defaults, the stage-owned focus-container set, and a safe `--dry-run` planning mode.
+- That wrapper now runs four bounded steps in order: `prove:stage-live`, `prove:stage-live-native-execution`, `prove:live-fairness`, and `prove:live-soak-capacity`.
 - That stage-owned focus-container set is limited to `wf-stage-api`, `wf-stage-worker`, and `wf-stage-web` by default; it does not widen the verdict to unrelated shared-host containers.
 - That stage-owned wrapper also codifies the approved shared-host private-port exception list used on VPS 2, so the proof lane no longer depends on one-off operator shell exports.
 - That deferred follow-on decision is now closed: VPS/runtime stability was already proven, and the current core built-in workflow families have now been deepened from native workflow shells into matched bounded domain-specific prompt/data packs. The track stayed matched across the full current core set instead of deepening `wf_tax_strategy` by itself.
@@ -234,9 +253,9 @@ The first harness implementation slice is now built and verified:
 - Closed a pure proof/cleanup slice on the isolated stage-stability wrapper instead of reopening worker/native, dashboard/start, or deploy-topology scope: `prove:stage-stability` no longer performs its own remote workflow-template compatibility lookup before fairness and soak.
 - Removed that compatibility layer because it had become redundant: the wrapper was already forwarding public workflow ids unchanged, `prove:live-fairness` already resolves template ids where that translation is actually needed, and `prove:live-soak-capacity` only shells into that fairness proof path.
 - Extracted the stage-stability execution orchestration into a dedicated helper, `scripts/lib/stage-live-stability-runner.mjs`, so the wrapper's real execution shape can be tested directly instead of inferred from source-text assertions alone.
-- Added behavioral regression proof that the wrapper now runs exactly three bounded steps in order: local `prove:stage-live`, remote `prove:live-fairness`, and local `prove:live-soak-capacity`, while keeping forwarded lane specs on public workflow ids and avoiding any wrapper-side `workflow_templates` SQL lookup.
+- Added behavioral regression proof that the wrapper now runs exactly four bounded steps in order: local `prove:stage-live`, local `prove:stage-live-native-execution`, remote `prove:live-fairness`, and local `prove:live-soak-capacity`, while keeping forwarded lane specs on public workflow ids and avoiding any wrapper-side `workflow_templates` SQL lookup.
 - Hardened the wrapper to fail closed on malformed single-value flags such as repeated, blank, or valueless `--ssh-target`, validated stage container overrides as shell-safe tokens, and corrected the remote fairness command so the container path now executes through `cd /app && node scripts/prove-live-fairness.mjs ...` instead of a malformed concatenation.
-- Focused verification for this proof/cleanup slice is green across `npx vitest run tests/stage-live-stability-runner.test.ts tests/stage-live-stability.test.ts tests/stage-live-stability-script.test.ts tests/stage-live-proof.test.ts tests/native-proof-lane-model.test.ts tests/handoff-docs.test.ts tests/vps2-isolated-stage-config.test.ts` with `30` passing tests.
+- Focused verification for this proof/cleanup slice is green across `npx vitest run tests/stage-live-stability-runner.test.ts tests/stage-live-stability.test.ts tests/stage-live-stability-script.test.ts tests/stage-live-native-execution-script.test.ts tests/stage-live-proof.test.ts tests/native-proof-lane-model.test.ts tests/handoff-docs.test.ts tests/vps2-isolated-stage-config.test.ts` with `31` passing tests.
 - The meaningful blast radius stayed inside the stage-proof utility seam: `scripts/prove-stage-live-stability.mjs`, `scripts/lib/stage-live-stability.mjs`, the new `scripts/lib/stage-live-stability-runner.mjs`, and the matching focused tests. No worker/native executor, board, dashboard, API, or deployment behavior was widened.
 
 - Began with the required GitNexus preflight and got a clean start-of-phase result: `gitnexus status` was up to date and the corresponding detect-changes headline was `No changes detected`, so the phase started from a quiet seam before local edits widened the branch diff again.
@@ -614,7 +633,7 @@ The audit-correction track, launch-closeout verification pass, and isolated-host
 - keep the Phase A freeze in force: no new `memoryBoundary` metadata, no new thin-event wording/permutation regressions, and no overlay/example names that read like built-in product identity
 - treat any older deferred export/Obsidian/`memoryBoundary` expansion bullets that still appear later in this section as historical context, not active instructions, until a later explicit reopen
 - use the Docker-backed deferred-FK proof as CI-owned portable evidence, with focused local fallback verification on Dockerless machines
-- decide explicitly whether to keep `wf-api.spyderbyte.cloud` as the launch lane for now or to spend one bounded operator slice on shared-host/public-host cutover planning
+- treat `wf-api.spyderbyte.cloud` as the current launch lane unless operators deliberately choose one bounded shared-host/public-host cutover slice later
 - if shared-host cutover is considered, treat it as deployment plumbing only; the June 15, 2026 isolated-host proof already closed the application/runtime/browser evidence gate
 - rerun a fresh seam/blast-radius check before any further launch-facing changes
 - keep the next meaningful work tied to launch readiness, not additional deferred metadata shaping
