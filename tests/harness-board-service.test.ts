@@ -2120,6 +2120,57 @@ describe("harness board service", () => {
     expect(hydrated.pendingAttention).toBeUndefined();
   });
 
+  it("resolves pending attention against the run package without requiring an explicit board workflow selector", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid", workflowId: "wf_connect_first_workflow" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      workflowId: "wf_connect_first_workflow",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "waiting",
+      resumeSummary: "Pause until the tenant confirms the revised revenue assumption."
+    });
+
+    await expect(
+      service.resolvePendingAttention({
+        authorization: "Bearer valid",
+        runId: board.runId,
+        command: "resume_lane",
+        resumeSummary: "Resume with the confirmed revenue assumption."
+      })
+    ).resolves.toEqual({
+      status: "resumed",
+      cardId: created.cardId,
+      state: "working"
+    });
+  });
+
   it("fails closed when explicit lane-resume attention reuses a stale action token", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({

@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import process from "node:process";
 
 import { postDashboardRunAndVerifyDurableBinding } from "./lib/live-dashboard-run-proof.mjs";
+import { resolveLiveNativeAttention } from "./lib/live-harness-board-roundtrip.mjs";
 import { waitForNativeExecutionAcceptance } from "./lib/live-native-execution-acceptance.mjs";
 import { resolveNativeProofStartSelector } from "./lib/native-proof-lane-model.mjs";
 import { DEFAULT_STAGE_PROOF_ENV_FILE, DEFAULT_STAGE_SSH_ENV_FILE, parseStageProofArgs, resolveNodeCommand } from "./lib/stage-live-proof.mjs";
@@ -40,17 +41,18 @@ const startSelection = resolveNativeProofStartSelector({
   workflowTemplateId: workflowTemplateOverride
 });
 const { resolvedStartWorkflowId, startPath } = startSelection;
-const baseUrl =
-  startPath === "dashboard_public_start"
+const shouldProveWaitingRoundTrip = workflowId === "wf_connect_first_workflow";
+const browserProofBaseUrl =
+  startPath === "dashboard_public_start" || shouldProveWaitingRoundTrip
     ? requireOrigin(args["base-url"] ?? env.WF_LIVE_BASE_URL ?? env.WF_STAGE_API_ORIGIN, "WF_LIVE_BASE_URL")
     : null;
-const portalOrigin =
-  startPath === "dashboard_public_start"
+const browserProofPortalOrigin =
+  startPath === "dashboard_public_start" || shouldProveWaitingRoundTrip
     ? requireOrigin(args["portal-origin"] ?? env.WF_SMOKE_PORTAL_URL ?? env.WF_STAGE_PORTAL_ORIGIN, "WF_SMOKE_PORTAL_URL")
     : null;
 
 const sessionTokenResolution =
-  startPath === "dashboard_public_start"
+  startPath === "dashboard_public_start" || shouldProveWaitingRoundTrip
     ? await resolveSessionToken({
         providedSessionToken,
         tenantId,
@@ -67,8 +69,8 @@ const sessionTokenResolution =
 const durableResult =
   startPath === "dashboard_public_start"
     ? await postDashboardRunAndVerifyDurableBinding({
-        baseUrl,
-        portalOrigin,
+        baseUrl: browserProofBaseUrl,
+        portalOrigin: browserProofPortalOrigin,
         sessionCookieName,
         sessionToken: sessionTokenResolution.sessionToken,
         tenantId,
@@ -121,7 +123,41 @@ const nativeVerification = verifyNativeAcceptance({
   advancementProof,
   expectedExecutionEngine
 });
-const ok = durableResult.ok && nativeVerification.ok;
+const waitingAttentionResolution =
+  shouldProveWaitingRoundTrip &&
+  durableResult.runId &&
+  nativeVerification.ok &&
+  (advancementProof?.phase === "native_waiting_reached" || advancementProof?.phase === "native_blocked_reached")
+    ? await resolveLiveNativeAttention({
+        baseUrl: browserProofBaseUrl,
+        portalOrigin: browserProofPortalOrigin,
+        sessionCookieName,
+        sessionToken: sessionTokenResolution.sessionToken,
+        workflowId,
+        expectedRunId: durableResult.runId,
+        fetchImpl: (url, options) => fetchWithTimeout(url, options, timeoutMs)
+      })
+    : null;
+const roundTripProof =
+  waitingAttentionResolution?.ok && durableResult.runId
+    ? await advanceNativeExecutionProof({
+        sshTarget: remoteVerification.sshTarget,
+        sudoPassword: remoteVerification.sudoPassword,
+        containerName: remoteVerification.containerName,
+        tenantId,
+        runId: durableResult.runId,
+        postAttemptedAt: waitingAttentionResolution.postAttemptedAt,
+        timeoutMs
+      })
+    : null;
+const roundTripVerification = verifyWaitingRoundTrip({
+  workflowId,
+  nativeVerification,
+  advancementProof,
+  waitingAttentionResolution,
+  roundTripProof
+});
+const ok = durableResult.ok && nativeVerification.ok && roundTripVerification.ok;
 
 process.exitCode = ok ? 0 : 1;
 process.stdout.write(
@@ -138,8 +174,8 @@ process.stdout.write(
       },
       proof: {
         startPath,
-        apiOrigin: baseUrl,
-        portalOrigin,
+        apiOrigin: browserProofBaseUrl,
+        portalOrigin: browserProofPortalOrigin,
         sessionCookieName,
         sessionTokenSource: sessionTokenResolution.source,
         expectedExecutionEngine,
@@ -155,7 +191,10 @@ process.stdout.write(
         durableResult,
         nativeAcceptance,
         advancementProof,
-        nativeVerification
+        nativeVerification,
+        waitingAttentionResolution,
+        roundTripProof,
+        roundTripVerification
       }
     },
     null,
@@ -911,6 +950,74 @@ function verifyNativeAcceptance({ durableResult, nativeAcceptance, advancementPr
         ? `The durable workflow_definition_snapshot executionEngine is ${expectedExecutionEngine}.`
         : "This start path does not persist executionEngine on workflow_definition_snapshot, so native routing is proven by the harness advancement event instead.",
       "A bootstrapped non-CEO child lane produced a fresh outcome committed event after the current attempt timestamp."
+    ]
+  };
+}
+
+function verifyWaitingRoundTrip({
+  workflowId,
+  nativeVerification,
+  advancementProof,
+  waitingAttentionResolution,
+  roundTripProof
+}) {
+  if (workflowId !== "wf_connect_first_workflow") {
+    return {
+      ok: true,
+      phase: "round_trip_not_required",
+      notes: [
+        `Waiting-lane board round-trip proof is currently bounded to wf_connect_first_workflow, so ${workflowId} keeps the existing native advancement acceptance only.`
+      ]
+    };
+  }
+
+  if (!nativeVerification?.ok) {
+    return {
+      ok: false,
+      phase: "native_execution_not_verified",
+      notes: [
+        "The bounded waiting-lane round-trip proof cannot continue until the first native advancement leg is verified."
+      ]
+    };
+  }
+
+  if (advancementProof?.phase !== "native_waiting_reached" && advancementProof?.phase !== "native_blocked_reached") {
+    return {
+      ok: false,
+      phase: "native_attention_not_reached",
+      notes: [
+        "The first native advancement leg did not land in a waiting or blocked attention state, so the bounded resolve-attention round-trip cannot be proven honestly."
+      ]
+    };
+  }
+
+  if (!waitingAttentionResolution?.ok) {
+    return {
+      ok: false,
+      phase: waitingAttentionResolution?.phase ?? "waiting_attention_not_resolved",
+      notes: waitingAttentionResolution?.notes ?? [
+        "The live board did not return a resolvable native attention contract."
+      ]
+    };
+  }
+
+  if (!roundTripProof?.ok) {
+    return {
+      ok: false,
+      phase: roundTripProof?.phase ?? "waiting_lane_redispatch_not_verified",
+      notes: roundTripProof?.notes ?? [
+        "The native board action succeeded, but durable native redispatch after that action was not proven."
+      ]
+    };
+  }
+
+  return {
+    ok: true,
+    phase: "round_trip_verified",
+    notes: [
+      "The first native execution leg reached a truthful attention state.",
+      "The live board returned a bounded resolve-attention contract and accepted a native attention resolution.",
+      "A fresh native redispatch/advancement was proven after the board action."
     ]
   };
 }

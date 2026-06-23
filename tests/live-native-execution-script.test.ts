@@ -23,7 +23,14 @@ describe("live native execution proof script", () => {
     expect(script).toContain("created_at > $3");
     expect(script).toContain("advanceNativeExecutionProof");
     expect(script).toContain("waitForNativeExecutionAcceptance");
+    expect(script).toContain("resolveLiveNativeAttention");
     expect(script).toContain("loadRemoteNativeExecutionState");
+    expect(script).toContain("verifyWaitingRoundTrip");
+    expect(script).toContain("round_trip_verified");
+    expect(script).toContain("roundTripProof");
+    expect(script).toContain("resolve-attention");
+    expect(script).toContain("native_blocked_reached");
+    expect(script).toContain("native_attention_not_reached");
     expect(script).toContain("workflow_templates");
     expect(script).toContain("workflowTemplateOverride");
     expect(script).toContain("WF_STAGE_WORKFLOW_TEMPLATE_ID");

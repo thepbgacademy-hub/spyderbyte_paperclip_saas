@@ -2145,14 +2145,16 @@ export function createHarnessBoardService(options: {
       decisionNote?: string;
       targetCardId?: string;
     }): Promise<{ status: HarnessProposalStatus; cardId?: string }> {
-      const access = await authorizeHarnessRequest({
+      const access = await authorizeHarnessProposalRequest({
         authenticate: options.authenticate,
         requireTenantMember: options.requireTenantMember,
         requireActivePackageInstall: options.requireActivePackageInstall,
+        repository: options.repository,
         workflowRegistry: options.workflowRegistry,
         ...(options.resolveWorkflowRegistry ? { resolveWorkflowRegistry: options.resolveWorkflowRegistry } : {}),
         authorization: request.authorization,
-        ...(request.cookie ? { cookie: request.cookie } : {})
+        ...(request.cookie ? { cookie: request.cookie } : {}),
+        proposalId: request.proposalId
       });
 
       if (!options.runAtomically) {
@@ -3368,14 +3370,14 @@ export function createHarnessBoardService(options: {
       resultSummary?: string;
       resumeSummary?: string;
     }): Promise<{ cardId: string; state: HarnessCardRecord["state"] }> {
-      const access = await authorizeHarnessRequest({
+      const access = await authorizeHarnessCardRequest({
         authenticate: options.authenticate,
         requireTenantMember: options.requireTenantMember,
         requireActivePackageInstall: options.requireActivePackageInstall,
-        workflowRegistry: options.workflowRegistry,
-        ...(options.resolveWorkflowRegistry ? { resolveWorkflowRegistry: options.resolveWorkflowRegistry } : {}),
+        repository: options.repository,
         authorization: request.authorization,
-        ...(request.cookie ? { cookie: request.cookie } : {})
+        ...(request.cookie ? { cookie: request.cookie } : {}),
+        cardId: request.cardId
       });
 
       if (!options.runAtomically) {
@@ -3492,14 +3494,14 @@ export function createHarnessBoardService(options: {
       actionToken?: string;
       resolvedAttention?: HarnessAttentionState;
     }): Promise<{ runId: string; state: "done" }> {
-      const access = await authorizeHarnessRequest({
+      const access = await authorizeHarnessRunRequest({
         authenticate: options.authenticate,
         requireTenantMember: options.requireTenantMember,
         requireActivePackageInstall: options.requireActivePackageInstall,
-        workflowRegistry: options.workflowRegistry,
-        ...(options.resolveWorkflowRegistry ? { resolveWorkflowRegistry: options.resolveWorkflowRegistry } : {}),
+        repository: options.repository,
         authorization: request.authorization,
-        ...(request.cookie ? { cookie: request.cookie } : {})
+        ...(request.cookie ? { cookie: request.cookie } : {}),
+        runId: request.runId
       });
 
       if (!options.runAtomically) {
@@ -3712,14 +3714,14 @@ export function createHarnessBoardService(options: {
       | { status: "deferred"; runId: string; cardId: string }
       | { status: "moved_to_assembly"; runId: string; runState: "assembling" }
     > {
-      const access = await authorizeHarnessRequest({
+      const access = await authorizeHarnessRunRequest({
         authenticate: options.authenticate,
         requireTenantMember: options.requireTenantMember,
         requireActivePackageInstall: options.requireActivePackageInstall,
-        workflowRegistry: options.workflowRegistry,
-        ...(options.resolveWorkflowRegistry ? { resolveWorkflowRegistry: options.resolveWorkflowRegistry } : {}),
+        repository: options.repository,
         authorization: request.authorization,
-        ...(request.cookie ? { cookie: request.cookie } : {})
+        ...(request.cookie ? { cookie: request.cookie } : {}),
+        runId: request.runId
       });
 
       const run = await options.repository.getRun(request.runId);
@@ -4079,14 +4081,14 @@ export function createHarnessBoardService(options: {
       actionToken?: string;
       resumeSummary?: string;
     }): Promise<{ status: "resumed"; cardId: string; state: "working" } | { status: "unblocked"; cardId: string; state: "approved" }> {
-      const access = await authorizeHarnessRequest({
+      const access = await authorizeHarnessRunRequest({
         authenticate: options.authenticate,
         requireTenantMember: options.requireTenantMember,
         requireActivePackageInstall: options.requireActivePackageInstall,
-        workflowRegistry: options.workflowRegistry,
-        ...(options.resolveWorkflowRegistry ? { resolveWorkflowRegistry: options.resolveWorkflowRegistry } : {}),
+        repository: options.repository,
         authorization: request.authorization,
-        ...(request.cookie ? { cookie: request.cookie } : {})
+        ...(request.cookie ? { cookie: request.cookie } : {}),
+        runId: request.runId
       });
 
       if (!options.runAtomically) {
@@ -4325,14 +4327,14 @@ export function createHarnessBoardService(options: {
       mode?: HarnessFreshCycleMode;
       resolvedAttention?: HarnessAttentionState;
     }): Promise<{ runId: string; reopenedProposalCount: number }> {
-      const access = await authorizeHarnessRequest({
+      const access = await authorizeHarnessRunRequest({
         authenticate: options.authenticate,
         requireTenantMember: options.requireTenantMember,
         requireActivePackageInstall: options.requireActivePackageInstall,
-        workflowRegistry: options.workflowRegistry,
-        ...(options.resolveWorkflowRegistry ? { resolveWorkflowRegistry: options.resolveWorkflowRegistry } : {}),
+        repository: options.repository,
         authorization: request.authorization,
-        ...(request.cookie ? { cookie: request.cookie } : {})
+        ...(request.cookie ? { cookie: request.cookie } : {}),
+        runId: request.runId
       });
 
       if (!options.runAtomically) {
@@ -5096,19 +5098,16 @@ async function loadExportBoardContext(input: {
   cookie?: string;
   runId: string;
 }) {
-  const access = await authorizeHarnessRequest({
+  const access = await authorizeHarnessRunRequest({
     authenticate: input.authenticate,
     requireTenantMember: input.requireTenantMember,
     requireActivePackageInstall: input.requireActivePackageInstall,
-    workflowRegistry: input.workflowRegistry,
-    ...(input.resolveWorkflowRegistry ? { resolveWorkflowRegistry: input.resolveWorkflowRegistry } : {}),
+    repository: input.repository,
     authorization: input.authorization,
-    ...(input.cookie ? { cookie: input.cookie } : {})
+    ...(input.cookie ? { cookie: input.cookie } : {}),
+    runId: input.runId
   });
-  const run = await input.repository.getRun(input.runId);
-  if (!run || run.tenantId !== access.session.tenantId) {
-    throw new ApiAuthError();
-  }
+  const { run } = access;
   const [cards, continuity, events, decisions, proposals, exportDeliveries, completionPackageSnapshot, governanceHistorySnapshot] = await Promise.all([
     input.repository.listCardsForRun(run.id),
     input.repository.listCardContinuityForRun(run.id),
@@ -5138,6 +5137,125 @@ async function loadExportBoardContext(input: {
   };
 }
 
+async function authorizeHarnessRunRequest(input: {
+  authenticate(input: { authorization: string; cookie?: string }): Promise<ApiSession | null>;
+  requireTenantMember(input: { tenantId: string; userId: string }): Promise<void>;
+  requireActivePackageInstall(input: { tenantId: string; packageId: string }): Promise<void>;
+  repository: HarnessRepository;
+  authorization: string;
+  cookie?: string;
+  runId: string;
+}): Promise<{ session: ApiSession; run: HarnessRunRecord }> {
+  const session = await authenticateHarnessSession({
+    authenticate: input.authenticate,
+    requireTenantMember: input.requireTenantMember,
+    authorization: input.authorization,
+    ...(input.cookie ? { cookie: input.cookie } : {})
+  });
+
+  const run = await input.repository.getRun(input.runId);
+  if (!run || run.tenantId !== session.tenantId) {
+    throw new ApiAuthError();
+  }
+
+  await requireHarnessPackageAccess({
+    requireActivePackageInstall: input.requireActivePackageInstall,
+    tenantId: session.tenantId,
+    packageId: run.packageId
+  });
+
+  return { session, run };
+}
+
+async function authorizeHarnessCardRequest(input: {
+  authenticate(input: { authorization: string; cookie?: string }): Promise<ApiSession | null>;
+  requireTenantMember(input: { tenantId: string; userId: string }): Promise<void>;
+  requireActivePackageInstall(input: { tenantId: string; packageId: string }): Promise<void>;
+  repository: HarnessRepository;
+  authorization: string;
+  cookie?: string;
+  cardId: string;
+}): Promise<{ session: ApiSession; run: HarnessRunRecord; card: HarnessCardRecord }> {
+  const session = await authenticateHarnessSession({
+    authenticate: input.authenticate,
+    requireTenantMember: input.requireTenantMember,
+    authorization: input.authorization,
+    ...(input.cookie ? { cookie: input.cookie } : {})
+  });
+
+  const card = await input.repository.getCard(input.cardId);
+  if (!card) {
+    throw new HarnessCardProgressionConflictError("Harness child card was not found");
+  }
+  const run = await input.repository.getRun(card.runId);
+  if (!run || run.tenantId !== session.tenantId) {
+    throw new ApiAuthError();
+  }
+
+  await requireHarnessPackageAccess({
+    requireActivePackageInstall: input.requireActivePackageInstall,
+    tenantId: session.tenantId,
+    packageId: run.packageId
+  });
+
+  return { session, run, card };
+}
+
+async function authorizeHarnessProposalRequest(input: {
+  authenticate(input: { authorization: string; cookie?: string }): Promise<ApiSession | null>;
+  requireTenantMember(input: { tenantId: string; userId: string }): Promise<void>;
+  requireActivePackageInstall(input: { tenantId: string; packageId: string }): Promise<void>;
+  repository: HarnessRepository;
+  workflowRegistry: HarnessWorkflowRegistry;
+  resolveWorkflowRegistry?(input: { tenantId: string; userId: string }): Promise<HarnessWorkflowRegistry>;
+  authorization: string;
+  cookie?: string;
+  proposalId: string;
+}): Promise<{
+  session: ApiSession;
+  run: HarnessRunRecord;
+  proposal: HarnessSubCardProposal;
+  workflowDefinition: WealthFactoryWorkflowDefinition;
+}> {
+  const session = await authenticateHarnessSession({
+    authenticate: input.authenticate,
+    requireTenantMember: input.requireTenantMember,
+    authorization: input.authorization,
+    ...(input.cookie ? { cookie: input.cookie } : {})
+  });
+
+  const proposal = await input.repository.getProposal(input.proposalId);
+  if (!proposal) {
+    throw new Error("Harness proposal was not found");
+  }
+  const run = await input.repository.getRun(proposal.runId);
+  if (!run || run.tenantId !== session.tenantId) {
+    throw new ApiAuthError();
+  }
+
+  await requireHarnessPackageAccess({
+    requireActivePackageInstall: input.requireActivePackageInstall,
+    tenantId: session.tenantId,
+    packageId: run.packageId
+  });
+
+  const workflowRegistry = input.resolveWorkflowRegistry
+    ? await input.resolveWorkflowRegistry({ tenantId: session.tenantId, userId: session.userId })
+    : input.workflowRegistry;
+
+  let workflowDefinition: WealthFactoryWorkflowDefinition;
+  try {
+    workflowDefinition = workflowRegistry.getDefinition(run.workflowId);
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new HarnessWorkflowSelectionError(error.message);
+    }
+    throw error;
+  }
+
+  return { session, run, proposal, workflowDefinition };
+}
+
 async function authorizeHarnessRequest(input: {
   authenticate(input: { authorization: string; cookie?: string }): Promise<ApiSession | null>;
   requireTenantMember(input: { tenantId: string; userId: string }): Promise<void>;
@@ -5148,13 +5266,12 @@ async function authorizeHarnessRequest(input: {
   requestedWorkflowId?: string;
   cookie?: string;
 }): Promise<{ session: ApiSession; workflowDefinition: WealthFactoryWorkflowDefinition }> {
-  const session = await input.authenticate({
+  const session = await authenticateHarnessSession({
+    authenticate: input.authenticate,
+    requireTenantMember: input.requireTenantMember,
     authorization: input.authorization,
     ...(input.cookie ? { cookie: input.cookie } : {})
   });
-  if (!session) {
-    throw new ApiAuthError();
-  }
 
   const workflowRegistry = input.resolveWorkflowRegistry
     ? await input.resolveWorkflowRegistry({ tenantId: session.tenantId, userId: session.userId })
@@ -5171,24 +5288,55 @@ async function authorizeHarnessRequest(input: {
     }
     throw error;
   }
-  try {
-    await input.requireTenantMember({ tenantId: session.tenantId, userId: session.userId });
-    await input.requireActivePackageInstall({
-      tenantId: session.tenantId,
-      packageId: workflowDefinition.packageId
-    });
-  } catch (error) {
-    if (
-      error instanceof TenantMembershipRequiredError ||
-      error instanceof ActivePackageInstallRequiredError
-    ) {
-      throw new ApiAuthError();
-    }
-
-    throw error;
-  }
+  await requireHarnessPackageAccess({
+    requireActivePackageInstall: input.requireActivePackageInstall,
+    tenantId: session.tenantId,
+    packageId: workflowDefinition.packageId
+  });
 
   return { session, workflowDefinition };
+}
+
+async function authenticateHarnessSession(input: {
+  authenticate(input: { authorization: string; cookie?: string }): Promise<ApiSession | null>;
+  requireTenantMember(input: { tenantId: string; userId: string }): Promise<void>;
+  authorization: string;
+  cookie?: string;
+}): Promise<ApiSession> {
+  const session = await input.authenticate({
+    authorization: input.authorization,
+    ...(input.cookie ? { cookie: input.cookie } : {})
+  });
+  if (!session) {
+    throw new ApiAuthError();
+  }
+  try {
+    await input.requireTenantMember({ tenantId: session.tenantId, userId: session.userId });
+  } catch (error) {
+    if (error instanceof TenantMembershipRequiredError) {
+      throw new ApiAuthError();
+    }
+    throw error;
+  }
+  return session;
+}
+
+async function requireHarnessPackageAccess(input: {
+  requireActivePackageInstall(input: { tenantId: string; packageId: string }): Promise<void>;
+  tenantId: string;
+  packageId: string;
+}) {
+  try {
+    await input.requireActivePackageInstall({
+      tenantId: input.tenantId,
+      packageId: input.packageId
+    });
+  } catch (error) {
+    if (error instanceof ActivePackageInstallRequiredError) {
+      throw new ApiAuthError();
+    }
+    throw error;
+  }
 }
 
 function resolveBoardWorkflowDefinitionFallback(
