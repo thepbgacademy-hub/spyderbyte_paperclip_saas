@@ -11,6 +11,8 @@ import {
 } from "./types.js";
 import { createPaperclipIssueLaunchAdapter } from "./issue-launch.js";
 
+// Legacy-bounded adapter: retained only for isolated compatibility and test seams.
+// Active Wealth Factory runtime execution no longer routes workflow runs through this client.
 type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
 export type PaperclipClientOptions = {

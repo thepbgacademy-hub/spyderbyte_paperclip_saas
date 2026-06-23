@@ -22,21 +22,33 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
-- Closed the bounded stage native-execution runner proof gap instead of reopening the already-green board-contract seam, broader stage-stability acceptance seam, or shared-host launch plumbing.
-- Ran the required GitNexus preflight first on June 22, 2026. `gitnexus status` was current at commit `7370811`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` still reported a branch-wide critical tree centered in the harness board/client area plus stage-proof tooling. That result was treated as a reason to choose only the thinnest remaining meaningful local proof gap.
-- Confirmed via bounded scout/review that the larger public board contract rename/normalization seam is already locally complete and that the broader isolated stage-stability acceptance seam is already closed; the remaining worthwhile gap was execution-level behavioral proof for `scripts/prove-stage-live-native-execution.mjs`.
-- Added a new focused runner-level proof in `tests/stage-live-native-execution-runner.test.ts`, starting red first and then going green after extracting the minimal helper `scripts/lib/stage-live-native-execution-runner.mjs`.
-- Kept the wrapper command surface unchanged on purpose: `scripts/prove-stage-live-native-execution.mjs` still owns env loading, secret loading, lane/template resolution, and public command exposure, while the new helper owns only the three-lane invocation loop plus typed step-context surfacing for non-zero or signaled child failures.
-- Re-aligned the existing wrapper proof in `tests/stage-live-native-execution-script.test.ts` so it now checks the extracted wrapper seam instead of overfitting to the old inlined loop body.
-- Local verification for this phase is green across:
-  - `npx vitest run tests/stage-live-native-execution-runner.test.ts tests/stage-live-native-execution-script.test.ts`
-  - `npx vitest run tests/stage-live-stability-runner.test.ts tests/stage-live-stability-script.test.ts tests/stage-live-stability.test.ts tests/native-proof-lane-model.test.ts tests/demo-seed-profiles.test.ts tests/external-smoke-script.test.ts tests/runtime-server.test.ts tests/vps2-isolated-stage-config.test.ts tests/vps2-shared-host-cutover-plan.test.ts tests/handoff-docs.test.ts`
+- Completed the remaining June 22 post-audit realignment phases R2 through R6 from `wf-harness/docs/plans/2026-06-22-post-audit-realignment-plan.md`.
+- Re-ran the required GitNexus preflight before the deeper cleanup work. On June 22, 2026 `gitnexus status` stayed current at commit `cc2fc8f`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported a critical working-tree blast radius across 13 files / 20 symbols. That result matched the intended seams: harness HTTP, board UI, worker runtime, and handoff/TODO tracking.
+- Phase R2 is now closed:
+  - moved the provider lifecycle proof runner out of `src/` into `scripts/prove-provider-credential-lifecycle.mjs`
+  - removed the stale stage-demo realignment scripts and duplicate `live-run-drive` shims
+  - kept live/operator launch scripts bounded instead of widening into runtime behavior
+- Phase R3 is now closed:
+  - retired the public `/approve` harness alias
+  - retired legacy public `actionToken` and `command` compatibility on the live harness HTTP seam
+  - kept the downstream service contract stable while fail-closing the public route layer
+- Phase R4 is now closed:
+  - extracted the duplicated live action-control render path into `apps/web/src/components/HarnessBoardActionPanel.tsx`
+  - reused that shared panel for both pending-attention and pending-approval board actions without widening board behavior
+- Phase R5 is now closed:
+  - extracted the native provider execution subflow from `src/worker/runtime.ts` into `src/worker/runtime-native-execution.ts`
+  - removed the unused debug shared-provider fallback construction from the worker runtime hot path
+  - kept claim, dispatch, and outcome-commit ordering unchanged
+- Phase R6 is now closed:
+  - kept the active Paperclip role explicitly bounded to secret projection / compatibility seams
+  - marked `src/paperclip/client.ts` and `src/paperclip/issue-launch.ts` as legacy-bounded adapters so the code no longer reads as dual-engine by accident
+- Focused verification is green across the realignment seam set:
+  - `npx vitest run tests/deploy-config.test.ts tests/live-run-drive.test.ts`
+  - `npx vitest run tests/harness-http.test.ts tests/runtime-server.test.ts`
+  - `npx vitest run tests/harness-ui.test.tsx tests/harness-board-client.test.ts`
+  - `npx vitest run tests/worker-runtime.test.ts tests/runtime-provider-fallback.test.ts`
   - `npm run build -- --pretty false`
-- Ran the matching non-destructive isolated live acceptance gate with `npm run prove:stage-live-native-execution`, and it passed on June 22, 2026 against `wf-api.spyderbyte.cloud` for `wf_connect_first_workflow`, `wf_tax_strategy`, and `wf_package_followup`.
-- That live runner proof stayed on the isolated Wealth Factory lane and verified the expected direct public reservation -> bounded native execution advancement path without changing `api.spyderbyte.cloud`.
-- Kept the seam anti-drift and no-scope-creep on purpose: this phase added one behavior-testable runner extraction and matching proof only; it did not widen worker/runtime policy, board contracts, queue topology, public dashboard behavior, or shared-host cutover posture.
-- Kept `api.spyderbyte.cloud` unchanged on purpose: this runner-proof phase validated the isolated Wealth Factory lane only and did not execute the separate shared-host cutover plan.
-- The next continuation point is to isolate the next meaningful bounded build slice from the still-critical working tree, not to reopen already-green board normalization or stage-stability acceptance without a new reason.
+- The next continuation point should move out of correction mode and into the next explicitly planned acceptance/build slice, not reopen the June 22 realignment phases.
 
 ## Key Design Commitments
 

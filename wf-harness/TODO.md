@@ -123,6 +123,45 @@ This file tracks the new harness subproject only.
 
 ## Current Next Slice
 
+- [x] Complete Phase R1: Repo Noise and Artifact Cleanup from `wf-harness/docs/plans/2026-06-22-post-audit-realignment-plan.md`.
+  - [x] Run the required GitNexus preflight first.
+  - [x] Keep the slice bounded to tracked repo-noise, ignore-rule, and handoff-authority cleanup only.
+  - [x] Reduce the repo-root `HANDOFF.md` to a pointer so `wf-harness/HANDOFF.md` is the one authoritative handoff path.
+  - [x] Retire `repo-noise-slice-checklist.md` in favor of the newer June 22 realignment plan.
+  - [x] Promote local-only ignore gaps into tracked repo policy for `AGENTS.md`, `CLAUDE.md`, `sudo_deploy.txt`, and the new local audit folders.
+  - [x] Verify the bounded cleanup seam with `npx vitest run tests/handoff-docs.test.ts`.
+- [x] Complete Phase R2: Proof and Tooling Surface Reduction.
+  - [x] Run the required GitNexus preflight first.
+  - [x] Remove proof-only runtime leftovers from `src/` by moving provider lifecycle proof execution to `scripts/prove-provider-credential-lifecycle.mjs`.
+  - [x] Retire the one-off stage-demo realignment scripts and stale duplicate `live-run-drive` shims.
+  - [x] Keep the bounded launch/operator scripts intact instead of widening into deploy/runtime behavior changes.
+  - [x] Verify the bounded tooling reduction seam with `npx vitest run tests/deploy-config.test.ts tests/live-run-drive.test.ts` and `npm run build -- --pretty false`.
+- [x] Complete Phase R3: Launch Surface Pruning on Harness HTTP.
+  - [x] Run the required GitNexus preflight first.
+  - [x] Retire the `/api/harness/proposals/:id/approve` alias from the live boundary.
+  - [x] Retire legacy public `actionToken` and `command` request-field compatibility from the live harness boundary.
+  - [x] Keep the internal service contract stable while fail-closing the public HTTP seam.
+  - [x] Verify the pruned launch surface with `npx vitest run tests/harness-http.test.ts tests/runtime-server.test.ts` and `npm run build -- --pretty false`.
+- [x] Complete Phase R4: Board UI Decomposition and Simplification.
+  - [x] Run the required GitNexus preflight first.
+  - [x] Extract the duplicated live contract-action rendering path into `apps/web/src/components/HarnessBoardActionPanel.tsx`.
+  - [x] Reuse the shared action panel for both pending-attention and pending-approval board actions without changing fetch/retry/governance behavior.
+  - [x] Keep the page-side orchestration logic in `HarnessBoardPage.tsx` so the slice stays bounded to UI decomposition.
+  - [x] Verify the board simplification seam with `npx vitest run tests/harness-ui.test.tsx tests/harness-board-client.test.ts` and `npm run build -- --pretty false`.
+- [x] Complete Phase R5: Runtime Hotspot Reduction.
+  - [x] Run the required GitNexus preflight first.
+  - [x] Extract the native execution subflow from `src/worker/runtime.ts` into `src/worker/runtime-native-execution.ts`.
+  - [x] Remove the unused debug shared-provider fallback construction from the worker runtime hot path.
+  - [x] Keep claim, dispatch, and outcome-commit ordering unchanged while shrinking the native execution hotspot.
+  - [x] Verify the runtime hotspot reduction seam with `npx vitest run tests/worker-runtime.test.ts tests/runtime-provider-fallback.test.ts` and `npm run build -- --pretty false`.
+- [x] Complete Phase R6: Paperclip Seam Freeze.
+  - [x] Run the required GitNexus preflight first.
+  - [x] Keep the active Paperclip role explicitly bounded to secret projection and compatibility-only adapter seams.
+  - [x] Mark `src/paperclip/client.ts` and `src/paperclip/issue-launch.ts` as legacy-bounded adapters so the codebase no longer reads as though Paperclip is still an active execution engine.
+  - [x] Carry the seam-freeze truth into `TODO.md` and `HANDOFF.md` so later phases do not reopen dual-engine drift by accident.
+
+## Historical Next Slice Notes
+
 - [x] Close the bounded stage native-execution runner proof gap without reopening broader stage-stability, board-contract, or launch-lane scope.
   - [x] Keep the pre-phase GitNexus gate explicit: on June 22, 2026 `gitnexus status` stayed current at commit `7370811`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` still reported a branch-wide critical tree centered in the harness board/client area plus stage-proof tooling.
   - [x] Treat the larger board and stage-stability seams as already closed for their current bounded phases, and choose only the thinnest remaining meaningful gap: execution-level behavioral proof for `scripts/prove-stage-live-native-execution.mjs`.

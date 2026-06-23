@@ -194,7 +194,7 @@ export function createHarnessHttpHandler(options: {
         /^\/api\/harness\/runs\/[^/]+\/resolve-attention$/u.test(request.path) ||
         /^\/api\/harness\/runs\/[^/]+\/fresh-cycle$/u.test(request.path) ||
         /^\/api\/harness\/runs\/[^/]+\/export-candidates\/[^/]+\/(preflight|dry-run|export|delivery-replay)$/u.test(request.path) ||
-        /^\/api\/harness\/proposals\/[^/]+\/(approve|decision)$/u.test(request.path)
+        /^\/api\/harness\/proposals\/[^/]+\/decision$/u.test(request.path)
       )
     ) {
       return {
@@ -234,8 +234,8 @@ export function createHarnessHttpHandler(options: {
         ? "harness-governance-history-export"
       : request.method === "POST" && /^\/api\/harness\/runs\/[^/]+\/export-candidates\/[^/]+\/delivery-replay$/u.test(request.path)
         ? "harness-governance-history-export-replay"
-      : request.method === "POST" && /^\/api\/harness\/proposals\/[^/]+\/(approve|decision)$/u.test(request.path)
-        ? "harness-proposal-approve"
+      : request.method === "POST" && /^\/api\/harness\/proposals\/[^/]+\/decision$/u.test(request.path)
+        ? "harness-proposal-decision"
       : null;
 
     if (!routeKey) {
@@ -395,7 +395,7 @@ export function createHarnessHttpHandler(options: {
           return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
         }
         const bodyInput = readJsonObject(request.body);
-        const command = readOptionalString(bodyInput?.resolution ?? bodyInput?.command);
+        const command = readOptionalString(bodyInput?.resolution);
         const actionToken = readRequiredActionHandle(bodyInput);
         if (command !== "resume_lane" && command !== "unblock_lane") {
           return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
@@ -525,14 +525,14 @@ export function createHarnessHttpHandler(options: {
         return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
       }
 
-      const proposalMatch = /^\/api\/harness\/proposals\/([^/]+)\/(approve|decision)$/u.exec(request.path);
+      const proposalMatch = /^\/api\/harness\/proposals\/([^/]+)\/decision$/u.exec(request.path);
       if (!proposalMatch) {
         return { status: 404, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "not_found" } };
       }
       const bodyInput = readJsonObject(request.body);
       const decision = readOptionalString(bodyInput?.decision);
       const actionToken = readRequiredActionHandle(bodyInput);
-      const routeDecision = proposalMatch[2] === "approve" ? "approve" : decision ?? "";
+      const routeDecision = decision ?? "";
       if (!routeDecision || !["approve", "defer", "deny"].includes(routeDecision)) {
         return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
       }
@@ -551,9 +551,6 @@ export function createHarnessHttpHandler(options: {
         ...(decisionNote ? { decisionNote } : {}),
         ...(targetCardId ? { targetCardId } : {})
       });
-      if (proposalMatch[2] === "approve" && body.status !== "approved") {
-        return { status: 409, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "conflict" } };
-      }
       assertWealthFactoryResponse(body);
       return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
     } catch (error) {
@@ -599,7 +596,7 @@ function readOptionalString(value: unknown): string | undefined {
 }
 
 function readRequiredActionHandle(value: Record<string, unknown> | undefined): string {
-  return readRequiredString(value?.actionHandle ?? value?.actionToken);
+  return readRequiredString(value?.actionHandle);
 }
 
 function retryAfterSeconds(resetAt: number): number {

@@ -1380,14 +1380,14 @@ describe("runtime server", () => {
         "content-length": String(
           JSON.stringify({
             completionSummary: "The CEO packaged the final business-facing outcome.",
-            actionToken: "test-review-token"
+            actionHandle: "test-review-token"
           }).length
         ),
         "content-type": "application/json"
       },
       body: JSON.stringify({
         completionSummary: "The CEO packaged the final business-facing outcome.",
-        actionToken: "test-review-token"
+        actionHandle: "test-review-token"
       })
     });
     const response = createResponse();

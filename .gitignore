@@ -10,6 +10,11 @@ playwright-report/
 npm-debug.log*
 *.tsbuildinfo
 .claude/
+AGENTS.md
+CLAUDE.md
+sudo_deploy.txt
+audit/2026-06-19/
+audit/2026-06-22/
 api_stage*.log
 proof_*.log
 tmp_stage_*.json

@@ -11,6 +11,73 @@ import {
 import { createHarnessHttpHandler } from "../src/api/harness-http.js";
 
 describe("harness HTTP boundary", () => {
+  it("fails closed for retired compatibility aliases on the launch routes", async () => {
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn().mockResolvedValue({
+        runId: "run_123",
+        workflowId: "wf_connect_first_workflow",
+        packageId: "pkg_bib_connect",
+        columns: [],
+        cards: [],
+        pendingApprovals: [],
+        followThroughItems: [],
+        recentDecisions: []
+      }),
+      createTopLevelChildCard: vi.fn(),
+      submitTenantGoal: vi.fn(),
+      advanceChildCard: vi.fn(),
+      decideProposal: vi.fn(),
+      completeRun: vi.fn(),
+      reviewPendingAttention: vi.fn(),
+      resolvePendingAttention: vi.fn(),
+      startFreshCycle: vi.fn(),
+      preflightExportCandidate: vi.fn(),
+      dryRunExportCandidate: vi.fn(),
+      exportGovernanceHistoryCandidate: vi.fn(),
+      exportPackageBundleCandidate: vi.fn(),
+      replayGovernanceHistoryDeliveryCandidate: vi.fn(),
+      replayPackageBundleDeliveryCandidate: vi.fn(),
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
+    });
+
+    const approveAliasResponse = await handler({
+      method: "POST",
+      path: "/api/harness/proposals/proposal_123/approve",
+      headers: { origin: "https://portal.wealthfactory.test", authorization: "Bearer valid" },
+      body: { actionHandle: "handle-1" },
+      bodyByteLength: JSON.stringify({ actionHandle: "handle-1" }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(approveAliasResponse.status).toBe(404);
+    expect(approveAliasResponse.body).toEqual({ code: "not_found" });
+
+    const resolveResponse = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/resolve-attention",
+      headers: { origin: "https://portal.wealthfactory.test", authorization: "Bearer valid" },
+      body: { command: "resume_lane", actionHandle: "handle-1" },
+      bodyByteLength: JSON.stringify({ command: "resume_lane", actionHandle: "handle-1" }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(resolveResponse.status).toBe(400);
+    expect(resolveResponse.body).toEqual({ code: "invalid_request" });
+
+    const legacyActionTokenResponse = await handler({
+      method: "POST",
+      path: "/api/harness/proposals/proposal_123/decision",
+      headers: { origin: "https://portal.wealthfactory.test", authorization: "Bearer valid" },
+      body: { decision: "approve", actionToken: "legacy-token" },
+      bodyByteLength: JSON.stringify({ decision: "approve", actionToken: "legacy-token" }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(legacyActionTokenResponse.status).toBe(400);
+    expect(legacyActionTokenResponse.body).toEqual({ code: "invalid_request" });
+  });
+
   it("rejects untrusted origins before resolving board data", async () => {
     const listBoardState = vi.fn();
     const createTopLevelChildCard = vi.fn();
@@ -789,8 +856,8 @@ describe("harness HTTP boundary", () => {
         authorization: "Bearer valid",
         "content-type": "application/json"
       },
-      body: { actionToken: "stale-token" },
-      bodyByteLength: JSON.stringify({ actionToken: "stale-token" }).length,
+      body: { actionHandle: "stale-token" },
+      bodyByteLength: JSON.stringify({ actionHandle: "stale-token" }).length,
       ip: "203.0.113.10"
     });
 
@@ -812,7 +879,7 @@ describe("harness HTTP boundary", () => {
 
     const response = await handler({
       method: "POST",
-      path: "/api/harness/proposals/proposal_1/approve",
+      path: "/api/harness/proposals/proposal_1/decision",
       headers: {
         origin: "https://portal.wealthfactory.test",
         authorization: "Bearer valid",
@@ -820,9 +887,11 @@ describe("harness HTTP boundary", () => {
         "content-type": "application/json"
       },
       body: {
+        decision: "approve",
         actionHandle: "test-proposal-token"
       },
       bodyByteLength: JSON.stringify({
+        decision: "approve",
         actionHandle: "test-proposal-token"
       }).length,
       ip: "203.0.113.10"
@@ -862,7 +931,7 @@ describe("harness HTTP boundary", () => {
       },
       body: {
         decision: "approve",
-        actionToken: "test-proposal-token",
+        actionHandle: "test-proposal-token",
         targetCardId: "card_owner_1"
       },
       bodyByteLength: 64,
@@ -904,7 +973,7 @@ describe("harness HTTP boundary", () => {
       },
       body: {
         decision: "defer",
-        actionToken: "test-proposal-token",
+        actionHandle: "test-proposal-token",
         decisionNote: "Wait for the current lane to finish first."
       },
       bodyByteLength: 74,
@@ -923,7 +992,7 @@ describe("harness HTTP boundary", () => {
     expect(response.body).toEqual({ status: "deferred" });
   });
 
-  it("maps a non-approved /approve outcome back to conflict semantics", async () => {
+  it("passes explicit deny decisions through the guarded proposal decision route", async () => {
     const decideProposal = vi.fn().mockResolvedValue({ status: "denied" });
     const handler = createHarnessHttpHandler({
       allowedOrigins: ["https://portal.wealthfactory.test"],
@@ -937,7 +1006,7 @@ describe("harness HTTP boundary", () => {
 
     const response = await handler({
       method: "POST",
-      path: "/api/harness/proposals/proposal_1/approve",
+      path: "/api/harness/proposals/proposal_1/decision",
       headers: {
         origin: "https://portal.wealthfactory.test",
         authorization: "Bearer valid",
@@ -945,16 +1014,18 @@ describe("harness HTTP boundary", () => {
         "content-type": "application/json"
       },
       body: {
-        actionToken: "test-proposal-token"
+        decision: "deny",
+        actionHandle: "test-proposal-token"
       },
       bodyByteLength: JSON.stringify({
-        actionToken: "test-proposal-token"
+        decision: "deny",
+        actionHandle: "test-proposal-token"
       }).length,
       ip: "203.0.113.10"
     });
 
-    expect(response.status).toBe(409);
-    expect(response.body).toEqual({ code: "conflict" });
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ status: "denied" });
   });
 
   it("returns 404 for unknown proposal paths without burning the approval rate-limit bucket", async () => {
@@ -1375,7 +1446,7 @@ describe("harness HTTP boundary", () => {
       path: "/api/harness/runs/run_123/complete",
       body: {
         completionSummary: "The CEO packaged the final business-facing outcome.",
-        actionToken: "test-review-token"
+        actionHandle: "test-review-token"
       },
       headers: {
         origin: "https://portal.wealthfactory.test",
@@ -1417,7 +1488,7 @@ describe("harness HTTP boundary", () => {
       path: "/api/harness/runs/run_123/complete",
       body: {
         completionSummary: "The CEO packaged the final business-facing outcome.",
-        actionToken: "stale-review-token"
+        actionHandle: "stale-review-token"
       },
       headers: {
         origin: "https://portal.wealthfactory.test",
@@ -1426,7 +1497,7 @@ describe("harness HTTP boundary", () => {
       },
       bodyByteLength: JSON.stringify({
         completionSummary: "The CEO packaged the final business-facing outcome.",
-        actionToken: "stale-review-token"
+        actionHandle: "stale-review-token"
       }).length,
       ip: "203.0.113.10"
     });
@@ -1502,7 +1573,7 @@ describe("harness HTTP boundary", () => {
       path: "/api/harness/runs/run_123/review-attention",
       body: {
         decision: "start_fresh_cycle",
-        actionToken: "test-review-token",
+        actionHandle: "test-review-token",
         mode: "clean"
       },
       headers: {
@@ -1513,7 +1584,7 @@ describe("harness HTTP boundary", () => {
       },
       bodyByteLength: JSON.stringify({
         decision: "start_fresh_cycle",
-        actionToken: "test-review-token",
+        actionHandle: "test-review-token",
         mode: "clean"
       }).length,
       ip: "203.0.113.10"
@@ -1551,7 +1622,7 @@ describe("harness HTTP boundary", () => {
       path: "/api/harness/runs/run_123/review-attention",
       body: {
         decision: "start_next_lane",
-        actionToken: "test-review-token"
+        actionHandle: "test-review-token"
       },
       headers: {
         origin: "https://portal.wealthfactory.test",
@@ -1561,7 +1632,7 @@ describe("harness HTTP boundary", () => {
       },
       bodyByteLength: JSON.stringify({
         decision: "start_next_lane",
-        actionToken: "test-review-token"
+        actionHandle: "test-review-token"
       }).length,
       ip: "203.0.113.10"
     });
@@ -1667,7 +1738,7 @@ describe("harness HTTP boundary", () => {
       path: "/api/harness/runs/run_123/review-attention",
       body: {
         decision: "start_fresh_cycle",
-        actionToken: "test-review-token"
+        actionHandle: "test-review-token"
       },
       headers: {
         origin: "https://portal.wealthfactory.test",
@@ -1676,7 +1747,7 @@ describe("harness HTTP boundary", () => {
       },
       bodyByteLength: JSON.stringify({
         decision: "start_fresh_cycle",
-        actionToken: "test-review-token"
+        actionHandle: "test-review-token"
       }).length,
       ip: "203.0.113.10"
     };
@@ -1712,7 +1783,7 @@ describe("harness HTTP boundary", () => {
       path: "/api/harness/runs/run_123/review-attention",
       body: {
         decision: "start_fresh_cycle",
-        actionToken: "stale-review-token"
+        actionHandle: "stale-review-token"
       },
       headers: {
         origin: "https://portal.wealthfactory.test",
@@ -1721,7 +1792,7 @@ describe("harness HTTP boundary", () => {
       },
       bodyByteLength: JSON.stringify({
         decision: "start_fresh_cycle",
-        actionToken: "stale-review-token"
+        actionHandle: "stale-review-token"
       }).length,
       ip: "203.0.113.10"
     });
@@ -1749,7 +1820,7 @@ describe("harness HTTP boundary", () => {
       path: "/api/harness/proposals/proposal_1/decision",
       body: {
         decision: "approve",
-        actionToken: "stale-proposal-token"
+        actionHandle: "stale-proposal-token"
       },
       headers: {
         origin: "https://portal.wealthfactory.test",
@@ -1758,7 +1829,7 @@ describe("harness HTTP boundary", () => {
       },
       bodyByteLength: JSON.stringify({
         decision: "approve",
-        actionToken: "stale-proposal-token"
+        actionHandle: "stale-proposal-token"
       }).length,
       ip: "203.0.113.10"
     });
@@ -2040,8 +2111,8 @@ describe("harness HTTP boundary", () => {
         authorization: "Bearer valid",
         "content-type": "application/json"
       },
-      body: { mode: "reopen_everything", actionToken: "test-review-token" },
-      bodyByteLength: JSON.stringify({ mode: "reopen_everything", actionToken: "test-review-token" }).length,
+      body: { mode: "reopen_everything", actionHandle: "test-review-token" },
+      bodyByteLength: JSON.stringify({ mode: "reopen_everything", actionHandle: "test-review-token" }).length,
       ip: "203.0.113.10"
     });
 
@@ -2072,7 +2143,7 @@ describe("harness HTTP boundary", () => {
       path: "/api/harness/runs/run_123/fresh-cycle",
       body: {
         mode: "reopen_deferred",
-        actionToken: "test-review-token"
+        actionHandle: "test-review-token"
       },
       headers: {
         origin: "https://portal.wealthfactory.test",
@@ -2081,7 +2152,7 @@ describe("harness HTTP boundary", () => {
       },
       bodyByteLength: JSON.stringify({
         mode: "reopen_deferred",
-        actionToken: "test-review-token"
+        actionHandle: "test-review-token"
       }).length,
       ip: "203.0.113.10"
     };
@@ -2117,7 +2188,7 @@ describe("harness HTTP boundary", () => {
       path: "/api/harness/runs/run_123/fresh-cycle",
       body: {
         mode: "reopen_deferred",
-        actionToken: "stale-review-token"
+        actionHandle: "stale-review-token"
       },
       headers: {
         origin: "https://portal.wealthfactory.test",
@@ -2126,7 +2197,7 @@ describe("harness HTTP boundary", () => {
       },
       bodyByteLength: JSON.stringify({
         mode: "reopen_deferred",
-        actionToken: "stale-review-token"
+        actionHandle: "stale-review-token"
       }).length,
       ip: "203.0.113.10"
     });

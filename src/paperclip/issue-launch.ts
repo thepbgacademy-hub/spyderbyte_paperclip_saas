@@ -1,5 +1,7 @@
 import { toPaperclipProviderContext, type PaperclipRuntimeProviderContext, type PaperclipRunReference } from "./types.js";
 
+// Legacy-bounded adapter: retained only for compatibility and focused adapter tests.
+// Wealth Factory's active launch flow no longer depends on Paperclip issue-launch execution.
 type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
 export type PaperclipIssueLaunchOptions = {

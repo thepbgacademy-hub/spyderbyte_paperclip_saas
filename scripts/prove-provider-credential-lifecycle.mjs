@@ -1,18 +1,7 @@
 import process from "node:process";
 
-import { createPgPool, createPgPoolQueryClient } from "../db/postgres-client.js";
-import { createDashboardRuntime, loadRuntimeEnv } from "../api/runtime-server.js";
-
-type Args = {
-  mode: "register" | "rotate" | "revoke" | "full" | undefined;
-  tenant: string | undefined;
-  user: string | undefined;
-  providerKind: string | undefined;
-  label: string | undefined;
-  secretName: string | undefined;
-  secretRef: string | undefined;
-  metadata: string | undefined;
-};
+import { createPgPool, createPgPoolQueryClient } from "../dist/db/postgres-client.js";
+import { createDashboardRuntime, loadRuntimeEnv } from "../dist/api/runtime-server.js";
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
@@ -71,8 +60,8 @@ async function main() {
 
 await main();
 
-function parseArgs(values: readonly string[]): Args {
-  const args: Args = {
+function parseArgs(values) {
+  const args = {
     mode: undefined,
     tenant: undefined,
     user: undefined,
@@ -84,10 +73,7 @@ function parseArgs(values: readonly string[]): Args {
   };
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index];
-    if (typeof value !== "string") {
-      continue;
-    }
-    if (!value.startsWith("--")) {
+    if (typeof value !== "string" || !value.startsWith("--")) {
       continue;
     }
     const key = value.slice(2);
@@ -100,7 +86,7 @@ function parseArgs(values: readonly string[]): Args {
         args.tenant = next;
         break;
       case "mode":
-        args.mode = next as Args["mode"];
+        args.mode = next;
         break;
       case "user":
         args.user = next;
@@ -128,18 +114,7 @@ function parseArgs(values: readonly string[]): Args {
   return args;
 }
 
-async function runLifecycleMode(input: {
-  runtime: ReturnType<typeof createDashboardRuntime>;
-  client: ReturnType<typeof createPgPoolQueryClient>;
-  mode: "register" | "rotate" | "revoke" | "full";
-  tenantId: string;
-  userId: string;
-  providerKind: string;
-  label: string;
-  secretName: string;
-  metadata: Record<string, unknown>;
-  secretRef: string | undefined;
-}) {
+async function runLifecycleMode(input) {
   const registerValue = input.mode === "rotate" || input.mode === "revoke" ? null : requireEnv("WF_LIFECYCLE_SECRET_VALUE");
   const rotateValue = input.mode === "register" || input.mode === "revoke" ? null : requireEnv("WF_LIFECYCLE_SECRET_VALUE_NEXT");
 
@@ -147,7 +122,7 @@ async function runLifecycleMode(input: {
     await input.runtime.registerProviderCredential({
       tenantId: input.tenantId,
       actorUserId: input.userId,
-      providerKind: input.providerKind as never,
+      providerKind: input.providerKind,
       label: input.label,
       secretValues: toSecretValues(input.secretName, registerValue),
       metadata: input.metadata
@@ -194,7 +169,7 @@ async function runLifecycleMode(input: {
   await input.runtime.registerProviderCredential({
     tenantId: input.tenantId,
     actorUserId: input.userId,
-    providerKind: input.providerKind as never,
+    providerKind: input.providerKind,
     label: input.label,
     secretValues: toSecretValues(input.secretName, registerValue),
     metadata: input.metadata
@@ -225,7 +200,7 @@ async function runLifecycleMode(input: {
   };
 }
 
-function requireEnv(name: string): string {
+function requireEnv(name) {
   const value = process.env[name];
   if (!value || value.trim().length === 0) {
     throw new Error(`${name} is required`);
@@ -233,7 +208,7 @@ function requireEnv(name: string): string {
   return value;
 }
 
-function parseMetadata(raw?: string): Record<string, unknown> {
+function parseMetadata(raw) {
   if (!raw || raw.trim().length === 0) {
     return {};
   }
@@ -241,13 +216,10 @@ function parseMetadata(raw?: string): Record<string, unknown> {
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error("--metadata must be a JSON object");
   }
-  return parsed as Record<string, unknown>;
+  return parsed;
 }
 
-async function loadCredentialState(
-  client: ReturnType<typeof createPgPoolQueryClient>,
-  input: { tenantId: string; providerKind: string; label: string }
-) {
+async function loadCredentialState(client, input) {
   const [secretResult, bindingResult] = await Promise.all([
     client.query(
       `select id, secret_ref, revoked_at, revoked_reason
@@ -301,15 +273,15 @@ async function loadCredentialState(
   };
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+function asRecord(value) {
+  return value && typeof value === "object" ? value : {};
 }
 
-function readOptionalString(value: unknown): string | null {
+function readOptionalString(value) {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-function toSecretValues(secretName: string, value: string | null): Record<string, string> {
+function toSecretValues(secretName, value) {
   if (value === null) {
     throw new Error(`Missing lifecycle secret value for ${secretName}`);
   }

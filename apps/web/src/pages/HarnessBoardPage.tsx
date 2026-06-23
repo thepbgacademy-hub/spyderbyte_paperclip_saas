@@ -13,6 +13,7 @@ import {
   type HarnessBoardCard,
   type HarnessBoardColumn
 } from "../components/HarnessBoard.js";
+import { HarnessBoardActionPanel } from "../components/HarnessBoardActionPanel.js";
 import { HarnessCardDrawer } from "../components/HarnessCardDrawer.js";
 
 const harnessBoardClient = createHarnessBoardClient();
@@ -2572,6 +2573,15 @@ export function HarnessBoardPage(props: {
     );
   }
 
+  const actionPanelStyles = {
+    actionButtonRow: styles.actionButtonRow,
+    actionButton: styles.actionButton,
+    actionButtonDisabled: styles.actionButtonDisabled,
+    actionSummary: styles.actionSummary,
+    contractMeta: styles.contractMeta,
+    statusNotice: styles.statusNotice
+  };
+
   return (
     <main data-testid="page-board" style={styles.page}>
       <section style={styles.hero}>
@@ -2722,84 +2732,46 @@ export function HarnessBoardPage(props: {
                   {pendingAttention.targetStatusLabel ? (
                     <p style={styles.actionSummary}>{`Queue target status: ${pendingAttention.targetStatusLabel}`}</p>
                   ) : null}
-                  {pendingAttention.actionMethod && pendingAttention.actionPath ? (
-                    <p style={styles.contractMeta}>{`${pendingAttention.actionMethod} ${pendingAttention.actionPath}`}</p>
-                  ) : null}
-                  {pendingAttention.actionRoute ? (
-                    <p style={styles.contractMeta}>{`Action family: ${formatActionRoute(pendingAttention.actionRoute)}`}</p>
-                  ) : null}
-                  {renderActionConstraintSummary({
-                    allowedValues: pendingAttention.allowedDecisions ?? pendingAttention.allowedResolutions,
-                    label: pendingAttention.allowedDecisions ? "Allowed decisions" : "Allowed resolutions"
-                  })}
-                  {renderRequestFields(pendingAttention.requestFields)}
-                  {renderActionOptions(pendingAttention.actionOptions, pendingAttention.recommendedOptionValue)}
-                  {pendingAttention.actionOptions?.length ? (
-                    <>
-                      <div style={styles.actionButtonRow}>
-                        {pendingAttention.actionOptions.map((option) => {
-                          const actionKey = `attention:${option.value}`;
-                          const actionState = getContractActionState({
-                            fields: pendingAttention.requestFields,
-                            option,
-                            draftValues: actionDrafts[actionKey] ?? {}
-                          });
-                          const disabled =
-                            !liveActionsEnabled
-                            || !pendingAttention.actionPath
-                            || !canSubmitContractActionState(actionState)
-                            || submittingActionKey !== null;
+                  <HarnessBoardActionPanel
+                    actionHandle={pendingAttention.actionHandle}
+                    actionMethod={pendingAttention.actionMethod}
+                    actionOptions={pendingAttention.actionOptions}
+                    actionPath={pendingAttention.actionPath}
+                    actionRoute={pendingAttention.actionRoute}
+                    actionRouteLabel={pendingAttention.actionRoute ? (formatActionRoute(pendingAttention.actionRoute) ?? undefined) : undefined}
+                    allowedValues={pendingAttention.allowedDecisions ?? pendingAttention.allowedResolutions}
+                    allowedValuesLabel={pendingAttention.allowedDecisions ? "Allowed decisions" : "Allowed resolutions"}
+                    getOptionButtonLabel={getOptionButtonLabel}
+                    liveActionsEnabled={liveActionsEnabled}
+                    noticeLabelFallback={pendingAttention.actionLabel ?? "Board action"}
+                    onSubmit={handleContractAction}
+                    recommendedOptionValue={pendingAttention.recommendedOptionValue}
+                    renderActionConstraintSummary={renderActionConstraintSummary}
+                    renderActionOptions={renderActionOptions}
+                    renderComposer={renderLiveActionComposer}
+                    renderRequestFields={renderRequestFields}
+                    requestFields={pendingAttention.requestFields}
+                    resolveOptionState={(option) => {
+                      const actionKey = `attention:${option.value}`;
+                      const actionState = getContractActionState({
+                        fields: pendingAttention.requestFields,
+                        option,
+                        draftValues: actionDrafts[actionKey] ?? {}
+                      });
 
-                          return (
-                            <button
-                              key={option.value}
-                              style={{
-                                ...styles.actionButton,
-                                ...(disabled ? styles.actionButtonDisabled : {})
-                              }}
-                              type="button"
-                              disabled={disabled}
-                              onClick={() =>
-                                handleContractAction({
-                                  actionKey,
-                                  actionPath: pendingAttention.actionPath!,
-                                  actionRoute: pendingAttention.actionRoute,
-                                  actionMethod: pendingAttention.actionMethod,
-                                  actionHandle: pendingAttention.actionHandle,
-                                  exampleRequest: actionState.payload,
-                                  confirmationLabel: option.requiresConfirmation ? option.confirmationLabel : undefined,
-                                  noticeLabel: option.label
-                                })}
-                            >
-                              {submittingActionKey === actionKey ? "Submitting..." : getOptionButtonLabel(option, pendingAttention.recommendedOptionValue)}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {pendingAttention.actionOptions.map((option) => {
-                        const actionKey = `attention:${option.value}`;
-                        const composerInput = {
-                          actionKey,
-                          fields: pendingAttention.requestFields,
-                          option
-                        } as const;
-                        const recommendedOptionValue = pendingAttention.recommendedOptionValue;
-                        return (
-                          <div key={`${option.value}-fields`} style={{ display: "grid", gap: "0.45rem" }}>
-                            {typeof recommendedOptionValue === "string"
-                              ? renderLiveActionComposer({
-                                ...composerInput,
-                                recommendedOptionValue
-                              })
-                              : renderLiveActionComposer(composerInput)}
-                          </div>
-                        );
-                      })}
-                      {!liveActionsEnabled ? (
-                        <p style={styles.statusNotice}>Live board actions are unavailable in preview mode.</p>
-                      ) : null}
-                    </>
-                  ) : null}
+                      return {
+                        actionKey,
+                        disabled:
+                          !liveActionsEnabled
+                          || !pendingAttention.actionPath
+                          || !canSubmitContractActionState(actionState)
+                          || submittingActionKey !== null,
+                        payload: actionState.payload
+                      };
+                    }}
+                    styles={actionPanelStyles}
+                    submittingActionKey={submittingActionKey}
+                  />
                 </li>
               </ul>
             </section>
@@ -2839,80 +2811,46 @@ export function HarnessBoardPage(props: {
                       <p style={styles.actionSummary}>{`Last decision: ${approval.lastDecisionAtLabel}`}</p>
                     ) : null}
                     {approval.targetSummary ? <p style={styles.actionSummary}>{approval.targetSummary}</p> : null}
-                    <p style={styles.contractMeta}>{`${approval.actionMethod} ${approval.actionPath}`}</p>
-                    <p style={styles.contractMeta}>{`Action family: ${formatActionRoute(approval.actionRoute)}`}</p>
-                    {renderActionConstraintSummary({
-                      allowedValues: approval.allowedDecisions,
-                      label: "Allowed decisions"
-                    })}
-                    {renderRequestFields(approval.requestFields)}
-                    {renderActionOptions(approval.actionOptions, approval.recommendedOptionValue)}
-                    {approval.actionOptions?.length ? (
-                      <>
-                        <div style={styles.actionButtonRow}>
-                          {approval.actionOptions.map((option) => {
-                            const actionKey = `approval:${approval.id}:${option.value}`;
-                            const actionState = getContractActionState({
-                              fields: approval.requestFields,
-                              option,
-                              draftValues: actionDrafts[actionKey] ?? {}
-                            });
-                            const disabled =
-                              !liveActionsEnabled
-                              || !approval.actionPath
-                              || !canSubmitContractActionState(actionState)
-                              || submittingActionKey !== null;
+                    <HarnessBoardActionPanel
+                      actionHandle={approval.actionHandle}
+                      actionMethod={approval.actionMethod}
+                      actionOptions={approval.actionOptions}
+                      actionPath={approval.actionPath}
+                      actionRoute={approval.actionRoute}
+                      actionRouteLabel={formatActionRoute(approval.actionRoute) ?? undefined}
+                      allowedValues={approval.allowedDecisions}
+                      allowedValuesLabel="Allowed decisions"
+                      getOptionButtonLabel={getOptionButtonLabel}
+                      liveActionsEnabled={liveActionsEnabled}
+                      noticeLabelFallback={approval.actionLabel ?? undefined}
+                      onSubmit={handleContractAction}
+                      recommendedOptionValue={approval.recommendedOptionValue}
+                      renderActionConstraintSummary={renderActionConstraintSummary}
+                      renderActionOptions={renderActionOptions}
+                      renderComposer={renderLiveActionComposer}
+                      renderRequestFields={renderRequestFields}
+                      requestFields={approval.requestFields}
+                      resolveOptionState={(option) => {
+                        const actionKey = `approval:${approval.id}:${option.value}`;
+                        const actionState = getContractActionState({
+                          fields: approval.requestFields,
+                          option,
+                          draftValues: actionDrafts[actionKey] ?? {}
+                        });
 
-                            return (
-                              <button
-                                key={option.value}
-                                style={{
-                                  ...styles.actionButton,
-                                  ...(disabled ? styles.actionButtonDisabled : {})
-                                }}
-                                type="button"
-                                disabled={disabled}
-                                onClick={() =>
-                                  handleContractAction({
-                                    actionKey,
-                                    actionPath: approval.actionPath,
-                                    actionRoute: approval.actionRoute,
-                                    actionMethod: approval.actionMethod,
-                                    actionHandle: approval.actionHandle,
-                                    exampleRequest: actionState.payload,
-                                    confirmationLabel: option.requiresConfirmation ? option.confirmationLabel : undefined,
-                                    noticeLabel: option.label
-                                  })}
-                              >
-                                {submittingActionKey === actionKey ? "Submitting..." : getOptionButtonLabel(option, approval.recommendedOptionValue)}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        {approval.actionOptions.map((option) => {
-                          const actionKey = `approval:${approval.id}:${option.value}`;
-                          const composerInput = {
-                            actionKey,
-                            fields: approval.requestFields,
-                            option
-                          } as const;
-                          const recommendedOptionValue = approval.recommendedOptionValue;
-                          return (
-                            <div key={`${option.value}-fields`} style={{ display: "grid", gap: "0.45rem" }}>
-                              {typeof recommendedOptionValue === "string"
-                                ? renderLiveActionComposer({
-                                  ...composerInput,
-                                  recommendedOptionValue
-                                })
-                                : renderLiveActionComposer(composerInput)}
-                            </div>
-                          );
-                        })}
-                        {!liveActionsEnabled ? (
-                          <p style={styles.statusNotice}>Live board actions are unavailable in preview mode.</p>
-                        ) : null}
-                      </>
-                    ) : null}
+                        return {
+                          actionKey,
+                          disabled:
+                            !liveActionsEnabled
+                            || !approval.actionPath
+                            || !canSubmitContractActionState(actionState)
+                            || submittingActionKey !== null,
+                          payload: actionState.payload
+                        };
+                      }}
+                      styles={actionPanelStyles}
+                      submittingActionKey={submittingActionKey}
+                    />
                   </li>
                 ))}
               </ul>
