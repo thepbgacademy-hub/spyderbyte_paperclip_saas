@@ -11,6 +11,7 @@ const {
   buildLaneProofEnv,
   buildStageProofPlan,
   parseStageProofArgs,
+  selectNamedStageProofLanes,
   selectSingleWorkflowTemplateId
 } = require("../scripts/lib/stage-live-proof.mjs");
 
@@ -135,6 +136,21 @@ describe("stage live proof helper", () => {
         }
       })
     ).toThrow("Unknown stage proof lane 'unknown'");
+  });
+
+  it("selects only the explicitly requested stage proof lanes for wrapper scripts", () => {
+    expect(
+      selectNamedStageProofLanes(
+        [
+          { laneName: "primary", workflowId: "wf_connect_first_workflow" },
+          { laneName: "tertiary", workflowId: "wf_tax_strategy" },
+          { laneName: "quinary", workflowId: "wf_package_followup" }
+        ],
+        "primary"
+      )
+    ).toEqual([
+      { laneName: "primary", workflowId: "wf_connect_first_workflow" }
+    ]);
   });
 
   it("keeps local db urls untouched when the proof already has direct reachability", () => {

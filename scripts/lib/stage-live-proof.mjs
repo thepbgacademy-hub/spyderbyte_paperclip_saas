@@ -82,6 +82,17 @@ export function buildLaneProofEnv({ plan, lane, sessionToken }) {
   };
 }
 
+export function selectNamedStageProofLanes(candidates, value) {
+  const selectedLaneNames = parseLaneNames(value);
+  const selected = candidates.filter((candidate) => selectedLaneNames.includes(candidate.laneName));
+  const selectedNameSet = new Set(selected.map((candidate) => candidate.laneName));
+  const unknownLaneName = selectedLaneNames.find((laneName) => !selectedNameSet.has(laneName));
+  if (unknownLaneName) {
+    throw new Error(`Unknown stage proof lane '${unknownLaneName}'`);
+  }
+  return selected;
+}
+
 export function resolveNodeCommand(baseName) {
   return process.platform === "win32" ? `${baseName}.cmd` : baseName;
 }

@@ -8,7 +8,8 @@ import { runStageLiveNativeExecutionPlan } from "./lib/stage-live-native-executi
 import {
   DEFAULT_STAGE_PROOF_ENV_FILE,
   DEFAULT_STAGE_SSH_ENV_FILE,
-  parseStageProofArgs
+  parseStageProofArgs,
+  selectNamedStageProofLanes
 } from "./lib/stage-live-proof.mjs";
 
 const CORE_FAMILY_LANES = [
@@ -45,13 +46,14 @@ if (!sshTarget) {
 }
 
 try {
+  const selectedLanes = selectNamedStageProofLanes(CORE_FAMILY_LANES, args.lanes ?? env.WF_STAGE_PROOF_LANES);
   runStageLiveNativeExecutionPlan({
     envFilePath,
     sshEnvFilePath,
     sshTarget,
     preflightContainer,
     childEnv,
-    lanes: CORE_FAMILY_LANES.map((lane) => ({
+    lanes: selectedLanes.map((lane) => ({
       ...lane,
       profile: {
         ...lane.profile,
