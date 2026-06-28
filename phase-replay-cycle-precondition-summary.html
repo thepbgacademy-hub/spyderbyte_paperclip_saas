@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Replay Cycle Precondition Phase Summary</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17201a;
+      --muted: #5f6b62;
+      --line: #d8dfd7;
+      --panel: #f8faf6;
+      --accent: #1f6f4a;
+      --accent-soft: #e7f3ec;
+      --warn: #8a5a14;
+      --warn-soft: #fff3d6;
+    }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      color: var(--ink);
+      background: linear-gradient(180deg, #fbfcf9 0%, #eef4ed 100%);
+    }
+    main {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 40px 24px 56px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 24px;
+      padding-bottom: 18px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 34px;
+      line-height: 1.1;
+    }
+    h2 {
+      margin: 0 0 12px;
+      font-size: 20px;
+    }
+    p {
+      line-height: 1.55;
+    }
+    .subtitle {
+      color: var(--muted);
+      margin: 0;
+      max-width: 760px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin: 24px 0;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      box-shadow: 0 12px 32px rgba(42, 58, 42, 0.08);
+    }
+    .status {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 4px 10px;
+      margin-bottom: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .note {
+      background: var(--warn-soft);
+      border-color: #e7c16d;
+    }
+    code {
+      background: #edf2ec;
+      border: 1px solid #dce5da;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: 0.94em;
+    }
+    ul {
+      margin: 8px 0 0;
+      padding-left: 20px;
+    }
+    li {
+      margin: 7px 0;
+      line-height: 1.45;
+    }
+    a {
+      color: #185f40;
+      font-weight: 600;
+    }
+    footer {
+      margin-top: 28px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Replay Cycle Precondition Phase</h1>
+      <p class="subtitle">Bounded proof-harness hardening for Wealth Factory export delivery recovery on the isolated stage lane.</p>
+    </header>
+
+    <section class="grid">
+      <article class="card">
+        <span class="status">Completed</span>
+        <h2>What Changed</h2>
+        <p>The replay-cycle helper now checks whether the targeted run is eligible for induced delivery failure before changing <code>WF_OBSIDIAN_EXPORT_ROOT</code>.</p>
+      </article>
+      <article class="card">
+        <span class="status">Fail Closed</span>
+        <h2>New Result</h2>
+        <p>Delivered/current-bundle runs return <code>replay_cycle_not_failure_eligible</code> immediately, with governance and package delivery details.</p>
+      </article>
+      <article class="card">
+        <span class="status">Guarded</span>
+        <h2>Reviewer Fixes</h2>
+        <p>Custom failure writer roots must match the derived <code>.replay-proof-blocker</code> path, and DB <code>bundle_revision</code> can prove current-bundle freshness.</p>
+      </article>
+    </section>
+
+    <section class="card note">
+      <h2>Boundary</h2>
+      <p>This phase does not widen runtime behavior, seed new templates, bypass the one-run-per-workflow model, or modify VPS deployment topology. A one-shot writer-break/failure/replay proof still requires a future fresh export-bundle lane.</p>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <h2>Verification</h2>
+        <ul>
+          <li><code>npx vitest run tests/live-export-closure-proof.test.ts tests/live-harness-export-stage-config.test.ts tests/live-harness-export-replay-cycle.test.ts tests/live-harness-export-replay-cycle-script.test.ts</code></li>
+          <li><code>npm run build:server</code></li>
+        </ul>
+      </article>
+      <article class="card">
+        <h2>Review</h2>
+        <p>A detail reviewer found two issues before commit. Both were patched and covered by focused tests.</p>
+      </article>
+    </section>
+
+    <footer>
+      <h2>Updated Files</h2>
+      <ul>
+        <li><a href="scripts/lib/live-harness-export-replay-cycle.mjs">scripts/lib/live-harness-export-replay-cycle.mjs</a></li>
+        <li><a href="scripts/prove-live-harness-export-replay-cycle.mjs">scripts/prove-live-harness-export-replay-cycle.mjs</a></li>
+        <li><a href="tests/live-harness-export-replay-cycle.test.ts">tests/live-harness-export-replay-cycle.test.ts</a></li>
+        <li><a href="tests/live-harness-export-replay-cycle-script.test.ts">tests/live-harness-export-replay-cycle-script.test.ts</a></li>
+        <li><a href="wf-harness/TODO.md">wf-harness/TODO.md</a></li>
+        <li><a href="wf-harness/HANDOFF.md">wf-harness/HANDOFF.md</a></li>
+      </ul>
+    </footer>
+  </main>
+</body>
+</html>

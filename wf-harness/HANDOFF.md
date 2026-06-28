@@ -1027,3 +1027,56 @@ Everything below this heading is archived pre-freeze context for the deferred `m
     - final truthful live result: `ok: false`, `phase: closed_board_export_candidates_timeout`
     - read-only board inspection on that same run showed `boardState: "closed"`, both export deliveries at `status: "delivered"` / `contractFreshness: "current_bundle"`, and only fresh export actions (`governance-history-export`, `package-bundle-export`) exposed on the public contract
     - that means the isolated Wealth Factory stage lane is currently fail-closed for replay on the delivered tax-strategy run, which is aligned with the bounded replay contract until a later stage intentionally proves a replay-eligible failure state
+
+- Started the next bounded isolated-stage replay-cycle proof slice on June 28, 2026 and closed the proof-harness mismatches, but not the live product precondition yet:
+  - added `scripts/lib/live-harness-export-replay-cycle.mjs` plus `scripts/prove-live-harness-export-replay-cycle.mjs`
+  - added focused coverage in `tests/live-harness-export-replay-cycle.test.ts` and `tests/live-harness-export-replay-cycle-script.test.ts`
+  - local verification is green:
+    - `npx vitest run tests/live-harness-export-replay-cycle.test.ts tests/live-harness-export-replay-cycle-script.test.ts`
+    - `npm run build:server`
+  - fixed two real proof-harness contract bugs exposed by the first live reruns:
+    - the remote writer-config probe now returns `configured`, matching the replay helper's precondition contract
+    - the stage wrapper now remaps `pollForClosedBoardExportCandidate(...).exportCandidate` into the replay helper's expected `candidate` field
+  - also relaxed the writer-root precondition truthfully: an absolute configured root that does not exist yet is acceptable for this proof seam because the bounded writer can create it during restore
+  - the matched isolated-stage replay-cycle rerun now reaches the real acceptance seam instead of dying inside the script:
+    - command used:
+      - `node scripts/prove-live-harness-export-replay-cycle.mjs --env-file E:/the_secrets/projects/wealth-factory-stage/wf-stage.vps2.env --ssh-env-file E:/the_secrets/vps/ssh.env --ssh-target deploy@187.77.19.83 --preflight-container wf-stage-api --tenant 22222222-2222-4222-8222-444444444444 --user 11111111-1111-4111-8111-333333333333 --workflow 44444444-4444-4444-8444-666666666666 --board-workflow wf_tax_strategy --run cdc1d911-e9a8-4810-b9f8-40476bc008a9 --timeout-ms 60000 --poll-interval-ms 1000 --max-attempts 60`
+    - final truthful live result on the existing stage run:
+      - `ok: false`
+      - `phase: "export_replay_cycle_failed"`
+      - note: `Timed out before governance_history_export reached one of the accepted delivery states: delivery_failed`
+  - read-only stage DB inspection explains why:
+    - the tenant currently has only one export-delivery run on this lane: `cdc1d911-e9a8-4810-b9f8-40476bc008a9`
+    - both `governance_history_export` and `package_bundle_export` are already `delivered`
+    - both are also on the `current_bundle`
+    - that means the public export path will not create a brand-new failed delivery attempt on that same bundle just because the writer root is broken; the lane is behaving correctly and fail-closing the replay proof precondition
+  - follow-up attempt to provision a brand-new tax-strategy run through the existing direct native proof path also stayed truthful:
+    - `node scripts/prove-live-native-execution.mjs ... --workflow wf_tax_strategy --workflow-template 44444444-4444-4444-8444-666666666666 --fresh-run true --timeout-ms 60000`
+    - result: `fresh_harness_run_conflict`, existing run `cdc1d911-e9a8-4810-b9f8-40476bc008a9`
+  - follow-up stage investigation closed the original fresh-lane assumption more tightly:
+    - the only tenant that currently has the enabled tax-strategy workflow template on isolated stage is still `22222222-2222-4222-8222-444444444444`
+    - a direct attempt to bootstrap a parallel fresh public tax-strategy lane for that same tenant/workflow fails closed on the durable harness uniqueness seam (`harness_runs_tenant_workflow_unique_idx`)
+    - other stage tenants do have active `openai_api` credentials and package installs, but not the enabled tax-strategy workflow template id `44444444-4444-4444-8444-666666666666`, so they cannot be used for this exact replay proof without widening stage template state
+  - the bounded operator-only alternative was then proven live on the same isolated run:
+    - operator-prepared the two current-bundle delivery rows on run `cdc1d911-e9a8-4810-b9f8-40476bc008a9` to `status = "delivery_failed"` with synthetic bounded error metadata (`last_error_code = "operator_replay_probe"`)
+    - reran the existing public replay proof unchanged:
+      - `node scripts/prove-live-harness-export.mjs --env-file E:/the_secrets/projects/wealth-factory-stage/wf-stage.vps2.env --ssh-env-file E:/the_secrets/vps/ssh.env --ssh-target deploy@187.77.19.83 --preflight-container wf-stage-api --tenant 22222222-2222-4222-8222-444444444444 --user 11111111-1111-4111-8111-333333333333 --workflow 44444444-4444-4444-8444-666666666666 --run cdc1d911-e9a8-4810-b9f8-40476bc008a9 --board-workflow wf_tax_strategy --mode replay --timeout-ms 60000 --poll-interval-ms 1000 --max-attempts 60`
+    - final truthful live result:
+      - `ok: true`
+      - `phase: "governance_and_package_export_verified"`
+      - governance and package deliveries both returned to `delivered`
+      - both receipts remained on the current bundle and advanced to `attemptCount: 2`
+  - next continuation point:
+    - treat live public replay acceptance as proven on isolated stage
+    - keep the more ambitious `scripts/prove-live-harness-export-replay-cycle.mjs` helper as a proof harness that still needs a genuinely fresh export bundle lane if we later want to prove writer-break-induced failure creation and replay in one uninterrupted script
+    - do not widen runtime/export semantics just to manufacture a fresh bundle on a delivered current run
+
+- Closed the replay-cycle helper truthfulness gap that remained after the live proof:
+  - `scripts/lib/live-harness-export-replay-cycle.mjs` now reads governance and package delivery eligibility before it mutates `WF_OBSIDIAN_EXPORT_ROOT`.
+  - Delivered/current-bundle runs now return `phase: "replay_cycle_not_failure_eligible"` with bounded governance/package eligibility details instead of breaking the writer root and timing out while waiting for a delivery failure that the current bundle cannot produce.
+  - `scripts/prove-live-harness-export-replay-cycle.mjs` now passes the remote delivery snapshot into that helper, so the stage script can use database delivery truth instead of board shape alone.
+  - Reviewer follow-up closed two sharper edges before commit: custom failure writer roots must now match the derived `.replay-proof-blocker` path for the configured export root, and remote `bundle_revision` can now prove current-bundle freshness when it matches the board candidate bundle revision.
+  - Focused verification is green:
+    - `npx vitest run tests/live-harness-export-replay-cycle.test.ts tests/live-harness-export-replay-cycle-script.test.ts`
+    - `npm run build:server`
+  - Keep the remaining stronger proof as a future fresh-bundle lane. Do not seed extra templates, bypass the one-run-per-workflow model, or widen runtime/export behavior just to make the one-shot replay-cycle script pass on the already-delivered current bundle.
