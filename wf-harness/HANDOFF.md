@@ -22,6 +22,167 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
+- Closed the bounded native attention-cycle proof-hardening slice on June 28, 2026 without widening runtime semantics, export plumbing, or deployment topology.
+- Re-ran the required GitNexus preflight before touching this proof seam. `gitnexus status` stayed current at commit `012a40d`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` still reported branch-wide `critical` risk because of long-lived workspace noise rather than this narrow proof slice.
+- Confirmed the underlying board-service seam was already implemented before treating this as proof-only work:
+  - `src/harness/board-service.ts` already derives per-cycle pending-attention markers and mints action handles through `createPendingAttentionActionToken(...)` plus `derivePendingAttentionTokenCycleMarker(...)`.
+  - the same seam already fail-closes stale resolve-attention tokens through `assertHarnessActionToken(...)` before any lane mutation occurs.
+- Tightened only the local proof surface:
+  - `tests/live-attention-cycle-proof.test.ts` now pins additional fail-closed contract cases for `attention_path_invalid`, `attention_resolution_invalid`, `attention_handle_not_refreshed`, and `stale_handle_not_rejected`.
+  - the proof still stays on the authenticated public board seam through `scripts/lib/live-attention-cycle-proof.mjs` and `scripts/prove-live-attention-cycle.mjs`; no runtime behavior, worker behavior, or deployment wiring changed in this slice.
+- Focused local verification is green:
+  - `npx vitest run tests/live-attention-cycle-proof.test.ts tests/live-attention-cycle-script.test.ts`
+  - `npx vitest run tests/harness-board-service.test.ts -t "keeps the unblock action handle stable within one attention cycle but refreshes it after a new blocked cycle"`
+  - `npm run build:server`
+- The matched isolated-stage live read stayed truthful but did not complete acceptance because the available stage demo lanes were already dirty before the proof began:
+  - `npm run prove:live-attention-cycle -- --tenant 22222222-2222-4222-8222-222222222222 --user 11111111-1111-4111-8111-111111111111 --workflow wf_connect_first_workflow --persona cfo --title "Stage attention-cycle proof" --deliverable-type pricing_review`
+  - `npm run prove:live-attention-cycle -- --tenant 22222222-2222-4222-8222-333333333333 --user 11111111-1111-4111-8111-222222222222 --workflow wf_connect_first_workflow --persona cfo --title "Stage attention-cycle proof" --deliverable-type pricing_review`
+  - `npm run prove:live-attention-cycle -- --tenant 22222222-2222-4222-8222-666666666666 --user 11111111-1111-4111-8111-555555555555 --workflow wf_package_followup --persona cfo --title "Stage attention-cycle proof" --deliverable-type pricing_review`
+  - all three returned the same truthful precondition: `ok: false`, `phase: "preexisting_attention_present"`, with existing durable runs already exposing unrelated pending attention before the bounded proof could start.
+- Follow-up operator-only inspection on June 28, 2026 exhausted the rest of the canonical isolated stage lanes too:
+  - `npm run prove:stage-stability -- --dry-run` confirmed the canonical lane set is `primary`, `secondary`, `tertiary`, `quaternary`, `quinary`, `senary`.
+  - `npm run prove:live-attention-cycle -- --tenant 22222222-2222-4222-8222-444444444444 --user 11111111-1111-4111-8111-333333333333 --workflow wf_tax_strategy --persona cfo --title "Stage attention-cycle proof" --deliverable-type pricing_review` returned `phase: "card_create_failed"` with HTTP `409`, because the current tax-strategy run `cdc1d911-e9a8-4810-b9f8-40476bc008a9` is already `done` and packaging work rather than offering a clean board for a new proof lane.
+  - `npm run prove:live-attention-cycle -- --tenant 22222222-2222-4222-8222-555555555555 --user 11111111-1111-4111-8111-444444444444 --workflow wf_tax_strategy --persona cfo --title "Stage attention-cycle proof" --deliverable-type pricing_review` returned `phase: "preexisting_attention_present"` on durable run `f9dccaac-17c4-44c8-95b1-7eb69b194b70`.
+  - `npm run prove:live-attention-cycle -- --tenant 22222222-2222-4222-8222-777777777777 --user 11111111-1111-4111-8111-666666666666 --workflow wf_package_followup --persona cfo --title "Stage attention-cycle proof" --deliverable-type pricing_review` returned `phase: "preexisting_attention_present"` on durable run `b444da6c-72d5-4953-8d89-e529ef2e7801`.
+  - read-only stage DB inspection then confirmed those are old proof/demo runs, not a helper regression:
+    - primary `wf_connect_first_workflow` run `eb420710-c786-4801-b54d-5c3adb39f0fc` is currently `blocked` on a CFO lane with provider `HTTP 401` attention.
+    - quaternary `wf_tax_strategy` run `f9dccaac-17c4-44c8-95b1-7eb69b194b70` is currently `blocked` on a CFO lane awaiting unblock.
+    - senary `wf_package_followup` run `b444da6c-72d5-4953-8d89-e529ef2e7801` is currently `blocked` on a CMO lane awaiting unblock.
+    - tertiary `wf_tax_strategy` run `cdc1d911-e9a8-4810-b9f8-40476bc008a9` is already `done`, so this proof shape cannot open a fresh bounded lane there without a separate operator reset/fresh-cycle step.
+- The same inspection also closed one tempting but unsafe path: `scripts/seed-wfpc-demo.mjs` is not safe for creating a fresh isolated lane on this branch because it writes `wfpc.workflow_templates.id = profile.workflowId` and upserts shared package rows/provider requirements globally, so reseeding can overwrite shared stage state instead of creating a tenant-isolated proof lane.
+- Next continuation point:
+  - treat the proof-hardening slice as closed locally
+  - treat live attention-cycle acceptance as operationally blocked until an operator intentionally provisions one clean isolated stage lane or explicitly approves resetting one of the existing dirty proof lanes
+  - do not use `scripts/seed-wfpc-demo.mjs` for that provisioning on this branch, and do not pretend more code work will solve the current blocker
+
+- Closed the bounded fresh-start export bootstrap acceptance seam on June 28, 2026 without widening normal dashboard-start behavior or shared-host blast radius.
+- Re-ran the required GitNexus preflight before touching this seam. `gitnexus status` stayed current at commit `012a40d`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope unstaged` still reported branch-wide `critical` risk because of long-lived workspace noise rather than this isolated slice.
+- Tightened only the dashboard-start proof path:
+  - `scripts/lib/live-dashboard-run-proof.mjs` now forwards optional `freshRun: true` through the guarded dashboard start POST body.
+  - `src/api/dashboard-http.ts` / `src/api/dashboard-http.js` and `src/api/dashboard-api.ts` / `src/api/dashboard-api.js` now preserve that bounded `freshRun` flag through the authenticated runtime seam.
+  - `src/api/runtime-server.ts` / `src/api/runtime-server.js` now fail closed with `409 conflict` when a fresh native public harness run is explicitly requested but the current uniqueness model would force reuse of an existing run.
+  - `scripts/prove-live-harness-export.mjs` now requests `freshRun: true` whenever `--run` is omitted and surfaces the live result as `phase: "fresh_harness_run_conflict"` instead of silently treating reused durable state as a fresh bootstrap.
+- Added focused local regressions:
+  - `tests/dashboard-http.test.ts`, `tests/api-routes.test.ts`, and `tests/live-dashboard-run-proof.test.ts` pin the bounded `freshRun` forwarding contract.
+  - `tests/runtime-server.test.ts` now proves the uniqueness-model fail-closed branch instead of allowing silent reuse.
+  - `tests/live-harness-export-script.test.ts` now proves both the `freshRun` request wiring and the explicit `fresh_harness_run_conflict` export-proof result.
+- Focused local verification is green:
+  - `npx vitest run tests/dashboard-http.test.ts tests/api-routes.test.ts tests/live-dashboard-run-proof.test.ts tests/live-harness-export-script.test.ts tests/runtime-server.test.ts`
+  - `npx vitest run tests/live-harness-export-script.test.ts tests/live-harness-export-proof.test.ts tests/live-export-closure-proof.test.ts tests/live-dashboard-run-proof.test.ts tests/harness-repository.test.ts tests/harness-board-service.test.ts`
+  - `npm run build`
+  - `npm run build:server`
+- Refreshed only the isolated stage API lane on VPS 2:
+  - built only `spyderbyte/api:wf-stage-20260628-freshrunconflict1` from a bounded API build context
+  - updated only `WF_STAGE_API_IMAGE` in `/home/deploy/wealth-factory-stage/wf-stage.vps2.env`
+  - recreated only `wf-stage-api`; worker/web and shared-host routes were left untouched
+- The matched isolated-stage live proof now behaves truthfully on the current code:
+  - reran `node scripts/prove-live-harness-export.mjs --env-file E:/the_secrets/projects/wealth-factory-stage/wf-stage.vps2.env --ssh-env-file E:/the_secrets/vps/ssh.env --ssh-target deploy@187.77.19.83 --preflight-container wf-stage-api --tenant 22222222-2222-4222-8222-444444444444 --user 11111111-1111-4111-8111-333333333333 --workflow 44444444-4444-4444-8444-666666666666 --board-workflow wf_tax_strategy --delivery-mode auto --timeout-ms 60000`
+  - final truthful live result: `ok: false`, `durableResult.error.status: 409`, `durableResult.error.body.code: "conflict"`, `exportProof.phase: "fresh_harness_run_conflict"`, `exportProof.existingRunId = cdc1d911-e9a8-4810-b9f8-40476bc008a9`
+  - this confirms the live lane no longer claims a reused durable run is a fresh bootstrap start
+- Next continuation point:
+  - treat the fresh-start export bootstrap seam as closed at the fail-closed uniqueness boundary
+  - use explicit `--run <existing-run-id>` whenever we want export acceptance against the current durable tax-strategy run
+  - if product requirements ever demand truly parallel fresh public harness runs for the same tenant/workflow, that is a separate schema/runtime phase because the current uniqueness model intentionally forbids it
+
+- Closed the isolated stage strict export-delivery acceptance lane on June 28, 2026 with one bounded operator-config follow-through after the proof seam was hardened.
+- Re-ran the required GitNexus preflight before touching the proof seam. `gitnexus status` stayed current at commit `012a40d`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` remained branch-wide `critical` because of long-lived workspace noise rather than this bounded slice.
+- Added one narrow proof helper seam:
+  - `scripts/lib/live-harness-export-stage-config.mjs` now normalizes currently detectable remote writer availability and returns a structured `delivery_writer_not_configured` precondition only when the stage proof is running with `--delivery-mode required`.
+  - it fail-closes missing roots, non-absolute roots, existing file-shaped roots, and non-writable existing directories; absolute roots that do not exist yet are still allowed through because the bounded writer can create them during delivery.
+  - `scripts/prove-live-harness-export.mjs` now checks the isolated `wf-stage-api` container for `WF_OBSIDIAN_EXPORT_ROOT` before strict delivery acceptance, reports that precondition in the proof JSON, and still leaves `auto` mode unchanged.
+- Added focused local regressions:
+  - `tests/live-harness-export-stage-config.test.ts` pins missing, non-writable, and healthy writer-root preconditions.
+  - `tests/live-harness-export-script.test.ts` now gives a source-level regression proving the stage proof script still wires the remote writer preflight through the bounded harness export path.
+  - `tests/runtime-server.test.ts` now proves governance-history delivery remains truthfully `export_ready` when no writer is configured on the runtime seam.
+- Focused local verification is green:
+  - `npx vitest run tests/live-harness-export-stage-config.test.ts tests/live-harness-export-script.test.ts`
+  - `npx vitest run tests/runtime-server.test.ts -t "keeps governance-history delivery at export_ready when no writer is configured on the runtime"`
+  - `npm run build:server`
+- The matched isolated-stage confirmation was then completed end to end on the same bounded lane:
+  - first reran `node scripts/prove-live-harness-export.mjs --tenant 22222222-2222-4222-8222-444444444444 --user 11111111-1111-4111-8111-333333333333 --workflow 44444444-4444-4444-8444-666666666666 --run cdc1d911-e9a8-4810-b9f8-40476bc008a9 --board-workflow wf_tax_strategy --delivery-mode required --timeout-ms 60000`, which truthfully failed early with `phase: "delivery_writer_not_configured"` and `deliveryWriterConfig.exportRoot = null`
+  - patched the isolated lane only:
+    - local deployment artifacts now thread `WF_OBSIDIAN_EXPORT_ROOT` through `deploy/docker-compose.vps2-isolated-stage.yml`, `deploy/env/wf-stage.vps2.example.env`, and `deploy/runbooks/vps2-isolated-wealth-factory-stage-rollout.md`
+    - remote `/home/deploy/wealth-factory-stage/wf-stage.vps2.env` now sets `WF_OBSIDIAN_EXPORT_ROOT=/tmp/wealth-factory-stage-obsidian-export`
+    - remote `/home/deploy/wealth-factory-stage/docker-compose.vps2-isolated-stage.yml` now passes that env var into `wf-stage-api`
+    - recreated only `wf-stage-api`; worker/web were left untouched
+  - verified the remote lane directly:
+    - `docker exec wf-stage-api printenv WF_OBSIDIAN_EXPORT_ROOT` => `/tmp/wealth-factory-stage-obsidian-export`
+    - `docker exec wf-stage-api sh -lc 'mkdir -p /tmp/wealth-factory-stage-obsidian-export && touch /tmp/wealth-factory-stage-obsidian-export/.probe'` succeeded
+    - the bounded export files now exist under `/tmp/wealth-factory-stage-obsidian-export/wealth-factory/...`
+  - reran the same strict required-delivery proof and it finished green with `phase: "governance_and_package_export_verified"`
+  - the proof now reports `deliveryWriterConfig: { exportRoot: "/tmp/wealth-factory-stage-obsidian-export", configured: true, absolute: true, exists: true, directory: true, writable: true }`
+  - the live result also reports delivered governance-history and package-bundle receipts, including:
+    - `wealth-factory/governance-history/wf_tax_strategy/wf_tax_strategy-governance-history.md`
+    - `wealth-factory/package-bundles/wf_tax_strategy/wf_tax_strategy-package-bundle.md`
+- Next continuation point:
+  - treat this export-writer acceptance seam as closed
+  - keep the isolated lane on the same operator-only host path until the next bounded acceptance family is chosen
+  - continue from the next native/export acceptance slice instead of reopening this writer-root plumbing
+
+- Closed the isolated closed-board export acceptance slice on June 28, 2026 without widening into shared-host cutover, worker/web refresh, or broader deployment-topology work.
+- Re-ran the required GitNexus preflight before touching the export-proof seam. `gitnexus status` stayed current at commit `012a40d`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` remained branch-wide `critical` because of the long-lived workspace noise rather than this bounded slice.
+- Tightened the local proof helper contract first:
+  - `scripts/lib/live-harness-export-proof.mjs` now fail-closes the bounded final-assembly review contract on wrong route, missing payload requirements, missing run id, wrong same-origin action path, and non-2xx review POST responses.
+  - `tests/live-harness-export-proof.test.ts` now covers those new fail-closed branches plus the truthful blocked package-export shape where governance delivery is only `export_ready` and the board withholds `package-bundle-export` instead of returning a `409`.
+- Closed the board-surface truth gap that the live rerun exposed:
+  - `src/harness/board-service.ts` and `src/harness/board-service.js` now emit explicit `boardState: "open" | "closed"` on the live board response.
+  - `tests/harness-board-service.test.ts` now pins `boardState: "open"` for final-assembly attention and `boardState: "closed"` after explicit `complete_run`.
+- Preserved the earlier repository timestamp fix and verified it on the same bounded slice:
+  - `src/harness/repository.ts` / `src/harness/repository.js` normalize Postgres `Date` row timestamps back into ISO strings before completion/governance snapshot upserts reuse them.
+  - `tests/harness-repository.test.ts` still proves both the mapper normalization and real-Postgres snapshot acceptance for Date-backed timestamps.
+- Focused local verification is green:
+  - `npx vitest run tests/live-harness-export-proof.test.ts tests/live-export-closure-proof.test.ts tests/live-harness-export-script.test.ts`
+  - `npx vitest run tests/harness-board-service.test.ts -t "surfaces a bounded CEO review attention view when completed work is ready for final assembly|completes an assembling run through an explicit CEO assembly seam"`
+  - `npx vitest run tests/harness-repository.test.ts -t "normalizes Postgres Date run timestamps into ISO strings when mapping repository rows|accepts Date objects for completion-package snapshot timestamps in the real Postgres repository|accepts Date objects for governance-history snapshot timestamps in the real Postgres repository"`
+  - `npm run build:server`
+- The isolated stage lane is now green for the bounded acceptance result too:
+  - built and loaded `spyderbyte/api:wf-stage-20260628-exportclosefix2`
+  - updated only `WF_STAGE_API_IMAGE` in `/home/deploy/wealth-factory-stage/wf-stage.vps2.env`
+  - refreshed only `wf-stage-api` in the isolated compose stack on `wf-api.spyderbyte.cloud`
+  - reran `node scripts/prove-live-harness-export.mjs --tenant 22222222-2222-4222-8222-444444444444 --user 11111111-1111-4111-8111-333333333333 --workflow 44444444-4444-4444-8444-666666666666 --run cdc1d911-e9a8-4810-b9f8-40476bc008a9 --board-workflow wf_tax_strategy --delivery-mode auto --timeout-ms 60000`
+  - final truthful live result: `ok: true`, `phase: governance_ready_package_blocked`
+- That live proof matters because it shows the isolated lane now behaves correctly end to end:
+  - the CEO `complete_run` review succeeds on the live board
+  - the board now emits explicit `boardState: "closed"`
+  - governance-history export reaches `export_ready`
+  - package export remains truthfully fail-closed behind the governance-delivery dependency gate
+  - the earlier stale `500 service_unavailable` final-assembly failure path is gone
+- Next continuation point:
+  - keep this slice closed
+  - move into the next bounded export/delivery acceptance seam only if we want to prove governance-history delivery and then package-bundle export after that dependency is actually delivered
+  - do not reopen shared-host cutover, web/worker refresh, or broader deployment cleanup from this acceptance result
+
+- Historical note: the previously closed bounded `wf_connect_first_workflow` native attention-first acceptance seam remains valid and unchanged.
+- Re-ran the required GitNexus preflight before touching the proof harness. After a forced index refresh on June 28, 2026, `gitnexus status` was current at commit `012a40d`, while `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` remained branch-wide `critical` across 51 files / 202 symbols because of existing workspace noise rather than this narrow proof slice.
+- The bounded code change is intentionally small and local to the connect-first proof seam:
+  - `scripts/lib/live-native-execution-proof-options.mjs` now centralizes the first-leg acceptance options for the live native proof harness.
+  - `scripts/prove-live-native-execution.mjs` now consumes that helper so `wf_connect_first_workflow` disables `allowFreshExecutionClaimAsTerminal` just like `wf_tax_strategy`, while the tax-only blocked-artifact requirement stays isolated to the tax lane.
+  - `tests/live-attention-roundtrip-verification.test.ts` now pins the connect-first round-trip success and fail-closed no-attention cases directly.
+  - `tests/live-native-execution-script.test.ts` now proves the live script keeps connect-first on that same attention-first acceptance path instead of silently allowing the fresh-claim shortcut.
+- Focused local verification is green for the bounded seam:
+  - `npx vitest run tests/live-native-execution-script.test.ts`
+  - `npx vitest run tests/live-attention-roundtrip-verification.test.ts`
+  - `npx vitest run tests/live-native-execution-acceptance.test.ts`
+  - `npm run build`
+  - `npm run build:server`
+- The isolated stage live gate is also green for the same bounded lane. On June 28, 2026 the connect-first proof passed against `deploy@187.77.19.83` / `wf-stage-api`, proving `direct_public_reservation_verified`, `native_blocked_reached`, `native_attention_resolved`, and `round_trip_verified` on durable run `eb420710-c786-4801-b54d-5c3adb39f0fc`.
+- Keep one stage-timing note explicit too: one June 28 rerun timed out at `native_advancement_timeout` after unblock when the proof budget stayed at `--timeout-ms 30000`, and the same bounded lane passed again immediately at `--timeout-ms 60000`. Treat that as isolated stage pickup variability for the durable-run reuse path, not as a logic regression in the attention-first acceptance contract this slice closed.
+- Keep one residual stage note explicit: the same command with `--fresh-run true` still fails truthfully on the existing `wfpc.harness_runs_tenant_workflow_unique_idx` uniqueness guard for that tenant/workflow. That is now a separate bounded stage-proof bootstrap seam, not a regression in the connect-first attention-first acceptance contract that this slice closed.
+- That bounded fresh-run proof-bootstrap seam is now closed too. On June 28, 2026 the direct native proof lane was updated in two parallel fail-closed readers:
+  - `scripts/lib/live-run-drive.mjs` now checks for an existing native public harness run before a fresh-run reservation and returns `{ reserved: false, reason: "fresh_harness_run_conflict", existingRunId }` instead of falling through toward the uniqueness guard.
+  - `scripts/prove-live-native-execution.mjs` now performs the same explicit precondition inside the direct remote bootstrap path and returns `{ ok: false, phase: "fresh_harness_run_conflict", existingRunId, mode: "existing_harness_run_conflicts_with_fresh_proof" }` before `seedPublicWorkflowHarnessRun(...)` would hit `wfpc.harness_runs_tenant_workflow_unique_idx`.
+- Keep the architecture note explicit: those two seams are intentionally parallel and independent. The direct SSH proof path does not call `live-run-drive.mjs`, so future edits must preserve both fail-closed readers instead of assuming one shared implementation.
+- Keep the post-review guardrails explicit too:
+  - public workflow proofs must now pass an explicit `workflowTemplateId` when `workflowId` is not a UUID; `live-run-drive.mjs` no longer guesses the tenant's latest workflow template because that could silently verify the wrong workflow on a multi-template tenant.
+  - queue verification now treats only bounded worker-pickup states as success and fail-closes terminal BullMQ states as `queue_terminal_state` instead of reporting them as queued-for-worker.
+  - `apps/web/src/harness-board-client.ts` and its checked-in `.js` companion now preserve API-returned `timed_out` error codes instead of collapsing them to `unknown`, so the retry guidance remains intact on the live board UI.
+- The bounded local verification for that slice is green:
+  - `npx vitest run tests/live-run-drive.test.ts tests/live-native-execution-script.test.ts tests/live-native-execution-acceptance.test.ts`
+  - `npx vitest run tests/harness-ui.test.tsx tests/live-harness-export-stage-config.test.ts`
+  - `npm run build`
+  - `npm run build:server`
+- The isolated live stage proof is also green for the new seam. On June 28, 2026 `node scripts/prove-live-native-execution.mjs --env-file E:/the_secrets/projects/wealth-factory-stage/wf-stage.vps2.env --ssh-env-file E:/the_secrets/vps/ssh.env --ssh-target deploy@187.77.19.83 --preflight-container wf-stage-api --tenant 22222222-2222-4222-8222-222222222222 --user 11111111-1111-4111-8111-111111111111 --workflow wf_connect_first_workflow --workflow-template 44444444-4444-4444-8444-444444444444 --timeout-ms 60000 --fresh-run true` returned the structured conflict result with durable run `eb420710-c786-4801-b54d-5c3adb39f0fc` instead of the raw uniqueness-index failure.
+- Keep the GitNexus read explicit for continuation too: on June 28, 2026 `gitnexus status` stayed current at commit `012a40d`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` remained branch-wide `critical` across 58 files / 246 symbols because of ambient workspace noise rather than this narrow proof-bootstrap slice.
 - Completed the remaining June 22 post-audit realignment phases R2 through R6 from `wf-harness/docs/plans/2026-06-22-post-audit-realignment-plan.md`.
 - Re-ran the required GitNexus preflight before the deeper cleanup work. On June 22, 2026 `gitnexus status` stayed current at commit `cc2fc8f`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported a critical working-tree blast radius across 13 files / 20 symbols. That result matched the intended seams: harness HTTP, board UI, worker runtime, and handoff/TODO tracking.
 - Phase R2 is now closed:
@@ -48,7 +209,38 @@ The first harness implementation slice is now built and verified:
   - `npx vitest run tests/harness-ui.test.tsx tests/harness-board-client.test.ts`
   - `npx vitest run tests/worker-runtime.test.ts tests/runtime-provider-fallback.test.ts`
   - `npm run build -- --pretty false`
-- The next continuation point should move out of correction mode and into the next explicitly planned acceptance/build slice, not reopen the June 22 realignment phases.
+- The next continuation point should stay out of the June 22 realignment phases and move into the next explicitly bounded acceptance/debug slice instead.
+- The new isolated closed-board export proof harness is now local-green but live-blocked on current stage data, not on proof code. `scripts/prove-live-harness-export.mjs` can now prove the closed-board export contract either by starting a fresh dashboard run or by targeting an existing run with `--run`, it keeps the board selector separate with `--board-workflow` so template-id start selectors do not get forced onto the board seam, and it now supports `--delivery-mode auto|required` so acceptance can distinguish export-ready/package-blocked proof from strict delivered-only proof.
+- Focused local proof for that harness is green in `tests/live-export-closure-proof.test.ts`, `tests/live-harness-export-proof.test.ts`, and `tests/live-harness-export-script.test.ts`, plus repo TypeScript build.
+- The bounded local proof contract is now stricter too: only explicit `boardState: "closed"` boards count as closed-board export acceptance. An open board with a completion package no longer passes by inference.
+- The bounded template-UUID dashboard-start identity fix is now also closed on the isolated API lane. On June 23, 2026 the visible workflow-template selector `44444444-4444-4444-8444-666666666666` was proven live to resolve into durable public workflow id `wf_tax_strategy` while preserving the template UUID separately as `workflowTemplateId`.
+- That live proof now returns durable run `cdc1d911-e9a8-4810-b9f8-40476bc008a9` with truthful durable/outbox identity (`publicWorkflowId = wf_tax_strategy`, `workflowTemplateId = 44444444-4444-4444-8444-666666666666`, outbox `status = enqueued`) after the isolated API-only stage tag `wf-stage-20260623-templateidfix7`.
+- Keep the seam bounded exactly as implemented: template-id dashboard starts may expose a public workflow identity only when runtime package-key resolution maps back to a known public workflow definition. A package-key miss must fail closed to tenant-template identity, and the runtime suite now pins that fallback with a focused regression.
+- One bounded invariant still needs to stay explicit in future widening work: the current template-UUID-to-public-id resolution is only accepted for the current core built-ins where one startable public workflow maps to one package key. Do not widen that package-key lookup model across broader workflow families without an explicit design change.
+- The closed-board export proof seam is now also tighter and more truthful on the isolated stage lane. If the expected run is still blocked on explicit `await_unblock` attention, `scripts/prove-live-harness-export.mjs` now exits as a structured known-skip (`ok: true`, `skipped: true`, `phase: closed_board_export_precondition_unmet`) instead of burning the full polling window and misreporting the condition as a generic export-candidate timeout.
+- On June 23, 2026 that live rerun stayed pinned to run `cdc1d911-e9a8-4810-b9f8-40476bc008a9` and surfaced the truthful precondition summary directly from `pendingAttention`: native execution reached the provider lane but could not complete the provider call safely, so an operator must explicitly unblock the CFO lane before closed-board export acceptance is actionable.
+- The live native attention roundtrip helper is now aligned with the bounded public request shape too. `scripts/lib/live-harness-board-roundtrip.mjs` now posts only `resolution` plus `actionHandle` when it drives `resolve-attention`, and the local roundtrip tests prove both `resume_lane` and `unblock_lane` against that slimmer public payload.
+- On June 23, 2026 the isolated stage unblock seam itself was proven live on run `cdc1d911-e9a8-4810-b9f8-40476bc008a9`: the CFO lane accepted the bounded `unblock_lane` resolution with HTTP `200` / `status: "unblocked"` and re-entered worker execution.
+- The durable proof readers are now fail-closed too: `scripts/lib/live-run-drive.mjs`, `scripts/prove-live-dashboard-run.mjs`, `scripts/prove-live-native-execution.mjs`, and `scripts/prove-live-harness-export.mjs` all read the authoritative `secret_references.secret_ref` row through `bound_secret_reference_id`, and they no longer fall back to stale `bound_provider_context.secretRef` JSON if that join is missing.
+- Local repo noise is bounded as well: generated `.js` mirrors under `src/`, `tests/`, and `apps/web/` are now ignored so proof/helper commits keep the real `.mjs` and `.ts` file set visible. Real proof helpers like `scripts/prove-live-harness-export.mjs` and `scripts/cleanup-stale-bound-runs.mjs` remain intentionally visible.
+- The isolated export proof helper now treats both `await_unblock` and `await_lane_resume` as truthful structured preconditions on the expected run instead of falling through into a generic closed-board export timeout.
+- June 28, 2026 update: the required durable read-only stage-history check is now complete. A fresh `ssh + sudo + docker exec wf-stage-api` query against run `cdc1d911-e9a8-4810-b9f8-40476bc008a9` showed `run.state = "assembling"` and the CFO child lane already `state = "done"`.
+- The latest durable outcome events on that run are no longer the older `await_unblock` / `await_lane_resume` blockers. As of June 28, 2026 the newest committed CFO events record `outcomeState = "done"` with `postOutcomeActionKind = "queue_ceo_review"` and `postOutcomeReason = "final_assembly"`.
+- Treat that as the corrected live truth boundary. The isolated stage lane is no longer blocked on founder tax posture evidence or the provider/native re-entry seam for this run; the remaining live gap is bounded CEO/final-assembly closure and then a rerun of the closed-board export acceptance gate.
+- The bounded repo-side closeout seam is now patched locally too:
+  - `scripts/lib/live-harness-export-proof.mjs` can now detect `queue_ceo_review` / `Final assembly` on the expected run and post the bounded `review-attention` completion payload before continuing closed-board export polling.
+  - `src/harness/repository.ts` now normalizes Postgres `Date` row timestamps back into ISO strings before run/card/event/decision mapping hands them into later snapshot upserts, and the matching `repository.js` mirror was updated to keep the local JS-import test surface truthful.
+  - Focused local proof is green across `tests/live-harness-export-proof.test.ts`, `tests/live-export-closure-proof.test.ts`, `tests/live-harness-export-script.test.ts`, `tests/harness-repository.test.ts`, `tests/harness-board-service.test.ts`, plus `npm run build` and `npm run build:server`.
+- The matched isolated-stage rerun is still blocked until the stage API image is refreshed. On June 28, 2026 the live `review-attention` POST still returned `500 {"code":"service_unavailable"}` on `wf-stage-api`, and a direct in-container repro narrowed that to the older timestamp-mapping bug:
+  - `reviewPendingAttention(... decision = "complete_run" ...)` throws `invalid input syntax for type timestamp with time zone: "Sun Jun 28 2026 ..."` from `upsertCompletionPackageSnapshot`
+  - that means the repo-side fix is correct and locally green, but the isolated stage lane is still serving the older API image/runtime code path
+- Next live continuation point:
+  - refresh the isolated `wf-stage-api` image/container with the current repo build
+  - rerun `node scripts/prove-live-harness-export.mjs --tenant 22222222-2222-4222-8222-444444444444 --user 11111111-1111-4111-8111-333333333333 --workflow 44444444-4444-4444-8444-666666666666 --run cdc1d911-e9a8-4810-b9f8-40476bc008a9 --board-workflow wf_tax_strategy --delivery-mode auto --timeout-ms 60000`
+  - only call the phase fully live-complete once the board reaches a genuinely closed/exportable state instead of stopping at `assembling`
+- The structured prerequisite-evidence phase is now closed locally too. `wf_tax_strategy` founder tax posture evidence no longer rides into native execution only as appended prose on `resumeFocus` / continuity summaries; it now flows through the internal worker envelope as first-class `workflowPrerequisites.taxStrategyEvidence` and renders in prompt context from that structured seam.
+- Keep the already-closed seams closed: do not reopen the operator-unblock path, export-proof helper, board-load transport, dashboard-start identity seam, or the newly structured prerequisite-evidence envelope seam unless a later durable regression proves one of them broke again.
+- The next live-facing bounded slice should start from CEO/final-assembly closure on the isolated lane, not from another unblock/provider-retry loop.
 
 ## Key Design Commitments
 
@@ -803,3 +995,35 @@ Everything below this heading is archived pre-freeze context for the deferred `m
 - Closed the next thin worker-history fallback gap too. The board now also has direct regressions for generic ignored callbacks, no-state ignored `lane_not_working`, persona-aware follow-on dispatch without outcome-state hints, persona-aware reactivated dispatch without outcome-state hints, and summary-bearing CEO-review outcomes without explicit review reasons.
 - Closed the next thin attention/dispatch/outcome fallback gap too. The board now also has direct regressions for governance-hold and lane-resume `attention_resolved`, initial-lane dispatch with only execution-stage metadata, reason-only CEO-review outcomes, and next-lane handoffs without summaries.
 - Closed the reactivated follow-on fanout recovery gap on the worker/runtime seam. A rejected reactivated-specific dispatch or suppressed-start hook now records a bounded specific `execution_hook_failed` event but still lets the baseline follow-on handoff run, so resumed runs keep the same failure isolation guarantees as the non-reactivated path.
+- Read-only live-stage revalidation on June 28, 2026 narrowed the current attention-cycle blocker to environment hygiene, not missing harness code:
+  - canonical proof lanes remain dirty (`primary`, `secondary`, `quaternary`, `quinary`, and `senary` stop at `preexisting_attention_present`; `tertiary` stops at bounded `card_create_failed` / HTTP `409`)
+  - stage DB inspection shows no canonical lane with zero cards and no prior board state
+  - `scripts/seed-wfpc-demo.mjs` is too wide for substrate recovery on this branch because it rewrites shared workflow-template/package/provider truth
+  - `scripts/cleanup-stale-bound-runs.mjs` is insufficient because it only clears queued/running workflow rows and queue jobs, not harness cards or board attention state
+- The existing public fresh-cycle seam cannot currently rescue those lanes:
+  - `POST /api/harness/runs/:runId/fresh-cycle` exists and is service-backed
+  - service-side `startFreshCycle` only accepts the latest packaged run (`assembling` or `done`)
+  - the public HTTP route requires an `actionHandle`
+  - the only packaged canonical lane (`tertiary`, `wf_tax_strategy`, run `cdc1d911-e9a8-4810-b9f8-40476bc008a9`) returns `pendingAttention: null` on the live board, so there is no public action handle to drive the route
+  - there is no operator-only reset/fresh-cycle route in `src/operators/routes.ts`
+- Sonnet headless review agreed with the narrowed boundary: do not add a reset utility or widen the public harness route. The next safe move is privileged stage-lane recycling outside the current public harness contract, then rerun the bounded live attention-cycle proof unchanged.
+- Follow-up live validation on June 28, 2026 proved the cheaper path and superseded that tentative reset conclusion for the current proof family:
+  - the `primary` canonical lane already satisfied the helper's exact blocked-lane reuse contract for `wf_connect_first_workflow`
+  - the earlier failure was invocation drift, not missing stage hygiene: the live proof must target the canonical blocked lane title `Pressure-test the pricing lane` instead of a timestamp title
+  - `npm run prove:live-attention-cycle -- --tenant 22222222-2222-4222-8222-222222222222 --user 11111111-1111-4111-8111-111111111111 --workflow wf_connect_first_workflow --persona cfo --title "Pressure-test the pricing lane" --deliverable-type pricing_review` now passes with `phase: "attention_cycle_refresh_verified"`
+  - that successful rerun reused run `eb420710-c786-4801-b54d-5c3adb39f0fc`, card `6928fa40-9270-46cb-85c3-1af3a9d4fb93`, and verified fresh action-handle minting plus stale-handle `409 stale_contract` rejection end-to-end without any DB reset or new repo seam
+  - for this live proof family, prefer the exact blocked-lane reuse path on `primary` before considering any privileged lane recycle intervention
+
+- Closed the next bounded export proof seam locally on June 28, 2026 without widening runtime/service behavior:
+  - `scripts/lib/live-harness-export-proof.mjs` now treats `delivery_replayed` as an accepted proof-layer delivery status and as delivery-complete for replay-mode gating only.
+  - replay-mode proof runs now fail closed unless the board exposes the bounded `governance-history-export-replay` or `package-bundle-export-replay` action for the targeted existing run.
+  - `scripts/prove-live-harness-export.mjs` now supports an explicit replay mode that requires `--run`, so replay recovery cannot silently bootstrap a fresh dashboard lane.
+  - focused local verification is green:
+    - `npx vitest run tests/live-harness-export-proof.test.ts tests/live-harness-export-script.test.ts`
+    - `npm run build:server`
+  - this slice is intentionally proof-layer-only and does not change `src/harness/board-service.ts`, deployment wiring, or VPS topology.
+  - matched isolated-stage confirmation is now recorded too:
+    - `node scripts/prove-live-harness-export.mjs --tenant 22222222-2222-4222-8222-444444444444 --user 11111111-1111-4111-8111-333333333333 --workflow 44444444-4444-4444-8444-666666666666 --run cdc1d911-e9a8-4810-b9f8-40476bc008a9 --board-workflow wf_tax_strategy --mode replay --max-attempts 2 --poll-interval-ms 500 --timeout-ms 60000`
+    - final truthful live result: `ok: false`, `phase: closed_board_export_candidates_timeout`
+    - read-only board inspection on that same run showed `boardState: "closed"`, both export deliveries at `status: "delivered"` / `contractFreshness: "current_bundle"`, and only fresh export actions (`governance-history-export`, `package-bundle-export`) exposed on the public contract
+    - that means the isolated Wealth Factory stage lane is currently fail-closed for replay on the delivered tax-strategy run, which is aligned with the bounded replay contract until a later stage intentionally proves a replay-eligible failure state
