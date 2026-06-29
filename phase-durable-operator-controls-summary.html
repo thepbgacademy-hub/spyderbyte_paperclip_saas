@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Durable Operator Controls Phase Summary</title>
+  <style>
+    :root {
+      --ink: #102018;
+      --muted: #5e6f64;
+      --line: #cfe1d4;
+      --paper: #f7fbf5;
+      --card: #ffffff;
+      --accent: #2f6f4e;
+      --accent-soft: #e3f1e7;
+    }
+    body {
+      margin: 0;
+      font-family: "Aptos", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(47, 111, 78, 0.16), transparent 36rem),
+        linear-gradient(135deg, #fbf8ef 0%, var(--paper) 54%, #edf6ef 100%);
+      line-height: 1.55;
+    }
+    main {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 48px 24px;
+    }
+    header {
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      padding: 34px;
+      background: rgba(255, 255, 255, 0.78);
+      box-shadow: 0 18px 55px rgba(16, 32, 24, 0.08);
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(2rem, 5vw, 4rem);
+      letter-spacing: -0.04em;
+    }
+    h2 {
+      margin: 0 0 14px;
+      font-size: 1.15rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--accent);
+    }
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      max-width: 760px;
+      font-size: 1.08rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 18px;
+      margin-top: 24px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 22px;
+      background: var(--card);
+      box-shadow: 0 10px 30px rgba(16, 32, 24, 0.06);
+    }
+    .pill {
+      display: inline-block;
+      margin-bottom: 12px;
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 0.82rem;
+    }
+    ul {
+      margin: 10px 0 0;
+      padding-left: 20px;
+    }
+    a {
+      color: var(--accent);
+      font-weight: 700;
+      text-decoration-thickness: 2px;
+    }
+    code {
+      border-radius: 7px;
+      padding: 2px 5px;
+      background: #eef6ef;
+      color: #244932;
+    }
+    footer {
+      margin-top: 24px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Durable Operator Controls</h1>
+      <p class="subtitle">This phase wired the first real operator control lane into the runtime without widening into job admin, secret rotation, run cancellation, or Paperclip-disable semantics.</p>
+    </header>
+
+    <section class="grid" aria-label="Phase cards">
+      <article class="card">
+        <span class="pill">Implemented</span>
+        <h2>Runtime Wiring</h2>
+        <p>The runtime now mounts a default operator HTTP handler backed by Postgres dependencies unless a test handler is injected.</p>
+        <ul>
+          <li>Durable operator lookup uses <code>wfpc.tenant_memberships</code>.</li>
+          <li>Tenant pause/resume uses <code>wfpc.tenants.paused_at</code>.</li>
+          <li>The session tenant remains authoritative over URL/body tenant input.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <span class="pill">Guardrails</span>
+        <h2>Scope Fence</h2>
+        <p>Deferred operator surfaces are explicit instead of silently pretending to work.</p>
+        <ul>
+          <li>Unsupported commands return <code>501 operator_operation_not_implemented</code>.</li>
+          <li>Pause and emergency disable require a reason capped at 500 characters.</li>
+          <li>Owner/admin/operator durable memberships can authorize through the service check.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <span class="pill">Review</span>
+        <h2>Independent Checks</h2>
+        <p>GitNexus was current before the phase. Hooke mapped safe seams, Helmholtz reviewed the diff, and Sonnet performed a final no-edit review.</p>
+        <ul>
+          <li>Helmholtz found two issues; both were fixed with tests.</li>
+          <li>Sonnet found no launch-blocking issues after the fixes.</li>
+          <li>Residual notes are bounded to future audit-schema and deferred-operation design.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <span class="pill">Verification</span>
+        <h2>Test Evidence</h2>
+        <p>Fresh verification passed after the review-driven corrections.</p>
+        <ul>
+          <li><code>npm run build</code> passed.</li>
+          <li><code>npm test</code> passed: 147 files, 1307 tests, 14 skipped.</li>
+          <li>Focused operator/runtime suite passed: 73 tests.</li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="card" style="margin-top: 24px;">
+      <h2>Files Changed</h2>
+      <ul>
+        <li><a href="src/operators/operator-deps.ts">src/operators/operator-deps.ts</a></li>
+        <li><a href="src/api/operator-http.ts">src/api/operator-http.ts</a></li>
+        <li><a href="src/api/runtime-server.ts">src/api/runtime-server.ts</a></li>
+        <li><a href="tests/operator-deps.test.ts">tests/operator-deps.test.ts</a></li>
+        <li><a href="tests/operator-http.test.ts">tests/operator-http.test.ts</a></li>
+        <li><a href="tests/runtime-server.test.ts">tests/runtime-server.test.ts</a></li>
+        <li><a href="phase-durable-operator-controls-summary.html">phase-durable-operator-controls-summary.html</a></li>
+      </ul>
+    </section>
+
+    <footer>
+      Generated locally for the Wealth Factory harness build on 2026-06-29.
+    </footer>
+  </main>
+</body>
+</html>

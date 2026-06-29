@@ -8,6 +8,7 @@ import { createDashboardApi, DashboardApiConflictError } from "./dashboard-api.j
 import { createDashboardHttpHandler, type DashboardHttpRequest, type DashboardHttpResponse } from "./dashboard-http.js";
 import { createHarnessHttpHandler } from "./harness-http.js";
 import { createHealthHttpHandler } from "./health-http.js";
+import { createOperatorHttpHandler } from "./operator-http.js";
 import { createStorageOAuthHttpHandler } from "./storage-oauth-http.js";
 import { createDurableAuditSink } from "../audit/durable-audit.js";
 import { createAcidGuardRepository } from "../db/acid-guard-repository.js";
@@ -42,6 +43,8 @@ import { createProviderCredentialService } from "../secrets/provider-credential-
 import { createRuntimeProviderExecutionContextResolver } from "../providers/runtime-provider-execution.js";
 import type { RuntimeProviderBinding } from "../providers/runtime-provider-resolution.js";
 import { createRuntimeHarnessCeoGoalExecutor } from "../harness/ceo-goal-executor.js";
+import { createPostgresOperatorDependencies } from "../operators/operator-deps.js";
+import { createOperatorService } from "../operators/operator-service.js";
 
 function coerceExportWriterFailure(error: unknown): {
   code: string;
@@ -911,6 +914,14 @@ export function createDashboardRuntime(options: {
     replayPackageBundleDeliveryCandidate: harnessBoardApi.replayPackageBundleDeliveryCandidate,
     rateLimiter: createPostgresFixedWindowRateLimiter({ runner: transactionRunner, limit: 120, windowMs: 60_000 })
   });
+  const operatorHttpHandler =
+    options.operatorHttpHandler ??
+    createOperatorHttpHandler({
+      allowedOrigins: options.env.allowedOrigins,
+      authenticate: options.auth.authenticate,
+      operatorService: createOperatorService(createPostgresOperatorDependencies(queryClient, audit)),
+      rateLimiter: createPostgresFixedWindowRateLimiter({ runner: transactionRunner, limit: 60, windowMs: 60_000 })
+    });
   const healthHandler = createHealthHttpHandler({
     allowedOrigins: options.env.allowedOrigins,
     readinessCheck: () => checkDatabaseReadiness(pool)
@@ -944,8 +955,8 @@ export function createDashboardRuntime(options: {
     if (request.path.startsWith("/api/harness/")) {
       return harnessBoardHandler(request);
     }
-    if (options.operatorHttpHandler && request.path.startsWith("/api/operator/")) {
-      return options.operatorHttpHandler(request);
+    if (request.path.startsWith("/api/operator/")) {
+      return operatorHttpHandler(request);
     }
     if (appShellHandler && !request.path.startsWith("/api/")) {
       return appShellHandler(request);

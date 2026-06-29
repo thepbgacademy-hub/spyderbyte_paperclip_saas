@@ -4,7 +4,7 @@ import type { ApiSession } from "./dashboard-api.js";
 import type { DashboardHttpRequest, DashboardHttpResponse } from "./dashboard-http.js";
 
 type OperatorService = {
-  pauseTenant(input: { tenantId: string; actorUserId: string; reason?: string }): Promise<void>;
+  pauseTenant(input: { tenantId: string; actorUserId: string; reason: string }): Promise<void>;
   resumeTenant(input: { tenantId: string; actorUserId: string; reason?: string }): Promise<void>;
   inspectJob(input: { tenantId: string; actorUserId: string; jobId: string }): Promise<Record<string, unknown> | null>;
   retryJob(input: { tenantId: string; actorUserId: string; jobId: string; reason?: string }): Promise<void>;
@@ -13,7 +13,7 @@ type OperatorService = {
   listDeadLetters(input: { tenantId: string; actorUserId: string }): Promise<Record<string, unknown>[]>;
   rotateSecret(input: { tenantId: string; actorUserId: string; secretRef: string; reason?: string }): Promise<unknown>;
   revokeSecret(input: { tenantId: string; actorUserId: string; secretRef: string; reason?: string }): Promise<void>;
-  disablePaperclip(input: { tenantId: string; actorUserId: string; reason?: string }): Promise<void>;
+  disablePaperclip(input: { tenantId: string; actorUserId: string; reason: string }): Promise<void>;
 };
 
 type RuntimeAuth = {
@@ -23,6 +23,8 @@ type RuntimeAuth = {
 type RateLimiter = {
   consume(key: string): Promise<{ allowed: boolean; remaining: number; resetAt: number }>;
 };
+
+const MAX_OPERATOR_REASON_LENGTH = 500;
 
 export function createOperatorHttpHandler(options: {
   allowedOrigins: readonly string[];
@@ -76,17 +78,20 @@ export function createOperatorHttpHandler(options: {
       authorization: request.headers.authorization ?? "",
       ...(request.headers.cookie ? { cookie: request.headers.cookie } : {})
     });
-    if (!session || session.role !== "operator") {
+    if (!session) {
       return { status: 403, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "operator_access_denied" } };
     }
 
     const reason = readOptionalString(readJsonObject(request.body)?.reason);
+    if (requiresBoundedReason(route) && (!reason || reason.length > MAX_OPERATOR_REASON_LENGTH)) {
+      return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
+    }
     const input = { tenantId: session.tenantId, actorUserId: session.userId, ...(reason ? { reason } : {}) };
 
     try {
       switch (route.kind) {
         case "pause-tenant":
-          await options.operatorService.pauseTenant(input);
+          await options.operatorService.pauseTenant({ tenantId: session.tenantId, actorUserId: session.userId, reason: reason ?? "" });
           return { status: 204, headers: { ...securityHeaders, ...corsHeaders }, body: null };
         case "resume-tenant":
           await options.operatorService.resumeTenant(input);
@@ -122,12 +127,19 @@ export function createOperatorHttpHandler(options: {
           await options.operatorService.revokeSecret({ ...input, secretRef: route.secretRef });
           return { status: 204, headers: { ...securityHeaders, ...corsHeaders }, body: null };
         case "disable-paperclip":
-          await options.operatorService.disablePaperclip(input);
+          await options.operatorService.disablePaperclip({ tenantId: session.tenantId, actorUserId: session.userId, reason: reason ?? "" });
           return { status: 204, headers: { ...securityHeaders, ...corsHeaders }, body: null };
       }
     } catch (error) {
       if (error instanceof OperatorAccessError) {
         return { status: 403, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "operator_access_denied" } };
+      }
+      if (hasErrorCode(error, "operator_operation_not_implemented")) {
+        return {
+          status: 501,
+          headers: { ...securityHeaders, ...corsHeaders },
+          body: { code: "operator_operation_not_implemented" }
+        };
       }
       return { status: 500, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "service_unavailable" } };
     }
@@ -188,6 +200,19 @@ function parseOperatorRoute(method: string, path: string): OperatorRoute | null 
   }
 
   return null;
+}
+
+function requiresBoundedReason(route: OperatorRoute): boolean {
+  return route.kind === "pause-tenant" || route.kind === "disable-paperclip";
+}
+
+function hasErrorCode(error: unknown, code: string): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === code
+  );
 }
 
 function readJsonObject(value: unknown): Record<string, unknown> | undefined {

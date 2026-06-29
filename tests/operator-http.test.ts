@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createOperatorHttpHandler } from "../src/api/operator-http.js";
+import { OperatorOperationNotImplementedError } from "../src/operators/operator-deps.js";
 import { createOperatorService } from "../src/operators/operator-service.js";
 
 const baseRequest = {
@@ -10,8 +11,9 @@ const baseRequest = {
 };
 
 describe("operator HTTP safety surface", () => {
-  it("fails closed before service dispatch when the verified session is not an operator", async () => {
+  it("fails closed at the durable operator check when the verified session is not an operator", async () => {
     const deps = operatorDeps();
+    vi.mocked(deps.isOperator).mockResolvedValue(false);
     const operatorService = createOperatorService(deps);
     const handler = createOperatorHttpHandler({
       allowedOrigins: ["https://portal.example.test"],
@@ -28,8 +30,30 @@ describe("operator HTTP safety surface", () => {
     });
 
     expect(response).toMatchObject({ status: 403, body: { code: "operator_access_denied" } });
-    expect(deps.isOperator).not.toHaveBeenCalled();
+    expect(deps.isOperator).toHaveBeenCalledWith(expect.objectContaining({ tenantId: "tenant-session", actorUserId: "user-member" }));
     expect(deps.tenantControls.pause).not.toHaveBeenCalled();
+  });
+
+  it("allows durable owner and admin memberships to pass through service-level operator authorization", async () => {
+    const deps = operatorDeps();
+    const operatorService = createOperatorService(deps);
+    const handler = createOperatorHttpHandler({
+      allowedOrigins: ["https://portal.example.test"],
+      authenticate: vi.fn().mockResolvedValue({ tenantId: "tenant-session", userId: "owner-1", role: "member" }),
+      operatorService,
+      rateLimiter: allowAllRateLimiter()
+    });
+
+    const response = await handler({
+      ...baseRequest,
+      method: "POST",
+      path: "/api/operator/tenants/tenant-session/resume",
+      body: { reason: "operator cleared" }
+    });
+
+    expect(response).toMatchObject({ status: 204, body: null });
+    expect(deps.isOperator).toHaveBeenCalledWith(expect.objectContaining({ tenantId: "tenant-session", actorUserId: "owner-1" }));
+    expect(deps.tenantControls.resume).toHaveBeenCalledWith({ tenantId: "tenant-session", reason: "operator cleared" });
   });
 
   it("uses the verified session tenant instead of trusting a body-supplied tenant id", async () => {
@@ -58,6 +82,69 @@ describe("operator HTTP safety surface", () => {
         eventType: "operator.tenant_paused"
       })
     );
+  });
+
+  it("requires bounded reasons before dispatching operator pause and emergency disable commands", async () => {
+    const deps = operatorDeps();
+    const operatorService = createOperatorService(deps);
+    const handler = createOperatorHttpHandler({
+      allowedOrigins: ["https://portal.example.test"],
+      authenticate: vi.fn().mockResolvedValue({ tenantId: "tenant-session", userId: "operator-1", role: "operator" }),
+      operatorService,
+      rateLimiter: allowAllRateLimiter()
+    });
+
+    const pauseResponse = await handler({
+      ...baseRequest,
+      method: "POST",
+      path: "/api/operator/tenants/tenant-session/pause",
+      body: {}
+    });
+    const disableResponse = await handler({
+      ...baseRequest,
+      method: "POST",
+      path: "/api/operator/tenants/tenant-session/emergency/disable-paperclip",
+      body: { reason: "   " }
+    });
+    const longReasonResponse = await handler({
+      ...baseRequest,
+      method: "POST",
+      path: "/api/operator/tenants/tenant-session/pause",
+      body: { reason: "x".repeat(501) }
+    });
+
+    expect(pauseResponse).toMatchObject({ status: 400, body: { code: "invalid_request" } });
+    expect(disableResponse).toMatchObject({ status: 400, body: { code: "invalid_request" } });
+    expect(longReasonResponse).toMatchObject({ status: 400, body: { code: "invalid_request" } });
+    expect(deps.tenantControls.pause).not.toHaveBeenCalled();
+    expect(deps.tenantControls.disablePaperclip).not.toHaveBeenCalled();
+    expect(deps.audit).not.toHaveBeenCalled();
+  });
+
+  it("maps intentionally deferred operator commands to explicit unavailable responses", async () => {
+    const deps = operatorDeps({
+      secrets: {
+        rotate: vi.fn().mockRejectedValue(new OperatorOperationNotImplementedError("secrets.rotate")),
+        revoke: vi.fn().mockResolvedValue(undefined)
+      }
+    });
+    const operatorService = createOperatorService(deps);
+    const handler = createOperatorHttpHandler({
+      allowedOrigins: ["https://portal.example.test"],
+      authenticate: vi.fn().mockResolvedValue({ tenantId: "tenant-session", userId: "operator-1", role: "operator" }),
+      operatorService,
+      rateLimiter: allowAllRateLimiter()
+    });
+
+    const response = await handler({
+      ...baseRequest,
+      method: "POST",
+      path: "/api/operator/tenants/tenant-session/secrets/vault%3A%2F%2Fsecret-1/rotate",
+      body: { reason: "scheduled rotation" }
+    });
+
+    expect(response).toMatchObject({ status: 501, body: { code: "operator_operation_not_implemented" } });
+    expect(JSON.stringify(response.body)).not.toContain("vault://secret-1");
   });
 
   it("sanitizes job inspection and dead-letter responses", async () => {

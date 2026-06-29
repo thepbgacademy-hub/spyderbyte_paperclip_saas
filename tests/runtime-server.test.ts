@@ -762,6 +762,47 @@ describe("runtime server", () => {
     await runtime.close();
   });
 
+  it("routes operator requests through the default durable operator controls when no test handler is injected", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: {
+        authenticate: vi.fn().mockResolvedValue({
+          tenantId: "tenant-1",
+          userId: "operator-1",
+          role: "operator"
+        })
+      }
+    });
+
+    const body = JSON.stringify({ reason: "operator maintenance window" });
+    const request = createRequest({
+      method: "POST",
+      url: "/api/operator/tenants/tenant-url-ignored/pause",
+      headers: {
+        authorization: "Bearer token",
+        origin: "https://www.spyderbyte.cloud",
+        "content-type": "application/json",
+        "content-length": String(Buffer.byteLength(body))
+      },
+      body
+    });
+    const response = createResponse();
+
+    runtime.server.emit("request", request as unknown as IncomingMessage, response as unknown as ServerResponse);
+    await response.finished;
+
+    expect(response.statusCode).toBe(204);
+    expect(response.body).toBe("");
+    await runtime.close();
+  });
+
   it("routes dashboard run-start requests through the runtime dashboard surface when queue start is wired", async () => {
     const runtime = createDashboardRuntime({
       env: {
