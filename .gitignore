@@ -20,3 +20,7 @@ proof_*.log
 tmp_stage_*.json
 *_runs.json
 tmp_stage_six_companies.json
+src/**/*.js
+tests/**/*.js
+apps/web/src/**/*.js
+apps/web/tests/**/*.js
