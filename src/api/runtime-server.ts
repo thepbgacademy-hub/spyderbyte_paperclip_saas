@@ -372,6 +372,7 @@ export function createDashboardRuntime(options: {
   governanceHistoryExportWriter?: GovernanceHistoryExportWriter;
   onPackageBundleExportReady?: Parameters<typeof createHarnessBoardService>[0]["onPackageBundleExportReady"];
   packageBundleExportWriter?: PackageBundleExportWriter;
+  operatorHttpHandler?: (request: DashboardHttpRequest) => Promise<DashboardHttpResponse>;
 }) {
   const pool = createPgPool({
     connectionString: options.env.supabaseDbUrl,
@@ -942,6 +943,9 @@ export function createDashboardRuntime(options: {
     }
     if (request.path.startsWith("/api/harness/")) {
       return harnessBoardHandler(request);
+    }
+    if (options.operatorHttpHandler && request.path.startsWith("/api/operator/")) {
+      return options.operatorHttpHandler(request);
     }
     if (appShellHandler && !request.path.startsWith("/api/")) {
       return appShellHandler(request);

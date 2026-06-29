@@ -716,6 +716,52 @@ describe("runtime server", () => {
     await runtime.close();
   });
 
+  it("routes operator requests through an injected operator HTTP surface without constructing operator dependencies", async () => {
+    const operatorHttpHandler = vi.fn().mockResolvedValue({
+      status: 204,
+      headers: { "x-operator-handler": "injected" },
+      body: null
+    });
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() },
+      operatorHttpHandler
+    });
+
+    const request = createRequest({
+      method: "POST",
+      url: "/api/operator/tenants/tenant-1/pause",
+      headers: {
+        authorization: "Bearer token",
+        origin: "https://www.spyderbyte.cloud",
+        "content-length": "0"
+      }
+    });
+    const response = createResponse();
+
+    runtime.server.emit("request", request as unknown as IncomingMessage, response as unknown as ServerResponse);
+    await response.finished;
+
+    expect(response.statusCode).toBe(204);
+    expect(response.headers["x-operator-handler"]).toBe("injected");
+    expect(response.body).toBe("");
+    expect(operatorHttpHandler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        path: "/api/operator/tenants/tenant-1/pause",
+        headers: expect.objectContaining({ authorization: "Bearer token" })
+      })
+    );
+    await runtime.close();
+  });
+
   it("routes dashboard run-start requests through the runtime dashboard surface when queue start is wired", async () => {
     const runtime = createDashboardRuntime({
       env: {
