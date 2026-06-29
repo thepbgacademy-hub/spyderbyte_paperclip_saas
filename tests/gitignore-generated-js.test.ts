@@ -12,7 +12,8 @@ describe(".gitignore generated JS mirror fence", () => {
       "apps/web/src/App.js",
       "apps/web/tests/e2e/workflow.spec.js",
       "apps/web/playwright.config.js",
-      "apps/web/playwright.live.config.js"
+      "apps/web/playwright.live.config.js",
+      "phase-example-summary.html"
     ];
 
     for (const sample of ignoredSamples) {

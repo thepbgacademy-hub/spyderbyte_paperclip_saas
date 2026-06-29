@@ -1,6 +1,8 @@
 import type { ProviderKind } from "../providers/provider-types.js";
 import type { QueryClient } from "../db/supabase-repositories.js";
 
+// Legacy-bounded adapter: retained only for Paperclip secret projection compatibility.
+// Active Wealth Factory runtime execution does not route workflow runs through this module.
 type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
 export type PaperclipSecretBindingRecord = {

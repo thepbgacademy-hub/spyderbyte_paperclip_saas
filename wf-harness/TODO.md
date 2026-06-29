@@ -70,7 +70,8 @@ This file tracks the new harness subproject only.
 
 - [x] Define persisted run-state model for CEO orchestration.
 - [x] Define persisted hybrid-card model for child personas.
-- [ ] Define CEO approval rules for dynamic card creation beyond the seeded bootstrap defaults.
+- [x] Define CEO approval rules for dynamic card creation beyond the seeded bootstrap defaults.
+  - Launch state: closed by the persisted proposal, CEO approval mutation, governance decision memory, and lane-cap/defer rules below; do not reopen without an explicit design change.
   - [x] Persist sub-card proposals as first-class harness state.
   - [x] Add a guarded CEO approval mutation path for persisted proposals.
 - [x] Define resume-from-crash behavior and checkpoint policy.
@@ -115,6 +116,7 @@ This file tracks the new harness subproject only.
   - [x] Keep the worker-side lane-dispatch seam approval-aware and fail-closed so `planning` lanes, terminal runs, and no-actionable-lane cases stay quiet instead of looking like queued execution.
 - [x] Add harness-specific audit publishing beyond the persisted card-event trail.
 - [ ] Expand the dashboard visual system once the additional Hermes/Obsidian reference screenshots are reviewed.
+  - Deferred: not a public-launch blocker; do not start this visual expansion until the missing reference screenshots are intentionally supplied and approved as a design phase.
 - [x] Design the Obsidian long-memory integration so board records, decisions, and company history can live in tenant-owned knowledge space without becoming live runtime state.
   - [x] Capture the accepted source-of-truth split in `wf-harness/docs/2026-06-29-obsidian-long-memory-integration-design.md`.
   - [x] Keep Obsidian limited to tenant-owned long memory promoted through `governance_history_export` and `package_bundle_export`.
@@ -123,7 +125,8 @@ This file tracks the new harness subproject only.
 - [x] Add an explicit unsafe-artifact-id guard before any future disk-backed artifact retrieval or local blob-staging seam is introduced.
   - [x] Confirm the current artifact seam is still in-memory and tenant-scoped, so `artifactId` does not yet resolve into filesystem paths or direct disk reads.
   - [x] Require future artifact retrieval to validate artifact ids against a strict allowlist format, reject separators and traversal encodings, and verify the resolved path stays under the intended artifact root before touching disk.
-- [ ] Keep live board failure handling contract-driven as the board becomes more interactive.
+- [x] Keep live board failure handling contract-driven as the board becomes more interactive.
+  - Launch state: closed for the current board surface by the timeout, stale/conflict recovery, retryable action recovery, and action-family guidance below; future interactive surfaces need their own bounded phase.
   - [x] Preserve bounded harness HTTP failure codes in the browser client instead of flattening them into one generic board error.
   - [x] Extend the live page to surface action-family-aware recovery guidance for proposal review, CEO review, lane resume/unblock, and throttled live-board loads instead of flattening everything into one generic failure string.
   - [x] Resync the live board automatically after stale/conflict contract failures and expose explicit bounded reload controls instead of leaving board recovery as a purely manual mental step.
@@ -534,6 +537,7 @@ This file tracks the new harness subproject only.
 - [x] Surface bounded lane continuity memory on card details so continuity source, latest outcome memory, and latest absorbed-work context stay tenant-visible without replaying raw card events or opening a second notes store.
 - [x] Surface bounded policy/recommendation context on `followThroughItems` so implemented governance actions already carry enough suggested-versus-implemented memory for later export without reconstructing intent from raw decision rows.
 - [x] Surface a bounded `memoryBoundary` read model so the board can distinguish live Wealth Factory runtime memory from later tenant-record/export candidates without turning future export or Obsidian surfaces into live orchestration truth.
+  - Historical/frozen per Phase A and Phase H: all `memoryBoundary` expansion below is complete launch history. Do not add more `memoryBoundary` metadata without an explicit design-doc change.
 - [x] Surface bounded `memoryBoundary` readiness states so export-candidate memory that is already stable does not get conflated with package-shaped memory that still waits on board closure.
 - [x] Surface `memoryBoundary` readiness labels, next-eligible export guidance, and pulse-level export summary from the same harness contract so the UI does not re-derive export posture from enums or package heuristics.
 - [x] Surface `memoryBoundary` role, eligibility-rule, and source-surface metadata plus partition summaries from the same harness contract so the runtime-memory vs governance-history vs packaged-output split stays engine-owned instead of becoming a second UI/export heuristic layer.
