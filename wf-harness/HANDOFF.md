@@ -22,6 +22,19 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
+- Closed the local-only Obsidian long-memory integration design phase on June 29, 2026 without touching runtime, deployment, VPS state, or public dashboard behavior.
+- Added `wf-harness/docs/2026-06-29-obsidian-long-memory-integration-design.md` as the accepted design boundary for tenant-owned long memory.
+- The source-of-truth split is now explicit:
+  - Wealth Factory owns live execution truth, including run locks, queue/outbox state, orchestration state, lane continuity, attention state, auth, BYOK credential state, fairness, retries, and replay controls.
+  - Obsidian may own tenant long memory only through approved export candidates: `governance_history_export` and `package_bundle_export`.
+  - Obsidian must not be read as execution truth for workflow start, resume, retry, replay, or completion.
+- Deferred to a later connector phase: OAuth setup UI, tenant folder selection, cloud connector token lifecycle, and tenant-visible delivery history beyond the existing bounded board/export status.
+- This phase intentionally did not run VPS validation because it only records the post-launch-readiness design boundary and does not change runtime/deploy behavior.
+- Next continuation point:
+  - keep fresh-bundle replay operator-provisioned
+  - if continuing launch work, choose either a tenant-owned storage connector design/implementation slice or a bounded private worker/native execution depth slice
+  - do not reopen public dashboard/start behavior unless a launch blocker proves it is necessary
+
 - Closed the five-step launch-readiness continuation on June 28, 2026 after the replay-cycle proof typing gate.
 - Consulted GitNexus before and after the bounded local proof fix. The first forced post-fix index timed out on the known analyzer path, then `gitnexus analyze --force --index-only --worker-timeout 300` completed successfully at commit `deb2961`.
 - Consulted Sonnet in headless mode for consideration only. Sonnet agreed with the launch-readiness order: push baseline, run local launch gates, run isolated stage dry-run, run isolated `wf-api.spyderbyte.cloud` validation, then update the handoff/decision gate. Sonnet was not given VPS access.

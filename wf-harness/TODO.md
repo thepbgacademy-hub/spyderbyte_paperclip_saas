@@ -115,7 +115,11 @@ This file tracks the new harness subproject only.
   - [x] Keep the worker-side lane-dispatch seam approval-aware and fail-closed so `planning` lanes, terminal runs, and no-actionable-lane cases stay quiet instead of looking like queued execution.
 - [x] Add harness-specific audit publishing beyond the persisted card-event trail.
 - [ ] Expand the dashboard visual system once the additional Hermes/Obsidian reference screenshots are reviewed.
-- [ ] Design the Obsidian long-memory integration so board records, decisions, and company history can live in tenant-owned knowledge space without becoming live runtime state.
+- [x] Design the Obsidian long-memory integration so board records, decisions, and company history can live in tenant-owned knowledge space without becoming live runtime state.
+  - [x] Capture the accepted source-of-truth split in `wf-harness/docs/2026-06-29-obsidian-long-memory-integration-design.md`.
+  - [x] Keep Obsidian limited to tenant-owned long memory promoted through `governance_history_export` and `package_bundle_export`.
+  - [x] Keep Wealth Factory-owned `lane_continuity`, `attention_state`, live orchestration state, BYOK credential state, worker envelopes, and queue payloads out of Obsidian sync.
+  - [x] Defer OAuth, cloud connector setup, folder selection, and expanded delivery history to a later dedicated connector phase.
 - [x] Add an explicit unsafe-artifact-id guard before any future disk-backed artifact retrieval or local blob-staging seam is introduced.
   - [x] Confirm the current artifact seam is still in-memory and tenant-scoped, so `artifactId` does not yet resolve into filesystem paths or direct disk reads.
   - [x] Require future artifact retrieval to validate artifact ids against a strict allowlist format, reject separators and traversal encodings, and verify the resolved path stays under the intended artifact root before touching disk.
