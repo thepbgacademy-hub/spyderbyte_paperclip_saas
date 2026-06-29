@@ -6,6 +6,7 @@ const rootHandoff = readFileSync("HANDOFF.md", "utf8");
 const handoff = readFileSync("wf-harness/HANDOFF.md", "utf8");
 const obsidianDesign = readFileSync("wf-harness/docs/2026-06-29-obsidian-long-memory-integration-design.md", "utf8");
 const latestPhase = handoff.split("## Latest Phase")[1]?.split("## Key Design Commitments")[0] ?? "";
+const latestPhaseCurrentBlock = latestPhase.trimStart().split(/\r?\n\r?\n/)[0] ?? "";
 const todo = readFileSync("wf-harness/TODO.md", "utf8");
 const currentNextSlice = todo.split("## Current Next Slice")[1]?.split("## Historical Next Slice Notes")[0] ?? "";
 
@@ -18,32 +19,47 @@ describe("handoff board-surface wording", () => {
   });
 
   it("records the completed realignment phases without reopening product scope", () => {
-    expect(latestPhase).toContain(
+    expect(handoff).toContain(
       "Phase R2 is now closed"
     );
-    expect(latestPhase).toContain(
+    expect(handoff).toContain(
       "GitNexus preflight"
     );
-    expect(latestPhase).toContain(
+    expect(handoff).toContain(
       "Phase R4 is now closed"
     );
-    expect(latestPhase).toContain(
+    expect(handoff).toContain(
       "HarnessBoardActionPanel.tsx"
     );
-    expect(latestPhase).toContain(
+    expect(handoff).toContain(
       "Phase R5 is now closed"
     );
-    expect(latestPhase).toContain(
+    expect(handoff).toContain(
       "runtime-native-execution.ts"
     );
-    expect(latestPhase).toContain(
+    expect(handoff).toContain(
       "Phase R6 is now closed"
     );
-    expect(latestPhase).toContain(
+    expect(handoff).toContain(
       "legacy-bounded adapters"
     );
-    expect(latestPhase).toContain(
+    expect(handoff).toContain(
       "`npx vitest run tests/worker-runtime.test.ts tests/runtime-provider-fallback.test.ts`"
+    );
+  });
+
+  it("records the current local launch-gate validation as latest", () => {
+    expect(latestPhaseCurrentBlock).toContain(
+      "Closed the bounded local launch-gate validation after the CEO-governed multi-lane dispatch fix"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "Sonnet was consulted in headless mode for consideration only"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "`npm test` (`145` files passed, `1292` tests passed, `14` skipped)"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "worker/internal claim tokens out of tenant-facing export artifacts"
     );
   });
 
@@ -75,8 +91,8 @@ describe("handoff board-surface wording", () => {
     expect(todo).toContain(
       "Keep Obsidian limited to tenant-owned long memory promoted through `governance_history_export` and `package_bundle_export`"
     );
-    expect(latestPhase).toContain(
-      "Closed the local-only Obsidian long-memory integration design phase"
+    expect(obsidianDesign).toContain(
+      "This note closes the local-only Obsidian long-memory design phase"
     );
     expect(obsidianDesign).toContain(
       "Wealth Factory owns live execution truth"
