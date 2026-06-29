@@ -103,14 +103,14 @@
       <header>
         <div class="eyebrow">Wealth Factory Harness</div>
         <h1>Native Run Loop Proof</h1>
-        <p class="muted">Completed a bounded local-only acceptance phase proving one Wealth Factory lane from board bootstrap through native worker completion and CEO closure.</p>
+        <p class="muted">Completed bounded local-only acceptance phases proving the Wealth Factory native loop from one-lane closure through CEO-governed multi-lane continuation.</p>
         <span class="status">Local E2E Green</span>
       </header>
 
       <section class="grid" aria-label="Phase results">
         <article class="card">
           <h2>What Changed</h2>
-          <p>Added an in-memory E2E proof for the native harness loop. The test creates one CFO lane, claims it through the native worker dispatch seam, commits the outcome with the persisted execution claim token, resolves final assembly through CEO attention, and verifies closed-board package/export readiness.</p>
+          <p>Added and extended in-memory proof coverage for the native harness loop. The phase now covers one-lane closure, two-lane CEO-governed continuation, and direct worker-executor regressions for generic dispatch suppression versus explicit reviewed dispatch.</p>
         </article>
 
         <article class="card">
@@ -118,14 +118,16 @@
           <ul>
             <li>No VPS access or live mutation.</li>
             <li>No public dashboard/start widening.</li>
-            <li>No export writer, queue, deployment, or package-overlay changes.</li>
-            <li>No production runtime code changes.</li>
+            <li>No export writer, replay, queue, deployment, or package-overlay changes.</li>
+            <li>Only the private worker dispatch seam changed.</li>
+            <li>No worker-internal execution claim tokens exposed to tenant artifacts.</li>
+            <li>Unresolved CEO review now intentionally holds generic dispatch, so future operator/live phases must keep attention recovery visible.</li>
           </ul>
         </article>
 
         <article class="card">
           <h2>Reviewer Result</h2>
-          <p>Reviewer found two low-severity documentation/precision issues. Both were corrected: the handoff latest phase now points to this slice, and claim-token wording now accurately distinguishes this happy-path proof from lower-level stale-token rejection coverage.</p>
+          <p>Reviewer found two low-severity documentation/precision issues during the first proof, both corrected. The second reviewer found one medium governance gap: a generic worker poll could claim the next approved lane before CEO review. That gap is now covered by E2E and direct worker tests, then fixed in the private worker dispatch seam.</p>
         </article>
       </section>
 
@@ -133,8 +135,10 @@
         <h2>Verification</h2>
         <ul>
           <li><code>npx vitest run tests/harness-e2e-run-loop.test.ts</code></li>
+          <li><code>npx vitest run tests/harness-worker-executor.test.ts -t "CEO next-lane review|reviewed next-lane"</code></li>
           <li><code>npx vitest run tests/harness-e2e-run-loop.test.ts tests/harness-worker-executor.test.ts</code></li>
           <li><code>npx vitest run tests/harness-board-service.test.ts</code></li>
+          <li><code>npx vitest run tests/harness-e2e-run-loop.test.ts tests/harness-worker-executor.test.ts tests/harness-board-service.test.ts</code></li>
           <li><code>npm run build</code></li>
         </ul>
       </section>
@@ -143,6 +147,7 @@
         <h2>Files Updated</h2>
         <ul>
           <li><a href="tests/harness-e2e-run-loop.test.ts">tests/harness-e2e-run-loop.test.ts</a></li>
+          <li><a href="src/harness/worker-executor.ts">src/harness/worker-executor.ts</a></li>
           <li><a href="wf-harness/TODO.md">wf-harness/TODO.md</a></li>
           <li><a href="wf-harness/HANDOFF.md">wf-harness/HANDOFF.md</a></li>
           <li><a href="phase-native-run-loop-proof-summary.html">phase-native-run-loop-proof-summary.html</a></li>

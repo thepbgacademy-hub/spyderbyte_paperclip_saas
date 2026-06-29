@@ -25,6 +25,170 @@ function markCardWorkingWithClaim(
 }
 
 describe("harness worker executor", () => {
+  it("does not claim the next approved lane while CEO next-lane review is unresolved", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Finalize pricing review",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "done";
+    const cmoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "marketing_plan"
+    });
+    cmoCard.state = "approved";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+    await repository.insertCard(cmoCard);
+    await repository.insertEvent(
+      createHarnessCardEventRecord({
+        cardId: ceoCard.id,
+        eventKind: "attention_requested",
+        payload: {
+          actionKind: "queue_ceo_review",
+          runState: "active",
+          reason: "next_lane_decision",
+          completedCardId: cfoCard.id,
+          nextCardId: cmoCard.id,
+          targetCardId: cmoCard.id,
+          targetPersona: "cmo"
+        }
+      })
+    );
+
+    await expect(
+      buildHarnessWorkerDispatch({
+        repository,
+        tenantId: "tenant-1",
+        runId: run.id,
+        workflowId: "wf_connect_first_workflow"
+      })
+    ).resolves.toEqual({
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow",
+      status: "queued",
+      laneExecution: null
+    });
+    await expect(repository.getCard(cmoCard.id)).resolves.toEqual(
+      expect.objectContaining({
+        id: cmoCard.id,
+        state: "approved",
+        executionClaimToken: null
+      })
+    );
+  });
+
+  it("allows explicit reviewed next-lane dispatch while CEO review attention is unresolved", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Finalize pricing review",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "done";
+    const cmoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cmo",
+      title: "Prepare launch messaging",
+      deliverableType: "marketing_plan"
+    });
+    cmoCard.state = "approved";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+    await repository.insertCard(cmoCard);
+    await repository.insertEvent(
+      createHarnessCardEventRecord({
+        cardId: ceoCard.id,
+        eventKind: "attention_requested",
+        payload: {
+          actionKind: "queue_ceo_review",
+          runState: "active",
+          reason: "next_lane_decision",
+          completedCardId: cfoCard.id,
+          nextCardId: cmoCard.id,
+          targetCardId: cmoCard.id,
+          targetPersona: "cmo"
+        }
+      })
+    );
+
+    await expect(
+      buildHarnessWorkerDispatchResolution({
+        repository,
+        tenantId: "tenant-1",
+        runId: run.id,
+        workflowId: "wf_connect_first_workflow",
+        targetCardId: cmoCard.id
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        dispatch: expect.objectContaining({
+          runId: run.id,
+          workflowId: "wf_connect_first_workflow",
+          status: "running",
+          laneExecution: expect.objectContaining({
+            cardId: cmoCard.id,
+            persona: "cmo",
+            state: "working"
+          })
+        }),
+        lane: expect.objectContaining({
+          id: cmoCard.id,
+          state: "working"
+        }),
+        executionClaim: expect.objectContaining({
+          kind: "approved_claim",
+          previousClaimedAt: null
+        })
+      })
+    );
+  });
+
   it("hydrates continuity-backed resume focus into the next actionable lane dispatch", async () => {
     const repository = createInMemoryHarnessRepository();
     const run = createHarnessRunRecord({

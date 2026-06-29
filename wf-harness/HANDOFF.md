@@ -22,19 +22,23 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
-- Closed the bounded local native run-loop acceptance proof for one complete Wealth Factory lane.
-- Added `tests/harness-e2e-run-loop.test.ts` as an in-memory E2E harness proof for board bootstrap, first CEO-approved CFO lane creation, native worker dispatch claim, persisted execution-claim-token outcome commit, explicit final-assembly CEO review, closed-board completion output, and ready export candidates.
-- The phase stayed local-only and did not touch runtime behavior, VPS state, deployment topology, public dashboard/start behavior, export delivery, queue substrate, or package-overlay/plugin seams.
-- GitNexus was current before edits at `e70c1d6`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported no pending indexed changes before the slice began.
-- Sonnet headless and the subagent explorer agreed the smallest useful next slice was this local run-loop proof before another live/export lane.
+- Closed the bounded local multi-lane continuation acceptance proof for the CEO-governed native loop.
+- Extended `tests/harness-e2e-run-loop.test.ts` to prove the two-lane continuation path: CFO lane completion queues CEO `next_lane_decision`, CEO explicitly starts the CMO lane, the CMO lane claims through the native worker seam with a persisted execution claim token, final assembly queues only after both lanes complete, and the closed completion package contains both lane outcomes.
+- Reviewer follow-up exposed and closed a real governance gap: before the fix, generic worker polling could claim the next approved lane while unresolved CEO `next_lane_decision` attention was pending. `src/harness/worker-executor.ts` now suppresses generic dispatch while unresolved CEO review attention exists, while preserving explicit targeted dispatch from `reviewPendingAttention(... decision: "start_next_lane" ...)`.
+- Added direct worker-executor regressions for the same seam so the lower-level contract now matches the E2E proof: unresolved CEO next-lane review suppresses generic dispatch, and explicit `targetCardId` reviewed dispatch still claims the approved lane.
+- Operational tradeoff to preserve: unresolved CEO review attention now intentionally holds generic worker dispatch. Future live/operator phases must keep attention resolution and stale-attention recovery visible so this safety hold cannot become a silent queue stall.
+- The phase did not touch VPS state, deployment topology, public dashboard/start behavior, export delivery/replay, queue substrate, reset utilities, workflow-family expansion, or package-overlay/plugin seams.
+- GitNexus was refreshed after the prior proof commit: `gitnexus analyze --force --index-only --worker-timeout 300` completed successfully at commit `4f7bddf`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported no working-tree changes before this slice began.
+- Sonnet recommended an output-artifact boundary, but suggested exporting execution claim tokens; that part was rejected because worker claim tokens must stay internal. The subagent explorer identified the safer launch-relevant slice as the multi-lane CEO continuation proof, and this phase followed that boundary.
 - Verification:
   - `npx vitest run tests/harness-e2e-run-loop.test.ts`
   - `npx vitest run tests/harness-e2e-run-loop.test.ts tests/harness-worker-executor.test.ts`
   - `npx vitest run tests/harness-board-service.test.ts`
   - `npm run build`
 - Next continuation point:
-  - choose the next bounded native acceptance family or a non-destructive live confirmation only when the phase changes runtime/deploy behavior
+  - choose the next bounded acceptance family that proves launch-critical behavior not already covered, or move to a thin non-destructive live confirmation only when runtime/deploy behavior changes
   - keep fresh-bundle replay operator-provisioned
+  - keep worker/internal claim tokens out of tenant-facing export artifacts
   - do not reopen public dashboard/start behavior unless a launch blocker proves it is necessary
 
 - Closed the five-step launch-readiness continuation on June 28, 2026 after the replay-cycle proof typing gate.
@@ -1131,3 +1135,14 @@ Everything below this heading is archived pre-freeze context for the deferred `m
   - Verification:
     - `npx vitest run tests/harness-e2e-run-loop.test.ts`
   - Next recommended move: run the broader nearby harness regression/build gate, then decide whether the next value-adding phase is a live non-destructive VPS confirmation of a changed runtime seam or the next bounded native acceptance family. Do not add package-overlay/plugin content or reset utilities unless a design doc explicitly approves that lane.
+
+- Closed the bounded local multi-lane continuation acceptance proof:
+  - Extended `tests/harness-e2e-run-loop.test.ts` with a second in-memory E2E proof for the two-lane CEO-governed native loop.
+  - The proof covers CFO completion, generic worker dispatch suppression while CEO `next_lane_decision` attention is pending, explicit CEO-approved CMO start, persisted execution-claim-token worker outcome commit for the second lane, final assembly attention, and closed completion package output containing both lane outcomes.
+  - Reviewer follow-up turned this from proof-only coverage into a narrow private worker dispatch fix in `src/harness/worker-executor.ts`: unresolved CEO review attention now blocks generic worker polling from claiming the next approved lane before explicit CEO approval.
+  - Direct worker-executor regressions now pin both sides of the seam: generic polling stays queued/null under unresolved CEO review, while explicit reviewed `targetCardId` dispatch still claims the lane.
+  - Verification:
+    - `npx vitest run tests/harness-worker-executor.test.ts -t "CEO next-lane review|reviewed next-lane"`
+    - `npx vitest run tests/harness-e2e-run-loop.test.ts tests/harness-worker-executor.test.ts tests/harness-board-service.test.ts`
+    - `npm run build`
+  - Scope guardrail: do not export execution claim tokens in future tenant-facing artifacts. They are private worker coordination data, not customer memory or package output.

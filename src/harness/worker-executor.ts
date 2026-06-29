@@ -322,6 +322,19 @@ export async function buildHarnessWorkerDispatchResolution(input: {
     const runtime = createHarnessRuntime();
     runtime.resumeRun({ run, cards, proposals, continuity });
 
+    const currentAttention = deriveCurrentHarnessAttentionState(events);
+    if (!input.targetCardId && currentAttention?.action.kind === "queue_ceo_review") {
+      // Generic workers must not outrun unresolved CEO review; reviewed dispatch passes an explicit target.
+      return {
+        dispatch: {
+          runId: run.id,
+          workflowId: run.workflowId,
+          status: "queued",
+          laneExecution: null
+        }
+      };
+    }
+
     const targetedCardId =
       input.targetCardId
       ?? deriveLatestResolvedAttentionTargetCardId({
