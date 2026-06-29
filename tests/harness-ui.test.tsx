@@ -1796,6 +1796,10 @@ describe("harness board UI", () => {
     expect(markup).toContain("A bounded launch cockpit summary of focus, lane state, next actions, governance, and progress.");
     expect(markup).toContain("Start a new board cycle from this run?");
     expect(markup).toContain("Review proposal decision");
+    expect(markup).toContain("Attention recovery");
+    expect(markup).toContain("Worker progress is intentionally paused until the CEO closes this review action from the live board contract.");
+    expect(markup).toContain("Resolve this review from the Board action panel; do not bypass it with a manual worker restart or stale action token.");
+    expect(markup).toContain("Recovery path: close CEO review before worker progress resumes.");
     expect(markup).toContain("Approve proposal");
     expect(markup).toContain("Defer proposal");
     expect(markup).toContain("Deny this proposal and close the follow-on request?");
@@ -1872,6 +1876,10 @@ describe("harness board UI", () => {
     const markup = renderToStaticMarkup(<HarnessBoardPage initialBoard={resolveAttentionBoardResponse} />);
 
     expect(markup).toContain("Resume lane");
+    expect(markup).toContain("Attention recovery");
+    expect(markup).toContain("Worker progress is intentionally paused until this lane resume action is resolved from the live board contract.");
+    expect(markup).toContain("Resolve the lane follow-up from the Board action panel; do not bypass it with a manual worker restart or stale action token.");
+    expect(markup).toContain("Recovery path: resolve lane follow-up before worker progress resumes.");
     expect(markup).toContain("Waiting on lane resume");
     expect(markup).toContain("1 lane follow-up and 1 pending approval are shaping the next move.");
     expect(markup).toContain("Resume the pricing lane once the tenant confirms the updated revenue assumption.");
@@ -1883,6 +1891,48 @@ describe("harness board UI", () => {
     expect(markup).toContain("Hide composer for Resume lane");
     expect(markup).toContain("Live request fields for Resume lane");
     expect(markup).toContain("&quot;resolution&quot;:&quot;resume_lane&quot;");
+  });
+
+  it("keeps unblock attention outside the lane-resume recovery copy scope", () => {
+    const unblockBoardResponse: HarnessBoardResponse = {
+      ...resolveAttentionBoardResponse,
+      runId: "run_ui_test_unblock",
+      pendingAttention: {
+        ...resolveAttentionBoardResponse.pendingAttention!,
+        kind: "await_unblock",
+        statusLabel: "Waiting on lane unblock",
+        summary: "Unblock the pricing lane after the bounded prerequisite is satisfied.",
+        actionLabel: "Unblock lane",
+        actionDescription: "Return the blocked lane to the approved queue when the prerequisite is satisfied.",
+        requestFields: [
+          {
+            name: "resolution",
+            label: "Resolution choice",
+            description: "Choose the single bounded step that resolves this attention state.",
+            required: true,
+            allowedValues: ["unblock_lane"]
+          }
+        ],
+        actionOptions: [
+          {
+            value: "unblock_lane",
+            label: "Unblock lane",
+            description: "Return the lane to the approved queue through the existing harness path.",
+            emphasis: "primary",
+            nextEffectSummary: "The lane returns to approved state and can re-enter the bounded queue.",
+            exampleRequest: { resolution: "unblock_lane" }
+          }
+        ],
+        recommendedOptionValue: "unblock_lane",
+        allowedResolutions: ["unblock_lane"]
+      }
+    };
+    const markup = renderToStaticMarkup(<HarnessBoardPage initialBoard={unblockBoardResponse} />);
+
+    expect(markup).toContain("Unblock lane");
+    expect(markup).not.toContain("Attention recovery");
+    expect(markup).not.toContain("Recovery path: resolve lane follow-up before worker progress resumes.");
+    expect(markup).not.toContain("Resolve the lane follow-up from the Board action panel; do not bypass it with a manual worker restart or stale action token.");
   });
 
   it("describes approval-only next actions without mislabeling them as CEO review", () => {

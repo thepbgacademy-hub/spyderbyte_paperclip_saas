@@ -140,11 +140,18 @@ This file tracks the new harness subproject only.
   - [x] Record sanitized stage-parity evidence and keep raw soak/live topology captures out of commits.
   - [x] Keep native execution proof policy scoped to plumbing readiness by avoiding tax-domain-specific blocked-artifact assertions until the matched tax prompt/data pack phase is explicitly started.
 
-- [ ] Complete the post-stage-refresh commit/reindex closeout.
+- [x] Complete the post-stage-refresh commit/reindex closeout.
   - [x] Run the full local regression/build gate after the stage-refresh fixes.
   - [x] Complete the reviewer pass against stale-attention guardrails, proof-helper scope, and docs.
-  - [ ] Commit and push the completed stage-refresh slice.
-  - [ ] Refresh GitNexus indexing after the pushed commit.
+  - [x] Commit and push the completed stage-refresh slice at `d73eb35`.
+  - [x] Refresh GitNexus indexing after the pushed commit. On June 29, 2026 `gitnexus status` was current at `d73eb35`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before the next phase began.
+
+- [x] Harden the public board attention-recovery copy without widening runtime semantics, export plumbing, or deployment topology.
+  - [x] Run the required GitNexus preflight first. On June 29, 2026 `gitnexus status` was current at `d73eb35`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.
+  - [x] Keep pending CEO review and lane-resume attention visible as a launch-safe recovery path on the public board.
+  - [x] Prove the UI copy tells operators to resolve the live board action instead of restarting workers, replaying stale action tokens, or bypassing the engine-owned contract.
+  - [x] Verify the bounded UI seam with `npx vitest run tests/harness-ui.test.tsx -t "renders bounded attention|renders bounded resolve-attention"`.
+  - [x] Run the required local build/regression gate: `npm test`, `npm run build`, `npm run build:server`, and `npm run build:web` passed on June 29, 2026. The web build retained only known Vite/client-directive and chunk-size warnings.
 
 - [x] Close the bounded native attention-cycle proof-hardening slice without widening runtime semantics, export plumbing, or deployment topology.
   - [x] Run the required GitNexus preflight first and keep the blast-radius read explicit. On June 28, 2026 `gitnexus status` stayed current at commit `012a40d`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` remained branch-wide `critical` because of long-lived workspace noise rather than this narrow proof seam.

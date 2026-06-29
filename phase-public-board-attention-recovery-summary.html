@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Public Board Attention Recovery Hardening</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07111f;
+      --panel: #0d1b2e;
+      --card: #13243a;
+      --line: #29415f;
+      --text: #edf6ff;
+      --muted: #a9bed5;
+      --accent: #7dd3fc;
+      --ok: #8ef7b3;
+      --warn: #fef08a;
+    }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(125, 211, 252, 0.2), transparent 30rem),
+        linear-gradient(135deg, #07111f, #0a1628 55%, #06101d);
+      color: var(--text);
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      line-height: 1.6;
+    }
+    main {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 40px 22px;
+    }
+    header {
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      padding: 30px;
+      background: rgba(13, 27, 46, 0.82);
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+    }
+    h1, h2, h3, p {
+      margin-top: 0;
+    }
+    h1 {
+      font-size: clamp(2rem, 4vw, 3.4rem);
+      line-height: 1.05;
+      margin-bottom: 12px;
+    }
+    h2 {
+      color: var(--accent);
+      letter-spacing: 0.02em;
+    }
+    .eyebrow {
+      color: var(--accent);
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-size: 0.82rem;
+      margin-bottom: 10px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin: 22px 0;
+    }
+    .card {
+      background: rgba(19, 36, 58, 0.86);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 20px;
+    }
+    .status {
+      display: inline-block;
+      border: 1px solid rgba(142, 247, 179, 0.45);
+      color: var(--ok);
+      border-radius: 999px;
+      padding: 4px 12px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    code {
+      color: var(--warn);
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 6px;
+      padding: 2px 5px;
+    }
+    ul {
+      padding-left: 20px;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    footer {
+      margin-top: 24px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">Completed Phase</p>
+      <h1>Public Board Attention Recovery Hardening</h1>
+      <p>This phase kept the blast radius intentionally small: launch-facing board copy now tells operators that CEO review and lane resume attention are live board gates, not reasons to restart workers, bypass contracts, or replay stale tokens.</p>
+      <span class="status">Local E2E TDD Green</span>
+    </header>
+
+    <section class="grid">
+      <article class="card">
+        <h2>What Changed</h2>
+        <p>The harness board now renders an <strong>Attention recovery</strong> pulse and board-action guidance only for scoped attention kinds: <code>queue_ceo_review</code> and <code>await_lane_resume</code>.</p>
+      </article>
+      <article class="card">
+        <h2>Scope Guard</h2>
+        <p>No runtime semantics, worker flow, export plumbing, deployment topology, policy exception, or workflow-family prompt/data behavior was widened.</p>
+      </article>
+      <article class="card">
+        <h2>Reviewer Fix</h2>
+        <p>The reviewer caught a scope-creep edge where generic attention kinds would have received this copy. The implementation now returns <code>null</code> for non-scoped attention, with negative coverage for <code>await_unblock</code>.</p>
+      </article>
+    </section>
+
+    <section class="card">
+      <h2>Verification</h2>
+      <ul>
+        <li><code>npx vitest run tests/harness-ui.test.tsx -t "renders bounded attention|renders bounded resolve-attention|keeps unblock attention"</code> passed.</li>
+        <li><code>npx vitest run tests/handoff-docs.test.ts</code> passed.</li>
+        <li><code>npm test</code> passed: 145 test files, 1295 tests passed, 14 skipped.</li>
+        <li><code>npm run build</code>, <code>npm run build:server</code>, and <code>npm run build:web</code> passed.</li>
+        <li>GitNexus post-change blast radius remained medium and limited to board UI plus TODO/doc-test seams.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Consultation</h2>
+      <p>Sonnet was consulted in headless mode before implementation for advisory input only. Actual subagents were used: Wegener for phase exploration and Noether for post-implementation review. No subagent accessed the VPS.</p>
+    </section>
+
+    <section class="card">
+      <h2>Files Updated</h2>
+      <ul>
+        <li><a href="apps/web/src/pages/HarnessBoardPage.tsx">apps/web/src/pages/HarnessBoardPage.tsx</a></li>
+        <li><a href="tests/harness-ui.test.tsx">tests/harness-ui.test.tsx</a></li>
+        <li><a href="tests/handoff-docs.test.ts">tests/handoff-docs.test.ts</a></li>
+        <li><a href="wf-harness/TODO.md">wf-harness/TODO.md</a></li>
+        <li><a href="phase-public-board-attention-recovery-summary.html">phase-public-board-attention-recovery-summary.html</a></li>
+      </ul>
+    </section>
+
+    <footer>
+      Next recommended phase: bounded operator MVP tools gap, unless we choose to do a commit/push and GitNexus reindex first.
+    </footer>
+  </main>
+</body>
+</html>

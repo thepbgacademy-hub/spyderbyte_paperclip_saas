@@ -63,15 +63,21 @@ describe("handoff board-surface wording", () => {
     );
   });
 
-  it("keeps the current next-slice section pointed at the post-stage-refresh closeout", () => {
+  it("keeps the current next-slice section pointed at the completed stage closeout and attention recovery hardening", () => {
     expect(currentNextSlice.trimStart()).toContain(
       "- [x] Refresh only the isolated Wealth Factory stage lane to prove live parity with the current branch."
     );
     expect(currentNextSlice).toContain(
-      "- [ ] Complete the post-stage-refresh commit/reindex closeout."
+      "- [x] Complete the post-stage-refresh commit/reindex closeout."
     );
     expect(currentNextSlice).toContain(
-      "Complete the reviewer pass against stale-attention guardrails, proof-helper scope, and docs."
+      "Commit and push the completed stage-refresh slice at `d73eb35`."
+    );
+    expect(currentNextSlice).toContain(
+      "- [x] Harden the public board attention-recovery copy without widening runtime semantics, export plumbing, or deployment topology."
+    );
+    expect(currentNextSlice).toContain(
+      "resolve the live board action instead of restarting workers, replaying stale action tokens, or bypassing the engine-owned contract"
     );
     expect(todo).toContain(
       "Phase R2: Proof and Tooling Surface Reduction"

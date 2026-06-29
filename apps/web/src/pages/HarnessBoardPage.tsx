@@ -1197,6 +1197,29 @@ function describeNextActionsSummary(
   }
 }
 
+function describeAttentionRecoverySummary(pendingAttention: HarnessBoardResponse["pendingAttention"] | null) {
+  if (!pendingAttention) {
+    return null;
+  }
+
+  switch (pendingAttention.kind) {
+    case "queue_ceo_review":
+      return {
+        pulseSummary: "Recovery path: close CEO review before worker progress resumes.",
+        panelSummary: "Worker progress is intentionally paused until the CEO closes this review action from the live board contract.",
+        safeStep: "Resolve this review from the Board action panel; do not bypass it with a manual worker restart or stale action token."
+      };
+    case "await_lane_resume":
+      return {
+        pulseSummary: "Recovery path: resolve lane follow-up before worker progress resumes.",
+        panelSummary: "Worker progress is intentionally paused until this lane resume action is resolved from the live board contract.",
+        safeStep: "Resolve the lane follow-up from the Board action panel; do not bypass it with a manual worker restart or stale action token."
+      };
+    default:
+      return null;
+  }
+}
+
 function describeSubmittedActionResult(result: HarnessBoardActionResult, fallbackLabel: string) {
   switch (result.status) {
     case "approved":
@@ -2201,6 +2224,7 @@ export function HarnessBoardPage(props: {
     ? `${activeLanes.length} visible lane${activeLanes.length === 1 ? " is" : "s are"} active across ${formatLowercaseList(activeLaneTitles)}.`
     : "No visible lanes are active yet.";
   const nextActionsSummary = describeNextActionsSummary(pendingAttention, pendingApprovals);
+  const attentionRecoverySummary = describeAttentionRecoverySummary(pendingAttention);
   const governancePostureSummary = completionPackage
     ? `Package ${packageState.toLowerCase()} with ${packageGovernanceCount} open governance item${packageGovernanceCount === 1 ? "" : "s"} still shaping the handoff.`
     : "No package governance items are shaping the current handoff.";
@@ -2237,6 +2261,15 @@ export function HarnessBoardPage(props: {
       heading: "Next actions",
       summary: nextActionsSummary
     },
+    ...(attentionRecoverySummary
+      ? [
+          {
+            key: "attention-recovery",
+            heading: "Attention recovery",
+            summary: attentionRecoverySummary.pulseSummary
+          }
+        ]
+      : []),
     {
       key: "governance-posture",
       heading: "Governance posture",
@@ -2731,6 +2764,12 @@ export function HarnessBoardPage(props: {
                   ) : null}
                   {pendingAttention.targetStatusLabel ? (
                     <p style={styles.actionSummary}>{`Queue target status: ${pendingAttention.targetStatusLabel}`}</p>
+                  ) : null}
+                  {attentionRecoverySummary ? (
+                    <>
+                      <p style={styles.actionSummary}>{attentionRecoverySummary.panelSummary}</p>
+                      <p style={styles.actionSummary}>{attentionRecoverySummary.safeStep}</p>
+                    </>
                   ) : null}
                   <HarnessBoardActionPanel
                     actionHandle={pendingAttention.actionHandle}
