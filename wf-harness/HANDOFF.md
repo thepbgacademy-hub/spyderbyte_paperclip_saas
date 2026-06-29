@@ -22,6 +22,21 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
+- Added the manual live read-only confirmation gate for the stage operator-controls probe.
+- Kept the phase local-only and non-destructive: no VPS access, no live token execution, no Docker/image/env/Caddy/DNS changes, no database migration, no operator mutation, and no folding of the probe into stage-stability automation.
+- GitNexus preflight was current at commit `0679751`; `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.
+- Sonnet was consulted in headless mode for consideration only and was not given VPS access. Sonnet recommended a diffable manual confirmation artifact plus a guard proving the live read-only probe is not part of normal CI/stage-stability execution.
+- A local explorer subagent independently recommended pinning the `prove:stage-stability -- --dry-run` sequence so it cannot silently include `npm run prove:stage-operator-controls`, and storing sanitized confirmation evidence under `audit/2026-06-29`.
+- Added:
+  - `wf-harness/docs/2026-06-29-stage-operator-controls-live-confirmation.md` as the manual operator-token gate
+  - `audit/2026-06-29/stage-operator-controls-read-only-confirmation.json` as sanitized committed launch evidence
+  - `tests/stage-operator-controls-confirmation.test.ts` to prove the artifact exists, documents the GET-only command posture, and contains no bearer token transcript
+  - a `tests/stage-live-stability-script.test.ts` assertion that the operator probe is absent from the automated stage-stability dry-run sequence
+- Next continuation point:
+  - if an operator token is intentionally provisioned, run the live read-only confirmation manually against `wf-api.spyderbyte.cloud`
+  - keep the probe out of `prove:stage-stability` until that live read-only result is reviewed green
+  - continue deferring stage pause/resume and all deferred operator mutations to separately approved phases
+
 - Added the dry-run-first isolated stage operator-controls probe after the local operator-controls integration proof.
 - Kept the phase non-destructive by default: no VPS access during implementation, no live stage mutation, no Docker/image/env/Caddy/DNS changes, no database migration, no operator UI, no pause/resume execution, and no implementation of deferred operator capabilities.
 - GitNexus preflight was current at commit `454f544`; `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.

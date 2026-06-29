@@ -132,6 +132,15 @@ This file tracks the new harness subproject only.
 
 ## Current Next Slice
 
+- [x] Add a manual live read-only confirmation gate for the stage operator-controls probe without executing the live token path or widening stage automation.
+  - [x] Run the required GitNexus preflight first. On June 29, 2026 `gitnexus status` was current at commit `0679751`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.
+  - [x] Consult Sonnet and a local explorer subagent before implementation; both recommended keeping the live read-only probe human-gated and out of automated stage-stability until a later explicit approval.
+  - [x] Add `wf-harness/docs/2026-06-29-stage-operator-controls-live-confirmation.md` to document the exact GET-only command posture, required env vars, token hygiene, and out-of-scope operator mutations.
+  - [x] Add sanitized audit evidence at `audit/2026-06-29/stage-operator-controls-read-only-confirmation.json` without bearer tokens, raw live transcripts, or VPS topology.
+  - [x] Add focused confirmation coverage proving the artifact exists, contains the manual command gate, avoids committed bearer tokens, and that `prove:stage-operator-controls` is not included in normal test/stage-stability execution chains.
+  - [x] Extend the stage-stability dry-run test to prove the automated sequence still excludes `npm run prove:stage-operator-controls`.
+  - [x] Defer the actual `--execute-read-only` live request until an operator token is intentionally provisioned and reviewed as a separate action.
+
 - [x] Add a dry-run-first isolated stage operator-controls probe without mutating stage state or widening operator capability.
   - [x] Run the required GitNexus preflight first. On June 29, 2026 `gitnexus status` was current at commit `454f544`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.
   - [x] Consult Sonnet and a local explorer subagent before implementation; both recommended a read-only stage probe planner/proof before any stage mutation.

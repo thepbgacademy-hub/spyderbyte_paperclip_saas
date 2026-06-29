@@ -48,18 +48,24 @@ describe("handoff board-surface wording", () => {
     );
   });
 
-  it("records the completed stage operator-controls probe as latest", () => {
+  it("records the completed stage operator-controls confirmation gate as latest", () => {
     expect(latestPhaseCurrentBlock).toContain(
-      "Added the dry-run-first isolated stage operator-controls probe"
+      "Added the manual live read-only confirmation gate for the stage operator-controls probe"
     );
     expect(latestPhaseCurrentBlock).toContain(
       "Sonnet was consulted in headless mode for consideration only"
     );
     expect(latestPhaseCurrentBlock).toContain(
-      "Added `npm run prove:stage-operator-controls`"
+      "manual operator-token gate"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "operator probe is absent from the automated stage-stability dry-run sequence"
     );
     expect(latestPhaseCurrentBlock).toContain(
       "continue deferring stage pause/resume and all deferred operator mutations to separately approved phases"
+    );
+    expect(latestPhase).toContain(
+      "Added the dry-run-first isolated stage operator-controls probe"
     );
     expect(latestPhase).toContain(
       "Closed the bounded local operator-controls integration proof harness"
@@ -67,6 +73,15 @@ describe("handoff board-surface wording", () => {
   });
 
   it("keeps the current next-slice section pointed at completed bounded launch-readiness slices", () => {
+    expect(currentNextSlice.trimStart()).toContain(
+      "- [x] Add a manual live read-only confirmation gate for the stage operator-controls probe without executing the live token path or widening stage automation."
+    );
+    expect(currentNextSlice).toContain(
+      "Add sanitized audit evidence at `audit/2026-06-29/stage-operator-controls-read-only-confirmation.json`"
+    );
+    expect(currentNextSlice).toContain(
+      "Extend the stage-stability dry-run test to prove the automated sequence still excludes `npm run prove:stage-operator-controls`."
+    );
     expect(currentNextSlice.trimStart()).toContain(
       "- [x] Add a dry-run-first isolated stage operator-controls probe without mutating stage state or widening operator capability."
     );

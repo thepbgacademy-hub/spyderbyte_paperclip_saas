@@ -53,6 +53,8 @@ describe("stage live stability runner script", () => {
         "npm run prove:live-soak-capacity"
       ]
     });
+    expect(parsed.sequence).not.toContain("npm run prove:stage-operator-controls");
+    expect(JSON.stringify(parsed.plan)).not.toContain("prove:stage-operator-controls");
   });
 
   it("fails closed with a wrapper-owned error when the sudo password file is missing", () => {

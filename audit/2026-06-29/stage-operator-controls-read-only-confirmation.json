@@ -1,0 +1,45 @@
+{
+  "checkedAt": "2026-06-29T12:20:00Z",
+  "phase": "stage_operator_controls_read_only_confirmation_gate",
+  "ok": true,
+  "launchLane": "wf-api.spyderbyte.cloud",
+  "defaultMode": "dry-run",
+  "automatedInStageStability": false,
+  "liveExecutionRequiresExplicitFlag": "--execute-read-only",
+  "requiredEnvironment": [
+    "WF_STAGE_API_ORIGIN",
+    "WF_STAGE_OPERATOR_TENANT_ID",
+    "WF_STAGE_OPERATOR_BEARER_TOKEN"
+  ],
+  "approvedRequest": {
+    "method": "GET",
+    "path": "/api/operator/tenants/:tenant/jobs/dead-letters",
+    "acceptedStatuses": [
+      200,
+      403,
+      404,
+      501
+    ]
+  },
+  "commandTemplate": "npm run prove:stage-operator-controls -- --execute-read-only",
+  "secretHandling": {
+    "bearerTokenCommitted": false,
+    "rawLiveResponseCommitted": false,
+    "allowedOutput": "structured JSON with masked authorization preview only"
+  },
+  "explicitlyOutOfScope": [
+    "pause/resume execution",
+    "job retry or cancellation",
+    "secret rotation or revocation",
+    "run cancellation by secret reference",
+    "emergency Paperclip disable",
+    "Docker, DNS, Caddy, image, compose, or database migration changes",
+    "folding this probe into npm run prove:stage-stability"
+  ],
+  "guardrails": [
+    "Keep the live read-only probe human-gated until a later phase explicitly approves automation.",
+    "Do not commit bearer tokens, raw live transcripts with secrets, or unrelated VPS topology captures.",
+    "Use the markdown confirmation gate before any live operator token is provisioned."
+  ],
+  "relatedDocument": "wf-harness/docs/2026-06-29-stage-operator-controls-live-confirmation.md"
+}
