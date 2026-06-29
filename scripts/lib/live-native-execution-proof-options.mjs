@@ -5,9 +5,5 @@ export function buildNativeExecutionAcceptanceOptions(workflowId) {
     options.allowFreshExecutionClaimAsTerminal = false;
   }
 
-  if (workflowId === "wf_tax_strategy") {
-    options.expectedBlockedArtifactName = "founder_tax_posture_documents";
-  }
-
   return options;
 }

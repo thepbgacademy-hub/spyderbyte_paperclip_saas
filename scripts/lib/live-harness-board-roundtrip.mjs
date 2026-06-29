@@ -27,8 +27,8 @@ export async function resolveLiveNativeAttention(input) {
     };
   }
 
-  const resolution = resolveNativeAttentionResolution(boardBody, input.expectedRunId);
-  if (!resolution) {
+  const action = resolveNativeAttentionAction(boardBody, input.expectedRunId);
+  if (!action) {
     return {
       ok: false,
       phase: "native_attention_unavailable",
@@ -59,16 +59,14 @@ export async function resolveLiveNativeAttention(input) {
       origin: normalizeOrigin(input.portalOrigin)
     },
     body: JSON.stringify({
-      resolution,
-      actionHandle: boardBody.pendingAttention.actionHandle,
+      ...action.body,
       ...(normalizeValue(input.resumeSummary) ? { resumeSummary: normalizeValue(input.resumeSummary) } : {}),
       ...resolveTaxStrategyPrerequisiteEvidenceFields(input.taxStrategyPrerequisiteEvidence)
     })
   });
   const actionBody = await readJson(actionResponse);
-  const expectedActionStatus = resolution === "resume_lane" ? "resumed" : "unblocked";
 
-  if (actionResponse.status !== 200 || actionBody?.status !== expectedActionStatus) {
+  if (actionResponse.status !== 200 || actionBody?.status !== action.expectedStatus) {
     return {
       ok: false,
       phase: "native_attention_resolution_failed",
@@ -98,7 +96,7 @@ export async function resolveLiveNativeAttention(input) {
   };
 }
 
-function resolveNativeAttentionResolution(boardBody, expectedRunId) {
+function resolveNativeAttentionAction(boardBody, expectedRunId) {
   if (!boardBody || typeof boardBody !== "object") {
     return null;
   }
@@ -119,10 +117,22 @@ function resolveNativeAttentionResolution(boardBody, expectedRunId) {
     return null;
   }
   if (pendingAttention.allowedResolutions.includes("resume_lane")) {
-    return "resume_lane";
+    return {
+      body: {
+        resolution: "resume_lane",
+        actionHandle: pendingAttention.actionHandle
+      },
+      expectedStatus: "resumed"
+    };
   }
   if (pendingAttention.allowedResolutions.includes("unblock_lane")) {
-    return "unblock_lane";
+    return {
+      body: {
+        resolution: "unblock_lane",
+        actionHandle: pendingAttention.actionHandle
+      },
+      expectedStatus: "unblocked"
+    };
   }
   return null;
 }

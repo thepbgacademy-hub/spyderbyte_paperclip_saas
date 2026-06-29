@@ -102,6 +102,71 @@ describe("harness worker executor", () => {
     );
   });
 
+  it("does not let stale CEO review attention block an approved lane when current board posture no longer requires that review", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_tax_strategy",
+      packageId: "pkg_tax_strategy",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Review the founder tax posture",
+      deliverableType: "tax_strategy"
+    });
+    cfoCard.state = "approved";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+    await repository.insertEvent(
+      createHarnessCardEventRecord({
+        cardId: cfoCard.id,
+        eventKind: "attention_requested",
+        payload: {
+          actionKind: "queue_ceo_review",
+          runState: "active",
+          reason: "next_lane_decision",
+          completedCardId: cfoCard.id,
+          targetPersona: "ceo"
+        }
+      })
+    );
+
+    await expect(
+      buildHarnessWorkerDispatch({
+        repository,
+        tenantId: "tenant-1",
+        runId: run.id,
+        workflowId: "wf_tax_strategy"
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        runId: run.id,
+        workflowId: "wf_tax_strategy",
+        status: "running",
+        laneExecution: expect.objectContaining({
+          cardId: cfoCard.id,
+          persona: "cfo",
+          state: "working"
+        })
+      })
+    );
+  });
+
   it("allows explicit reviewed next-lane dispatch while CEO review attention is unresolved", async () => {
     const repository = createInMemoryHarnessRepository();
     const run = createHarnessRunRecord({

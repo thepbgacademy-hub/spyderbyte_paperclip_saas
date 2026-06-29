@@ -84,4 +84,14 @@ describe("live native execution proof script", () => {
     expect(script).toContain('import { buildNativeExecutionAcceptanceOptions } from "./lib/live-native-execution-proof-options.mjs";');
     expect(script).toContain("...buildNativeExecutionAcceptanceOptions(workflowId)");
   });
+
+  it("does not mutate preexisting native attention before advancement or widen worker dispatch", () => {
+    const script = readFileSync("scripts/prove-live-native-execution.mjs", "utf8");
+
+    expect(script).not.toContain("preAdvancementAttentionResolution");
+    expect(script).not.toContain("preexistingAttentionResolution");
+    expect(script).not.toContain("resolvePreexistingNativeAttention");
+    expect(script).not.toContain("preexisting_attention_resolution_failed");
+    expect(script).not.toContain("decision: \"start_next_lane\"");
+  });
 });

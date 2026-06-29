@@ -6,7 +6,6 @@ const require = createRequire(import.meta.url);
 const { buildNativeExecutionAcceptanceOptions } = require("../scripts/lib/live-native-execution-proof-options.mjs") as {
   buildNativeExecutionAcceptanceOptions(workflowId: string): {
     allowFreshExecutionClaimAsTerminal?: boolean;
-    expectedBlockedArtifactName?: string;
   };
 };
 
@@ -17,10 +16,9 @@ describe("live native execution proof options", () => {
     });
   });
 
-  it("keeps wf_tax_strategy on the attention-first path and preserves its tax-only blocked-artifact guard", () => {
+  it("keeps wf_tax_strategy on the attention-first path without smuggling tax-domain blocker assertions into plumbing proof", () => {
     expect(buildNativeExecutionAcceptanceOptions("wf_tax_strategy")).toEqual({
-      allowFreshExecutionClaimAsTerminal: false,
-      expectedBlockedArtifactName: "founder_tax_posture_documents"
+      allowFreshExecutionClaimAsTerminal: false
     });
   });
 

@@ -118,7 +118,10 @@ const advancementProof =
         tenantId,
         runId: durableResult.runId,
         workflowId,
-        postAttemptedAt: durableResult.postAttemptedAt ?? durableResult.snapshot?.run?.createdAt ?? null,
+        postAttemptedAt:
+          durableResult.postAttemptedAt
+          ?? durableResult.snapshot?.run?.createdAt
+          ?? null,
         timeoutMs
       })
     : null;

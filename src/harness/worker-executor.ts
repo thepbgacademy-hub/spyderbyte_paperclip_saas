@@ -323,8 +323,21 @@ export async function buildHarnessWorkerDispatchResolution(input: {
     runtime.resumeRun({ run, cards, proposals, continuity });
 
     const currentAttention = deriveCurrentHarnessAttentionState(events);
-    if (!input.targetCardId && currentAttention?.action.kind === "queue_ceo_review") {
-      // Generic workers must not outrun unresolved CEO review; reviewed dispatch passes an explicit target.
+    const currentRunState = deriveHarnessRunState({ run, cards, proposals });
+    const currentlyPendingAttention = determineHarnessPostOutcomeAction({
+      runState: currentRunState,
+      cards,
+      proposals,
+      nextDispatchCard: null
+    });
+    if (
+      !input.targetCardId
+      && currentAttention?.action.kind === "queue_ceo_review"
+      && currentlyPendingAttention?.kind === "queue_ceo_review"
+      && isSameAttentionAction(currentAttention.action, currentlyPendingAttention)
+    ) {
+      // Generic workers must not outrun unresolved CEO review. A null pending action means
+      // the current board posture no longer requires the historical ledger attention.
       return {
         dispatch: {
           runId: run.id,

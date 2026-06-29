@@ -132,12 +132,19 @@ This file tracks the new harness subproject only.
 
 ## Current Next Slice
 
-- [ ] Refresh only the isolated Wealth Factory stage lane to prove live parity with the current branch.
-  - [ ] Build/tag a reviewed current-branch image for the isolated Wealth Factory stage lane only.
-  - [ ] Update only the isolated `wf-stage-*` lane to that reviewed image; do not touch `api.spyderbyte.cloud`, unrelated containers, DNS/Caddy, old Paperclip lanes, seed/demo scripts, or fresh-bundle replay.
-  - [ ] Set and validate `WF_PAPERCLIP_LAUNCH_MODE=runs` on the isolated stage lane before running live proof.
-  - [ ] Run the non-destructive `npm run prove:stage-stability` proof after image/env parity is confirmed.
-  - [ ] Record sanitized stage-parity evidence and keep raw soak/live topology captures out of commits.
+- [x] Refresh only the isolated Wealth Factory stage lane to prove live parity with the current branch.
+  - [x] Build/tag a reviewed current-branch image for the isolated Wealth Factory stage lane only.
+  - [x] Update only the isolated `wf-stage-*` lane to that reviewed image; do not touch `api.spyderbyte.cloud`, unrelated containers, DNS/Caddy, old Paperclip lanes, seed/demo scripts, or fresh-bundle replay.
+  - [x] Set and validate `WF_PAPERCLIP_LAUNCH_MODE=runs` on the isolated stage lane before running live proof.
+  - [x] Run the non-destructive `npm run prove:stage-stability` proof after image/env parity is confirmed.
+  - [x] Record sanitized stage-parity evidence and keep raw soak/live topology captures out of commits.
+  - [x] Keep native execution proof policy scoped to plumbing readiness by avoiding tax-domain-specific blocked-artifact assertions until the matched tax prompt/data pack phase is explicitly started.
+
+- [ ] Complete the post-stage-refresh commit/reindex closeout.
+  - [x] Run the full local regression/build gate after the stage-refresh fixes.
+  - [x] Complete the reviewer pass against stale-attention guardrails, proof-helper scope, and docs.
+  - [ ] Commit and push the completed stage-refresh slice.
+  - [ ] Refresh GitNexus indexing after the pushed commit.
 
 - [x] Close the bounded native attention-cycle proof-hardening slice without widening runtime semantics, export plumbing, or deployment topology.
   - [x] Run the required GitNexus preflight first and keep the blast-radius read explicit. On June 28, 2026 `gitnexus status` stayed current at commit `012a40d`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` remained branch-wide `critical` because of long-lived workspace noise rather than this narrow proof seam.

@@ -22,6 +22,31 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
+- Closed the bounded isolated Wealth Factory stage-refresh/parity slice on VPS 2.
+- Kept the live work intentionally narrow: only `wf-stage-web`, `wf-stage-api`, and `wf-stage-worker` were refreshed; no DNS/Caddy changes, no `api.spyderbyte.cloud` mutation, no old Paperclip lane mutation, no seed/demo script, no database migration, no queue reset, no fresh-bundle replay, and no broad Docker cleanup/prune.
+- GitNexus preflight was current at commit `8f84ae9`; `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before this slice began.
+- Sonnet was consulted in headless mode for consideration only and was not given VPS access. Sonnet recommended a commit-pinned stage image refresh, `WF_PAPERCLIP_LAUNCH_MODE=runs`, targeted compose refresh, and preserving the CEO-review guard while repairing dirty proof-lane state through product-safe seams.
+- A local-only subagent explorer confirmed the safe deployment boundary: build current images, update only isolated stage env/compose, use targeted `docker compose up -d --no-deps wf-stage-web wf-stage-api wf-stage-worker`, and avoid unrelated containers.
+- Stage was refreshed to reviewed image tag `wf-stage-20260629-staleattention3` for web/API/worker, with `WF_PAPERCLIP_LAUNCH_MODE=runs` and the dedicated `wfpc-workflow-runs-stage` queue validated on the running containers.
+- During live proof, the `wf_tax_strategy` lane exposed a real stale-ledger edge: the event ledger still contained an unresolved older `queue_ceo_review` attention, while the current board posture no longer exposed that attention as pending. The worker was safely refusing generic dispatch based on the stale ledger alone.
+- The fix stayed bounded to the native proof/worker attention seam:
+  - `src/harness/worker-executor.ts` now suppresses generic dispatch only when unresolved CEO-review attention still matches the currently derived board/post-outcome action.
+  - `scripts/lib/live-harness-board-roundtrip.mjs` remains limited to bounded native `resume_lane` / `unblock_lane` resolution through the same-origin `/api/harness/runs/:runId/resolve-attention` route.
+  - `scripts/prove-live-native-execution.mjs` avoids pre-advancement attention mutation so stale live runs cannot race proof rearm; it advances native execution first, then resolves the current board-exposed `resume_lane` / `unblock_lane` attention contract.
+  - `scripts/lib/live-native-execution-proof-options.mjs` keeps this phase scoped to native plumbing by not asserting tax-domain-specific blocked artifact wording before the matched tax prompt/data pack is built.
+- Verification:
+  - red/green focused worker regression for stale CEO-review attention vs current CEO-review guard
+  - `npx vitest run tests/harness-worker-executor.test.ts tests/live-harness-board-roundtrip.test.ts tests/live-native-execution-script.test.ts`
+  - `npm run build:server`
+  - isolated stage tax native proof rerun passed on `wf_tax_strategy`
+  - `npm run prove:stage-live-native-execution` passed across `wf_connect_first_workflow`, `wf_tax_strategy`, and `wf_package_followup`
+  - `npm run prove:stage-stability` completed `stage_stability_complete`
+- Raw soak captures were deleted from the working tree and kept out of commits because they include broader VPS topology; sanitized evidence is recorded in `audit/2026-06-29/stage-live-stability-summary.json`.
+- Known non-blocking web-build notes remain unchanged: Vite reports dependency-level ignored `"use client"` directives from `react-router` / `lucide-react`, plus the existing single client chunk size warning.
+- Next continuation point:
+  - run the normal local full regression/build gate, reviewer pass, GitNexus post-change check, commit, push, and reindex
+  - after commit, proceed to the next bounded launch-critical acceptance family only if it advances public launch readiness; avoid fresh-bundle replay/operator-provisioning work unless it is explicitly chosen as the next phase
+
 - Closed the bounded stage-parity planning gate after the pushed local launch-gate validation.
 - Kept the phase non-destructive: no VPS mutation, no Docker restart/recreate, no DNS/Caddy/shared-host change, no seed/demo script, no database migration, no queue mutation, no export replay mutation, no public dashboard/start widening, and no workflow-family expansion.
 - GitNexus was current at commit `799faea` before the phase began; `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported no changes.

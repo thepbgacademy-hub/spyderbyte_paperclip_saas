@@ -48,30 +48,30 @@ describe("handoff board-surface wording", () => {
     );
   });
 
-  it("records the current stage-parity planning gate as latest", () => {
+  it("records the completed isolated stage-refresh parity slice as latest", () => {
     expect(latestPhaseCurrentBlock).toContain(
-      "Closed the bounded stage-parity planning gate after the pushed local launch-gate validation"
+      "Closed the bounded isolated Wealth Factory stage-refresh/parity slice on VPS 2"
     );
     expect(latestPhaseCurrentBlock).toContain(
       "Sonnet was consulted in headless mode for consideration only"
     );
     expect(latestPhaseCurrentBlock).toContain(
-      "the real stage env currently sets `WF_PAPERCLIP_LAUNCH_MODE=issues`"
+      "Stage was refreshed to reviewed image tag `wf-stage-20260629-staleattention3`"
     );
     expect(latestPhaseCurrentBlock).toContain(
-      "updates only the isolated Wealth Factory stage lane to a reviewed image built from the current branch"
+      "`npm run prove:stage-stability` completed `stage_stability_complete`"
     );
   });
 
-  it("keeps the current next-slice section pointed at the stage parity refresh", () => {
+  it("keeps the current next-slice section pointed at the post-stage-refresh closeout", () => {
     expect(currentNextSlice.trimStart()).toContain(
-      "- [ ] Refresh only the isolated Wealth Factory stage lane to prove live parity with the current branch."
+      "- [x] Refresh only the isolated Wealth Factory stage lane to prove live parity with the current branch."
     );
     expect(currentNextSlice).toContain(
-      "Set and validate `WF_PAPERCLIP_LAUNCH_MODE=runs` on the isolated stage lane before running live proof."
+      "- [ ] Complete the post-stage-refresh commit/reindex closeout."
     );
     expect(currentNextSlice).toContain(
-      "do not touch `api.spyderbyte.cloud`, unrelated containers, DNS/Caddy, old Paperclip lanes, seed/demo scripts, or fresh-bundle replay"
+      "Complete the reviewer pass against stale-attention guardrails, proof-helper scope, and docs."
     );
     expect(todo).toContain(
       "Phase R2: Proof and Tooling Surface Reduction"

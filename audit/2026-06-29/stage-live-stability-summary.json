@@ -1,12 +1,30 @@
 {
-  "checkedAt": "2026-06-29T04:10:00Z",
+  "checkedAt": "2026-06-29T08:35:00Z",
   "phase": "stage_stability_complete",
   "ok": true,
   "launchLane": "wf-api.spyderbyte.cloud",
+  "stageImageTag": "wf-stage-20260629-staleattention3",
+  "stageLaunchMode": "runs",
   "sharedHostCutoverChanged": false,
   "vpsDestructiveActionPerformed": false,
   "rawSoakArtifactsCommitted": false,
   "rawSoakArtifactsReason": "Raw soak captures include unrelated VPS topology and live stage operational identifiers, so this sanitized summary is the committed evidence artifact.",
+  "stageRefreshBoundary": {
+    "changedContainers": [
+      "wf-stage-web",
+      "wf-stage-api",
+      "wf-stage-worker"
+    ],
+    "unchangedSurfaces": [
+      "api.spyderbyte.cloud",
+      "DNS/Caddy",
+      "old Paperclip lanes",
+      "seed/demo scripts",
+      "database migrations",
+      "queue reset",
+      "fresh-bundle replay"
+    ]
+  },
   "steps": [
     {
       "id": "stage-live-proof",
@@ -16,7 +34,7 @@
     {
       "id": "stage-live-native-execution",
       "ok": true,
-      "summary": "Native execution proof completed on the isolated launch lane."
+      "summary": "Native execution proof completed on the isolated launch lane after aligning stale CEO-review attention handling with the current board-derived pending action and keeping tax-domain blocker wording out of plumbing acceptance."
     },
     {
       "id": "stage-live-fairness",
@@ -30,15 +48,16 @@
     }
   ],
   "localGates": {
+    "focusedWorkerAndProofTests": "passed",
     "build": "passed",
     "buildServer": "passed",
-    "buildWeb": "passed",
+    "buildWeb": "passed with known Vite dependency/chunk warnings",
     "test": "passed"
   },
   "gitnexus": {
-    "status": "up-to-date",
-    "indexedCommit": "deb2961",
-    "note": "The first forced index timed out on the known analyzer path; rerun with --worker-timeout 300 completed successfully."
+    "status": "preflight up-to-date before stage refresh",
+    "indexedCommit": "8f84ae9",
+    "note": "Post-change reindex is part of the commit/reindex closeout slice."
   },
   "guardrails": [
     "Keep wf-api.spyderbyte.cloud as the canonical launch validation lane.",

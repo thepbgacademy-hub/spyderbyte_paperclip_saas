@@ -356,8 +356,7 @@ describe("live harness board round-trip helper", () => {
       notes: [
         "The live board did not return the expected native resolve-attention contract for the requested run.",
         "Expected run run-123 with a resolve-attention action that allows resume_lane or unblock_lane."
-      ],
-      actionResult: undefined
+      ]
     });
 
     expect(fetchImpl).toHaveBeenCalledTimes(1);
