@@ -132,6 +132,15 @@ This file tracks the new harness subproject only.
 
 ## Current Next Slice
 
+- [x] Add a dry-run-first isolated stage operator-controls probe without mutating stage state or widening operator capability.
+  - [x] Run the required GitNexus preflight first. On June 29, 2026 `gitnexus status` was current at commit `454f544`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.
+  - [x] Consult Sonnet and a local explorer subagent before implementation; both recommended a read-only stage probe planner/proof before any stage mutation.
+  - [x] Add `npm run prove:stage-operator-controls` as an opt-in proof command that defaults to dry-run and emits structured JSON.
+  - [x] Keep the executable path limited to one explicit `--execute-read-only` request against `GET /api/operator/tenants/:tenant/jobs/dead-letters`.
+  - [x] Fail closed on missing operator token before network execution, non-read methods, mutable route overrides, redirects, unexpected 2xx responses, and server errors.
+  - [x] Keep token values out of JSON output by logging only a masked preview.
+  - [x] Defer pause/resume stage execution, job retry/cancel, secret rotate/revoke, run cancellation, emergency Paperclip disable, VPS/container/DNS/Caddy changes, and folding this probe into stage stability.
+
 - [x] Close the bounded local operator-controls integration proof harness without widening operator capability, runtime topology, or live stage mutation.
   - [x] Run the required GitNexus preflight first. On June 29, 2026 `gitnexus status` was current at commit `30c7de3`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.
   - [x] Consult Sonnet and a local explorer subagent before implementation; both recommended local proof coverage before any live stage touch.

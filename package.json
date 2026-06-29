@@ -17,6 +17,7 @@
     "check:live-runtime": "node scripts/check-live-runtime-readiness.mjs",
     "prove:stage-live": "node scripts/prove-stage-live-deployment.mjs",
     "prove:stage-live-native-execution": "node scripts/prove-stage-live-native-execution.mjs",
+    "prove:stage-operator-controls": "node scripts/prove-stage-operator-controls.mjs",
     "prove:stage-stability": "node scripts/prove-stage-live-stability.mjs",
     "seed:demo": "node scripts/seed-wfpc-demo.mjs",
     "prove:provider-lifecycle": "npm run build:server && node scripts/prove-provider-credential-lifecycle.mjs",

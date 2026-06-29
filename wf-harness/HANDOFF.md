@@ -22,6 +22,24 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
+- Added the dry-run-first isolated stage operator-controls probe after the local operator-controls integration proof.
+- Kept the phase non-destructive by default: no VPS access during implementation, no live stage mutation, no Docker/image/env/Caddy/DNS changes, no database migration, no operator UI, no pause/resume execution, and no implementation of deferred operator capabilities.
+- GitNexus preflight was current at commit `454f544`; `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.
+- Sonnet was consulted in headless mode for consideration only and was not given VPS access. Sonnet agreed the safest next phase was a read-only stage probe with hard method/status/token/timeout guardrails.
+- A local explorer subagent independently recommended the same phase: keep the proof opt-in, default to dry-run, and avoid `pause`, `resume`, `retry`, `cancel`, `rotate`, `revoke`, `disablePaperclip`, and `cancel-by-secret-ref`.
+- Added `npm run prove:stage-operator-controls`:
+  - default mode emits structured dry-run JSON and makes no network calls
+  - `--execute-read-only` is required before any live request
+  - the only executable route is `GET /api/operator/tenants/:tenant/jobs/dead-letters`
+  - acceptable live statuses are limited to `200`, `403`, `404`, or `501`; redirects, unexpected 2xx, and server errors fail closed
+  - bearer tokens are required only for execution and are masked in output
+- Verification:
+  - `npx vitest run tests/stage-operator-controls-probe.test.ts tests/stage-operator-controls-script.test.ts`
+- Next continuation point:
+  - run a separate explicit non-destructive stage read-only confirmation only if the operator token/env is intentionally supplied
+  - keep this probe out of `prove:stage-stability` until the read-only path is reviewed green in the live lane
+  - continue deferring stage pause/resume and all deferred operator mutations to separately approved phases
+
 - Closed the bounded local operator-controls integration proof harness after the durable operator tenant-controls commit `30c7de3`.
 - Kept the phase local-only and non-destructive: no VPS access, no live stage mutation, no Docker/image/env/Caddy/DNS changes, no database migration, no operator UI, and no implementation of deferred job admin, secret rotation/revoke, run cancellation, or emergency Paperclip-disable semantics.
 - GitNexus preflight was current at commit `30c7de3`; `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.

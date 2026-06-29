@@ -48,25 +48,34 @@ describe("handoff board-surface wording", () => {
     );
   });
 
-  it("records the completed operator-controls integration proof as latest", () => {
+  it("records the completed stage operator-controls probe as latest", () => {
     expect(latestPhaseCurrentBlock).toContain(
-      "Closed the bounded local operator-controls integration proof harness"
+      "Added the dry-run-first isolated stage operator-controls probe"
     );
     expect(latestPhaseCurrentBlock).toContain(
       "Sonnet was consulted in headless mode for consideration only"
     );
     expect(latestPhaseCurrentBlock).toContain(
-      "Added `tests/operator-controls-integration.test.ts` to prove the real local stack path"
+      "Added `npm run prove:stage-operator-controls`"
     );
     expect(latestPhaseCurrentBlock).toContain(
-      "continue to defer job inspect/retry/cancel, secret rotate/revoke, cancel-runs-by-secret-ref, Paperclip disable semantics, and operator UI"
+      "continue deferring stage pause/resume and all deferred operator mutations to separately approved phases"
     );
     expect(latestPhase).toContain(
-      "Closed the bounded isolated Wealth Factory stage-refresh/parity slice on VPS 2"
+      "Closed the bounded local operator-controls integration proof harness"
     );
   });
 
   it("keeps the current next-slice section pointed at completed bounded launch-readiness slices", () => {
+    expect(currentNextSlice.trimStart()).toContain(
+      "- [x] Add a dry-run-first isolated stage operator-controls probe without mutating stage state or widening operator capability."
+    );
+    expect(currentNextSlice).toContain(
+      "Add `npm run prove:stage-operator-controls` as an opt-in proof command that defaults to dry-run and emits structured JSON."
+    );
+    expect(currentNextSlice).toContain(
+      "Defer pause/resume stage execution, job retry/cancel, secret rotate/revoke, run cancellation, emergency Paperclip disable, VPS/container/DNS/Caddy changes, and folding this probe into stage stability."
+    );
     expect(currentNextSlice.trimStart()).toContain(
       "- [x] Refresh only the isolated Wealth Factory stage lane to prove live parity with the current branch."
     );
