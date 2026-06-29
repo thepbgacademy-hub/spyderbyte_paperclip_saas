@@ -622,3 +622,9 @@ This file tracks the new harness subproject only.
   - [x] Rerun `npm run prove:live-attention-cycle -- --tenant 22222222-2222-4222-8222-222222222222 --user 11111111-1111-4111-8111-111111111111 --workflow wf_connect_first_workflow --persona cfo --title "Pressure-test the pricing lane" --deliverable-type pricing_review`.
   - [x] Verify `phase: "attention_cycle_refresh_verified"` on run `eb420710-c786-4801-b54d-5c3adb39f0fc`, including fresh second-cycle action-handle minting and stale first-handle `409 stale_contract` rejection.
   - [x] Record the real precondition so future reruns use the canonical blocked-lane title instead of assuming a timestamp proof lane.
+- [x] Close the bounded local native run-loop acceptance proof for one complete Wealth Factory lane.
+  - [x] Keep the phase local-only and in-memory: no VPS, no public dashboard/start widening, no export writer, no deployment topology changes, and no worker queue substrate changes.
+  - [x] Add `tests/harness-e2e-run-loop.test.ts` to prove board bootstrap, CEO-created CFO lane approval, native worker dispatch claim, persisted execution-claim-token worker outcome commit, CEO final-assembly attention review, closed board state, completion package output, and ready export candidates in one uninterrupted loop.
+  - [x] Preserve the Paperclip pressure-test lessons by proving the happy-path handoff is Wealth Factory-owned, persisted-claim-token-aware, explicit-attention-gated, and export-boundary-visible instead of depending on shared credential assumptions or hidden runtime state. Stale-token rejection remains covered in the lower-level worker executor suite.
+  - [x] Verify with `npx vitest run tests/harness-e2e-run-loop.test.ts`.
+  - [x] Defer matched VPS validation because this slice adds acceptance coverage only and does not change live runtime or deployment behavior.

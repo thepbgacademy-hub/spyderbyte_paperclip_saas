@@ -22,17 +22,19 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
-- Closed the local-only Obsidian long-memory integration design phase on June 29, 2026 without touching runtime, deployment, VPS state, or public dashboard behavior.
-- Added `wf-harness/docs/2026-06-29-obsidian-long-memory-integration-design.md` as the accepted design boundary for tenant-owned long memory.
-- The source-of-truth split is now explicit:
-  - Wealth Factory owns live execution truth, including run locks, queue/outbox state, orchestration state, lane continuity, attention state, auth, BYOK credential state, fairness, retries, and replay controls.
-  - Obsidian may own tenant long memory only through approved export candidates: `governance_history_export` and `package_bundle_export`.
-  - Obsidian must not be read as execution truth for workflow start, resume, retry, replay, or completion.
-- Deferred to a later connector phase: OAuth setup UI, tenant folder selection, cloud connector token lifecycle, and tenant-visible delivery history beyond the existing bounded board/export status.
-- This phase intentionally did not run VPS validation because it only records the post-launch-readiness design boundary and does not change runtime/deploy behavior.
+- Closed the bounded local native run-loop acceptance proof for one complete Wealth Factory lane.
+- Added `tests/harness-e2e-run-loop.test.ts` as an in-memory E2E harness proof for board bootstrap, first CEO-approved CFO lane creation, native worker dispatch claim, persisted execution-claim-token outcome commit, explicit final-assembly CEO review, closed-board completion output, and ready export candidates.
+- The phase stayed local-only and did not touch runtime behavior, VPS state, deployment topology, public dashboard/start behavior, export delivery, queue substrate, or package-overlay/plugin seams.
+- GitNexus was current before edits at `e70c1d6`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported no pending indexed changes before the slice began.
+- Sonnet headless and the subagent explorer agreed the smallest useful next slice was this local run-loop proof before another live/export lane.
+- Verification:
+  - `npx vitest run tests/harness-e2e-run-loop.test.ts`
+  - `npx vitest run tests/harness-e2e-run-loop.test.ts tests/harness-worker-executor.test.ts`
+  - `npx vitest run tests/harness-board-service.test.ts`
+  - `npm run build`
 - Next continuation point:
+  - choose the next bounded native acceptance family or a non-destructive live confirmation only when the phase changes runtime/deploy behavior
   - keep fresh-bundle replay operator-provisioned
-  - if continuing launch work, choose either a tenant-owned storage connector design/implementation slice or a bounded private worker/native execution depth slice
   - do not reopen public dashboard/start behavior unless a launch blocker proves it is necessary
 
 - Closed the five-step launch-readiness continuation on June 28, 2026 after the replay-cycle proof typing gate.
@@ -1119,3 +1121,13 @@ Everything below this heading is archived pre-freeze context for the deferred `m
     - `npx vitest run tests/live-harness-export-replay-cycle.test.ts tests/live-harness-export-replay-cycle-script.test.ts`
     - `npm run build:server`
   - Keep the remaining stronger proof as a future fresh-bundle lane. Do not seed extra templates, bypass the one-run-per-workflow model, or widen runtime/export behavior just to make the one-shot replay-cycle script pass on the already-delivered current bundle.
+
+- Closed the bounded local native run-loop acceptance proof for one complete Wealth Factory lane:
+  - Added `tests/harness-e2e-run-loop.test.ts` as an in-memory E2E harness proof.
+  - The test bootstraps the runtime-backed board, creates the first CEO-approved CFO lane, claims it through `buildHarnessWorkerDispatch`, commits the lane through `commitHarnessWorkerLaneOutcome` with the persisted execution claim token, resolves the explicit final-assembly CEO attention seam, and then verifies closed-board completion output plus ready export candidates.
+  - This is intentionally a proof/coverage slice, not a runtime behavior change. No VPS, queue substrate, public dashboard/start, export writer, or deployment topology was widened.
+  - GitNexus was current before edits at `e70c1d6`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported no pending indexed changes before the slice began.
+  - Sonnet headless and the subagent explorer agreed the smallest useful next slice was this local run-loop proof before moving into another live or export lane.
+  - Verification:
+    - `npx vitest run tests/harness-e2e-run-loop.test.ts`
+  - Next recommended move: run the broader nearby harness regression/build gate, then decide whether the next value-adding phase is a live non-destructive VPS confirmation of a changed runtime seam or the next bounded native acceptance family. Do not add package-overlay/plugin content or reset utilities unless a design doc explicitly approves that lane.
