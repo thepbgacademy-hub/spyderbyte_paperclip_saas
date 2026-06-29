@@ -15,6 +15,7 @@ type ConnectFirstInterpretation = {
   state: NativeDecisionState;
   analysis: string;
   nextAction: string;
+  requiredArtifactName?: "founder_tax_posture_documents";
 };
 type IncompleteStagedInterpretation = ConnectFirstInterpretation & {
   state: Exclude<NativeDecisionState, "done">;
@@ -28,6 +29,7 @@ export type NativeExecutionOutcome = {
   state: "waiting" | "done" | "blocked" | "cancelled";
   resultSummary?: string;
   resumeSummary?: string;
+  requiredArtifactName?: "founder_tax_posture_documents";
 };
 
 export type NativeExecutionInput = {
@@ -229,7 +231,7 @@ function buildStagedInterpretationPrompt(input: {
     ...buildDomainContextLines(input.workflowDefinition, "roleInstruction"),
     "Step 1 of 3: interpret the lane.",
     input.workflowDefinition.laneDecisionLine,
-    "Return strict JSON only with this shape: {\"state\":\"done|waiting|blocked|cancelled\",\"analysis\":\"...\",\"nextAction\":\"...\"}.",
+    "Return strict JSON only with this shape: {\"state\":\"done|waiting|blocked|cancelled\",\"analysis\":\"...\",\"nextAction\":\"...\",\"requiredArtifactName?\":\"founder_tax_posture_documents\"}.",
     input.workflowDefinition.doneInstruction,
     input.workflowDefinition.waitingInstruction,
     input.workflowDefinition.blockedInstruction,
@@ -356,12 +358,25 @@ function parseNativeWorkflowOutcome(input: {
     };
   }
 
+  const normalizedBlockedPrerequisite =
+    parsed.state === "blocked"
+      ? normalizeTaxStrategyBlockedPrerequisite({
+          laneExecution: input.laneExecution,
+          generatedSummary: parsed.summary,
+          ...(parsed.requiredArtifactName
+            ? { requiredArtifactName: parsed.requiredArtifactName }
+            : {})
+        })
+      : null;
   return {
     state: parsed.state,
+    ...(normalizedBlockedPrerequisite?.requiredArtifactName
+      ? { requiredArtifactName: normalizedBlockedPrerequisite.requiredArtifactName }
+      : {}),
     resumeSummary: formatNativeWorkflowResumeSummary({
       workflowDefinition,
       state: parsed.state,
-      generatedSummary: parsed.summary,
+      generatedSummary: normalizedBlockedPrerequisite?.summary ?? parsed.summary,
       laneExecution: input.laneExecution
     })
   };
@@ -386,12 +401,25 @@ function buildStagedInterpretationOutcome(input: {
   laneExecution: LaneExecution;
   interpretation: IncompleteStagedInterpretation;
 }): NativeExecutionOutcome {
+  const blockedPrerequisite =
+    input.interpretation.state === "blocked"
+      ? normalizeTaxStrategyBlockedPrerequisite({
+          laneExecution: input.laneExecution,
+          generatedSummary: input.interpretation.analysis,
+          ...(input.interpretation.requiredArtifactName
+            ? { requiredArtifactName: input.interpretation.requiredArtifactName }
+            : {})
+        })
+      : null;
   return {
     state: input.interpretation.state,
+    ...(blockedPrerequisite?.requiredArtifactName
+      ? { requiredArtifactName: blockedPrerequisite.requiredArtifactName }
+      : {}),
     resumeSummary: formatNativeWorkflowResumeSummary({
       workflowDefinition: input.workflowDefinition,
       state: input.interpretation.state,
-      generatedSummary: input.interpretation.analysis,
+      generatedSummary: blockedPrerequisite?.summary ?? input.interpretation.analysis,
       laneExecution: input.laneExecution
     })
   };
@@ -402,14 +430,45 @@ function buildBlockedNativeWorkflowOutcome(input: {
   laneExecution: LaneExecution;
   reason: string;
 }): NativeExecutionOutcome {
+  const blockedPrerequisite = normalizeTaxStrategyBlockedPrerequisite({
+    laneExecution: input.laneExecution,
+    generatedSummary: input.reason
+  });
   return {
     state: "blocked",
+    ...(blockedPrerequisite.requiredArtifactName
+      ? { requiredArtifactName: blockedPrerequisite.requiredArtifactName }
+      : {}),
     resumeSummary: formatNativeWorkflowResumeSummary({
       workflowDefinition: input.workflowDefinition,
       state: "blocked",
-      generatedSummary: input.reason,
+      generatedSummary: blockedPrerequisite.summary,
       laneExecution: input.laneExecution
     })
+  };
+}
+
+function normalizeTaxStrategyBlockedPrerequisite(input: {
+  laneExecution: LaneExecution;
+  generatedSummary: string;
+  requiredArtifactName?: string;
+}): {
+  summary: string;
+  requiredArtifactName: "founder_tax_posture_documents" | null;
+} {
+  const trimmed = input.generatedSummary.trim();
+  if (
+    input.laneExecution.deliverableType !== "tax_strategy_review"
+    || input.requiredArtifactName !== "founder_tax_posture_documents"
+  ) {
+    return { summary: trimmed, requiredArtifactName: null };
+  }
+
+  return {
+    summary: trimmed.includes("founder_tax_posture_documents")
+      ? trimmed
+      : `${trimmed} The named prerequisite artifact is founder_tax_posture_documents.`,
+    requiredArtifactName: "founder_tax_posture_documents"
   };
 }
 
@@ -481,17 +540,26 @@ function tryParseStagedInterpretation(text: string): ConnectFirstInterpretation 
     }
 
     const keys = Object.keys(parsed);
-    if (keys.length !== 3 || !keys.includes("state") || !keys.includes("analysis") || !keys.includes("nextAction")) {
+    if (
+      (keys.length !== 3 && keys.length !== 4)
+      || !keys.includes("state")
+      || !keys.includes("analysis")
+      || !keys.includes("nextAction")
+      || (keys.length === 4 && !keys.includes("requiredArtifactName"))
+    ) {
       return null;
     }
 
     const state = Reflect.get(parsed, "state");
     const analysis = Reflect.get(parsed, "analysis");
     const nextAction = Reflect.get(parsed, "nextAction");
+    const requiredArtifactName = Reflect.get(parsed, "requiredArtifactName");
     if (
       (state !== "done" && state !== "waiting" && state !== "blocked" && state !== "cancelled") ||
       typeof analysis !== "string" ||
-      typeof nextAction !== "string"
+      typeof nextAction !== "string" ||
+      (typeof requiredArtifactName !== "undefined"
+        && requiredArtifactName !== "founder_tax_posture_documents")
     ) {
       return null;
     }
@@ -505,7 +573,8 @@ function tryParseStagedInterpretation(text: string): ConnectFirstInterpretation 
     return {
       state,
       analysis: trimmedAnalysis,
-      nextAction: trimmedNextAction
+      nextAction: trimmedNextAction,
+      ...(requiredArtifactName ? { requiredArtifactName } : {})
     };
   } catch {
     return null;

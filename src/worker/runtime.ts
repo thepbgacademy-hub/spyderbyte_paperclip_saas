@@ -1,3 +1,5 @@
+import { createHash, randomUUID } from "node:crypto";
+
 import { loadEnv } from "../config/env.js";
 import { loadRuntimeEnv } from "../api/runtime-server.js";
 import { createDurableAuditSink } from "../audit/durable-audit.js";
@@ -47,6 +49,17 @@ export function loadWorkerEnv(source: NodeJS.ProcessEnv = process.env) {
     ...appEnv,
     ...runtimeEnv
   };
+}
+
+function createRuntimeRedispatchQueueJobId(input: {
+  tenantId: string;
+  workflowId: string;
+  runId: string;
+  dispatchKind: string;
+  actionToken: string;
+}): string {
+  const digest = createHash("sha256").update(input.actionToken).digest("hex").slice(0, 12);
+  return `${input.tenantId}:${input.workflowId}:${input.runId}:redispatch:${input.dispatchKind}:${digest}`;
 }
 
 export function createWorkerRuntime(options: {
@@ -507,10 +520,35 @@ export function createWorkerRuntime(options: {
                 recordStatus: async (status) => {
                   await recordWorkflowStatus(status);
                 },
+                stageRedispatch: async ({ tenantId, runId, workflowId, userId, dispatchKind }) => {
+                  const redispatchQueueJobId = createRuntimeRedispatchQueueJobId({
+                    tenantId,
+                    workflowId,
+                    runId,
+                    dispatchKind,
+                    actionToken: randomUUID()
+                  });
+                  const stagedRedispatch = await acidRepository.stageWorkflowRunRedispatch({
+                    tenantId,
+                    runId,
+                    userId,
+                    idempotencyKey: redispatchQueueJobId
+                  });
+                  if (!stagedRedispatch.staged) {
+                    console.warn("Worker redispatch staging did not return an outbox row", {
+                      tenantId,
+                      runId,
+                      workflowId,
+                      dispatchKind
+                    });
+                  }
+                },
                 loadBoundProviderContext: async ({ tenantId, runId }) => {
                   const binding = await acidRepository.getBoundProviderLaunchBinding({ tenantId, runId });
                   return binding ? ([binding] as readonly RuntimeProviderBinding[]) : null;
                 },
+                loadTaxStrategyPrerequisiteSnapshot: async ({ runId }) =>
+                  harnessRepository.getTaxStrategyPrerequisiteSnapshot(runId),
                 hydrateProviderContext: async ({ tenantId, runId, workflowId, providerBindings }) =>
                   providerExecutionResolver.resolveForRun({
                     tenantId,
@@ -538,7 +576,10 @@ export function createWorkerRuntime(options: {
                           ...(nativeInput.executionClaimToken ? { executionClaimToken: nativeInput.executionClaimToken } : {}),
                           state: nativeInput.outcome.state,
                           ...(nativeInput.outcome.resultSummary ? { resultSummary: nativeInput.outcome.resultSummary } : {}),
-                          ...(nativeInput.outcome.resumeSummary ? { resumeSummary: nativeInput.outcome.resumeSummary } : {})
+                          ...(nativeInput.outcome.resumeSummary ? { resumeSummary: nativeInput.outcome.resumeSummary } : {}),
+                          ...(nativeInput.outcome.requiredArtifactName
+                            ? { requiredArtifactName: nativeInput.outcome.requiredArtifactName }
+                            : {})
                         },
                         { allowDuringClose: true }
                       )
@@ -2002,6 +2043,7 @@ async function processHarnessWorkflowJob(options: {
     tenantId: string;
     runId: string;
     workflowId: string;
+    createdByUserId: string;
   };
   repository: Pick<
     ReturnType<typeof createPostgresHarnessRepository>,
@@ -2042,6 +2084,13 @@ async function processHarnessWorkflowJob(options: {
   executionEngine: "wf_harness_v1" | "wf_native_v1";
   workflowRegistry: Pick<ReturnType<typeof createHarnessWorkflowRegistry>, "getDefinition">;
   recordStatus?: (status: { tenantId: string; runId: string; workflowId: string; status: "queued" | "running" | "failed" }) => void | Promise<void>;
+  stageRedispatch?: (input: {
+    tenantId: string;
+    runId: string;
+    workflowId: string;
+    userId: string;
+    dispatchKind: string;
+  }) => void | Promise<void>;
   nativeExecutor?: NativeExecutor;
   loadBoundProviderContext?: (input: {
     tenantId: string;
@@ -2049,6 +2098,9 @@ async function processHarnessWorkflowJob(options: {
     workflowId: string;
     requiredCapabilities: readonly ProviderCapability[];
   }) => Promise<readonly RuntimeProviderBinding[] | null>;
+  loadTaxStrategyPrerequisiteSnapshot?: (input: {
+    runId: string;
+  }) => Promise<Awaited<ReturnType<ReturnType<typeof createPostgresHarnessRepository>["getTaxStrategyPrerequisiteSnapshot"]>>>;
   hydrateProviderContext?: (input: {
     tenantId: string;
     runId: string;
@@ -2263,7 +2315,10 @@ async function processHarnessWorkflowJob(options: {
             nativeExecutor: options.nativeExecutor,
             loadBoundProviderContext: options.loadBoundProviderContext,
             hydrateProviderContext: options.hydrateProviderContext,
-            commitNativeOutcome: options.commitNativeOutcome
+            commitNativeOutcome: options.commitNativeOutcome,
+            ...(options.loadTaxStrategyPrerequisiteSnapshot
+              ? { loadTaxStrategyPrerequisiteSnapshot: options.loadTaxStrategyPrerequisiteSnapshot }
+              : {})
           });
           nativeOutcomeCommitted = true;
           finalStatus = deriveHarnessWorkflowStatusFromOutcome(committedNativeOutcome) ?? dispatch.status;
@@ -2280,6 +2335,15 @@ async function processHarnessWorkflowJob(options: {
       }
     }
     if (!dispatch.laneExecution) {
+      if (dispatchResolution.suppressedReason === "claim_lost") {
+        await options.stageRedispatch?.({
+          tenantId: options.payload.tenantId,
+          runId: dispatch.runId,
+          workflowId: dispatch.workflowId,
+          userId: options.payload.createdByUserId,
+          dispatchKind: "claim_lost"
+        });
+      }
       await options.recordStatus?.({
         tenantId: options.payload.tenantId,
         runId: dispatch.runId,
@@ -2527,6 +2591,7 @@ async function processHarnessLaneOutcome(options: {
     state: "waiting" | "done" | "blocked" | "cancelled";
     resultSummary?: string;
     resumeSummary?: string;
+    requiredArtifactName?: string;
   };
   repository: Pick<
     ReturnType<typeof createPostgresHarnessRepository>,
@@ -2577,6 +2642,7 @@ async function processHarnessLaneOutcome(options: {
     state: options.payload.state,
     ...(options.payload.resultSummary ? { resultSummary: options.payload.resultSummary } : {}),
     ...(options.payload.resumeSummary ? { resumeSummary: options.payload.resumeSummary } : {}),
+    ...(options.payload.requiredArtifactName ? { requiredArtifactName: options.payload.requiredArtifactName } : {}),
     ...(options.runAtomically ? { runAtomically: options.runAtomically } : {})
   });
   if (outcome.status === "committed") {

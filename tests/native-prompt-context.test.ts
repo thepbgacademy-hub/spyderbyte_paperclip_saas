@@ -189,4 +189,69 @@ describe("worker native prompt context", () => {
       "Post-outcome contract:"
     ]);
   });
+
+  it("renders structured workflow prerequisite evidence without mutating continuity fallbacks", () => {
+    const envelope: HarnessWorkerExecutionEnvelope = {
+      ...buildExecutionEnvelope(),
+      workflowId: "wf_tax_strategy",
+      workflowPrerequisites: {
+        taxStrategyEvidence: [
+          {
+            artifactName: "founder_tax_posture_documents",
+            status: "confirmed",
+            summary: "Founder tax posture documents were confirmed for bounded tax review.",
+            confirmedBy: "operator",
+            taxYear: "2025",
+            entityType: "llc",
+            confirmedAt: "2026-06-23T16:00:00.000Z"
+          }
+        ]
+      }
+    };
+
+    expect(
+      buildWorkerPromptContextLines({
+        workflowId: "wf_tax_strategy",
+        executionEnvelope: envelope
+      })
+    ).toContain("Workflow prerequisite evidence:");
+    expect(
+      buildWorkerPromptContextLines({
+        workflowId: "wf_tax_strategy",
+        executionEnvelope: envelope
+      })
+    ).toContain(
+      "- founder_tax_posture_documents | status: confirmed | confirmed by: operator | tax year: 2025 | entity type: llc | confirmed at: 2026-06-23T16:00:00.000Z | summary: Founder tax posture documents were confirmed for bounded tax review."
+    );
+  });
+
+  it("truncates oversized prerequisite summaries before they reach prompt context", () => {
+    const envelope: HarnessWorkerExecutionEnvelope = {
+      ...buildExecutionEnvelope(),
+      workflowId: "wf_tax_strategy",
+      workflowPrerequisites: {
+        taxStrategyEvidence: [
+          {
+            artifactName: "founder_tax_posture_documents",
+            status: "confirmed",
+            summary: `${"Founder tax posture documents were confirmed for bounded tax review. ".repeat(8)}tail`,
+            confirmedBy: "operator",
+            taxYear: "2025",
+            entityType: "llc",
+            confirmedAt: "2026-06-23T16:00:00.000Z"
+          }
+        ]
+      }
+    };
+
+    const lines = buildWorkerPromptContextLines({
+      workflowId: "wf_tax_strategy",
+      executionEnvelope: envelope
+    });
+    const evidenceLine = lines.find((line) => line.startsWith("- founder_tax_posture_documents"));
+
+    expect(evidenceLine).toBeDefined();
+    expect(evidenceLine?.endsWith("...")).toBe(true);
+    expect(evidenceLine?.length).toBeLessThan(420);
+  });
 });

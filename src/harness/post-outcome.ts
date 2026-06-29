@@ -29,6 +29,7 @@ export type HarnessPostOutcomeAction =
 export type HarnessAttentionState = {
   action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
   requestedAt: string;
+  requestEventId?: string;
   snapshot: HarnessAttentionSnapshot;
 };
 
@@ -213,6 +214,7 @@ export function deriveCurrentHarnessAttentionState(
         current = {
           action,
           requestedAt: event.createdAt,
+          requestEventId: event.id,
           snapshot: parseHarnessAttentionSnapshot(event.payload) ?? buildFallbackAttentionSnapshot(action)
         };
       }

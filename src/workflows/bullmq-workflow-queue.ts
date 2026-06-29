@@ -34,6 +34,7 @@ export function createBullmqWorkflowRunEnqueuer(options: WorkflowQueueConnection
         runId: input.runId,
         workflowId: input.workflowId ?? input.workflowTemplateId ?? "",
         createdByUserId: input.userId
+        , idempotencyKey: input.idempotencyKey
       });
 
       try {

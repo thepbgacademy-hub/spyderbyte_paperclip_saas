@@ -1934,6 +1934,102 @@ describe("harness HTTP boundary", () => {
     expect(response.body).toEqual({ status: "unblocked", cardId: "card_blocked_1", state: "approved" });
   });
 
+  it("forwards bounded tax prerequisite evidence on a tax-strategy unblock resolution", async () => {
+    const resolvePendingAttention = vi
+      .fn()
+      .mockResolvedValue({ status: "unblocked", cardId: "card_blocked_1", state: "approved" });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      resolvePendingAttention,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const payload = {
+      resolution: "unblock_lane",
+      actionHandle: "test-resolve-token",
+      resumeSummary: "Founder tax posture documentation is now supplied.",
+      taxEvidenceSummary: "Founder tax posture documents were confirmed for bounded tax review.",
+      taxEvidenceConfirmedBy: "operator",
+      taxEvidenceTaxYear: "2025",
+      taxEvidenceEntityType: "llc"
+    };
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/resolve-attention",
+      body: payload,
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        cookie: "wf_session=abc",
+        "content-type": "application/json"
+      },
+      bodyByteLength: JSON.stringify(payload).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(resolvePendingAttention).toHaveBeenCalledWith({
+      authorization: "Bearer valid",
+      cookie: "wf_session=abc",
+      runId: "run_123",
+      command: "unblock_lane",
+      actionToken: "test-resolve-token",
+      resumeSummary: "Founder tax posture documentation is now supplied.",
+      taxStrategyPrerequisiteEvidence: {
+        summary: "Founder tax posture documents were confirmed for bounded tax review.",
+        confirmedBy: "operator",
+        taxYear: "2025",
+        entityType: "llc"
+      }
+    });
+    expect(response.body).toEqual({ status: "unblocked", cardId: "card_blocked_1", state: "approved" });
+  });
+
+  it("rejects partial bounded tax prerequisite evidence on an unblock resolution", async () => {
+    const resolvePendingAttention = vi.fn();
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      resolvePendingAttention,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/resolve-attention",
+      body: {
+        resolution: "unblock_lane",
+        actionHandle: "test-resolve-token",
+        taxEvidenceSummary: "Founder tax posture documents were confirmed for bounded tax review."
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        "content-type": "application/json"
+      },
+      bodyByteLength: JSON.stringify({
+        resolution: "unblock_lane",
+        actionHandle: "test-resolve-token",
+        taxEvidenceSummary: "Founder tax posture documents were confirmed for bounded tax review."
+      }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ code: "invalid_request" });
+    expect(resolvePendingAttention).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid resolve-attention commands before calling the service", async () => {
     const resolvePendingAttention = vi.fn();
     const handler = createHarnessHttpHandler({

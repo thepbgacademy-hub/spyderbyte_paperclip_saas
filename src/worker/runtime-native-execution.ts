@@ -1,9 +1,21 @@
 import type { HarnessWorkerDispatch, HarnessWorkerExecutionEnvelope, HarnessWorkerLaneOutcome } from "../harness/worker-executor.js";
+import type { HarnessTaxStrategyPrerequisiteSnapshotRecord } from "../harness/types.js";
 import type { ProviderCapability } from "../packages/package-types.js";
 import { RuntimeProviderExecutionError, type RuntimeProviderExecutionBinding } from "../providers/runtime-provider-execution.js";
 import type { RuntimeProviderBinding } from "../providers/runtime-provider-resolution.js";
 import { RuntimeProviderResolutionError } from "../providers/runtime-provider-resolution.js";
 import { NativeExecutionError, type NativeExecutionOutcome, type NativeExecutor } from "./native-executor.js";
+
+class WorkflowPrerequisiteResolutionError extends Error {
+  readonly workflowId: string;
+
+  constructor(input: { workflowId: string; cause: unknown }) {
+    super(`Failed to load bounded workflow prerequisites for ${input.workflowId}`);
+    this.name = "WorkflowPrerequisiteResolutionError";
+    this.workflowId = input.workflowId;
+    this.cause = input.cause;
+  }
+}
 
 export async function executeNativeHarnessLane(input: {
   commitNativeOutcome: (input: {
@@ -28,6 +40,9 @@ export async function executeNativeHarnessLane(input: {
     workflowId: string;
     requiredCapabilities: readonly ProviderCapability[];
   }) => Promise<readonly RuntimeProviderBinding[] | null>;
+  loadTaxStrategyPrerequisiteSnapshot?: (input: {
+    runId: string;
+  }) => Promise<HarnessTaxStrategyPrerequisiteSnapshotRecord | null>;
   nativeExecutor: NativeExecutor;
   payload: {
     tenantId: string;
@@ -36,19 +51,28 @@ export async function executeNativeHarnessLane(input: {
   };
 }): Promise<HarnessWorkerLaneOutcome> {
   let nativeOutcome: NativeExecutionOutcome;
+  let executionEnvelope = input.executionEnvelope;
 
   try {
+    executionEnvelope = await augmentExecutionEnvelopeWithWorkflowPrerequisites({
+      workflowId: input.dispatch.workflowId,
+      executionEnvelope: input.executionEnvelope,
+      runId: input.dispatch.runId,
+      ...(input.loadTaxStrategyPrerequisiteSnapshot
+        ? { loadTaxStrategyPrerequisiteSnapshot: input.loadTaxStrategyPrerequisiteSnapshot }
+        : {})
+    });
     const providerBindings = await input.loadBoundProviderContext({
       tenantId: input.payload.tenantId,
       runId: input.dispatch.runId,
       workflowId: input.dispatch.workflowId,
-      requiredCapabilities: input.executionEnvelope.requiredCapabilities
+      requiredCapabilities: executionEnvelope.requiredCapabilities
     });
     if (providerBindings === null) {
       throw new RuntimeProviderResolutionError({
         tenantId: input.payload.tenantId,
         workflowId: input.dispatch.workflowId,
-        capability: input.executionEnvelope.requiredCapabilities[0] ?? "text_generation"
+        capability: executionEnvelope.requiredCapabilities[0] ?? "text_generation"
       });
     }
 
@@ -71,7 +95,7 @@ export async function executeNativeHarnessLane(input: {
       tenantId: input.payload.tenantId,
       runId: input.dispatch.runId,
       workflowId: input.dispatch.workflowId,
-      executionEnvelope: input.executionEnvelope,
+      executionEnvelope,
       providerBinding: hydratedProviderContext[0]
     });
   } catch (error) {
@@ -92,7 +116,48 @@ export async function executeNativeHarnessLane(input: {
   });
 }
 
+async function augmentExecutionEnvelopeWithWorkflowPrerequisites(input: {
+  workflowId: string;
+  executionEnvelope: HarnessWorkerExecutionEnvelope;
+  loadTaxStrategyPrerequisiteSnapshot?: (input: { runId: string }) => Promise<HarnessTaxStrategyPrerequisiteSnapshotRecord | null>;
+  runId: string;
+}): Promise<HarnessWorkerExecutionEnvelope> {
+  if (input.workflowId !== "wf_tax_strategy" || !input.loadTaxStrategyPrerequisiteSnapshot) {
+    return input.executionEnvelope;
+  }
+
+  let snapshot: HarnessTaxStrategyPrerequisiteSnapshotRecord | null;
+  try {
+    snapshot = await input.loadTaxStrategyPrerequisiteSnapshot({ runId: input.runId });
+  } catch (error) {
+    throw new WorkflowPrerequisiteResolutionError({
+      workflowId: input.workflowId,
+      cause: error
+    });
+  }
+  if (!snapshot || snapshot.evidence.length === 0) {
+    return input.executionEnvelope;
+  }
+
+  return {
+    ...input.executionEnvelope,
+    workflowPrerequisites: {
+      ...input.executionEnvelope.workflowPrerequisites,
+      taxStrategyEvidence: snapshot.evidence
+    }
+  };
+}
+
 function toNativeProviderFailureOutcome(error: unknown): NativeExecutionOutcome | null {
+  if (error instanceof WorkflowPrerequisiteResolutionError) {
+    return {
+      state: "blocked",
+      resumeSummary:
+        `Native execution could not continue because ${error.workflowId} prerequisite evidence could not be loaded safely at execution time. ` +
+        "Keep this lane blocked until the prerequisite snapshot read is healthy again."
+    };
+  }
+
   if (error instanceof RuntimeProviderResolutionError) {
     return {
       state: "blocked",
@@ -115,7 +180,18 @@ function toNativeProviderFailureOutcome(error: unknown): NativeExecutionOutcome 
   if (error instanceof NativeExecutionError) {
     return {
       state: "blocked",
-      resumeSummary: "Native execution reached the provider lane but could not complete the provider call safely. Review the provider response and continue with workflow-specific native handling."
+      resumeSummary:
+        error.reason === "provider_kind_unsupported"
+          ? "Native execution could not continue because the bound provider kind is not supported by the current native executor."
+          : error.reason === "secret_missing"
+            ? "Native execution could not continue because the bound provider secret is missing the required API key at execution time."
+          : error.reason === "request_failed"
+              ? Number.isInteger(error.statusCode)
+                ? `Native execution reached the provider lane but the provider rejected the request with HTTP ${error.statusCode}.`
+                : "Native execution reached the provider lane but the provider request failed before a usable response was returned."
+              : error.reason === "response_invalid"
+                ? "Native execution reached the provider lane but the provider response was invalid for bounded native execution."
+                : "Native execution reached the provider lane but could not complete the provider call safely. Review the provider response and continue with workflow-specific native handling."
     };
   }
 

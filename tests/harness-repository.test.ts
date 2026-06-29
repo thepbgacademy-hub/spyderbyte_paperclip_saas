@@ -31,6 +31,7 @@ const exportDeliveryBundleRevisionMigration = readFileSync("supabase/migrations/
 const completionPackageSnapshotsMigration = readFileSync("supabase/migrations/0027_wf_harness_completion_package_snapshots.sql", "utf8");
 const governanceHistorySnapshotsMigration = readFileSync("supabase/migrations/0028_wf_harness_governance_history_snapshots.sql", "utf8");
 const cardExecutionClaimsMigration = readFileSync("supabase/migrations/0029_wf_harness_card_execution_claims.sql", "utf8");
+const taxStrategyPrerequisiteSnapshotsMigration = readFileSync("supabase/migrations/0033_wf_harness_tax_strategy_prerequisite_snapshots.sql", "utf8");
 const execFileAsync = promisify(execFile);
 
 const HARNESS_POSTGRES_IMAGE = "postgres:16-alpine";
@@ -191,6 +192,39 @@ describe("harness persistence records", () => {
       status: "approved",
       approvedCardId: "approved_card_1"
     });
+  });
+
+  it("normalizes Postgres Date run timestamps into ISO strings when mapping repository rows", async () => {
+    const createdAt = new Date("2026-06-01T00:00:00.000Z");
+    const updatedAt = new Date("2026-06-01T00:05:00.000Z");
+    const repository = createPostgresHarnessRepository({
+      query: vi.fn(async () => ({
+        rows: [
+          {
+            id: "run_pg_date_1",
+            tenant_id: "tenant-123",
+            workflow_id: "wf_connect_first_workflow",
+            package_id: "pkg_bib_connect",
+            orchestrator_persona: "ceo",
+            state: "assembling",
+            runtime_context: {
+              providerKind: "openai_api",
+              credentialLabel: "Primary OpenAI"
+            },
+            created_at: createdAt,
+            updated_at: updatedAt
+          }
+        ]
+      }))
+    });
+
+    await expect(repository.getRun("run_pg_date_1")).resolves.toEqual(
+      expect.objectContaining({
+        id: "run_pg_date_1",
+        createdAt: createdAt.toISOString(),
+        updatedAt: updatedAt.toISOString()
+      })
+    );
   });
 
   it("stores bounded card continuity snapshots in the minimal in-memory repository", async () => {
@@ -557,6 +591,53 @@ describe("harness persistence records", () => {
         followThroughItems: [
           expect.objectContaining({
             id: "decision_follow_1"
+          })
+        ]
+      })
+    );
+  });
+
+  it("stores bounded tax-strategy prerequisite snapshots in the minimal in-memory repository", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-123",
+      workflowId: "wf_tax_strategy",
+      packageId: "pkg_tax_strategy",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+
+    await repository.insertRun(run);
+    await repository.upsertTaxStrategyPrerequisiteSnapshot({
+      runId: run.id,
+      tenantId: run.tenantId,
+      workflowId: run.workflowId,
+      packageId: run.packageId,
+      evidence: [
+        {
+          artifactName: "founder_tax_posture_documents",
+          status: "confirmed",
+          summary: "Founder tax posture documents were confirmed for bounded tax review.",
+          confirmedBy: "operator",
+          taxYear: "2025",
+          entityType: "llc",
+          confirmedAt: "2026-06-23T16:00:00.000Z"
+        }
+      ],
+      createdAt: "2026-06-23T16:00:00.000Z",
+      updatedAt: "2026-06-23T16:00:00.000Z"
+    });
+
+    await expect(repository.getTaxStrategyPrerequisiteSnapshot(run.id)).resolves.toEqual(
+      expect.objectContaining({
+        runId: run.id,
+        evidence: [
+          expect.objectContaining({
+            artifactName: "founder_tax_posture_documents",
+            taxYear: "2025"
           })
         ]
       })
@@ -1990,6 +2071,77 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
     120_000
   );
   it(
+    "accepts Date objects for completion-package snapshot timestamps in the real Postgres repository",
+    async () => {
+      const database = requireDisposableHarnessDatabase();
+      const client = new Client({ connectionString: database.connectionString });
+      await client.connect();
+
+      try {
+        const repository = createPostgresHarnessRepository({
+          query: async (sql: string, values: readonly unknown[]) => {
+            const result = await client.query(sql, [...values]);
+            return { rows: result.rows };
+          }
+        });
+        const tenantId = randomUUID();
+        const run = createHarnessRunRecord({
+          tenantId,
+          workflowId: "wf_connect_first_workflow",
+          packageId: "pkg_bib_connect",
+          orchestratorPersona: "ceo",
+          runtimeContext: {
+            providerKind: "openai_api",
+            credentialLabel: "Primary OpenAI"
+          }
+        });
+        const snapshotCreatedAt = new Date("2026-06-01T00:00:00.000Z");
+        const snapshotUpdatedAt = new Date("2026-06-01T00:05:00.000Z");
+
+        await resetHarnessProofDatabase(client);
+        await seedHarnessProofPrerequisites(client, tenantId);
+        await client.query(completionPackageSnapshotsMigration);
+        await repository.insertRun(run);
+
+        await expect(repository.upsertCompletionPackageSnapshot({
+          runId: run.id,
+          tenantId: run.tenantId,
+          workflowId: run.workflowId,
+          packageId: run.packageId,
+          status: "done",
+          summary: "The CEO packaged the final business-facing outcome.",
+          deferredApprovalCount: 0,
+          deniedApprovalCount: 0,
+          hasOpenGovernanceItems: false,
+          packageNote: "Closed-board deliverables are ready to promote into a tenant-owned package bundle.",
+          recommendations: ["Package only completed lanes into the tenant-facing board outcome."],
+          objections: [],
+          governanceItems: [],
+          deliverables: [
+            {
+              cardId: "card_done_pg_date_1",
+              persona: "CFO",
+              title: "Pressure-test the pricing lane",
+              deliverableLabel: "Pricing Review",
+              outcome: "Pricing floor is stable enough for launch."
+            }
+          ],
+          createdAt: snapshotCreatedAt as unknown as string,
+          updatedAt: snapshotUpdatedAt as unknown as string
+        })).resolves.toEqual(
+          expect.objectContaining({
+            runId: run.id,
+            createdAt: snapshotCreatedAt.toISOString(),
+            updatedAt: snapshotUpdatedAt.toISOString()
+          })
+        );
+      } finally {
+        await client.end();
+      }
+    },
+    120_000
+  );
+  it(
     "stores bounded governance-history snapshots in the real Postgres repository",
     async () => {
       const database = requireDisposableHarnessDatabase();
@@ -2057,6 +2209,144 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
             followThroughItems: [
               expect.objectContaining({
                 id: "decision_pg_follow_1"
+              })
+            ]
+          })
+        );
+      } finally {
+        await client.end();
+      }
+    },
+    120_000
+  );
+  it(
+    "accepts Date objects for governance-history snapshot timestamps in the real Postgres repository",
+    async () => {
+      const database = requireDisposableHarnessDatabase();
+      const client = new Client({ connectionString: database.connectionString });
+      await client.connect();
+
+      try {
+        const repository = createPostgresHarnessRepository({
+          query: async (sql: string, values: readonly unknown[]) => {
+            const result = await client.query(sql, [...values]);
+            return { rows: result.rows };
+          }
+        });
+        const tenantId = randomUUID();
+        const run = createHarnessRunRecord({
+          tenantId,
+          workflowId: "wf_connect_first_workflow",
+          packageId: "pkg_bib_connect",
+          orchestratorPersona: "ceo",
+          runtimeContext: {
+            providerKind: "openai_api",
+            credentialLabel: "Primary OpenAI"
+          }
+        });
+        const snapshotCreatedAt = new Date("2026-06-01T00:00:00.000Z");
+        const snapshotUpdatedAt = new Date("2026-06-01T00:05:00.000Z");
+
+        await resetHarnessProofDatabase(client);
+        await seedHarnessProofPrerequisites(client, tenantId);
+        await client.query(governanceHistorySnapshotsMigration);
+        await repository.insertRun(run);
+
+        await expect(repository.upsertGovernanceHistorySnapshot({
+          runId: run.id,
+          tenantId: run.tenantId,
+          workflowId: run.workflowId,
+          packageId: run.packageId,
+          recentDecisions: [
+            {
+              id: "decision_pg_date_1",
+              decisionKind: "run_completed",
+              label: "CEO completed the board",
+              resolution: "Completed package assembly",
+              timestampLabel: "Jun 1, 2026"
+            }
+          ],
+          followThroughItems: [
+            {
+              id: "decision_pg_follow_date_1",
+              action: "packaged_outcome",
+              summary: "Packaged the closed-board outcome for tenant export.",
+              resolutionLabel: "Packaged for export",
+              timestampLabel: "Jun 1, 2026"
+            }
+          ],
+          createdAt: snapshotCreatedAt as unknown as string,
+          updatedAt: snapshotUpdatedAt as unknown as string
+        })).resolves.toEqual(
+          expect.objectContaining({
+            runId: run.id,
+            createdAt: snapshotCreatedAt.toISOString(),
+            updatedAt: snapshotUpdatedAt.toISOString()
+          })
+        );
+      } finally {
+        await client.end();
+      }
+    },
+    120_000
+  );
+  it(
+    "stores bounded tax-strategy prerequisite snapshots in the real Postgres repository",
+    async () => {
+      const database = requireDisposableHarnessDatabase();
+      const client = new Client({ connectionString: database.connectionString });
+      await client.connect();
+
+      try {
+        const repository = createPostgresHarnessRepository({
+          query: async (sql: string, values: readonly unknown[]) => {
+            const result = await client.query(sql, [...values]);
+            return { rows: result.rows };
+          }
+        });
+        const tenantId = randomUUID();
+        const run = createHarnessRunRecord({
+          tenantId,
+          workflowId: "wf_tax_strategy",
+          packageId: "pkg_tax_strategy",
+          orchestratorPersona: "ceo",
+          runtimeContext: {
+            providerKind: "openai_api",
+            credentialLabel: "Primary OpenAI"
+          }
+        });
+
+        await resetHarnessProofDatabase(client);
+        await seedHarnessProofPrerequisites(client, tenantId);
+        await client.query(taxStrategyPrerequisiteSnapshotsMigration);
+        await repository.insertRun(run);
+        await repository.upsertTaxStrategyPrerequisiteSnapshot({
+          runId: run.id,
+          tenantId: run.tenantId,
+          workflowId: run.workflowId,
+          packageId: run.packageId,
+          evidence: [
+            {
+              artifactName: "founder_tax_posture_documents",
+              status: "confirmed",
+              summary: "Founder tax posture documents were confirmed for bounded tax review.",
+              confirmedBy: "operator",
+              taxYear: "2025",
+              entityType: "llc",
+              confirmedAt: "2026-06-23T16:00:00.000Z"
+            }
+          ],
+          createdAt: "2026-06-23T16:00:00.000Z",
+          updatedAt: "2026-06-23T16:00:00.000Z"
+        });
+
+        await expect(repository.getTaxStrategyPrerequisiteSnapshot(run.id)).resolves.toEqual(
+          expect.objectContaining({
+            runId: run.id,
+            evidence: [
+              expect.objectContaining({
+                artifactName: "founder_tax_posture_documents",
+                taxYear: "2025"
               })
             ]
           })

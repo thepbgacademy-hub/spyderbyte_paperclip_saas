@@ -261,6 +261,36 @@ export interface HarnessGovernanceHistorySnapshotRecord extends HarnessGovernanc
   updatedAt: string;
 }
 
+export interface HarnessTaxStrategyPrerequisiteEvidenceItem {
+  artifactName: "founder_tax_posture_documents";
+  status: "confirmed";
+  summary: string;
+  confirmedBy: string;
+  taxYear: string;
+  entityType: string;
+  confirmedAt: string;
+}
+
+export interface HarnessTaxStrategyPrerequisiteEvidenceInput {
+  summary: string;
+  confirmedBy: string;
+  taxYear: string;
+  entityType: string;
+}
+
+export interface HarnessTaxStrategyPrerequisiteSnapshot {
+  evidence: HarnessTaxStrategyPrerequisiteEvidenceItem[];
+}
+
+export interface HarnessTaxStrategyPrerequisiteSnapshotRecord extends HarnessTaxStrategyPrerequisiteSnapshot {
+  runId: string;
+  tenantId: string;
+  workflowId: string;
+  packageId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface HarnessExportPackageFileRecord {
   path: string;
   mediaType: "text/markdown" | "application/json";

@@ -178,6 +178,36 @@ describe("authenticated dashboard API", () => {
     });
   });
 
+  it("forwards an explicit fresh-run request when the workflow is present in the tenant-visible dashboard catalog", async () => {
+    const deps = {
+      authenticate: vi.fn().mockResolvedValue(session),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      listWorkflows: vi.fn().mockResolvedValue([{ id: "workflow-template-1", name: "Connect First Workflow", enabled: true }]),
+      listPackages: vi.fn().mockResolvedValue([]),
+      listArtifacts: vi.fn().mockResolvedValue([]),
+      listProviderConnections: vi.fn().mockResolvedValue([]),
+      listStorageConnectors: vi.fn().mockResolvedValue([]),
+      getPlatformLoad: vi.fn().mockResolvedValue({
+        level: "light",
+        summary: "Light traffic",
+        detail: "New workflows should begin processing quickly."
+      }),
+      startWorkflowRun: vi.fn().mockResolvedValue({ runId: "run-456", queued: true })
+    };
+    const api = createDashboardApi(deps);
+
+    await expect(
+      api.startWorkflowRun({ authorization: "Bearer valid", workflowId: "workflow-template-1", freshRun: true })
+    ).resolves.toEqual({ runId: "run-456", queued: true });
+
+    expect(deps.startWorkflowRun).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      userId: "user-1",
+      workflowId: "workflow-template-1",
+      freshRun: true
+    });
+  });
+
   it("fails closed when a workflow is visible in the dashboard catalog but not start-enabled on that public seam", async () => {
     const deps = {
       authenticate: vi.fn().mockResolvedValue(session),

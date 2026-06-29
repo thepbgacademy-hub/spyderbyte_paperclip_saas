@@ -20,6 +20,7 @@ import {
   isHarnessCardState,
   isHarnessChildPersona,
   isHarnessDeliverableType,
+  type HarnessTaxStrategyPrerequisiteEvidenceInput,
   normalizeHarnessDeliverableType,
   normalizeHarnessPersona
 } from "../harness/types.js";
@@ -89,6 +90,7 @@ type HarnessApi = {
     command: HarnessAttentionResolutionCommand;
     actionToken: string;
     resumeSummary?: string;
+    taxStrategyPrerequisiteEvidence?: HarnessTaxStrategyPrerequisiteEvidenceInput;
   }): Promise<
     | { status: "resumed"; cardId: string; state: "working" }
     | { status: "unblocked"; cardId: string; state: "approved" }
@@ -404,15 +406,38 @@ export function createHarnessHttpHandler(options: {
           return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
         }
         const resumeSummary = readOptionalString(bodyInput?.resumeSummary);
-
-        const body = await options.resolvePendingAttention({
+        const taxEvidenceSummary = readRequiredString(bodyInput?.taxEvidenceSummary);
+        const taxEvidenceConfirmedBy = readRequiredString(bodyInput?.taxEvidenceConfirmedBy);
+        const taxEvidenceTaxYear = readRequiredString(bodyInput?.taxEvidenceTaxYear);
+        const taxEvidenceEntityType = readRequiredString(bodyInput?.taxEvidenceEntityType);
+        const hasAnyTaxEvidenceField = Boolean(
+          taxEvidenceSummary || taxEvidenceConfirmedBy || taxEvidenceTaxYear || taxEvidenceEntityType
+        );
+        const hasCompleteTaxEvidenceFieldSet = Boolean(
+          taxEvidenceSummary && taxEvidenceConfirmedBy && taxEvidenceTaxYear && taxEvidenceEntityType
+        );
+        if (hasAnyTaxEvidenceField && !hasCompleteTaxEvidenceFieldSet) {
+          return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
+        }
+        const resolveAttentionRequest: Parameters<NonNullable<typeof options.resolvePendingAttention>>[0] = {
           authorization: request.headers.authorization ?? "",
           ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
           runId: decodeURIComponent(resolveAttentionMatch[1] ?? ""),
           command,
-          actionToken,
-          ...(resumeSummary ? { resumeSummary } : {})
-        });
+          actionToken
+        };
+        if (resumeSummary) {
+          resolveAttentionRequest.resumeSummary = resumeSummary;
+        }
+        if (hasCompleteTaxEvidenceFieldSet) {
+          resolveAttentionRequest.taxStrategyPrerequisiteEvidence = {
+            summary: taxEvidenceSummary,
+            confirmedBy: taxEvidenceConfirmedBy,
+            taxYear: taxEvidenceTaxYear,
+            entityType: taxEvidenceEntityType
+          };
+        }
+        const body = await options.resolvePendingAttention(resolveAttentionRequest);
         assertWealthFactoryResponse(body);
         return { status: 200, headers: { ...securityHeaders, ...corsHeaders }, body };
       }

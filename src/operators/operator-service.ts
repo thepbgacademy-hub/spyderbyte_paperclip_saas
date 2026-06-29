@@ -21,6 +21,9 @@ type Dependencies = {
     cancel(input: { tenantId: string; jobId: string }): Promise<void> | void;
     deadLetters(input: { tenantId: string }): Promise<Record<string, unknown>[]>;
   };
+  runs: {
+    cancelBySecretRef(input: { tenantId: string; secretRef: string }): Promise<{ cancelled: number; runIds: string[] }>;
+  };
   secrets: {
     rotate(input: { tenantId: string; actorUserId: string; secretRef: string; nextSecretValues: Record<string, string> }): Promise<unknown>;
     revoke(input: { tenantId: string; actorUserId: string; secretRef: string }): Promise<unknown>;
@@ -67,6 +70,25 @@ export function createOperatorService(deps: Dependencies) {
       await requireOperator(input);
       await deps.jobs.cancel({ tenantId: input.tenantId, jobId: input.jobId });
       await audit({ ...input, eventType: "operator.job_cancelled", entityType: "workflow_job" });
+    },
+    async cancelRunsBySecretRef(input: OperatorInput & { secretRef: string }) {
+      await requireOperator(input);
+      const result = await deps.runs.cancelBySecretRef({
+        tenantId: input.tenantId,
+        secretRef: input.secretRef
+      });
+      await audit({
+        ...input,
+        eventType: "operator.bound_runs_cancelled",
+        entityType: "workflow_run",
+        metadata: {
+          cancelled: result.cancelled,
+          runIds: result.runIds.slice(0, 25),
+          runIdCount: result.runIds.length,
+          runIdsTruncated: result.runIds.length > 25
+        }
+      });
+      return result;
     },
     async listDeadLetters(input: OperatorInput) {
       await requireOperator(input);

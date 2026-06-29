@@ -10,7 +10,9 @@ function createConnectFirstMultiStepFetch(input: {
   interpretationState: "done" | "waiting" | "blocked" | "cancelled";
   interpretationAnalysis: string;
   interpretationNextAction: string;
+  interpretationRequiredArtifactName?: "founder_tax_posture_documents";
   draftedSummary: string;
+  draftedRequiredArtifactName?: "founder_tax_posture_documents";
   validationApproved: boolean;
   validationReason: string;
 }) {
@@ -24,7 +26,10 @@ function createConnectFirstMultiStepFetch(input: {
           output_text: JSON.stringify({
             state: input.interpretationState,
             analysis: input.interpretationAnalysis,
-            nextAction: input.interpretationNextAction
+            nextAction: input.interpretationNextAction,
+            ...(input.interpretationRequiredArtifactName
+              ? { requiredArtifactName: input.interpretationRequiredArtifactName }
+              : {})
           })
         })
       };
@@ -35,7 +40,10 @@ function createConnectFirstMultiStepFetch(input: {
         json: async () => ({
           output_text: JSON.stringify({
             state: input.interpretationState,
-            summary: input.draftedSummary
+            summary: input.draftedSummary,
+            ...(input.draftedRequiredArtifactName
+              ? { requiredArtifactName: input.draftedRequiredArtifactName }
+              : {})
           })
         })
       };
@@ -314,7 +322,8 @@ const STAGED_FAMILY_PROOF_CASES = [
     workflowId: "wf_tax_strategy",
     buildExecutionEnvelope: buildTaxExecutionEnvelope,
     laneLabel: "Tax Strategy Workflow tax strategy review lane for CFO: Review the founder tax posture",
-    extraGuidance: "Focus on tax-position readiness, open assumptions, and the clearest next bounded operator action.",
+    extraGuidance:
+      "Focus on tax-position readiness, the current restructuring assumptions, and the clearest bounded advisor-ready next step. Do not ask for generic discovery; if a named prerequisite artifact is missing, return blocked and name that artifact.",
     doneInstruction: 'Use state "done" only when the lane is actually complete and the next operator can treat it as finished.',
     invalidDecisionLabel: "Tax Strategy Workflow"
   },
@@ -349,11 +358,11 @@ const CORE_DOMAIN_CONTEXT_CASES = [
     buildExecutionEnvelope: buildTaxExecutionEnvelope,
     roleInstruction: "Operate as a bounded tax-posture reviewer for the Tax Strategy family.",
     interpretationFocus:
-      "Focus on tax-position readiness, restructuring assumptions, and the next bounded recommendation or evidence request.",
+      "Focus on tax-position readiness, restructuring assumptions, and one bounded recommendation. Use waiting only for an explicit board-resume decision; if a named prerequisite artifact is missing, treat it as blocked instead of requesting generic intake.",
     draftConstraint:
-      "Keep the drafted outcome anchored to the current tax strategy review lane, open assumptions, and one bounded advisor-ready next step.",
+      "Keep the drafted outcome anchored to the current tax strategy review lane, the current restructuring assumptions, and one bounded advisor-ready next step or named missing artifact.",
     validationGate:
-      "Approve only when the outcome stays inside the current tax review lane and does not overstate finalized tax recommendations beyond the evidence."
+      "Approve only when the outcome stays inside the current tax review lane, does not overstate finalized tax recommendations beyond the evidence, and does not widen into generic tax discovery."
   },
   {
     testLabel: "package-followup",
@@ -809,15 +818,15 @@ describe("default native executor", () => {
     expect(fetch).toHaveBeenCalledTimes(3);
     expect(String(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body)).input)).toContain("Step 1 of 3: interpret the lane");
     expect(String(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body)).input)).toContain(
-      "Focus on tax-position readiness, open assumptions, and the clearest next bounded operator action."
+      "Focus on tax-position readiness, the current restructuring assumptions, and the clearest bounded advisor-ready next step. Do not ask for generic discovery; if a named prerequisite artifact is missing, return blocked and name that artifact."
     );
     expect(String(JSON.parse(String(fetch.mock.calls[1]?.[1]?.body)).input)).toContain("Step 2 of 3: draft the lane outcome");
     expect(String(JSON.parse(String(fetch.mock.calls[1]?.[1]?.body)).input)).toContain(
-      "Focus on tax-position readiness, open assumptions, and the clearest next bounded operator action."
+      "Focus on tax-position readiness, the current restructuring assumptions, and the clearest bounded advisor-ready next step. Do not ask for generic discovery; if a named prerequisite artifact is missing, return blocked and name that artifact."
     );
     expect(String(JSON.parse(String(fetch.mock.calls[2]?.[1]?.body)).input)).toContain("Step 3 of 3: validate the drafted lane outcome");
     expect(String(JSON.parse(String(fetch.mock.calls[2]?.[1]?.body)).input)).toContain(
-      "Focus on tax-position readiness, open assumptions, and the clearest next bounded operator action."
+      "Focus on tax-position readiness, the current restructuring assumptions, and the clearest bounded advisor-ready next step. Do not ask for generic discovery; if a named prerequisite artifact is missing, return blocked and name that artifact."
     );
     expect(String(JSON.parse(String(fetch.mock.calls[2]?.[1]?.body)).input)).toContain(
       "Use state \"done\" only when the lane is actually complete and the next operator can treat it as finished."
@@ -974,6 +983,39 @@ describe("default native executor", () => {
       expect(fetch).toHaveBeenCalledTimes(1);
     }
   );
+
+  it("normalizes tax-strategy blocked summaries so the named prerequisite artifact is always explicit", async () => {
+    const fetch = createConnectFirstMultiStepFetch({
+      interpretationState: "blocked",
+      interpretationAnalysis:
+        "The tax strategy review for the founder's tax posture cannot proceed because the current founder tax documentation and detailed tax position analysis are missing.",
+      interpretationNextAction: "Wait for the required dependency.",
+      interpretationRequiredArtifactName: "founder_tax_posture_documents",
+      draftedSummary: "A required dependency is still missing before the bounded lane result can proceed.",
+      validationApproved: true,
+      validationReason: "The blocked outcome accurately reflects the missing dependency."
+    });
+    const executor = createDefaultNativeExecutor({
+      fetch: fetch as unknown as typeof globalThis.fetch
+    });
+
+    await expect(
+      executor.execute({
+        tenantId: "tenant-1",
+        runId: "run-tax-strategy-blocked-artifact-1",
+        workflowId: "wf_tax_strategy",
+        executionEnvelope: buildTaxExecutionEnvelope(),
+        providerBinding: buildProviderBinding()
+      })
+    ).resolves.toEqual({
+      state: "blocked",
+      requiredArtifactName: "founder_tax_posture_documents",
+      resumeSummary:
+        "Tax Strategy Workflow tax strategy review lane for CFO: Review the founder tax posture needs an explicit unblock action. " +
+        "The tax strategy review for the founder's tax posture cannot proceed because the current founder tax documentation and detailed tax position analysis are missing. " +
+        "The named prerequisite artifact is founder_tax_posture_documents."
+    });
+  });
 
   it.each(STAGED_FAMILY_PROOF_CASES)(
     "honors cancelled staged outcomes for the $testLabel workflow family",

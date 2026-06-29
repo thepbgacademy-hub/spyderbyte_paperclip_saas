@@ -151,6 +151,7 @@ function assertWorkflowBoundaryKinds(definitions: readonly InternalWorkflowBound
 
 export function createWorkflowRegistry(definitions: readonly WealthFactoryWorkflowDefinition[]) {
   const byPublicId = new Map(definitions.map((definition) => [definition.publicId, definition]));
+  const byPackageId = new Map(definitions.map((definition) => [definition.packageId, definition]));
 
   return {
     listPublicWorkflows(): WealthFactoryWorkflowListItem[] {
@@ -179,6 +180,15 @@ export function createWorkflowRegistry(definitions: readonly WealthFactoryWorkfl
       const definition = byPublicId.get(publicWorkflowId);
       if (!definition) {
         throw new Error("Unknown Wealth Factory workflow");
+      }
+
+      return definition;
+    },
+
+    getDefinitionByPackageId(packageId: string): WealthFactoryWorkflowDefinition {
+      const definition = byPackageId.get(packageId);
+      if (!definition) {
+        throw new Error("Unknown Wealth Factory workflow package");
       }
 
       return definition;

@@ -18,6 +18,9 @@ function service(overrides = {}) {
       cancel: vi.fn(),
       deadLetters: vi.fn().mockResolvedValue([{ id: "job-1", rawLog: "hidden", payload: { secretRef: "secret_ref" } }])
     },
+    runs: {
+      cancelBySecretRef: vi.fn().mockResolvedValue({ cancelled: 2, runIds: ["run-1", "run-2"] })
+    },
     secrets: { rotate: vi.fn(), revoke: vi.fn() },
     audit: vi.fn(),
     ...overrides
@@ -54,5 +57,33 @@ describe("operator service", () => {
     expect(deps.secrets.revoke).toHaveBeenCalled();
     expect(deps.tenantControls.disablePaperclip).toHaveBeenCalledWith({ tenantId: "tenant-1", reason: "incident" });
     expect(JSON.stringify(deps.audit.mock.calls)).not.toContain("sk-next");
+  });
+
+  it("cancels stale active runs bound to one secret ref and audits without leaking the raw secret ref", async () => {
+    const { operator, deps } = service();
+
+    await expect(
+      operator.cancelRunsBySecretRef({
+        tenantId: "tenant-1",
+        actorUserId: "admin-1",
+        secretRef: "wf_secret_old"
+      })
+    ).resolves.toEqual({ cancelled: 2, runIds: ["run-1", "run-2"] });
+
+    expect(deps.runs.cancelBySecretRef).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      secretRef: "wf_secret_old"
+    });
+    expect(deps.audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "operator.bound_runs_cancelled",
+        entityType: "workflow_run",
+        metadata: expect.objectContaining({
+          cancelled: 2,
+          runIds: ["run-1", "run-2"]
+        })
+      })
+    );
+    expect(JSON.stringify(deps.audit.mock.calls)).not.toContain("wf_secret_old");
   });
 });

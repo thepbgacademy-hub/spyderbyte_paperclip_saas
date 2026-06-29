@@ -59,7 +59,7 @@ type DashboardApiDeps = {
   listProviderConnections(input: { tenantId: string; userId: string }): Promise<unknown[]>;
   listStorageConnectors(input: { tenantId: string; userId: string }): Promise<unknown[]>;
   getPlatformLoad(input: { tenantId: string; userId: string }): Promise<CustomerSafePlatformLoad>;
-  startWorkflowRun?: (input: { tenantId: string; userId: string; workflowId: string }) => Promise<{ runId: string; queued: true }>;
+  startWorkflowRun?: (input: { tenantId: string; userId: string; workflowId: string; freshRun?: boolean }) => Promise<{ runId: string; queued: true }>;
 };
 
 export function createDashboardApi(deps: DashboardApiDeps) {
@@ -96,7 +96,7 @@ export function createDashboardApi(deps: DashboardApiDeps) {
       return response;
     },
 
-    async startWorkflowRun(request: { authorization: string; cookie?: string; workflowId: string }) {
+    async startWorkflowRun(request: { authorization: string; cookie?: string; workflowId: string; freshRun?: boolean }) {
       const session = await deps.authenticate({ authorization: request.authorization, ...(request.cookie ? { cookie: request.cookie } : {}) });
       if (!session) {
         throw new ApiAuthError();
@@ -123,7 +123,8 @@ export function createDashboardApi(deps: DashboardApiDeps) {
         const response = await deps.startWorkflowRun({
           tenantId: session.tenantId,
           userId: session.userId,
-          workflowId
+          workflowId,
+          ...(request.freshRun ? { freshRun: true } : {})
         });
         assertWealthFactoryResponse(response);
         return response;
@@ -131,6 +132,12 @@ export function createDashboardApi(deps: DashboardApiDeps) {
         if (error instanceof WorkflowRunReservationError) {
           throw new DashboardApiConflictError(error.reason);
         }
+        console.error("wealth_factory_dashboard_start_failed", {
+          tenantId: session.tenantId,
+          userId: session.userId,
+          workflowId,
+          error: error instanceof Error ? error.message : String(error)
+        });
         throw error;
       }
     }

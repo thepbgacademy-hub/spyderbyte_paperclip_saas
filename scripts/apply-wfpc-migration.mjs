@@ -930,6 +930,61 @@ try {
       throw new Error("Harness card execution-claim migration did not produce the required schema shape");
     }
   }
+  const queryHarnessTaxStrategyPrerequisiteSnapshotsReady = () =>
+    client.query(
+      `select
+        exists (
+          select 1
+          from information_schema.tables
+          where table_schema = 'wfpc'
+            and table_name = 'harness_tax_strategy_prerequisite_snapshots'
+        ) as has_tax_strategy_prerequisite_snapshots,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'wfpc'
+            and table_name = 'harness_tax_strategy_prerequisite_snapshots'
+            and column_name = 'snapshot_payload'
+            and is_nullable = 'NO'
+        ) as has_tax_strategy_prerequisite_snapshot_payload,
+        exists (
+          select 1
+          from pg_constraint
+          where conrelid = to_regclass('wfpc.harness_tax_strategy_prerequisite_snapshots')
+            and lower(pg_get_constraintdef(oid)) like '%jsonb_typeof(snapshot_payload) = ''object''%'
+        ) as has_tax_strategy_prerequisite_snapshot_check,
+        exists (
+          select 1
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+          where n.nspname = 'wfpc'
+            and c.relname = 'harness_tax_strategy_prerequisite_snapshots'
+            and c.relrowsecurity
+        ) as has_tax_strategy_prerequisite_snapshot_rls,
+        exists (
+          select 1
+          from pg_policies
+          where schemaname = 'wfpc'
+            and tablename = 'harness_tax_strategy_prerequisite_snapshots'
+            and policyname = 'members can read harness tax strategy prerequisite snapshots'
+        ) as has_tax_strategy_prerequisite_snapshot_policy`
+    );
+  let harnessTaxStrategyPrerequisiteSnapshotsExisting = await queryHarnessTaxStrategyPrerequisiteSnapshotsReady();
+  let harnessTaxStrategyPrerequisiteSnapshotsReady = Object.values(
+    harnessTaxStrategyPrerequisiteSnapshotsExisting.rows[0] ?? {}
+  ).every(Boolean);
+  if (!harnessTaxStrategyPrerequisiteSnapshotsReady) {
+    await client.query(
+      readFileSync("supabase/migrations/0033_wf_harness_tax_strategy_prerequisite_snapshots.sql", "utf8")
+    );
+    harnessTaxStrategyPrerequisiteSnapshotsExisting = await queryHarnessTaxStrategyPrerequisiteSnapshotsReady();
+    harnessTaxStrategyPrerequisiteSnapshotsReady = Object.values(
+      harnessTaxStrategyPrerequisiteSnapshotsExisting.rows[0] ?? {}
+    ).every(Boolean);
+    if (!harnessTaxStrategyPrerequisiteSnapshotsReady) {
+      throw new Error("Harness tax strategy prerequisite snapshot migration did not produce the required schema shape");
+    }
+  }
   const queryDurablePublicWorkflowIdentityReady = () =>
     client.query(
       `select
@@ -1020,6 +1075,7 @@ try {
           !harnessExportDeliveryClaimsReady ||
           !harnessCompletionPackageSnapshotsReady ||
           !harnessGovernanceHistorySnapshotsReady ||
+          !harnessTaxStrategyPrerequisiteSnapshotsReady ||
           !durablePublicWorkflowIdentityReady,
         tableCount: rows.length,
         tables: rows.map((row) => row.table_name)

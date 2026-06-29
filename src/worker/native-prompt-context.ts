@@ -11,6 +11,7 @@ export function buildWorkerPromptContextLines(input: {
     executionEnvelope.laneExecution.latestResultSummary ??
     "No prior result summary recorded.";
   const absorbedWork = summarizeAbsorbedWork(executionEnvelope);
+  const prerequisiteEvidenceLines = formatWorkflowPrerequisiteLines(executionEnvelope);
 
   return [
     `Workflow: ${input.workflowId}`,
@@ -21,6 +22,7 @@ export function buildWorkerPromptContextLines(input: {
     `Continuity summary: ${continuitySummary}`,
     `Latest result summary: ${latestResultSummary}`,
     `Absorbed work items: ${absorbedWork}`,
+    ...prerequisiteEvidenceLines,
     `Orchestrator persona: ${executionEnvelope.orchestratorHandoff.orchestratorPersona}`,
     `Dispatch reason: ${executionEnvelope.orchestratorHandoff.dispatchReason}`,
     `Scope guard: ${executionEnvelope.orchestratorHandoff.scopeGuard}`,
@@ -105,4 +107,27 @@ function summarizeAbsorbedWork(executionEnvelope: HarnessWorkerExecutionEnvelope
   }
 
   return "No absorbed work items recorded.";
+}
+
+function formatWorkflowPrerequisiteLines(executionEnvelope: HarnessWorkerExecutionEnvelope): string[] {
+  const taxStrategyEvidence = (executionEnvelope.workflowPrerequisites?.taxStrategyEvidence ?? []).slice(0, 3);
+  if (taxStrategyEvidence.length === 0) {
+    return [];
+  }
+
+  return [
+    "Workflow prerequisite evidence:",
+    ...taxStrategyEvidence.map(
+      (item) =>
+        `- ${item.artifactName} | status: ${item.status} | confirmed by: ${item.confirmedBy} | tax year: ${item.taxYear} | entity type: ${item.entityType} | confirmed at: ${item.confirmedAt} | summary: ${truncateWorkflowPrerequisiteText(item.summary, 240)}`
+    )
+  ];
+}
+
+function truncateWorkflowPrerequisiteText(value: string, maxLength: number): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= maxLength) {
+    return trimmed;
+  }
+  return `${trimmed.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
 }

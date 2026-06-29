@@ -112,10 +112,22 @@ function createMockDbQuery() {
     }
 
     if (sql.includes("from wfpc.workflow_templates") && sql.includes("for update")) {
+      const workflowTemplateId = String(values[1] ?? "workflow-template-1");
+      if (workflowTemplateId === "44444444-4444-4444-8444-666666666666") {
+        return {
+          rows: [
+            {
+              id: workflowTemplateId,
+              package_id: "11111111-1111-4111-8111-111111111111",
+              provider_kind: "openai_api"
+            }
+          ]
+        };
+      }
       return {
         rows: [
           {
-            id: values[1] ?? "workflow-template-1",
+            id: workflowTemplateId,
             package_id: "pkg_bib_connect",
             provider_kind: "openai_api"
           }
@@ -265,6 +277,7 @@ vi.mock("../src/db/supabase-repositories.js", () => ({
   })),
   createSupabaseRepositories: vi.fn(() => ({
     resolvePaperclipCompanyMapping: vi.fn().mockResolvedValue({ paperclipCompanyId: "pc-company-1", paperclipIssueAgentId: "pc-agent-1" }),
+    resolveWorkflowTemplateStartIdentity: vi.fn().mockResolvedValue(null),
     listActiveInstalledPackageIds: vi.fn().mockResolvedValue([]),
     hasActiveWorkflowRuns: vi.fn().mockResolvedValue(false),
     countActiveWorkflowRuns: vi.fn().mockResolvedValue(0),
@@ -1047,6 +1060,177 @@ describe("runtime server", () => {
     }
   });
 
+  it("fails closed when dashboard start explicitly requests a fresh native public run but the uniqueness model would force reuse", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {
+          WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-example-audit"
+        }
+      },
+      auth: {
+        authenticate: vi.fn().mockResolvedValue({
+          tenantId: "tenant-1",
+          userId: "user-1",
+          role: "member"
+        })
+      },
+      workflowQueueEnqueuer: { enqueueOnce: vi.fn().mockResolvedValue("enqueued") }
+    });
+
+    const repositories = vi.mocked(createSupabaseRepositories).mock.results.at(-1)?.value;
+    repositories?.listActiveInstalledPackageIds.mockResolvedValue(["pkg-example-audit"]);
+    const transactionRunner = vi.mocked(createPgTransactionRunner).mock.results.at(-1)?.value as { __query?: ReturnType<typeof vi.fn> } | undefined;
+    const poolQueryClient = vi.mocked(createPgPoolQueryClient).mock.results.at(-1)?.value as { query?: ReturnType<typeof vi.fn> } | undefined;
+    const originalPoolImplementation = poolQueryClient?.query?.getMockImplementation();
+    poolQueryClient?.query?.mockImplementation(async (sql: string, values: readonly unknown[] = []) => {
+      if (sql.includes("from wfpc.harness_runs") && sql.includes("workflow_id = $2")) {
+        return {
+          rows: [
+            {
+              id: "existing-run-123",
+              tenant_id: "tenant-1",
+              workflow_id: "wf-example-audit",
+              package_id: "pkg-example-audit",
+              orchestrator_persona: "ceo",
+              state: "active",
+              runtime_context: { providerKind: "openai_api", credentialLabel: "OpenAI" },
+              created_at: "2026-06-16T00:00:00.000Z",
+              updated_at: "2026-06-16T00:00:00.000Z"
+            }
+          ]
+        };
+      }
+      return originalPoolImplementation ? originalPoolImplementation(sql, values) : { rows: [] };
+    });
+    try {
+      const startRequest = createRequest({
+        method: "POST",
+        url: "/api/dashboard/runs",
+        headers: {
+          authorization: "Bearer token",
+          origin: "https://www.spyderbyte.cloud",
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({ workflowId: "wf-example-audit", freshRun: true })
+      });
+      const startResponse = createResponse();
+
+      runtime.server.emit("request", startRequest as unknown as IncomingMessage, startResponse as unknown as ServerResponse);
+      await startResponse.finished;
+
+      expect(startResponse.statusCode).toBe(409);
+      expect(startResponse.body).toContain('"code":"conflict"');
+      const sql = transactionRunner?.__query?.mock.calls.map(([statement]) => String(statement)).join("\n") ?? "";
+      expect(sql).not.toMatch(/insert into wfpc\.workflow_run_reservations/i);
+      expect(sql).not.toMatch(/insert into wfpc\.harness_runs/i);
+      expect(sql).not.toMatch(/update wfpc\.workflow_runs/i);
+    } finally {
+      if (originalPoolImplementation) {
+        poolQueryClient?.query?.mockImplementation(originalPoolImplementation);
+      } else {
+        poolQueryClient?.query?.mockReset();
+      }
+      await runtime.close();
+    }
+  });
+
+  it("returns the existing native public harness run when redispatch staging is a no-op instead of attempting a duplicate durable insert", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {
+          WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf-example-audit"
+        }
+      },
+      auth: {
+        authenticate: vi.fn().mockResolvedValue({
+          tenantId: "tenant-1",
+          userId: "user-1",
+          role: "member"
+        })
+      },
+      workflowQueueEnqueuer: { enqueueOnce: vi.fn().mockResolvedValue("enqueued") }
+    });
+
+    const repositories = vi.mocked(createSupabaseRepositories).mock.results.at(-1)?.value;
+    repositories?.listActiveInstalledPackageIds.mockResolvedValue(["pkg-example-audit"]);
+    const transactionRunner = vi.mocked(createPgTransactionRunner).mock.results.at(-1)?.value as { __query?: ReturnType<typeof vi.fn> } | undefined;
+    const poolQueryClient = vi.mocked(createPgPoolQueryClient).mock.results.at(-1)?.value as { query?: ReturnType<typeof vi.fn> } | undefined;
+    const originalImplementation = transactionRunner?.__query?.getMockImplementation();
+    const originalPoolImplementation = poolQueryClient?.query?.getMockImplementation();
+    transactionRunner?.__query?.mockImplementation(async (sql: string, values: readonly unknown[] = []) => {
+      if (sql.includes("insert into wfpc.workflow_queue_outbox") && sql.includes("select runs.tenant_id")) {
+        return { rows: [] };
+      }
+      return originalImplementation ? originalImplementation(sql, values) : { rows: [] };
+    });
+    poolQueryClient?.query?.mockImplementation(async (sql: string, values: readonly unknown[] = []) => {
+      if (sql.includes("from wfpc.harness_runs") && sql.includes("workflow_id = $2")) {
+        return {
+          rows: [
+            {
+              id: "existing-run-123",
+              tenant_id: "tenant-1",
+              workflow_id: "wf-example-audit",
+              package_id: "pkg-example-audit",
+              orchestrator_persona: "ceo",
+              state: "blocked",
+              runtime_context: { providerKind: "openai_api", credentialLabel: "OpenAI" },
+              created_at: "2026-06-16T00:00:00.000Z",
+              updated_at: "2026-06-16T00:00:00.000Z"
+            }
+          ]
+        };
+      }
+      return originalPoolImplementation ? originalPoolImplementation(sql, values) : { rows: [] };
+    });
+    try {
+      const startRequest = createRequest({
+        method: "POST",
+        url: "/api/dashboard/runs",
+        headers: {
+          authorization: "Bearer token",
+          origin: "https://www.spyderbyte.cloud",
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({ workflowId: "wf-example-audit" })
+      });
+      const startResponse = createResponse();
+
+      runtime.server.emit("request", startRequest as unknown as IncomingMessage, startResponse as unknown as ServerResponse);
+      await startResponse.finished;
+
+      expect(startResponse.statusCode).toBe(202);
+      expect(startResponse.body).toContain('"queued":true');
+      expect(startResponse.body).toContain('"runId":"existing-run-123"');
+      const sql = transactionRunner?.__query?.mock.calls.map(([statement]) => String(statement)).join("\n") ?? "";
+      expect(sql).toMatch(/insert into wfpc\.workflow_queue_outbox/i);
+      expect(sql).not.toMatch(/insert into wfpc\.workflow_run_reservations/i);
+      expect(sql).not.toMatch(/insert into wfpc\.harness_runs/i);
+    } finally {
+      if (originalImplementation) {
+        transactionRunner?.__query?.mockImplementation(originalImplementation);
+      } else {
+        transactionRunner?.__query?.mockReset();
+      }
+      if (originalPoolImplementation) {
+        poolQueryClient?.query?.mockImplementation(originalPoolImplementation);
+      } else {
+        poolQueryClient?.query?.mockReset();
+      }
+      await runtime.close();
+    }
+  });
+
   it("invokes native bootstrap for public-start overlays that opt into native execution", async () => {
     const runtime = createDashboardRuntime({
       env: {
@@ -1133,6 +1317,249 @@ describe("runtime server", () => {
       expect(sql).toMatch(/insert into wfpc\.harness_card_continuity/i);
     } finally {
       registrySpy.mockRestore();
+      await runtime.close();
+    }
+  });
+
+  it("seeds a native public harness run when dashboard start arrives with a tenant workflow template id for a core built-in", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {
+          WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_tax_strategy"
+        }
+      },
+      auth: {
+        authenticate: vi.fn().mockResolvedValue({
+          tenantId: "tenant-1",
+          userId: "user-1",
+          role: "member"
+        })
+      },
+      workflowQueueEnqueuer: { enqueueOnce: vi.fn().mockResolvedValue("enqueued") }
+    });
+
+    const repositories = vi.mocked(createSupabaseRepositories).mock.results.at(-1)?.value;
+    repositories?.listWorkflows.mockResolvedValue([
+      {
+        id: "44444444-4444-4444-8444-666666666666",
+        name: "Tax Strategy Workflow",
+        providerKind: "openai_api",
+        enabled: true
+      }
+    ]);
+    repositories?.resolveWorkflowTemplateStartIdentity?.mockResolvedValue({
+      workflowTemplateId: "44444444-4444-4444-8444-666666666666",
+      workflowPackageId: "pkg_tax_strategy",
+      publicWorkflowId: "wf_tax_strategy"
+    });
+
+    try {
+      const startRequest = createRequest({
+        method: "POST",
+        url: "/api/dashboard/runs",
+        headers: {
+          authorization: "Bearer token",
+          origin: "https://www.spyderbyte.cloud",
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({ workflowId: "44444444-4444-4444-8444-666666666666" })
+      });
+      const startResponse = createResponse();
+
+      runtime.server.emit("request", startRequest as unknown as IncomingMessage, startResponse as unknown as ServerResponse);
+      await startResponse.finished;
+
+      expect(startResponse.statusCode).toBe(202);
+      expect(startResponse.body).toContain('"queued":true');
+      const reservationQuery = (vi.mocked(createPgTransactionRunner).mock.results.at(-1)?.value as { __query?: ReturnType<typeof vi.fn> } | undefined)?.__query;
+      const sql = reservationQuery?.mock.calls.map(([statement]) => String(statement)).join("\n") ?? "";
+      const values = reservationQuery?.mock.calls
+        .filter(([statement]) => String(statement).includes("insert into wfpc.workflow_run_reservations"))
+        .map(([, params]) => params);
+      const harnessRunValues = reservationQuery?.mock.calls
+        .filter(([statement]) => String(statement).includes("insert into wfpc.harness_runs"))
+        .map(([, params]) => params);
+      expect(sql).toMatch(/insert into wfpc\.harness_runs/i);
+      expect(values?.some((params) => params?.[1] === "wf_tax_strategy" && params?.[2] === "44444444-4444-4444-8444-666666666666")).toBe(true);
+      expect(harnessRunValues?.some((params) => params?.[3] === "pkg_tax_strategy")).toBe(true);
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  it("reuses the existing core built-in native run for a template-id dashboard start even when the public registry definition has no provider kind", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {
+          WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_tax_strategy"
+        }
+      },
+      auth: {
+        authenticate: vi.fn().mockResolvedValue({
+          tenantId: "tenant-1",
+          userId: "user-1",
+          role: "member"
+        })
+      },
+      workflowQueueEnqueuer: { enqueueOnce: vi.fn().mockResolvedValue("enqueued") }
+    });
+
+    const repositories = vi.mocked(createSupabaseRepositories).mock.results.at(-1)?.value;
+    repositories?.listWorkflows.mockResolvedValue([
+      {
+        id: "44444444-4444-4444-8444-666666666666",
+        name: "Tax Strategy Workflow",
+        providerKind: "openai_api",
+        enabled: true
+      }
+    ]);
+    repositories?.resolveWorkflowTemplateStartIdentity?.mockResolvedValue({
+      workflowTemplateId: "44444444-4444-4444-8444-666666666666",
+      workflowPackageId: "pkg_tax_strategy",
+      publicWorkflowId: "wf_tax_strategy"
+    });
+
+    const transactionRunner = vi.mocked(createPgTransactionRunner).mock.results.at(-1)?.value as { __query?: ReturnType<typeof vi.fn> } | undefined;
+    const poolQueryClient = vi.mocked(createPgPoolQueryClient).mock.results.at(-1)?.value as { query?: ReturnType<typeof vi.fn> } | undefined;
+    const originalImplementation = transactionRunner?.__query?.getMockImplementation();
+    const originalPoolImplementation = poolQueryClient?.query?.getMockImplementation();
+    transactionRunner?.__query?.mockImplementation(async (sql: string, values: readonly unknown[] = []) => {
+      if (sql.includes("insert into wfpc.workflow_queue_outbox") && sql.includes("select runs.tenant_id")) {
+        return { rows: [] };
+      }
+      return originalImplementation ? originalImplementation(sql, values) : { rows: [] };
+    });
+    poolQueryClient?.query?.mockImplementation(async (sql: string, values: readonly unknown[] = []) => {
+      if (sql.includes("from wfpc.harness_runs") && sql.includes("workflow_id = $2")) {
+        return {
+          rows: [
+            {
+              id: "existing-tax-run-123",
+              tenant_id: "tenant-1",
+              workflow_id: "wf_tax_strategy",
+              package_id: "pkg_tax_strategy",
+              orchestrator_persona: "ceo",
+              state: "blocked",
+              runtime_context: { providerKind: "openai_api", credentialLabel: "OpenAI" },
+              created_at: "2026-06-16T00:00:00.000Z",
+              updated_at: "2026-06-16T00:00:00.000Z"
+            }
+          ]
+        };
+      }
+      return originalPoolImplementation ? originalPoolImplementation(sql, values) : { rows: [] };
+    });
+
+    try {
+      const startRequest = createRequest({
+        method: "POST",
+        url: "/api/dashboard/runs",
+        headers: {
+          authorization: "Bearer token",
+          origin: "https://www.spyderbyte.cloud",
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({ workflowId: "44444444-4444-4444-8444-666666666666" })
+      });
+      const startResponse = createResponse();
+
+      runtime.server.emit("request", startRequest as unknown as IncomingMessage, startResponse as unknown as ServerResponse);
+      await startResponse.finished;
+
+      expect(startResponse.statusCode).toBe(202);
+      expect(startResponse.body).toContain('"queued":true');
+      expect(startResponse.body).toContain('"runId":"existing-tax-run-123"');
+      const sql = transactionRunner?.__query?.mock.calls.map(([statement]) => String(statement)).join("\n") ?? "";
+      expect(sql).toMatch(/insert into wfpc\.workflow_queue_outbox/i);
+      expect(sql).not.toMatch(/insert into wfpc\.workflow_run_reservations/i);
+      expect(sql).not.toMatch(/insert into wfpc\.harness_runs/i);
+    } finally {
+      if (originalImplementation) {
+        transactionRunner?.__query?.mockImplementation(originalImplementation);
+      } else {
+        transactionRunner?.__query?.mockReset();
+      }
+      if (originalPoolImplementation) {
+        poolQueryClient?.query?.mockImplementation(originalPoolImplementation);
+      } else {
+        poolQueryClient?.query?.mockReset();
+      }
+      await runtime.close();
+    }
+  });
+
+  it("fails closed to tenant-template start identity when template package-key resolution misses the public registry", async () => {
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {
+          WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_tax_strategy"
+        }
+      },
+      auth: {
+        authenticate: vi.fn().mockResolvedValue({
+          tenantId: "tenant-1",
+          userId: "user-1",
+          role: "member"
+        })
+      },
+      workflowQueueEnqueuer: { enqueueOnce: vi.fn().mockResolvedValue("enqueued") }
+    });
+
+    const repositories = vi.mocked(createSupabaseRepositories).mock.results.at(-1)?.value;
+    repositories?.listWorkflows.mockResolvedValue([
+      {
+        id: "44444444-4444-4444-8444-666666666666",
+        name: "Tax Strategy Workflow",
+        providerKind: "openai_api",
+        enabled: true
+      }
+    ]);
+    repositories?.resolveWorkflowTemplateStartIdentity?.mockResolvedValue({
+      workflowTemplateId: "44444444-4444-4444-8444-666666666666",
+      workflowPackageId: "pkg_missing_core"
+    });
+
+    try {
+      const startRequest = createRequest({
+        method: "POST",
+        url: "/api/dashboard/runs",
+        headers: {
+          authorization: "Bearer token",
+          origin: "https://www.spyderbyte.cloud",
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({ workflowId: "44444444-4444-4444-8444-666666666666" })
+      });
+      const startResponse = createResponse();
+
+      runtime.server.emit("request", startRequest as unknown as IncomingMessage, startResponse as unknown as ServerResponse);
+      await startResponse.finished;
+
+      expect(startResponse.statusCode).toBe(202);
+      expect(startResponse.body).toContain('"queued":true');
+      const reservationQuery = (vi.mocked(createPgTransactionRunner).mock.results.at(-1)?.value as { __query?: ReturnType<typeof vi.fn> } | undefined)?.__query;
+      const sql = reservationQuery?.mock.calls.map(([statement]) => String(statement)).join("\n") ?? "";
+      const values = reservationQuery?.mock.calls
+        .filter(([statement]) => String(statement).includes("insert into wfpc.workflow_run_reservations"))
+        .map(([, params]) => params);
+      expect(sql).not.toMatch(/insert into wfpc\.harness_runs/i);
+      expect(values?.some((params) => params?.[1] === "44444444-4444-4444-8444-666666666666" && params?.[2] === "44444444-4444-4444-8444-666666666666")).toBe(true);
+    } finally {
       await runtime.close();
     }
   });
@@ -1692,6 +2119,46 @@ describe("runtime server", () => {
     await runtime.close();
   });
 
+  it("requeues unblocked harness attention through the existing workflow queue seam when an enqueuer is available", async () => {
+    const enqueueOnce = vi.fn().mockResolvedValue("enqueued");
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() },
+      workflowQueueEnqueuer: { enqueueOnce }
+    });
+
+    const boardServiceOptions = vi.mocked(createHarnessBoardService).mock.calls.at(-1)?.[0];
+    expect(boardServiceOptions?.onResolvedAttentionDispatch).toEqual(expect.any(Function));
+
+    await boardServiceOptions?.onResolvedAttentionDispatch?.({
+      tenantId: "tenant_123",
+      userId: "user_123",
+      runId: "run_123",
+      workflowId: "wf_connect_first_workflow",
+      cardId: "card_123",
+      actionToken: "attention-token-456",
+      command: "unblock_lane",
+      state: "approved"
+    });
+
+    expect(enqueueOnce).not.toHaveBeenCalled();
+    const redispatchQuery = (vi.mocked(createPgTransactionRunner).mock.results.at(-1)?.value as { __query?: ReturnType<typeof vi.fn> } | undefined)?.__query;
+    const sql = redispatchQuery?.mock.calls.map(([statement]) => String(statement)).join("\n") ?? "";
+    expect(sql).toMatch(/insert into wfpc\.workflow_queue_outbox/i);
+    expect(sql).toMatch(/when wfpc\.workflow_queue_outbox\.status = 'claimed' then wfpc\.workflow_queue_outbox\.idempotency_key/i);
+    expect(sql).toMatch(/else excluded\.idempotency_key/i);
+    expect(redispatchQuery?.mock.calls[0]?.[1]?.[3]).toMatch(/^tenant_123:wf_connect_first_workflow:run_123:redispatch:unblock_lane:[a-f0-9]{12}$/i);
+
+    await runtime.close();
+  });
+
   it("requeues fresh harness cycles through the existing workflow queue seam when an enqueuer is available", async () => {
     const enqueueOnce = vi.fn().mockResolvedValue("enqueued");
     const runtime = createDashboardRuntime({
@@ -1923,6 +2390,69 @@ describe("runtime server", () => {
     });
 
     expect(onPackageBundleExportReady).toHaveBeenCalledOnce();
+    await runtime.close();
+  });
+
+  it("keeps governance-history delivery at export_ready when no writer is configured on the runtime", async () => {
+    resetMockExportDeliveryRow();
+    const onGovernanceHistoryExportReady = vi.fn().mockResolvedValue(undefined);
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {}
+      },
+      auth: { authenticate: vi.fn() },
+      onGovernanceHistoryExportReady
+    });
+
+    const boardServiceOptions = vi.mocked(createHarnessBoardService).mock.calls.at(-1)?.[0];
+    await boardServiceOptions?.onGovernanceHistoryExportReady?.({
+      tenantId: "tenant_123",
+      userId: "user_123",
+      runId: "run_123",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      candidateId: "governance_history_export",
+      bundleId: "bundle_123",
+      bundleRevision: "bundle_revision_123",
+      exportFormat: "obsidian_markdown_bundle",
+      recordTarget: "governance_history_record",
+      idempotencyKey: "idempotency_123",
+      noteTitle: "Governance history",
+      noteFileName: "wf_connect_first_workflow-governance-history.md",
+      placement: {
+        targetSystem: "obsidian_vault",
+        vaultFolder: "wealth-factory/governance-history/wf_connect_first_workflow",
+        primaryNotePath:
+          "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+        syncStrategy: "append_history_entry",
+        confirmationRequirement: "tenant_export_confirmation"
+      },
+      files: [
+        {
+          path: "wealth-factory/governance-history/wf_connect_first_workflow/wf_connect_first_workflow-governance-history.md",
+          mediaType: "text/markdown",
+          byteSize: 20,
+          checksum: "abc",
+          content: "# Governance history"
+        }
+      ],
+      recordCount: 2,
+      disclosureSummary: "Decision summary only",
+      redactionSummary: "Governance-safe redaction"
+    });
+
+    expect(mockExportDeliveryRow).toMatchObject({
+      status: "export_ready",
+      attempt_count: 0,
+      writer_kind: null,
+      delivered_at: null
+    });
+    expect(onGovernanceHistoryExportReady).toHaveBeenCalledOnce();
     await runtime.close();
   });
 

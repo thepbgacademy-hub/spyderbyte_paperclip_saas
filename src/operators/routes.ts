@@ -4,6 +4,7 @@ export type OperatorRouteName =
   | "inspectJob"
   | "retryJob"
   | "cancelJob"
+  | "cancelRunsBySecretRef"
   | "listDeadLetters"
   | "rotateSecret"
   | "revokeSecret"
@@ -15,6 +16,7 @@ export const OPERATOR_ROUTES: readonly OperatorRouteName[] = [
   "inspectJob",
   "retryJob",
   "cancelJob",
+  "cancelRunsBySecretRef",
   "listDeadLetters",
   "rotateSecret",
   "revokeSecret",

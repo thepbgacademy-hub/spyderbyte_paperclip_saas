@@ -17,6 +17,7 @@ import type {
   HarnessCardRecord,
   HarnessCompletionPackageSnapshotRecord,
   HarnessGovernanceHistorySnapshotRecord,
+  HarnessTaxStrategyPrerequisiteSnapshotRecord,
   HarnessExportDeliveryAttemptClaim,
   HarnessExportDeliveryReceipt,
   HarnessExportDeliveryOutcomeUpdate,
@@ -57,6 +58,8 @@ export interface HarnessRepository {
   getCompletionPackageSnapshot(runId: string): Promise<HarnessCompletionPackageSnapshotRecord | null>;
   upsertGovernanceHistorySnapshot(record: HarnessGovernanceHistorySnapshotRecord): Promise<HarnessGovernanceHistorySnapshotRecord>;
   getGovernanceHistorySnapshot(runId: string): Promise<HarnessGovernanceHistorySnapshotRecord | null>;
+  upsertTaxStrategyPrerequisiteSnapshot(record: HarnessTaxStrategyPrerequisiteSnapshotRecord): Promise<HarnessTaxStrategyPrerequisiteSnapshotRecord>;
+  getTaxStrategyPrerequisiteSnapshot(runId: string): Promise<HarnessTaxStrategyPrerequisiteSnapshotRecord | null>;
   getExportDeliveryByIdempotencyKey(idempotencyKey: string): Promise<HarnessExportDeliveryRecord | null>;
   upsertExportDelivery(record: HarnessExportDeliveryRecord): Promise<HarnessExportDeliveryRecord>;
   claimExportDeliveryAttempt(input: HarnessExportDeliveryAttemptClaim): Promise<HarnessExportDeliveryRecord | null>;
@@ -86,6 +89,7 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
   const decisions = new Map<string, HarnessBoardDecisionRecord[]>();
   const completionPackageSnapshots = new Map<string, HarnessCompletionPackageSnapshotRecord>();
   const governanceHistorySnapshots = new Map<string, HarnessGovernanceHistorySnapshotRecord>();
+  const taxStrategyPrerequisiteSnapshots = new Map<string, HarnessTaxStrategyPrerequisiteSnapshotRecord>();
   const exportDeliveries = new Map<string, HarnessExportDeliveryRecord>();
   const proposals = new Map<string, HarnessSubCardProposal>();
 
@@ -376,6 +380,30 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
             ...record,
             recentDecisions: record.recentDecisions.map((item) => ({ ...item })),
             followThroughItems: record.followThroughItems.map((item) => ({ ...item }))
+          }
+        : null;
+    },
+
+    async upsertTaxStrategyPrerequisiteSnapshot(record) {
+      const existing = taxStrategyPrerequisiteSnapshots.get(record.runId);
+      const nextRecord: HarnessTaxStrategyPrerequisiteSnapshotRecord = {
+        ...record,
+        createdAt: existing?.createdAt ?? record.createdAt,
+        evidence: record.evidence.map((item) => ({ ...item }))
+      };
+      taxStrategyPrerequisiteSnapshots.set(record.runId, nextRecord);
+      return {
+        ...nextRecord,
+        evidence: nextRecord.evidence.map((item) => ({ ...item }))
+      };
+    },
+
+    async getTaxStrategyPrerequisiteSnapshot(runId) {
+      const record = taxStrategyPrerequisiteSnapshots.get(runId);
+      return record
+        ? {
+            ...record,
+            evidence: record.evidence.map((item) => ({ ...item }))
           }
         : null;
     },
@@ -954,6 +982,41 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
       return result.rows[0] ? mapHarnessGovernanceHistorySnapshotRow(result.rows[0]) : null;
     },
 
+    async upsertTaxStrategyPrerequisiteSnapshot(record) {
+      const result = await client.query(
+        `insert into wfpc.harness_tax_strategy_prerequisite_snapshots
+          (run_id, tenant_id, workflow_id, package_id, snapshot_payload, created_at, updated_at)
+         values ($1, $2, $3, $4, $5::jsonb, $6::timestamptz, $7::timestamptz)
+         on conflict (run_id) do update
+           set snapshot_payload = excluded.snapshot_payload,
+               updated_at = excluded.updated_at
+         returning run_id, tenant_id, workflow_id, package_id, snapshot_payload, created_at, updated_at`,
+        [
+          record.runId,
+          record.tenantId,
+          record.workflowId,
+          record.packageId,
+          JSON.stringify({
+            evidence: record.evidence.map((item) => ({ ...item }))
+          }),
+          record.createdAt,
+          record.updatedAt
+        ]
+      );
+      return mapHarnessTaxStrategyPrerequisiteSnapshotRow(result.rows[0])!;
+    },
+
+    async getTaxStrategyPrerequisiteSnapshot(runId) {
+      const result = await client.query(
+        `select run_id, tenant_id, workflow_id, package_id, snapshot_payload, created_at, updated_at
+         from wfpc.harness_tax_strategy_prerequisite_snapshots
+         where run_id = $1
+         limit 1`,
+        [runId]
+      );
+      return result.rows[0] ? mapHarnessTaxStrategyPrerequisiteSnapshotRow(result.rows[0]) : null;
+    },
+
     async getExportDeliveryByIdempotencyKey(idempotencyKey) {
       const result = await client.query(
         `select id, run_id, tenant_id, workflow_id, package_id, candidate_id, status, export_format, record_target,
@@ -1375,6 +1438,51 @@ function mapHarnessGovernanceHistorySnapshotRow(row: unknown): HarnessGovernance
   };
 }
 
+function mapHarnessTaxStrategyPrerequisiteSnapshotRow(row: unknown): HarnessTaxStrategyPrerequisiteSnapshotRecord | null {
+  const record = asRecord(row);
+  if (!record.run_id || !record.tenant_id || !record.workflow_id || !record.package_id) {
+    return null;
+  }
+
+  const snapshot = asRecord(record.snapshot_payload);
+  return {
+    runId: String(record.run_id),
+    tenantId: String(record.tenant_id),
+    workflowId: String(record.workflow_id),
+    packageId: String(record.package_id),
+    evidence: Array.isArray(snapshot.evidence)
+      ? snapshot.evidence
+          .map((item) => {
+            const entry = asRecord(item);
+            if (
+              entry.artifactName !== "founder_tax_posture_documents"
+              || entry.status !== "confirmed"
+              || typeof entry.summary !== "string"
+              || typeof entry.confirmedBy !== "string"
+              || typeof entry.taxYear !== "string"
+              || typeof entry.entityType !== "string"
+              || typeof entry.confirmedAt !== "string"
+            ) {
+              return null;
+            }
+
+            return {
+              artifactName: "founder_tax_posture_documents" as const,
+              status: "confirmed" as const,
+              summary: entry.summary,
+              confirmedBy: entry.confirmedBy,
+              taxYear: entry.taxYear,
+              entityType: entry.entityType,
+              confirmedAt: entry.confirmedAt
+            };
+          })
+          .filter((item): item is HarnessTaxStrategyPrerequisiteSnapshotRecord["evidence"][number] => item !== null)
+      : [],
+    createdAt: asIsoTimestamp(record.created_at) ?? "",
+    updatedAt: asIsoTimestamp(record.updated_at) ?? ""
+  };
+}
+
 function mapHarnessExportDeliveryRow(row: unknown): HarnessExportDeliveryRecord {
   const record = asRecord(row);
   const placement = asRecord(record.placement_manifest);
@@ -1472,8 +1580,8 @@ function mapHarnessRunRow(row: unknown): HarnessRunRecord | null {
     orchestratorPersona: String(record.orchestrator_persona),
     state: String(record.state) as HarnessRunRecord["state"],
     runtimeContext: normalizeRuntimeContext(record.runtime_context),
-    createdAt: String(record.created_at),
-    updatedAt: String(record.updated_at)
+    createdAt: asIsoTimestamp(record.created_at) ?? String(record.created_at),
+    updatedAt: asIsoTimestamp(record.updated_at) ?? String(record.updated_at)
   };
 }
 
@@ -1493,8 +1601,8 @@ function mapHarnessCardRow(row: unknown): HarnessCardRecord | null {
     state: String(record.state) as HarnessCardRecord["state"],
     executionClaimToken: typeof record.execution_claim_token === "string" ? record.execution_claim_token : null,
     executionClaimedAt: asIsoTimestamp(record.execution_claimed_at),
-    createdAt: String(record.created_at),
-    updatedAt: String(record.updated_at)
+    createdAt: asIsoTimestamp(record.created_at) ?? String(record.created_at),
+    updatedAt: asIsoTimestamp(record.updated_at) ?? String(record.updated_at)
   };
 }
 
@@ -1509,7 +1617,7 @@ function mapHarnessCardEventRow(row: unknown): HarnessCardEventRecord | null {
     cardId: String(record.card_id),
     eventKind: String(record.event_kind) as HarnessCardEventRecord["eventKind"],
     payload: asRecord(record.payload),
-    createdAt: String(record.created_at)
+    createdAt: asIsoTimestamp(record.created_at) ?? String(record.created_at)
   };
 }
 
@@ -1531,7 +1639,7 @@ function mapHarnessCardContinuityRow(row: unknown): HarnessCardContinuityRecord 
     absorbedWorkItems: Array.isArray(record.absorbed_work_items)
       ? record.absorbed_work_items.filter((item): item is string => typeof item === "string")
       : [],
-    updatedAt: String(record.updated_at)
+    updatedAt: asIsoTimestamp(record.updated_at) ?? String(record.updated_at)
   };
 }
 
@@ -1599,7 +1707,7 @@ function mapHarnessBoardDecisionRow(row: unknown): HarnessBoardDecisionRecord | 
     recommendationSummary:
       typeof record.recommendation_summary === "string" ? record.recommendation_summary : null,
     objectionSummary: typeof record.objection_summary === "string" ? record.objection_summary : null,
-    createdAt: String(record.created_at)
+    createdAt: asIsoTimestamp(record.created_at) ?? String(record.created_at)
   };
 }
 

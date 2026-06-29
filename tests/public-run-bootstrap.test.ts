@@ -75,6 +75,8 @@ describe("public run bootstrap", () => {
     });
 
     const cards = await repository.listCardsForRun("run-tax-1");
+    const childLane = cards.find((card) => card.persona !== "ceo") ?? null;
+    const continuity = childLane ? await repository.getCardContinuity(childLane.id) : null;
 
     expect(cards.map((card) => ({ persona: card.persona, title: card.title, deliverableType: card.deliverableType, state: card.state }))).toEqual([
       {
@@ -90,6 +92,12 @@ describe("public run bootstrap", () => {
         state: "approved"
       }
     ]);
+    expect(continuity).toMatchObject({
+      cardId: childLane?.id,
+      runId: "run-tax-1",
+      continuitySummary:
+        "CFO should assess the founder tax posture against the current restructuring assumptions workbook, return one bounded advisor-ready recommendation, or name the single missing artifact blocking completion."
+    });
   });
 
   it("seeds the package-followup native public start with the bounded launch-copy lane", async () => {

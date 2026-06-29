@@ -18,7 +18,8 @@ import {
   type HarnessCardRecord,
   type HarnessCardState,
   type HarnessRunRecord,
-  type HarnessRuntimeContext
+  type HarnessRuntimeContext,
+  type HarnessTaxStrategyPrerequisiteEvidenceItem
 } from "./types.js";
 import {
   parseContinuityAbsorbedWorkItem,
@@ -147,6 +148,9 @@ export type HarnessWorkerExecutionEnvelope = {
   boardContext: HarnessWorkerBoardContext;
   laneExecution: HarnessWorkerLaneExecution;
   continuityContext?: HarnessWorkerContinuityContext;
+  workflowPrerequisites?: {
+    taxStrategyEvidence?: readonly HarnessTaxStrategyPrerequisiteEvidenceItem[];
+  };
   dispatchHandoff?: HarnessWorkerDispatchHandoff;
   outcomeContract: HarnessWorkerOutcomeContract;
 };
@@ -199,6 +203,7 @@ type HarnessWorkerDispatchResolution = {
   dispatch: HarnessWorkerDispatch;
   lane?: HarnessCardRecord;
   executionClaim?: HarnessWorkerExecutionClaimContext;
+  suppressedReason?: "claim_lost";
 };
 
 export type HarnessWorkerLaneAttentionTransition =
@@ -317,9 +322,15 @@ export async function buildHarnessWorkerDispatchResolution(input: {
     const runtime = createHarnessRuntime();
     runtime.resumeRun({ run, cards, proposals, continuity });
 
-    const lane =
+    const targetedCardId =
       input.targetCardId
-        ? cards.find((card) => card.id === input.targetCardId && card.persona !== "ceo") ?? null
+      ?? deriveLatestResolvedAttentionTargetCardId({
+        cards,
+        events
+      });
+    const lane =
+      targetedCardId
+        ? cards.find((card) => card.id === targetedCardId && card.persona !== "ceo") ?? null
         : selectNextActionableLane(cards);
     if (!lane) {
       return {
@@ -343,7 +354,8 @@ export async function buildHarnessWorkerDispatchResolution(input: {
           workflowId: run.workflowId,
           status: "queued",
           laneExecution: null
-        }
+        },
+        suppressedReason: "claim_lost"
       };
     }
     const claimedLane = claimedExecution.lane;
@@ -409,6 +421,48 @@ function createInitialLaneClaimHandoff(): Extract<HarnessWorkerDispatchHandoff, 
     executionStage: "initial_lane_start",
     executionStageLabel: "Initial lane start"
   };
+}
+
+function deriveLatestResolvedAttentionTargetCardId(input: {
+  cards: readonly HarnessCardRecord[];
+  events: readonly HarnessCardEventRecord[];
+}): string | null {
+  const latestAttentionEvent = [...input.events]
+    .filter((event) => event.eventKind === "attention_requested" || event.eventKind === "attention_resolved")
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+
+  if (!latestAttentionEvent || latestAttentionEvent.eventKind !== "attention_resolved") {
+    return null;
+  }
+
+  const actionKind = readWorkerEventStringField(latestAttentionEvent.payload, "actionKind");
+  if (actionKind !== "await_unblock") {
+    return null;
+  }
+
+  const targetCardId = readWorkerEventStringField(latestAttentionEvent.payload, "targetCardId");
+  if (!targetCardId) {
+    return null;
+  }
+
+  const targetCard =
+    input.cards.find((card) => card.id === targetCardId && card.persona !== "ceo")
+    ?? null;
+  if (!targetCard || ACTIONABLE_CARD_PRIORITIES[targetCard.state] === null) {
+    return null;
+  }
+
+  const laterDispatchExists = input.events.some(
+    (event) =>
+      event.cardId === targetCardId
+      && event.eventKind === "execution_dispatched"
+      && event.createdAt.localeCompare(latestAttentionEvent.createdAt) > 0
+  );
+  if (laterDispatchExists) {
+    return null;
+  }
+
+  return targetCardId;
 }
 
 function deriveDispatchHandoffForClaimedLane(input: {
@@ -514,6 +568,7 @@ export async function commitHarnessWorkerLaneOutcome(input: {
   state: Extract<HarnessCardState, "waiting" | "done" | "blocked" | "cancelled">;
   resultSummary?: string;
   resumeSummary?: string;
+  requiredArtifactName?: string;
   executionClaimToken?: string;
   runAtomically?: <T>(work: (repository: HarnessOutcomeRepository) => Promise<T>) => Promise<T>;
 }): Promise<HarnessWorkerLaneOutcome> {
@@ -790,6 +845,7 @@ export async function commitHarnessWorkerLaneOutcome(input: {
         ...(postOutcomeAction ? { postOutcomeAction } : {}),
         ...(continuity.latestResultSummary ? { latestResultSummary: continuity.latestResultSummary } : {}),
         ...(continuity.continuitySummary ? { continuitySummary: continuity.continuitySummary } : {}),
+        ...(input.requiredArtifactName ? { requiredArtifactName: input.requiredArtifactName } : {}),
         ...(nextDispatch ? { nextDispatch } : {})
       })
     );
@@ -1214,6 +1270,7 @@ function buildCommittedOutcomeEvent(input: {
   postOutcomeAction?: HarnessPostOutcomeAction;
   latestResultSummary?: string | null;
   continuitySummary?: string | null;
+  requiredArtifactName?: string | null;
   nextDispatch?: HarnessWorkerDispatch;
 }) {
   return createHarnessCardEventRecord({
@@ -1240,7 +1297,8 @@ function buildCommittedOutcomeEvent(input: {
           }
         : {}),
       ...(input.latestResultSummary ? { resultSummary: input.latestResultSummary } : {}),
-      ...(input.continuitySummary ? { continuitySummary: input.continuitySummary } : {})
+      ...(input.continuitySummary ? { continuitySummary: input.continuitySummary } : {}),
+      ...(input.requiredArtifactName ? { requiredArtifactName: input.requiredArtifactName } : {})
     }
   });
 }

@@ -10,7 +10,8 @@ import type {
   HarnessCompletionPackageSnapshotRecord,
   HarnessExportDeliveryRecord,
   HarnessGovernanceHistorySnapshotRecord,
-  HarnessRunRecord
+  HarnessRunRecord,
+  HarnessTaxStrategyPrerequisiteEvidenceInput
 } from "./types.js";
 import { createHarnessBoardDecisionRecord, createHarnessCardContinuityRecord, createHarnessCardEventRecord } from "./types.js";
 import {
@@ -90,6 +91,7 @@ export type HarnessBoardResponse = {
   runId: string;
   workflowId: string;
   packageId: string;
+  boardState: "open" | "closed";
   columns: HarnessBoardColumnView[];
   cards: HarnessBoardCardView[];
   pendingApprovals: HarnessPendingApprovalView[];
@@ -841,7 +843,18 @@ export type HarnessMemoryBoundaryView = {
 };
 
 export type HarnessActionRequestFieldView = {
-  name: "decision" | "decisionNote" | "targetCardId" | "resolution" | "resumeSummary" | "completionSummary" | "mode";
+  name:
+    | "decision"
+    | "decisionNote"
+    | "targetCardId"
+    | "resolution"
+    | "resumeSummary"
+    | "completionSummary"
+    | "mode"
+    | "taxEvidenceSummary"
+    | "taxEvidenceConfirmedBy"
+    | "taxEvidenceTaxYear"
+    | "taxEvidenceEntityType";
   label: string;
   description?: string;
   required: boolean;
@@ -3547,19 +3560,26 @@ export function createHarnessBoardService(options: {
             proposals,
             nextDispatchCard: null
           });
-          const currentAttention = deriveCurrentHarnessAttentionState(events);
-          if (
+        const currentAttention = deriveCurrentHarnessAttentionState(events);
+        if (
             !pendingAttention
             || pendingAttention.kind !== "queue_ceo_review"
             || (currentAttention && !isSameAttentionAction(currentAttention.action, pendingAttention))
           ) {
             throw new HarnessRunCompletionConflictError("Harness run is not waiting on CEO review");
           }
+          const pendingAttentionCycleMarker = derivePendingAttentionTokenCycleMarker({
+            action: pendingAttention,
+            events,
+            currentAttention
+          });
           if (request.actionToken) {
             assertHarnessActionToken(
               createPendingAttentionActionToken({
                 runId: run.id,
-                action: pendingAttention
+                action: pendingAttention,
+                requestedAt: currentAttention?.requestedAt,
+                cycleMarker: pendingAttentionCycleMarker
               }),
               request.actionToken
             );
@@ -3748,11 +3768,18 @@ export function createHarnessBoardService(options: {
       ) {
         throw new HarnessRunCompletionConflictError("Harness run is not waiting on CEO review");
       }
+      const pendingAttentionCycleMarker = derivePendingAttentionTokenCycleMarker({
+        action: pendingAttention,
+        events,
+        currentAttention
+      });
       if (request.actionToken) {
         assertHarnessActionToken(
           createPendingAttentionActionToken({
             runId: run.id,
-            action: pendingAttention
+            action: pendingAttention,
+            requestedAt: currentAttention?.requestedAt,
+            cycleMarker: pendingAttentionCycleMarker
           }),
           request.actionToken
         );
@@ -3796,11 +3823,18 @@ export function createHarnessBoardService(options: {
           ) {
             throw new HarnessRunCompletionConflictError("Harness run is not waiting on CEO next-lane review");
           }
+          const atomicPendingAttentionCycleMarker = derivePendingAttentionTokenCycleMarker({
+            action: atomicPendingAttention,
+            events: atomicEvents,
+            currentAttention: atomicCurrentAttention
+          });
           if (request.actionToken) {
             assertHarnessActionToken(
               createPendingAttentionActionToken({
                 runId: atomicRun.id,
-                action: atomicPendingAttention
+                action: atomicPendingAttention,
+                requestedAt: atomicCurrentAttention?.requestedAt,
+                cycleMarker: atomicPendingAttentionCycleMarker
               }),
               request.actionToken
             );
@@ -3809,7 +3843,9 @@ export function createHarnessBoardService(options: {
             request.actionToken
             ?? createPendingAttentionActionToken({
               runId: atomicRun.id,
-              action: atomicPendingAttention
+              action: atomicPendingAttention,
+              requestedAt: atomicCurrentAttention?.requestedAt,
+              cycleMarker: atomicPendingAttentionCycleMarker
             });
 
           const ceoCard = atomicCards.find((card) => card.persona === "ceo" && card.parentCardId === null) ?? null;
@@ -4080,6 +4116,7 @@ export function createHarnessBoardService(options: {
       command: HarnessAttentionResolutionCommand;
       actionToken?: string;
       resumeSummary?: string;
+      taxStrategyPrerequisiteEvidence?: HarnessTaxStrategyPrerequisiteEvidenceInput;
     }): Promise<{ status: "resumed"; cardId: string; state: "working" } | { status: "unblocked"; cardId: string; state: "approved" }> {
       const access = await authorizeHarnessRunRequest({
         authenticate: options.authenticate,
@@ -4120,11 +4157,20 @@ export function createHarnessBoardService(options: {
         ) {
           throw new HarnessCardProgressionConflictError("Harness run has no active attention to resolve");
         }
+        const pendingAttentionCycleMarker = derivePendingAttentionTokenCycleMarker({
+          action: pendingAttention,
+          events,
+          currentAttention
+        });
+        const targetCardId = "cardId" in pendingAttention ? pendingAttention.cardId : null;
+        const targetCard = targetCardId ? cards.find((card) => card.id === targetCardId) ?? null : null;
         if (request.actionToken) {
           assertHarnessActionToken(
             createPendingAttentionActionToken({
               runId: run.id,
-              action: pendingAttention
+              action: pendingAttention,
+              requestedAt: currentAttention?.requestedAt,
+              cycleMarker: pendingAttentionCycleMarker
             }),
             request.actionToken
           );
@@ -4140,14 +4186,13 @@ export function createHarnessBoardService(options: {
           request.actionToken ??
           createPendingAttentionActionToken({
             runId: run.id,
-            action: pendingAttention
+            action: pendingAttention,
+            requestedAt: currentAttention?.requestedAt,
+            cycleMarker: pendingAttentionCycleMarker
           });
-
-        const targetCardId = "cardId" in pendingAttention ? pendingAttention.cardId : null;
         if (!targetCardId) {
           throw new HarnessCardProgressionConflictError("Harness attention target is missing");
         }
-        const targetCard = cards.find((card) => card.id === targetCardId);
         if (!targetCard) {
           throw new HarnessCardProgressionConflictError("Harness attention target lane was not found");
         }
@@ -4181,6 +4226,43 @@ export function createHarnessBoardService(options: {
           card: updatedCard,
           ...(trimmedResumeSummary ? { resumeSummary: trimmedResumeSummary } : {})
         });
+        if (
+          request.command === "unblock_lane"
+          && request.taxStrategyPrerequisiteEvidence
+          && isFounderTaxPosturePrerequisiteAttention({
+            action: pendingAttention,
+            requiredArtifactName: derivePendingAttentionRequiredArtifactName({
+              action: pendingAttention,
+              targetCardId,
+              events
+            })
+          })
+        ) {
+          const completeTaxEvidence = normalizeTaxStrategyPrerequisiteEvidenceInput(request.taxStrategyPrerequisiteEvidence);
+          if (!completeTaxEvidence) {
+            throw new HarnessCardProgressionConflictError("Harness founder-tax prerequisite evidence is incomplete");
+          }
+          const persistedAt = new Date().toISOString();
+          await repository.upsertTaxStrategyPrerequisiteSnapshot({
+            runId: run.id,
+            tenantId: run.tenantId,
+            workflowId: run.workflowId,
+            packageId: run.packageId,
+            evidence: [
+              {
+                artifactName: "founder_tax_posture_documents",
+                status: "confirmed",
+                summary: completeTaxEvidence.summary,
+                confirmedBy: completeTaxEvidence.confirmedBy,
+                taxYear: completeTaxEvidence.taxYear,
+                entityType: completeTaxEvidence.entityType,
+                confirmedAt: persistedAt
+              }
+            ],
+            createdAt: persistedAt,
+            updatedAt: persistedAt
+          });
+        }
         const reconciledRun = await reconcileHarnessRunState({ repository, run });
         const nextRun = reconciledRun ?? run;
         const [cardsAfterResolution, proposalsAfterResolution, continuityAfterResolution] = await Promise.all([
@@ -4382,11 +4464,18 @@ export function createHarnessBoardService(options: {
           ) {
             throw new HarnessRunCycleConflictError("Harness run is not waiting on CEO review");
           }
+          const pendingAttentionCycleMarker = derivePendingAttentionTokenCycleMarker({
+            action: pendingAttention,
+            events,
+            currentAttention
+          });
           if (request.actionToken) {
             assertHarnessActionToken(
               createPendingAttentionActionToken({
                 runId: run.id,
-                action: pendingAttention
+                action: pendingAttention,
+                requestedAt: currentAttention?.requestedAt,
+                cycleMarker: pendingAttentionCycleMarker
               }),
               request.actionToken
             );
@@ -6062,6 +6151,7 @@ function buildHarnessBoardResponse(input: {
     runId: input.run.id,
     workflowId: input.run.workflowId,
     packageId: input.run.packageId,
+    boardState: input.run.state === "done" ? "closed" : "open",
     columns,
     cards,
     pendingApprovals: sortedPendingProposals.map((proposal) => {
@@ -9487,6 +9577,15 @@ function buildPendingAttentionView(input: {
     currentAttention && isSameAttentionAction(currentAttention.action, action)
       ? currentAttention.snapshot
       : null;
+  const currentAttentionRequestedAt =
+    currentAttention && isSameAttentionAction(currentAttention.action, action)
+      ? currentAttention.requestedAt
+      : undefined;
+  const pendingAttentionCycleMarker = derivePendingAttentionTokenCycleMarker({
+    action,
+    events: input.events,
+    currentAttention
+  });
   const targetCardId =
     "cardId" in action
       ? action.cardId
@@ -9505,6 +9604,15 @@ function buildPendingAttentionView(input: {
       ? persistedSnapshot.targetPersona.toUpperCase()
       : (targetCard ? targetCard.persona.toUpperCase() : undefined);
   const attentionTargetTitle = persistedSnapshot?.targetTitle ?? targetCard?.title;
+  const requiredArtifactName = derivePendingAttentionRequiredArtifactName({
+    action,
+    targetCardId,
+    events: input.events
+  });
+  const founderTaxPrerequisiteAttention = isFounderTaxPosturePrerequisiteAttention({
+    action,
+    requiredArtifactName
+  });
   const pendingApprovalCount = input.proposals.filter(
     (proposal) => proposal.status === "proposed" || proposal.status === "deferred"
   ).length;
@@ -9521,6 +9629,34 @@ function buildPendingAttentionView(input: {
         : proposedApprovalCount > 0
           ? "new_work_waiting"
           : undefined;
+  const requestFields: HarnessActionRequestFieldView[] = [
+    {
+      name: "resolution",
+      label: "Resolution choice",
+      description: "Choose the single bounded step that resolves this attention state.",
+      required: true,
+      allowedValues: [action.kind === "await_lane_resume" ? "resume_lane" : "unblock_lane"]
+    },
+    {
+      name: "resumeSummary",
+      label: action.kind === "await_lane_resume" ? "Resume summary" : "Unblock summary",
+      description: "Optional tenant-safe note describing what changed before execution resumes.",
+      required: false
+    },
+    ...(founderTaxPrerequisiteAttention ? buildTaxStrategyPrerequisiteRequestFields() : [])
+  ];
+  const primaryActionExampleRequest =
+    action.kind === "await_lane_resume"
+      ? { resolution: "resume_lane" }
+      : founderTaxPrerequisiteAttention
+        ? {
+            resolution: "unblock_lane",
+            taxEvidenceSummary: "Founder tax posture documents were confirmed for bounded tax review.",
+            taxEvidenceConfirmedBy: "operator",
+            taxEvidenceTaxYear: "2025",
+            taxEvidenceEntityType: "llc"
+          }
+        : { resolution: "unblock_lane" };
 
   return {
     kind: action.kind,
@@ -9537,7 +9673,9 @@ function buildPendingAttentionView(input: {
               actionMethod: "POST" as const,
               actionHandle: createPendingAttentionActionToken({
                 runId: input.run.id,
-                action
+                action,
+                requestedAt: currentAttentionRequestedAt,
+                cycleMarker: pendingAttentionCycleMarker
               }),
               actionLabel: "Sequence next lane",
               actionDescription: "Choose the next bounded move before another child lane starts.",
@@ -9604,7 +9742,9 @@ function buildPendingAttentionView(input: {
               actionMethod: "POST" as const,
               actionHandle: createPendingAttentionActionToken({
                 runId: input.run.id,
-                action
+                action,
+                requestedAt: currentAttentionRequestedAt,
+                cycleMarker: pendingAttentionCycleMarker
               }),
               actionLabel: "Review final assembly",
               actionDescription: "Finish the current board cycle or intentionally start the next one.",
@@ -9691,28 +9831,16 @@ function buildPendingAttentionView(input: {
           actionMethod: "POST" as const,
           actionHandle: createPendingAttentionActionToken({
             runId: input.run.id,
-            action
+            action,
+            requestedAt: currentAttentionRequestedAt,
+            cycleMarker: pendingAttentionCycleMarker
           }),
           actionLabel: action.kind === "await_lane_resume" ? "Resume lane" : "Unblock lane",
           actionDescription:
             action.kind === "await_lane_resume"
               ? "Resume the waiting lane when the required board input is ready."
               : "Clear the blocked lane when the missing dependency has been resolved.",
-          requestFields: [
-            {
-              name: "resolution",
-              label: "Resolution choice",
-              description: "Choose the single bounded step that resolves this attention state.",
-              required: true,
-              allowedValues: [action.kind === "await_lane_resume" ? "resume_lane" : "unblock_lane"]
-            },
-            {
-              name: "resumeSummary",
-              label: action.kind === "await_lane_resume" ? "Resume summary" : "Unblock summary",
-              description: "Optional tenant-safe note describing what changed before execution resumes.",
-              required: false
-            }
-          ] satisfies HarnessActionRequestFieldView[],
+          requestFields,
           actionOptions: [
             {
               value: action.kind === "await_lane_resume" ? "resume_lane" : "unblock_lane",
@@ -9726,10 +9854,7 @@ function buildPendingAttentionView(input: {
                 action.kind === "await_lane_resume"
                   ? "The lane returns to active execution and re-enters the worker queue through the existing harness path."
                   : "The lane leaves its blocked state and re-enters the worker queue through the existing harness path.",
-              exampleRequest:
-                action.kind === "await_lane_resume"
-                  ? { resolution: "resume_lane" }
-                  : { resolution: "unblock_lane" }
+              exampleRequest: primaryActionExampleRequest
             }
           ] satisfies HarnessActionOptionView[],
           recommendedOptionValue: action.kind === "await_lane_resume" ? "resume_lane" : "unblock_lane",
@@ -9763,6 +9888,86 @@ function buildPendingAttentionView(input: {
         }
       : {})
   };
+}
+
+function buildTaxStrategyPrerequisiteRequestFields(): HarnessActionRequestFieldView[] {
+  return [
+    {
+      name: "taxEvidenceSummary",
+      label: "Evidence summary",
+      description: "Summarize the bounded founder-tax prerequisite evidence that was confirmed.",
+      required: true
+    },
+    {
+      name: "taxEvidenceConfirmedBy",
+      label: "Confirmed by",
+      description: "Record who confirmed the founder-tax prerequisite evidence for this unblock step.",
+      required: true
+    },
+    {
+      name: "taxEvidenceTaxYear",
+      label: "Tax year",
+      description: "Capture the bounded tax year associated with the confirmed founder-tax evidence.",
+      required: true
+    },
+    {
+      name: "taxEvidenceEntityType",
+      label: "Entity type",
+      description: "Capture the founder entity type tied to the confirmed founder-tax evidence.",
+      required: true
+    }
+  ];
+}
+
+function isFounderTaxPosturePrerequisiteAttention(input: {
+  action: HarnessPostOutcomeAction;
+  requiredArtifactName: string | null;
+}): boolean {
+  return input.action.kind === "await_unblock"
+    && input.requiredArtifactName === "founder_tax_posture_documents";
+}
+
+function normalizeTaxStrategyPrerequisiteEvidenceInput(
+  input: HarnessTaxStrategyPrerequisiteEvidenceInput
+): HarnessTaxStrategyPrerequisiteEvidenceInput | null {
+  const summary = input.summary.trim();
+  const confirmedBy = input.confirmedBy.trim();
+  const taxYear = input.taxYear.trim();
+  const entityType = input.entityType.trim();
+  if (!summary || !confirmedBy || !taxYear || !entityType) {
+    return null;
+  }
+
+  return {
+    summary,
+    confirmedBy,
+    taxYear,
+    entityType
+  };
+}
+
+function derivePendingAttentionRequiredArtifactName(input: {
+  action: HarnessPostOutcomeAction;
+  targetCardId: string | null;
+  events: readonly HarnessCardEventRecord[];
+}): string | null {
+  if (input.action.kind !== "await_unblock" || !input.targetCardId) {
+    return null;
+  }
+
+  const latestCommittedOutcome = [...input.events]
+    .filter((event) => event.cardId === input.targetCardId && event.eventKind === "execution_outcome_committed")
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+  if (!latestCommittedOutcome) {
+    return null;
+  }
+
+  const postOutcomeActionKind = readOptionalString(latestCommittedOutcome.payload.postOutcomeActionKind);
+  if (postOutcomeActionKind !== input.action.kind) {
+    return null;
+  }
+
+  return readOptionalString(latestCommittedOutcome.payload.requiredArtifactName) ?? null;
 }
 
 function buildPendingApprovalRequestFields(handoffTargetCardId?: string): HarnessActionRequestFieldView[] {
@@ -10169,6 +10374,8 @@ function createPendingApprovalActionToken(input: {
 function createPendingAttentionActionToken(input: {
   runId: string;
   action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
+  requestedAt?: string | undefined;
+  cycleMarker?: string | undefined;
 }) {
   return createHarnessActionToken([
     "pending-attention",
@@ -10178,8 +10385,50 @@ function createPendingAttentionActionToken(input: {
     "reason" in input.action ? input.action.reason : "",
     "cardId" in input.action ? input.action.cardId : "",
     "completedCardId" in input.action ? input.action.completedCardId ?? "" : "",
-    "nextCardId" in input.action ? input.action.nextCardId ?? "" : ""
+    "nextCardId" in input.action ? input.action.nextCardId ?? "" : "",
+    input.requestedAt ?? "",
+    input.cycleMarker ?? ""
   ]);
+}
+
+function derivePendingAttentionTokenCycleMarker(input: {
+  action: Exclude<HarnessPostOutcomeAction, { kind: "dispatch_next_lane" }>;
+  events: readonly HarnessCardEventRecord[];
+  currentAttention: HarnessAttentionState | null;
+}): string | undefined {
+  if (input.currentAttention && isSameAttentionAction(input.currentAttention.action, input.action)) {
+    return input.currentAttention.requestEventId;
+  }
+
+  if (!("cardId" in input.action)) {
+    return undefined;
+  }
+
+  for (let index = input.events.length - 1; index >= 0; index -= 1) {
+    const event = input.events[index]!;
+    if (event.cardId !== input.action.cardId) {
+      continue;
+    }
+
+    if (event.eventKind === "state_changed") {
+      const nextState = typeof event.payload.to === "string" ? event.payload.to : null;
+      if (nextState === input.action.runState) {
+        return event.id;
+      }
+      continue;
+    }
+
+    if (event.eventKind === "execution_outcome_committed") {
+      const runState = typeof event.payload.runState === "string" ? event.payload.runState : null;
+      const postOutcomeActionKind =
+        typeof event.payload.postOutcomeActionKind === "string" ? event.payload.postOutcomeActionKind : null;
+      if (runState === input.action.runState && postOutcomeActionKind === input.action.kind) {
+        return event.id;
+      }
+    }
+  }
+
+  return undefined;
 }
 
 function assertHarnessActionToken(expectedToken: string, providedToken: string | undefined) {

@@ -461,6 +461,34 @@ describe("ACID guard repository", () => {
     expect(sql).not.toMatch(/completed', 'failed', 'cancelled/i);
   });
 
+  it("cancels only active runs whose stored bound provider context still names one stale secret ref", async () => {
+    const client = createSequencedClient([
+      [
+        { id: "run-1", status: "cancelled" },
+        { id: "run-2", status: "cancelled" }
+      ]
+    ]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(
+      repository.cancelWorkflowRunsBySecretRef({
+        tenantId: "tenant-1",
+        secretRef: "wf_secret_old"
+      })
+    ).resolves.toEqual({
+      cancelled: 2,
+      runIds: ["run-1", "run-2"]
+    });
+
+    const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
+    expect(sql).toMatch(/update wfpc\.workflow_runs runs/i);
+    expect(sql).toMatch(/set status = 'cancelled'/i);
+    expect(sql).toMatch(/jsonb_array_elements\(runs\.bound_provider_context\)/i);
+    expect(sql).toMatch(/entry->>'secretRef' = \$2/i);
+    expect(sql).toMatch(/runs\.status in \('queued', 'running'\)/i);
+    expect(sql).toMatch(/returning runs\.id, runs\.status/i);
+  });
+
   it("marks workflow outbox rows as enqueued after external queue success", async () => {
     const client = createSequencedClient([[{ id: "outbox-1" }]]);
     const repository = createAcidGuardRepository(createTransactionRunner(client));

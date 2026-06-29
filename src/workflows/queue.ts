@@ -12,6 +12,7 @@ type CreateWorkflowQueuePayloadInput = {
   runId: string;
   workflowId: string;
   createdByUserId: string;
+  idempotencyKey: string;
   createdAt?: Date;
 };
 
@@ -23,7 +24,7 @@ export function createWorkflowQueuePayload(input: CreateWorkflowQueuePayloadInpu
     runId: input.runId,
     workflowId: input.workflowId,
     createdByUserId: input.createdByUserId,
-    idempotencyKey: `${input.tenantId}:${input.workflowId}:${input.runId}`,
+    idempotencyKey: input.idempotencyKey,
     createdAt: (input.createdAt ?? new Date()).toISOString()
   });
 }
@@ -52,7 +53,7 @@ export function validateWorkflowQueuePayload(value: unknown): WorkflowQueuePaylo
   assertSafeValue("workflowId", payload.workflowId);
   assertSafeValue("createdByUserId", payload.createdByUserId);
 
-  if (payload.idempotencyKey !== `${payload.tenantId}:${payload.workflowId}:${payload.runId}`) {
+  if (!isValidWorkflowQueueIdempotencyKey(payload)) {
     throw new Error("Queue payload idempotency key is invalid");
   }
 
@@ -61,6 +62,15 @@ export function validateWorkflowQueuePayload(value: unknown): WorkflowQueuePaylo
   }
 
   return payload;
+}
+
+function isValidWorkflowQueueIdempotencyKey(payload: Pick<WorkflowQueuePayload, "tenantId" | "workflowId" | "runId" | "idempotencyKey">): boolean {
+  const baseRunKey = `${payload.tenantId}:${payload.workflowId}:${payload.runId}`;
+  if (payload.idempotencyKey === baseRunKey) {
+    return true;
+  }
+
+  return new RegExp(`^${escapeRegExp(baseRunKey)}:redispatch:[a-z_]+:[a-f0-9]{12}$`, "i").test(payload.idempotencyKey);
 }
 
 function readRequiredString(value: Record<string, unknown>, key: keyof WorkflowQueuePayload): string {
@@ -84,4 +94,8 @@ function assertSafeValue(key: keyof WorkflowQueuePayload, value: string): void {
   if (/sk-[a-z0-9_-]+|api[_-]?key|token|secret|authorization|password|credential|prompt/i.test(value)) {
     throw new Error(`Queue payload ${key} contains a forbidden secret-like value`);
   }
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

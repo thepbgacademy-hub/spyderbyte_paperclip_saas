@@ -5,6 +5,7 @@ import {
   createBullmqWorkflowConsumer,
   createBullmqWorkflowRunEnqueuer
 } from "../src/workflows/bullmq-workflow-queue.js";
+import { validateWorkflowQueuePayload } from "../src/workflows/queue.js";
 import { WorkerRuntimeClosingError } from "../src/worker/runtime-closing-error.js";
 
 const mocks = vi.hoisted(() => ({
@@ -148,12 +149,38 @@ describe("bullmq workflow queue", () => {
         workflowId: "workflow-1",
         createdByUserId: "user-1",
         runId: "run-1",
-        idempotencyKey: "tenant-1:workflow-1:run-1"
+        idempotencyKey
       }),
       {
         jobId: createBullmqSafeJobId(idempotencyKey)
       }
     );
+  });
+
+  it("accepts durable redispatch idempotency keys in workflow queue payloads", () => {
+    expect(() =>
+      validateWorkflowQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "workflow-1",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:workflow-1:run-1:redispatch:unblock_lane:abc123def456",
+        createdAt: new Date().toISOString()
+      })
+    ).not.toThrow();
+  });
+
+  it("rejects malformed workflow queue idempotency key suffixes", () => {
+    expect(() =>
+      validateWorkflowQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "workflow-1",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:workflow-1:run-1:redispatch:unblock_lane:nothexvalue",
+        createdAt: new Date().toISOString()
+      })
+    ).toThrow("Queue payload idempotency key is invalid");
   });
 
   it("starts a BullMQ worker that forwards queue payloads into the workflow runtime", async () => {

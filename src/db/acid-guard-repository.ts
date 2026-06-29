@@ -571,6 +571,34 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
       });
     },
 
+    async cancelWorkflowRunsBySecretRef(input: {
+      tenantId: string;
+      secretRef: string;
+    }): Promise<{ cancelled: number; runIds: string[] }> {
+      return runner.withTransaction(async (transaction) => {
+        const result = await transaction.query(
+          `update wfpc.workflow_runs runs
+           set status = 'cancelled',
+               updated_at = now()
+           where runs.tenant_id = $1
+             and exists (
+               select 1
+               from jsonb_array_elements(runs.bound_provider_context) entry
+               where entry->>'secretRef' = $2
+             )
+             and runs.status in ('queued', 'running')
+           returning runs.id, runs.status`,
+          [input.tenantId, input.secretRef]
+        );
+        return {
+          cancelled: result.rows.length,
+          runIds: result.rows
+            .map((row) => String(asRecord(row).id ?? ""))
+            .filter((value) => value.length > 0)
+        };
+      });
+    },
+
     async getBoundProviderContext(input: { tenantId: string; runId: string }): Promise<readonly BoundProviderContextRecord[] | null> {
       return runner.withTransaction(async (transaction) => {
         const result = await transaction.query(

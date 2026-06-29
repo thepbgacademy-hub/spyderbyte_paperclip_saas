@@ -57,6 +57,7 @@ const fallbackBoardBase: HarnessBoardResponse = {
   runId: "harness-browser-fallback",
   workflowId: "wf_connect_first_workflow",
   packageId: "pkg_bib_connect",
+  boardState: "open",
   columns: [
     {
       id: "planning",
@@ -5646,6 +5647,7 @@ function isHarnessBoardErrorCode(value: unknown): value is HarnessBoardClientErr
     "request_rejected",
     "service_unavailable",
     "stale_contract",
+    "timed_out",
     "unauthorized",
     "unknown"
   ].includes(String(value));

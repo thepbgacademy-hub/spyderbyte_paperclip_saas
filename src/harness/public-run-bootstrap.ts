@@ -30,7 +30,8 @@ const PUBLIC_WORKFLOW_BOOTSTRAPS: Readonly<Record<string, PublicWorkflowBootstra
     persona: "cfo",
     title: "Review the founder tax posture",
     deliverableType: "tax_strategy_review",
-    continuitySummary: "CFO should begin this approved tax strategy review lane: Review the founder tax posture."
+    continuitySummary:
+      "CFO should assess the founder tax posture against the current restructuring assumptions workbook, return one bounded advisor-ready recommendation, or name the single missing artifact blocking completion."
   },
   [PACKAGE_FOLLOWUP_WORKFLOW_ID]: {
     persona: "cmo",

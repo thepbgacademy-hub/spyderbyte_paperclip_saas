@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   HarnessBoard,
@@ -30,7 +30,7 @@ import {
   summarizeContractActionState,
   HarnessBoardPage
 } from "../apps/web/src/pages/HarnessBoardPage.js";
-import { HarnessBoardClientError } from "../apps/web/src/harness-board-client.js";
+import { createHarnessBoardClient, HarnessBoardClientError } from "../apps/web/src/harness-board-client.js";
 import type { HarnessBoardResponse } from "../src/harness/board-service.js";
 
 const cards: HarnessBoardCard[] = [
@@ -104,6 +104,7 @@ const boardResponse: HarnessBoardResponse = {
   runId: "run_ui_test_1",
   workflowId: "wf_connect_first_workflow",
   packageId: "pkg_bib_connect",
+  boardState: "open",
   columns,
   cards,
   pendingApprovals: [
@@ -2078,6 +2079,21 @@ describe("harness board UI", () => {
       "Retry the live board load through the bounded reload control.",
       "If the timeout repeats, pause before retrying again so the board does not slip into a manual refresh loop."
     ]);
+  });
+
+  it("preserves timed_out when the live board API returns that explicit error code", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ code: "timed_out" }), {
+        status: 408,
+        headers: { "content-type": "application/json" }
+      })
+    );
+    const client = createHarnessBoardClient(fetchImpl as typeof fetch, undefined);
+
+    await expect(client.fetchBoard("wf_connect_first_workflow")).rejects.toMatchObject({
+      code: "timed_out",
+      status: 408
+    });
   });
 
   it("renders initial action feedback guidance when the page is seeded with a live-action failure", () => {

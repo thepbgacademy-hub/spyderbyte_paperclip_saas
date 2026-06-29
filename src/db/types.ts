@@ -182,6 +182,16 @@ export type HarnessGovernanceHistorySnapshotRow = {
   updatedAt: string;
 };
 
+export type HarnessTaxStrategyPrerequisiteSnapshotRow = {
+  runId: string;
+  tenantId: string;
+  workflowId: string;
+  packageId: string;
+  snapshotPayload: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type SecretReferenceRow = {
   id: string;
   tenantId: string;

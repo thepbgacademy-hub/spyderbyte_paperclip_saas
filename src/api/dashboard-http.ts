@@ -25,7 +25,7 @@ export type DashboardHttpResponse = {
 
 type DashboardApi = {
   listDashboard(request: { authorization: string; cookie?: string }): Promise<unknown>;
-  startWorkflowRun(request: { authorization: string; cookie?: string; workflowId: string }): Promise<unknown>;
+  startWorkflowRun(request: { authorization: string; cookie?: string; workflowId: string; freshRun?: boolean }): Promise<unknown>;
 };
 
 type RateLimiter = {
@@ -102,6 +102,7 @@ export function createDashboardHttpHandler(options: {
       }
 
       const workflowId = readRequiredString(request.body, "workflowId");
+      const freshRun = readOptionalBoolean(request.body, "freshRun");
       if (!workflowId) {
         return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
       }
@@ -110,7 +111,8 @@ export function createDashboardHttpHandler(options: {
         const body = await options.dashboardApi.startWorkflowRun({
           authorization: request.headers.authorization ?? "",
           ...(request.headers.cookie ? { cookie: request.headers.cookie } : {}),
-          workflowId
+          workflowId,
+          ...(freshRun ? { freshRun: true } : {})
         });
         assertWealthFactoryResponse(body);
         return { status: 202, headers: { ...securityHeaders, ...corsHeaders }, body };
@@ -160,6 +162,13 @@ function readRequiredString(body: unknown, key: string): string | null {
 
 function hasErrorCode(error: unknown, code: string): boolean {
   return typeof error === "object" && error !== null && "code" in error && (error as { code?: unknown }).code === code;
+}
+
+function readOptionalBoolean(body: unknown, key: string): boolean {
+  if (!body || typeof body !== "object") {
+    return false;
+  }
+  return (body as Record<string, unknown>)[key] === true;
 }
 
 function retryAfterSeconds(resetAt: number): number {

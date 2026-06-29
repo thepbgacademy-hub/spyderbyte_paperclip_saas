@@ -194,6 +194,7 @@ const { makeHarnessRepository, harnessRepositoryRef } = vi.hoisted(() => {
       }
       return null;
     }),
+    getTaxStrategyPrerequisiteSnapshot: vi.fn().mockResolvedValue(null),
     listProposalsForRun: vi.fn().mockResolvedValue([]),
     listEventsForRun: vi.fn().mockResolvedValue([]),
     listCardContinuityForRun: vi.fn().mockResolvedValue([
@@ -308,6 +309,10 @@ vi.mock("../src/db/acid-guard-repository.js", () => ({
       label: "Bound OpenAI",
       secretRef: "wf_secret_bound",
       metadata: {}
+    }),
+    stageWorkflowRunRedispatch: vi.fn().mockResolvedValue({
+      staged: true,
+      outboxId: "outbox-redispatch-1"
     }),
     transitionWorkflowRunStatus: vi.fn().mockResolvedValue({ transitioned: true, status: "queued" })
   }))
@@ -925,6 +930,168 @@ describe("worker runtime", () => {
     await runtime.close();
   });
 
+  it("reclaims the just-unblocked lane instead of an older approved sibling after unblock attention resolves", async () => {
+    const onHarnessLaneReady = vi.fn();
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-harness-unblock-target",
+      onHarnessLaneReady
+    });
+
+    const harnessRepository = harnessRepositoryRef.current;
+    harnessRepository.listCardsForRun.mockResolvedValueOnce([
+      {
+        id: "card_ceo",
+        runId: "run-1",
+        parentCardId: null,
+        persona: "ceo",
+        title: "Plan run",
+        deliverableType: "plan",
+        state: "planning",
+        executionClaimToken: null,
+        executionClaimedAt: null,
+        createdAt: "2026-05-21T10:00:00.000Z",
+        updatedAt: "2026-05-21T10:00:00.000Z"
+      },
+      {
+        id: "card_cmo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cmo",
+        title: "Older approved messaging lane",
+        deliverableType: "marketing_plan",
+        state: "approved",
+        executionClaimToken: null,
+        executionClaimedAt: null,
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:02:00.000Z"
+      },
+      {
+        id: "card_cfo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Just unblocked pricing lane",
+        deliverableType: "pricing_review",
+        state: "approved",
+        executionClaimToken: null,
+        executionClaimedAt: null,
+        createdAt: "2026-05-21T10:03:00.000Z",
+        updatedAt: "2026-05-21T10:09:00.000Z"
+      }
+    ]);
+    harnessRepository.listEventsForRun.mockResolvedValueOnce([
+      {
+        id: "event_attention_requested",
+        cardId: "card_cfo",
+        eventKind: "attention_requested",
+        payload: {
+          actionKind: "await_unblock",
+          runState: "blocked",
+          targetCardId: "card_cfo"
+        },
+        createdAt: "2026-05-21T10:08:00.000Z"
+      },
+      {
+        id: "event_attention_resolved",
+        cardId: "card_cfo",
+        eventKind: "attention_resolved",
+        payload: {
+          actionKind: "await_unblock",
+          runState: "blocked",
+          targetCardId: "card_cfo",
+          statusLabel: "Waiting on unblock",
+          summary: "Resume the pricing lane from the revised assumptions workbook.",
+          targetPersona: "cfo"
+        },
+        createdAt: "2026-05-21T10:09:00.000Z"
+      }
+    ]);
+    harnessRepository.claimCardForExecution.mockImplementationOnce(async ({ cardId }) => {
+      if (cardId === "card_cfo") {
+        return {
+          id: "card_cfo",
+          runId: "run-1",
+          parentCardId: "card_ceo",
+          persona: "cfo",
+          title: "Just unblocked pricing lane",
+          deliverableType: "pricing_review",
+          state: "working",
+          executionClaimToken: "claim-cfo-unblocked",
+          executionClaimedAt: "2026-05-21T10:10:00.000Z",
+          createdAt: "2026-05-21T10:03:00.000Z",
+          updatedAt: "2026-05-21T10:10:00.000Z"
+        };
+      }
+
+      return {
+        id: "card_cmo",
+        runId: "run-1",
+        parentCardId: "card_ceo",
+        persona: "cmo",
+        title: "Older approved messaging lane",
+        deliverableType: "marketing_plan",
+        state: "working",
+        executionClaimToken: "claim-cmo-older",
+        executionClaimedAt: "2026-05-21T10:10:00.000Z",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:10:00.000Z"
+      };
+    });
+    harnessRepository.getCardContinuity.mockImplementationOnce(async (cardId: string) => ({
+      cardId,
+      runId: "run-1",
+      continuitySource: "resume_override",
+      continuitySummary:
+        cardId === "card_cfo"
+          ? "Resume the pricing lane from the revised assumptions workbook."
+          : "Resume the older messaging lane from the earlier approval snapshot.",
+      latestResultSummary: cardId === "card_cfo" ? "Pricing blocker was cleared." : "Messaging draft is still staged.",
+      absorbedWorkItems: [],
+      updatedAt: "2026-05-21T10:09:00.000Z"
+    }));
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1:redispatch:unblock_lane:abc123def456",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+
+    expect(harnessRepository.claimCardForExecution).toHaveBeenCalledWith({
+      cardId: "card_cfo",
+      expectedState: "approved"
+    });
+    expect(harnessRepository.claimCardForExecution).toHaveBeenCalledTimes(1);
+    expect(harnessRepository.claimCardForExecution).not.toHaveBeenCalledWith({
+      cardId: "card_cmo",
+      expectedState: "approved"
+    });
+    expect(onHarnessLaneReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        laneExecution: expect.objectContaining({
+          cardId: "card_cfo"
+        })
+      })
+    );
+    expect(onHarnessLaneReady).toHaveBeenCalledTimes(1);
+
+    await runtime.close();
+  });
+
   it("routes native-enabled harness workflows through the native executor seam without hitting Paperclip", async () => {
     const { createPaperclipClient } = await import("../src/paperclip/client.js");
     const nativeExecutor = {
@@ -1315,7 +1482,96 @@ describe("worker runtime", () => {
       harnessRepositoryRef.current.upsertCardContinuity.mock.calls.some(([value]) =>
         value.cardId === "card_cfo" &&
         value.continuitySummary ===
-          "Native execution reached the provider lane but could not complete the provider call safely. Review the provider response and continue with workflow-specific native handling."
+          "Native execution reached the provider lane but the provider request failed before a usable response was returned."
+      )
+    ).toBe(true);
+
+    await runtime.close();
+  });
+
+  it("fails closed to a blocked native lane outcome with the provider HTTP status when OpenAI rejects the request", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      text: async () => "{\"error\":{\"message\":\"project header mismatch\"}}"
+    });
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow",
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-native-request-rejected"
+    });
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+
+    expect(
+      harnessRepositoryRef.current.upsertCardContinuity.mock.calls.some(([value]) =>
+        value.cardId === "card_cfo" &&
+        value.continuitySummary ===
+          "Native execution reached the provider lane but the provider rejected the request with HTTP 403."
+      )
+    ).toBe(true);
+
+    await runtime.close();
+  });
+
+  it("fails closed to a blocked native lane outcome when the provider response is invalid", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        output: []
+      })
+    });
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow",
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+      }),
+      workerInstanceId: "worker-test-native-response-invalid"
+    });
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_connect_first_workflow:run-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-1",
+      workflowId: "wf_connect_first_workflow",
+      status: "running"
+    });
+
+    expect(harnessRepositoryRef.current.transitionCardState).toHaveBeenCalledWith({
+      cardId: "card_cfo",
+      expectedState: "working",
+      expectedExecutionClaimToken: "claim-cfo-1",
+      state: "blocked"
+    });
+    expect(
+      harnessRepositoryRef.current.upsertCardContinuity.mock.calls.some(([value]) =>
+        value.cardId === "card_cfo" &&
+        value.continuitySummary ===
+          "Native execution reached the provider lane but the provider response was invalid for bounded native execution."
       )
     ).toBe(true);
 
@@ -1817,6 +2073,361 @@ describe("worker runtime", () => {
         String(value).includes("\"executionEngine\":\"wf_native_v1\"")
       )
     ).toBe(true);
+
+    await runtime.close();
+  });
+
+  it("threads tax-strategy prerequisite evidence into the native execution envelope on the bounded re-entry seam", async () => {
+    const { createPaperclipClient } = await import("../src/paperclip/client.js");
+    const nativeExecutor = {
+      execute: vi.fn().mockResolvedValue({
+        state: "done",
+        resultSummary: "Completed the bounded tax review after the founder documents were confirmed."
+      })
+    };
+    let taxLaneState: "approved" | "working" | "done" = "approved";
+    harnessRepositoryRef.current.getRun.mockResolvedValueOnce({
+      id: "run-tax-1",
+      tenantId: "tenant-1",
+      workflowId: "wf_tax_strategy",
+      packageId: "pkg_tax_strategy",
+      orchestratorPersona: "ceo",
+      state: "active",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      },
+      createdAt: "2026-05-21T10:00:00.000Z",
+      updatedAt: "2026-05-21T10:00:00.000Z"
+    });
+    harnessRepositoryRef.current.listCardsForRun.mockImplementation(async (runId: string) => {
+      if (runId !== "run-tax-1") {
+        return [];
+      }
+      return [
+        {
+          id: "card_ceo",
+          runId: "run-tax-1",
+          parentCardId: null,
+          persona: "ceo",
+          title: "Plan tax strategy run",
+          deliverableType: "plan",
+          state: "planning",
+          executionClaimToken: null,
+          executionClaimedAt: null,
+          createdAt: "2026-05-21T10:00:00.000Z",
+          updatedAt: "2026-05-21T10:00:00.000Z"
+        },
+        {
+          id: "card_cfo",
+          runId: "run-tax-1",
+          parentCardId: "card_ceo",
+          persona: "cfo",
+          title: "Review the founder tax posture",
+          deliverableType: "tax_strategy_review",
+          state: taxLaneState,
+          executionClaimToken: taxLaneState === "approved" ? null : "claim-cfo-tax",
+          executionClaimedAt: taxLaneState === "approved" ? null : "2026-05-21T10:04:00.000Z",
+          createdAt: "2026-05-21T10:01:00.000Z",
+          updatedAt: "2026-05-21T10:04:00.000Z"
+        }
+      ];
+    });
+    harnessRepositoryRef.current.claimCardForExecution.mockImplementationOnce(async () => {
+      taxLaneState = "working";
+      return {
+        id: "card_cfo",
+        runId: "run-tax-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Review the founder tax posture",
+        deliverableType: "tax_strategy_review",
+        state: "working",
+        executionClaimToken: "claim-cfo-tax",
+        executionClaimedAt: "2026-05-21T10:04:00.000Z",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:04:00.000Z"
+      };
+    });
+    harnessRepositoryRef.current.getCard.mockImplementation(async (cardId: string) => {
+      if (cardId !== "card_cfo") {
+        return null;
+      }
+      return {
+        id: "card_cfo",
+        runId: "run-tax-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Review the founder tax posture",
+        deliverableType: "tax_strategy_review",
+        state: taxLaneState,
+        executionClaimToken: taxLaneState === "approved" ? null : "claim-cfo-tax",
+        executionClaimedAt: taxLaneState === "approved" ? null : "2026-05-21T10:04:00.000Z",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:04:00.000Z"
+      };
+    });
+    harnessRepositoryRef.current.transitionCardState.mockImplementationOnce(async () => {
+      taxLaneState = "done";
+      return {
+        id: "card_cfo",
+        runId: "run-tax-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Review the founder tax posture",
+        deliverableType: "tax_strategy_review",
+        state: "done",
+        executionClaimToken: null,
+        executionClaimedAt: null,
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:05:00.000Z"
+      };
+    });
+    harnessRepositoryRef.current.getCardContinuity.mockImplementation(async (cardId: string) => {
+      if (cardId !== "card_cfo") {
+        return null;
+      }
+      return {
+        cardId: "card_cfo",
+        runId: "run-tax-1",
+        continuitySource: "resume_override",
+        continuitySummary: "Resume the tax strategy lane from the latest restructuring assumptions workbook.",
+        latestResultSummary: "The draft tax posture is directionally viable.",
+        absorbedWorkItems: ["Check restructuring assumptions"],
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      };
+    });
+    harnessRepositoryRef.current.getTaxStrategyPrerequisiteSnapshot.mockResolvedValueOnce({
+      runId: "run-tax-1",
+      tenantId: "tenant-1",
+      workflowId: "wf_tax_strategy",
+      packageId: "pkg_tax_strategy",
+      evidence: [
+        {
+          artifactName: "founder_tax_posture_documents",
+          status: "confirmed",
+          summary: "Founder tax posture documents were confirmed for bounded tax review.",
+          confirmedBy: "operator",
+          taxYear: "2025",
+          entityType: "llc",
+          confirmedAt: "2026-06-23T16:00:00.000Z"
+        }
+      ],
+      createdAt: "2026-06-23T16:00:00.000Z",
+      updatedAt: "2026-06-23T16:00:00.000Z"
+    });
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_tax_strategy",
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf_tax_strategy"
+      }),
+      workerInstanceId: "worker-test-tax-prerequisite-evidence",
+      nativeExecutor
+    });
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-tax-1",
+        workflowId: "wf_tax_strategy",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_tax_strategy:run-tax-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-tax-1",
+      workflowId: "wf_tax_strategy",
+      status: "queued"
+    });
+
+    expect(nativeExecutor.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowId: "wf_tax_strategy",
+        executionEnvelope: expect.objectContaining({
+          laneExecution: expect.objectContaining({
+            resumeFocus: "Resume the tax strategy lane from the latest restructuring assumptions workbook."
+          }),
+          continuityContext: expect.objectContaining({
+            summary: "Resume the tax strategy lane from the latest restructuring assumptions workbook."
+          }),
+          workflowPrerequisites: expect.objectContaining({
+            taxStrategyEvidence: [
+              expect.objectContaining({
+                artifactName: "founder_tax_posture_documents",
+                summary: "Founder tax posture documents were confirmed for bounded tax review.",
+                confirmedBy: "operator",
+                taxYear: "2025",
+                entityType: "llc"
+              })
+            ]
+          })
+        })
+      })
+    );
+    expect(vi.mocked(createPaperclipClient)).not.toHaveBeenCalled();
+
+    await runtime.close();
+  });
+
+  it("fails closed to a blocked native lane outcome when tax-strategy prerequisite evidence cannot be loaded", async () => {
+    const { createPaperclipClient } = await import("../src/paperclip/client.js");
+    const nativeExecutor = {
+      execute: vi.fn()
+    };
+    let taxLaneState: "approved" | "working" | "blocked" = "approved";
+    harnessRepositoryRef.current.getRun.mockResolvedValueOnce({
+      id: "run-tax-1",
+      tenantId: "tenant-1",
+      workflowId: "wf_tax_strategy",
+      packageId: "pkg_tax_strategy",
+      orchestratorPersona: "ceo",
+      state: "active",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      },
+      createdAt: "2026-05-21T10:00:00.000Z",
+      updatedAt: "2026-05-21T10:00:00.000Z"
+    });
+    harnessRepositoryRef.current.listCardsForRun.mockImplementation(async (runId: string) => {
+      if (runId !== "run-tax-1") {
+        return [];
+      }
+      return [
+        {
+          id: "card_ceo",
+          runId: "run-tax-1",
+          parentCardId: null,
+          persona: "ceo",
+          title: "Plan tax strategy run",
+          deliverableType: "plan",
+          state: "planning",
+          executionClaimToken: null,
+          executionClaimedAt: null,
+          createdAt: "2026-05-21T10:00:00.000Z",
+          updatedAt: "2026-05-21T10:00:00.000Z"
+        },
+        {
+          id: "card_cfo",
+          runId: "run-tax-1",
+          parentCardId: "card_ceo",
+          persona: "cfo",
+          title: "Review the founder tax posture",
+          deliverableType: "tax_strategy_review",
+          state: taxLaneState,
+          executionClaimToken: taxLaneState === "approved" ? null : "claim-cfo-1",
+          executionClaimedAt: taxLaneState === "approved" ? null : "2026-05-21T10:04:00.000Z",
+          createdAt: "2026-05-21T10:01:00.000Z",
+          updatedAt: "2026-05-21T10:04:00.000Z"
+        }
+      ];
+    });
+    harnessRepositoryRef.current.claimCardForExecution.mockImplementationOnce(async () => {
+      taxLaneState = "working";
+      return {
+        id: "card_cfo",
+        runId: "run-tax-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Review the founder tax posture",
+        deliverableType: "tax_strategy_review",
+        state: "working",
+        executionClaimToken: "claim-cfo-1",
+        executionClaimedAt: "2026-05-21T10:04:00.000Z",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:04:00.000Z"
+      };
+    });
+    harnessRepositoryRef.current.getCard.mockImplementation(async (cardId: string) => {
+      if (cardId !== "card_cfo") {
+        return null;
+      }
+      return {
+        id: "card_cfo",
+        runId: "run-tax-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Review the founder tax posture",
+        deliverableType: "tax_strategy_review",
+        state: taxLaneState,
+        executionClaimToken: taxLaneState === "approved" ? null : "claim-cfo-1",
+        executionClaimedAt: taxLaneState === "approved" ? null : "2026-05-21T10:04:00.000Z",
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:04:00.000Z"
+      };
+    });
+    harnessRepositoryRef.current.transitionCardState.mockImplementationOnce(async () => {
+      taxLaneState = "blocked";
+      return {
+        id: "card_cfo",
+        runId: "run-tax-1",
+        parentCardId: "card_ceo",
+        persona: "cfo",
+        title: "Review the founder tax posture",
+        deliverableType: "tax_strategy_review",
+        state: "blocked",
+        executionClaimToken: null,
+        executionClaimedAt: null,
+        createdAt: "2026-05-21T10:01:00.000Z",
+        updatedAt: "2026-05-21T10:05:00.000Z"
+      };
+    });
+    harnessRepositoryRef.current.getCardContinuity.mockImplementation(async (cardId: string) => {
+      if (cardId !== "card_cfo") {
+        return null;
+      }
+      return {
+        cardId: "card_cfo",
+        runId: "run-tax-1",
+        continuitySource: "resume_override",
+        continuitySummary: "Resume the tax strategy lane from the latest restructuring assumptions workbook.",
+        latestResultSummary: "The draft tax posture is directionally viable.",
+        absorbedWorkItems: ["Check restructuring assumptions"],
+        updatedAt: "2026-05-21T10:03:00.000Z"
+      };
+    });
+    harnessRepositoryRef.current.getTaxStrategyPrerequisiteSnapshot.mockRejectedValueOnce(new Error("db offline"));
+    const runtime = createWorkerRuntime({
+      env: loadWorkerEnv({
+        ...validEnv,
+        WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_tax_strategy",
+        WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: "wf_tax_strategy"
+      }),
+      workerInstanceId: "worker-test-tax-prerequisite-evidence-load-failure",
+      nativeExecutor
+    });
+
+    await expect(
+      runtime.processQueuePayload({
+        tenantId: "tenant-1",
+        runId: "run-tax-1",
+        workflowId: "wf_tax_strategy",
+        createdByUserId: "user-1",
+        idempotencyKey: "tenant-1:wf_tax_strategy:run-tax-1",
+        createdAt: new Date().toISOString()
+      })
+    ).resolves.toEqual({
+      runId: "run-tax-1",
+      workflowId: "wf_tax_strategy",
+      status: "queued"
+    });
+
+    expect(nativeExecutor.execute).not.toHaveBeenCalled();
+    expect(harnessRepositoryRef.current.transitionCardState).toHaveBeenCalledWith({
+      cardId: "card_cfo",
+      expectedState: "working",
+      expectedExecutionClaimToken: "claim-cfo-1",
+      state: "blocked"
+    });
+    expect(
+      harnessRepositoryRef.current.upsertCardContinuity.mock.calls.some(([value]) =>
+        value.cardId === "card_cfo" &&
+        value.continuitySummary ===
+          "Native execution could not continue because wf_tax_strategy prerequisite evidence could not be loaded safely at execution time. Keep this lane blocked until the prerequisite snapshot read is healthy again."
+      )
+    ).toBe(true);
+    expect(vi.mocked(createPaperclipClient)).not.toHaveBeenCalled();
 
     await runtime.close();
   });
@@ -3678,7 +4289,7 @@ describe("worker runtime", () => {
     await runtime.close();
   });
 
-  it("stays quiet when the worker loses the approved-lane claim race", async () => {
+  it("durably restages the run when the worker loses the approved-lane claim race", async () => {
     const { createAcidGuardRepository } = await import("../src/db/acid-guard-repository.js");
     const onHarnessLaneReady = vi.fn();
     const runtime = createWorkerRuntime({
@@ -3718,6 +4329,12 @@ describe("worker runtime", () => {
       runId: "run-1",
       from: ["queued", "running"],
       to: "queued"
+    });
+    expect(acidRepository.stageWorkflowRunRedispatch).toHaveBeenCalledWith({
+      tenantId: "tenant-1",
+      runId: "run-1",
+      userId: "user-1",
+      idempotencyKey: expect.stringMatching(/^tenant-1:wf_connect_first_workflow:run-1:redispatch:claim_lost:[a-f0-9]{12}$/i)
     });
     expect(onHarnessLaneReady).not.toHaveBeenCalled();
 

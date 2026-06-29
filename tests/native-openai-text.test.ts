@@ -370,7 +370,8 @@ describe("native OpenAI text generator", () => {
       })
     ).rejects.toMatchObject({
       name: "NativeOpenAIExecutionError",
-      reason: "request_failed"
+      reason: "request_failed",
+      statusCode: 401
     } satisfies Partial<NativeOpenAIExecutionError>);
   });
 

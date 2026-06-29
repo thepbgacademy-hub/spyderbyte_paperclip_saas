@@ -7,7 +7,8 @@ export const CURRENT_CORE_NATIVE_WORKFLOW_IDS = [
   TAX_STRATEGY_WORKFLOW_ID,
   PACKAGE_FOLLOWUP_WORKFLOW_ID
 ] as const;
-export const NATIVE_DECISION_JSON_SHAPE = "{\"state\":\"done|waiting|blocked|cancelled\",\"summary\":\"...\"}";
+export const NATIVE_DECISION_JSON_SHAPE =
+  "{\"state\":\"done|waiting|blocked|cancelled\",\"summary\":\"...\",\"requiredArtifactName?\":\"founder_tax_posture_documents\"}";
 
 export type NativeWorkflowDefinition = {
   executionStrategy: "single_step" | "staged_review";
@@ -62,15 +63,16 @@ export const NATIVE_WORKFLOW_DEFINITIONS: Record<string, NativeWorkflowDefinitio
     completedPrefix: "Completed the Tax Strategy Workflow",
     actionPrefix: "Tax Strategy Workflow",
     invalidDecisionLabel: "Tax Strategy Workflow",
-    extraGuidance: "Focus on tax-position readiness, open assumptions, and the clearest next bounded operator action.",
+    extraGuidance:
+      "Focus on tax-position readiness, the current restructuring assumptions, and the clearest bounded advisor-ready next step. Do not ask for generic discovery; if a named prerequisite artifact is missing, return blocked and name that artifact.",
     domainContext: {
       roleInstruction: "Operate as a bounded tax-posture reviewer for the Tax Strategy family.",
       interpretationFocus:
-        "Focus on tax-position readiness, restructuring assumptions, and the next bounded recommendation or evidence request.",
+        "Focus on tax-position readiness, restructuring assumptions, and one bounded recommendation. Use waiting only for an explicit board-resume decision; if a named prerequisite artifact is missing, treat it as blocked instead of requesting generic intake.",
       draftConstraint:
-        "Keep the drafted outcome anchored to the current tax strategy review lane, open assumptions, and one bounded advisor-ready next step.",
+        "Keep the drafted outcome anchored to the current tax strategy review lane, the current restructuring assumptions, and one bounded advisor-ready next step or named missing artifact.",
       validationGate:
-        "Approve only when the outcome stays inside the current tax review lane and does not overstate finalized tax recommendations beyond the evidence."
+        "Approve only when the outcome stays inside the current tax review lane, does not overstate finalized tax recommendations beyond the evidence, and does not widen into generic tax discovery."
     }
   },
   [PACKAGE_FOLLOWUP_WORKFLOW_ID]: {

@@ -9,6 +9,7 @@ const MAX_RESULT_SUMMARY_LENGTH = 500;
 export class NativeOpenAIExecutionError extends Error {
   readonly code = "native_provider_execution_failed";
   readonly publicMessage = "workflow_failed";
+  readonly statusCode: number | undefined;
 
   constructor(
     readonly reason:
@@ -16,10 +17,14 @@ export class NativeOpenAIExecutionError extends Error {
       | "secret_missing"
       | "request_failed"
       | "response_invalid",
-    message: string
+    message: string,
+    options?: {
+      statusCode?: number;
+    }
   ) {
     super(message);
     this.name = "NativeOpenAIExecutionError";
+    this.statusCode = Number.isInteger(options?.statusCode) ? options?.statusCode : undefined;
   }
 }
 
@@ -94,7 +99,8 @@ export function createNativeOpenAITextGenerator(options?: {
         const body = await safeReadText(response);
         throw new NativeOpenAIExecutionError(
           "request_failed",
-          `Native OpenAI text generation failed with status ${response.status}${body ? `: ${body}` : ""}`
+          `Native OpenAI text generation failed with status ${response.status}${body ? `: ${body}` : ""}`,
+          { statusCode: response.status }
         );
       }
 

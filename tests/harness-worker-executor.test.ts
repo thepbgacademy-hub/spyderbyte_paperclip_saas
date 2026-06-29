@@ -152,6 +152,331 @@ describe("harness worker executor", () => {
     );
   });
 
+  it("prefers the just-resolved unblock target over an older approved sibling when rebuilding dispatch", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cmoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cmo",
+      title: "Older approved messaging lane",
+      deliverableType: "marketing_plan"
+    });
+    cmoCard.state = "approved";
+    cmoCard.updatedAt = "2026-05-21T10:02:00.000Z";
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Just unblocked pricing lane",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "approved";
+    cfoCard.updatedAt = "2026-05-21T10:09:00.000Z";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cmoCard);
+    await repository.insertCard(cfoCard);
+    const unblockRequestedEvent = createHarnessCardEventRecord({
+      cardId: cfoCard.id,
+      eventKind: "attention_requested",
+      payload: {
+        actionKind: "await_unblock",
+        runState: "blocked",
+        targetCardId: cfoCard.id
+      }
+    });
+    unblockRequestedEvent.createdAt = "2026-05-21T10:08:00.000Z";
+    const unblockResolvedEvent = createHarnessCardEventRecord({
+      cardId: cfoCard.id,
+      eventKind: "attention_resolved",
+      payload: {
+        actionKind: "await_unblock",
+        runState: "blocked",
+        targetCardId: cfoCard.id,
+        statusLabel: "Waiting on unblock",
+        summary: "Resume the pricing lane from the revised assumptions workbook.",
+        targetPersona: "cfo"
+      }
+    });
+    unblockResolvedEvent.createdAt = "2026-05-21T10:09:30.000Z";
+    await repository.insertEvent(unblockRequestedEvent);
+    await repository.insertEvent(unblockResolvedEvent);
+    await repository.upsertCardContinuity(
+      createHarnessCardContinuityRecord({
+        cardId: cfoCard.id,
+        runId: run.id,
+        continuitySource: "resume_override",
+        continuitySummary: "Resume the pricing lane from the revised assumptions workbook.",
+        latestResultSummary: "Pricing blocker was cleared."
+      })
+    );
+
+    const resolution = await buildHarnessWorkerDispatchResolution({
+      repository,
+      tenantId: "tenant-1",
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow"
+    });
+
+    expect(resolution.dispatch.laneExecution).toEqual(
+      expect.objectContaining({
+        cardId: cfoCard.id,
+        persona: "cfo"
+      })
+    );
+    expect(resolution.executionClaim).toEqual(
+      expect.objectContaining({
+        kind: "approved_claim"
+      })
+    );
+  });
+
+  it("does not widen the reclaim override to resolved await-lane-resume attention", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cmoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cmo",
+      title: "Older approved messaging lane",
+      deliverableType: "marketing_plan"
+    });
+    cmoCard.state = "approved";
+    cmoCard.updatedAt = "2026-05-21T10:02:00.000Z";
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Waiting pricing lane",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "approved";
+    cfoCard.updatedAt = "2026-05-21T10:09:00.000Z";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cmoCard);
+    await repository.insertCard(cfoCard);
+    const resumeResolvedEvent = createHarnessCardEventRecord({
+      cardId: cfoCard.id,
+      eventKind: "attention_resolved",
+      payload: {
+        actionKind: "await_lane_resume",
+        runState: "waiting",
+        targetCardId: cfoCard.id,
+        statusLabel: "Waiting on resume",
+        summary: "Resume the pricing lane once the board confirms the restart.",
+        targetPersona: "cfo"
+      }
+    });
+    resumeResolvedEvent.createdAt = "2026-05-21T10:09:30.000Z";
+    await repository.insertEvent(resumeResolvedEvent);
+
+    const resolution = await buildHarnessWorkerDispatchResolution({
+      repository,
+      tenantId: "tenant-1",
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow"
+    });
+
+    expect(resolution.dispatch.laneExecution).toEqual(
+      expect.objectContaining({
+        cardId: cmoCard.id,
+        persona: "cmo"
+      })
+    );
+  });
+
+  it("falls back to the normal actionable sibling when a resolved unblock target is no longer claimable", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cmoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cmo",
+      title: "Older approved messaging lane",
+      deliverableType: "marketing_plan"
+    });
+    cmoCard.state = "approved";
+    cmoCard.updatedAt = "2026-05-21T10:02:00.000Z";
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Previously blocked pricing lane",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "blocked";
+    cfoCard.updatedAt = "2026-05-21T10:09:00.000Z";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cmoCard);
+    await repository.insertCard(cfoCard);
+    const unblockResolvedEvent = createHarnessCardEventRecord({
+      cardId: cfoCard.id,
+      eventKind: "attention_resolved",
+      payload: {
+        actionKind: "await_unblock",
+        runState: "blocked",
+        targetCardId: cfoCard.id,
+        statusLabel: "Waiting on unblock",
+        summary: "Resume the pricing lane once the blocker clears.",
+        targetPersona: "cfo"
+      }
+    });
+    unblockResolvedEvent.createdAt = "2026-05-21T10:09:30.000Z";
+    await repository.insertEvent(unblockResolvedEvent);
+
+    const resolution = await buildHarnessWorkerDispatchResolution({
+      repository,
+      tenantId: "tenant-1",
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow"
+    });
+
+    expect(resolution.dispatch.laneExecution).toEqual(
+      expect.objectContaining({
+        cardId: cmoCard.id,
+        persona: "cmo"
+      })
+    );
+  });
+
+  it("consumes a resolved unblock reclaim after the first follow-on dispatch is already persisted", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cmoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cmo",
+      title: "Older approved messaging lane",
+      deliverableType: "marketing_plan"
+    });
+    cmoCard.state = "approved";
+    cmoCard.updatedAt = "2026-05-21T10:02:00.000Z";
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Previously reclaimed pricing lane",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "approved";
+    cfoCard.updatedAt = "2026-05-21T10:09:00.000Z";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cmoCard);
+    await repository.insertCard(cfoCard);
+    const unblockResolvedEvent = createHarnessCardEventRecord({
+      cardId: cfoCard.id,
+      eventKind: "attention_resolved",
+      payload: {
+        actionKind: "await_unblock",
+        runState: "blocked",
+        targetCardId: cfoCard.id,
+        statusLabel: "Waiting on unblock",
+        summary: "Resume the pricing lane from the revised assumptions workbook.",
+        targetPersona: "cfo"
+      }
+    });
+    unblockResolvedEvent.createdAt = "2026-05-21T10:09:30.000Z";
+    const reclaimedDispatchEvent = createHarnessCardEventRecord({
+      cardId: cfoCard.id,
+      eventKind: "execution_dispatched",
+      payload: {
+        kind: "follow_on_dispatch",
+        kindLabel: "Follow-on dispatch",
+        executionStage: "post_outcome_follow_on",
+        executionStageLabel: "Post-outcome follow-on",
+        reactivatedRun: true,
+        triggeredByCardId: ceoCard.id,
+        triggeredByPersona: "ceo",
+        triggeredByOutcomeState: "blocked"
+      }
+    });
+    reclaimedDispatchEvent.createdAt = "2026-05-21T10:10:00.000Z";
+    await repository.insertEvent(unblockResolvedEvent);
+    await repository.insertEvent(reclaimedDispatchEvent);
+
+    const resolution = await buildHarnessWorkerDispatchResolution({
+      repository,
+      tenantId: "tenant-1",
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow"
+    });
+
+    expect(resolution.dispatch.laneExecution).toEqual(
+      expect.objectContaining({
+        cardId: cmoCard.id,
+        persona: "cmo"
+      })
+    );
+  });
+
   it("builds a private execution envelope without widening dispatch telemetry", async () => {
     const repository = createInMemoryHarnessRepository();
     const run = createHarnessRunRecord({
@@ -2994,7 +3319,8 @@ describe("harness worker executor", () => {
         workflowId: "wf_connect_first_workflow",
         status: "queued",
         laneExecution: null
-      }
+      },
+      suppressedReason: "claim_lost"
     });
 
     expect(repository.claimCardForExecution).not.toBe(claimCardForExecution);
@@ -3063,7 +3389,8 @@ describe("harness worker executor", () => {
         workflowId: "wf_connect_first_workflow",
         status: "queued",
         laneExecution: null
-      }
+      },
+      suppressedReason: "claim_lost"
     });
 
     await expect(repository.getCard(cfoCard.id)).resolves.toEqual(

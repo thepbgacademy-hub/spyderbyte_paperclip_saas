@@ -166,6 +166,39 @@ describe("dashboard HTTP boundary", () => {
     });
   });
 
+  it("forwards an explicit fresh-run request through the guarded dashboard HTTP seam", async () => {
+    const dashboardApi = {
+      listDashboard: vi.fn(),
+      startWorkflowRun: vi.fn().mockResolvedValue({ runId: "run-456", queued: true })
+    };
+    const handler = createDashboardHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      dashboardApi,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/dashboard/runs",
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        "content-type": "application/json"
+      },
+      body: { workflowId: "workflow-template-1", freshRun: true },
+      bodyByteLength: 50,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(202);
+    expect(response.body).toEqual({ runId: "run-456", queued: true });
+    expect(dashboardApi.startWorkflowRun).toHaveBeenCalledWith({
+      authorization: "Bearer valid",
+      workflowId: "workflow-template-1",
+      freshRun: true
+    });
+  });
+
   it("fails closed on invalid dashboard run-start payloads", async () => {
     const dashboardApi = {
       listDashboard: vi.fn(),

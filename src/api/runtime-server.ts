@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { createAppShellHandler } from "./app-shell.js";
 import type { ApiSession } from "./dashboard-api.js";
-import { createDashboardApi } from "./dashboard-api.js";
+import { createDashboardApi, DashboardApiConflictError } from "./dashboard-api.js";
 import { createDashboardHttpHandler, type DashboardHttpRequest, type DashboardHttpResponse } from "./dashboard-http.js";
 import { createHarnessHttpHandler } from "./harness-http.js";
 import { createHealthHttpHandler } from "./health-http.js";
@@ -312,6 +312,58 @@ async function listTenantDashboardWorkflows(input: {
   return [...workflowMap.values()];
 }
 
+async function resolveWorkflowStartTarget(input: {
+  tenantId: string;
+  workflowId: string;
+  repositories: Pick<ReturnType<typeof createSupabaseRepositories>, "resolveWorkflowTemplateStartIdentity">;
+  registry: ReturnType<typeof createHarnessWorkflowRegistry>;
+}) {
+  const definition = (() => {
+    try {
+      return input.registry.getDefinition(input.workflowId);
+    } catch {
+      return null;
+    }
+  })();
+  if (definition) {
+    return {
+      publicWorkflowId: input.workflowId,
+      workflowTemplateId: null,
+      definition
+    };
+  }
+
+  const templateIdentity = await input.repositories.resolveWorkflowTemplateStartIdentity({
+    tenantId: input.tenantId,
+    workflowTemplateId: input.workflowId
+  });
+  if (!templateIdentity) {
+    return {
+      publicWorkflowId: input.workflowId,
+      workflowTemplateId: input.workflowId,
+      definition: null
+    };
+  }
+
+  const templateDefinition = (() => {
+    try {
+      return input.registry.getDefinitionByPackageId(templateIdentity.workflowPackageId);
+    } catch {
+      return null;
+    }
+  })();
+
+  // Package-key misses must fail closed here. Until we widen this seam deliberately,
+  // template-id dashboard starts may only expose a public workflow identity when the
+  // registry can prove the package maps back to a known public workflow definition.
+
+  return {
+    publicWorkflowId: templateDefinition?.publicId ?? input.workflowId,
+    workflowTemplateId: templateIdentity.workflowTemplateId,
+    definition: templateDefinition
+  };
+}
+
 export function createDashboardRuntime(options: {
   env: RuntimeEnv;
   auth: RuntimeAuth;
@@ -450,8 +502,8 @@ export function createDashboardRuntime(options: {
     listStorageConnectors: repositories.listStorageConnectors,
     getPlatformLoad: repositories.getPlatformLoad,
     ...(workflowRunReservation
-      ? {
-          startWorkflowRun: async (input: { tenantId: string; userId: string; workflowId: string }) => {
+        ? {
+          startWorkflowRun: async (input: { tenantId: string; userId: string; workflowId: string; freshRun?: boolean }) => {
             const installedPackages = await resolveTenantInstalledOverlayPackages({ tenantId: input.tenantId, repositories });
             const registry = createHarnessWorkflowRegistry({
               harnessEnabledWorkflowIds:
@@ -460,24 +512,29 @@ export function createDashboardRuntime(options: {
                 options.env.runtimeEnv.WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS?.split(",").map((entry) => entry.trim()).filter(Boolean) ?? [],
               installedPackages
             });
-            const definition = (() => {
-              try {
-                return registry.getDefinition(input.workflowId);
-              } catch {
-                return null;
-              }
-            })();
+            const resolvedTarget = await resolveWorkflowStartTarget({
+              tenantId: input.tenantId,
+              workflowId: input.workflowId,
+              repositories,
+              registry
+            });
+            const definition = resolvedTarget.definition;
+            const publicWorkflowId = resolvedTarget.publicWorkflowId;
+            const workflowTemplateId = resolvedTarget.workflowTemplateId;
             const existingNativePublicRun =
               definition &&
               definition.publicStartEnabled === true &&
               definition.executionEngine === "wf_native_v1" &&
-              hasPublicWorkflowHarnessBootstrap(input.workflowId)
+              hasPublicWorkflowHarnessBootstrap(publicWorkflowId)
                 ? await harnessRepository.findLatestRunForTenantWorkflow({
                     tenantId: input.tenantId,
-                    workflowId: input.workflowId
+                    workflowId: publicWorkflowId
                   })
                 : null;
-            if (existingNativePublicRun && definition && definition.publicStartEnabled === true && definition.providerKind) {
+            if (input.freshRun && existingNativePublicRun) {
+              throw new DashboardApiConflictError("fresh_harness_run_conflict");
+            }
+            if (existingNativePublicRun && definition && definition.publicStartEnabled === true) {
               await acidRepository.transitionWorkflowRunStatus({
                 tenantId: input.tenantId,
                 runId: existingNativePublicRun.id,
@@ -487,7 +544,7 @@ export function createDashboardRuntime(options: {
               const actionToken = randomUUID();
               const redispatchQueueJobId = createRedispatchQueueJobId({
                 tenantId: input.tenantId,
-                workflowId: input.workflowId,
+                workflowId: publicWorkflowId,
                 runId: existingNativePublicRun.id,
                 dispatchKind: "public_start",
                 actionToken
@@ -501,19 +558,20 @@ export function createDashboardRuntime(options: {
               if (stagedRedispatch.staged) {
                 return { runId: existingNativePublicRun.id, queued: true };
               }
+              return { runId: existingNativePublicRun.id, queued: true };
             }
             const runId = existingNativePublicRun?.id ?? randomUUID();
             return workflowRunReservation.reserveAndEnqueue({
               tenantId: input.tenantId,
               userId: input.userId,
-              workflowId: input.workflowId,
+              workflowId: publicWorkflowId,
               ...(definition && definition.publicStartEnabled === true && definition.providerKind
                 ? {
                     workflowTemplateId: null,
                     workflowIdentityKind: "installed_package_overlay" as const,
                     workflowPackageId: definition.packageId,
                     workflowDefinitionSnapshot: {
-                      publicWorkflowId: input.workflowId,
+                      publicWorkflowId,
                       packageId: definition.packageId,
                       executionEngine: definition.executionEngine ?? "paperclip",
                       requiredCapabilities: [...definition.requiredCapabilities],
@@ -521,11 +579,11 @@ export function createDashboardRuntime(options: {
                     }
                   }
                 : {
-                    workflowTemplateId: input.workflowId,
+                    workflowTemplateId: workflowTemplateId ?? input.workflowId,
                     workflowIdentityKind: "tenant_template" as const
                   }),
               runId,
-              idempotencyKey: `${input.tenantId}:${input.workflowId}:${runId}`,
+              idempotencyKey: `${input.tenantId}:${publicWorkflowId}:${runId}`,
               ...(definition && definition.publicStartEnabled === true && definition.providerKind
                 ? {
                     workflowBinding: {
@@ -536,16 +594,16 @@ export function createDashboardRuntime(options: {
                 : {}),
               ...(definition &&
               definition.executionEngine === "wf_native_v1" &&
-              hasPublicWorkflowHarnessBootstrap(input.workflowId) &&
+              hasPublicWorkflowHarnessBootstrap(publicWorkflowId) &&
               !existingNativePublicRun
                 ? {
-                    onReserved: async ({ transaction, publicWorkflowId, workflowPackageId, providerKind, credentialLabel }) => {
+                    onReserved: async ({ transaction, publicWorkflowId, providerKind, credentialLabel }) => {
                       await seedPublicWorkflowHarnessRun({
                         repository: createPostgresHarnessRepository(transaction),
                         tenantId: input.tenantId,
                         runId,
                         workflowId: publicWorkflowId,
-                        packageId: workflowPackageId,
+                        packageId: definition.packageId,
                         providerKind,
                         credentialLabel
                       });

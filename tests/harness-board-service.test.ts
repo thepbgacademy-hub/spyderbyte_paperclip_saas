@@ -1047,6 +1047,7 @@ describe("harness board service", () => {
 
     const board = await service.listBoardState({ authorization: "Bearer valid" });
 
+    expect(board.boardState).toBe("open");
     expect(board.pendingAttention).toEqual({
       kind: "queue_ceo_review",
       runState: "assembling",
@@ -2068,6 +2069,7 @@ describe("harness board service", () => {
 
   it("resolves pending lane-unblock attention through the explicit attention seam", async () => {
     const repository = createInMemoryHarnessRepository();
+    const onResolvedAttentionDispatch = vi.fn().mockResolvedValue(undefined);
     const service = createHarnessBoardService({
       authenticate: vi.fn().mockResolvedValue({
         tenantId: "tenant_123",
@@ -2078,6 +2080,7 @@ describe("harness board service", () => {
       requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
       repository,
       runAtomically: async (work) => work(repository),
+      onResolvedAttentionDispatch,
       workflowRegistry: createHarnessWorkflowRegistry({
         harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
       })
@@ -2116,8 +2119,91 @@ describe("harness board service", () => {
       cardId: created.cardId,
       state: "approved"
     });
+    expect(onResolvedAttentionDispatch).toHaveBeenCalledWith({
+      tenantId: "tenant_123",
+      userId: "user_123",
+      runId: board.runId,
+      workflowId: "wf_connect_first_workflow",
+      cardId: created.cardId,
+      actionToken: expect.any(String),
+      command: "unblock_lane",
+      state: "approved"
+    });
     expect(persistedCard?.state).toBe("approved");
     expect(hydrated.pendingAttention).toBeUndefined();
+  });
+
+  it("keeps the unblock action handle stable within one attention cycle but refreshes it after a new blocked cycle", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "blocked"
+    });
+
+    const firstBlockedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    const firstBlockedBoardRepeat = await service.listBoardState({ authorization: "Bearer valid" });
+    const firstActionHandle = firstBlockedBoard.pendingAttention?.actionHandle;
+
+    expect(firstActionHandle).toBeTruthy();
+    expect(firstBlockedBoardRepeat.pendingAttention?.actionHandle).toBe(firstActionHandle);
+
+    await service.resolvePendingAttention({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      command: "unblock_lane",
+      ...(firstActionHandle ? { actionToken: firstActionHandle } : {}),
+      resumeSummary: "The blocker is cleared and the lane can re-enter the board queue."
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "blocked"
+    });
+
+    const secondBlockedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+    expect(secondBlockedBoard.pendingAttention?.actionHandle).toBeTruthy();
+    expect(secondBlockedBoard.pendingAttention?.actionHandle).not.toBe(firstActionHandle);
+    await expect(
+      service.resolvePendingAttention({
+        authorization: "Bearer valid",
+        runId: board.runId,
+        command: "unblock_lane",
+        ...(firstActionHandle ? { actionToken: firstActionHandle } : {})
+      })
+    ).rejects.toThrow(/action token no longer matches/i);
   });
 
   it("resolves pending attention against the run package without requiring an explicit board workflow selector", async () => {
@@ -2793,6 +2879,187 @@ describe("harness board service", () => {
           label: "Board attention is now waiting on a lane unblock decision."
         })
       ])
+    );
+  });
+
+  it("adds bounded founder-tax evidence fields to tax-strategy unblock attention when that prerequisite is missing", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid", workflowId: "wf_tax_strategy" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      workflowId: "wf_tax_strategy",
+      persona: "cfo",
+      title: "Review the founder tax posture",
+      deliverableType: "tax_strategy_review"
+    }));
+
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await repository.insertEvent({
+      id: "event_tax_blocked_outcome",
+      cardId: created.cardId,
+      eventKind: "execution_outcome_committed",
+      payload: {
+        outcomeState: "blocked",
+        postOutcomeActionKind: "await_unblock",
+        requiredArtifactName: "founder_tax_posture_documents",
+        continuitySummary:
+          "Founder tax posture documents are still missing. Keep the lane blocked until the founder tax packet is supplied."
+      },
+      createdAt: "2026-06-25T16:20:00.000Z"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "blocked",
+      resumeSummary:
+        "Founder tax posture documents are still missing. Keep the lane blocked until the founder tax packet is supplied."
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid", workflowId: "wf_tax_strategy" });
+
+    expect(board.pendingAttention).toEqual(
+      expect.objectContaining({
+        kind: "await_unblock",
+        requestFields: expect.arrayContaining([
+          expect.objectContaining({
+            name: "taxEvidenceSummary",
+            required: true
+          }),
+          expect.objectContaining({
+            name: "taxEvidenceConfirmedBy",
+            required: true
+          }),
+          expect.objectContaining({
+            name: "taxEvidenceTaxYear",
+            required: true
+          }),
+          expect.objectContaining({
+            name: "taxEvidenceEntityType",
+            required: true
+          })
+        ]),
+        actionOptions: expect.arrayContaining([
+          expect.objectContaining({
+            exampleRequest: expect.objectContaining({
+              resolution: "unblock_lane",
+              taxEvidenceSummary: expect.any(String),
+              taxEvidenceConfirmedBy: expect.any(String),
+              taxEvidenceTaxYear: expect.any(String),
+              taxEvidenceEntityType: expect.any(String)
+            })
+          })
+        ])
+      })
+    );
+  });
+
+  it("persists bounded founder-tax prerequisite evidence when resolving the matching tax-strategy unblock seam", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid", workflowId: "wf_tax_strategy" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      workflowId: "wf_tax_strategy",
+      persona: "cfo",
+      title: "Review the founder tax posture",
+      deliverableType: "tax_strategy_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await repository.insertEvent({
+      id: "event_tax_blocked_outcome_persist",
+      cardId: created.cardId,
+      eventKind: "execution_outcome_committed",
+      payload: {
+        outcomeState: "blocked",
+        postOutcomeActionKind: "await_unblock",
+        requiredArtifactName: "founder_tax_posture_documents",
+        continuitySummary:
+          "Founder tax posture documents are still missing. Keep the lane blocked until the founder tax packet is supplied."
+      },
+      createdAt: "2026-06-25T16:25:00.000Z"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "blocked",
+      resumeSummary:
+        "Founder tax posture documents are still missing. Keep the lane blocked until the founder tax packet is supplied."
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid", workflowId: "wf_tax_strategy" });
+    await expect(
+      service.resolvePendingAttention({
+        authorization: "Bearer valid",
+        runId: board.runId,
+        command: "unblock_lane",
+        actionToken: board.pendingAttention?.actionHandle ?? "",
+        resumeSummary: "Founder tax posture documentation is now supplied.",
+        taxStrategyPrerequisiteEvidence: {
+          summary: "Founder tax posture documents were confirmed for bounded tax review.",
+          confirmedBy: "operator",
+          taxYear: "2025",
+          entityType: "llc"
+        }
+      })
+    ).resolves.toEqual({
+      status: "unblocked",
+      cardId: created.cardId,
+      state: "approved"
+    });
+
+    await expect(repository.getTaxStrategyPrerequisiteSnapshot(board.runId)).resolves.toEqual(
+      expect.objectContaining({
+        runId: board.runId,
+        tenantId: "tenant_123",
+        workflowId: "wf_tax_strategy",
+        evidence: [
+          expect.objectContaining({
+            artifactName: "founder_tax_posture_documents",
+            status: "confirmed",
+            summary: "Founder tax posture documents were confirmed for bounded tax review.",
+            confirmedBy: "operator",
+            taxYear: "2025",
+            entityType: "llc"
+          })
+        ]
+      })
     );
   });
 
@@ -11847,6 +12114,7 @@ describe("harness board service", () => {
     const hydratedBoard = await service.listBoardState({ authorization: "Bearer valid" });
 
     expect(run?.state).toBe("done");
+    expect(hydratedBoard.boardState).toBe("closed");
     expect(ceoEvents.at(-1)?.eventKind).toBe("result_recorded");
     expect(ceoEvents.at(-1)?.payload).toEqual({
       summary: "The CEO packaged the final business-facing outcome."

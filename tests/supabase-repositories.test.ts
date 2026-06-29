@@ -87,6 +87,28 @@ describe("Supabase wfpc repositories", () => {
     expect(JSON.stringify(await repositories.listStorageConnectors({ tenantId: "tenant-1" }))).not.toMatch(/secret|vault|oauth|privatepath|private/i);
   });
 
+  it("resolves a workflow template start identity through the package key seam", async () => {
+    const query = createQuery({
+      "from wfpc.workflow_templates workflows": [
+        {
+          id: "44444444-4444-4444-8444-666666666666",
+          package_key: "pkg_tax_strategy"
+        }
+      ]
+    });
+    const repositories = createSupabaseRepositories({ query });
+
+    await expect(
+      repositories.resolveWorkflowTemplateStartIdentity({
+        tenantId: "tenant-1",
+        workflowTemplateId: "44444444-4444-4444-8444-666666666666"
+      })
+    ).resolves.toEqual({
+      workflowTemplateId: "44444444-4444-4444-8444-666666666666",
+      workflowPackageId: "pkg_tax_strategy"
+    });
+  });
+
   it("lists private runtime provider connections with secret refs and normalized capability coverage", async () => {
     const query = createQuery({
       "from wfpc.workflow_templates workflows": [
