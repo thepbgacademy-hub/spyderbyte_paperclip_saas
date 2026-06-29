@@ -60,7 +60,7 @@ describe("handoff board-surface wording", () => {
       "Phase R5: Runtime Hotspot Reduction"
     );
     expect(currentNextSlice).toContain(
-      "Phase R6: Paperclip Seam Freeze"
+      "Phase R6: Paperclip Compatibility Bounding"
     );
     expect(currentNextSlice).not.toContain(
       "Close the bounded stage native-execution runner proof gap"
