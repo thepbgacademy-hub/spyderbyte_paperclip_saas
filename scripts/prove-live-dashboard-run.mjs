@@ -163,6 +163,7 @@ async function loadRemoteWorkflowRunSnapshot({ sshTarget, sudoPassword, containe
     "  run.workflow_template_id,",
     "  run.bound_secret_reference_id,",
     "  run.bound_provider_context,",
+    "  secrets.secret_ref as current_secret_ref,",
     "  outbox.id as outbox_id,",
     "  outbox.status as outbox_status,",
     "  outbox.created_at as outbox_created_at,",
@@ -171,6 +172,10 @@ async function loadRemoteWorkflowRunSnapshot({ sshTarget, sudoPassword, containe
     "  outbox.attempts as outbox_attempts,",
     "  outbox.last_error as outbox_last_error",
     "from wfpc.workflow_runs run",
+    "left join wfpc.secret_references secrets",
+    "  on secrets.id = run.bound_secret_reference_id",
+    " and secrets.tenant_id = run.tenant_id",
+    " and secrets.revoked_at is null",
     "left join wfpc.workflow_queue_outbox outbox",
     "  on outbox.tenant_id = run.tenant_id",
     " and outbox.run_id = run.id",
@@ -222,7 +227,7 @@ async function loadRemoteWorkflowRunSnapshot({ sshTarget, sudoPassword, containe
               capability: typeof entry.capability === "string" ? entry.capability : "",
               providerKind: typeof entry.providerKind === "string" ? entry.providerKind : "",
               label: typeof entry.label === "string" ? entry.label : "",
-              secretRef: typeof entry.secretRef === "string" ? entry.secretRef : "",
+              secretRef: typeof row?.current_secret_ref === "string" ? row.current_secret_ref : "",
               metadata: entry.metadata && typeof entry.metadata === "object" ? entry.metadata : {}
             }))
             .filter((entry) => entry.capability && entry.providerKind && entry.label && entry.secretRef)

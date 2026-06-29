@@ -12,6 +12,20 @@ export async function resolveLiveNativeAttention(input) {
     }
   });
   const boardBody = await readJson(boardResponse);
+  if (boardResponse.status !== 200) {
+    return {
+      ok: false,
+      phase: "native_attention_board_load_failed",
+      notes: [
+        "Loading the live board contract did not return a successful response.",
+        `Observed HTTP status ${boardResponse.status} before the native resolve-attention contract could be inspected.`
+      ],
+      actionResult: {
+        status: boardResponse.status,
+        body: boardBody
+      }
+    };
+  }
 
   const resolution = resolveNativeAttentionResolution(boardBody, input.expectedRunId);
   if (!resolution) {
@@ -27,6 +41,16 @@ export async function resolveLiveNativeAttention(input) {
 
   const postAttemptedAt = nowImpl();
   const actionPath = new URL(boardBody.pendingAttention.actionPath, normalizeOrigin(input.baseUrl));
+  if (!isBoundedResolveAttentionPath(actionPath, normalizeOrigin(input.baseUrl), input.expectedRunId)) {
+    return {
+      ok: false,
+      phase: "native_attention_contract_invalid",
+      notes: [
+        "The live board exposed a resolve-attention action path outside the bounded harness route contract.",
+        `Expected a same-origin /api/harness/runs/${input.expectedRunId}/resolve-attention action path before submitting the authenticated attention resolution.`
+      ]
+    };
+  }
   const actionResponse = await fetchImpl(actionPath.toString(), {
     method: "POST",
     headers: {
@@ -37,8 +61,8 @@ export async function resolveLiveNativeAttention(input) {
     body: JSON.stringify({
       resolution,
       actionHandle: boardBody.pendingAttention.actionHandle,
-      command: resolution,
-      actionToken: boardBody.pendingAttention.actionHandle
+      ...(normalizeValue(input.resumeSummary) ? { resumeSummary: normalizeValue(input.resumeSummary) } : {}),
+      ...resolveTaxStrategyPrerequisiteEvidenceFields(input.taxStrategyPrerequisiteEvidence)
     })
   });
   const actionBody = await readJson(actionResponse);
@@ -111,8 +135,39 @@ function normalizeOrigin(value) {
   return normalized.replace(/\/$/, "");
 }
 
+function isBoundedResolveAttentionPath(actionUrl, expectedOrigin, expectedRunId) {
+  return (
+    actionUrl.origin === expectedOrigin &&
+    actionUrl.pathname === `/api/harness/runs/${expectedRunId}/resolve-attention` &&
+    (actionUrl.search ?? "") === "" &&
+    (actionUrl.hash ?? "") === ""
+  );
+}
+
 function normalizeValue(value) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function resolveTaxStrategyPrerequisiteEvidenceFields(evidence) {
+  if (!evidence || typeof evidence !== "object") {
+    return {};
+  }
+
+  const summary = normalizeValue(evidence.taxEvidenceSummary) ?? normalizeValue(evidence.summary);
+  const confirmedBy = normalizeValue(evidence.taxEvidenceConfirmedBy) ?? normalizeValue(evidence.confirmedBy);
+  const taxYear = normalizeValue(evidence.taxEvidenceTaxYear) ?? normalizeValue(evidence.taxYear);
+  const entityType = normalizeValue(evidence.taxEvidenceEntityType) ?? normalizeValue(evidence.entityType);
+
+  if (!summary || !confirmedBy || !taxYear || !entityType) {
+    return {};
+  }
+
+  return {
+    taxEvidenceSummary: summary,
+    taxEvidenceConfirmedBy: confirmedBy,
+    taxEvidenceTaxYear: taxYear,
+    taxEvidenceEntityType: entityType
+  };
 }
 
 async function readJson(response) {

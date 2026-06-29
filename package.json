@@ -24,6 +24,7 @@
     "inspect:live-run": "node scripts/inspect-live-workflow-run.mjs",
     "inspect:live-queue-snapshot": "node scripts/inspect-live-queue-snapshot.mjs",
     "prove:live-fairness": "node scripts/prove-live-fairness.mjs",
+    "prove:live-attention-cycle": "node scripts/prove-live-attention-cycle.mjs",
     "prove:live-soak-capacity": "node scripts/run-live-soak-capacity.mjs",
     "analyze:worker-fairness": "node scripts/analyze-worker-fairness.mjs",
     "analyze:resource-saturation": "node scripts/analyze-resource-saturation.mjs",

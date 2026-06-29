@@ -125,6 +125,7 @@ The stage API service must receive the resolved frontend asset env:
 
 - `WF_WEB_APP_ENTRY_URL=https://<isolated-stage-host>/app-assets/<entry-file>.js`
 - `WF_WEB_APP_STYLESHEET_URL=https://<isolated-stage-host>/app-assets/<stylesheet-file>.css` when emitted
+- `WF_OBSIDIAN_EXPORT_ROOT=<absolute-writable-path-inside-wf-stage-api>`
 
 It must also retain the existing runtime/session env already proven on VPS 2:
 
@@ -221,6 +222,7 @@ Then update `deploy/env/wf-stage.vps2.env` with:
 - reviewed `WF_STORAGE_OAUTH_REDIRECT_ORIGIN` that matches an allowed portal origin
 - real `WF_VAULT_MASTER_KEY`
 - real `PAPERCLIP_*` values
+- reviewed `WF_OBSIDIAN_EXPORT_ROOT` (for example `/tmp/wealth-factory-stage-obsidian-export` on the isolated stage API lane)
 - emitted `WF_WEB_APP_ENTRY_URL`
 - emitted `WF_WEB_APP_STYLESHEET_URL` when present
 

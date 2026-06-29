@@ -11,6 +11,17 @@ const { resolveLiveNativeAttention } = require("../scripts/lib/live-harness-boar
     sessionToken: string;
     workflowId: string;
     expectedRunId: string;
+    resumeSummary?: string;
+    taxStrategyPrerequisiteEvidence?: {
+      summary?: string;
+      confirmedBy?: string;
+      taxYear?: string;
+      entityType?: string;
+      taxEvidenceSummary?: string;
+      taxEvidenceConfirmedBy?: string;
+      taxEvidenceTaxYear?: string;
+      taxEvidenceEntityType?: string;
+    };
     fetchImpl?: (url: string, options?: Record<string, unknown>) => Promise<{
       status: number;
       json(): Promise<unknown>;
@@ -106,9 +117,7 @@ describe("live harness board round-trip helper", () => {
         }),
         body: JSON.stringify({
           resolution: "resume_lane",
-          actionHandle: "handle-123",
-          command: "resume_lane",
-          actionToken: "handle-123"
+          actionHandle: "handle-123"
         })
       })
     );
@@ -173,9 +182,144 @@ describe("live harness board round-trip helper", () => {
       expect.objectContaining({
         body: JSON.stringify({
           resolution: "unblock_lane",
-          actionHandle: "handle-456",
-          command: "unblock_lane",
-          actionToken: "handle-456"
+          actionHandle: "handle-456"
+        })
+      })
+    );
+  });
+
+  it("threads an explicit resumeSummary when the live attention resolution needs richer unblock context", async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({
+          runId: "run-tax-123",
+          workflowId: "wf_tax_strategy",
+          pendingAttention: {
+            actionRoute: "resolve-attention",
+            actionPath: "/api/harness/runs/run-tax-123/resolve-attention",
+            actionHandle: "handle-tax-123",
+            allowedResolutions: ["unblock_lane"]
+          }
+        })
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({
+          status: "unblocked",
+          cardId: "card-tax-123",
+          state: "approved"
+        })
+      });
+
+    await expect(
+      resolveLiveNativeAttention({
+        baseUrl: "https://wf-api.spyderbyte.cloud",
+        portalOrigin: "https://www.spyderbyte.cloud",
+        sessionCookieName: "wf_portal_session",
+        sessionToken: "session-token-tax-123",
+        workflowId: "wf_tax_strategy",
+        expectedRunId: "run-tax-123",
+        resumeSummary:
+          "Founder tax posture documentation is now supplied. Resume the tax strategy lane from the latest restructuring assumptions workbook and finalize the bounded tax review.",
+        fetchImpl,
+        nowImpl: () => "2026-06-23T00:05:30.000Z"
+      })
+    ).resolves.toEqual({
+      ok: true,
+      phase: "native_attention_resolved",
+      notes: [
+        "The live board returned the current native attention contract for the requested workflow.",
+        "Submitting the bounded native attention resolution through the guarded resolve-attention route returned a successful response."
+      ],
+      postAttemptedAt: "2026-06-23T00:05:30.000Z",
+      actionResult: {
+        status: 200,
+        body: {
+          status: "unblocked",
+          cardId: "card-tax-123",
+          state: "approved"
+        }
+      }
+    });
+
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      2,
+      "https://wf-api.spyderbyte.cloud/api/harness/runs/run-tax-123/resolve-attention",
+      expect.objectContaining({
+        body: JSON.stringify({
+          resolution: "unblock_lane",
+          actionHandle: "handle-tax-123",
+          resumeSummary:
+            "Founder tax posture documentation is now supplied. Resume the tax strategy lane from the latest restructuring assumptions workbook and finalize the bounded tax review."
+        })
+      })
+    );
+  });
+
+  it("threads bounded tax prerequisite evidence when the tax-strategy unblock seam needs real founder-tax confirmation", async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({
+          runId: "run-tax-456",
+          workflowId: "wf_tax_strategy",
+          pendingAttention: {
+            actionRoute: "resolve-attention",
+            actionPath: "/api/harness/runs/run-tax-456/resolve-attention",
+            actionHandle: "handle-tax-456",
+            allowedResolutions: ["unblock_lane"]
+          }
+        })
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({
+          status: "unblocked",
+          cardId: "card-tax-456",
+          state: "approved"
+        })
+      });
+
+    await expect(
+      resolveLiveNativeAttention({
+        baseUrl: "https://wf-api.spyderbyte.cloud",
+        portalOrigin: "https://www.spyderbyte.cloud",
+        sessionCookieName: "wf_portal_session",
+        sessionToken: "session-token-tax-456",
+        workflowId: "wf_tax_strategy",
+        expectedRunId: "run-tax-456",
+        resumeSummary:
+          "Founder tax posture documentation is now supplied. Resume the tax strategy lane from the latest restructuring assumptions workbook and finalize the bounded tax review.",
+        taxStrategyPrerequisiteEvidence: {
+          summary: "Founder tax posture documents were confirmed for bounded tax review.",
+          confirmedBy: "operator",
+          taxYear: "2025",
+          entityType: "llc"
+        },
+        fetchImpl,
+        nowImpl: () => "2026-06-25T16:30:30.000Z"
+      })
+    ).resolves.toEqual(
+      expect.objectContaining({
+        ok: true,
+        phase: "native_attention_resolved"
+      })
+    );
+
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      2,
+      "https://wf-api.spyderbyte.cloud/api/harness/runs/run-tax-456/resolve-attention",
+      expect.objectContaining({
+        body: JSON.stringify({
+          resolution: "unblock_lane",
+          actionHandle: "handle-tax-456",
+          resumeSummary:
+            "Founder tax posture documentation is now supplied. Resume the tax strategy lane from the latest restructuring assumptions workbook and finalize the bounded tax review.",
+          taxEvidenceSummary: "Founder tax posture documents were confirmed for bounded tax review.",
+          taxEvidenceConfirmedBy: "operator",
+          taxEvidenceTaxYear: "2025",
+          taxEvidenceEntityType: "llc"
         })
       })
     );
@@ -214,6 +358,80 @@ describe("live harness board round-trip helper", () => {
         "Expected run run-123 with a resolve-attention action that allows resume_lane or unblock_lane."
       ],
       actionResult: undefined
+    });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails closed when the board resolves attention through an off-origin action path", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      status: 200,
+      json: async () => ({
+        runId: "run-789",
+        workflowId: "wf_connect_first_workflow",
+        pendingAttention: {
+          actionRoute: "resolve-attention",
+          actionPath: "https://malicious.example/api/harness/runs/run-789/resolve-attention",
+          actionHandle: "handle-789",
+          allowedResolutions: ["unblock_lane"]
+        }
+      })
+    });
+
+    await expect(
+      resolveLiveNativeAttention({
+        baseUrl: "https://wf-api.spyderbyte.cloud",
+        portalOrigin: "https://www.spyderbyte.cloud",
+        sessionCookieName: "wf_portal_session",
+        sessionToken: "session-token-789",
+        workflowId: "wf_connect_first_workflow",
+        expectedRunId: "run-789",
+        fetchImpl
+      })
+    ).resolves.toEqual({
+      ok: false,
+      phase: "native_attention_contract_invalid",
+      notes: [
+        "The live board exposed a resolve-attention action path outside the bounded harness route contract.",
+        "Expected a same-origin /api/harness/runs/run-789/resolve-attention action path before submitting the authenticated attention resolution."
+      ],
+      actionResult: undefined
+    });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports board-load transport failures explicitly before attempting contract resolution", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      status: 401,
+      json: async () => ({
+        error: "unauthorized"
+      })
+    });
+
+    await expect(
+      resolveLiveNativeAttention({
+        baseUrl: "https://wf-api.spyderbyte.cloud",
+        portalOrigin: "https://www.spyderbyte.cloud",
+        sessionCookieName: "wf_portal_session",
+        sessionToken: "session-token-401",
+        workflowId: "wf_connect_first_workflow",
+        expectedRunId: "run-401",
+        fetchImpl
+      })
+    ).resolves.toEqual({
+      ok: false,
+      phase: "native_attention_board_load_failed",
+      notes: [
+        "Loading the live board contract did not return a successful response.",
+        "Observed HTTP status 401 before the native resolve-attention contract could be inspected."
+      ],
+      actionResult: {
+        status: 401,
+        body: {
+          error: "unauthorized"
+        }
+      }
     });
 
     expect(fetchImpl).toHaveBeenCalledTimes(1);

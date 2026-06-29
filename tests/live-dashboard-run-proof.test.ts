@@ -29,10 +29,11 @@ describe("live dashboard run proof helper", () => {
                 capability: "text_generation",
                 providerKind: "openai_api",
                 label: "OpenAI",
-                secretRef: "wf_secret_demo",
+                secretRef: "wf_secret_stale",
                 metadata: {}
               }
             ],
+            current_secret_ref: "wf_secret_current",
             outbox_id: "outbox-1",
             outbox_status: "pending",
             outbox_created_at: new Date("2026-06-18T12:00:01.000Z"),
@@ -71,7 +72,7 @@ describe("live dashboard run proof helper", () => {
               capability: "text_generation",
               providerKind: "openai_api",
               label: "OpenAI",
-              secretRef: "wf_secret_demo",
+              secretRef: "wf_secret_current",
               metadata: {}
             }
           ]
@@ -169,6 +170,122 @@ describe("live dashboard run proof helper", () => {
     expect(loadSnapshot).toHaveBeenCalledWith({
       tenantId: "tenant-1",
       runId: "run-remote-123"
+    });
+  });
+
+  it("forwards an explicit fresh-run request body when the proof must avoid durable run reuse", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      status: 202,
+      json: vi.fn().mockResolvedValue({
+        queued: true,
+        runId: "run-fresh-123"
+      })
+    });
+    const loadSnapshot = vi.fn().mockResolvedValue({
+      run: {
+        id: "run-fresh-123",
+        status: "queued",
+        createdAt: "2026-06-18T12:31:00.000Z",
+        publicWorkflowId: "workflow-template-1",
+        workflowTemplateId: "workflow-template-1",
+        boundSecretReferenceId: "secret-ref-1",
+        providerContext: [
+          {
+            capability: "text_generation",
+            providerKind: "openai_api",
+            label: "OpenAI",
+            secretRef: "wf_secret_demo",
+            metadata: {}
+          }
+        ]
+      },
+      outbox: {
+        id: "outbox-fresh-1",
+        status: "pending",
+        createdAt: "2026-06-18T12:31:01.000Z",
+        publicWorkflowId: "workflow-template-1",
+        workflowTemplateId: "workflow-template-1",
+        attempts: 0,
+        lastError: null
+      }
+    });
+
+    await expect(
+      postDashboardRunAndVerifyDurableBinding({
+        baseUrl: "https://api.wealthfactory.test",
+        portalOrigin: "https://app.wealthfactory.test",
+        sessionToken: "signed-session-token",
+        tenantId: "tenant-1",
+        workflowId: "workflow-template-1",
+        freshRun: true,
+        loadSnapshot,
+        fetchImpl
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      runId: "run-fresh-123"
+    });
+
+    expect(fetchImpl).toHaveBeenCalledWith("https://api.wealthfactory.test/api/dashboard/runs", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://app.wealthfactory.test",
+        cookie: "wf_portal_session=signed-session-token"
+      },
+      body: JSON.stringify({
+        workflowId: "workflow-template-1",
+        freshRun: true
+      })
+    });
+  });
+
+  it("fails closed when the durable snapshot loses the authoritative current secret ref even if stale provider context remains", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      status: 202,
+      json: vi.fn().mockResolvedValue({
+        queued: true,
+        runId: "run-stale-123"
+      })
+    });
+    const loadSnapshot = vi.fn().mockResolvedValue({
+      run: {
+        id: "run-stale-123",
+        status: "queued",
+        createdAt: "2026-06-18T12:32:00.000Z",
+        publicWorkflowId: "workflow-template-1",
+        workflowTemplateId: "workflow-template-1",
+        boundSecretReferenceId: "secret-ref-1",
+        providerContext: []
+      },
+      outbox: {
+        id: "outbox-stale-1",
+        status: "pending",
+        createdAt: "2026-06-18T12:32:01.000Z",
+        publicWorkflowId: "workflow-template-1",
+        workflowTemplateId: "workflow-template-1",
+        attempts: 0,
+        lastError: null
+      }
+    });
+
+    await expect(
+      postDashboardRunAndVerifyDurableBinding({
+        baseUrl: "https://api.wealthfactory.test",
+        portalOrigin: "https://app.wealthfactory.test",
+        sessionToken: "signed-session-token",
+        tenantId: "tenant-1",
+        workflowId: "workflow-template-1",
+        loadSnapshot,
+        fetchImpl
+      })
+    ).resolves.toMatchObject({
+      ok: false,
+      runId: "run-stale-123",
+      verification: {
+        ok: false,
+        phase: "binding_missing"
+      }
     });
   });
 

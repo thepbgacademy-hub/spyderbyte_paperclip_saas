@@ -20,6 +20,9 @@ export async function reserveLiveWorkflowRun(input) {
     workflowTemplateId: input.workflowTemplateId,
     workflowId: input.workflowId
   });
+  if (!workflowTemplateId) {
+    return { reserved: false, reason: "workflow_template_required" };
+  }
   const tenant = await input.client.query("select paused_at from wfpc.tenants where id = $1 for update", [input.tenantId]);
   if (tenant.rows.length === 0) {
     return { reserved: false, reason: "tenant_not_found" };
@@ -94,9 +97,27 @@ export async function reserveLiveWorkflowRun(input) {
   if (!boundCapability) {
     return { reserved: false, reason: "entitlement_denied" };
   }
-  const existingNativePublicRun = input.skipExistingHarnessReuse
-    ? null
-    : await reuseExistingNativePublicRunIfPresent({
+  const bootstrapper = isUuid(input.workflowId) ? null : await loadNativePublicRunBootstrapper(input.bootstrapNativePublicRun);
+  const supportsNativePublicHarnessBootstrap = Boolean(bootstrapper?.hasWorkflowBootstrap(input.workflowId));
+  const existingHarnessRunId =
+    supportsNativePublicHarnessBootstrap
+      ? await findExistingNativePublicHarnessRunId({
+          client: input.client,
+          tenantId: input.tenantId,
+          workflowId: input.workflowId
+        })
+      : null;
+  if (input.skipExistingHarnessReuse && existingHarnessRunId) {
+    return {
+      reserved: false,
+      reason: "fresh_harness_run_conflict",
+      existingRunId: existingHarnessRunId
+    };
+  }
+  const existingNativePublicRun =
+    input.skipExistingHarnessReuse || !supportsNativePublicHarnessBootstrap || !existingHarnessRunId
+      ? null
+      : await reuseExistingNativePublicRunIfPresent({
         client: input.client,
         tenantId: input.tenantId,
         userId: input.userId,
@@ -106,7 +127,8 @@ export async function reserveLiveWorkflowRun(input) {
         providerKind: String(workflowRow.provider_kind),
         credentialRow,
         boundCapability,
-        idempotencyKey: input.idempotencyKey
+        idempotencyKey: input.idempotencyKey,
+        existingRunId: existingHarnessRunId
       });
   if (existingNativePublicRun) {
     return existingNativePublicRun;
@@ -159,7 +181,8 @@ export async function reserveLiveWorkflowRun(input) {
     ...input,
     packageId: String(workflowRow.package_id),
     providerKind: String(workflowRow.provider_kind),
-    credentialLabel: String(credentialRow.label)
+    credentialLabel: String(credentialRow.label),
+    bootstrapper
   });
 
   return { reserved: true, runId: input.runId };
@@ -175,6 +198,7 @@ export async function loadWorkflowRunSnapshot({ client, tenantId, runId }) {
         run.workflow_template_id,
         run.bound_secret_reference_id,
         run.bound_provider_context,
+        secrets.secret_ref as current_secret_ref,
         outbox.id as outbox_id,
         outbox.status as outbox_status,
         outbox.created_at as outbox_created_at,
@@ -183,6 +207,10 @@ export async function loadWorkflowRunSnapshot({ client, tenantId, runId }) {
         outbox.attempts as outbox_attempts,
         outbox.last_error as outbox_last_error
      from wfpc.workflow_runs run
+     left join wfpc.secret_references secrets
+       on secrets.id = run.bound_secret_reference_id
+      and secrets.tenant_id = run.tenant_id
+      and secrets.revoked_at is null
      left join wfpc.workflow_queue_outbox outbox
        on outbox.tenant_id = run.tenant_id
       and outbox.run_id = run.id
@@ -202,7 +230,10 @@ export async function loadWorkflowRunSnapshot({ client, tenantId, runId }) {
       publicWorkflowId: String(row.public_workflow_id ?? ""),
       workflowTemplateId: typeof row.workflow_template_id === "string" ? row.workflow_template_id : "",
       boundSecretReferenceId: String(row.bound_secret_reference_id ?? ""),
-      providerContext: toProviderContext(row.bound_provider_context)
+      providerContext: toProviderContext(
+        row.bound_provider_context,
+        typeof row.current_secret_ref === "string" ? row.current_secret_ref : ""
+      )
     },
     outbox: {
       id: String(row.outbox_id ?? ""),
@@ -239,7 +270,7 @@ export function summarizeWorkflowRunVerification({ snapshot, queue }) {
     };
   }
 
-  if (snapshot.outbox.status === "enqueued" && queue.state) {
+  if (snapshot.outbox.status === "enqueued" && isWorkerPickupQueueState(queue.state)) {
     return {
       ok: true,
       phase: "queued_for_worker",
@@ -247,6 +278,18 @@ export function summarizeWorkflowRunVerification({ snapshot, queue }) {
         "Workflow run is reserved and queued.",
         "Bound provider context is attached to the workflow run.",
         "BullMQ job is present for worker pickup."
+      ]
+    };
+  }
+
+  if (snapshot.outbox.status === "enqueued" && isTerminalQueueState(queue.state)) {
+    return {
+      ok: false,
+      phase: "queue_terminal_state",
+      notes: [
+        "Workflow run is reserved and the outbox is marked enqueued.",
+        "BullMQ reported a terminal queue state instead of a worker-pickup state.",
+        `Queue state: ${queue.state}.`
       ]
     };
   }
@@ -300,7 +343,7 @@ function coerceTimestamp(value) {
   return null;
 }
 
-function toProviderContext(value) {
+function toProviderContext(value, currentSecretRef = "") {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -311,7 +354,7 @@ function toProviderContext(value) {
       capability: String(entry.capability ?? ""),
       providerKind: String(entry.providerKind ?? ""),
       label: String(entry.label ?? ""),
-      secretRef: String(entry.secretRef ?? ""),
+      secretRef: currentSecretRef,
       metadata: asRecord(entry.metadata)
     }))
     .filter((entry) => entry.capability && entry.providerKind && entry.label && entry.secretRef);
@@ -360,7 +403,7 @@ async function bootstrapNativePublicRunIfNeeded(input) {
   if (isUuid(input.workflowId)) {
     return;
   }
-  const bootstrapper = await loadNativePublicRunBootstrapper(input.bootstrapNativePublicRun);
+  const bootstrapper = input.bootstrapper ?? await loadNativePublicRunBootstrapper(input.bootstrapNativePublicRun);
   if (!bootstrapper || !bootstrapper.hasWorkflowBootstrap(input.workflowId)) {
     return;
   }
@@ -409,28 +452,26 @@ async function loadNativePublicRunBootstrapper(override) {
   };
 }
 
-async function reuseExistingNativePublicRunIfPresent(input) {
-  if (isUuid(input.workflowId)) {
-    return null;
-  }
-  const bootstrapper = await loadNativePublicRunBootstrapper();
-  if (!bootstrapper || !bootstrapper.hasWorkflowBootstrap(input.workflowId)) {
-    return null;
-  }
-
-  const existingHarnessRun = await input.client.query(
+async function findExistingNativePublicHarnessRunId({ client, tenantId, workflowId }) {
+  const existingHarnessRun = await client.query(
     `select id
      from wfpc.harness_runs
      where tenant_id = $1
        and workflow_id = $2
      order by updated_at desc, created_at desc
      limit 1`,
-    [input.tenantId, input.workflowId]
+    [tenantId, workflowId]
   );
   const runId = String(existingHarnessRun.rows[0]?.id ?? "");
+  return runId || null;
+}
+
+async function reuseExistingNativePublicRunIfPresent(input) {
+  const runId = normalizeExistingRunId(input.existingRunId);
   if (!runId) {
     return null;
   }
+  const reusedRunIdempotencyKey = `${input.tenantId}:${input.workflowId}:${runId}`;
   const workflowIdentityKind = input.workflowTemplateId ? "tenant_template" : "installed_package_overlay";
 
   await input.client.query(
@@ -504,10 +545,14 @@ async function reuseExistingNativePublicRunIfPresent(input) {
          end,
          last_error = null,
          updated_at = now()`,
-    [input.tenantId, runId, input.workflowId, input.workflowTemplateId, workflowIdentityKind, input.workflowPackageId, input.userId, input.idempotencyKey]
+    [input.tenantId, runId, input.workflowId, input.workflowTemplateId, workflowIdentityKind, input.workflowPackageId, input.userId, reusedRunIdempotencyKey]
   );
 
   return { reserved: true, runId };
+}
+
+function normalizeExistingRunId(value) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
 async function resolveWorkflowTemplateId({ client, tenantId, workflowTemplateId, workflowId }) {
@@ -517,17 +562,22 @@ async function resolveWorkflowTemplateId({ client, tenantId, workflowTemplateId,
   if (isUuid(workflowId)) {
     return workflowId;
   }
-  const result = await client.query(
-    `select id
-     from wfpc.workflow_templates
-     where tenant_id = $1
-     order by created_at desc
-     limit 1`,
-    [tenantId]
-  );
-  return String(result.rows[0]?.id ?? workflowId);
+  return null;
 }
 
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value ?? ""));
+}
+
+function isWorkerPickupQueueState(value) {
+  return value === "waiting"
+    || value === "active"
+    || value === "prioritized"
+    || value === "delayed"
+    || value === "waiting-children"
+    || value === "paused";
+}
+
+function isTerminalQueueState(value) {
+  return value === "failed" || value === "completed";
 }

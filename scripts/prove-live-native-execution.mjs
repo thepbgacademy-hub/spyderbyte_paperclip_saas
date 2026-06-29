@@ -2,9 +2,11 @@ import { spawn, spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import process from "node:process";
 
+import { verifyWaitingRoundTrip } from "./lib/live-attention-roundtrip-verification.mjs";
 import { postDashboardRunAndVerifyDurableBinding } from "./lib/live-dashboard-run-proof.mjs";
 import { resolveLiveNativeAttention } from "./lib/live-harness-board-roundtrip.mjs";
 import { waitForNativeExecutionAcceptance } from "./lib/live-native-execution-acceptance.mjs";
+import { buildNativeExecutionAcceptanceOptions } from "./lib/live-native-execution-proof-options.mjs";
 import { resolveNativeProofStartSelector } from "./lib/native-proof-lane-model.mjs";
 import { DEFAULT_STAGE_PROOF_ENV_FILE, DEFAULT_STAGE_SSH_ENV_FILE, parseStageProofArgs, resolveNodeCommand } from "./lib/stage-live-proof.mjs";
 import { loadScriptEnv } from "./lib/script-env.mjs";
@@ -31,6 +33,7 @@ const timeoutMs = parsePositiveInteger(args["timeout-ms"] ?? "15000", "timeout-m
 const sessionCookieName = normalizeValue(args["session-cookie-name"] ?? env.WF_PORTAL_SESSION_COOKIE_NAME) ?? "wf_portal_session";
 const expectedExecutionEngine =
   normalizeValue(args["expected-execution-engine"] ?? env.WF_STAGE_EXPECTED_EXECUTION_ENGINE) ?? "wf_native_v1";
+const requireFreshRun = args["fresh-run"] === "true";
 const providedSessionToken =
   normalizeValue(args["session-token"]) ??
   normalizeValue(env.WF_LIVE_SESSION_COOKIE_VALUE) ??
@@ -41,18 +44,18 @@ const startSelection = resolveNativeProofStartSelector({
   workflowTemplateId: workflowTemplateOverride
 });
 const { resolvedStartWorkflowId, startPath } = startSelection;
-const shouldProveWaitingRoundTrip = workflowId === "wf_connect_first_workflow";
+const shouldProveAttentionRoundTrip = workflowId === "wf_connect_first_workflow" || workflowId === "wf_tax_strategy";
 const browserProofBaseUrl =
-  startPath === "dashboard_public_start" || shouldProveWaitingRoundTrip
+  startPath === "dashboard_public_start" || shouldProveAttentionRoundTrip
     ? requireOrigin(args["base-url"] ?? env.WF_LIVE_BASE_URL ?? env.WF_STAGE_API_ORIGIN, "WF_LIVE_BASE_URL")
     : null;
 const browserProofPortalOrigin =
-  startPath === "dashboard_public_start" || shouldProveWaitingRoundTrip
+  startPath === "dashboard_public_start" || shouldProveAttentionRoundTrip
     ? requireOrigin(args["portal-origin"] ?? env.WF_SMOKE_PORTAL_URL ?? env.WF_STAGE_PORTAL_ORIGIN, "WF_SMOKE_PORTAL_URL")
     : null;
 
 const sessionTokenResolution =
-  startPath === "dashboard_public_start" || shouldProveWaitingRoundTrip
+  startPath === "dashboard_public_start" || shouldProveAttentionRoundTrip
     ? await resolveSessionToken({
         providedSessionToken,
         tenantId,
@@ -92,7 +95,8 @@ const durableResult =
         tenantId,
         userId,
         workflowId,
-        workflowTemplateId: resolvedStartWorkflowId
+        workflowTemplateId: resolvedStartWorkflowId,
+        requireFreshRun
       });
 
 const nativeAcceptance =
@@ -113,6 +117,7 @@ const advancementProof =
         containerName: remoteVerification.containerName,
         tenantId,
         runId: durableResult.runId,
+        workflowId,
         postAttemptedAt: durableResult.postAttemptedAt ?? durableResult.snapshot?.run?.createdAt ?? null,
         timeoutMs
       })
@@ -124,19 +129,23 @@ const nativeVerification = verifyNativeAcceptance({
   expectedExecutionEngine
 });
 const waitingAttentionResolution =
-  shouldProveWaitingRoundTrip &&
+  shouldProveAttentionRoundTrip &&
   durableResult.runId &&
   nativeVerification.ok &&
   (advancementProof?.phase === "native_waiting_reached" || advancementProof?.phase === "native_blocked_reached")
-    ? await resolveLiveNativeAttention({
-        baseUrl: browserProofBaseUrl,
-        portalOrigin: browserProofPortalOrigin,
-        sessionCookieName,
-        sessionToken: sessionTokenResolution.sessionToken,
-        workflowId,
-        expectedRunId: durableResult.runId,
-        fetchImpl: (url, options) => fetchWithTimeout(url, options, timeoutMs)
-      })
+    ? await (async () => {
+        return await resolveLiveNativeAttention({
+          baseUrl: browserProofBaseUrl,
+          portalOrigin: browserProofPortalOrigin,
+          sessionCookieName,
+          sessionToken: sessionTokenResolution.sessionToken,
+          workflowId,
+          expectedRunId: durableResult.runId,
+          resumeSummary: resolveAttentionResumeSummary({ workflowId, phase: advancementProof?.phase }),
+          taxStrategyPrerequisiteEvidence: resolveAttentionTaxStrategyEvidence({ workflowId, phase: advancementProof?.phase }),
+          fetchImpl: (url, options) => fetchWithTimeout(url, options, timeoutMs)
+        });
+      })()
     : null;
 const roundTripProof =
   waitingAttentionResolution?.ok && durableResult.runId
@@ -146,6 +155,7 @@ const roundTripProof =
         containerName: remoteVerification.containerName,
         tenantId,
         runId: durableResult.runId,
+        workflowId,
         postAttemptedAt: waitingAttentionResolution.postAttemptedAt,
         timeoutMs
       })
@@ -277,6 +287,7 @@ async function loadRemoteWorkflowRunSnapshot({ sshTarget, sudoPassword, containe
       "  run.workflow_definition_snapshot,",
       "  run.bound_secret_reference_id,",
       "  run.bound_provider_context,",
+      "  secrets.secret_ref as current_secret_ref,",
       "  outbox.id as outbox_id,",
       "  outbox.status as outbox_status,",
       "  outbox.created_at as outbox_created_at,",
@@ -286,6 +297,10 @@ async function loadRemoteWorkflowRunSnapshot({ sshTarget, sudoPassword, containe
       "  outbox.attempts as outbox_attempts,",
       "  outbox.last_error as outbox_last_error",
       "from wfpc.workflow_runs run",
+      "left join wfpc.secret_references secrets",
+      "  on secrets.id = run.bound_secret_reference_id",
+      " and secrets.tenant_id = run.tenant_id",
+      " and secrets.revoked_at is null",
       "left join wfpc.workflow_queue_outbox outbox",
       "  on outbox.tenant_id = run.tenant_id",
       " and outbox.run_id = run.id",
@@ -316,7 +331,7 @@ async function loadRemoteWorkflowRunSnapshot({ sshTarget, sudoPassword, containe
               capability: typeof entry.capability === "string" ? entry.capability : "",
               providerKind: typeof entry.providerKind === "string" ? entry.providerKind : "",
               label: typeof entry.label === "string" ? entry.label : "",
-              secretRef: typeof entry.secretRef === "string" ? entry.secretRef : "",
+              secretRef: typeof row.current_secret_ref === "string" ? row.current_secret_ref : "",
               metadata: entry.metadata && typeof entry.metadata === "object" ? entry.metadata : {}
             }))
             .filter((entry) => entry.capability && entry.providerKind && entry.label && entry.secretRef)
@@ -376,7 +391,7 @@ async function loadRemoteNativeAcceptance({ sshTarget, sudoPassword, containerNa
   };
 }
 
-async function reserveDirectNativePublicRun({ sshTarget, sudoPassword, containerName, tenantId, userId, workflowId, workflowTemplateId }) {
+async function reserveDirectNativePublicRun({ sshTarget, sudoPassword, containerName, tenantId, userId, workflowId, workflowTemplateId, requireFreshRun }) {
   process.stdout.write("\n>> remote direct public reservation via wf-stage-api\n");
   const preparedHarnessRun = await seedRemoteFreshHarnessRun({
     sshTarget,
@@ -385,8 +400,19 @@ async function reserveDirectNativePublicRun({ sshTarget, sudoPassword, container
     tenantId,
     workflowId,
     workflowTemplateId,
-    runId: randomUUID()
+    runId: randomUUID(),
+    requireFreshRun
   });
+  if (preparedHarnessRun?.ok === false) {
+    return {
+      ok: false,
+      error: {
+        code: normalizeValue(preparedHarnessRun.phase) ?? "direct_public_harness_precondition_failed",
+        ...(normalizeValue(preparedHarnessRun.existingRunId) ? { existingRunId: normalizeValue(preparedHarnessRun.existingRunId) } : {}),
+        ...(normalizeValue(preparedHarnessRun.mode) ? { harnessPreparationMode: normalizeValue(preparedHarnessRun.mode) } : {})
+      }
+    };
+  }
   const requestedRunId = normalizeValue(preparedHarnessRun?.runId);
   if (!requestedRunId) {
     throw new Error("Remote harness bootstrap did not return a run id");
@@ -560,11 +586,11 @@ async function driveRemoteDirectNativeProofProductPath({
 function createProofRedispatchQueueJobId({ tenantId, workflowId, runId, dispatchKind, actionToken }) {
   const digest = createHash("sha256").update(actionToken).digest("hex").slice(0, 12);
   const normalizedWorkflowId = workflowId.replace(/[^a-z0-9_-]/gi, "_");
-  const normalizedDispatchKind = dispatchKind.replace(/[^a-z0-9_-]/gi, "_");
-  return `wfq_proof_${normalizedWorkflowId}_${normalizedDispatchKind}_${runId}_${digest}`;
+  const normalizedDispatchKind = dispatchKind.replace(/[^a-z_]/gi, "_");
+  return `${tenantId}:${normalizedWorkflowId}:${runId}:redispatch:${normalizedDispatchKind}:${digest}`;
 }
 
-async function seedRemoteFreshHarnessRun({ sshTarget, sudoPassword, containerName, tenantId, workflowId, workflowTemplateId, runId }) {
+async function seedRemoteFreshHarnessRun({ sshTarget, sudoPassword, containerName, tenantId, workflowId, workflowTemplateId, runId, requireFreshRun }) {
   process.stdout.write("\n>> remote fresh harness bootstrap via wf-stage-api\n");
   const remoteScript = [
     "const pg = require('pg');",
@@ -572,6 +598,7 @@ async function seedRemoteFreshHarnessRun({ sshTarget, sudoPassword, containerNam
     `const workflowId = ${JSON.stringify(workflowId)};`,
     `const workflowTemplateId = ${JSON.stringify(workflowTemplateId ?? null)};`,
     `const runId = ${JSON.stringify(runId)};`,
+    `const requireFreshRun = ${JSON.stringify(requireFreshRun === true)};`,
     "(async () => {",
     "  const { createPostgresHarnessRepository } = await import('./dist/harness/repository.js');",
     "  const { seedPublicWorkflowHarnessRun } = await import('./dist/harness/public-run-bootstrap.js');",
@@ -624,6 +651,28 @@ async function seedRemoteFreshHarnessRun({ sshTarget, sudoPassword, containerNam
     "      [tenantId, workflowId]",
     "    );",
     "    const existingRunId = String(existingRunResult.rows[0]?.id ?? '');",
+    "    if (requireFreshRun) {",
+    "      if (existingRunId) {",
+    "        console.log(JSON.stringify({",
+    "          ok: false,",
+    "          phase: 'fresh_harness_run_conflict',",
+    "          existingRunId,",
+    "          mode: 'existing_harness_run_conflicts_with_fresh_proof'",
+    "        }));",
+    "        return;",
+    "      }",
+    "      await seedPublicWorkflowHarnessRun({",
+    "        repository,",
+    "        tenantId,",
+    "        runId,",
+    "        workflowId,",
+    "        packageId: String(workflowRow.package_id),",
+    "        providerKind: String(workflowRow.provider_kind),",
+    "        credentialLabel",
+    "      });",
+    "      console.log(JSON.stringify({ ok: true, runId, mode: 'seeded_fresh_run' }));",
+    "      return;",
+    "    }",
     "    if (!existingRunId) {",
     "      await seedPublicWorkflowHarnessRun({",
     "        repository,",
@@ -653,6 +702,7 @@ async function seedRemoteFreshHarnessRun({ sshTarget, sudoPassword, containerNam
     "      const existingLaneId = String(childLaneResult.rows[0]?.id ?? '');",
     "      const existingLaneState = String(childLaneResult.rows[0]?.state ?? '');",
     "      if (existingLaneState === 'approved') {",
+    "        await repository.updateRunState({ runId: existingRunId, state: 'active' });",
     "        console.log(JSON.stringify({ ok: true, runId: existingRunId, mode: 'existing_lane_present', laneId: existingLaneId }));",
     "        return;",
     "      }",
@@ -660,6 +710,7 @@ async function seedRemoteFreshHarnessRun({ sshTarget, sudoPassword, containerNam
     "      if (!rearmedLane) {",
     "        throw new Error(`Existing harness run ${existingRunId} has a child lane that could not be re-armed`);",
     "      }",
+    "      await repository.updateRunState({ runId: existingRunId, state: 'active' });",
     "      await repository.insertEvent(createHarnessCardEventRecord({",
     "        cardId: existingLaneId,",
     "        eventKind: 'state_changed',",
@@ -703,6 +754,7 @@ async function seedRemoteFreshHarnessRun({ sshTarget, sudoPassword, containerNam
     "      latestResultSummary: null,",
     "      absorbedWorkItems: []",
     "    }));",
+    "    await repository.updateRunState({ runId: existingRunId, state: 'active' });",
     "    console.log(JSON.stringify({ ok: true, runId: existingRunId, mode: 'repaired_missing_lane', laneId: lane.id }));",
     "  } finally {",
     "    await client.end();",
@@ -725,7 +777,7 @@ async function seedRemoteFreshHarnessRun({ sshTarget, sudoPassword, containerNam
   return JSON.parse(result.stdout.trim() || "null");
 }
 
-async function advanceNativeExecutionProof({ sshTarget, sudoPassword, containerName, tenantId, runId, postAttemptedAt, timeoutMs }) {
+async function advanceNativeExecutionProof({ sshTarget, sudoPassword, containerName, tenantId, runId, workflowId, postAttemptedAt, timeoutMs }) {
   if (!normalizeValue(postAttemptedAt)) {
     return {
       ok: false,
@@ -754,7 +806,8 @@ async function advanceNativeExecutionProof({ sshTarget, sudoPassword, containerN
         tenantId: snapshotTenantId,
         runId: snapshotRunId,
         postAttemptedAt
-      })
+      }),
+    ...buildNativeExecutionAcceptanceOptions(workflowId)
   });
 
   const childLane = acceptance.state?.lane ?? null;
@@ -954,71 +1007,23 @@ function verifyNativeAcceptance({ durableResult, nativeAcceptance, advancementPr
   };
 }
 
-function verifyWaitingRoundTrip({
-  workflowId,
-  nativeVerification,
-  advancementProof,
-  waitingAttentionResolution,
-  roundTripProof
-}) {
-  if (workflowId !== "wf_connect_first_workflow") {
-    return {
-      ok: true,
-      phase: "round_trip_not_required",
-      notes: [
-        `Waiting-lane board round-trip proof is currently bounded to wf_connect_first_workflow, so ${workflowId} keeps the existing native advancement acceptance only.`
-      ]
-    };
+function resolveAttentionResumeSummary({ workflowId, phase }) {
+  if (workflowId === "wf_tax_strategy" && phase === "native_blocked_reached") {
+    return "Founder tax posture documentation is now supplied. Resume the tax strategy lane from the latest restructuring assumptions workbook and finalize the bounded tax review.";
   }
+  return null;
+}
 
-  if (!nativeVerification?.ok) {
-    return {
-      ok: false,
-      phase: "native_execution_not_verified",
-      notes: [
-        "The bounded waiting-lane round-trip proof cannot continue until the first native advancement leg is verified."
-      ]
-    };
-  }
-
-  if (advancementProof?.phase !== "native_waiting_reached" && advancementProof?.phase !== "native_blocked_reached") {
-    return {
-      ok: false,
-      phase: "native_attention_not_reached",
-      notes: [
-        "The first native advancement leg did not land in a waiting or blocked attention state, so the bounded resolve-attention round-trip cannot be proven honestly."
-      ]
-    };
-  }
-
-  if (!waitingAttentionResolution?.ok) {
-    return {
-      ok: false,
-      phase: waitingAttentionResolution?.phase ?? "waiting_attention_not_resolved",
-      notes: waitingAttentionResolution?.notes ?? [
-        "The live board did not return a resolvable native attention contract."
-      ]
-    };
-  }
-
-  if (!roundTripProof?.ok) {
-    return {
-      ok: false,
-      phase: roundTripProof?.phase ?? "waiting_lane_redispatch_not_verified",
-      notes: roundTripProof?.notes ?? [
-        "The native board action succeeded, but durable native redispatch after that action was not proven."
-      ]
-    };
+function resolveAttentionTaxStrategyEvidence({ workflowId, phase }) {
+  if (workflowId !== "wf_tax_strategy" || phase !== "native_blocked_reached") {
+    return null;
   }
 
   return {
-    ok: true,
-    phase: "round_trip_verified",
-    notes: [
-      "The first native execution leg reached a truthful attention state.",
-      "The live board returned a bounded resolve-attention contract and accepted a native attention resolution.",
-      "A fresh native redispatch/advancement was proven after the board action."
-    ]
+    taxEvidenceSummary: "Founder tax posture documents were confirmed for bounded tax review.",
+    taxEvidenceConfirmedBy: "operator",
+    taxEvidenceTaxYear: "2025",
+    taxEvidenceEntityType: "llc"
   };
 }
 

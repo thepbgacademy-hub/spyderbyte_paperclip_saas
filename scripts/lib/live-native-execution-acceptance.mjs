@@ -10,6 +10,7 @@ export async function waitForNativeExecutionAcceptance(input) {
   const pollIntervalMs = Number.isFinite(input.pollIntervalMs) ? Math.max(0, input.pollIntervalMs) : 250;
   const maxAttempts = Number.isInteger(input.maxAttempts) && input.maxAttempts > 0 ? input.maxAttempts : 20;
   const postAttemptedAt = requireTimestamp(input.postAttemptedAt, "postAttemptedAt");
+  const allowFreshExecutionClaimAsTerminal = input.allowFreshExecutionClaimAsTerminal !== false;
 
   let state = null;
 
@@ -20,7 +21,10 @@ export async function waitForNativeExecutionAcceptance(input) {
       attempt
     });
 
-    const acceptance = summarizeNativeExecutionAcceptance(state, postAttemptedAt);
+    const acceptance = summarizeNativeExecutionAcceptance(state, postAttemptedAt, {
+      expectedBlockedArtifactName: normalizeValue(input.expectedBlockedArtifactName),
+      allowFreshExecutionClaimAsTerminal
+    });
     if (acceptance.terminal) {
       return {
         ok: acceptance.ok,
@@ -50,13 +54,15 @@ export async function waitForNativeExecutionAcceptance(input) {
   };
 }
 
-function summarizeNativeExecutionAcceptance(state, postAttemptedAt) {
+function summarizeNativeExecutionAcceptance(state, postAttemptedAt, options = {}) {
   const event = state?.event;
   const eventOutcomeState = normalizeValue(event?.payload?.outcomeState);
+  const blockedArtifactAcceptance = summarizeBlockedArtifactAcceptance(eventOutcomeState, event?.payload, options.expectedBlockedArtifactName);
   if (
     normalizeValue(event?.eventKind) === "execution_outcome_committed" &&
     eventOutcomeState &&
     isAcceptedOutcomeState(eventOutcomeState) &&
+    blockedArtifactAcceptance.accepted &&
     isFreshTimestamp(event?.createdAt, postAttemptedAt) &&
     isNonChiefExecutivePersona(event?.persona)
   ) {
@@ -67,7 +73,7 @@ function summarizeNativeExecutionAcceptance(state, postAttemptedAt) {
       notes: [
         "The queued run advanced into bounded native execution.",
         `A fresh execution_outcome_committed event for the bootstrapped non-CEO lane recorded outcomeState ${eventOutcomeState} after the current POST attempt.`
-      ]
+      ].concat(buildProviderRequestBlockedNotes(eventOutcomeState, event?.payload)).concat(blockedArtifactAcceptance.notes)
     };
   }
 
@@ -78,7 +84,8 @@ function summarizeNativeExecutionAcceptance(state, postAttemptedAt) {
     lane.laneCount === 1 &&
     normalizeValue(lane.state) === "working" &&
     isFreshTimestamp(lane.executionClaimedAt, postAttemptedAt) &&
-    isNonChiefExecutivePersona(lane.persona)
+    isNonChiefExecutivePersona(lane.persona) &&
+    options.allowFreshExecutionClaimAsTerminal !== false
   ) {
     return {
       terminal: true,
@@ -142,6 +149,46 @@ function isNonChiefExecutivePersona(value) {
 function isFreshTimestamp(value, floor) {
   const timestamp = Date.parse(String(value ?? ""));
   return Number.isFinite(timestamp) && timestamp > floor;
+}
+
+function buildProviderRequestBlockedNotes(outcomeState, payload) {
+  if (outcomeState !== "blocked") {
+    return [];
+  }
+
+  const continuitySummary = normalizeValue(payload?.continuitySummary);
+  if (!continuitySummary) {
+    return [];
+  }
+
+  const lowerSummary = continuitySummary.toLowerCase();
+  const matchesProviderRequestFailure =
+    lowerSummary.includes("provider rejected the request with http") ||
+    lowerSummary.includes("provider request failed before a usable response was returned");
+
+  return matchesProviderRequestFailure ? [`Blocked outcome summary: ${continuitySummary}`] : [];
+}
+
+function summarizeBlockedArtifactAcceptance(outcomeState, payload, expectedBlockedArtifactName) {
+  if (outcomeState !== "blocked" || !expectedBlockedArtifactName) {
+    return {
+      accepted: true,
+      notes: []
+    };
+  }
+
+  const continuitySummary = normalizeValue(payload?.continuitySummary);
+  if (!continuitySummary || !continuitySummary.includes(expectedBlockedArtifactName)) {
+    return {
+      accepted: false,
+      notes: []
+    };
+  }
+
+  return {
+    accepted: true,
+    notes: [`Blocked outcome named the expected prerequisite artifact: ${expectedBlockedArtifactName}.`]
+  };
 }
 
 function requireTimestamp(value, label) {

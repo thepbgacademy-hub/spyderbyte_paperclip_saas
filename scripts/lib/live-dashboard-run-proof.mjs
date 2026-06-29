@@ -18,7 +18,8 @@ export async function postDashboardRunAndVerifyDurableBinding(input) {
       cookie: `${sessionCookieName}=${input.sessionToken}`
     },
     body: JSON.stringify({
-      workflowId: input.workflowId
+      workflowId: input.workflowId,
+      ...(input.freshRun ? { freshRun: true } : {})
     })
   });
 
