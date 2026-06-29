@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wealth Factory Stage Parity Planning Gate</title>
+    <style>
+      :root {
+        --ink: #17221f;
+        --muted: #65716c;
+        --paper: #f3eadc;
+        --card: #fff9ed;
+        --line: #d9c9b3;
+        --green: #27685b;
+        --amber: #9b662d;
+        --red: #8e3f34;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: Georgia, "Times New Roman", serif;
+        background:
+          radial-gradient(circle at 80% 0%, rgba(39, 104, 91, 0.18), transparent 24rem),
+          linear-gradient(145deg, #f8f0e5 0%, #e9decf 100%);
+      }
+
+      main {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 48px 24px;
+      }
+
+      header {
+        border-bottom: 2px solid var(--line);
+        margin-bottom: 26px;
+        padding-bottom: 22px;
+      }
+
+      h1 {
+        color: var(--green);
+        font-size: clamp(2rem, 5vw, 4rem);
+        line-height: 0.95;
+        margin: 0 0 12px;
+      }
+
+      h2 {
+        color: var(--green);
+        margin: 0 0 12px;
+      }
+
+      p, li {
+        color: var(--muted);
+        font-size: 1.02rem;
+        line-height: 1.58;
+      }
+
+      .badge {
+        display: inline-flex;
+        border-radius: 999px;
+        background: rgba(155, 102, 45, 0.14);
+        color: var(--amber);
+        font-weight: 700;
+        margin-bottom: 12px;
+        padding: 7px 12px;
+      }
+
+      .grid {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      }
+
+      .card {
+        background: rgba(255, 249, 237, 0.92);
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        box-shadow: 0 18px 45px rgba(23, 34, 31, 0.08);
+        padding: 22px;
+      }
+
+      .blocker {
+        border-left: 5px solid var(--red);
+      }
+
+      code {
+        background: rgba(39, 104, 91, 0.1);
+        border-radius: 6px;
+        color: var(--ink);
+        padding: 2px 5px;
+      }
+
+      a {
+        color: var(--green);
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="badge">Parity planned, live proof intentionally held</div>
+        <h1>Stage Parity Planning Gate</h1>
+        <p>
+          This phase checked the isolated Wealth Factory stage lane from the local repo and secrets contract before any live mutation.
+          The correct outcome is a guarded hold: local proof remains green, dry-run planning is valid, but full stage parity should wait
+          until the isolated stage image and launch-mode drift are resolved.
+        </p>
+      </header>
+
+      <section class="grid" aria-label="stage parity cards">
+        <article class="card">
+          <h2>Confirmed</h2>
+          <ul>
+            <li>GitNexus was up to date at <code>799faea</code> before the phase.</li>
+            <li>Required stage compose variables have real values in the stage env file.</li>
+            <li>Harness and native executor workflow allowlists match the three intended workflows.</li>
+            <li>The stage compose exposes only <code>3000</code> and <code>8080</code>; port <code>2375</code> is not exposed.</li>
+            <li>The stage-stability dry run emits only the expected four proof steps.</li>
+          </ul>
+        </article>
+
+        <article class="card blocker">
+          <h2>Blocked</h2>
+          <p>
+            Full live parity was not run because the stage env is not pinned to an image known to contain commit <code>799faea</code>,
+            and it currently sets <code>WF_PAPERCLIP_LAUNCH_MODE=issues</code> instead of the current launch posture of <code>runs</code>.
+            Testing through that drift would produce noisy or misleading launch evidence.
+          </p>
+        </article>
+
+        <article class="card">
+          <h2>Verification</h2>
+          <ul>
+            <li><code>npm run prove:stage-stability -- --dry-run</code></li>
+            <li><code>npx vitest run tests/handoff-docs.test.ts tests/gitignore-generated-js.test.ts</code></li>
+            <li><code>npm test</code>: 145 files passed, 1292 tests passed, 14 skipped</li>
+            <li><code>npm run build</code></li>
+            <li><code>npm run build:server</code></li>
+            <li><code>npm run build:web</code></li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <h2>Next Slice</h2>
+          <p>
+            Refresh only the isolated Wealth Factory stage lane to a reviewed current-branch image, set and validate
+            <code>WF_PAPERCLIP_LAUNCH_MODE=runs</code>, then run the non-destructive stage-stability proof.
+            Keep unrelated domains, containers, DNS, Caddy, seed scripts, and fresh-bundle replay out of scope.
+          </p>
+          <p>
+            The TODO now places this as the visible open item under <code>## Current Next Slice</code> so the next phase
+            cannot be buried under historical checked work.
+          </p>
+        </article>
+      </section>
+
+      <section class="card" style="margin-top: 18px;">
+        <h2>Files Updated</h2>
+        <ul>
+          <li><a href="wf-harness/HANDOFF.md">wf-harness/HANDOFF.md</a></li>
+          <li><a href="wf-harness/TODO.md">wf-harness/TODO.md</a></li>
+          <li><a href="tests/handoff-docs.test.ts">tests/handoff-docs.test.ts</a></li>
+          <li><a href="phase-stage-parity-planning-summary.html">phase-stage-parity-planning-summary.html</a></li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

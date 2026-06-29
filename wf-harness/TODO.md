@@ -132,6 +132,13 @@ This file tracks the new harness subproject only.
 
 ## Current Next Slice
 
+- [ ] Refresh only the isolated Wealth Factory stage lane to prove live parity with the current branch.
+  - [ ] Build/tag a reviewed current-branch image for the isolated Wealth Factory stage lane only.
+  - [ ] Update only the isolated `wf-stage-*` lane to that reviewed image; do not touch `api.spyderbyte.cloud`, unrelated containers, DNS/Caddy, old Paperclip lanes, seed/demo scripts, or fresh-bundle replay.
+  - [ ] Set and validate `WF_PAPERCLIP_LAUNCH_MODE=runs` on the isolated stage lane before running live proof.
+  - [ ] Run the non-destructive `npm run prove:stage-stability` proof after image/env parity is confirmed.
+  - [ ] Record sanitized stage-parity evidence and keep raw soak/live topology captures out of commits.
+
 - [x] Close the bounded native attention-cycle proof-hardening slice without widening runtime semantics, export plumbing, or deployment topology.
   - [x] Run the required GitNexus preflight first and keep the blast-radius read explicit. On June 28, 2026 `gitnexus status` stayed current at commit `012a40d`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` remained branch-wide `critical` because of long-lived workspace noise rather than this narrow proof seam.
   - [x] Confirm from `src/harness/board-service.ts` that the underlying action-handle lifecycle already exists before treating this as a proof-only slice: same-cycle handles stay stable, new blocked cycles mint fresh handles, and stale tokens fail closed before mutation.
@@ -644,3 +651,12 @@ This file tracks the new harness subproject only.
   - [x] Update `tests/handoff-docs.test.ts` so historical phase checks read the whole handoff while the `Latest Phase` assertion follows this current launch-gate phase.
   - [x] Verify with `npx vitest run tests/handoff-docs.test.ts`, `npx vitest run tests/gitignore-generated-js.test.ts`, `npm test`, `npm run build`, `npm run build:server`, and `npm run build:web`.
   - [x] Preserve web-build warnings as non-blocking notes instead of widening scope: dependency-level ignored `"use client"` directives and the existing single client chunk size warning remain outside this phase.
+- [x] Close the bounded stage-parity planning gate after the pushed local launch-gate validation.
+  - [x] Keep the phase non-destructive: no VPS mutation, no Docker restart/recreate, no DNS/Caddy/shared-host change, no seed/demo script, no database migration, no queue mutation, no export replay mutation, no public dashboard/start widening, and no workflow-family expansion.
+  - [x] Reconfirm GitNexus before validation: status current at `799faea`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported no changes.
+  - [x] Consult Sonnet in headless mode for consideration only; accepted the local manifest/env parity gate recommendation and did not grant VPS access.
+  - [x] Use the explorer subagent recommendation to keep the live stage-stability sequence out of scope until stage env/image drift is intentionally resolved.
+  - [x] Verify required stage compose vars are present in the real stage env, workflow allowlists match the three intended core workflows, and port `2375` is not exposed by `deploy/docker-compose.vps2-isolated-stage.yml`.
+  - [x] Record parity blockers instead of testing a drifted substrate: real stage images are older than the pushed local branch and the real stage env currently sets `WF_PAPERCLIP_LAUNCH_MODE=issues` rather than `runs`.
+  - [x] Verify with `npm run prove:stage-stability -- --dry-run`, `npx vitest run tests/handoff-docs.test.ts tests/gitignore-generated-js.test.ts`, `npm test`, `npm run build`, `npm run build:server`, and `npm run build:web`.
+  - [ ] Next bounded slice: refresh only the isolated Wealth Factory stage lane to a reviewed current-branch image, set/validate `WF_PAPERCLIP_LAUNCH_MODE=runs`, then run the non-destructive stage-stability proof.

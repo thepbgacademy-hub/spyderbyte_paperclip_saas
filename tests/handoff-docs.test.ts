@@ -48,35 +48,44 @@ describe("handoff board-surface wording", () => {
     );
   });
 
-  it("records the current local launch-gate validation as latest", () => {
+  it("records the current stage-parity planning gate as latest", () => {
     expect(latestPhaseCurrentBlock).toContain(
-      "Closed the bounded local launch-gate validation after the CEO-governed multi-lane dispatch fix"
+      "Closed the bounded stage-parity planning gate after the pushed local launch-gate validation"
     );
     expect(latestPhaseCurrentBlock).toContain(
       "Sonnet was consulted in headless mode for consideration only"
     );
     expect(latestPhaseCurrentBlock).toContain(
-      "`npm test` (`145` files passed, `1292` tests passed, `14` skipped)"
+      "the real stage env currently sets `WF_PAPERCLIP_LAUNCH_MODE=issues`"
     );
     expect(latestPhaseCurrentBlock).toContain(
-      "worker/internal claim tokens out of tenant-facing export artifacts"
+      "updates only the isolated Wealth Factory stage lane to a reviewed image built from the current branch"
     );
   });
 
-  it("records the completed R2 through R6 checklist in the current next-slice section", () => {
+  it("keeps the current next-slice section pointed at the stage parity refresh", () => {
+    expect(currentNextSlice.trimStart()).toContain(
+      "- [ ] Refresh only the isolated Wealth Factory stage lane to prove live parity with the current branch."
+    );
     expect(currentNextSlice).toContain(
+      "Set and validate `WF_PAPERCLIP_LAUNCH_MODE=runs` on the isolated stage lane before running live proof."
+    );
+    expect(currentNextSlice).toContain(
+      "do not touch `api.spyderbyte.cloud`, unrelated containers, DNS/Caddy, old Paperclip lanes, seed/demo scripts, or fresh-bundle replay"
+    );
+    expect(todo).toContain(
       "Phase R2: Proof and Tooling Surface Reduction"
     );
-    expect(currentNextSlice).toContain(
+    expect(todo).toContain(
       "scripts/prove-provider-credential-lifecycle.mjs"
     );
-    expect(currentNextSlice).toContain(
+    expect(todo).toContain(
       "Phase R4: Board UI Decomposition and Simplification"
     );
-    expect(currentNextSlice).toContain(
+    expect(todo).toContain(
       "Phase R5: Runtime Hotspot Reduction"
     );
-    expect(currentNextSlice).toContain(
+    expect(todo).toContain(
       "Phase R6: Paperclip Compatibility Bounding"
     );
     expect(currentNextSlice).not.toContain(
