@@ -48,22 +48,25 @@ describe("handoff board-surface wording", () => {
     );
   });
 
-  it("records the completed isolated stage-refresh parity slice as latest", () => {
+  it("records the completed operator-controls integration proof as latest", () => {
     expect(latestPhaseCurrentBlock).toContain(
-      "Closed the bounded isolated Wealth Factory stage-refresh/parity slice on VPS 2"
+      "Closed the bounded local operator-controls integration proof harness"
     );
     expect(latestPhaseCurrentBlock).toContain(
       "Sonnet was consulted in headless mode for consideration only"
     );
     expect(latestPhaseCurrentBlock).toContain(
-      "Stage was refreshed to reviewed image tag `wf-stage-20260629-staleattention3`"
+      "Added `tests/operator-controls-integration.test.ts` to prove the real local stack path"
     );
     expect(latestPhaseCurrentBlock).toContain(
-      "`npm run prove:stage-stability` completed `stage_stability_complete`"
+      "continue to defer job inspect/retry/cancel, secret rotate/revoke, cancel-runs-by-secret-ref, Paperclip disable semantics, and operator UI"
+    );
+    expect(latestPhase).toContain(
+      "Closed the bounded isolated Wealth Factory stage-refresh/parity slice on VPS 2"
     );
   });
 
-  it("keeps the current next-slice section pointed at the completed stage closeout and attention recovery hardening", () => {
+  it("keeps the current next-slice section pointed at completed bounded launch-readiness slices", () => {
     expect(currentNextSlice.trimStart()).toContain(
       "- [x] Refresh only the isolated Wealth Factory stage lane to prove live parity with the current branch."
     );

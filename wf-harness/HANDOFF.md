@@ -22,6 +22,21 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
+- Closed the bounded local operator-controls integration proof harness after the durable operator tenant-controls commit `30c7de3`.
+- Kept the phase local-only and non-destructive: no VPS access, no live stage mutation, no Docker/image/env/Caddy/DNS changes, no database migration, no operator UI, and no implementation of deferred job admin, secret rotation/revoke, run cancellation, or emergency Paperclip-disable semantics.
+- GitNexus preflight was current at commit `30c7de3`; `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.
+- Sonnet was consulted in headless mode for consideration only and was not given VPS access. Sonnet recommended a local proof harness before any live stage validation because the only missing piece was proof that the real HTTP -> service -> Postgres dependency chain worked together.
+- A local explorer subagent independently recommended the same bounded proof-harness path and warned not to implement new operator capability or run live stage probes in this phase.
+- Added `tests/operator-controls-integration.test.ts` to prove the real local stack path:
+  - pause via `/api/operator/tenants/:tenant/pause` performs durable membership lookup, uses the authenticated session tenant instead of URL/body tenant input, updates `wfpc.tenants.paused_at`, and emits bounded audit metadata
+  - resume clears `wfpc.tenants.paused_at` through the same integrated path
+  - missing durable membership fails closed before mutation or audit
+  - deferred secret rotation still returns `501 operator_operation_not_implemented` without leaking the secret handle
+- Next continuation point:
+  - keep live stage validation separate and non-destructive if chosen next
+  - continue to defer job inspect/retry/cancel, secret rotate/revoke, cancel-runs-by-secret-ref, Paperclip disable semantics, and operator UI until a dedicated phase explicitly starts them
+  - prefer the next launch-critical acceptance family only if it advances public launch readiness more than more proof-only work
+
 - Closed the bounded isolated Wealth Factory stage-refresh/parity slice on VPS 2.
 - Kept the live work intentionally narrow: only `wf-stage-web`, `wf-stage-api`, and `wf-stage-worker` were refreshed; no DNS/Caddy changes, no `api.spyderbyte.cloud` mutation, no old Paperclip lane mutation, no seed/demo script, no database migration, no queue reset, no fresh-bundle replay, and no broad Docker cleanup/prune.
 - GitNexus preflight was current at commit `8f84ae9`; `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before this slice began.

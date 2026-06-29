@@ -132,6 +132,15 @@ This file tracks the new harness subproject only.
 
 ## Current Next Slice
 
+- [x] Close the bounded local operator-controls integration proof harness without widening operator capability, runtime topology, or live stage mutation.
+  - [x] Run the required GitNexus preflight first. On June 29, 2026 `gitnexus status` was current at commit `30c7de3`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.
+  - [x] Consult Sonnet and a local explorer subagent before implementation; both recommended local proof coverage before any live stage touch.
+  - [x] Prove the real local stack path from `createOperatorHttpHandler` to `createOperatorService` to `createPostgresOperatorDependencies` with a mock query client.
+  - [x] Confirm pause/resume bind to the authenticated session tenant, execute the intended `wfpc.tenants.paused_at` SQL shape, and emit bounded audit metadata.
+  - [x] Confirm missing durable operator membership fails closed before tenant mutation or audit.
+  - [x] Confirm deferred operator commands still return `501 operator_operation_not_implemented` without leaking secret handles.
+  - [x] Defer live stage probing, job admin, secret rotation/revoke, run cancellation, emergency Paperclip disable semantics, and operator UI work.
+
 - [x] Refresh only the isolated Wealth Factory stage lane to prove live parity with the current branch.
   - [x] Build/tag a reviewed current-branch image for the isolated Wealth Factory stage lane only.
   - [x] Update only the isolated `wf-stage-*` lane to that reviewed image; do not touch `api.spyderbyte.cloud`, unrelated containers, DNS/Caddy, old Paperclip lanes, seed/demo scripts, or fresh-bundle replay.
