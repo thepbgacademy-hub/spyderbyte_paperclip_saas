@@ -24,3 +24,4 @@ src/**/*.js
 tests/**/*.js
 apps/web/src/**/*.js
 apps/web/tests/**/*.js
+apps/web/*.js
