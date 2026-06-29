@@ -197,7 +197,7 @@ describe("live harness export replay cycle", () => {
           candidateId: "governance_history_export",
           actions: ["export-preflight", "governance-history-export"]
         }),
-        postCandidateAction: async ({ action }) =>
+        postCandidateAction: async ({ action }: { action: { actionRoute?: string | null } }) =>
           action.actionRoute === "export-preflight"
             ? { status: 200, body: { status: "ready" } }
             : { status: 500, body: { code: "writer_failed" } },
@@ -245,7 +245,7 @@ describe("live harness export replay cycle", () => {
           candidateId: "governance_history_export",
           actions: ["export-preflight", "governance-history-export"]
         }),
-        postCandidateAction: async ({ action }) =>
+        postCandidateAction: async ({ action }: { action: { actionRoute?: string | null } }) =>
           action.actionRoute === "export-preflight"
             ? { status: 200, body: { status: "ready" } }
             : { status: 500, body: { code: "writer_failed" } },
