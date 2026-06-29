@@ -602,6 +602,16 @@ This file tracks the new harness subproject only.
     - [x] Add reviewer-driven guardrails so custom failure writer roots must match the derived `.replay-proof-blocker` path and DB `bundle_revision` can establish current-bundle freshness when it matches the board candidate bundle revision.
     - [x] Verify with `npx vitest run tests/live-harness-export-replay-cycle.test.ts tests/live-harness-export-replay-cycle-script.test.ts` and `npm run build:server`.
   - [ ] Later fresh-bundle proof only: provision a genuinely new export-bundle lane before expecting `scripts/prove-live-harness-export-replay-cycle.mjs` to prove writer-break-induced failure creation and replay in one uninterrupted run.
+- [x] Complete the five-step launch-readiness continuation after the replay-cycle typing gate.
+  - [x] Push the clean baseline branch to GitHub before new phase work so local launch checks start from a recoverable remote checkpoint.
+  - [x] Fix the TypeScript-only replay-cycle proof typing gap without changing runtime behavior: add `scripts/lib/live-harness-export-replay-cycle.d.mts` and annotate the focused test callback action shape.
+  - [x] Verify local launch gates on June 28, 2026: `npm run build`, `npm run build:server`, `npm run build:web`, and full `npm test` all passed.
+  - [x] Refresh GitNexus after the local proof fix. The first forced index hit the known worker timeout, but `gitnexus analyze --force --index-only --worker-timeout 300` completed successfully at commit `deb2961`.
+  - [x] Run `npm run prove:stage-stability -- --dry-run` and confirm the isolated launch plan remains bounded to `prove:stage-live`, `prove:stage-live-native-execution`, `prove:live-fairness`, and `prove:live-soak-capacity`.
+  - [x] Run `npm run prove:stage-live` against `wf-api.spyderbyte.cloud` and confirm public security smoke plus live Playwright checks pass across `wf_connect_first_workflow`, `wf_tax_strategy`, and `wf_package_followup`.
+  - [x] Run full `npm run prove:stage-stability` against the isolated Wealth Factory lane and confirm `phase: "stage_stability_complete"` with all four steps green.
+  - [x] Preserve the launch posture: keep `wf-api.spyderbyte.cloud` as the canonical launch validation lane, do not mutate `api.spyderbyte.cloud`, do not use `scripts/seed-wfpc-demo.mjs`, and leave fresh-bundle replay proof as a separate operator-provisioned lane.
+  - [x] Store sanitized launch-readiness evidence under `audit/2026-06-29/stage-live-stability-summary.json` for the successful stage-stability run; do not commit raw soak captures because they include unrelated VPS topology and live stage identifiers.
 - [x] Resume live attention-cycle acceptance through the exact blocked-lane reuse contract on the canonical `primary` lane.
   - [x] Keep the phase bounded to proof invocation truth only; do not add a reset utility or widen any public/operator route.
   - [x] Confirm the helper's exact blocked-lane predicates against the live board: `wf_connect_first_workflow`, `await_unblock`, `blocked`, `CFO`, `Pressure-test the pricing lane`, and `Pricing Review`.

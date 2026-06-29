@@ -1,0 +1,49 @@
+{
+  "checkedAt": "2026-06-29T04:10:00Z",
+  "phase": "stage_stability_complete",
+  "ok": true,
+  "launchLane": "wf-api.spyderbyte.cloud",
+  "sharedHostCutoverChanged": false,
+  "vpsDestructiveActionPerformed": false,
+  "rawSoakArtifactsCommitted": false,
+  "rawSoakArtifactsReason": "Raw soak captures include unrelated VPS topology and live stage operational identifiers, so this sanitized summary is the committed evidence artifact.",
+  "steps": [
+    {
+      "id": "stage-live-proof",
+      "ok": true,
+      "summary": "Public security smoke and live browser checks passed across the three current core workflow families."
+    },
+    {
+      "id": "stage-live-native-execution",
+      "ok": true,
+      "summary": "Native execution proof completed on the isolated launch lane."
+    },
+    {
+      "id": "stage-live-fairness",
+      "ok": true,
+      "summary": "Fairness proof completed with the bounded one-cycle canonical lane plan."
+    },
+    {
+      "id": "stage-live-soak",
+      "ok": true,
+      "summary": "Soak proof completed without resource saturation or queue reachability failure."
+    }
+  ],
+  "localGates": {
+    "build": "passed",
+    "buildServer": "passed",
+    "buildWeb": "passed",
+    "test": "passed"
+  },
+  "gitnexus": {
+    "status": "up-to-date",
+    "indexedCommit": "deb2961",
+    "note": "The first forced index timed out on the known analyzer path; rerun with --worker-timeout 300 completed successfully."
+  },
+  "guardrails": [
+    "Keep wf-api.spyderbyte.cloud as the canonical launch validation lane.",
+    "Do not mutate api.spyderbyte.cloud during launch validation.",
+    "Do not use scripts/seed-wfpc-demo.mjs for fresh proof provisioning.",
+    "Keep fresh-bundle replay proof as a separate operator-provisioned lane."
+  ]
+}

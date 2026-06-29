@@ -14,6 +14,37 @@ export type LiveHarnessExportReplayCycleResult = {
   [key: string]: unknown;
 };
 
+export type LiveHarnessExportReplayCycleCandidateId =
+  | "governance_history_export"
+  | "package_bundle_export"
+  | string;
+
+export type LiveHarnessExportReplayCycleAction = {
+  actionRoute?: string | null;
+  actionHandle?: string | null;
+  actionPath?: string | null;
+};
+
+export type LiveHarnessExportReplayCycleDelivery = {
+  status?: string | null;
+  bundleRevision?: string | null;
+  bundle_revision?: string | null;
+  contractFreshness?: string | null;
+  contract_freshness?: string | null;
+  [key: string]: unknown;
+};
+
+export type LiveHarnessExportReplayCycleCandidate = {
+  latestDelivery?: LiveHarnessExportReplayCycleDelivery | null;
+  exportActions?: LiveHarnessExportReplayCycleAction[] | null;
+  [key: string]: unknown;
+};
+
+export type LiveHarnessExportReplayCycleBoardCandidate = {
+  board?: unknown;
+  candidate?: LiveHarnessExportReplayCycleCandidate | null;
+};
+
 export function runLiveHarnessExportReplayCycle(input: {
   runId?: string | null;
   failureWriterRoot?: string | null;
@@ -25,22 +56,18 @@ export function runLiveHarnessExportReplayCycle(input: {
   }) => Promise<LiveHarnessExportReplayCycleWriterConfig> | LiveHarnessExportReplayCycleWriterConfig;
   loadClosedBoardCandidate: (input: {
     runId: string;
-    candidateId: string;
-  }) => Promise<unknown> | unknown;
+    candidateId: LiveHarnessExportReplayCycleCandidateId;
+  }) => Promise<LiveHarnessExportReplayCycleBoardCandidate> | LiveHarnessExportReplayCycleBoardCandidate;
   loadCandidateDeliverySnapshot?: (input: {
-    candidateId: string;
-  }) => Promise<unknown> | unknown;
+    candidateId: LiveHarnessExportReplayCycleCandidateId;
+  }) => Promise<LiveHarnessExportReplayCycleDelivery | null> | LiveHarnessExportReplayCycleDelivery | null;
   postCandidateAction: (input: {
     runId: string;
-    candidateId: string;
-    action: {
-      actionRoute?: string | null;
-      actionHandle?: string | null;
-      actionPath?: string | null;
-    };
+    candidateId: LiveHarnessExportReplayCycleCandidateId;
+    action: LiveHarnessExportReplayCycleAction;
   }) => Promise<unknown> | unknown;
   waitForCandidateDeliveryStatus: (input: {
-    candidateId: string;
+    candidateId: LiveHarnessExportReplayCycleCandidateId;
     acceptedStatuses: string[];
   }) => Promise<unknown> | unknown;
 }): Promise<LiveHarnessExportReplayCycleResult>;
