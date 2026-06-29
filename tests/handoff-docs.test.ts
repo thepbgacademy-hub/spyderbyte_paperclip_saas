@@ -48,21 +48,24 @@ describe("handoff board-surface wording", () => {
     );
   });
 
-  it("records the completed stage operator-controls confirmation gate as latest", () => {
+  it("records the completed stage operator-controls live confirmation as latest", () => {
     expect(latestPhaseCurrentBlock).toContain(
-      "Added the manual live read-only confirmation gate for the stage operator-controls probe"
+      "Completed the manual live read-only confirmation for the stage operator-controls probe"
     );
     expect(latestPhaseCurrentBlock).toContain(
-      "Sonnet was consulted in headless mode for consideration only"
+      "exactly one `GET /api/operator/tenants/:tenant/jobs/dead-letters` request"
     );
     expect(latestPhaseCurrentBlock).toContain(
-      "manual operator-token gate"
+      "HTTP `403`, `verdict: accepted_operator_surface_status`"
     );
     expect(latestPhaseCurrentBlock).toContain(
-      "operator probe is absent from the automated stage-stability dry-run sequence"
+      "Sanitized evidence is recorded in `audit/2026-06-29/stage-operator-controls-read-only-confirmation.json`"
     );
     expect(latestPhaseCurrentBlock).toContain(
       "continue deferring stage pause/resume and all deferred operator mutations to separately approved phases"
+    );
+    expect(latestPhase).toContain(
+      "Added the manual live read-only confirmation gate for the stage operator-controls probe"
     );
     expect(latestPhase).toContain(
       "Added the dry-run-first isolated stage operator-controls probe"

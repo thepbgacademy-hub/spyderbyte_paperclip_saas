@@ -22,6 +22,16 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
+- Completed the manual live read-only confirmation for the stage operator-controls probe.
+- Kept the run non-destructive: exactly one `GET /api/operator/tenants/:tenant/jobs/dead-letters` request against `wf-api.spyderbyte.cloud`, no VPS access, no Docker/image/env/Caddy/DNS changes, no database migration, no queue mutation, no pause/resume, no retry/cancel, and no secret mutation.
+- The short-lived operator session token was generated locally from the stage runtime signing env, was not printed or committed, and was removed from the local process environment through the documented `try/finally` cleanup.
+- Live result on June 29, 2026: `ok: true`, HTTP `403`, `verdict: accepted_operator_surface_status`, latency `730ms`. The `403` is expected/accepted for this gate because it proves the live read-only operator surface is reachable and fail-closes at authorization without mutating state.
+- Sanitized evidence is recorded in `audit/2026-06-29/stage-operator-controls-read-only-confirmation.json`.
+- Next continuation point:
+  - keep `prove:stage-operator-controls` out of `prove:stage-stability` unless a later explicit phase decides this read-only probe should become automated
+  - continue deferring stage pause/resume and all deferred operator mutations to separately approved phases
+  - move back to the next launch-critical acceptance family rather than expanding operator controls further
+
 - Added the manual live read-only confirmation gate for the stage operator-controls probe.
 - Kept the phase local-only and non-destructive: no VPS access, no live token execution, no Docker/image/env/Caddy/DNS changes, no database migration, no operator mutation, and no folding of the probe into stage-stability automation.
 - GitNexus preflight was current at commit `0679751`; `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.

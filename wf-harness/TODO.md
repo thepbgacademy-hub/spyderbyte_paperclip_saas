@@ -135,6 +135,13 @@ This file tracks the new harness subproject only.
 
 ## Current Next Slice
 
+- [x] Run the manual live read-only confirmation for the stage operator-controls probe.
+  - [x] Generate a short-lived local operator session token from the stage runtime signing env without printing or committing it.
+  - [x] Execute exactly one `GET /api/operator/tenants/:tenant/jobs/dead-letters` request through `npm run prove:stage-operator-controls -- --execute-read-only`.
+  - [x] Confirm the live surface returned an accepted fail-closed result: HTTP `403`, `verdict: accepted_operator_surface_status`, no mutation performed, and no VPS access.
+  - [x] Record sanitized evidence in `audit/2026-06-29/stage-operator-controls-read-only-confirmation.json`.
+  - [x] Keep this probe out of `npm run prove:stage-stability` and continue deferring stage pause/resume plus all operator mutation routes.
+
 - [x] Add a manual live read-only confirmation gate for the stage operator-controls probe without executing the live token path or widening stage automation.
   - [x] Run the required GitNexus preflight first. On June 29, 2026 `gitnexus status` was current at commit `0679751`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.
   - [x] Consult Sonnet and a local explorer subagent before implementation; both recommended keeping the live read-only probe human-gated and out of automated stage-stability until a later explicit approval.
