@@ -46,6 +46,14 @@ On June 22, 2026 the same isolated host passed the full repo-side `npm run prove
   - `wf-stage-web`
 - `api.spyderbyte.cloud` remained unchanged during this rerun; the June 22, 2026 result is launch-readiness evidence for `wf-api.spyderbyte.cloud`, not a shared-host cutover.
 
+On June 29, 2026 the pressure-test evidence was converted into a launch operating rule for the isolated Wealth Factory lane.
+
+- four tenants per VPS is the strict launch upper cap, not a comfort target
+- the cap requires active monitoring because the four-tenant staggered follow-up still peaked at `474.71%` Paperclip CPU, `2990370980` bytes memory, and `1405` PIDs
+- do not place multiple tenant cron or heartbeat starts on the same minute boundary
+- keep a minimum `120` seconds between tenant start windows for cron, heartbeat, onboarding, and manual launch batches until a later dedicated scheduler phase is approved
+- this is an operator-facing launch rule only; it does not add a runtime scheduler, mutate the VPS, change Caddy/DNS, or raise the launch cap
+
 ## Goal
 
 Keep the fully wired Wealth Factory stage host on VPS 2 as the active public API lane without changing the current `api.spyderbyte.cloud` route unless operators deliberately choose a later cutover slice.

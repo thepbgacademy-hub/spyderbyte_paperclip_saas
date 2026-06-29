@@ -135,6 +135,14 @@ This file tracks the new harness subproject only.
 
 ## Current Next Slice
 
+- [x] Record the launch tenant ceiling and cron/heartbeat anti-clustering rule.
+  - [x] Run the required GitNexus preflight first. On June 29, 2026 `gitnexus status` was current at commit `c5bafcf`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.
+  - [x] Consult Sonnet and a local explorer subagent before implementation; both recommended a bounded policy/proof slice rather than a new scheduler or deployment change.
+  - [x] Decide that four tenants per VPS is the strict launch upper cap, not a comfort target, with active monitoring required before public launch.
+  - [x] Require a minimum `120` seconds between tenant cron, heartbeat, onboarding, and manual launch-batch start windows.
+  - [x] Add `wf-harness/docs/2026-06-29-launch-tenant-ceiling-and-jitter-policy.md` and `audit/2026-06-29/launch-tenant-ceiling-and-jitter-policy.json` as the durable source-of-truth record.
+  - [x] No runtime scheduler, VPS change, deployment topology change, or operator mutation is introduced by this phase.
+
 - [x] Run the manual live read-only confirmation for the stage operator-controls probe.
   - [x] Generate a short-lived local operator session token from the stage runtime signing env without printing or committing it.
   - [x] Execute exactly one `GET /api/operator/tenants/:tenant/jobs/dead-letters` request through `npm run prove:stage-operator-controls -- --execute-read-only`.

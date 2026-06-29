@@ -22,6 +22,26 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
+- Recorded the launch tenant ceiling and cron/heartbeat anti-clustering rule.
+- GitNexus preflight was current at commit `c5bafcf`; `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.
+- Sonnet was consulted in headless mode for consideration only and was not given VPS access. Sonnet recommended closing the remaining launch governance/scheduling risk with a bounded policy/proof slice rather than widening operator controls, deployment topology, dashboard visuals, or Obsidian/export scope.
+- A local explorer subagent independently confirmed the same boundary: codify the pod-cap launch rule and operator-facing anti-clustering guidance, but do not build a broad scheduler.
+- Decision: four tenants per VPS is a strict monitored launch upper cap, not a comfort target. A fifth tenant on the same VPS requires explicit review and fresh soak evidence.
+- Anti-clustering rule: keep at least `120` seconds between tenant cron, heartbeat, onboarding, and manual launch-batch start windows until a later dedicated scheduler phase is approved.
+- Added:
+  - `wf-harness/docs/2026-06-29-launch-tenant-ceiling-and-jitter-policy.md`
+  - `audit/2026-06-29/launch-tenant-ceiling-and-jitter-policy.json`
+  - `tests/launch-tenant-ceiling-policy.test.ts`
+- Updated:
+  - `TODO.md`
+  - `wf-harness/TODO.md`
+  - `deploy/runbooks/deploy-poc.md`
+  - `deploy/runbooks/vps2-isolated-wealth-factory-stage-rollout.md`
+- Kept the phase local-only and non-destructive: no VPS access, no runtime scheduler, no queue-smoothing engine, no deployment mutation, no Caddy/DNS change, no database migration, no operator mutation, and no launch-cap increase.
+- Next continuation point:
+  - keep four tenants per VPS as the monitored upper cap for launch unless a later fresh soak phase proves better Paperclip headroom
+  - continue with the next public-launch acceptance gate instead of deeper proof-only expansion
+
 - Completed the manual live read-only confirmation for the stage operator-controls probe.
 - Kept the run non-destructive: exactly one `GET /api/operator/tenants/:tenant/jobs/dead-letters` request against `wf-api.spyderbyte.cloud`, no VPS access, no Docker/image/env/Caddy/DNS changes, no database migration, no queue mutation, no pause/resume, no retry/cancel, and no secret mutation.
 - The short-lived operator session token was generated locally from the stage runtime signing env, was not printed or committed, and was removed from the local process environment through the documented `try/finally` cleanup.

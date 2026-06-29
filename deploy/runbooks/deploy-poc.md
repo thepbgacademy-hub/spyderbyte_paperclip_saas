@@ -362,6 +362,8 @@ Repeatable operator helpers for this proof lane:
   - `4tenant-staggered` still drove Paperclip to `474.71%` CPU, `2990370980` bytes memory, and `1405` PIDs while `80/80` runs still reached `running`
   - `4tenant-clustered` stayed healthier than the staggered long soak, but still peaked at `351.31%` CPU, `2482491097` bytes memory, and `957` PIDs
   - use the four-tenant artifacts before treating `4 tenants per VPS` as a comfortable default; the current evidence supports `4` as a strict upper cap with monitoring rather than a relaxed safety zone
+  - launch decision: four tenants per VPS is the strict launch upper cap, not a comfort target
+  - anti-clustering rule: keep at least `120` seconds between tenant cron, heartbeat, onboarding, or manual launch-batch start windows until a later scheduler phase is explicitly approved
 - the worker runtime now emits `workerInstanceId` and `observedAt` on structured `wealth_factory_worker_run` events so the analyzer can distinguish single-worker drain from real cross-worker participation
 - pin `WF_WORKER_INSTANCE_ID` explicitly for any fairness proof you plan to trust; the default `hostname:pid` fallback is only best-effort staging telemetry
 - after copying rebuilt `dist` files or proof helpers into worker containers, restart or recreate those workers before trusting telemetry; `docker cp` alone does not replace the already-running Node process

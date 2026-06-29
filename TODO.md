@@ -269,8 +269,9 @@ This file tracks implementation progress. Keep it current after every phase.
   - [x] Extend the staged pressure proof into longer soak duration and skewed burst scenarios.
   - [x] Add VPS-side resource saturation sampling so CPU, memory, and private queue depth are measured from inside the staged lane instead of inferred only from local polling and worker telemetry.
   - [x] Investigate and remediate longer-soak cross-worker lane skew under the six-lane / three-worker / five-cycle staggered soak (`50` total requests).
-  - [ ] Turn the current pod-cap evidence into an explicit launch rule.
+  - [x] Turn the current pod-cap evidence into an explicit launch rule.
     - [x] Prove that `6` tenants is a stress ceiling, not a comfort target.
     - [x] Run follow-up `4`-tenant longer-soak and cron-cluster approximations.
-    - [ ] Decide whether launch should start at `4` tenants with active monitoring or below `4` until Paperclip headroom improves, given the current four-tenant staggered peaks (`474.71%` CPU, `2990370980` bytes memory, `1405` PIDs).
-  - [ ] Add one more operator-facing pressure slice for cron/heartbeat clustering mitigation (`jitter`, schedule offsets, or queue smoothing) so tenants are not all encouraged to fire on the same minute boundaries.
+    - [x] Decide whether launch should start at `4` tenants with active monitoring or below `4` until Paperclip headroom improves, given the current four-tenant staggered peaks (`474.71%` CPU, `2990370980` bytes memory, `1405` PIDs): four tenants per VPS is the strict launch upper cap, not a comfort target.
+  - [x] Add one more operator-facing pressure slice for cron/heartbeat clustering mitigation (`jitter`, schedule offsets, or queue smoothing) so tenants are not all encouraged to fire on the same minute boundaries.
+    - [x] Require a minimum `120` seconds between tenant start windows for cron, heartbeat, tenant onboarding, and manual launch batches until a later dedicated scheduler phase exists.

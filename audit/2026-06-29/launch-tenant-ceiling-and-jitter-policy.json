@@ -1,0 +1,60 @@
+{
+  "checkedAt": "2026-06-29T18:30:00Z",
+  "phase": "launch_tenant_ceiling_policy_recorded",
+  "ok": true,
+  "decision": {
+    "launchTenantCeilingPerVps": 4,
+    "ceilingType": "strict_upper_cap_not_comfort_target",
+    "activeMonitoringRequired": true,
+    "escalationRequiredAboveTenantCount": 4
+  },
+  "pressureEvidence": {
+    "source": [
+      "TODO.md",
+      "deploy/runbooks/deploy-poc.md",
+      "audit/2026-05-21/live-soak-capacity-error-log.md"
+    ],
+    "sixTenantRead": "Fairness/drain behavior held, but six tenants remains a stress ceiling rather than a launch comfort target.",
+    "fourTenantStaggered": {
+      "runsReachedRunning": "80/80",
+      "outboxRowsReachedEnqueued": "80/80",
+      "queueEvidenceReachableAndValid": true,
+      "paperclipPeakCpuPercent": 474.71,
+      "paperclipPeakMemoryBytes": 2990370980,
+      "paperclipPeakPids": 1405,
+      "hotSampleRatio": 0.5333,
+      "longestHotStreak": 16
+    },
+    "fourTenantClustered": {
+      "runsReachedRunning": "40/40",
+      "outboxRowsReachedEnqueued": "40/40",
+      "queueEvidenceReachableAndValid": true,
+      "paperclipPeakCpuPercent": 351.31,
+      "paperclipPeakMemoryBytes": 2482491097,
+      "paperclipPeakPids": 957,
+      "hotSampleRatio": 0.25,
+      "longestHotStreak": 5
+    }
+  },
+  "antiClusteringRule": {
+    "appliesTo": [
+      "cron",
+      "heartbeat",
+      "tenant onboarding",
+      "manual launch batches"
+    ],
+    "minimumTenantStartOffsetSeconds": 120,
+    "sameMinuteCronLaunchesAllowed": false,
+    "runtimeSchedulerImplemented": false
+  },
+  "outOfScope": [
+    "new runtime scheduler",
+    "automated cron rewrite",
+    "queue smoothing engine",
+    "VPS, Docker, Caddy, DNS, or database mutation",
+    "operator pause/resume, retry/cancel, or secret mutation",
+    "raising the launch cap above four tenants"
+  ],
+  "sonnetConsulted": true,
+  "subagentConsulted": true
+}

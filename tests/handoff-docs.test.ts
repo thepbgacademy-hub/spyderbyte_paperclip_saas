@@ -48,21 +48,24 @@ describe("handoff board-surface wording", () => {
     );
   });
 
-  it("records the completed stage operator-controls live confirmation as latest", () => {
+  it("records the completed launch tenant ceiling policy as latest", () => {
     expect(latestPhaseCurrentBlock).toContain(
+      "Recorded the launch tenant ceiling and cron/heartbeat anti-clustering rule"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "four tenants per VPS is a strict monitored launch upper cap"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "keep at least `120` seconds between tenant cron, heartbeat, onboarding, and manual launch-batch start windows"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "no VPS access, no runtime scheduler, no queue-smoothing engine, no deployment mutation"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "continue with the next public-launch acceptance gate instead of deeper proof-only expansion"
+    );
+    expect(latestPhase).toContain(
       "Completed the manual live read-only confirmation for the stage operator-controls probe"
-    );
-    expect(latestPhaseCurrentBlock).toContain(
-      "exactly one `GET /api/operator/tenants/:tenant/jobs/dead-letters` request"
-    );
-    expect(latestPhaseCurrentBlock).toContain(
-      "HTTP `403`, `verdict: accepted_operator_surface_status`"
-    );
-    expect(latestPhaseCurrentBlock).toContain(
-      "Sanitized evidence is recorded in `audit/2026-06-29/stage-operator-controls-read-only-confirmation.json`"
-    );
-    expect(latestPhaseCurrentBlock).toContain(
-      "continue deferring stage pause/resume and all deferred operator mutations to separately approved phases"
     );
     expect(latestPhase).toContain(
       "Added the manual live read-only confirmation gate for the stage operator-controls probe"
