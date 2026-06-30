@@ -135,6 +135,15 @@ This file tracks the new harness subproject only.
 
 ## Current Next Slice
 
+- [x] Record the authenticated public launch host acceptance gate.
+  - [x] Run the required GitNexus preflight first. On June 30, 2026 `gitnexus status` was current at commit `40b1ffa`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.
+  - [x] Consult Sonnet and a local explorer subagent before implementation; both recommended closing the authenticated shell/board proof gap before onboarding, visuals, cutover, or deeper native proof work.
+  - [x] Add explicit `--mint-session` support to `npm run prove:public-launch-host` so a short-lived runtime session cookie can be minted from local stage auth env and passed through smoke/Playwright without printing or committing it.
+  - [x] Run `npm run prove:public-launch-host -- --mint-session --env-file <operator-supplied-stage-env-file> --expires-in-minutes 10 --execute`.
+  - [x] Confirm authenticated smoke checks passed for the HTML shell, board shell, and `/api/harness/board`, and Playwright passed all 10 live tests with no authenticated skips.
+  - [x] Record sanitized evidence in `audit/2026-06-30/authenticated-public-launch-host-acceptance.json`.
+  - [x] Keep the phase proof-only and non-destructive: no VPS access, no Docker/Caddy/DNS/database mutation, no runtime/worker/deploy behavior change, no scheduler change, no export replay, and no `api.spyderbyte.cloud` cutover.
+
 - [x] Record the public launch host acceptance gate.
   - [x] Confirm the stale closed-board/final-assembly export gate is already closed in later handoff evidence and should not be reopened as the next phase.
   - [x] Consult Sonnet and a local explorer subagent before implementation; Sonnet recommended the stale closed-board gate, while the explorer correctly identified later handoff evidence and recommended the public-host launch acceptance gate.

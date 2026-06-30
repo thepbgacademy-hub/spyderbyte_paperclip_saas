@@ -22,6 +22,25 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
+- Recorded the authenticated public launch host acceptance gate.
+- GitNexus preflight was current at commit `40b1ffa`; `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.
+- Sonnet was consulted in headless mode for consideration only and was not given VPS access. Sonnet recommended closing the authenticated shell/board proof gap before first-subscriber onboarding, visuals, cutover, or deeper native proof work.
+- A local explorer subagent independently recommended the same smallest launch-critical phase and identified the existing smoke, Playwright, and runtime-session helpers to reuse.
+- Decision: close the `wf-api.spyderbyte.cloud` authenticated public-lane proof without touching VPS, Docker, Caddy, DNS, databases, runtime behavior, worker behavior, deployment topology, scheduler policy, exports, or `api.spyderbyte.cloud` cutover.
+- Added explicit `--mint-session` support to `npm run prove:public-launch-host` so operators can mint a short-lived local runtime session cookie from the stage runtime auth env and pass it into the already-existing authenticated smoke/Playwright checks without printing the token.
+- Non-destructive authenticated live confirmation was run with `npm run prove:public-launch-host -- --mint-session --env-file <operator-supplied-stage-env-file> --expires-in-minutes 10 --execute`: `npm run smoke:external` passed authenticated HTML shell, board shell, and `/api/harness/board`; `npm run e2e:live` passed all 10 live tests with no authenticated skips.
+- Sanitized evidence is recorded in `audit/2026-06-30/authenticated-public-launch-host-acceptance.json`.
+- Added/updated:
+  - `scripts/lib/public-launch-host.mjs`
+  - `scripts/prove-public-launch-host.mjs`
+  - `tests/public-launch-host-proof.test.ts`
+  - `tests/stage-live-stability-script.test.ts`
+  - `audit/2026-06-30/authenticated-public-launch-host-acceptance.json`
+- Next continuation point:
+  - move to first-subscriber launch readiness under the proven `wf-api.spyderbyte.cloud` authenticated lane and four-tenant launch cap
+  - keep `api.spyderbyte.cloud` cutover operator-only until a separate explicit cutover phase
+  - do not reopen dashboard visuals, native proof depth, or export replay unless they are intentionally selected as a separate bounded phase
+
 - Recorded the public launch host acceptance gate.
 - GitNexus preflight was current at commit `2fe13db`; `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.
 - Sonnet was consulted in headless mode for consideration only and was not given VPS access. Sonnet recommended the older closed-board/final-assembly acceptance gate, but later handoff/TODO evidence showed that seam was already closed on June 28, 2026.

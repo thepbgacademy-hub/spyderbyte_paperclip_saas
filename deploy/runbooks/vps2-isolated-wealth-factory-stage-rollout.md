@@ -63,6 +63,14 @@ On June 30, 2026 the public-host launch acceptance gate was recorded for the cur
 - `api.spyderbyte.cloud` remains an operator-only shared-host cutover decision covered by `deploy/runbooks/vps2-shared-host-cutover-plan.md`
 - Sanitized evidence is recorded in `audit/2026-06-30/public-launch-host-acceptance.json`.
 
+On June 30, 2026 the authenticated public-host launch acceptance gap was closed for the same `wf-api.spyderbyte.cloud` posture.
+
+- `npm run prove:public-launch-host -- --mint-session --env-file <operator-supplied-stage-env-file> --expires-in-minutes 10 --execute` minted a short-lived local runtime session cookie and passed it through the existing authenticated smoke and Playwright checks without printing or committing the token.
+- `npm run smoke:external` passed authenticated checks for the HTML shell, board shell, shell assets, and `/api/harness/board`.
+- `npm run e2e:live` passed all 10 live tests with no authenticated shell or board skips.
+- this authenticated gate still does not certify or mutate `api.spyderbyte.cloud`, DNS, Caddy, Docker, database state, runtime behavior, worker behavior, scheduler policy, or deployment topology.
+- Sanitized evidence is recorded in `audit/2026-06-30/authenticated-public-launch-host-acceptance.json`.
+
 ## Goal
 
 Keep the fully wired Wealth Factory stage host on VPS 2 as the active public API lane without changing the current `api.spyderbyte.cloud` route unless operators deliberately choose a later cutover slice.

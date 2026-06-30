@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 
@@ -97,6 +97,44 @@ describe("public launch host proof", () => {
     expect(result.stdout).toContain('"WF_LIVE_SESSION_COOKIE_VALUE": "<set>"');
   });
 
+  it("plans an explicit authenticated launch proof without serializing a minted token", () => {
+    const plan = buildPublicLaunchHostPlan({
+      args: parsePublicLaunchHostArgs(["--mint-session", "--env-file", "E:/safe/wf-stage.env", "--expires-in-minutes", "10"]),
+      env: {}
+    });
+
+    expect(plan.authenticatedMode).toBe("mint_session");
+    expect(plan.authEnvFilePath).toBe("E:/safe/wf-stage.env");
+    expect(plan.expiresInMinutes).toBe(10);
+    expect(plan.authenticatedSessionCookieSupplied).toBe(false);
+    expect(plan.commands[0].env.WF_SMOKE_SESSION_COOKIE_VALUE).toBe("");
+    expect(plan.commands[1].env.WF_LIVE_SESSION_COOKIE_VALUE).toBe("");
+    expect(script).toContain("createRuntimeSessionToken");
+    expect(script).toContain("authenticatedSessionCookieSupplied");
+    expect(script).toContain("authenticated_public_launch_host_verified");
+    expect(script).toContain("buildAuthenticatedChecks");
+  });
+
+  it("does not advertise an implicit local secrets env file for minted sessions", () => {
+    const result = spawnSync(process.execPath, ["scripts/prove-public-launch-host.mjs", "--mint-session"], {
+      cwd: process.cwd(),
+      encoding: "utf8"
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('"authEnvFilePath": null');
+    expect(result.stdout).not.toContain("the_secrets");
+  });
+
+  it("rejects invalid public launch token ttl values before execution", () => {
+    expect(() =>
+      buildPublicLaunchHostPlan({
+        args: parsePublicLaunchHostArgs(["--mint-session", "--expires-in-minutes", "90"]),
+        env: {}
+      })
+    ).toThrow("--expires-in-minutes must be an integer between 1 and 60");
+  });
+
   it("documents the launch host decision and exposes an npm proof command", () => {
     expect(packageJson.scripts["prove:public-launch-host"]).toBe("node scripts/prove-public-launch-host.mjs");
     expect(runbook).toContain("`npm run prove:public-launch-host`");
@@ -123,5 +161,45 @@ describe("public launch host proof", () => {
       { label: "npm run e2e:live", status: 0 }
     ]);
     expect(runbook).toContain("Sanitized evidence is recorded in `audit/2026-06-30/public-launch-host-acceptance.json`");
+  });
+
+  it("records sanitized authenticated public-host acceptance evidence", () => {
+    const artifactPath = "audit/2026-06-30/authenticated-public-launch-host-acceptance.json";
+
+    expect(existsSync(artifactPath)).toBe(true);
+    const artifact = JSON.parse(readFileSync(artifactPath, "utf8")) as {
+      phase: string;
+      ok: boolean;
+      authenticatedSessionCookieSupplied: boolean;
+      sessionTokenPrinted: boolean;
+      vpsAccessed: boolean;
+      mutationPerformed: boolean;
+      results: Array<{ label: string; status: number; authenticatedChecks: string[] }>;
+    };
+
+    expect(artifact).toMatchObject({
+      phase: "authenticated_public_launch_host_verified",
+      ok: true,
+      authenticatedSessionCookieSupplied: true,
+      sessionTokenPrinted: false,
+      vpsAccessed: false,
+      mutationPerformed: false
+    });
+    expect(JSON.stringify(artifact)).not.toMatch(/wf1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/);
+    expect(JSON.stringify(artifact)).not.toContain("the_secrets");
+    expect(artifact.results).toEqual([
+      {
+        label: "npm run smoke:external",
+        status: 0,
+        authenticatedChecks: ["html_shell", "html_shell", "harness_board_api"]
+      },
+      {
+        label: "npm run e2e:live",
+        status: 0,
+        authenticatedChecks: ["authenticated_shell", "authenticated_harness_board"]
+      }
+    ]);
+    expect(handoff).toContain("Recorded the authenticated public launch host acceptance gate");
+    expect(harnessTodo).toContain("Record the authenticated public launch host acceptance gate");
   });
 });

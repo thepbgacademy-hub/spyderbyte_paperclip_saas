@@ -48,21 +48,24 @@ describe("handoff board-surface wording", () => {
     );
   });
 
-  it("records the completed public launch host gate as latest", () => {
+  it("records the completed authenticated public launch host gate as latest", () => {
     expect(latestPhaseCurrentBlock).toContain(
+      "Recorded the authenticated public launch host acceptance gate"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "all 10 live tests with no authenticated skips"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "without touching VPS, Docker, Caddy, DNS, databases, runtime behavior, worker behavior"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "move to first-subscriber launch readiness under the proven `wf-api.spyderbyte.cloud` authenticated lane"
+    );
+    expect(latestPhase).toContain(
       "Recorded the public launch host acceptance gate"
     );
     expect(latestPhaseCurrentBlock).toContain(
-      "`wf-api.spyderbyte.cloud` remains the launch acceptance lane"
-    );
-    expect(latestPhaseCurrentBlock).toContain(
-      "`api.spyderbyte.cloud` remains an operator-only shared-host cutover path"
-    );
-    expect(latestPhaseCurrentBlock).toContain(
-      "no VPS access, no live network proof unless `--execute` is explicitly supplied"
-    );
-    expect(latestPhaseCurrentBlock).toContain(
-      "continue toward first-subscriber launch readiness under the `wf-api.spyderbyte.cloud` posture and the four-tenant launch cap"
+      "keep `api.spyderbyte.cloud` cutover operator-only until a separate explicit cutover phase"
     );
     expect(latestPhase).toContain(
       "Recorded the launch tenant ceiling and cron/heartbeat anti-clustering rule"

@@ -1,0 +1,44 @@
+{
+  "phase": "authenticated_public_launch_host_verified",
+  "ok": true,
+  "checkedAt": "2026-06-30T07:30:43.022Z",
+  "apiOrigin": "https://wf-api.spyderbyte.cloud",
+  "portalOrigin": "https://www.spyderbyte.cloud",
+  "cutoverHost": "https://api.spyderbyte.cloud",
+  "launchPosture": "isolated_host_launch_lane",
+  "authenticatedSessionCookieSupplied": true,
+  "sessionTokenSource": "short_lived_local_mint_from_stage_runtime_auth_env",
+  "sessionTokenPrinted": false,
+  "sessionTokenCommitted": false,
+  "expiresInMinutes": 10,
+  "vpsAccessed": false,
+  "mutationPerformed": false,
+  "dnsCaddyChanged": false,
+  "runtimeChanged": false,
+  "deploymentChanged": false,
+  "results": [
+    {
+      "label": "npm run smoke:external",
+      "status": 0,
+      "authenticatedChecks": [
+        "html_shell",
+        "html_shell",
+        "harness_board_api"
+      ]
+    },
+    {
+      "label": "npm run e2e:live",
+      "status": 0,
+      "authenticatedChecks": [
+        "authenticated_shell",
+        "authenticated_harness_board"
+      ]
+    }
+  ],
+  "notes": [
+    "Executed `npm run prove:public-launch-host -- --mint-session --env-file <operator-supplied-stage-env-file> --expires-in-minutes 10 --execute`.",
+    "The wrapper minted a short-lived local runtime session cookie and passed it through smoke and Playwright env only.",
+    "The token value was not printed, committed, or stored in this evidence artifact.",
+    "No VPS, Docker, Caddy, DNS, database, runtime, worker, deployment, or cutover mutation was performed."
+  ]
+}

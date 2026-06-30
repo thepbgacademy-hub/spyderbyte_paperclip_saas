@@ -54,7 +54,9 @@ describe("stage live stability runner script", () => {
       ]
     });
     expect(parsed.sequence).not.toContain("npm run prove:stage-operator-controls");
+    expect(parsed.sequence).not.toContain("npm run prove:public-launch-host");
     expect(JSON.stringify(parsed.plan)).not.toContain("prove:stage-operator-controls");
+    expect(JSON.stringify(parsed.plan)).not.toContain("prove:public-launch-host");
   });
 
   it("fails closed with a wrapper-owned error when the sudo password file is missing", () => {
