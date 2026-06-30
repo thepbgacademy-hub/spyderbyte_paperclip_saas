@@ -48,20 +48,29 @@ describe("handoff board-surface wording", () => {
     );
   });
 
-  it("records the controlled first-subscriber handoff packet as latest", () => {
+  it("records the first-subscriber post-invite observation template as latest", () => {
     expect(latestPhaseCurrentBlock).toContain(
+      "Recorded the first-subscriber post-invite observation template"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "subscriber invite has not been performed by this repo phase"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "No VPS, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, dashboard-visual, onboarding-UI, workflow/package, rollback, or cutover mutation was performed"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "operator sends the first-subscriber invite out of band"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "`audit/2026-06-30/first-subscriber-post-invite-observation-template.json`"
+    );
+    expect(latestPhase).toContain(
       "Recorded the controlled first-subscriber handoff packet"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "operator-ready decision before any subscriber invite"
     );
-    expect(latestPhaseCurrentBlock).toContain(
-      "No VPS, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, dashboard-visual, onboarding-UI, workflow/package, or cutover mutation was performed"
-    );
-    expect(latestPhaseCurrentBlock).toContain(
-      "operator invites the first subscriber out of band"
-    );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "Sanitized evidence is recorded in `audit/2026-06-30/first-subscriber-handoff-decision.json`"
     );
     expect(latestPhase).toContain(

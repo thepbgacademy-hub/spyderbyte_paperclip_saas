@@ -22,6 +22,21 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
+- Recorded the first-subscriber post-invite observation template.
+- GitNexus preflight was current at commit `10321b0`; `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported no changes before edits.
+- Sonnet was consulted in headless mode for consideration only and was not given VPS access. Sonnet recommended adding the observation template before the invite so operators do not improvise blocker, rollback, or go/no-go recording under launch pressure.
+- A local explorer subagent independently confirmed there is no current launch-critical failing test/blocker to implement and warned not to manufacture a blocker from old stage/demo evidence.
+- Decision: the repo now provides a pending post-invite observation template and runbook; the subscriber invite has not been performed by this repo phase.
+- Added:
+  - `audit/2026-06-30/first-subscriber-post-invite-observation-template.json`
+  - `deploy/runbooks/first-subscriber-post-invite-runbook.md`
+  - `tests/first-subscriber-post-invite-observation.test.ts`
+- No VPS, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, dashboard-visual, onboarding-UI, workflow/package, rollback, or cutover mutation was performed.
+- Next continuation point:
+  - operator sends the first-subscriber invite out of band and records the sanitized observation result
+  - if the invite exposes a launch-critical blocker, open a separate smallest-blocker fix phase with a failing focused test
+  - keep `api.spyderbyte.cloud` as operator-only deferred cutover
+
 - Recorded the controlled first-subscriber handoff packet.
 - GitNexus preflight was current at commit `ccd0128`; `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported no changes before edits.
 - Sonnet was consulted in headless mode for consideration only and was not given VPS access. Sonnet confirmed the safest bounded next phase was a local-only handoff decision packet, not onboarding UI, VPS mutation, runtime work, export replay, or cutover.

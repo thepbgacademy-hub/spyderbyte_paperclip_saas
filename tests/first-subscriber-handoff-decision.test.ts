@@ -112,16 +112,13 @@ describe("first subscriber controlled handoff decision", () => {
     expect(serialized).not.toMatch(/Bearer\s+[A-Za-z0-9._-]+/);
   });
 
-  it("records the controlled handoff packet as the latest phase without widening launch scope", () => {
-    const latestPhaseCurrentBlock = handoff.split("## Latest Phase")[1]?.trimStart().split(/\r?\n\r?\n/)[0] ?? "";
+  it("keeps the controlled handoff packet in the handoff history without widening launch scope", () => {
+    const latestPhaseHistory = handoff.split("## Latest Phase")[1]?.split("## Key Design Commitments")[0] ?? "";
 
-    expect(latestPhaseCurrentBlock).toContain("Recorded the controlled first-subscriber handoff packet");
-    expect(latestPhaseCurrentBlock).toContain("Sonnet was consulted in headless mode");
-    expect(latestPhaseCurrentBlock).toContain("A local explorer subagent independently confirmed");
-    expect(latestPhaseCurrentBlock).toContain("operator-ready decision before any subscriber invite");
-    expect(latestPhaseCurrentBlock).toContain("No VPS, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, dashboard-visual, onboarding-UI, workflow/package, or cutover mutation was performed");
-    expect(latestPhaseCurrentBlock).toContain("Next continuation point");
-    expect(latestPhaseCurrentBlock).toContain("operator invites the first subscriber out of band");
+    expect(latestPhaseHistory).toContain("Recorded the controlled first-subscriber handoff packet");
+    expect(latestPhaseHistory).toContain("operator-ready decision before any subscriber invite");
+    expect(latestPhaseHistory).toContain("No VPS, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, dashboard-visual, onboarding-UI, workflow/package, or cutover mutation was performed");
+    expect(latestPhaseHistory).toContain("operator invites the first subscriber out of band");
     expect(todo).toContain("Record the controlled first-subscriber handoff packet");
     expect(todo).toContain("Do not turn this handoff packet into onboarding UI, scheduler automation, export replay, workflow/package expansion, or `api.spyderbyte.cloud` cutover.");
   });

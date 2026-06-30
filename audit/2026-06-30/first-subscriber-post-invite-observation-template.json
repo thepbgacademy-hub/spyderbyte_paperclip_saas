@@ -1,0 +1,46 @@
+{
+  "checkedAt": "2026-06-30T18:18:00.000Z",
+  "phase": "first_subscriber_post_invite_observation_template_recorded",
+  "ok": true,
+  "template": true,
+  "subscriberInviteSent": false,
+  "verdict": "pending",
+  "launchLane": "wf-api.spyderbyte.cloud",
+  "cutoverHost": "api.spyderbyte.cloud",
+  "cutoverStatus": "operator_only_deferred",
+  "blockerIntake": {
+    "blockerReported": false,
+    "blockerSeverity": "none",
+    "smallestFixPhaseRequired": false,
+    "blockerDescription": null
+  },
+  "rollback": {
+    "rollbackPerformed": false,
+    "rollbackReason": null,
+    "rollbackOperatorActionOnly": true
+  },
+  "scope": {
+    "vpsAccessed": false,
+    "mutationPerformed": false,
+    "dnsCaddyChanged": false,
+    "databaseChanged": false,
+    "runtimeChanged": false,
+    "deploymentChanged": false,
+    "onboardingUiChanged": false,
+    "schedulerChanged": false,
+    "exportReplayChanged": false,
+    "workflowPackageExpanded": false
+  },
+  "nextAllowedOutcomes": [
+    "operator_records_go_after_invite",
+    "operator_records_no_go_without_code_change",
+    "operator_records_rollback_completed",
+    "open_smallest_launch_critical_blocker_phase"
+  ],
+  "notes": [
+    "This is a pending observation template for the operator's out-of-band first-subscriber invite.",
+    "The invite has not been sent by this repo phase.",
+    "If the invite exposes a launch-critical blocker, stop and open a separate smallest-blocker fix phase before changing code.",
+    "Rollback remains an operator action; this template records the decision path only."
+  ]
+}
