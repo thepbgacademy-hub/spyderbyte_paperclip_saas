@@ -1,0 +1,49 @@
+{
+  "checkedAt": "2026-06-30T17:27:50.649Z",
+  "phase": "first_subscriber_preflight_authenticated_host_verified",
+  "ok": true,
+  "apiOrigin": "https://wf-api.spyderbyte.cloud",
+  "portalOrigin": "https://www.spyderbyte.cloud",
+  "cutoverHost": "https://api.spyderbyte.cloud",
+  "firstSubscriberLane": "wf-api.spyderbyte.cloud",
+  "launchPosture": "isolated_host_launch_lane",
+  "proofCommand": "npm run prove:public-launch-host -- --mint-session --env-file <operator-supplied-stage-env-file> --expires-in-minutes 10 --execute",
+  "authenticatedSessionCookieSupplied": true,
+  "sessionTokenSource": "short_lived_local_mint_from_stage_runtime_auth_env",
+  "sessionTokenPrinted": false,
+  "sessionTokenCommitted": false,
+  "expiresInMinutes": 10,
+  "vpsAccessed": false,
+  "mutationPerformed": false,
+  "dnsCaddyChanged": false,
+  "runtimeChanged": false,
+  "deploymentChanged": false,
+  "results": [
+    {
+      "label": "npm run smoke:external",
+      "status": 0,
+      "authenticatedChecks": [
+        "html_shell",
+        "board_shell",
+        "shell_assets",
+        "harness_board_api"
+      ]
+    },
+    {
+      "label": "npm run e2e:live",
+      "status": 0,
+      "authenticatedChecks": [
+        "authenticated_shell",
+        "authenticated_harness_board"
+      ]
+    }
+  ],
+  "nextGate": "controlled_first_subscriber_handoff",
+  "notes": [
+    "Executed the fresh authenticated public-host preflight proof immediately after the first-subscriber readiness gate.",
+    "The wrapper minted a short-lived local runtime session cookie and passed it through smoke and Playwright env only.",
+    "The token value was not printed, committed, or stored in this evidence artifact.",
+    "No VPS SSH, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, dashboard-visual, onboarding-UI, or cutover mutation was performed.",
+    "api.spyderbyte.cloud remains operator-only deferred cutover; wf-api.spyderbyte.cloud remains the controlled first-subscriber lane."
+  ]
+}

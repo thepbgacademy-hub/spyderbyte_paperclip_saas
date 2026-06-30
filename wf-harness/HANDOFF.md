@@ -22,6 +22,19 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
+- Recorded the first-subscriber authenticated public-host preflight proof.
+- GitNexus preflight was current at commit `d078cfc`; `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported no changes before edits.
+- Sonnet was consulted in headless mode for consideration only and was not given VPS access. Sonnet confirmed the next bounded phase should be the fresh authenticated public-host proof required by the first-subscriber launch checklist.
+- A local explorer subagent independently confirmed the same proof-only phase boundary and the minimal evidence/handoff/test update set.
+- Executed `npm run prove:public-launch-host -- --mint-session --env-file <operator-supplied-stage-env-file> --expires-in-minutes 10 --execute`.
+- Fresh authenticated preflight result: `npm run smoke:external` passed the authenticated HTML shell, board shell, shell assets, and `/api/harness/board`; `npm run e2e:live` passed all 10 live tests with no authenticated skips.
+- Sanitized evidence is recorded in `audit/2026-06-30/first-subscriber-preflight-authenticated-host-proof.json`.
+- No VPS, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, dashboard-visual, onboarding-UI, or cutover mutation was performed.
+- Next continuation point:
+  - proceed to controlled first-subscriber handoff on `wf-api.spyderbyte.cloud` if operators are ready
+  - keep `api.spyderbyte.cloud` as operator-only deferred cutover
+  - if handoff exposes a blocker, fix only the smallest launch-critical blocker rather than reopening visuals, exports, scheduler, or package expansion
+
 - Recorded the first-subscriber launch readiness gate.
 - GitNexus preflight was current at commit `275c3b9`; `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported no changes before edits.
 - Sonnet was consulted in headless mode for consideration only and was not given VPS access. Sonnet recommended a tight evidence/checklist gate that aggregates already-closed launch proofs rather than building onboarding UI, scheduler automation, runtime behavior, export replay, or cutover work.

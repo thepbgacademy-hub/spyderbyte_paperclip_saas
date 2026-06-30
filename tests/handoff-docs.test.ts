@@ -48,18 +48,21 @@ describe("handoff board-surface wording", () => {
     );
   });
 
-  it("records the completed first-subscriber launch readiness gate as latest", () => {
+  it("records the completed first-subscriber authenticated preflight proof as latest", () => {
     expect(latestPhaseCurrentBlock).toContain(
-      "Recorded the first-subscriber launch readiness gate"
+      "Recorded the first-subscriber authenticated public-host preflight proof"
     );
     expect(latestPhaseCurrentBlock).toContain(
-      "controlled go/no-go record under the proven authenticated `wf-api.spyderbyte.cloud` lane"
+      "Fresh authenticated preflight result"
     );
     expect(latestPhaseCurrentBlock).toContain(
       "No VPS, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, dashboard-visual, onboarding-UI, or cutover mutation was performed"
     );
     expect(latestPhaseCurrentBlock).toContain(
-      "perform a fresh authenticated public-host proof immediately before any real first-subscriber handoff"
+      "proceed to controlled first-subscriber handoff on `wf-api.spyderbyte.cloud`"
+    );
+    expect(latestPhase).toContain(
+      "Recorded the first-subscriber launch readiness gate"
     );
     expect(latestPhase).toContain(
       "Recorded the authenticated public launch host acceptance gate"
@@ -68,7 +71,7 @@ describe("handoff board-surface wording", () => {
       "Recorded the public launch host acceptance gate"
     );
     expect(latestPhaseCurrentBlock).toContain(
-      "keep `wf-api.spyderbyte.cloud` as the launch lane and `api.spyderbyte.cloud` as operator-only deferred cutover"
+      "keep `api.spyderbyte.cloud` as operator-only deferred cutover"
     );
     expect(latestPhase).toContain(
       "Recorded the launch tenant ceiling and cron/heartbeat anti-clustering rule"

@@ -135,6 +135,16 @@ This file tracks the new harness subproject only.
 
 ## Current Next Slice
 
+- [x] Record the first-subscriber authenticated public-host preflight proof.
+  - [x] Run the required GitNexus preflight first. On June 30, 2026 `gitnexus status` was current at commit `d078cfc`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported no changes before edits.
+  - [x] Consult Sonnet and a local explorer subagent before implementation; both confirmed the proof-only public-host preflight boundary.
+  - [x] Execute `npm run prove:public-launch-host -- --mint-session --env-file <operator-supplied-stage-env-file> --expires-in-minutes 10 --execute`.
+  - [x] Confirm authenticated smoke checks passed for shell, board shell, shell assets, and `/api/harness/board`, and Playwright passed all 10 live tests with no authenticated skips.
+  - [x] Record sanitized evidence in `audit/2026-06-30/first-subscriber-preflight-authenticated-host-proof.json`.
+  - [x] Keep `wf-api.spyderbyte.cloud` as the controlled first-subscriber lane and `api.spyderbyte.cloud` as operator-only deferred cutover.
+  - [x] Do not turn this preflight into onboarding UI, scheduler automation, export replay, or `api.spyderbyte.cloud` cutover.
+  - [x] Keep the phase non-destructive: no VPS, Docker, Caddy, DNS, database, runtime, worker, queue, seed, dashboard-visual, workflow-family, package-overlay, or operator mutation.
+
 - [x] Record the first-subscriber launch readiness gate.
   - [x] Run the required GitNexus preflight first. On June 30, 2026 `gitnexus status` was current at commit `275c3b9`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported no changes before edits.
   - [x] Consult Sonnet and a local explorer subagent before implementation; both recommended the same evidence/checklist gate rather than onboarding UI, scheduler automation, runtime widening, export replay, or cutover.

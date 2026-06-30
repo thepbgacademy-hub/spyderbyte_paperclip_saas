@@ -134,13 +134,13 @@ describe("first-subscriber launch readiness gate", () => {
   });
 
   it("updates the handoff and TODO as a completed bounded gate", () => {
-    const latestPhaseCurrentBlock = handoff.split("## Latest Phase")[1]?.trimStart().split(/\r?\n\r?\n/)[0] ?? "";
+    const latestPhase = handoff.split("## Latest Phase")[1]?.split("## Key Design Commitments")[0] ?? "";
 
-    expect(latestPhaseCurrentBlock).toContain("Recorded the first-subscriber launch readiness gate");
-    expect(latestPhaseCurrentBlock).toContain("Sonnet was consulted in headless mode");
-    expect(latestPhaseCurrentBlock).toContain("A local explorer subagent independently confirmed");
-    expect(latestPhaseCurrentBlock).toContain("No VPS, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, dashboard-visual, onboarding-UI, or cutover mutation was performed");
-    expect(latestPhaseCurrentBlock).toContain("Next continuation point");
+    expect(latestPhase).toContain("Recorded the first-subscriber launch readiness gate");
+    expect(latestPhase).toContain("Sonnet was consulted in headless mode");
+    expect(latestPhase).toContain("A local explorer subagent independently confirmed");
+    expect(latestPhase).toContain("No VPS, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, dashboard-visual, onboarding-UI, or cutover mutation was performed");
+    expect(latestPhase).toContain("Next continuation point");
     expect(todo).toContain("Record the first-subscriber launch readiness gate");
     expect(todo).toContain("Do not promote this gate into subscriber-facing onboarding UI, scheduler automation, cutover, or export replay.");
   });
