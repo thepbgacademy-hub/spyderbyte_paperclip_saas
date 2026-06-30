@@ -48,21 +48,24 @@ describe("handoff board-surface wording", () => {
     );
   });
 
-  it("records the completed launch tenant ceiling policy as latest", () => {
+  it("records the completed public launch host gate as latest", () => {
     expect(latestPhaseCurrentBlock).toContain(
+      "Recorded the public launch host acceptance gate"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "`wf-api.spyderbyte.cloud` remains the launch acceptance lane"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "`api.spyderbyte.cloud` remains an operator-only shared-host cutover path"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "no VPS access, no live network proof unless `--execute` is explicitly supplied"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "continue toward first-subscriber launch readiness under the `wf-api.spyderbyte.cloud` posture and the four-tenant launch cap"
+    );
+    expect(latestPhase).toContain(
       "Recorded the launch tenant ceiling and cron/heartbeat anti-clustering rule"
-    );
-    expect(latestPhaseCurrentBlock).toContain(
-      "four tenants per VPS is a strict monitored launch upper cap"
-    );
-    expect(latestPhaseCurrentBlock).toContain(
-      "keep at least `120` seconds between tenant cron, heartbeat, onboarding, and manual launch-batch start windows"
-    );
-    expect(latestPhaseCurrentBlock).toContain(
-      "no VPS access, no runtime scheduler, no queue-smoothing engine, no deployment mutation"
-    );
-    expect(latestPhaseCurrentBlock).toContain(
-      "continue with the next public-launch acceptance gate instead of deeper proof-only expansion"
     );
     expect(latestPhase).toContain(
       "Completed the manual live read-only confirmation for the stage operator-controls probe"

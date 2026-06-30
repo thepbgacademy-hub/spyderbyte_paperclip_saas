@@ -22,6 +22,27 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
+- Recorded the public launch host acceptance gate.
+- GitNexus preflight was current at commit `2fe13db`; `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.
+- Sonnet was consulted in headless mode for consideration only and was not given VPS access. Sonnet recommended the older closed-board/final-assembly acceptance gate, but later handoff/TODO evidence showed that seam was already closed on June 28, 2026.
+- A local explorer subagent independently caught that stale-gate risk and recommended the public-host launch acceptance gate instead.
+- Decision: `wf-api.spyderbyte.cloud` remains the launch acceptance lane. `api.spyderbyte.cloud` remains an operator-only shared-host cutover path unless operators explicitly choose that separate deployment-plumbing slice.
+- Non-destructive live confirmation was run with `npm run prove:public-launch-host -- --execute`: `npm run smoke:external` passed against `wf-api.spyderbyte.cloud`, and `npm run e2e:live` passed the unauthenticated live checks with authenticated shell/board checks skipped because no deploy-safe session cookie was supplied.
+- Sanitized evidence is recorded in `audit/2026-06-30/public-launch-host-acceptance.json`.
+- Added:
+  - `scripts/lib/public-launch-host.mjs`
+  - `scripts/prove-public-launch-host.mjs`
+  - `tests/public-launch-host-proof.test.ts`
+  - `audit/2026-06-30/public-launch-host-acceptance.json`
+  - `npm run prove:public-launch-host`
+- Updated:
+  - `deploy/runbooks/vps2-isolated-wealth-factory-stage-rollout.md`
+  - `wf-harness/TODO.md`
+- Kept the phase local/proof-only by default: no VPS access, no live network proof unless `--execute` is explicitly supplied, no DNS/Caddy mutation, no runtime/export/harness behavior change, no scheduler change, and no public-host cutover.
+- Next continuation point:
+  - run `npm run prove:public-launch-host -- --execute` only when operators want a fresh non-destructive public-host confirmation
+  - otherwise continue toward first-subscriber launch readiness under the `wf-api.spyderbyte.cloud` posture and the four-tenant launch cap
+
 - Recorded the launch tenant ceiling and cron/heartbeat anti-clustering rule.
 - GitNexus preflight was current at commit `c5bafcf`; `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.
 - Sonnet was consulted in headless mode for consideration only and was not given VPS access. Sonnet recommended closing the remaining launch governance/scheduling risk with a bounded policy/proof slice rather than widening operator controls, deployment topology, dashboard visuals, or Obsidian/export scope.

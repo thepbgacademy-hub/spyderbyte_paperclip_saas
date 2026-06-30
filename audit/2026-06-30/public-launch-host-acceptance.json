@@ -1,0 +1,34 @@
+{
+  "checkedAt": "2026-06-30T06:52:54.741Z",
+  "phase": "public_launch_host_verified",
+  "ok": true,
+  "launchPosture": "isolated_host_launch_lane",
+  "apiOrigin": "https://wf-api.spyderbyte.cloud",
+  "portalOrigin": "https://www.spyderbyte.cloud",
+  "cutoverHost": "https://api.spyderbyte.cloud",
+  "vpsAccessed": false,
+  "mutationPerformed": false,
+  "dnsCaddyChanged": false,
+  "authenticatedSessionCookieSupplied": false,
+  "results": [
+    {
+      "label": "npm run smoke:external",
+      "status": 0,
+      "summary": "DNS, public 80/443, stage-private port closure, unauthenticated dashboard CORS/auth, storage OAuth unavailable fail-closed, and unauthenticated shell gate checks passed against wf-api.spyderbyte.cloud."
+    },
+    {
+      "label": "npm run e2e:live",
+      "status": 0,
+      "summary": "Live Playwright unauthenticated dashboard/origin/shell-gate checks passed against wf-api.spyderbyte.cloud; authenticated shell and board checks skipped because no deploy-safe session cookie was supplied."
+    }
+  ],
+  "privatePortSet": "6379,9000,3000,5173,8080,8081,2375",
+  "acceptedSkips": [
+    "authenticated shell proof requires WF_LIVE_SESSION_COOKIE_VALUE",
+    "authenticated harness-board proof requires WF_LIVE_SESSION_COOKIE_VALUE"
+  ],
+  "notes": [
+    "This evidence does not certify or mutate api.spyderbyte.cloud.",
+    "This evidence does not access VPS over SSH or execute Docker/Caddy/DNS/database changes."
+  ]
+}

@@ -54,6 +54,15 @@ On June 29, 2026 the pressure-test evidence was converted into a launch operatin
 - keep a minimum `120` seconds between tenant start windows for cron, heartbeat, onboarding, and manual launch batches until a later dedicated scheduler phase is approved
 - this is an operator-facing launch rule only; it does not add a runtime scheduler, mutate the VPS, change Caddy/DNS, or raise the launch cap
 
+On June 30, 2026 the public-host launch acceptance gate was recorded for the current posture.
+
+- launch acceptance defaults to `wf-api.spyderbyte.cloud`
+- `npm run prove:public-launch-host` dry-runs the external smoke and live Playwright proof plan without network calls
+- `npm run prove:public-launch-host -- --execute` runs the bounded public-host proof against `wf-api.spyderbyte.cloud`
+- this gate does not certify or mutate `api.spyderbyte.cloud`
+- `api.spyderbyte.cloud` remains an operator-only shared-host cutover decision covered by `deploy/runbooks/vps2-shared-host-cutover-plan.md`
+- Sanitized evidence is recorded in `audit/2026-06-30/public-launch-host-acceptance.json`.
+
 ## Goal
 
 Keep the fully wired Wealth Factory stage host on VPS 2 as the active public API lane without changing the current `api.spyderbyte.cloud` route unless operators deliberately choose a later cutover slice.

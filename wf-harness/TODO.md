@@ -135,6 +135,14 @@ This file tracks the new harness subproject only.
 
 ## Current Next Slice
 
+- [x] Record the public launch host acceptance gate.
+  - [x] Confirm the stale closed-board/final-assembly export gate is already closed in later handoff evidence and should not be reopened as the next phase.
+  - [x] Consult Sonnet and a local explorer subagent before implementation; Sonnet recommended the stale closed-board gate, while the explorer correctly identified later handoff evidence and recommended the public-host launch acceptance gate.
+  - [x] Add `npm run prove:public-launch-host` as a dry-run-first proof wrapper that defaults launch acceptance to `wf-api.spyderbyte.cloud`.
+  - [x] Run `npm run prove:public-launch-host -- --execute` and record sanitized evidence in `audit/2026-06-30/public-launch-host-acceptance.json`.
+  - [x] Keep `api.spyderbyte.cloud` as an operator-only shared-host cutover lane, not the default launch-acceptance target.
+  - [x] Keep the phase local/proof-only by default: no VPS access, no DNS/Caddy mutation, no runtime/export/harness behavior change, and no public-host cutover.
+
 - [x] Record the launch tenant ceiling and cron/heartbeat anti-clustering rule.
   - [x] Run the required GitNexus preflight first. On June 29, 2026 `gitnexus status` was current at commit `c5bafcf`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.
   - [x] Consult Sonnet and a local explorer subagent before implementation; both recommended a bounded policy/proof slice rather than a new scheduler or deployment change.
