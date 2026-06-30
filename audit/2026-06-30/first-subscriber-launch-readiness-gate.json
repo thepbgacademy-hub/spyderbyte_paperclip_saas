@@ -1,0 +1,70 @@
+{
+  "checkedAt": "2026-06-30T16:45:00Z",
+  "phase": "first_subscriber_launch_readiness_gate_recorded",
+  "ok": true,
+  "launchLane": {
+    "apiOrigin": "https://wf-api.spyderbyte.cloud",
+    "portalOrigin": "https://www.spyderbyte.cloud",
+    "cutoverHost": "https://api.spyderbyte.cloud",
+    "cutoverStatus": "operator_only_deferred",
+    "firstSubscriberPosture": "controlled_first_subscriber_under_isolated_authenticated_lane"
+  },
+  "tenantSafety": {
+    "launchTenantCeilingPerVps": 4,
+    "minimumTenantStartOffsetSeconds": 120,
+    "activeMonitoringRequired": true
+  },
+  "requiredEvidence": [
+    {
+      "label": "authenticated public launch host",
+      "path": "audit/2026-06-30/authenticated-public-launch-host-acceptance.json",
+      "phase": "authenticated_public_launch_host_verified",
+      "ok": true
+    },
+    {
+      "label": "public launch host",
+      "path": "audit/2026-06-30/public-launch-host-acceptance.json",
+      "phase": "public_launch_host_verified",
+      "ok": true
+    },
+    {
+      "label": "stage live stability",
+      "path": "audit/2026-06-29/stage-live-stability-summary.json",
+      "phase": "stage_stability_complete",
+      "ok": true
+    },
+    {
+      "label": "launch tenant ceiling and jitter",
+      "path": "audit/2026-06-29/launch-tenant-ceiling-and-jitter-policy.json",
+      "phase": "launch_tenant_ceiling_policy_recorded",
+      "ok": true
+    },
+    {
+      "label": "stage operator controls read-only confirmation",
+      "path": "audit/2026-06-29/stage-operator-controls-read-only-confirmation.json",
+      "phase": "stage_operator_controls_read_only_confirmation_gate",
+      "ok": true
+    }
+  ],
+  "blockedScope": [
+    "api.spyderbyte.cloud cutover",
+    "new subscriber-facing onboarding UI",
+    "runtime scheduler or queue smoothing",
+    "VPS, Docker, Caddy, DNS, database, or seed mutation",
+    "dashboard visual expansion",
+    "export replay or Obsidian delivery expansion",
+    "workflow-family or package-overlay expansion"
+  ],
+  "operatorChecklist": "deploy/runbooks/first-subscriber-launch-checklist.md",
+  "sanitized": {
+    "containsSecrets": false,
+    "containsRuntimeSessionToken": false,
+    "vpsMutationRequired": false
+  },
+  "notes": [
+    "This gate aggregates already-committed evidence for a controlled first subscriber under the isolated authenticated launch lane.",
+    "This gate does not create, charge, or onboard a real subscriber.",
+    "This gate does not certify api.spyderbyte.cloud and does not mutate VPS, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, or dashboard behavior.",
+    "Operators must rerun the authenticated public launch host proof with an operator-supplied stage env file immediately before subscriber handoff."
+  ]
+}

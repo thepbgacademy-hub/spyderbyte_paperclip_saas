@@ -135,6 +135,15 @@ This file tracks the new harness subproject only.
 
 ## Current Next Slice
 
+- [x] Record the first-subscriber launch readiness gate.
+  - [x] Run the required GitNexus preflight first. On June 30, 2026 `gitnexus status` was current at commit `275c3b9`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported no changes before edits.
+  - [x] Consult Sonnet and a local explorer subagent before implementation; both recommended the same evidence/checklist gate rather than onboarding UI, scheduler automation, runtime widening, export replay, or cutover.
+  - [x] Add sanitized readiness evidence at `audit/2026-06-30/first-subscriber-launch-readiness-gate.json`.
+  - [x] Add the operator-facing checklist at `deploy/runbooks/first-subscriber-launch-checklist.md`.
+  - [x] Pin the controlled first-subscriber posture to `wf-api.spyderbyte.cloud`, the four-tenant launch cap, active monitoring, and minimum `120` second tenant start spacing.
+  - [x] Do not promote this gate into subscriber-facing onboarding UI, scheduler automation, cutover, or export replay.
+  - [x] Keep the phase non-destructive: no VPS, Docker, Caddy, DNS, database, runtime, worker, queue, seed, dashboard-visual, workflow-family, package-overlay, or operator mutation.
+
 - [x] Record the authenticated public launch host acceptance gate.
   - [x] Run the required GitNexus preflight first. On June 30, 2026 `gitnexus status` was current at commit `40b1ffa`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.
   - [x] Consult Sonnet and a local explorer subagent before implementation; both recommended closing the authenticated shell/board proof gap before onboarding, visuals, cutover, or deeper native proof work.

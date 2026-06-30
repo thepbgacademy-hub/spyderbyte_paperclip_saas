@@ -48,24 +48,27 @@ describe("handoff board-surface wording", () => {
     );
   });
 
-  it("records the completed authenticated public launch host gate as latest", () => {
+  it("records the completed first-subscriber launch readiness gate as latest", () => {
     expect(latestPhaseCurrentBlock).toContain(
+      "Recorded the first-subscriber launch readiness gate"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "controlled go/no-go record under the proven authenticated `wf-api.spyderbyte.cloud` lane"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "No VPS, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, dashboard-visual, onboarding-UI, or cutover mutation was performed"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "perform a fresh authenticated public-host proof immediately before any real first-subscriber handoff"
+    );
+    expect(latestPhase).toContain(
       "Recorded the authenticated public launch host acceptance gate"
-    );
-    expect(latestPhaseCurrentBlock).toContain(
-      "all 10 live tests with no authenticated skips"
-    );
-    expect(latestPhaseCurrentBlock).toContain(
-      "without touching VPS, Docker, Caddy, DNS, databases, runtime behavior, worker behavior"
-    );
-    expect(latestPhaseCurrentBlock).toContain(
-      "move to first-subscriber launch readiness under the proven `wf-api.spyderbyte.cloud` authenticated lane"
     );
     expect(latestPhase).toContain(
       "Recorded the public launch host acceptance gate"
     );
     expect(latestPhaseCurrentBlock).toContain(
-      "keep `api.spyderbyte.cloud` cutover operator-only until a separate explicit cutover phase"
+      "keep `wf-api.spyderbyte.cloud` as the launch lane and `api.spyderbyte.cloud` as operator-only deferred cutover"
     );
     expect(latestPhase).toContain(
       "Recorded the launch tenant ceiling and cron/heartbeat anti-clustering rule"

@@ -22,6 +22,21 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
+- Recorded the first-subscriber launch readiness gate.
+- GitNexus preflight was current at commit `275c3b9`; `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported no changes before edits.
+- Sonnet was consulted in headless mode for consideration only and was not given VPS access. Sonnet recommended a tight evidence/checklist gate that aggregates already-closed launch proofs rather than building onboarding UI, scheduler automation, runtime behavior, export replay, or cutover work.
+- A local explorer subagent independently confirmed the same phase boundary and identified the committed evidence artifacts to aggregate.
+- Decision: first subscriber readiness is now a controlled go/no-go record under the proven authenticated `wf-api.spyderbyte.cloud` lane and four-tenant launch cap, not full public launch certification.
+- Added:
+  - `audit/2026-06-30/first-subscriber-launch-readiness-gate.json`
+  - `deploy/runbooks/first-subscriber-launch-checklist.md`
+  - `tests/first-subscriber-launch-readiness-gate.test.ts`
+- No VPS, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, dashboard-visual, onboarding-UI, or cutover mutation was performed.
+- Next continuation point:
+  - perform a fresh authenticated public-host proof immediately before any real first-subscriber handoff
+  - keep `wf-api.spyderbyte.cloud` as the launch lane and `api.spyderbyte.cloud` as operator-only deferred cutover
+  - after first-subscriber readiness is confirmed, choose either the actual controlled subscriber handoff or the smallest remaining launch blocker surfaced by that handoff
+
 - Recorded the authenticated public launch host acceptance gate.
 - GitNexus preflight was current at commit `40b1ffa`; `gitnexus detect-changes --repo spyderbyte_paperclip_saas` reported no changes before edits.
 - Sonnet was consulted in headless mode for consideration only and was not given VPS access. Sonnet recommended closing the authenticated shell/board proof gap before first-subscriber onboarding, visuals, cutover, or deeper native proof work.

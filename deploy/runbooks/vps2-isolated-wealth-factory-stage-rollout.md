@@ -71,6 +71,14 @@ On June 30, 2026 the authenticated public-host launch acceptance gap was closed 
 - this authenticated gate still does not certify or mutate `api.spyderbyte.cloud`, DNS, Caddy, Docker, database state, runtime behavior, worker behavior, scheduler policy, or deployment topology.
 - Sanitized evidence is recorded in `audit/2026-06-30/authenticated-public-launch-host-acceptance.json`.
 
+On June 30, 2026 the first-subscriber launch readiness gate was recorded.
+
+- `wf-api.spyderbyte.cloud` remains the controlled first-subscriber launch lane.
+- `api.spyderbyte.cloud` remains an operator-only deferred cutover path, not the subscriber lane.
+- first-subscriber readiness is governed by `deploy/runbooks/first-subscriber-launch-checklist.md`.
+- sanitized gate evidence is recorded in `audit/2026-06-30/first-subscriber-launch-readiness-gate.json`.
+- this gate does not create a subscriber-facing onboarding UI, add scheduler automation, widen export replay, mutate VPS state, or certify full public launch.
+
 ## Goal
 
 Keep the fully wired Wealth Factory stage host on VPS 2 as the active public API lane without changing the current `api.spyderbyte.cloud` route unless operators deliberately choose a later cutover slice.
