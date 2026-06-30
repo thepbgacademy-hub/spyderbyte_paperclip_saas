@@ -67,15 +67,14 @@ describe("first subscriber authenticated public-host preflight proof", () => {
     expect(JSON.stringify(artifact)).not.toMatch(/Bearer\s+[A-Za-z0-9._-]+/);
   });
 
-  it("records the fresh preflight as the latest phase without widening launch scope", () => {
-    const latestPhaseCurrentBlock = handoff.split("## Latest Phase")[1]?.trimStart().split(/\r?\n\r?\n/)[0] ?? "";
+  it("keeps the fresh preflight in the handoff history without widening launch scope", () => {
+    const latestPhaseHistory = handoff.split("## Latest Phase")[1]?.split("## Key Design Commitments")[0] ?? "";
 
-    expect(latestPhaseCurrentBlock).toContain("Recorded the first-subscriber authenticated public-host preflight proof");
-    expect(latestPhaseCurrentBlock).toContain("Sonnet was consulted in headless mode");
-    expect(latestPhaseCurrentBlock).toContain("A local explorer subagent independently confirmed");
-    expect(latestPhaseCurrentBlock).toContain("No VPS, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, dashboard-visual, onboarding-UI, or cutover mutation was performed");
-    expect(latestPhaseCurrentBlock).toContain("controlled first-subscriber handoff on `wf-api.spyderbyte.cloud`");
-    expect(latestPhaseCurrentBlock).toContain("keep `api.spyderbyte.cloud` as operator-only deferred cutover");
+    expect(latestPhaseHistory).toContain("Recorded the first-subscriber authenticated public-host preflight proof");
+    expect(latestPhaseHistory).toContain("Fresh authenticated preflight result");
+    expect(latestPhaseHistory).toContain("No VPS, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, dashboard-visual, onboarding-UI, or cutover mutation was performed");
+    expect(latestPhaseHistory).toContain("controlled first-subscriber handoff on `wf-api.spyderbyte.cloud`");
+    expect(latestPhaseHistory).toContain("keep `api.spyderbyte.cloud` as operator-only deferred cutover");
     expect(todo).toContain("Record the first-subscriber authenticated public-host preflight proof");
     expect(todo).toContain("Do not turn this preflight into onboarding UI, scheduler automation, export replay, or `api.spyderbyte.cloud` cutover.");
   });

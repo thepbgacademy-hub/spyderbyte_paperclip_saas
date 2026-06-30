@@ -1,0 +1,56 @@
+{
+  "checkedAt": "2026-06-30T18:03:00.000Z",
+  "phase": "first_subscriber_controlled_handoff_packet_recorded",
+  "ok": true,
+  "decision": "operator_ready_to_invite_first_subscriber",
+  "subscriberInviteSent": false,
+  "launchLane": "wf-api.spyderbyte.cloud",
+  "cutoverHost": "api.spyderbyte.cloud",
+  "cutoverStatus": "operator_only_deferred",
+  "referencedEvidence": [
+    {
+      "path": "audit/2026-06-30/first-subscriber-preflight-authenticated-host-proof.json",
+      "phase": "first_subscriber_preflight_authenticated_host_verified",
+      "ok": true
+    },
+    {
+      "path": "audit/2026-06-30/first-subscriber-launch-readiness-gate.json",
+      "phase": "first_subscriber_launch_readiness_gate_recorded",
+      "ok": true
+    }
+  ],
+  "operatorChecklist": {
+    "checklistPath": "deploy/runbooks/first-subscriber-launch-checklist.md",
+    "branchAndLaneConfirmed": true,
+    "targetTenantFresh": true,
+    "authenticatedPublicHostProofPassed": true,
+    "privatePortAndShellSmokeConfirmed": true,
+    "operatorReadOnlyFailClosedAccepted": true,
+    "handoffDecisionRecordedBeforeInvite": true
+  },
+  "tenantSafety": {
+    "launchTenantCeilingPerVps": 4,
+    "minimumTenantStartOffsetSeconds": 120,
+    "activeMonitoringRequired": true
+  },
+  "scope": {
+    "vpsAccessed": false,
+    "mutationPerformed": false,
+    "dnsCaddyChanged": false,
+    "databaseChanged": false,
+    "runtimeChanged": false,
+    "deploymentChanged": false,
+    "onboardingUiChanged": false,
+    "schedulerChanged": false,
+    "exportReplayChanged": false,
+    "workflowPackageExpanded": false
+  },
+  "nextGate": "operator_invites_first_subscriber_out_of_band",
+  "notes": [
+    "This artifact records the controlled first-subscriber handoff packet and operator-ready decision only.",
+    "The subscriber invite remains an out-of-band operator action and was not performed by this repo phase.",
+    "No real subscriber identity, tenant name, session token, bearer token, secret path, VPS credential, or runtime credential is stored here.",
+    "wf-api.spyderbyte.cloud remains the controlled first-subscriber lane.",
+    "api.spyderbyte.cloud remains operator-only deferred cutover territory."
+  ]
+}

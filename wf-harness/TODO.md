@@ -135,6 +135,15 @@ This file tracks the new harness subproject only.
 
 ## Current Next Slice
 
+- [x] Record the controlled first-subscriber handoff packet.
+  - [x] Run the required GitNexus preflight first. On June 30, 2026 `gitnexus status` was current at commit `ccd0128`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported no changes before edits.
+  - [x] Consult Sonnet and a local explorer subagent before implementation; both confirmed the local-only handoff packet boundary and found no current launch-critical failing test/blocker.
+  - [x] Record the operator-ready handoff decision in `audit/2026-06-30/first-subscriber-handoff-decision.json`.
+  - [x] Keep the subscriber invite as an out-of-band operator action; do not record it as performed by the repo.
+  - [x] Keep `wf-api.spyderbyte.cloud` as the controlled first-subscriber lane and `api.spyderbyte.cloud` as operator-only deferred cutover.
+  - [x] Do not turn this handoff packet into onboarding UI, scheduler automation, export replay, workflow/package expansion, or `api.spyderbyte.cloud` cutover.
+  - [x] Keep the phase non-destructive: no VPS, Docker, Caddy, DNS, database, runtime, worker, queue, seed, dashboard-visual, workflow-family, package-overlay, or operator mutation.
+
 - [x] Record the first-subscriber authenticated public-host preflight proof.
   - [x] Run the required GitNexus preflight first. On June 30, 2026 `gitnexus status` was current at commit `d078cfc`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported no changes before edits.
   - [x] Consult Sonnet and a local explorer subagent before implementation; both confirmed the proof-only public-host preflight boundary.

@@ -48,18 +48,27 @@ describe("handoff board-surface wording", () => {
     );
   });
 
-  it("records the completed first-subscriber authenticated preflight proof as latest", () => {
+  it("records the controlled first-subscriber handoff packet as latest", () => {
     expect(latestPhaseCurrentBlock).toContain(
+      "Recorded the controlled first-subscriber handoff packet"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "operator-ready decision before any subscriber invite"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "No VPS, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, dashboard-visual, onboarding-UI, workflow/package, or cutover mutation was performed"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "operator invites the first subscriber out of band"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "Sanitized evidence is recorded in `audit/2026-06-30/first-subscriber-handoff-decision.json`"
+    );
+    expect(latestPhase).toContain(
       "Recorded the first-subscriber authenticated public-host preflight proof"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "Fresh authenticated preflight result"
-    );
-    expect(latestPhaseCurrentBlock).toContain(
-      "No VPS, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, dashboard-visual, onboarding-UI, or cutover mutation was performed"
-    );
-    expect(latestPhaseCurrentBlock).toContain(
-      "proceed to controlled first-subscriber handoff on `wf-api.spyderbyte.cloud`"
     );
     expect(latestPhase).toContain(
       "Recorded the first-subscriber launch readiness gate"
@@ -70,7 +79,7 @@ describe("handoff board-surface wording", () => {
     expect(latestPhase).toContain(
       "Recorded the public launch host acceptance gate"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "keep `api.spyderbyte.cloud` as operator-only deferred cutover"
     );
     expect(latestPhase).toContain(
