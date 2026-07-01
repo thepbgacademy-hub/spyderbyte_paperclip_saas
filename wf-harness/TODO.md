@@ -155,7 +155,9 @@ This file tracks the new harness subproject only.
   - [x] Confirm the Docker access diagnosis without mutation: VPS2 `deploy` is in `deploy sudo users`, while `/var/run/docker.sock` is owned by `root:docker`, so Docker inspection fails until an operator grants or otherwise authorizes Docker access.
   - [x] Run the approved operator access command `sudo usermod -aG docker deploy`, then start a fresh SSH proof session.
   - [x] Rerun `npm run prove:codex-auth-home-readiness -- --execute`; result advanced past Docker access to `codex_cli_missing`, proving the command now reaches `wf-stage-api` without DB/workflow/DNS/Caddy/provider/Paperclip mutation.
-  - [ ] Provision or refresh only the isolated Wealth Factory API image/lane so the Codex CLI is available, then rerun the auth-home readiness proof before checking `CODEX_HOME` and smoke prompt.
+  - [x] Package `@openai/codex` into the API runtime image path, build `spyderbyte/api:wf-stage-20260630-codexcli2`, refresh only `wf-stage-api`, and rerun the auth-home readiness proof.
+  - [x] Record the new truthful VPS readiness result: `codex_home_missing`; Codex CLI is present, but the API lane does not yet expose a tenant-isolated `CODEX_HOME` directory.
+  - [ ] Provision a tenant-isolated Codex auth home for the Wealth Factory API/worker lane, expose it to `wf-stage-api` as `CODEX_HOME`, then rerun the auth-home readiness proof before any provider binding repair execute phase.
   - [ ] Create or repair the live OpenAI device/Codex subscription connection with `codexHome` / `authStateRef` metadata, then start or rebind a fresh proof run rather than retrying the old `openai_api`-bound run.
   - [ ] Preserve BYOK/API-provider lanes for users who choose Anthropic, Gemini/OpenRouter, OpenAI API keys, or other supported API accounts.
   - [ ] Continue using the browser harness for first-hand login/workflow testing, cataloging each action and blocker before making adjustments.

@@ -195,7 +195,7 @@ describe("Codex auth-home readiness proof", () => {
     };
 
     expect(artifact).toMatchObject({
-      phase: "codex_cli_missing",
+      phase: "codex_home_missing",
       ok: false,
       sshTarget: "deploy@[masked]",
       mutationPerformed: false,
@@ -205,11 +205,11 @@ describe("Codex auth-home readiness proof", () => {
       providerRepairExecuted: false,
       paperclipTouched: false,
       codexCliChecked: true,
-      codexHomeChecked: false,
+      codexHomeChecked: true,
       smokePromptChecked: false
     });
-    expect(artifact.finding).toContain("Codex CLI is not present");
-    expect(artifact.finding).toContain("smoke prompt checks were not reached");
+    expect(artifact.finding).toContain("Codex CLI is present");
+    expect(artifact.finding).toContain("does not yet expose a tenant-isolated CODEX_HOME");
     expect(JSON.stringify(artifact)).not.toMatch(/187\.77\.19\.83|E:\\the_secrets|sk-[A-Za-z0-9_-]+|Bearer\s+[A-Za-z0-9._-]+|postgresql:\/\//i);
   });
 

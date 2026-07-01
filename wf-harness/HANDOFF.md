@@ -47,7 +47,8 @@ The first harness implementation slice is now built and verified:
 - Recorded sanitized evidence at `audit/2026-06-30/vps-codex-auth-home-readiness-proof.json`. The evidence confirms no DB rows, `workflow_runs`, DNS/Caddy, provider repair, Paperclip, or launch-state mutation was performed.
 - Confirmed the access diagnosis with a read-only VPS check: `deploy` belongs to `deploy sudo users`, while `/var/run/docker.sock` is owned by `root:docker`; Docker API access therefore fails before the proof can inspect `wf-stage-api`.
 - Ran the approved operator access command `sudo usermod -aG docker deploy`, opened a fresh proof path, and reran `npm run prove:codex-auth-home-readiness -- --execute`. Result advanced to `codex_cli_missing`, so the proof now reaches `wf-stage-api` but the container image does not include Codex CLI yet.
-- Decision: do not proceed to OpenAI device provider binding repair execute or fresh proof-run rebind until the isolated stage API lane includes Codex CLI and a tenant-isolated `CODEX_HOME` can pass the same readiness proof.
+- Packaged `@openai/codex` into the API runtime image path, built `spyderbyte/api:wf-stage-20260630-codexcli2` from committed source, refreshed only `wf-stage-api`, and reran `npm run prove:codex-auth-home-readiness -- --execute`. Result advanced to `codex_home_missing`: Codex CLI is present, but the container lane does not yet expose a tenant-isolated `CODEX_HOME`.
+- Decision: do not proceed to OpenAI device provider binding repair execute or fresh proof-run rebind until the isolated stage API lane has a tenant-isolated `CODEX_HOME` and passes the same readiness proof including the non-secret smoke prompt.
 - Added:
   - `audit/2026-06-30/first-subscriber-browser-harness-observation.json`
   - `tests/first-subscriber-browser-harness-observation.test.ts`

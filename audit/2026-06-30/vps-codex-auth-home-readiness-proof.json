@@ -1,14 +1,14 @@
 {
-  "phase": "codex_cli_missing",
+  "phase": "codex_home_missing",
   "ok": false,
   "dryRun": false,
-  "timestamp": "2026-06-30T20:46:00.000-05:00",
+  "timestamp": "2026-06-30T22:32:00.000-05:00",
   "container": "wf-stage-api",
   "sshTarget": "deploy@[masked]",
   "codexCliChecked": true,
-  "codexHomeChecked": false,
+  "codexHomeChecked": true,
   "smokePromptChecked": false,
-  "codexCliPresent": false,
+  "codexCliPresent": true,
   "codexHomeExists": false,
   "smokePromptPassed": false,
   "mutationPerformed": false,
@@ -18,6 +18,7 @@
   "providerRepairExecuted": false,
   "paperclipTouched": false,
   "operatorAccessChange": "Approved operator access change completed: deploy was added to the docker group on VPS2, then a fresh SSH proof reached wf-stage-api.",
-  "finding": "The bounded VPS proof reached the isolated Wealth Factory wf-stage-api container and checked for the Codex CLI. The Codex CLI is not present in the container lane yet, so CODEX_HOME and smoke prompt checks were not reached.",
-  "nextRequiredPhase": "Provision or refresh only the isolated Wealth Factory API image/lane so the Codex CLI is available, then rerun the same Codex auth-home readiness proof before any provider binding repair execute phase."
+  "apiImageRefresh": "Refreshed only wf-stage-api from spyderbyte/api:wf-stage-20260629-staleattention3 to spyderbyte/api:wf-stage-20260630-codexcli2 after building the image from committed source.",
+  "finding": "The bounded VPS proof reached the isolated Wealth Factory wf-stage-api container and confirmed Codex CLI is present. The container lane does not yet expose a tenant-isolated CODEX_HOME directory, so the smoke prompt was not reached.",
+  "nextRequiredPhase": "Provision a tenant-isolated Codex auth home for the Wealth Factory API/worker lane, expose it to wf-stage-api as CODEX_HOME, then rerun the same Codex auth-home readiness proof before any provider binding repair execute phase."
 }

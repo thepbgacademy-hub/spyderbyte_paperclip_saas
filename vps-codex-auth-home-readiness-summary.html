@@ -90,16 +90,16 @@
         <span class="badge">Bounded VPS Proof</span>
         <h1>Codex Auth-Home Readiness</h1>
         <p>
-          This phase added and ran a bounded readiness proof for the Wealth Factory VPS lane. After approved Docker operator access was restored,
-          the proof reached <code>wf-stage-api</code>, but the container image does not include Codex CLI yet.
+          This phase added and ran a bounded readiness proof for the Wealth Factory VPS lane. After approved Docker operator access was restored and
+          only <code>wf-stage-api</code> was refreshed, the proof reached Codex CLI but stopped at the missing <code>CODEX_HOME</code> gate.
         </p>
       </header>
 
       <section class="grid">
         <article class="card blocker">
           <h2>Result</h2>
-          <p><strong>Phase:</strong> <code>codex_cli_missing</code></p>
-          <p>The proof reached the isolated Wealth Factory container and checked for Codex CLI. Codex CLI is not present, so <code>CODEX_HOME</code> and smoke prompt checks were not reached yet.</p>
+          <p><strong>Phase:</strong> <code>codex_home_missing</code></p>
+          <p>The proof reached the isolated Wealth Factory container and confirmed Codex CLI is present. The container does not yet expose a tenant-isolated <code>CODEX_HOME</code>, so the smoke prompt was not reached yet.</p>
         </article>
 
         <article class="card">
@@ -126,7 +126,7 @@
         <article class="card">
           <h2>Next Gate</h2>
           <p>
-            Provision or refresh only the isolated Wealth Factory API image/lane so Codex CLI is available, then rerun this same readiness proof before provider binding repair.
+            Provision a tenant-isolated Codex auth home for the Wealth Factory API/worker lane, expose it to <code>wf-stage-api</code> as <code>CODEX_HOME</code>, then rerun this same readiness proof before provider binding repair.
             Do not execute provider binding repair until this proof passes.
           </p>
         </article>
