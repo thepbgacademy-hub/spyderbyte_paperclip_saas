@@ -23,7 +23,12 @@ import { ShellLayout } from "./shell/ShellLayout.js";
 import { HIDDEN_SHELL_FLAGS } from "./shell/feature-flags.js";
 import { useTheme } from "./shell/theme-context.js";
 import { HIDDEN_FUTURE_ROUTES, VISIBLE_WEALTH_FACTORY_ROUTES, resolveShellRoute } from "./shell/navigation.js";
-import { getBrowserResultApprovalStorage, readStoredResultApprovalStates, writeStoredResultApprovalStates } from "./result-approval-storage.js";
+import {
+  getBrowserResultApprovalStorage,
+  mergeResultApprovalStates,
+  readStoredResultApprovalStates,
+  writeStoredResultApprovalStates
+} from "./result-approval-storage.js";
 
 export function buildBoardPath(workflowId?: string): string {
   if (!workflowId || workflowId.trim().length === 0) {
@@ -62,9 +67,14 @@ export default function App() {
   const [selectedResultId, setSelectedResultId] = useState<string>(dashboardRuntime.client.getSnapshot().artifacts[0]?.id ?? resultCards[0]!.id);
   const [teamTab, setTeamTab] = useState<TeamTab>("Included Team");
   const [selectedRoleId, setSelectedRoleId] = useState<string>(includedRoles[0]!.id);
-  const [resultApprovalStates, setResultApprovalStates] = useState<Record<string, ApprovalState>>(() =>
-    readStoredResultApprovalStates(getBrowserResultApprovalStorage())
-  );
+  const [resultApprovalStates, setResultApprovalStates] = useState<Record<string, ApprovalState>>(() => {
+    const storedStates = readStoredResultApprovalStates(getBrowserResultApprovalStorage());
+    const snapshot = dashboardRuntime.client.getSnapshot();
+    return mergeResultApprovalStates({
+      storedStates,
+      ...(snapshot.resultApprovalStates ? { backendStates: snapshot.resultApprovalStates } : {})
+    });
+  });
   const workflowStartAvailable =
     runtimeShellEnabled &&
     dashboard.workflows.some((workflow) => workflow.enabled !== false && workflow.startEnabled !== false);

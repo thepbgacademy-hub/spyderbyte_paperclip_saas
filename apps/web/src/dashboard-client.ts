@@ -1,3 +1,5 @@
+import { isApprovalState, type ApprovalState } from "./result-approval-types.js";
+
 export type DashboardRole = "member" | "operator";
 
 export type DashboardWorkflow = {
@@ -45,6 +47,7 @@ export type DashboardSnapshot = {
   role: DashboardRole;
   workflows: readonly DashboardWorkflow[];
   artifacts: readonly DashboardArtifact[];
+  resultApprovalStates?: Record<string, ApprovalState>;
   providerConnections: readonly DashboardProviderConnection[];
   storageConnectors: readonly DashboardStorageConnector[];
   platformLoad: DashboardPlatformLoad;
@@ -207,6 +210,8 @@ function mapDashboardResponse(response: unknown): DashboardSnapshot {
     .filter((provider) => provider.required === false)
     .map((provider) => provider.label);
 
+  const resultApprovalStates = mapResultApprovalStates(record.resultApprovalStates ?? record.result_approval_states);
+
   return {
     tenantName:
       typeof record.tenantName === "string"
@@ -221,6 +226,7 @@ function mapDashboardResponse(response: unknown): DashboardSnapshot {
     role: record.role === "operator" ? "operator" : "member",
     workflows: workflows.map(mapWorkflow),
     artifacts: artifacts.map(mapArtifact),
+    ...(resultApprovalStates ? { resultApprovalStates } : {}),
     providerConnections: mappedProviderConnections,
     storageConnectors: storageConnectors.map(mapStorageConnector),
     platformLoad: mapPlatformLoad(record.platformLoad ?? record.platform_load)
@@ -250,6 +256,19 @@ function mapArtifact(value: unknown): DashboardArtifact {
     artifactType: String(record.artifactType ?? record.artifact_type ?? "file"),
     expiresAt: String(record.expiresAt ?? record.expires_at ?? new Date().toISOString())
   };
+}
+
+function mapResultApprovalStates(value: unknown): Record<string, ApprovalState> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, ApprovalState] => {
+      const [key, state] = entry;
+      return typeof key === "string" && isApprovalState(state);
+    })
+  );
 }
 
 function mapProviderConnection(value: unknown): DashboardProviderConnection {

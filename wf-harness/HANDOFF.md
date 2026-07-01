@@ -22,6 +22,14 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
+- Bridged result approval state into the dashboard API/client contract without adding new routes, mutations, VPS deployment, or UI redesign.
+- Added an additive `resultApprovalStates` DTO field to the authenticated dashboard API. The dependency is optional so existing callers remain stable; when supplied, it is scoped by tenant/user and returned through the guarded dashboard response.
+- Added dashboard-client mapping and sanitization so only bounded approval states (`Awaiting review`, `Approved`, `Revision needed`) reach the browser snapshot.
+- Added browser-shell precedence through `mergeResultApprovalStates`: backend-provided states override localStorage fallback while local-only fallback entries remain available for preview/bootstrap shells.
+- Added focused TDD coverage in `tests/api-routes.test.ts`, `tests/dashboard-client.test.ts`, and `tests/app-result-approval-state.test.ts`.
+- Scope truth: this phase intentionally does not wire repository-backed live dashboard reads yet. `wfpc.artifact_metadata.workflow_run_id` points at the legacy/public workflow-run table, while `wfpc.harness_result_approval_states.run_id` points at `wfpc.harness_runs`; the next bounded phase must prove an explicit result-to-harness-run identity resolver before using the new repository table in dashboard reads.
+- Subagent/Sonnet boundary: Sonnet recommended committing the backend foundation before this bridge. A read-only subagent mapped the dashboard API/client/storage seam and confirmed backend-over-localStorage precedence as the safe bridge boundary.
+
 - Added the local-first backend durability foundation for result approval state without widening the browser/UI path.
 - Added `supabase/migrations/0034_wf_harness_result_approval_states.sql`, creating `wfpc.harness_result_approval_states` keyed by `(tenant_id, run_id, result_id)`, with bounded approval states, tenant/run foreign keys, tenant updated index, RLS enabled, and member read policy through `wfpc_private.is_tenant_member(tenant_id)`.
 - Added harness repository types and additive in-memory/Postgres methods: `upsertResultApprovalState`, `getResultApprovalState`, and `listResultApprovalStatesForRun`.

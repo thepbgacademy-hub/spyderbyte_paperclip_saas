@@ -56,6 +56,7 @@ type DashboardApiDeps = {
   listWorkflows(input: { tenantId: string; userId: string }): Promise<unknown[]>;
   listPackages(input: { tenantId: string; userId: string }): Promise<unknown[]>;
   listArtifacts(input: { tenantId: string; userId: string }): Promise<unknown[]>;
+  listResultApprovalStates?: (input: { tenantId: string; userId: string }) => Promise<Record<string, "Awaiting review" | "Approved" | "Revision needed">>;
   listProviderConnections(input: { tenantId: string; userId: string }): Promise<unknown[]>;
   listStorageConnectors(input: { tenantId: string; userId: string }): Promise<unknown[]>;
   getPlatformLoad(input: { tenantId: string; userId: string }): Promise<CustomerSafePlatformLoad>;
@@ -72,10 +73,13 @@ export function createDashboardApi(deps: DashboardApiDeps) {
 
       await deps.requireTenantMember({ tenantId: session.tenantId, userId: session.userId });
 
-      const [workflows, packages, artifacts, providerConnections, storageConnectors, platformLoad] = await Promise.all([
+      const [workflows, packages, artifacts, resultApprovalStates, providerConnections, storageConnectors, platformLoad] = await Promise.all([
         deps.listWorkflows({ tenantId: session.tenantId, userId: session.userId }),
         deps.listPackages({ tenantId: session.tenantId, userId: session.userId }),
         deps.listArtifacts({ tenantId: session.tenantId, userId: session.userId }),
+        deps.listResultApprovalStates
+          ? deps.listResultApprovalStates({ tenantId: session.tenantId, userId: session.userId })
+          : Promise.resolve({}),
         deps.listProviderConnections({ tenantId: session.tenantId, userId: session.userId }),
         deps.listStorageConnectors({ tenantId: session.tenantId, userId: session.userId }),
         deps.getPlatformLoad({ tenantId: session.tenantId, userId: session.userId })
@@ -87,6 +91,7 @@ export function createDashboardApi(deps: DashboardApiDeps) {
         workflows: toVisibleDashboardWorkflows(workflows),
         packages,
         artifacts,
+        resultApprovalStates,
         providerConnections,
         storageConnectors,
         platformLoad

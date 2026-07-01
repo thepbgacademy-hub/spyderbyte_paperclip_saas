@@ -15,7 +15,12 @@ This file tracks the new harness subproject only.
   - [x] Add a run-scoped `wfpc.harness_result_approval_states` table keyed by `(tenant_id, run_id, result_id)` with bounded approval states and member read RLS.
   - [x] Add additive harness repository methods for upserting, fetching, and listing result approval states without touching board-service, dashboard UI, HTTP routes, or VPS deployment.
   - [x] Prove in-memory repository latest-state behavior, tenant/run isolation, migration shape, and disposable Postgres cross-client round-trip.
-  - [ ] Next bounded phase: bridge backend approval state into the dashboard API/client contract, define backend-vs-localStorage precedence, then prove browser/device/session continuity locally before any VPS deployment.
+- [x] Bridge result approval state into the dashboard API/client contract.
+  - [x] Add an additive authenticated dashboard DTO field for `resultApprovalStates` without adding new routes, mutations, or UI surfaces.
+  - [x] Map and sanitize API-provided approval states in the browser dashboard client.
+  - [x] Define backend-over-localStorage precedence through a bounded merge helper while retaining local storage as fallback only.
+  - [x] Prove the contract with focused API, client, and browser-state tests.
+  - [ ] Next bounded phase: add the explicit result-to-harness-run identity resolver before wiring repository-backed dashboard approval reads; do not infer this from `artifact_metadata.workflow_run_id` until the harness-run mapping is proven.
 - [x] Approve first harness direction.
 - [x] Write v1 design spec.
 - [x] Review and refine the v1 design spec.

@@ -4,6 +4,7 @@ import {
   RESULT_APPROVAL_STATES_STORAGE_KEY,
   createDefaultResultApprovalStates,
   getBrowserResultApprovalStorage,
+  mergeResultApprovalStates,
   readStoredResultApprovalStates,
   writeStoredResultApprovalStates
 } from "../apps/web/src/result-approval-storage.js";
@@ -75,6 +76,23 @@ describe("app result approval state persistence", () => {
         "result-238": "Revision needed"
       })
     );
+  });
+
+  it("merge treats backend states as authoritative over stored browser fallback", () => {
+    expect(
+      mergeResultApprovalStates({
+        storedStates: {
+          "artifact-1": "Revision needed",
+          "local-only": "Approved"
+        },
+        backendStates: {
+          "artifact-1": "Approved"
+        }
+      })
+    ).toEqual({
+      "artifact-1": "Approved",
+      "local-only": "Approved"
+    });
   });
 
   it("round-trips approval states written to storage", () => {

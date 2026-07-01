@@ -1,4 +1,7 @@
 import type { DashboardPlatformLoad, DashboardSnapshot, DashboardWorkflow } from "../dashboard-client.js";
+import type { ApprovalState } from "../result-approval-types.js";
+
+export type { ApprovalState } from "../result-approval-types.js";
 
 export type Role = "member" | "operator";
 export type PageKey =
@@ -17,7 +20,6 @@ export type PageKey =
 export type FutureRouteKey = "assistant-studio" | "operations" | "advanced-insights";
 export type ThemePreset = "Foundry" | "Midnight" | "Ledger" | "Ember";
 export type RunStatus = "ready" | "queued" | "completed" | "paused";
-export type ApprovalState = "Awaiting review" | "Approved" | "Revision needed";
 export type TeamTab = "Included Team" | "Hired" | "Power Plays";
 export type DateRange = "7D" | "30D" | "90D";
 export type ProviderKey = "openai" | "anthropic" | "xaiGrok" | "openRouter" | "codex";

@@ -27,6 +27,7 @@ describe("authenticated dashboard API", () => {
       listWorkflows: vi.fn().mockResolvedValue([{ id: "wf-connect-first", name: "Connect First Workflow" }]),
       listPackages: vi.fn().mockResolvedValue([{ id: "pkg-bib-connect", name: "Connect First" }]),
       listArtifacts: vi.fn().mockResolvedValue([{ id: "artifact-1", filename: "post.png", expiresAt: "2026-05-11T00:00:00.000Z" }]),
+      listResultApprovalStates: vi.fn().mockResolvedValue({ "artifact-1": "Approved" }),
       listProviderConnections: vi.fn().mockResolvedValue([{ providerKind: "openai_api", label: "OpenAI", connected: true }]),
       listStorageConnectors: vi
         .fn()
@@ -45,6 +46,7 @@ describe("authenticated dashboard API", () => {
       workflows: [{ id: "wf-connect-first", name: "Connect First Workflow", startEnabled: true }],
       packages: [{ id: "pkg-bib-connect", name: "Connect First" }],
       artifacts: [{ id: "artifact-1", filename: "post.png", expiresAt: "2026-05-11T00:00:00.000Z" }],
+      resultApprovalStates: { "artifact-1": "Approved" },
       providerConnections: [{ providerKind: "openai_api", label: "OpenAI", connected: true }],
       storageConnectors: [{ id: "storage-1", providerKind: "google_drive", displayName: "Company Drive", connected: true, publicTarget: { folderLabel: "Exports" } }],
       platformLoad: {
@@ -55,6 +57,30 @@ describe("authenticated dashboard API", () => {
     });
 
     expect(deps.requireTenantMember).toHaveBeenCalledWith({ tenantId: "tenant-1", userId: "user-1" });
+    expect(deps.listResultApprovalStates).toHaveBeenCalledWith({ tenantId: "tenant-1", userId: "user-1" });
+  });
+
+  it("keeps dashboard responses stable when result approval state resolver is not wired yet", async () => {
+    const api = createDashboardApi({
+      authenticate: vi.fn().mockResolvedValue(session),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      listWorkflows: vi.fn().mockResolvedValue([]),
+      listPackages: vi.fn().mockResolvedValue([]),
+      listArtifacts: vi.fn().mockResolvedValue([]),
+      listProviderConnections: vi.fn().mockResolvedValue([]),
+      listStorageConnectors: vi.fn().mockResolvedValue([]),
+      getPlatformLoad: vi.fn().mockResolvedValue({
+        level: "light",
+        summary: "Light traffic",
+        detail: "New workflows should begin processing quickly."
+      })
+    });
+
+    await expect(api.listDashboard({ authorization: "Bearer valid" })).resolves.toMatchObject({
+      tenantId: "tenant-1",
+      role: "member",
+      resultApprovalStates: {}
+    });
   });
 
   it("runs response guard over dashboard payloads", async () => {

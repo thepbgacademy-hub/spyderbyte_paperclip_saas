@@ -1,4 +1,4 @@
-import type { ApprovalState } from "./pages/dashboard-data.js";
+import { isApprovalState, type ApprovalState } from "./result-approval-types.js";
 
 export const RESULT_APPROVAL_STATES_STORAGE_KEY = "wealth-factory.resultApprovalStates.v1";
 
@@ -36,19 +36,28 @@ export function readStoredResultApprovalStates(storage: Pick<Storage, "getItem">
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return createDefaultResultApprovalStates();
     }
-    const allowedStates = new Set<ApprovalState>(["Awaiting review", "Approved", "Revision needed"]);
     return {
       ...createDefaultResultApprovalStates(),
       ...Object.fromEntries(
         Object.entries(parsed).filter((entry): entry is [string, ApprovalState] => {
           const [key, value] = entry;
-          return typeof key === "string" && allowedStates.has(value as ApprovalState);
+          return typeof key === "string" && isApprovalState(value);
         })
       )
     };
   } catch {
     return createDefaultResultApprovalStates();
   }
+}
+
+export function mergeResultApprovalStates(input: {
+  storedStates: Record<string, ApprovalState>;
+  backendStates?: Record<string, ApprovalState>;
+}): Record<string, ApprovalState> {
+  return {
+    ...input.storedStates,
+    ...(input.backendStates ?? {})
+  };
 }
 
 export function writeStoredResultApprovalStates(
