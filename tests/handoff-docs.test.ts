@@ -180,6 +180,7 @@ describe("handoff board-surface wording", () => {
     expect(currentNextSlice).toContain("no DB/workflow/DNS/Caddy/provider/Paperclip mutation");
     expect(currentNextSlice).toContain("`docker_permission_denied`");
     expect(currentNextSlice).toContain("Restore or approve bounded Docker operator access");
+    expect(currentNextSlice).toContain("`sudo usermod -aG docker deploy`");
     expect(currentNextSlice).toContain("no mutation of existing `workflow_runs`");
     expect(currentNextSlice).toContain("Preserve BYOK/API-provider lanes");
   });

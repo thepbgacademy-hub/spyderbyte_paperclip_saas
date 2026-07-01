@@ -152,6 +152,8 @@ This file tracks the new harness subproject only.
   - [x] Skip incomplete `openai_chatgpt_codex_subscription` rows during runtime provider resolution so placeholder device rows cannot block valid API-key fallback providers.
   - [x] Prove the VPS Codex auth-home readiness gate with `npm run prove:codex-auth-home-readiness -- --execute`, keeping the proof bounded and sanitized with no DB/workflow/DNS/Caddy/provider/Paperclip mutation.
   - [x] Record the truthful VPS readiness result: `docker_permission_denied` in `audit/2026-06-30/vps-codex-auth-home-readiness-proof.json`, with no database, workflow, DNS/Caddy, provider repair, Paperclip, or launch-state mutation.
+  - [x] Confirm the Docker access diagnosis without mutation: VPS2 `deploy` is in `deploy sudo users`, while `/var/run/docker.sock` is owned by `root:docker`, so Docker inspection fails until an operator grants or otherwise authorizes Docker access.
+  - [ ] Operator-approved access command, if chosen out of band: `sudo usermod -aG docker deploy`, then start a fresh SSH session and rerun `npm run prove:codex-auth-home-readiness -- --execute`.
   - [ ] Restore or approve bounded Docker operator access for the Wealth Factory deploy lane, then rerun the auth-home readiness proof before starting, refreshing, or repairing `wf-stage-api`.
   - [ ] Create or repair the live OpenAI device/Codex subscription connection with `codexHome` / `authStateRef` metadata, then start or rebind a fresh proof run rather than retrying the old `openai_api`-bound run.
   - [ ] Preserve BYOK/API-provider lanes for users who choose Anthropic, Gemini/OpenRouter, OpenAI API keys, or other supported API accounts.
