@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 const scriptPath = "scripts/prove-codex-auth-home-readiness.mjs";
 const artifactPath = "audit/2026-06-30/vps-codex-auth-home-readiness-proof.json";
+const apiDockerfilePath = "Dockerfile.api";
 
 describe("Codex auth-home readiness proof", () => {
   it("is exposed as a dry-run-first npm operator command", () => {
@@ -208,5 +209,16 @@ describe("Codex auth-home readiness proof", () => {
     expect(artifact.finding).toContain("Codex CLI is not present");
     expect(artifact.finding).toContain("smoke prompt checks were not reached");
     expect(JSON.stringify(artifact)).not.toMatch(/187\.77\.19\.83|E:\\the_secrets|sk-[A-Za-z0-9_-]+|Bearer\s+[A-Za-z0-9._-]+|postgresql:\/\//i);
+  });
+
+  it("packages the Codex CLI into the API runtime image path", () => {
+    const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as {
+      dependencies: Record<string, string>;
+    };
+    const dockerfile = readFileSync(apiDockerfilePath, "utf8");
+
+    expect(packageJson.dependencies["@openai/codex"]).toBeDefined();
+    expect(dockerfile).toContain('ENV PATH="/app/node_modules/.bin:${PATH}"');
+    expect(dockerfile).not.toContain("npm install -g");
   });
 });
