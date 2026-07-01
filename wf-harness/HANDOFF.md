@@ -22,6 +22,65 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
+- Recorded the first-subscriber browser-harness observation.
+- Used `E:/REPOS 2/browser-harness` with sandbox Chrome/CDP on the corrected `wf-api` board path.
+- The unauthenticated corrected URL returned `{"code":"unauthorized"}`, confirming the board path is auth-gated rather than missing.
+- Minted a short-lived local runtime session cookie from the operator-supplied stage env and set it in the sandbox browser without printing or storing the token.
+- The authenticated browser session loaded the Wealth Factory board at `https://wf-api.spyderbyte.cloud/board?workflowId=wf_connect_first_workflow`.
+- Current live workflow progression blocker: the native provider lane is blocked by HTTP `401`; the board reports, "Native execution reached the provider lane but the provider rejected the request with HTTP 401."
+- Decision: do not keep retrying workflow progression until the OpenAI device/Codex subscription provider binding is repaired or confirmed, then retry the bounded unblock path.
+- Corrected the local native provider seam so `openai_chatgpt_codex_subscription` routes through an isolated Codex CLI/device-auth runner instead of the API-key Responses path.
+- Corrected runtime provider priority so an available OpenAI device/Codex subscription binding is preferred over legacy `openai_api` for text generation.
+- Confirmed local Codex device auth with a non-secret smoke prompt returning `OK`; do not treat this as VPS proof until the isolated VPS lane has a corresponding Codex auth home/binding.
+- Alignment note from `E:/REPOS 2/openai-subscription-device-connect-and-provider-borrowing.md`: for Wealth Factory, the relevant pattern is OpenAI device-connect plus backend-only provider use. Ignore PWA-specific references from that note; the important code/design lesson is that OpenAI subscription auth should not be confused with `OPENAI_API_KEY` billing.
+- Provider choice remains dual-lane: this build should use OpenAI device/Codex subscription auth as the preferred operator/client lane, while preserving BYOK/API-provider lanes for users who choose Anthropic, Gemini/OpenRouter, OpenAI API keys, or other supported API accounts.
+- Read-only live stage provider-binding check found the controlled first-subscriber lane is still bound to `openai_api`; active provider connection metadata contains `project` only and does not contain `codexHome` or `authStateRef`.
+- This explains the live HTTP `401`: the existing run cannot use the device connector while its bound provider context is `openai_api`.
+- Added sanitized evidence at `audit/2026-06-30/first-subscriber-live-provider-binding-readonly.json`.
+- Added dry-run-first operator command `npm run repair:openai-device-provider-binding` to plan the OpenAI device provider binding repair without mutating live state. Execute mode fails closed until `codexHome` and `authStateRef` are supplied and the stage Codex auth home is installed/reviewed.
+- Hardened the repair command so execute mode remains fail-closed in this slice, even after `--confirm-codex-home-ready`, until a later dedicated DB-mutation phase wires the actual live repair.
+- Recorded the future mutation contract as transaction-scoped and tenant/workflow/provider-scoped, including the `wfpc.package_provider_requirements` seam required for fresh-run entitlement; the repair lane must not mutate existing `workflow_runs`, Paperclip state, shared-host routing, or BYOK/API-provider lanes.
+- Tightened runtime provider resolution so incomplete `openai_chatgpt_codex_subscription` rows without `codexHome` and `authStateRef` cannot preempt a valid API-key provider fallback.
+- Updated the first-subscriber launch checklist with the OpenAI device provider binding gate: dry-run first, confirm worker-lane Codex readiness, repair the binding, then start a fresh proof run rather than retrying the old `openai_api`-bound run.
+- Added:
+  - `audit/2026-06-30/first-subscriber-browser-harness-observation.json`
+  - `tests/first-subscriber-browser-harness-observation.test.ts`
+  - `audit/2026-06-30/first-subscriber-live-provider-binding-readonly.json`
+  - `tests/first-subscriber-live-provider-binding-readonly.test.ts`
+- Updated:
+  - `src/providers/native-openai-text.ts`
+  - `src/providers/runtime-provider-resolution.ts`
+  - `tests/native-openai-text.test.ts`
+  - `tests/runtime-provider-resolution.test.ts`
+  - `scripts/repair-openai-device-provider-binding.mjs`
+  - `tests/openai-device-provider-binding-repair-script.test.ts`
+  - `deploy/runbooks/first-subscriber-launch-checklist.md`
+- No VPS, Docker, Caddy, DNS, database, worker, scheduler, export, onboarding-UI, provider-credential, workflow/package, rollback, or cutover mutation was performed.
+- Next continuation point:
+  - repair or confirm the OpenAI device/Codex subscription provider binding for the controlled first-subscriber lane
+  - start or rebind a fresh proof run after the subscription-backed provider connection exists; do not keep retrying the existing `openai_api`-bound run and expect device auth to be used
+  - keep testing the OpenAI device/Codex subscription lane through the browser harness so actions, blockers, and required adjustments are cataloged from first-hand browser evidence
+  - retry the authenticated browser-harness board flow and use the existing `unblock_lane` action only after the subscription-backed provider binding is corrected
+  - keep `api.spyderbyte.cloud` as operator-only deferred cutover
+
+- Recorded the first-subscriber entry URL blocker and correction.
+- GitNexus preflight was current at commit `f513872`; `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported no changes before edits.
+- Sonnet was consulted in headless mode for consideration only and was not given VPS access. Sonnet confirmed the smallest safe phase was a local handoff/documentation correction, not DNS/Caddy, runtime routing, onboarding UI, or `api.spyderbyte.cloud` cutover.
+- Manual first-subscriber stand-in checks showed apex/www `/board` returned `404`, while `wf-api.spyderbyte.cloud` returned auth-gated responses (`401` for board shell without a session, `403` for board API without a session).
+- Decision: first-subscriber handoffs must use `https://wf-api.spyderbyte.cloud/board?workflowId=wf_connect_first_workflow`; apex/www `/board` links are invalid in the current launch posture.
+- Added:
+  - `audit/2026-06-30/first-subscriber-entry-url-blocker.json`
+  - `tests/first-subscriber-entry-url-blocker.test.ts`
+- Updated:
+  - `deploy/runbooks/first-subscriber-launch-checklist.md`
+  - `deploy/runbooks/first-subscriber-post-invite-runbook.md`
+- No VPS, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, onboarding-UI, workflow/package, rollback, or cutover mutation was performed.
+- Next continuation point:
+  - use the corrected authenticated `wf-api` board URL for the next first-subscriber stand-in check
+  - prove the subscriber session acquisition path before treating the corrected URL as a complete handoff
+  - if auth/session handoff still blocks entry after using the corrected URL, open the next smallest auth-entry blocker phase
+  - keep `api.spyderbyte.cloud` as operator-only deferred cutover
+
 - Recorded the first-subscriber post-invite observation template.
 - GitNexus preflight was current at commit `10321b0`; `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported no changes before edits.
 - Sonnet was consulted in headless mode for consideration only and was not given VPS access. Sonnet recommended adding the observation template before the invite so operators do not improvise blocker, rollback, or go/no-go recording under launch pressure.

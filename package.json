@@ -18,6 +18,7 @@
     "prove:stage-live": "node scripts/prove-stage-live-deployment.mjs",
     "prove:public-launch-host": "node scripts/prove-public-launch-host.mjs",
     "prove:stage-live-native-execution": "node scripts/prove-stage-live-native-execution.mjs",
+    "repair:openai-device-provider-binding": "node scripts/repair-openai-device-provider-binding.mjs",
     "prove:stage-operator-controls": "node scripts/prove-stage-operator-controls.mjs",
     "prove:stage-stability": "node scripts/prove-stage-live-stability.mjs",
     "seed:demo": "node scripts/seed-wfpc-demo.mjs",

@@ -1,3 +1,8 @@
+import { spawn } from "node:child_process";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import type { RuntimeProviderExecutionBinding } from "./runtime-provider-execution.js";
 import type { HarnessWorkerExecutionEnvelope } from "../harness/worker-executor.js";
 import { buildWorkerPromptContextLines } from "../worker/native-prompt-context.js";
@@ -14,6 +19,8 @@ export class NativeOpenAIExecutionError extends Error {
   constructor(
     readonly reason:
       | "provider_kind_unsupported"
+      | "codex_subscription_auth_missing"
+      | "codex_subscription_failed"
       | "secret_missing"
       | "request_failed"
       | "response_invalid",
@@ -28,12 +35,25 @@ export class NativeOpenAIExecutionError extends Error {
   }
 }
 
+export type CodexSubscriptionTextRunner = (input: {
+  prompt: string;
+  maxOutputTokens?: number;
+  preserveStructuredOutput?: boolean;
+  codexHome: string;
+  authStateRef: string;
+}) => Promise<{
+  outputText: string;
+  model: string;
+}>;
+
 export function createNativeOpenAITextGenerator(options?: {
   fetch?: typeof fetch;
   model?: string;
+  codexSubscriptionTextRunner?: CodexSubscriptionTextRunner;
 }) {
   const fetchImpl = options?.fetch ?? globalThis.fetch;
   const model = options?.model ?? DEFAULT_NATIVE_OPENAI_MODEL;
+  const codexSubscriptionTextRunner = options?.codexSubscriptionTextRunner ?? createCodexCliSubscriptionTextRunner();
 
   return {
     async generateText(input: {
@@ -45,6 +65,51 @@ export function createNativeOpenAITextGenerator(options?: {
       outputText: string;
       model: string;
     }> {
+      if (input.binding.providerKind === "openai_chatgpt_codex_subscription") {
+        const codexHome = readRequiredMetadataString(input.binding.metadata, "codexHome");
+        const authStateRef = readRequiredMetadataString(input.binding.metadata, "authStateRef");
+
+        if (!codexHome || !authStateRef) {
+          throw new NativeOpenAIExecutionError(
+            "codex_subscription_auth_missing",
+            "Native OpenAI Codex subscription execution requires an isolated codexHome and opaque authStateRef metadata."
+          );
+        }
+
+        try {
+          const generated = await codexSubscriptionTextRunner({
+            prompt: input.prompt,
+            codexHome,
+            authStateRef,
+            ...(typeof input.maxOutputTokens === "number" ? { maxOutputTokens: input.maxOutputTokens } : {}),
+            ...(typeof input.preserveStructuredOutput === "boolean" ? { preserveStructuredOutput: input.preserveStructuredOutput } : {})
+          });
+          const outputText = input.preserveStructuredOutput
+            ? generated.outputText.trim()
+            : normalizeOutputTextAscii(generated.outputText);
+
+          if (!outputText) {
+            throw new NativeOpenAIExecutionError(
+              "response_invalid",
+              "Native OpenAI Codex subscription execution returned no text output."
+            );
+          }
+
+          return {
+            outputText,
+            model: generated.model
+          };
+        } catch (error) {
+          if (error instanceof NativeOpenAIExecutionError) {
+            throw error;
+          }
+          throw new NativeOpenAIExecutionError(
+            "codex_subscription_failed",
+            `Native OpenAI Codex subscription execution failed: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      }
+
       if (input.binding.providerKind !== "openai_api" && input.binding.providerKind !== "openai") {
         throw new NativeOpenAIExecutionError(
           "provider_kind_unsupported",
@@ -143,6 +208,106 @@ export function createNativeOpenAITextGenerator(options?: {
   };
 }
 
+export function createCodexCliSubscriptionTextRunner(options?: {
+  command?: string;
+  timeoutMs?: number;
+  env?: NodeJS.ProcessEnv;
+}): CodexSubscriptionTextRunner {
+  const command = options?.command ?? "codex";
+  const timeoutMs = options?.timeoutMs ?? 120_000;
+  const baseEnv = options?.env ?? process.env;
+
+  return async ({ prompt, codexHome }) => {
+    // authStateRef is validated before this point; Codex reads the selected auth state from CODEX_HOME.
+    const tempDir = await mkdtemp(join(tmpdir(), "wf-codex-subscription-"));
+    const outputPath = join(tempDir, "last-message.txt");
+
+    try {
+      const outputText = await new Promise<string>((resolve, reject) => {
+        const env: NodeJS.ProcessEnv = {
+          ...baseEnv,
+          CODEX_HOME: codexHome
+        };
+        delete env.OPENAI_API_KEY;
+
+        const child = spawn(
+          command,
+          [
+            "exec",
+            "--skip-git-repo-check",
+            "--ephemeral",
+            "--ignore-user-config",
+            "--ignore-rules",
+            "--color",
+            "never",
+            "--output-last-message",
+            outputPath,
+            "-"
+          ],
+          {
+            cwd: tempDir,
+            env,
+            stdio: ["pipe", "pipe", "pipe"]
+          }
+        );
+
+        let stdout = "";
+        let stderr = "";
+        let settled = false;
+        const timeout = setTimeout(() => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          child.kill("SIGKILL");
+          reject(new Error(`Codex subscription execution timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+
+        child.stdout.on("data", (chunk) => {
+          stdout += String(chunk);
+        });
+        child.stderr.on("data", (chunk) => {
+          stderr += String(chunk);
+        });
+        child.on("error", (error) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          clearTimeout(timeout);
+          reject(error);
+        });
+        child.on("exit", async (code) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          clearTimeout(timeout);
+          if (code !== 0) {
+            reject(new Error(stderr.trim() || `codex exec exited with code ${code ?? "unknown"}`));
+            return;
+          }
+
+          try {
+            resolve((await readFile(outputPath, "utf8")).trim() || stdout.trim());
+          } catch {
+            resolve(stdout.trim());
+          }
+        });
+
+        child.stdin.end(prompt);
+      });
+
+      return {
+        outputText,
+        model: "openai_chatgpt_codex_subscription"
+      };
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  };
+}
+
 function buildLanePrompt(input: {
   workflowId: string;
   executionEnvelope: HarnessWorkerExecutionEnvelope;
@@ -157,6 +322,11 @@ function buildLanePrompt(input: {
       executionEnvelope: input.executionEnvelope
     })
   ].join("\n");
+}
+
+function readRequiredMetadataString(metadata: Record<string, unknown>, key: string): string {
+  const value = metadata[key];
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : "";
 }
 
 function extractOutputText(value: unknown): string {

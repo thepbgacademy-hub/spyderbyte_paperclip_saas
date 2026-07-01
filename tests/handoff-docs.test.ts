@@ -9,6 +9,7 @@ const latestPhase = handoff.split("## Latest Phase")[1]?.split("## Key Design Co
 const latestPhaseCurrentBlock = latestPhase.trimStart().split(/\r?\n\r?\n/)[0] ?? "";
 const todo = readFileSync("wf-harness/TODO.md", "utf8");
 const currentNextSlice = todo.split("## Current Next Slice")[1]?.split("## Historical Next Slice Notes")[0] ?? "";
+const firstSubscriberLaunchChecklist = readFileSync("deploy/runbooks/first-subscriber-launch-checklist.md", "utf8");
 
 describe("handoff board-surface wording", () => {
   it("keeps one authoritative handoff path after the repo-noise cleanup", () => {
@@ -48,20 +49,56 @@ describe("handoff board-surface wording", () => {
     );
   });
 
-  it("records the first-subscriber post-invite observation template as latest", () => {
+  it("records the browser-harness observation as latest while preserving launch-readiness history", () => {
     expect(latestPhaseCurrentBlock).toContain(
+      "Recorded the first-subscriber browser-harness observation"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "authenticated browser session loaded the Wealth Factory board"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "native provider lane is blocked by HTTP `401`"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "OpenAI device/Codex subscription provider binding"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "`audit/2026-06-30/first-subscriber-browser-harness-observation.json`"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "--confirm-codex-home-ready"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "remains fail-closed in this slice"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "wfpc.package_provider_requirements"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "incomplete `openai_chatgpt_codex_subscription` rows"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "must not mutate existing `workflow_runs`"
+    );
+    expect(latestPhase).toContain(
+      "Recorded the first-subscriber entry URL blocker and correction"
+    );
+    expect(latestPhase).toContain(
+      "apex/www `/board` returned `404`"
+    );
+    expect(latestPhase).toContain(
+      "https://wf-api.spyderbyte.cloud/board?workflowId=wf_connect_first_workflow"
+    );
+    expect(latestPhase).toContain(
+      "`audit/2026-06-30/first-subscriber-entry-url-blocker.json`"
+    );
+    expect(latestPhase).toContain(
       "Recorded the first-subscriber post-invite observation template"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "subscriber invite has not been performed by this repo phase"
     );
-    expect(latestPhaseCurrentBlock).toContain(
-      "No VPS, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, dashboard-visual, onboarding-UI, workflow/package, rollback, or cutover mutation was performed"
-    );
-    expect(latestPhaseCurrentBlock).toContain(
-      "operator sends the first-subscriber invite out of band"
-    );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "`audit/2026-06-30/first-subscriber-post-invite-observation-template.json`"
     );
     expect(latestPhase).toContain(
@@ -106,6 +143,21 @@ describe("handoff board-surface wording", () => {
     expect(latestPhase).toContain(
       "Closed the bounded local operator-controls integration proof harness"
     );
+  });
+
+  it("keeps the OpenAI device provider binding gate explicit before live repair execute", () => {
+    expect(firstSubscriberLaunchChecklist).toContain("## OpenAI Device Provider Binding Gate");
+    expect(firstSubscriberLaunchChecklist).toContain("tenant-isolated `CODEX_HOME`");
+    expect(firstSubscriberLaunchChecklist).toContain("non-secret smoke prompt");
+    expect(firstSubscriberLaunchChecklist).toContain("Current execute mode still fails closed");
+    expect(firstSubscriberLaunchChecklist).toContain("workflow provider requirement seam");
+    expect(firstSubscriberLaunchChecklist).toContain("Do not treat the existing `openai_api`-bound run as proof");
+    expect(firstSubscriberLaunchChecklist).toContain("must not mutate existing `workflow_runs`");
+    expect(currentNextSlice).toContain("Keep repair execute mode fail-closed");
+    expect(currentNextSlice).toContain("`wfpc.package_provider_requirements`");
+    expect(currentNextSlice).toContain("Skip incomplete `openai_chatgpt_codex_subscription` rows");
+    expect(currentNextSlice).toContain("no mutation of existing `workflow_runs`");
+    expect(currentNextSlice).toContain("Preserve BYOK/API-provider lanes");
   });
 
   it("keeps the current next-slice section pointed at completed bounded launch-readiness slices", () => {

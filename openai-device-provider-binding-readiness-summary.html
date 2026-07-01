@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenAI Device Provider Binding Readiness Summary</title>
+    <style>
+      :root {
+        --ink: #17211a;
+        --muted: #5d6b61;
+        --paper: #f7f3ea;
+        --card: #fffaf0;
+        --line: #d7c9ac;
+        --accent: #176b52;
+        --warn: #9b5b1d;
+      }
+      body {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(23, 107, 82, 0.18), transparent 32rem),
+          linear-gradient(135deg, #f8f1df 0%, #eef4e8 100%);
+      }
+      main {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 48px 24px;
+      }
+      header {
+        border-bottom: 2px solid var(--line);
+        margin-bottom: 28px;
+        padding-bottom: 22px;
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: clamp(2rem, 4vw, 4rem);
+        line-height: 0.95;
+      }
+      h2 {
+        margin: 0 0 12px;
+        color: var(--accent);
+      }
+      p {
+        line-height: 1.55;
+      }
+      .deck {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      }
+      .card {
+        background: rgba(255, 250, 240, 0.9);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: 0 16px 36px rgba(63, 49, 23, 0.08);
+        padding: 20px;
+      }
+      .badge {
+        display: inline-block;
+        border: 1px solid var(--accent);
+        border-radius: 999px;
+        color: var(--accent);
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        padding: 4px 10px;
+        text-transform: uppercase;
+      }
+      code {
+        background: #efe6d2;
+        border-radius: 6px;
+        padding: 1px 5px;
+      }
+      ul {
+        padding-left: 20px;
+      }
+      li {
+        margin: 8px 0;
+      }
+      a {
+        color: var(--accent);
+        font-weight: 700;
+      }
+      .warning {
+        border-color: rgba(155, 91, 29, 0.45);
+      }
+      .warning h2 {
+        color: var(--warn);
+      }
+      footer {
+        margin-top: 28px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <span class="badge">Wealth Factory Launch Readiness</span>
+        <h1>OpenAI Device Provider Binding Guard</h1>
+        <p>
+          This phase kept the first-subscriber launch lane bounded: it corrected the native OpenAI device/Codex subscription path,
+          preserved BYOK/API fallback lanes, and made the live provider-binding repair stay fail-closed until the VPS worker lane has a verified tenant-isolated Codex auth home.
+        </p>
+      </header>
+
+      <section class="deck">
+        <article class="card">
+          <h2>What Changed</h2>
+          <ul>
+            <li>Added native text generation support for <code>openai_chatgpt_codex_subscription</code> through an isolated Codex CLI runner.</li>
+            <li>Preferred complete subscription rows over legacy <code>openai_api</code>, while skipping incomplete subscription placeholders so valid API-key fallback still works.</li>
+            <li>Added <code>npm run repair:openai-device-provider-binding</code> as a dry-run-first operator command.</li>
+            <li>Recorded sanitized live evidence that the current controlled lane is still bound to <code>openai_api</code>.</li>
+          </ul>
+        </article>
+
+        <article class="card warning">
+          <h2>Guardrails</h2>
+          <ul>
+            <li>Repair execute mode remains blocked even after <code>--confirm-codex-home-ready</code> until a later dedicated DB-mutation phase.</li>
+            <li>The future repair contract includes <code>wfpc.package_provider_requirements</code> so fresh runs do not fail entitlement before credentials bind.</li>
+            <li>The repair lane must not mutate existing <code>workflow_runs</code>, Paperclip state, DNS/Caddy/shared-host routing, or BYOK/API-provider lanes.</li>
+            <li>Do not retry the stale <code>openai_api</code>-bound run as proof of device auth; start a fresh proof run after repair.</li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <h2>Review And Seams</h2>
+          <ul>
+            <li>GitNexus preflight/postflight: current at <code>f513872</code>, medium risk, affected flows limited to <code>GenerateLaneResult</code> through native OpenAI error/safe-read paths.</li>
+            <li>Real subagents used: Turing explored the phase boundary; Hooke reviewed the patch and found close-blockers that were corrected.</li>
+            <li>Sonnet was consulted twice in headless mode as read-only advisor/reviewer, with no VPS access.</li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <h2>Verification</h2>
+          <ul>
+            <li><code>npx vitest run</code> focused phase suite: 7 files, 32 tests passed.</li>
+            <li><code>npm run build</code>: passed.</li>
+            <li><code>git diff --check</code>: passed.</li>
+          </ul>
+        </article>
+      </section>
+
+      <footer class="card">
+        <h2>Files Updated Or Created</h2>
+        <ul>
+          <li><a href="src/providers/native-openai-text.ts">src/providers/native-openai-text.ts</a></li>
+          <li><a href="src/providers/runtime-provider-resolution.ts">src/providers/runtime-provider-resolution.ts</a></li>
+          <li><a href="scripts/repair-openai-device-provider-binding.mjs">scripts/repair-openai-device-provider-binding.mjs</a></li>
+          <li><a href="tests/native-openai-text.test.ts">tests/native-openai-text.test.ts</a></li>
+          <li><a href="tests/runtime-provider-resolution.test.ts">tests/runtime-provider-resolution.test.ts</a></li>
+          <li><a href="tests/openai-device-provider-binding-repair-script.test.ts">tests/openai-device-provider-binding-repair-script.test.ts</a></li>
+          <li><a href="tests/first-subscriber-live-provider-binding-readonly.test.ts">tests/first-subscriber-live-provider-binding-readonly.test.ts</a></li>
+          <li><a href="tests/first-subscriber-browser-harness-observation.test.ts">tests/first-subscriber-browser-harness-observation.test.ts</a></li>
+          <li><a href="tests/first-subscriber-entry-url-blocker.test.ts">tests/first-subscriber-entry-url-blocker.test.ts</a></li>
+          <li><a href="tests/handoff-docs.test.ts">tests/handoff-docs.test.ts</a></li>
+          <li><a href="deploy/runbooks/first-subscriber-launch-checklist.md">deploy/runbooks/first-subscriber-launch-checklist.md</a></li>
+          <li><a href="deploy/runbooks/first-subscriber-post-invite-runbook.md">deploy/runbooks/first-subscriber-post-invite-runbook.md</a></li>
+          <li><a href="wf-harness/HANDOFF.md">wf-harness/HANDOFF.md</a></li>
+          <li><a href="wf-harness/TODO.md">wf-harness/TODO.md</a></li>
+          <li><a href="audit/2026-06-30/first-subscriber-live-provider-binding-readonly.json">audit/2026-06-30/first-subscriber-live-provider-binding-readonly.json</a></li>
+          <li><a href="audit/2026-06-30/first-subscriber-browser-harness-observation.json">audit/2026-06-30/first-subscriber-browser-harness-observation.json</a></li>
+          <li><a href="audit/2026-06-30/first-subscriber-entry-url-blocker.json">audit/2026-06-30/first-subscriber-entry-url-blocker.json</a></li>
+          <li><a href="first-subscriber-entry-url-blocker-summary.html">first-subscriber-entry-url-blocker-summary.html</a></li>
+        </ul>
+      </footer>
+    </main>
+  </body>
+</html>

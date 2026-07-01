@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>First Subscriber Entry URL Blocker Summary</title>
+    <style>
+      :root {
+        --ink: #15221d;
+        --muted: #60716b;
+        --line: #d8e4dc;
+        --paper: #fbf8ef;
+        --card: #ffffff;
+        --accent: #24745a;
+        --warn: #9a5c00;
+      }
+      body {
+        margin: 0;
+        background: radial-gradient(circle at top left, #e5f2e9, transparent 35%), var(--paper);
+        color: var(--ink);
+        font-family: Georgia, "Times New Roman", serif;
+      }
+      main {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 48px 24px;
+      }
+      header {
+        border-bottom: 2px solid var(--line);
+        margin-bottom: 24px;
+        padding-bottom: 18px;
+      }
+      h1 {
+        font-size: 2.2rem;
+        margin: 0 0 8px;
+      }
+      h2 {
+        margin: 0 0 12px;
+      }
+      .subtitle {
+        color: var(--muted);
+        font-size: 1.05rem;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 16px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: 0 12px 28px rgba(21, 34, 29, 0.08);
+        padding: 18px;
+      }
+      .badge {
+        display: inline-block;
+        border-radius: 999px;
+        background: #e0f0e8;
+        color: var(--accent);
+        font-weight: 700;
+        padding: 4px 10px;
+      }
+      .warn {
+        color: var(--warn);
+        font-weight: 700;
+      }
+      code {
+        background: #eef5f0;
+        border-radius: 6px;
+        padding: 2px 5px;
+      }
+      ul {
+        padding-left: 20px;
+      }
+      a {
+        color: var(--accent);
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <span class="badge">Bounded Local Fix</span>
+        <h1>First Subscriber Entry URL Blocker</h1>
+        <p class="subtitle">Documented and corrected the handoff path that sent the stand-in subscriber to a dead apex <code>/board</code> route.</p>
+      </header>
+
+      <section class="grid">
+        <article class="card">
+          <h2>What Failed</h2>
+          <p>The stand-in used <code>https://spyderbyte.cloud/board?workflowId=wf_connect_first_workflow</code> and received <span class="warn">HTTP 404</span>. The <code>www</code> board path also finalized to the invalid apex route.</p>
+        </article>
+        <article class="card">
+          <h2>Correction</h2>
+          <p>The first-subscriber board entry is now pinned to <code>https://wf-api.spyderbyte.cloud/board?workflowId=wf_connect_first_workflow</code>. That path is intentionally auth-gated.</p>
+        </article>
+        <article class="card">
+          <h2>Guardrails</h2>
+          <p>No VPS, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, onboarding UI, workflow/package, rollback, or cutover mutation was performed.</p>
+        </article>
+        <article class="card">
+          <h2>Browser Harness</h2>
+          <p>The sandbox Chrome flow reached the authenticated Wealth Factory board. The next visible blocker is provider execution: the live lane returned <span class="warn">HTTP 401</span> and must be corrected through the OpenAI device/Codex subscription binding, not a BYOK API-key assumption.</p>
+        </article>
+      </section>
+
+      <section class="card" style="margin-top: 16px;">
+        <h2>Verification</h2>
+        <ul>
+          <li>Red test failed first for the missing blocker artifact/docs.</li>
+          <li>Focused suite passed: <code>5</code> files, <code>24</code> tests.</li>
+          <li>Full suite passed before final doc-note follow-up: <code>158</code> files, <code>1347</code> tests, <code>14</code> skipped.</li>
+          <li><code>npm run build</code> passed after the final patch.</li>
+          <li>Browser harness proof loaded the board with a short-lived local runtime session cookie and captured the subscription-backed provider binding blocker.</li>
+          <li>Native provider tests now prove <code>openai_chatgpt_codex_subscription</code> routes through a Codex device-auth runner without calling the API-key fetch path.</li>
+          <li>Resolver tests now prove the subscription-backed OpenAI lane is preferred over legacy <code>openai_api</code> when both can satisfy text generation.</li>
+          <li>Codex CLI device-auth smoke returned <code>OK</code> using local subscription/device settings.</li>
+          <li>Sonnet reviewed the entry-path phase and agreed runtime/DNS should not be touched; it flagged the auth-session acquisition proof, which the browser harness then exercised.</li>
+        </ul>
+      </section>
+
+      <section class="card" style="margin-top: 16px;">
+        <h2>Next Step</h2>
+        <p>Repair or create the tenant OpenAI device/Codex subscription provider binding for the controlled first-subscriber lane, then start or rebind a fresh proof run. Do not keep retrying the existing <code>openai_api</code>-bound run and expect device auth to be used.</p>
+      </section>
+
+      <section class="card" style="margin-top: 16px;">
+        <h2>Updated Files</h2>
+        <ul>
+          <li><a href="audit/2026-06-30/first-subscriber-entry-url-blocker.json">audit/2026-06-30/first-subscriber-entry-url-blocker.json</a></li>
+          <li><a href="audit/2026-06-30/first-subscriber-browser-harness-observation.json">audit/2026-06-30/first-subscriber-browser-harness-observation.json</a></li>
+          <li><a href="audit/2026-06-30/first-subscriber-live-provider-binding-readonly.json">audit/2026-06-30/first-subscriber-live-provider-binding-readonly.json</a></li>
+          <li><a href="deploy/runbooks/first-subscriber-launch-checklist.md">deploy/runbooks/first-subscriber-launch-checklist.md</a></li>
+          <li><a href="deploy/runbooks/first-subscriber-post-invite-runbook.md">deploy/runbooks/first-subscriber-post-invite-runbook.md</a></li>
+          <li><a href="tests/first-subscriber-browser-harness-observation.test.ts">tests/first-subscriber-browser-harness-observation.test.ts</a></li>
+          <li><a href="tests/first-subscriber-live-provider-binding-readonly.test.ts">tests/first-subscriber-live-provider-binding-readonly.test.ts</a></li>
+          <li><a href="tests/first-subscriber-entry-url-blocker.test.ts">tests/first-subscriber-entry-url-blocker.test.ts</a></li>
+          <li><a href="tests/first-subscriber-post-invite-observation.test.ts">tests/first-subscriber-post-invite-observation.test.ts</a></li>
+          <li><a href="tests/handoff-docs.test.ts">tests/handoff-docs.test.ts</a></li>
+          <li><a href="tests/native-openai-text.test.ts">tests/native-openai-text.test.ts</a></li>
+          <li><a href="tests/runtime-provider-resolution.test.ts">tests/runtime-provider-resolution.test.ts</a></li>
+          <li><a href="src/providers/native-openai-text.ts">src/providers/native-openai-text.ts</a></li>
+          <li><a href="src/providers/runtime-provider-resolution.ts">src/providers/runtime-provider-resolution.ts</a></li>
+          <li><a href="wf-harness/HANDOFF.md">wf-harness/HANDOFF.md</a></li>
+          <li><a href="wf-harness/TODO.md">wf-harness/TODO.md</a></li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

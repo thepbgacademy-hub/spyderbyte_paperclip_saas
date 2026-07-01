@@ -135,6 +135,36 @@ This file tracks the new harness subproject only.
 
 ## Current Next Slice
 
+- [x] Record the browser-harness first-subscriber observation.
+  - [x] Launch sandbox Chrome through `E:/REPOS 2/browser-harness`.
+  - [x] Confirm the corrected `wf-api` board URL is auth-gated when unauthenticated.
+  - [x] Mint a short-lived local runtime session cookie and load the Wealth Factory board in the sandbox browser without printing or storing the token.
+  - [x] Record the live workflow blocker at `audit/2026-06-30/first-subscriber-browser-harness-observation.json`.
+  - [x] Do not retry workflow progression until the OpenAI device/Codex subscription provider binding is repaired or confirmed.
+  - [x] Add the bounded native provider correction: subscription-backed OpenAI lanes use a Codex device-auth runner and resolver priority prefers that lane over legacy API-key OpenAI.
+  - [x] Confirm local Codex device auth with a non-secret smoke prompt before attempting any live retry.
+  - [x] Record alignment with `E:/REPOS 2/openai-subscription-device-connect-and-provider-borrowing.md`: ignore PWA-specific references from that note and retain the relevant OpenAI device connector pattern for Wealth Factory.
+  - [x] Run a read-only live provider-binding check for the controlled first-subscriber lane and record that the current live run remains bound to `openai_api`, not the OpenAI device/Codex subscription lane.
+  - [x] Keep OpenAI device/Codex subscription auth as the preferred lane for this operator-controlled launch proof.
+  - [x] Add a dry-run-first operator command for the OpenAI device provider binding repair: `npm run repair:openai-device-provider-binding`.
+  - [x] Keep repair execute mode fail-closed in this slice, even after `--confirm-codex-home-ready`, until a later dedicated DB-mutation phase wires and reviews the live repair.
+  - [x] Record the future repair mutation contract as transaction-scoped and limited to the intended tenant/workflow/provider binding plus `wfpc.package_provider_requirements`, with no mutation of existing `workflow_runs`, Paperclip state, shared-host routing, or BYOK/API-provider lanes.
+  - [x] Skip incomplete `openai_chatgpt_codex_subscription` rows during runtime provider resolution so placeholder device rows cannot block valid API-key fallback providers.
+  - [ ] Create or repair the live OpenAI device/Codex subscription connection with `codexHome` / `authStateRef` metadata, then start or rebind a fresh proof run rather than retrying the old `openai_api`-bound run.
+  - [ ] Preserve BYOK/API-provider lanes for users who choose Anthropic, Gemini/OpenRouter, OpenAI API keys, or other supported API accounts.
+  - [ ] Continue using the browser harness for first-hand login/workflow testing, cataloging each action and blocker before making adjustments.
+  - [x] Keep this observation non-destructive for live infrastructure: no VPS, Docker, Caddy, DNS, database, worker, queue, seed, scheduler, export, dashboard-visual, provider-credential, workflow-family, package-overlay, rollback, or operator mutation.
+
+- [x] Record and correct the first-subscriber entry URL blocker.
+  - [x] Run the required GitNexus preflight first. On June 30, 2026 `gitnexus status` was current at commit `f513872`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported no changes before edits.
+  - [x] Consult Sonnet before implementation; Sonnet recommended a bounded handoff/documentation correction rather than DNS/Caddy, runtime routing, onboarding UI, or cutover work.
+  - [x] Record the sanitized blocker evidence at `audit/2026-06-30/first-subscriber-entry-url-blocker.json`.
+  - [x] Forbid apex/www `/board` as a first-subscriber handoff URL.
+  - [x] Pin the first-subscriber board entry to `https://wf-api.spyderbyte.cloud/board?workflowId=wf_connect_first_workflow`.
+  - [x] Capture the remaining operational gap: the corrected `wf-api` board URL is auth-gated, so the next stand-in check must prove the subscriber session acquisition path.
+  - [x] Do not turn this correction into DNS/Caddy changes, onboarding UI, runtime routing changes, workflow/package expansion, or `api.spyderbyte.cloud` cutover.
+  - [x] Keep the phase non-destructive: no VPS, Docker, Caddy, DNS, database, runtime, worker, queue, seed, scheduler, export, dashboard-visual, workflow-family, package-overlay, rollback, or operator mutation.
+
 - [x] Record the first-subscriber post-invite observation template.
   - [x] Run the required GitNexus preflight first. On June 30, 2026 `gitnexus status` was current at commit `10321b0`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported no changes before edits.
   - [x] Consult Sonnet and a local explorer subagent before implementation; Sonnet recommended a pre-invite observation template, while the explorer confirmed no current launch-critical blocker exists and warned not to manufacture one from old evidence.

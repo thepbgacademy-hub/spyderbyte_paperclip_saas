@@ -1,0 +1,55 @@
+{
+  "checkedAt": "2026-06-30T19:05:00.000Z",
+  "phase": "first_subscriber_entry_url_blocker_documented",
+  "ok": true,
+  "verdict": "blocker_documented_and_handoff_corrected",
+  "launchLane": "wf-api.spyderbyte.cloud",
+  "correctedEntry": {
+    "subscriberBoardUrl": "https://wf-api.spyderbyte.cloud/board?workflowId=wf_connect_first_workflow",
+    "requiresAuthenticatedSession": true,
+    "portalOriginBoardRouteAvailable": false
+  },
+  "observedBlockedUrls": [
+    {
+      "url": "https://spyderbyte.cloud/board?workflowId=wf_connect_first_workflow",
+      "status": 404,
+      "interpretation": "invalid_first_subscriber_entry_path"
+    },
+    {
+      "url": "https://www.spyderbyte.cloud/board?workflowId=wf_connect_first_workflow",
+      "status": 404,
+      "interpretation": "invalid_first_subscriber_entry_path",
+      "note": "www finalized to the apex board path during the manual check."
+    },
+    {
+      "url": "https://wf-api.spyderbyte.cloud/board?workflowId=wf_connect_first_workflow",
+      "status": 401,
+      "interpretation": "valid_authenticated_first_subscriber_entry_path"
+    },
+    {
+      "url": "https://wf-api.spyderbyte.cloud/api/harness/board?workflowId=wf_connect_first_workflow",
+      "status": 403,
+      "interpretation": "expected_auth_gated_board_api_without_session"
+    }
+  ],
+  "scope": {
+    "vpsAccessed": false,
+    "mutationPerformed": false,
+    "dnsCaddyChanged": false,
+    "databaseChanged": false,
+    "runtimeChanged": false,
+    "deploymentChanged": false,
+    "workerChanged": false,
+    "schedulerChanged": false,
+    "exportReplayChanged": false,
+    "onboardingUiChanged": false,
+    "workflowPackageExpanded": false,
+    "apiCutoverChanged": false
+  },
+  "notes": [
+    "The first-subscriber handoff must use the authenticated wf-api board entry, not apex or www board paths.",
+    "The apex/www 404 is a launch handoff documentation blocker, not proof that the Wealth Factory lane is unavailable.",
+    "The wf-api board path returning 401 without a session and the board API returning 403 without a session are expected auth-gated behavior.",
+    "This phase corrected local handoff documentation only and did not mutate live infrastructure."
+  ]
+}

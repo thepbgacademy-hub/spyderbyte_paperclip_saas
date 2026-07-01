@@ -1,0 +1,69 @@
+{
+  "checkedAt": "2026-06-30T22:55:00.000Z",
+  "phase": "first_subscriber_live_provider_binding_readonly_check",
+  "ok": true,
+  "scope": {
+    "vpsAccessed": true,
+    "accessMode": "read_only_sql_via_wf_stage_api_container",
+    "liveInfrastructureMutated": false,
+    "databaseMutated": false,
+    "providerCredentialMutated": false,
+    "browserCookieSet": false,
+    "dnsCaddyChanged": false,
+    "workflowProgressionRetried": false
+  },
+  "liveFinding": {
+    "tenantId": "22222222-2222-4222-8222-222222222222",
+    "workflowId": "wf_connect_first_workflow",
+    "activeProviderConnections": [
+      {
+        "providerKind": "openai_api",
+        "label": "OpenAI",
+        "metadataKeys": [
+          "project"
+        ],
+        "hasCodexHomeMetadata": false,
+        "hasAuthStateRefMetadata": false
+      }
+    ],
+    "recentRunBoundProviderKinds": [
+      {
+        "runId": "eb420710-c786-4801-b54d-5c3adb39f0fc",
+        "status": "queued",
+        "boundProviderKinds": [
+          "openai_api"
+        ]
+      },
+      {
+        "runId": "2705da12-8e7b-4fee-b887-e521d340026f",
+        "status": "failed",
+        "boundProviderKinds": [
+          "openai_api"
+        ]
+      },
+      {
+        "runId": "0d108dc1-78ae-4713-bcec-a6274d489ee8",
+        "status": "running",
+        "boundProviderKinds": [
+          "openai_api"
+        ]
+      }
+    ]
+  },
+  "conclusion": {
+    "blocker": "live_stage_is_still_bound_to_openai_api_not_openai_device_codex_subscription",
+    "whyThe401MakesSense": "The live controlled first-subscriber lane is bound to the legacy OpenAI API provider kind, and the active provider connection does not expose subscription auth metadata keys.",
+    "nextAction": "create_or_repair_the_openai_device_codex_subscription_connection_for_the_controlled_lane_then_start_or_rebind_a_fresh_proof_run",
+    "doNotDo": [
+      "Do not keep retrying the existing bound openai_api run and expect the device connector to be used.",
+      "Do not replace BYOK/API-provider support for users who choose Anthropic, Gemini/OpenRouter, OpenAI API keys, or other API accounts.",
+      "Do not mutate unrelated VPS containers, DNS, Caddy, Paperclip lanes, or non-Wealth-Factory provider rows."
+    ]
+  },
+  "sanitized": {
+    "containsSecrets": false,
+    "containsRawProviderCredential": false,
+    "containsRuntimeSessionToken": false,
+    "containsSshOrDatabaseCredential": false
+  }
+}

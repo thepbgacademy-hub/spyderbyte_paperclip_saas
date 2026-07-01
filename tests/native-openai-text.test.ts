@@ -3,6 +3,66 @@ import { describe, expect, it, vi } from "vitest";
 import { createNativeOpenAITextGenerator, NativeOpenAIExecutionError } from "../src/providers/native-openai-text.js";
 
 describe("native OpenAI text generator", () => {
+  it("uses the Codex device subscription runner for subscription-backed OpenAI lanes without API keys", async () => {
+    const fetch = vi.fn();
+    const codexSubscriptionTextRunner = vi.fn().mockResolvedValue({
+      outputText: "Subscription-backed execution completed the bounded lane.",
+      model: "codex-subscription"
+    });
+    const generator = createNativeOpenAITextGenerator({
+      fetch: fetch as unknown as typeof globalThis.fetch,
+      codexSubscriptionTextRunner
+    });
+
+    await expect(
+      generator.generateText({
+        binding: {
+          capability: "text_generation",
+          providerKind: "openai_chatgpt_codex_subscription",
+          label: "OpenAI Codex",
+          secretRef: "wf_secret_codex",
+          metadata: { codexHome: "E:/wf-auth/tenant-1/codex", authStateRef: "codex-auth-state" },
+          secretValues: {}
+        },
+        prompt: "Return one bounded lane summary."
+      })
+    ).resolves.toEqual({
+      outputText: "Subscription-backed execution completed the bounded lane.",
+      model: "codex-subscription"
+    });
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(codexSubscriptionTextRunner).toHaveBeenCalledWith({
+      prompt: "Return one bounded lane summary.",
+      codexHome: "E:/wf-auth/tenant-1/codex",
+      authStateRef: "codex-auth-state"
+    });
+  });
+
+  it("fails closed when a Codex subscription binding has no isolated auth home", async () => {
+    const generator = createNativeOpenAITextGenerator({
+      fetch: vi.fn() as unknown as typeof globalThis.fetch,
+      codexSubscriptionTextRunner: vi.fn()
+    });
+
+    await expect(
+      generator.generateText({
+        binding: {
+          capability: "text_generation",
+          providerKind: "openai_chatgpt_codex_subscription",
+          label: "OpenAI Codex",
+          secretRef: "wf_secret_codex",
+          metadata: {},
+          secretValues: {}
+        },
+        prompt: "Return one bounded lane summary."
+      })
+    ).rejects.toMatchObject({
+      name: "NativeOpenAIExecutionError",
+      reason: "codex_subscription_auth_missing"
+    } satisfies Partial<NativeOpenAIExecutionError>);
+  });
+
   it("calls the Responses API with the bound api key and optional project header", async () => {
     const fetch = vi.fn().mockResolvedValue({
       ok: true,

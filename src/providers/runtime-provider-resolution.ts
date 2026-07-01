@@ -31,11 +31,11 @@ export class RuntimeProviderResolutionError extends Error {
 }
 
 const DEFAULT_PROVIDER_ORDER: readonly ProviderKind[] = [
+  "openai_chatgpt_codex_subscription",
   "openai_api",
   "anthropic_api",
   "xai_grok_api",
   "openrouter_api",
-  "openai_chatgpt_codex_subscription",
   "generic_api",
   "openai"
 ];
@@ -54,7 +54,8 @@ export function createRuntimeProviderResolver(options: {
     }): Promise<RuntimeProviderBinding[]> {
       const connections = (await options.listProviderConnections({ tenantId: input.tenantId }))
         .filter((connection) => connection.tenantId === input.tenantId)
-        .filter((connection) => connection.revokedAt == null);
+        .filter((connection) => connection.revokedAt == null)
+        .filter(isExecutableProviderConnection);
 
       return input.requiredCapabilities.map((capability) => {
         const eligible = connections.filter((connection) => connection.capabilities.includes(capability));
@@ -90,4 +91,17 @@ function choosePreferredConnection(
 function providerPriority(providerKind: ProviderKind, preferredProviderOrder: readonly ProviderKind[]): number {
   const index = preferredProviderOrder.indexOf(providerKind);
   return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+}
+
+function isExecutableProviderConnection(connection: RuntimeProviderConnection): boolean {
+  if (connection.providerKind !== "openai_chatgpt_codex_subscription") {
+    return true;
+  }
+
+  return hasNonEmptyMetadataString(connection.metadata, "codexHome") && hasNonEmptyMetadataString(connection.metadata, "authStateRef");
+}
+
+function hasNonEmptyMetadataString(metadata: Record<string, unknown>, key: string): boolean {
+  const value = metadata[key];
+  return typeof value === "string" && value.trim().length > 0;
 }

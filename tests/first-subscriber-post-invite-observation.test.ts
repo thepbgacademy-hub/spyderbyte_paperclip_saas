@@ -110,14 +110,16 @@ describe("first subscriber post-invite observation template", () => {
     expect(combined).not.toMatch(/Bearer\s+[A-Za-z0-9._-]+/);
   });
 
-  it("records the post-invite observation template as the latest phase without pretending the invite happened", () => {
+  it("records the post-invite observation template in handoff history without pretending the invite happened", () => {
     const latestPhaseCurrentBlock = handoff.split("## Latest Phase")[1]?.trimStart().split(/\r?\n\r?\n/)[0] ?? "";
 
-    expect(latestPhaseCurrentBlock).toContain("Recorded the first-subscriber post-invite observation template");
-    expect(latestPhaseCurrentBlock).toContain("Sonnet was consulted in headless mode");
-    expect(latestPhaseCurrentBlock).toContain("A local explorer subagent independently confirmed");
-    expect(latestPhaseCurrentBlock).toContain("subscriber invite has not been performed by this repo phase");
-    expect(latestPhaseCurrentBlock).toContain("No VPS, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, dashboard-visual, onboarding-UI, workflow/package, rollback, or cutover mutation was performed");
+    expect(latestPhaseCurrentBlock).toContain("Recorded the first-subscriber browser-harness observation");
+    expect(handoff).toContain("Recorded the first-subscriber entry URL blocker and correction");
+    expect(handoff).toContain("Recorded the first-subscriber post-invite observation template");
+    expect(handoff).toContain("Sonnet was consulted in headless mode");
+    expect(handoff).toContain("A local explorer subagent independently confirmed");
+    expect(handoff).toContain("subscriber invite has not been performed by this repo phase");
+    expect(handoff).toContain("No VPS, Docker, Caddy, DNS, database, runtime, worker, scheduler, export, dashboard-visual, onboarding-UI, workflow/package, rollback, or cutover mutation was performed");
     expect(todo).toContain("Record the first-subscriber post-invite observation template");
     expect(todo).toContain("Do not turn this observation template into onboarding UI, rollback automation, scheduler automation, export replay, workflow/package expansion, or `api.spyderbyte.cloud` cutover.");
   });

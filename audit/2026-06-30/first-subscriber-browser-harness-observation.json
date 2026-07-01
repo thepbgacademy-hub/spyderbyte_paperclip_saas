@@ -1,0 +1,45 @@
+{
+  "checkedAt": "2026-06-30T21:30:00.000Z",
+  "phase": "first_subscriber_browser_harness_observation_recorded",
+  "ok": true,
+  "browserHarnessUsed": true,
+  "browserHarnessPath": "E:/REPOS 2/browser-harness",
+  "correctedEntryUrl": "https://wf-api.spyderbyte.cloud/board?workflowId=wf_connect_first_workflow",
+  "screenshots": {
+    "unauthenticated": "E:/REPOS 2/browser-harness/wf-entry-check.png",
+    "authenticated": "E:/REPOS 2/browser-harness/wf-authenticated-entry-check.png"
+  },
+  "observations": {
+    "unauthenticatedEntry": "returned_unauthorized_json",
+    "authenticatedEntry": "loaded_wealth_factory_board",
+    "visibleWorkflowBlocker": "native_provider_http_401",
+    "visibleWorkflowBlockerSummary": "Native execution reached the provider lane but the provider rejected the request with HTTP 401."
+  },
+  "requiredCorrection": {
+    "category": "openai_device_codex_subscription_binding",
+    "nextAction": "repair_or_bind_openai_device_codex_subscription_then_retry_unblock",
+    "cannotBeCompletedWithout": "valid_openai_device_codex_subscription_binding",
+    "notes": [
+      "The corrected board URL and browser session path are proven far enough to enter the board.",
+      "The live workflow cannot progress past native provider execution until the OpenAI device/Codex subscription provider binding is repaired or confirmed.",
+      "Do not keep retrying the workflow or unblocking the lane until the subscription-backed provider binding is corrected."
+    ]
+  },
+  "scope": {
+    "vpsAccessed": false,
+    "liveInfrastructureMutated": false,
+    "databaseMutated": false,
+    "providerCredentialMutated": false,
+    "browserCookieSet": true,
+    "runtimeChanged": false,
+    "workerChanged": false,
+    "dnsCaddyChanged": false,
+    "onboardingUiChanged": false,
+    "apiCutoverChanged": false
+  },
+  "sanitized": {
+    "containsSecrets": false,
+    "containsRuntimeSessionToken": false,
+    "containsProviderApiKey": false
+  }
+}
