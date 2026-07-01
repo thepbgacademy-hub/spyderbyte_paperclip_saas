@@ -90,7 +90,20 @@ function runRemoteReadinessCheck({ sshTarget, container, timeoutMs }) {
 }
 
 function buildRemoteCommand({ container, timeoutMs }) {
-  const dockerCommand = `docker inspect -f '{{.State.Running}}' ${shellEscape(container)} >/dev/null 2>&1 || { printf '{"ok":false,"phase":"container_not_running"}'; exit 0; }; docker exec ${shellEscape(container)} sh -lc ${shellEscape(buildContainerReadinessScript({ timeoutMs }))}`;
+  const escapedContainer = shellEscape(container);
+  const inspectScript = [
+    `inspectOutput=$(docker inspect -f '{{.State.Running}}' ${escapedContainer} 2>&1)`,
+    "inspectStatus=$?",
+    "if [ $inspectStatus -ne 0 ]; then",
+    "case \"$inspectOutput\" in",
+    "*permission*denied*|*Permission*denied*) printf '{\"ok\":false,\"phase\":\"docker_permission_denied\",\"error\":\"docker inspect permission denied\",\"mutationPerformed\":false,\"dbRowsWritten\":false,\"workflowRunsTouched\":false}'; exit 0 ;;",
+    "*Cannot*connect*Docker*daemon*|*Cannot*connect*docker*daemon*) printf '{\"ok\":false,\"phase\":\"docker_unavailable\",\"error\":\"docker inspect unavailable\",\"mutationPerformed\":false,\"dbRowsWritten\":false,\"workflowRunsTouched\":false}'; exit 0 ;;",
+    "*) printf '{\"ok\":false,\"phase\":\"container_not_running\",\"mutationPerformed\":false,\"dbRowsWritten\":false,\"workflowRunsTouched\":false}'; exit 0 ;;",
+    "esac",
+    "fi",
+    "if [ \"$inspectOutput\" != \"true\" ]; then printf '{\"ok\":false,\"phase\":\"container_not_running\",\"mutationPerformed\":false,\"dbRowsWritten\":false,\"workflowRunsTouched\":false}'; exit 0; fi"
+  ].join("\n");
+  const dockerCommand = `${inspectScript}\ndocker exec ${escapedContainer} sh -lc ${shellEscape(buildContainerReadinessScript({ timeoutMs }))}`;
   return dockerCommand;
 }
 
@@ -190,8 +203,11 @@ function scrubSensitiveText(value) {
 }
 
 function classifyRemoteFailure(value) {
-  return /docker\.sock|permission denied while trying to connect to the docker API/i.test(value)
-    ? "docker_permission_denied"
+  if (/permission denied while trying to connect to the docker API/i.test(value)) {
+    return "docker_permission_denied";
+  }
+  return /cannot connect to the docker daemon/i.test(value)
+    ? "docker_unavailable"
     : "remote_command_failed";
 }
 

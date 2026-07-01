@@ -43,9 +43,9 @@ The first harness implementation slice is now built and verified:
 - Tightened runtime provider resolution so incomplete `openai_chatgpt_codex_subscription` rows without `codexHome` and `authStateRef` cannot preempt a valid API-key provider fallback.
 - Updated the first-subscriber launch checklist with the OpenAI device provider binding gate: dry-run first, confirm worker-lane Codex readiness, repair the binding, then start a fresh proof run rather than retrying the old `openai_api`-bound run.
 - Added the bounded VPS Codex auth-home readiness proof command `npm run prove:codex-auth-home-readiness`; it defaults to dry-run without loading secret files, runs only bounded SSH/Docker/Codex readiness checks on execute, redacts raw `CODEX_HOME`/secrets, and performs no DB, workflow, DNS/Caddy, provider repair, or Paperclip mutation.
-- Ran the bounded VPS Codex auth-home readiness proof against the isolated Wealth Factory lane. Result: `container_not_running`; the proof reached the Docker host without sudo, but `wf-stage-api` is not running yet.
+- Ran the bounded VPS Codex auth-home readiness proof against the isolated Wealth Factory lane. Result: `docker_permission_denied`; the proof reached the host, but the deploy SSH user cannot inspect Docker without elevated operator access.
 - Recorded sanitized evidence at `audit/2026-06-30/vps-codex-auth-home-readiness-proof.json`. The evidence confirms no DB rows, `workflow_runs`, DNS/Caddy, provider repair, Paperclip, or launch-state mutation was performed.
-- Decision: do not proceed to OpenAI device provider binding repair execute or fresh proof-run rebind until the isolated Wealth Factory stage API lane is running, the worker/API image has Codex CLI available, and a tenant-isolated `CODEX_HOME` can pass the same readiness proof.
+- Decision: do not proceed to OpenAI device provider binding repair execute, fresh proof-run rebind, or `wf-stage-api` start/refresh until bounded Docker operator access is restored or explicitly approved, the isolated stage API lane is running, the worker/API image has Codex CLI available, and a tenant-isolated `CODEX_HOME` can pass the same readiness proof.
 - Added:
   - `audit/2026-06-30/first-subscriber-browser-harness-observation.json`
   - `tests/first-subscriber-browser-harness-observation.test.ts`

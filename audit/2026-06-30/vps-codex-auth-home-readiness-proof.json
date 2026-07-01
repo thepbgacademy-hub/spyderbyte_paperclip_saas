@@ -1,8 +1,8 @@
 {
-  "phase": "container_not_running",
+  "phase": "docker_permission_denied",
   "ok": false,
   "dryRun": false,
-  "timestamp": "2026-06-30T20:03:00.000-05:00",
+  "timestamp": "2026-06-30T20:26:00.000-05:00",
   "container": "wf-stage-api",
   "sshTarget": "deploy@[masked]",
   "codexCliChecked": false,
@@ -17,6 +17,6 @@
   "dnsCaddyChanged": false,
   "providerRepairExecuted": false,
   "paperclipTouched": false,
-  "finding": "The bounded VPS proof reached the isolated Wealth Factory Docker host without sudo, but the configured wf-stage-api container is not running yet. Codex CLI and CODEX_HOME were not checked because the proof never entered the container.",
-  "nextRequiredPhase": "Bring up or refresh only the isolated Wealth Factory stage API lane, then rerun the same Codex auth-home readiness proof before any provider binding repair execute phase."
+  "finding": "The bounded VPS proof reached the isolated Wealth Factory host, but the deploy SSH user cannot inspect Docker without elevated operator access. Codex CLI and CODEX_HOME were not checked because the proof never reached container inspection.",
+  "nextRequiredPhase": "Restore or approve bounded Docker operator access for the Wealth Factory deploy lane, then rerun the same Codex auth-home readiness proof before starting, refreshing, or repairing wf-stage-api."
 }

@@ -155,7 +155,13 @@ describe("Codex auth-home readiness proof", () => {
     const script = readFileSync(scriptPath, "utf8");
 
     expect(script).toContain("docker_permission_denied");
+    expect(script).toContain("docker_unavailable");
     expect(script).toContain("permission denied while trying to connect to the docker API");
+    expect(script).toContain("docker inspect permission denied");
+    expect(script).toContain("docker inspect unavailable");
+    expect(script).toContain("inspectStatus=$?");
+    expect(script).toContain('].join("\\n")');
+    expect(script).not.toContain("then; case");
     expect(script).toContain("classifyRemoteFailure");
   });
 
@@ -186,7 +192,7 @@ describe("Codex auth-home readiness proof", () => {
     };
 
     expect(artifact).toMatchObject({
-      phase: "container_not_running",
+      phase: "docker_permission_denied",
       ok: false,
       sshTarget: "deploy@[masked]",
       mutationPerformed: false,
@@ -199,7 +205,7 @@ describe("Codex auth-home readiness proof", () => {
       codexHomeChecked: false,
       smokePromptChecked: false
     });
-    expect(artifact.finding).toContain("wf-stage-api container is not running");
+    expect(artifact.finding).toContain("cannot inspect Docker");
     expect(artifact.finding).toContain("were not checked");
     expect(JSON.stringify(artifact)).not.toMatch(/187\.77\.19\.83|E:\\the_secrets|sk-[A-Za-z0-9_-]+|Bearer\s+[A-Za-z0-9._-]+|postgresql:\/\//i);
   });

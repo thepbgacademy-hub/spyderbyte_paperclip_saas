@@ -90,16 +90,16 @@
         <span class="badge">Bounded VPS Proof</span>
         <h1>Codex Auth-Home Readiness</h1>
         <p>
-          This phase added and ran a bounded readiness proof for the Wealth Factory VPS lane. The proof confirmed the host/container path is reachable,
-          but the current <code>wf-stage-api</code> container is not running yet.
+          This phase added and ran a bounded readiness proof for the Wealth Factory VPS lane. The proof confirmed the SSH host path is reachable,
+          but the deploy SSH user cannot inspect Docker without elevated operator access.
         </p>
       </header>
 
       <section class="grid">
         <article class="card blocker">
           <h2>Result</h2>
-          <p><strong>Phase:</strong> <code>container_not_running</code></p>
-          <p>The proof reached the isolated Wealth Factory Docker host, then failed safely because <code>wf-stage-api</code> is not running. Codex CLI and <code>CODEX_HOME</code> were not checked yet.</p>
+          <p><strong>Phase:</strong> <code>docker_permission_denied</code></p>
+          <p>The proof reached the isolated Wealth Factory host, then failed safely because Docker inspection is not available to the deploy SSH user. Codex CLI and <code>CODEX_HOME</code> were not checked yet.</p>
         </article>
 
         <article class="card">
@@ -126,7 +126,7 @@
         <article class="card">
           <h2>Next Gate</h2>
           <p>
-            Bring up or refresh only the isolated Wealth Factory stage API lane, then rerun this same readiness proof before checking Codex CLI and <code>CODEX_HOME</code>.
+            Restore or approve bounded Docker operator access for the Wealth Factory deploy lane, then rerun this same readiness proof before starting, refreshing, or repairing <code>wf-stage-api</code>.
             Do not execute provider binding repair until this proof passes.
           </p>
         </article>
