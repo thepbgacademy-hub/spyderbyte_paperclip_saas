@@ -1,0 +1,66 @@
+{
+  "label": "after_approve_result",
+  "url": "https://wf-api.spyderbyte.cloud/results",
+  "title": "🐴 Wealth Factory",
+  "textPreview": "W\nWealth Factory\nInstalled Package\nConnect First | 22222222-2222-4222-8222-222222222222\nHome\nBoard\nWorkflows\nResults\nTeam\nProfiles\nProviders\nInsights\nPackage\nFiles\nAssistant\nBilling\nSettings\n\nCONNECT FIRST OPERATING SYSTEM\n\nResults\n\nReview outcomes, approvals, and delivery steps without exposing run mechanics.\n\nToday\n3 alerts\nMember\n\nRESULT LIST\n\nConnect-first onboarding brief\n\nConnect First Workflow | Updated 18 minutes ago\n\nApproved\nTax strategy review summary\n\nTax Strategy Workflow | Updated 2 hours ago\n\nRevision needed\n\nSELECTED RESULT\n\nApproved\nConnect-first onboarding brief\n\nA reviewed onboarding brief with the first approved actions already translated into customer-safe delivery notes.\n\nPreview area\n\nPackage-safe summary, approved copy guidance, and delivery notes are centered here for calm review.\n\nWorkflow\n\nConnect First Workflow\n\nHistory\n\nDraft reviewed | Export prep complete | Awaiting final owner decision\n\nCurrent state\n\nWorkflow completed. Wealth Factory result is ready for review and delivery.\n\nVisible terms only\n\nNo prompts, tool traces, or backend activity are exposed here.\nApprove result\nRequest revision\nWorkflow completed. Wealth Factory result is ready for review and delivery.\n\nEXPORT AND EXPIRY\n\nGoogle Drive available to connect\nDropbox available to connect\nDownload readiness: Ready to download\nExpires in 24 hours\nSend to Google Drive\nDownload artifact",
+  "unauthorized": false,
+  "hasConnectFirst": true,
+  "hasStartWorkflow": false,
+  "hasApproveResult": true,
+  "hasDownloadArtifact": true,
+  "hasAwaitingReview": false,
+  "hasApproved": true,
+  "hasReadyToDownload": true,
+  "hasError": false,
+  "approvalStorage": "{\"result-241\":\"Approved\",\"result-238\":\"Revision needed\"}",
+  "buttons": [
+    {
+      "index": 0,
+      "text": "Today",
+      "disabled": false,
+      "ariaDisabled": null
+    },
+    {
+      "index": 1,
+      "text": "3 alerts",
+      "disabled": false,
+      "ariaDisabled": null
+    },
+    {
+      "index": 2,
+      "text": "Connect-first onboarding brief\n\nConnect First Workflow | Updated 18 minutes ago\n\nApproved",
+      "disabled": false,
+      "ariaDisabled": null
+    },
+    {
+      "index": 3,
+      "text": "Tax strategy review summary\n\nTax Strategy Workflow | Updated 2 hours ago\n\nRevision needed",
+      "disabled": false,
+      "ariaDisabled": null
+    },
+    {
+      "index": 4,
+      "text": "Approve result",
+      "disabled": false,
+      "ariaDisabled": null
+    },
+    {
+      "index": 5,
+      "text": "Request revision",
+      "disabled": false,
+      "ariaDisabled": null
+    },
+    {
+      "index": 6,
+      "text": "Send to Google Drive",
+      "disabled": false,
+      "ariaDisabled": null
+    },
+    {
+      "index": 7,
+      "text": "Download artifact",
+      "disabled": false,
+      "ariaDisabled": null
+    }
+  ]
+}

@@ -4,6 +4,13 @@ This file tracks the new harness subproject only.
 
 ## Current Phase
 
+- [x] Close first-subscriber browser approval/download persistence on the isolated launch lane.
+  - [x] Reproduce the browser journey issue where Connect-first approval reverted after fresh `/results` navigation.
+  - [x] Add a bounded browser-shell result approval storage seam with malformed-storage fail-safe behavior.
+  - [x] Add a dedicated production-bundle verification script so local ignored JS mirrors cannot silently hide missing tracked TypeScript behavior.
+  - [x] Deploy only the isolated `wf-stage-web` asset refresh and API-shell asset URL update needed for the proof.
+  - [x] Prove live browser journey: Home -> Start workflow -> Results -> Approve result -> fresh Results -> Download artifact retains `Approved` and `Ready to download`.
+  - [ ] Decide whether launch requires backend/cross-device result approval durability; if yes, implement that as a separate API/database persistence phase rather than widening this browser-shell fix.
 - [x] Approve first harness direction.
 - [x] Write v1 design spec.
 - [x] Review and refine the v1 design spec.

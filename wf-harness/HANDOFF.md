@@ -22,6 +22,29 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
+- Closed the first-subscriber browser happy-path residual risk on the isolated `wf-api.spyderbyte.cloud` lane.
+- Browser-harness proof initially reproduced the issue: after `Start workflow` -> `Approve result`, a fresh `/results` navigation reverted the Connect-first result from `Approved` / `Ready to download` back to `Awaiting review`.
+- Added a tracked TypeScript browser-shell persistence seam for result approval state in `apps/web/src/result-approval-storage.ts` and wired `apps/web/src/App.tsx` to hydrate/write the bounded approval-state map through `localStorage`.
+- The current default approval map mirrors the shell fixture result IDs (`result-241`, `result-238`); backend/cross-device result durability remains a separate launch-gated phase before real multi-device approval state is promised.
+- Added focused coverage in `tests/app-result-approval-state.test.ts`, including denied-storage fallback behavior, plus `npm run verify:web-result-approval-bundle` to fail if `npm run build:web` output does not contain the approval-state storage key.
+- Important build hygiene finding: ignored generated JS mirrors under `apps/web/src` shadowed tracked TypeScript during local Vite builds. Removed the local ignored `apps/web/src/App.js` / `apps/web/src/result-approval-storage.js` shadows from the workspace and rebuilt from tracked TypeScript so the deployable proof matches the GitHub source of truth.
+- Refreshed only the isolated Wealth Factory stage web/API-shell lane:
+  - loaded `spyderbyte/web:wf-stage-20260701-resultstate4`
+  - updated remote `WF_STAGE_WEB_IMAGE=spyderbyte/web:wf-stage-20260701-resultstate4`
+  - updated remote `WF_WEB_APP_ENTRY_URL=https://wf-api.spyderbyte.cloud/app-assets/index-Dgje1Uul.js`
+  - updated remote `WF_WEB_APP_STYLESHEET_URL=https://wf-api.spyderbyte.cloud/app-assets/index-DSybLPSb.css`
+  - restarted only `wf-stage-web` and `wf-stage-api` with `--no-deps`
+- No worker, Caddy, DNS, database rows, shared `api.spyderbyte.cloud`, Paperclip state, provider credentials, or unrelated VPS containers were changed.
+- Final browser-harness proof passed: seeded Connect-first member session reached Home, clicked `Start workflow`, clicked `Approve result`, opened a fresh `/results`, clicked `Download artifact`, and retained `Approved`, `Ready to download`, and `approvalStorage={"result-241":"Approved","result-238":"Revision needed"}` after approval. Note: because that browser context had already approved the result during the earlier failed asset-url rerun, the final proof is strongest for post-fix reload/download persistence; the earlier happy-path evidence preserves the clean `Awaiting review` pre-approval observation.
+- Saved evidence:
+  - `audit/2026-07-01/first-subscriber-resultstate-proof-summary.json`
+  - `audit/2026-07-01/first-subscriber-resultstate-proof-initial-dashboard.json`
+  - `audit/2026-07-01/first-subscriber-resultstate-proof-after-start.json`
+  - `audit/2026-07-01/first-subscriber-resultstate-proof-after-approve.json`
+  - `audit/2026-07-01/first-subscriber-resultstate-proof-fresh-results.json`
+  - `audit/2026-07-01/first-subscriber-resultstate-proof-after-download.json`
+- Scope truth: this is browser-shell reload persistence for the first-subscriber launch journey, not backend/cross-device durable approval persistence. The next product-hardening seam should persist result approval/download readiness through the runtime API/database if cross-device or multi-browser durability is launch-required.
+
 - Recorded the first-subscriber browser-harness observation and follow-up same-origin unblock correction.
 - Used `E:/REPOS 2/browser-harness` with sandbox Chrome/CDP on the corrected `wf-api` board path.
 - The authenticated browser session loaded the Wealth Factory board at `https://wf-api.spyderbyte.cloud/board?workflowId=wf_connect_first_workflow`, proving the corrected launch board URL is real and auth-gated.

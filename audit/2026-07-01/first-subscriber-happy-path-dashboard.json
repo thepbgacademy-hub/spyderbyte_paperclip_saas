@@ -1,0 +1,101 @@
+{
+  "url": "https://wf-api.spyderbyte.cloud/",
+  "title": "🐴 Wealth Factory",
+  "textPreview": "W\nWealth Factory\nInstalled Package\nConnect First | 22222222-2222-4222-8222-222222222222\nHome\nBoard\nWorkflows\nResults\nTeam\nProfiles\nProviders\nInsights\nPackage\nFiles\nAssistant\nBilling\nSettings\n\nCONNECT FIRST OPERATING SYSTEM\n\nHome\n\nWhat matters today, what is moving, and what needs your decision next.\n\nToday\n3 alerts\nMember\n\nCURRENT FOCUS\n\n22222222-2222-4222-8222-222222222222\nLaunch the next approved workflow\n\nThe package-approved workflow is ready. Start now to keep work moving inside the approved runtime boundary.\n\nDue today\nReady to start\nNo blockers\nStart workflow\nReview workflow\n\nNEXT STEPS\n\nReview Connect-first onboarding brief | Updated 18 minutes ago\n\nEXPIRING DOWNLOADS\n\nOnboarding action plan | Expires in 18 hours\nTax review summary | Expires in 22 hours\nFollow-up next steps | Needs attention\n\nNEEDS ATTENTION\n\nReview available for Connect-first onboarding brief\n\nOPERATING SNAPSHOT\n\nApproved workflows\n\n1\n1 available now\n\nResults ready\n\n2\n1 awaiting review\n\nConnected providers\n\n2\nRequired lanes connected\n\nStorage lanes\n\n0\nNo export lane connected\n\nWORK QUEUE\n\nTASK\tSTATUS\tNEXT ACTION\nReview Connect-first onboarding brief\tReady to review\tOpen Results\nLaunch the next approved workflow\tReady\tOpen Workflows",
+  "unauthorized": false,
+  "hasConnectFirst": true,
+  "hasStart": true,
+  "buttons": [
+    {
+      "index": 0,
+      "text": "Today",
+      "disabled": false,
+      "ariaDisabled": null
+    },
+    {
+      "index": 1,
+      "text": "3 alerts",
+      "disabled": false,
+      "ariaDisabled": null
+    },
+    {
+      "index": 2,
+      "text": "Start workflow",
+      "disabled": false,
+      "ariaDisabled": null
+    },
+    {
+      "index": 3,
+      "text": "Review workflow",
+      "disabled": false,
+      "ariaDisabled": null
+    }
+  ],
+  "links": [
+    {
+      "index": 0,
+      "text": "Home",
+      "href": "https://wf-api.spyderbyte.cloud/"
+    },
+    {
+      "index": 1,
+      "text": "Board",
+      "href": "https://wf-api.spyderbyte.cloud/board"
+    },
+    {
+      "index": 2,
+      "text": "Workflows",
+      "href": "https://wf-api.spyderbyte.cloud/workflows"
+    },
+    {
+      "index": 3,
+      "text": "Results",
+      "href": "https://wf-api.spyderbyte.cloud/results"
+    },
+    {
+      "index": 4,
+      "text": "Team",
+      "href": "https://wf-api.spyderbyte.cloud/team"
+    },
+    {
+      "index": 5,
+      "text": "Profiles",
+      "href": "https://wf-api.spyderbyte.cloud/profiles"
+    },
+    {
+      "index": 6,
+      "text": "Providers",
+      "href": "https://wf-api.spyderbyte.cloud/providers"
+    },
+    {
+      "index": 7,
+      "text": "Insights",
+      "href": "https://wf-api.spyderbyte.cloud/insights"
+    },
+    {
+      "index": 8,
+      "text": "Package",
+      "href": "https://wf-api.spyderbyte.cloud/package"
+    },
+    {
+      "index": 9,
+      "text": "Files",
+      "href": "https://wf-api.spyderbyte.cloud/files"
+    },
+    {
+      "index": 10,
+      "text": "Assistant",
+      "href": "https://wf-api.spyderbyte.cloud/assistant"
+    },
+    {
+      "index": 11,
+      "text": "Billing",
+      "href": "https://wf-api.spyderbyte.cloud/billing"
+    },
+    {
+      "index": 12,
+      "text": "Settings",
+      "href": "https://wf-api.spyderbyte.cloud/settings"
+    }
+  ]
+}

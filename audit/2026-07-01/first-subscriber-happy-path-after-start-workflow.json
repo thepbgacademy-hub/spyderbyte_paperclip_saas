@@ -1,0 +1,62 @@
+{
+  "url": "https://wf-api.spyderbyte.cloud/results",
+  "title": "🐴 Wealth Factory",
+  "textPreview": "W\nWealth Factory\nInstalled Package\nConnect First | 22222222-2222-4222-8222-222222222222\nHome\nBoard\nWorkflows\nResults\nTeam\nProfiles\nProviders\nInsights\nPackage\nFiles\nAssistant\nBilling\nSettings\n\nCONNECT FIRST OPERATING SYSTEM\n\nResults\n\nReview outcomes, approvals, and delivery steps without exposing run mechanics.\n\nToday\n3 alerts\nMember\n\nRESULT LIST\n\nConnect-first onboarding brief\n\nConnect First Workflow | Updated 18 minutes ago\n\nAwaiting review\nTax strategy review summary\n\nTax Strategy Workflow | Updated 2 hours ago\n\nRevision needed\n\nSELECTED RESULT\n\nAwaiting review\nConnect-first onboarding brief\n\nA reviewed onboarding brief with the first approved actions already translated into customer-safe delivery notes.\n\nPreview area\n\nPackage-safe summary, approved copy guidance, and delivery notes are centered here for calm review.\n\nWorkflow\n\nConnect First Workflow\n\nHistory\n\nDraft reviewed | Export prep complete | Awaiting final owner decision\n\nCurrent state\n\nWorkflow queued. Secure worker is preparing the approved result.\n\nVisible terms only\n\nNo prompts, tool traces, or backend activity are exposed here.\nApprove result\nRequest revision\nWorkflow queued. Secure worker is preparing the approved result.\n\nEXPORT AND EXPIRY\n\nGoogle Drive available to connect\nDropbox available to connect\nDownload readiness: Awaiting review\nExpires in 24 hours\nSend to Google Drive\nDownload artifact",
+  "unauthorized": false,
+  "hasBoard": true,
+  "hasLatestIssue": false,
+  "hasRetry": false,
+  "hasBlocked": false,
+  "hasWorking": true,
+  "hasStartWorkflow": false,
+  "buttons": [
+    {
+      "index": 0,
+      "text": "Today",
+      "disabled": false,
+      "ariaDisabled": null
+    },
+    {
+      "index": 1,
+      "text": "3 alerts",
+      "disabled": false,
+      "ariaDisabled": null
+    },
+    {
+      "index": 2,
+      "text": "Connect-first onboarding brief\n\nConnect First Workflow | Updated 18 minutes ago\n\nAwaiting review",
+      "disabled": false,
+      "ariaDisabled": null
+    },
+    {
+      "index": 3,
+      "text": "Tax strategy review summary\n\nTax Strategy Workflow | Updated 2 hours ago\n\nRevision needed",
+      "disabled": false,
+      "ariaDisabled": null
+    },
+    {
+      "index": 4,
+      "text": "Approve result",
+      "disabled": false,
+      "ariaDisabled": null
+    },
+    {
+      "index": 5,
+      "text": "Request revision",
+      "disabled": false,
+      "ariaDisabled": null
+    },
+    {
+      "index": 6,
+      "text": "Send to Google Drive",
+      "disabled": false,
+      "ariaDisabled": null
+    },
+    {
+      "index": 7,
+      "text": "Download artifact",
+      "disabled": false,
+      "ariaDisabled": null
+    }
+  ]
+}

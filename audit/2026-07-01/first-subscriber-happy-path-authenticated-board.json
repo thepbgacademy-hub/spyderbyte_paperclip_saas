@@ -1,0 +1,79 @@
+{
+  "url": "https://wf-api.spyderbyte.cloud/board?workflowId=wf_connect_first_workflow",
+  "title": "🐴 Wealth Factory",
+  "textPreview": "W\nWealth Factory\nInstalled Package\nConnect First | 22222222-2222-4222-8222-222222222222\nHome\nBoard\nWorkflows\nResults\nTeam\nProfiles\nProviders\nInsights\nPackage\nFiles\nAssistant\nBilling\nSettings\n\nCONNECT FIRST OPERATING SYSTEM\n\nBoard\n\nTrack persona-owned work cards in a clean orchestrator board without exposing backend chatter.\n\nToday\n3 alerts\nMember\n\nHARNESS BOARD\n\nOrchestrator board for clean tenant-facing progress\n\nPersona cards stay concise, high-level, and readable. The board shows what each lane is advancing without exposing backend mechanics or internal run chatter.\n\nActive lanes\n\n0\n\nNo visible lanes are active yet.\n\nCurrent focus\n\nPreparing the next move\n\nPersona workload\n\nFocused\n\nCEO approvals\n\n0\n\nControl mode\n\nLive\n\nGovernance posture\n\nClear\n\n0 governance items\n\nProgress\n\n0\n\n0 follow-through actions landed\n\nBoard pulse\n\nA bounded launch cockpit summary of focus, lane state, next actions, governance, and progress.\n\nCurrent focus\n\nThe board is preparing the next move.\n\nActive lanes\n\nNo visible lanes are active yet.\n\nNext actions\n\nNo live review or approval items are shaping the next move.\n\nGovernance posture\n\nNo package governance items are shaping the current handoff.\n\nProgress\n\n0 deliverables are packaged, 0 follow-through actions landed, and 0 decisions are preserved.\n\nPersona workload\n\nA quick view of which business personas are currently carrying visible work.\n\nCEO approvals\n\nPending sub-card requests that still need CEO approval before new lanes open.\n\nNo pending approvals\nBoard is staying bounded",
+  "unauthorized": false,
+  "hasLatestIssue": false,
+  "hasRetryUnblock": false,
+  "hasUnblock": false,
+  "hasWorking": false,
+  "hasBlocked": false,
+  "hasComplete": false,
+  "buttons": [
+    {
+      "index": 0,
+      "text": "Today",
+      "disabled": false,
+      "ariaDisabled": null,
+      "type": "button"
+    },
+    {
+      "index": 1,
+      "text": "3 alerts",
+      "disabled": false,
+      "ariaDisabled": null,
+      "type": "button"
+    }
+  ],
+  "forms": [],
+  "cards": [
+    {
+      "index": 1,
+      "text": "HARNESS BOARD\n\nOrchestrator board for clean tenant-facing progress\n\nPersona cards stay concise, high-level, and readable. The board shows what each lane is advancing without exposing backend mechanics or internal run chatter.\n\nActive lanes\n\n0\n\nNo visible lanes are active yet.\n\nCurrent focus\n\nPreparing the next move\n\nPersona workload\n\nFocused\n\nCEO approvals\n\n0\n\nControl mode\n\nLive\n\nGovernance posture\n\nClear\n\n0 governance items\n\nProgress\n\n0\n\n0 follow-through actions landed"
+    },
+    {
+      "index": 2,
+      "text": "Active lanes\n\n0\n\nNo visible lanes are active yet."
+    },
+    {
+      "index": 3,
+      "text": "Current focus\n\nPreparing the next move"
+    },
+    {
+      "index": 4,
+      "text": "Persona workload\n\nFocused"
+    },
+    {
+      "index": 5,
+      "text": "CEO approvals\n\n0"
+    },
+    {
+      "index": 6,
+      "text": "Control mode\n\nLive"
+    },
+    {
+      "index": 7,
+      "text": "Governance posture\n\nClear\n\n0 governance items"
+    },
+    {
+      "index": 8,
+      "text": "Progress\n\n0\n\n0 follow-through actions landed"
+    },
+    {
+      "index": 9,
+      "text": "Board pulse\n\nA bounded launch cockpit summary of focus, lane state, next actions, governance, and progress.\n\nCurrent focus\n\nThe board is preparing the next move.\n\nActive lanes\n\nNo visible lanes are active yet.\n\nNext actions\n\nNo live review or approval items are shaping the next move.\n\nGovernance posture\n\nNo package governance items are shaping the current handoff.\n\nProgress\n\n0 deliverables are packaged, 0 follow-through actions landed, and 0 decisions are preserved.\n\nPersona workload\n\nA quick view of which business personas are currently carrying visible work.\n\nCEO approvals\n\nPending sub-card requests that still need CEO approval before new lanes open.\n\nNo pending approvals\nBoard is staying bounded"
+    },
+    {
+      "index": 11,
+      "text": "Board pulse\n\nA bounded launch cockpit summary of focus, lane state, next actions, governance, and progress.\n\nCurrent focus\n\nThe board is preparing the next move.\n\nActive lanes\n\nNo visible lanes are active yet.\n\nNext actions\n\nNo live review or approval items are shaping the next move.\n\nGovernance posture\n\nNo package governance items are shaping the current handoff.\n\nProgress\n\n0 deliverables are packaged, 0 follow-through actions landed, and 0 decisions are preserved."
+    },
+    {
+      "index": 12,
+      "text": "Persona workload\n\nA quick view of which business personas are currently carrying visible work."
+    },
+    {
+      "index": 13,
+      "text": "CEO approvals\n\nPending sub-card requests that still need CEO approval before new lanes open.\n\nNo pending approvals\nBoard is staying bounded"
+    }
+  ]
+}
