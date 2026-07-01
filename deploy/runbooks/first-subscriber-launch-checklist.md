@@ -38,6 +38,8 @@ The first-subscriber workflow must not be retried on the old `openai_api` provid
 2. Provision a tenant-isolated `CODEX_HOME` path for the first-subscriber tenant; do not reuse an operator-global `.codex` home.
 3. Confirm the auth-state reference points to the tenant-isolated Codex device-login state and never to a raw token committed in the repo or printed in logs.
 4. Run a non-secret smoke prompt from the same worker/container lane that will execute native provider calls.
+   - Use `npm run prove:codex-auth-home-readiness -- --execute` for the bounded readiness proof. The proof may inspect the configured worker container, Codex CLI, `CODEX_HOME` presence, and a non-secret smoke prompt only.
+   - The proof must not print raw `CODEX_HOME`, auth-state contents, session cookies, bearer tokens, VPS credentials, or paths under `the_secrets`.
 5. Run `npm run repair:openai-device-provider-binding` in dry-run mode and confirm the plan targets only the intended tenant/workflow/provider.
 6. Keep this slice in dry-run/readiness mode. Current execute mode still fails closed until a later dedicated DB-mutation phase wires and reviews the live repair.
 7. When that later phase exists, it must update the workflow provider requirement seam as well as the provider binding, otherwise a fresh run can fail entitlement before credentials bind.

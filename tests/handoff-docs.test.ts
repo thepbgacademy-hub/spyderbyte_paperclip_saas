@@ -78,6 +78,24 @@ describe("handoff board-surface wording", () => {
       "incomplete `openai_chatgpt_codex_subscription` rows"
     );
     expect(latestPhaseCurrentBlock).toContain(
+      "npm run prove:codex-auth-home-readiness"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "defaults to dry-run without loading secret files"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "Result: `container_not_running`"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "vps-codex-auth-home-readiness-proof.json"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "do not proceed to OpenAI device provider binding repair execute"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "performs no DB, workflow, DNS/Caddy, provider repair, or Paperclip mutation"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
       "must not mutate existing `workflow_runs`"
     );
     expect(latestPhase).toContain(
@@ -149,6 +167,8 @@ describe("handoff board-surface wording", () => {
     expect(firstSubscriberLaunchChecklist).toContain("## OpenAI Device Provider Binding Gate");
     expect(firstSubscriberLaunchChecklist).toContain("tenant-isolated `CODEX_HOME`");
     expect(firstSubscriberLaunchChecklist).toContain("non-secret smoke prompt");
+    expect(firstSubscriberLaunchChecklist).toContain("npm run prove:codex-auth-home-readiness -- --execute");
+    expect(firstSubscriberLaunchChecklist).toContain("must not print raw `CODEX_HOME`");
     expect(firstSubscriberLaunchChecklist).toContain("Current execute mode still fails closed");
     expect(firstSubscriberLaunchChecklist).toContain("workflow provider requirement seam");
     expect(firstSubscriberLaunchChecklist).toContain("Do not treat the existing `openai_api`-bound run as proof");
@@ -156,6 +176,10 @@ describe("handoff board-surface wording", () => {
     expect(currentNextSlice).toContain("Keep repair execute mode fail-closed");
     expect(currentNextSlice).toContain("`wfpc.package_provider_requirements`");
     expect(currentNextSlice).toContain("Skip incomplete `openai_chatgpt_codex_subscription` rows");
+    expect(currentNextSlice).toContain("Prove the VPS Codex auth-home readiness gate");
+    expect(currentNextSlice).toContain("no DB/workflow/DNS/Caddy/provider/Paperclip mutation");
+    expect(currentNextSlice).toContain("`container_not_running`");
+    expect(currentNextSlice).toContain("Bring up or refresh only the isolated Wealth Factory stage API lane");
     expect(currentNextSlice).toContain("no mutation of existing `workflow_runs`");
     expect(currentNextSlice).toContain("Preserve BYOK/API-provider lanes");
   });

@@ -150,6 +150,9 @@ This file tracks the new harness subproject only.
   - [x] Keep repair execute mode fail-closed in this slice, even after `--confirm-codex-home-ready`, until a later dedicated DB-mutation phase wires and reviews the live repair.
   - [x] Record the future repair mutation contract as transaction-scoped and limited to the intended tenant/workflow/provider binding plus `wfpc.package_provider_requirements`, with no mutation of existing `workflow_runs`, Paperclip state, shared-host routing, or BYOK/API-provider lanes.
   - [x] Skip incomplete `openai_chatgpt_codex_subscription` rows during runtime provider resolution so placeholder device rows cannot block valid API-key fallback providers.
+  - [x] Prove the VPS Codex auth-home readiness gate with `npm run prove:codex-auth-home-readiness -- --execute`, keeping the proof bounded and sanitized with no DB/workflow/DNS/Caddy/provider/Paperclip mutation.
+  - [x] Record the truthful VPS readiness result: `container_not_running` in `audit/2026-06-30/vps-codex-auth-home-readiness-proof.json`, with no database, workflow, DNS/Caddy, provider repair, Paperclip, or launch-state mutation.
+  - [ ] Bring up or refresh only the isolated Wealth Factory stage API lane, then rerun the auth-home readiness proof before checking Codex CLI and `CODEX_HOME`.
   - [ ] Create or repair the live OpenAI device/Codex subscription connection with `codexHome` / `authStateRef` metadata, then start or rebind a fresh proof run rather than retrying the old `openai_api`-bound run.
   - [ ] Preserve BYOK/API-provider lanes for users who choose Anthropic, Gemini/OpenRouter, OpenAI API keys, or other supported API accounts.
   - [ ] Continue using the browser harness for first-hand login/workflow testing, cataloging each action and blocker before making adjustments.

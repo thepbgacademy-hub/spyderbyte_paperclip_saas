@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VPS Codex Auth-Home Readiness Proof</title>
+    <style>
+      :root {
+        --ink: #18201b;
+        --muted: #667267;
+        --bg: #f4f0e6;
+        --card: #fffaf0;
+        --line: #d9cdb4;
+        --accent: #1d6b56;
+        --blocker: #9a4f1f;
+      }
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: Georgia, "Times New Roman", serif;
+        background:
+          radial-gradient(circle at 18% 0%, rgba(29, 107, 86, 0.18), transparent 34rem),
+          linear-gradient(140deg, #f7f0df, #edf4ea);
+      }
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 48px 24px;
+      }
+      header {
+        border-bottom: 2px solid var(--line);
+        padding-bottom: 22px;
+        margin-bottom: 24px;
+      }
+      h1 {
+        margin: 8px 0;
+        font-size: clamp(2rem, 4vw, 3.8rem);
+        line-height: 0.95;
+      }
+      h2 {
+        color: var(--accent);
+        margin-top: 0;
+      }
+      p, li {
+        line-height: 1.55;
+      }
+      .badge {
+        display: inline-block;
+        border: 1px solid var(--accent);
+        border-radius: 999px;
+        color: var(--accent);
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        padding: 5px 10px;
+        text-transform: uppercase;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 18px;
+      }
+      .card {
+        background: rgba(255, 250, 240, 0.92);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: 0 16px 32px rgba(64, 52, 30, 0.08);
+        padding: 20px;
+      }
+      .blocker h2 {
+        color: var(--blocker);
+      }
+      code {
+        background: #eee2c9;
+        border-radius: 6px;
+        padding: 1px 5px;
+      }
+      a {
+        color: var(--accent);
+        font-weight: 700;
+      }
+      footer {
+        margin-top: 22px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <span class="badge">Bounded VPS Proof</span>
+        <h1>Codex Auth-Home Readiness</h1>
+        <p>
+          This phase added and ran a bounded readiness proof for the Wealth Factory VPS lane. The proof confirmed the host/container path is reachable,
+          but the current <code>wf-stage-api</code> container is not running yet.
+        </p>
+      </header>
+
+      <section class="grid">
+        <article class="card blocker">
+          <h2>Result</h2>
+          <p><strong>Phase:</strong> <code>container_not_running</code></p>
+          <p>The proof reached the isolated Wealth Factory Docker host, then failed safely because <code>wf-stage-api</code> is not running. Codex CLI and <code>CODEX_HOME</code> were not checked yet.</p>
+        </article>
+
+        <article class="card">
+          <h2>Safety</h2>
+          <ul>
+            <li>No database rows were read for mutation or written.</li>
+            <li>No <code>workflow_runs</code> rows were touched.</li>
+            <li>No DNS, Caddy, Paperclip, provider repair, or launch-state mutation was performed.</li>
+            <li>The reusable dry-run path does not load operator secret files.</li>
+            <li>Raw VPS target, <code>CODEX_HOME</code>, tokens, and secrets were redacted from artifacts.</li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <h2>Implemented</h2>
+          <ul>
+            <li>Added <code>npm run prove:codex-auth-home-readiness</code>.</li>
+            <li>Added dry-run and mockable execute tests.</li>
+            <li>Recorded sanitized live evidence in the audit folder.</li>
+            <li>Updated TODO, handoff, and first-subscriber checklist.</li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <h2>Next Gate</h2>
+          <p>
+            Bring up or refresh only the isolated Wealth Factory stage API lane, then rerun this same readiness proof before checking Codex CLI and <code>CODEX_HOME</code>.
+            Do not execute provider binding repair until this proof passes.
+          </p>
+        </article>
+      </section>
+
+      <footer class="card">
+        <h2>Files</h2>
+        <ul>
+          <li><a href="scripts/prove-codex-auth-home-readiness.mjs">scripts/prove-codex-auth-home-readiness.mjs</a></li>
+          <li><a href="tests/prove-codex-auth-home-readiness.test.ts">tests/prove-codex-auth-home-readiness.test.ts</a></li>
+          <li><a href="audit/2026-06-30/vps-codex-auth-home-readiness-proof.json">audit/2026-06-30/vps-codex-auth-home-readiness-proof.json</a></li>
+          <li><a href="deploy/runbooks/first-subscriber-launch-checklist.md">deploy/runbooks/first-subscriber-launch-checklist.md</a></li>
+          <li><a href="wf-harness/HANDOFF.md">wf-harness/HANDOFF.md</a></li>
+          <li><a href="wf-harness/TODO.md">wf-harness/TODO.md</a></li>
+          <li><a href="tests/handoff-docs.test.ts">tests/handoff-docs.test.ts</a></li>
+          <li><a href="package.json">package.json</a></li>
+        </ul>
+      </footer>
+    </main>
+  </body>
+</html>
