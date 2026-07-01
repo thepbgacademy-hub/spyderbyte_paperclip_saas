@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { assertAllowedOrigin, createSecurityHeaders, validateRequestBodySize } from "../src/security/cors.js";
+import { assertAllowedBrowserOrigin, assertAllowedOrigin, createSecurityHeaders, validateRequestBodySize } from "../src/security/cors.js";
 import { createFixedWindowRateLimiter } from "../src/security/rate-limit.js";
 
 describe("split-origin security boundary", () => {
@@ -16,6 +16,91 @@ describe("split-origin security boundary", () => {
 
   it("rejects wildcard authenticated CORS", () => {
     expect(() => assertAllowedOrigin("https://portal.wealthfactory.example", ["*"])).toThrow("Wildcard CORS is forbidden");
+  });
+
+  it("allows browser requests without Origin only when HTTPS referer matches the request host", () => {
+    expect(
+      assertAllowedBrowserOrigin(
+        {
+          host: "wf-api.wealthfactory.example",
+          referer: "https://wf-api.wealthfactory.example/board?workflowId=wf_connect_first_workflow"
+        },
+        ["https://wf-api.wealthfactory.example"],
+        { allowSameOriginWithoutOrigin: true }
+      )
+    ).toEqual({});
+
+    expect(() =>
+      assertAllowedBrowserOrigin(
+        {
+          host: "wf-api.wealthfactory.example",
+          "sec-fetch-site": "same-origin"
+        },
+        ["https://wf-api.wealthfactory.example"],
+        { allowSameOriginWithoutOrigin: true }
+      )
+    ).toThrow("Origin is not allowed");
+
+    expect(() =>
+      assertAllowedBrowserOrigin(
+        {
+          host: "wf-api.wealthfactory.example",
+          referer: "https://evil.example/board?workflowId=wf_connect_first_workflow"
+        },
+        ["https://wf-api.wealthfactory.example"],
+        { allowSameOriginWithoutOrigin: true }
+      )
+    ).toThrow("Origin is not allowed");
+
+    expect(() =>
+      assertAllowedBrowserOrigin(
+        {
+          host: "wf-api.wealthfactory.example",
+          referer: "http://wf-api.wealthfactory.example/board?workflowId=wf_connect_first_workflow"
+        },
+        ["https://wf-api.wealthfactory.example"],
+        { allowSameOriginWithoutOrigin: true }
+      )
+    ).toThrow("Origin is not allowed");
+  });
+
+  it("allows browser requests with Origin only when HTTPS origin matches the request host", () => {
+    expect(
+      assertAllowedBrowserOrigin(
+        {
+          host: "wf-api.wealthfactory.example",
+          origin: "https://wf-api.wealthfactory.example"
+        },
+        ["https://portal.wealthfactory.example", "https://wf-api.wealthfactory.example"],
+        { allowSameOriginWithoutOrigin: true }
+      )
+    ).toEqual({
+      "access-control-allow-credentials": "true",
+      "access-control-allow-origin": "https://wf-api.wealthfactory.example",
+      vary: "Origin"
+    });
+
+    expect(() =>
+      assertAllowedBrowserOrigin(
+        {
+          host: "wf-api.wealthfactory.example",
+          origin: "https://wf-api.wealthfactory.example"
+        },
+        ["https://portal.wealthfactory.example"],
+        { allowSameOriginWithoutOrigin: true }
+      )
+    ).toThrow("Origin is not allowed");
+
+    expect(() =>
+      assertAllowedBrowserOrigin(
+        {
+          host: "wf-api.wealthfactory.example",
+          origin: "https://evil.example"
+        },
+        ["https://portal.wealthfactory.example"],
+        { allowSameOriginWithoutOrigin: true }
+      )
+    ).toThrow("Origin is not allowed");
   });
 
   it("enforces public request size limits", () => {

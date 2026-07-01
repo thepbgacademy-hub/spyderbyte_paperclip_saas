@@ -22,6 +22,25 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
+- Recorded the first-subscriber browser-harness observation and follow-up same-origin unblock correction.
+- Used `E:/REPOS 2/browser-harness` with sandbox Chrome/CDP on the corrected `wf-api` board path.
+- The authenticated browser session loaded the Wealth Factory board at `https://wf-api.spyderbyte.cloud/board?workflowId=wf_connect_first_workflow`, proving the corrected launch board URL is real and auth-gated.
+- Historical observation preserved for traceability: the native provider lane is blocked by HTTP `401` was the first browser-harness blocker before the OpenAI device/Codex subscription provider binding repair and reauth proof.
+- Initial browser submit showed the native provider lane is no longer blocked by HTTP `401`; after the Codex/device binding repair and reauth proof, the visible blocker moved to the board action POST returning `403 {"code":"request_rejected"}` before reaching the harness boundary.
+- Header capture showed Chrome sent same-origin browser metadata that was stricter than the original server guard allowed; the shared browser-origin guard now accepts exact same-origin HTTPS `Origin` or `Referer` proof against the public request `Host` only when that API origin is explicitly present in `WF_ALLOWED_ORIGINS`, while still rejecting mismatched hosts and plain HTTP referers. Reviewer feedback was folded in: no `x-forwarded-host` trust and no `Sec-Fetch-Site`-only acceptance.
+- Refreshed only the isolated Wealth Factory stage API lane to `spyderbyte/api:wf-stage-20260701-corsorigin3` and added `https://wf-api.spyderbyte.cloud` to the isolated stage `WF_ALLOWED_ORIGINS`; `wf-stage-worker`, `wf-stage-web`, Caddy, DNS, shared `api.spyderbyte.cloud`, database rows, Paperclip state, BYOK/API-provider lanes, and other VPS deployments were not changed.
+- Reran the browser-harness current-contract POST against the live board. Result: `POST /api/harness/runs/eb420710-c786-4801-b54d-5c3adb39f0fc/resolve-attention` returned a 2xx response through the browser context, and the follow-up board no longer showed `Latest board action issue` or `Retry Unblock lane`.
+- A non-destructive same-origin live probe against `corsorigin3` reached request validation with `400 invalid_request` instead of the previous browser-origin `403 request_rejected`.
+- OpenAI device/Codex subscription provider binding remains the intended native provider lane for this first-subscriber proof; do not fall back to API-key or Paperclip behavior to bypass the corrected launch path.
+- Saved evidence:
+  - `audit/2026-07-01/first-subscriber-browser-journey-after-reauth.json`
+  - `audit/2026-07-01/first-subscriber-browser-journey-controls-after-reauth.json`
+  - `audit/2026-07-01/first-subscriber-browser-journey-unblock-after-reauth.json`
+  - `audit/2026-07-01/first-subscriber-resolve-attention-header-capture.json`
+  - `audit/2026-07-01/first-subscriber-browser-current-contract-post-after-origin-cors-fix.json`
+  - `audit/2026-07-01/first-subscriber-browser-post-unblock-board-after-origin-cors-fix.json`
+  - `audit/2026-07-01/first-subscriber-same-origin-corsorigin3-live-probe.json`
+
 - Re-authenticated the tenant-isolated OpenAI Codex device login on VPS 2 through the operator-controlled browser/device-code flow without printing or committing credential material.
 - Fresh bounded readiness proofs against both `wf-stage-api` and `wf-stage-worker` now return `codex_auth_home_ready` for tenant `22222222-2222-4222-8222-222222222222`, workflow `wf_connect_first_workflow`, auth-state ref `codex-home:first-subscriber`, and matching `CODEX_HOME` fingerprint `73a6d07c58247365`.
 - Reran the bounded live native execution proof for the controlled connect-first lane with both green readiness artifacts. Result: `codex_readiness_gate_verified`, `native_blocked_reached`, `native_attention_resolved`, and `round_trip_verified` on run `eb420710-c786-4801-b54d-5c3adb39f0fc`.

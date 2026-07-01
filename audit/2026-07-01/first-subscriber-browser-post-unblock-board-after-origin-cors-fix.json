@@ -1,0 +1,17 @@
+{
+  "ok": true,
+  "capturedAt": "2026-07-01T18:34:37.040Z",
+  "workflowId": "wf_connect_first_workflow",
+  "title": "Wealth Factory",
+  "url": "https://wf-api.spyderbyte.cloud/board?workflowId=wf_connect_first_workflow",
+  "imageTag": "spyderbyte/api:wf-stage-20260701-corsorigin1",
+  "screenshot": null,
+  "checks": {
+    "loadedBoard": true,
+    "noActionIssue": true,
+    "noRetryButton": true,
+    "noRawSecretLeak": true,
+    "visibleWorkingOrNoBlockedCard": true
+  },
+  "visibleTextSample": "W\nWealth Factory\nInstalled Package\nConnect First | 22222222-2222-4222-8222-222222222222\nHome\nBoard\nWorkflows\nResults\nTeam\nProfiles\nProviders\nInsights\nPackage\nFiles\nAssistant\nBilling\nSettings\n\nCONNECT FIRST OPERATING SYSTEM\n\nBoard\n\nTrack persona-owned work cards in a clean orchestrator board without exposing backend chatter.\n\nToday\n3 alerts\nMember\n\nHARNESS BOARD\n\nOrchestrator board for clean tenant-facing progress\n\nPersona cards stay concise, high-level, and readable. The board shows what each lane is advancing without exposing backend mechanics or internal run chatter.\n\nActive lanes\n\n1\n\n1 visible lane is active across planning.\n\nCurrent focus\n\nPlan run\n\nPersona workload\n\nBalanced\n\nCEO approvals\n\n0\n\nControl mode\n\nLive\n\nGovernance posture\n\nClear\n\n0 governance items\n\nProgress\n\n0\n\n0 follow-through actions landed\n\nPlanning\n\nWork being shaped by the orchestrator.\n\nCEO\nUpdated Jun 15, 7:27 PM\nPlan run\n\nCEO is moving this deliverable forward inside a bounded assignment lane.\n\nPlanning\nHigh priority\nPlan\n\nOUTCOME\n\nThis plan is being shaped into the next clean business-facing move.\n\nCFO\nUpdated Jul 1, 6:34 PM\nPressure-test the pricing lane\n\nCFO is moving this deliverable forward inside a bounded assignment lane.\n\nApproved\nActive\nPricing Review\n\nOUTCOME\n\nThis pricing review is being shaped into the next clean business-facing move.\n\nWorking\n\nActive persona lanes moving the run forward.\n\nNo persona cards in this lane.\n\nWaiting\n\nLanes paused on a dependency or decision.\n\nNo persona cards in this lane.\n\nBlocked\n\nVisible blockers that need resolution before progress continues.\n\nNo persona cards in this lane.\n\nDone\n\nCompleted outputs ready for review.\n\nNo persona cards in this lane.\n\nBoard pulse\n\nA bounded launch cockpit summary of focus, lane state, next actions, governance, and progress.\n\nCurrent focus\n\nPlan run is carrying the clearest live business move right now.\n\nActive lanes\n\n1 visible lane is active across planning.\n\nNext actions\n\nNo live review or approval items are shaping the next move.\n\nGovernance posture\n\nNo package governance items are shaping the current handoff.\n\nProgress\n\n0 deliverables are packaged, 0 follow-through actions landed, and 0 decisions are preserved.\n\nPersona workload\n\nA quick view of which business personas are currently carrying visible work.\n\nCEO\n1 card\nCFO\n1 card\nCEO approvals\n\nPending sub-card requests that still need CEO approval before new lanes open.\n\nNo pending approvals\nBoard is staying bounded"
+}

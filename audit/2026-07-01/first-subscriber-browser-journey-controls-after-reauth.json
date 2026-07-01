@@ -1,0 +1,178 @@
+{
+  "ok": true,
+  "capturedAt": "2026-07-01T17:31:48.021Z",
+  "workflowId": "wf_connect_first_workflow",
+  "url": "https://wf-api.spyderbyte.cloud/board?workflowId=wf_connect_first_workflow",
+  "title": "Wealth Factory",
+  "clientJourneyChecks": {
+    "boardLoads": true,
+    "namesWorkflow": true,
+    "showsActiveOrBlockedLane": true,
+    "showsActionableControls": true,
+    "noRawSecretLeak": true
+  },
+  "headings": [
+    "Board",
+    "Orchestrator board for clean tenant-facing progress",
+    "Planning",
+    "Plan run",
+    "Working",
+    "Waiting",
+    "Blocked",
+    "Pressure-test the pricing lane",
+    "Done",
+    "Board pulse",
+    "Current focus",
+    "Active lanes",
+    "Next actions",
+    "Governance posture",
+    "Progress",
+    "Persona workload",
+    "CEO approvals",
+    "Board action",
+    "Unblock lane"
+  ],
+  "controls": [
+    {
+      "tag": "a",
+      "text": "Home",
+      "aria": null,
+      "href": "/",
+      "disabled": false
+    },
+    {
+      "tag": "a",
+      "text": "Board",
+      "aria": null,
+      "href": "/board",
+      "disabled": false
+    },
+    {
+      "tag": "a",
+      "text": "Workflows",
+      "aria": null,
+      "href": "/workflows",
+      "disabled": false
+    },
+    {
+      "tag": "a",
+      "text": "Results",
+      "aria": null,
+      "href": "/results",
+      "disabled": false
+    },
+    {
+      "tag": "a",
+      "text": "Team",
+      "aria": null,
+      "href": "/team",
+      "disabled": false
+    },
+    {
+      "tag": "a",
+      "text": "Profiles",
+      "aria": null,
+      "href": "/profiles",
+      "disabled": false
+    },
+    {
+      "tag": "a",
+      "text": "Providers",
+      "aria": null,
+      "href": "/providers",
+      "disabled": false
+    },
+    {
+      "tag": "a",
+      "text": "Insights",
+      "aria": null,
+      "href": "/insights",
+      "disabled": false
+    },
+    {
+      "tag": "a",
+      "text": "Package",
+      "aria": null,
+      "href": "/package",
+      "disabled": false
+    },
+    {
+      "tag": "a",
+      "text": "Files",
+      "aria": null,
+      "href": "/files",
+      "disabled": false
+    },
+    {
+      "tag": "a",
+      "text": "Assistant",
+      "aria": null,
+      "href": "/assistant",
+      "disabled": false
+    },
+    {
+      "tag": "a",
+      "text": "Billing",
+      "aria": null,
+      "href": "/billing",
+      "disabled": false
+    },
+    {
+      "tag": "a",
+      "text": "Settings",
+      "aria": null,
+      "href": "/settings",
+      "disabled": false
+    },
+    {
+      "tag": "button",
+      "text": "Today",
+      "aria": null,
+      "href": null,
+      "disabled": false
+    },
+    {
+      "tag": "button",
+      "text": "3 alerts",
+      "aria": null,
+      "href": null,
+      "disabled": false
+    },
+    {
+      "tag": "button",
+      "text": "CEO Updated Jun 15, 7:27 PM Plan run CEO is moving this deliverable forward inside a bounded assignment lane. Planning High priority Plan OUTCOME This plan is being shaped into the next clean business-facing move.",
+      "aria": "Open CEO card details",
+      "href": null,
+      "disabled": false
+    },
+    {
+      "tag": "button",
+      "text": "CFO Updated Jul 1, 4:59 PM Pressure-test the pricing lane CFO is moving this deliverable forward inside a bounded assignment lane. Blocked Active Pricing Review OUTCOME This pricing review is blocked and needs a deliberate unblock before more work starts.",
+      "aria": "Open CFO card details",
+      "href": null,
+      "disabled": false
+    },
+    {
+      "tag": "button",
+      "text": "Unblock lane (recommended)",
+      "aria": null,
+      "href": null,
+      "disabled": false
+    },
+    {
+      "tag": "button",
+      "text": "Hide composer for Unblock lane",
+      "aria": null,
+      "href": null,
+      "disabled": false
+    },
+    {
+      "tag": "button",
+      "text": "Reset to contract defaults",
+      "aria": null,
+      "href": null,
+      "disabled": false
+    }
+  ],
+  "visibleTextSample": "W Wealth Factory Installed Package Connect First | 22222222-2222-4222-8222-222222222222 Home Board Workflows Results Team Profiles Providers Insights Package Files Assistant Billing Settings CONNECT FIRST OPERATING SYSTEM Board Track persona-owned work cards in a clean orchestrator board without exposing backend chatter. Today 3 alerts Member HARNESS BOARD Orchestrator board for clean tenant-facing progress Persona cards stay concise, high-level, and readable. The board shows what each lane is advancing without exposing backend mechanics or internal run chatter. Active lanes 2 2 visible lanes are active across planning and blocked. Current focus Plan run Persona workload Balanced CEO approvals 0 Control mode Live Governance posture Clear 0 governance items Progress 0 0 follow-through actions landed Planning Work being shaped by the orchestrator. CEO Updated Jun 15, 7:27 PM Plan run CEO is moving this deliverable forward inside a bounded assignment lane. Planning High priority Plan OUTCOME This plan is being shaped into the next clean business-facing move. Working Active persona lanes moving the run forward. No persona cards in this lane. Waiting Lanes paused on a dependency or decision. No persona cards in this lane. Blocked Visible blockers that need resolution before progress continues. CFO Updated Jul 1, 4:59 PM Pressure-test the pricing lane CFO is moving this deliverable forward inside a bounded assignment lane. Blocked Active Pricing Review OUTCOME This pricing review is blocked and needs a deliberate unblock before more work starts. Done Completed outputs ready for review. No persona cards in this lane. Board pulse A bounded launch cockpit summary of focus, lane state, next actions, governance, and progress. Current focus Plan run is carrying the clearest live business move right now. Active lanes 2 visible lanes are active across planning and blocked. Next actions 1 live board action is shaping the next move. Governance posture No package governance items are shaping the current handoff. Progress 0 deliverables are packaged, 0 follow-through actions landed, and 0 decisions are preserved. Persona workload A quick view of which business personas are currently carrying visible work. CEO 1 card CFO 1 card CEO approvals Pending sub-card requests that still need CEO approval before new lanes open. No pending approvals Board is staying bounded Board action Connect First Workflow pricing review lane for CFO: Pressure-test the pricing lane needs an explicit unblock action. The pricing review cannot be completed because no current offer pricing, margin targets, customer segment assumptions, competitor anchors, or known pricing objections were provided. Without those inputs, any CFO pressure-test would be speculative. WAITING ON UNBLOCK Unblock lane Clear the blocked lane when the missing dependency has been resolved. Requested: Jul 1, 5:00 PM Unblock CFO lane: Pressure-test the pricing lane POST /api/harness/runs/eb420710-c786-4801-b54d-5c3adb39f0fc/resolve-attention Action family: resolve attention Allowed resolutions: unblock_lane Resolution choice Choose the single bounded step that resolves this attention state. Required field Allowed values: unblock_lane Unblock summary Optional tenant-safe note describing what changed before execution resumes. Optional field Unblock lane PRIMARY RECOMMENDED NEXT ACTION Move the lane out of its blocked state so execution can continue. The lane leaves its blocked state and re-enters the worker queue through the existing harness path. {\"resolution\":\"unblock_lane\"} Unblock lane (recommended) Hide composer for Unblock lane Reset to contract defaults Ready with contract defaults. Live request fields for Unblock lane Resolution choice Choose the single bounded step that resolves this attention state. unblock_lane Unblock summary Optional tenant-safe note describing what changed before execution resumes. Live payload preview { \"resolution\": \"unblock_lane\" }"
+}

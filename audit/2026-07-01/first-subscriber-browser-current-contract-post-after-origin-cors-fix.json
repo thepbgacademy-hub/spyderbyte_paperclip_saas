@@ -1,0 +1,13 @@
+{
+  "capturedAt": "2026-07-01T18:33:54.026Z",
+  "imageTag": "spyderbyte/api:wf-stage-20260701-corsorigin1",
+  "result": {
+    "boardStatus": 200,
+    "runId": "eb420710-c786-4801-b54d-5c3adb39f0fc",
+    "actionRoute": "resolve-attention",
+    "actionPath": "/api/harness/runs/eb420710-c786-4801-b54d-5c3adb39f0fc/resolve-attention",
+    "recommendedOptionValue": "unblock_lane",
+    "postStatus": 200,
+    "postBody": "{\"status\":\"unblocked\",\"cardId\":\"6928fa40-9270-46cb-85c3-1af3a9d4fb93\",\"state\":\"approved\"}"
+  }
+}

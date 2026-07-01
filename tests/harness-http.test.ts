@@ -13,7 +13,7 @@ import { createHarnessHttpHandler } from "../src/api/harness-http.js";
 describe("harness HTTP boundary", () => {
   it("fails closed for retired compatibility aliases on the launch routes", async () => {
     const handler = createHarnessHttpHandler({
-      allowedOrigins: ["https://portal.wealthfactory.test"],
+      allowedOrigins: ["https://portal.wealthfactory.test", "https://wf-api.wealthfactory.test"],
       listBoardState: vi.fn().mockResolvedValue({
         runId: "run_123",
         workflowId: "wf_connect_first_workflow",
@@ -82,7 +82,7 @@ describe("harness HTTP boundary", () => {
     const listBoardState = vi.fn();
     const createTopLevelChildCard = vi.fn();
     const handler = createHarnessHttpHandler({
-      allowedOrigins: ["https://portal.wealthfactory.test"],
+      allowedOrigins: ["https://portal.wealthfactory.test", "https://wf-api.wealthfactory.test"],
       listBoardState,
       createTopLevelChildCard,
       advanceChildCard: vi.fn(),
@@ -115,7 +115,7 @@ describe("harness HTTP boundary", () => {
       recentDecisions: []
     });
     const handler = createHarnessHttpHandler({
-      allowedOrigins: ["https://portal.wealthfactory.test"],
+      allowedOrigins: ["https://portal.wealthfactory.test", "https://wf-api.wealthfactory.test"],
       listBoardState,
       createTopLevelChildCard: vi.fn(),
       advanceChildCard: vi.fn(),
@@ -129,6 +129,8 @@ describe("harness HTTP boundary", () => {
       path: "/api/harness/board",
       headers: {
         authorization: "Bearer valid",
+        host: "wf-api.wealthfactory.test",
+        referer: "https://wf-api.wealthfactory.test/board?workflowId=wf_connect_first_workflow",
         "sec-fetch-site": "same-origin"
       },
       bodyByteLength: 0,
@@ -154,7 +156,7 @@ describe("harness HTTP boundary", () => {
       recentDecisions: []
     });
     const handler = createHarnessHttpHandler({
-      allowedOrigins: ["https://portal.wealthfactory.test"],
+      allowedOrigins: ["https://portal.wealthfactory.test", "https://wf-api.wealthfactory.test"],
       listBoardState,
       createTopLevelChildCard: vi.fn(),
       advanceChildCard: vi.fn(),
@@ -1930,6 +1932,50 @@ describe("harness HTTP boundary", () => {
       command: "unblock_lane",
       actionToken: "test-resolve-token",
       resumeSummary: "The blocker is cleared and this lane can return to the board queue."
+    });
+    expect(response.body).toEqual({ status: "unblocked", cardId: "card_blocked_1", state: "approved" });
+  });
+
+  it("allows same-origin browser resolve-attention writes when HTTPS referer proves the API origin", async () => {
+    const resolvePendingAttention = vi
+      .fn()
+      .mockResolvedValue({ status: "unblocked", cardId: "card_blocked_1", state: "approved" });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://wf-api.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      resolvePendingAttention,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/resolve-attention",
+      body: {
+        resolution: "unblock_lane",
+        actionHandle: "test-resolve-token"
+      },
+      headers: {
+        host: "wf-api.wealthfactory.test",
+        referer: "https://wf-api.wealthfactory.test/board?workflowId=wf_connect_first_workflow",
+        "content-type": "application/json"
+      },
+      bodyByteLength: JSON.stringify({
+        resolution: "unblock_lane",
+        actionHandle: "test-resolve-token"
+      }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(resolvePendingAttention).toHaveBeenCalledWith({
+      authorization: "",
+      runId: "run_123",
+      command: "unblock_lane",
+      actionToken: "test-resolve-token"
     });
     expect(response.body).toEqual({ status: "unblocked", cardId: "card_blocked_1", state: "approved" });
   });

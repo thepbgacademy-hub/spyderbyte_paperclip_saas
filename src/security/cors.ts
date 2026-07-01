@@ -51,17 +51,49 @@ export function assertAllowedBrowserOrigin(
     return assertAllowedOrigin(headers.origin, allowedOrigins);
   }
 
-  if (options.allowSameOriginWithoutOrigin && headers["sec-fetch-site"] === "same-origin") {
+  const requestOrigin = readRequestOrigin(headers);
+  const refererOrigin = readRefererOrigin(headers.referer);
+  if (
+    options.allowSameOriginWithoutOrigin &&
+    requestOrigin &&
+    refererOrigin === requestOrigin &&
+    isHttpsOrigin(refererOrigin) &&
+    allowedOrigins.includes(refererOrigin)
+  ) {
     return {};
   }
 
-  const requestOrigin = readRequestOrigin(headers);
-  const refererOrigin = readRefererOrigin(headers.referer);
-  if (options.allowSameOriginWithoutOrigin && requestOrigin && refererOrigin === requestOrigin) {
+  if (
+    options.allowSameOriginWithoutOrigin &&
+    refererOrigin &&
+    isHttpsRefererForRequestHost(headers, refererOrigin) &&
+    allowedOrigins.includes(refererOrigin)
+  ) {
     return {};
   }
 
   throw new Error("Origin is not allowed");
+}
+
+function isHttpsRefererForRequestHost(headers: RequestSecurityHeaders, refererOrigin: string | undefined): boolean {
+  return isHttpsOriginForRequestHost(headers, refererOrigin);
+}
+
+function isHttpsOriginForRequestHost(headers: RequestSecurityHeaders, origin: string | undefined): boolean {
+  if (!readRequestHost(headers) || !origin) {
+    return false;
+  }
+
+  try {
+    const originUrl = new URL(origin);
+    return originUrl.protocol === "https:" && originUrl.host === readRequestHost(headers);
+  } catch {
+    return false;
+  }
+}
+
+function isHttpsOrigin(origin: string | undefined): boolean {
+  return typeof origin === "string" && origin.startsWith("https://");
 }
 
 function readRefererOrigin(referer: string | undefined): string | undefined {
@@ -77,7 +109,8 @@ function readRefererOrigin(referer: string | undefined): string | undefined {
 }
 
 function readRequestOrigin(headers: RequestSecurityHeaders): string | undefined {
-  if (!headers.host) {
+  const host = readRequestHost(headers);
+  if (!host) {
     return undefined;
   }
 
@@ -86,5 +119,9 @@ function readRequestOrigin(headers: RequestSecurityHeaders): string | undefined 
     return undefined;
   }
 
-  return `${protocol}://${headers.host}`;
+  return `${protocol}://${host}`;
+}
+
+function readRequestHost(headers: RequestSecurityHeaders): string | undefined {
+  return headers.host;
 }

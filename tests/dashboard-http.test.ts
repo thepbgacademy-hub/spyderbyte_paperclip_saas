@@ -12,7 +12,7 @@ describe("dashboard HTTP boundary", () => {
       startWorkflowRun: vi.fn()
     };
     const handler = createDashboardHttpHandler({
-      allowedOrigins: ["https://portal.wealthfactory.test"],
+      allowedOrigins: ["https://portal.wealthfactory.test", "https://wf-api.wealthfactory.test"],
       dashboardApi,
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
     });
@@ -48,7 +48,7 @@ describe("dashboard HTTP boundary", () => {
       })
     };
     const handler = createDashboardHttpHandler({
-      allowedOrigins: ["https://portal.wealthfactory.test"],
+      allowedOrigins: ["https://portal.wealthfactory.test", "https://wf-api.wealthfactory.test"],
       dashboardApi,
       rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: 1 }) }
     });
@@ -58,6 +58,8 @@ describe("dashboard HTTP boundary", () => {
       path: "/api/dashboard",
       headers: {
         authorization: "Bearer valid",
+        host: "wf-api.wealthfactory.test",
+        referer: "https://wf-api.wealthfactory.test/dashboard",
         "sec-fetch-site": "same-origin"
       },
       bodyByteLength: 0,

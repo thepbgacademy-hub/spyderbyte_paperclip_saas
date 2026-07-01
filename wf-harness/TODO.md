@@ -151,10 +151,15 @@ This file tracks the new harness subproject only.
   - [x] Thread the same artifact requirement through `scripts/prove-stage-live-native-execution.mjs` and the stage native execution runner so multi-lane proof wrappers cannot bypass the gate.
   - [x] Prove the controlled `wf_connect_first_workflow` live native round trip after reauth: `codex_readiness_gate_verified`, `native_blocked_reached`, `native_attention_resolved`, and `round_trip_verified` in `audit/2026-07-01/live-native-execution-after-reauth-connect-first.json`.
   - [x] Record the wrapper guardrail: the wider stage wrapper must fail closed if connect-first readiness artifacts are reused for another workflow family such as `wf_tax_strategy`.
-- [ ] Next launch-facing slice: prove the browser/client journey on `wf_connect_first_workflow` against the now-green native round-trip lane.
-  - [ ] Use the browser harness to enter the authenticated first-subscriber board path.
-  - [ ] Confirm the tenant can see the native attention state and understand the next action without operator-only context.
-  - [ ] Exercise only the bounded connect-first unblock path; do not widen into other workflow families or export/cutover work.
+- [x] Next launch-facing slice: prove the browser/client journey on `wf_connect_first_workflow` against the now-green native round-trip lane.
+  - [x] Use the browser harness to enter the authenticated first-subscriber board path.
+  - [x] Confirm the tenant can see the native attention state and understand the next action without operator-only context.
+  - [x] Exercise only the bounded connect-first unblock path; do not widen into other workflow families or export/cutover work.
+  - [x] Capture the live browser POST blocker: `resolve-attention` returned `403 request_rejected` before reaching the harness boundary when Chrome sent same-origin browser metadata the original server guard did not accept.
+  - [x] Add the local TDD guard fix so the shared browser-origin guard accepts exact same-origin HTTPS `Origin` or `Referer` proof against the public request `Host` only when that API origin is explicitly present in `WF_ALLOWED_ORIGINS`, while still rejecting mismatched hosts and plain HTTP referers.
+  - [x] Deploy the same-origin guard fix to the isolated Wealth Factory stage lane only as `spyderbyte/api:wf-stage-20260701-corsorigin3`, with `https://wf-api.spyderbyte.cloud` explicitly included in the isolated stage `WF_ALLOWED_ORIGINS`.
+  - [x] Rerun the browser-harness current-contract unblock action against `wf_connect_first_workflow`; live browser POST returned 2xx and the follow-up board no longer shows `Latest board action issue` or `Retry Unblock lane`.
+  - [x] After reviewer feedback, remove `x-forwarded-host` trust and `Sec-Fetch-Site`-only acceptance, then confirm the narrowed live guard reaches request validation instead of returning `403 request_rejected`.
 
 - [x] Record the browser-harness first-subscriber observation.
   - [x] Launch sandbox Chrome through `E:/REPOS 2/browser-harness`.
