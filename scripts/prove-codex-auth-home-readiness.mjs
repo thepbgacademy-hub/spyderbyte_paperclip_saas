@@ -103,7 +103,7 @@ function buildRemoteCommand({ container, timeoutMs }) {
     "fi",
     "if [ \"$inspectOutput\" != \"true\" ]; then printf '{\"ok\":false,\"phase\":\"container_not_running\",\"mutationPerformed\":false,\"dbRowsWritten\":false,\"workflowRunsTouched\":false}'; exit 0; fi"
   ].join("\n");
-  const dockerCommand = `${inspectScript}\ndocker exec ${escapedContainer} sh -lc ${shellEscape(buildContainerReadinessScript({ timeoutMs }))}`;
+  const dockerCommand = `${inspectScript}\ndocker exec ${escapedContainer} sh -c ${shellEscape(buildContainerReadinessScript({ timeoutMs }))}`;
   return dockerCommand;
 }
 

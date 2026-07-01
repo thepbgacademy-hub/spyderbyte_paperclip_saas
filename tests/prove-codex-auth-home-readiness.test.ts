@@ -22,6 +22,8 @@ describe("Codex auth-home readiness proof", () => {
     expect(script).toContain("timeout");
     expect(script).toContain("smoke=");
     expect(script).toContain("READY");
+    expect(script).toContain(" sh -c ");
+    expect(script).not.toContain(" sh -lc ");
     expect(script).not.toContain("sudo -S");
     expect(script).not.toContain("SUDO_PASSWORD");
     expect(script).not.toMatch(/psql|UPDATE\s+wfpc|INSERT\s+INTO\s+wfpc|docker compose|docker restart/i);
