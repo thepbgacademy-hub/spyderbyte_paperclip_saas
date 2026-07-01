@@ -1,0 +1,83 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Wealth Factory Provider Binding Repair Slice Summary</title>
+  <style>
+    :root { --ink:#172017; --muted:#526052; --paper:#f7f3ea; --card:#fffaf0; --line:#d8cbb5; --accent:#2f6f4e; --warn:#9b5c1f; }
+    body { margin:0; font-family: Georgia, 'Times New Roman', serif; color:var(--ink); background:linear-gradient(135deg,#f7f3ea,#e9f0e6); }
+    main { max-width:1040px; margin:0 auto; padding:42px 22px; }
+    h1 { font-size:38px; margin:0 0 8px; letter-spacing:-0.03em; }
+    h2 { font-size:22px; margin:0 0 12px; }
+    p { line-height:1.55; }
+    .deck { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; margin:24px 0; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:18px; box-shadow:0 12px 28px rgba(49,42,31,.08); }
+    .label { display:inline-block; font:700 12px/1.2 Verdana,sans-serif; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); margin-bottom:8px; }
+    code { background:#efe5d4; padding:2px 5px; border-radius:5px; }
+    ul { padding-left:20px; }
+    li { margin:8px 0; }
+    a { color:var(--accent); font-weight:700; }
+    .status { border-left:5px solid var(--accent); }
+    .risk { border-left:5px solid var(--warn); }
+  </style>
+</head>
+<body>
+<main>
+  <p class="label">Wealth Factory Harness</p>
+  <h1>Provider Binding Repair Slice Summary</h1>
+  <p>This phase completed the local, operator-gated OpenAI Codex device-provider binding repair path. It keeps the first-subscriber repair narrow, proof-bound, and separate from Paperclip, DNS/Caddy, workflow runs, vault secrets, and BYOK/API-provider lanes.</p>
+
+  <section class="deck">
+    <article class="card status">
+      <span class="label">Implemented</span>
+      <h2>Target-Scoped Repair</h2>
+      <p><code>repair-openai-device-provider-binding</code> now executes only after explicit gates: Codex home, auth-state ref, confirmation flag, target-matched readiness proof, CODEX_HOME fingerprint, and DB URL.</p>
+    </article>
+    <article class="card status">
+      <span class="label">Protected</span>
+      <h2>Provider Seams</h2>
+      <p>The transaction updates the workflow template, package provider requirement, and metadata-only subscription reference. It fail-closes if the generated secret ref belongs to another provider lane.</p>
+    </article>
+    <article class="card risk">
+      <span class="label">Bounded Risk</span>
+      <h2>First Subscriber Only</h2>
+      <p>The subscription-reference revoke remains tenant/provider scoped because the table has no workflow column. Docs explicitly forbid generalizing this to multi-workflow tenants without a design/schema change.</p>
+    </article>
+  </section>
+
+  <section class="card">
+    <h2>Verification</h2>
+    <ul>
+      <li><code>npx vitest run tests/openai-device-provider-binding-repair-script.test.ts tests/prove-codex-auth-home-readiness.test.ts tests/vps2-isolated-stage-config.test.ts tests/handoff-docs.test.ts tests/first-subscriber-launch-readiness-gate.test.ts tests/first-subscriber-entry-url-blocker.test.ts</code> passed: 6 files, 42 tests.</li>
+      <li><code>npm run build</code> passed.</li>
+      <li><code>git diff --check</code> passed.</li>
+      <li><code>gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all</code> passed with low risk, 0 affected processes.</li>
+      <li>Sonnet was consulted in headless mode and recommended fixing runbook consistency, schema constraint proof, tenant-wide revoke documentation, and scan residuals.</li>
+      <li>Real subagent reviewers <strong>Laplace</strong> and <strong>Sartre</strong> were used and closed. Their findings were fixed before this summary.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>Next Phase</h2>
+    <p>Next is the operator-approved live stage repair and fresh proof run: supply the stage DB URL through operator env, run a dry-run immediately before execute, execute only on the Wealth Factory first-subscriber lane, then start/rebind a fresh proof run and continue browser-harness testing. Do not treat the old <code>openai_api</code>-bound run as proof of device auth.</p>
+  </section>
+
+  <section class="card">
+    <h2>Updated Files</h2>
+    <ul>
+      <li><a href="scripts/repair-openai-device-provider-binding.mjs">scripts/repair-openai-device-provider-binding.mjs</a></li>
+      <li><a href="scripts/prove-codex-auth-home-readiness.mjs">scripts/prove-codex-auth-home-readiness.mjs</a></li>
+      <li><a href="tests/openai-device-provider-binding-repair-script.test.ts">tests/openai-device-provider-binding-repair-script.test.ts</a></li>
+      <li><a href="tests/prove-codex-auth-home-readiness.test.ts">tests/prove-codex-auth-home-readiness.test.ts</a></li>
+      <li><a href="tests/handoff-docs.test.ts">tests/handoff-docs.test.ts</a></li>
+      <li><a href="deploy/runbooks/first-subscriber-launch-checklist.md">deploy/runbooks/first-subscriber-launch-checklist.md</a></li>
+      <li><a href="wf-harness/HANDOFF.md">wf-harness/HANDOFF.md</a></li>
+      <li><a href="wf-harness/TODO.md">wf-harness/TODO.md</a></li>
+      <li><a href="audit/2026-06-30/vps-codex-auth-home-readiness-proof.json">audit/2026-06-30/vps-codex-auth-home-readiness-proof.json</a></li>
+      <li><a href="audit/2026-06-30/secret-scan-report.md">audit/2026-06-30/secret-scan-report.md</a></li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VPS Codex Auth Home Provisioning Summary</title>
+    <style>
+      :root {
+        --ink: #1c1917;
+        --muted: #6b625d;
+        --paper: #fbf7ef;
+        --card: #fffdf8;
+        --line: #e8dccb;
+        --accent: #2f6f5e;
+        --warn: #a15c22;
+      }
+      body {
+        margin: 0;
+        background: linear-gradient(135deg, #fbf7ef 0%, #efe5d2 100%);
+        color: var(--ink);
+        font-family: "Aptos", "Segoe UI", sans-serif;
+      }
+      main {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 40px 22px;
+      }
+      header {
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 24px;
+        padding-bottom: 18px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 2rem;
+      }
+      .subtitle {
+        color: var(--muted);
+        margin: 0;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: 0 16px 40px rgba(60, 43, 24, 0.08);
+        padding: 18px;
+      }
+      h2 {
+        font-size: 1.05rem;
+        margin: 0 0 10px;
+      }
+      p,
+      li {
+        line-height: 1.55;
+      }
+      code {
+        background: #f2eadc;
+        border-radius: 7px;
+        padding: 2px 6px;
+      }
+      .status {
+        color: var(--warn);
+        font-weight: 700;
+      }
+      .ok {
+        color: var(--accent);
+        font-weight: 700;
+      }
+      a {
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>VPS Codex Auth Home Provisioning</h1>
+        <p class="subtitle">Bounded Wealth Factory stage lane update, June 30, 2026.</p>
+      </header>
+
+      <section class="grid">
+        <article class="card">
+          <h2>Phase Result</h2>
+          <p>
+            The isolated VPS stage API lane now exposes a tenant-isolated <code>CODEX_HOME</code>.
+            The readiness proof advanced from <code>codex_home_missing</code> to
+            <span class="status"><code>codex_smoke_failed</code></span>.
+          </p>
+        </article>
+
+        <article class="card">
+          <h2>What This Proves</h2>
+          <p>
+            Codex CLI is present in <code>wf-stage-api</code>, <code>CODEX_HOME</code> exists, and
+            the directory is writable. The remaining blocker is authenticated Codex device state
+            inside that VPS auth home.
+          </p>
+        </article>
+
+        <article class="card">
+          <h2>Guardrails Kept</h2>
+          <p>
+            No database rows, workflow runs, DNS/Caddy routing, Paperclip state, provider repair,
+            worker, scheduler, or public cutover path was mutated. Only <code>wf-stage-api</code>
+            was refreshed after backing up the stage files.
+          </p>
+        </article>
+      </section>
+
+      <section class="card" style="margin-top: 16px">
+        <h2>Verification</h2>
+        <ul>
+          <li><span class="ok">Passed:</span> <code>npx vitest run tests/prove-codex-auth-home-readiness.test.ts tests/vps2-isolated-stage-config.test.ts tests/handoff-docs.test.ts</code></li>
+          <li><span class="ok">Passed:</span> <code>npm run build</code></li>
+          <li><span class="ok">Passed:</span> <code>git diff --check</code></li>
+          <li><span class="ok">Passed:</span> <code>gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all</code> with low risk and zero affected processes</li>
+          <li><span class="ok">Consulted:</span> Sonnet in headless mode; it agreed with the API-only scope and recommended the writable-home guard.</li>
+          <li><span class="ok">Passed:</span> hotzone secret scan found no confirmed exposed secrets in changed Codex auth-home readiness files or targeted hotzone history.</li>
+        </ul>
+      </section>
+
+      <section class="card" style="margin-top: 16px">
+        <h2>Next Step</h2>
+        <p>
+          The Codex auth-home readiness proof now passes, and the OpenAI device provider-binding
+          repair script now requires a target-matched green readiness proof artifact before execute
+          mode can reach the still-fail-closed live DB mutation guard. The next bounded step is the
+          reviewed live provider-binding repair implementation/execution phase.
+        </p>
+      </section>
+
+      <section class="card" style="margin-top: 16px">
+        <h2>Updated Files</h2>
+        <ul>
+          <li><a href="audit/2026-06-30/vps-codex-auth-home-readiness-proof.json">audit/2026-06-30/vps-codex-auth-home-readiness-proof.json</a></li>
+          <li><a href="audit/2026-06-30/secret-scan-report.md">audit/2026-06-30/secret-scan-report.md</a></li>
+          <li><a href="deploy/docker-compose.vps2-isolated-stage.yml">deploy/docker-compose.vps2-isolated-stage.yml</a></li>
+          <li><a href="deploy/env/wf-stage.vps2.example.env">deploy/env/wf-stage.vps2.example.env</a></li>
+          <li><a href="scripts/prove-codex-auth-home-readiness.mjs">scripts/prove-codex-auth-home-readiness.mjs</a></li>
+          <li><a href="scripts/repair-openai-device-provider-binding.mjs">scripts/repair-openai-device-provider-binding.mjs</a></li>
+          <li><a href="tests/prove-codex-auth-home-readiness.test.ts">tests/prove-codex-auth-home-readiness.test.ts</a></li>
+          <li><a href="tests/openai-device-provider-binding-repair-script.test.ts">tests/openai-device-provider-binding-repair-script.test.ts</a></li>
+          <li><a href="tests/vps2-isolated-stage-config.test.ts">tests/vps2-isolated-stage-config.test.ts</a></li>
+          <li><a href="deploy/runbooks/first-subscriber-launch-checklist.md">deploy/runbooks/first-subscriber-launch-checklist.md</a></li>
+          <li><a href="wf-harness/HANDOFF.md">wf-harness/HANDOFF.md</a></li>
+          <li><a href="wf-harness/TODO.md">wf-harness/TODO.md</a></li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

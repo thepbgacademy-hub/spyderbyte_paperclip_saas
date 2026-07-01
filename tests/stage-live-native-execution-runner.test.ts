@@ -8,6 +8,9 @@ const { runStageLiveNativeExecutionPlan } = require("../scripts/lib/stage-live-n
     sshEnvFilePath: string;
     sshTarget: string;
     preflightContainer: string;
+    apiCodexHomeReadinessProofPath?: string | null;
+    workerCodexHomeReadinessProofPath?: string | null;
+    codexAuthStateRef?: string | null;
     childEnv: NodeJS.ProcessEnv;
     lanes: Array<{
       laneName: string;
@@ -34,6 +37,9 @@ describe("stage live native execution runner", () => {
       sshEnvFilePath: "E:/the_secrets/vps/ssh.env",
       sshTarget: "deploy@187.77.19.83",
       preflightContainer: "wf-stage-api",
+      apiCodexHomeReadinessProofPath: "audit/2026-07-01/api-ready.json",
+      workerCodexHomeReadinessProofPath: "audit/2026-07-01/worker-ready.json",
+      codexAuthStateRef: "codex-home:first-subscriber",
       childEnv: {
         VPS2_SUDO_PASSWORD: "super-secret"
       },
@@ -92,6 +98,12 @@ describe("stage live native execution runner", () => {
       "deploy@187.77.19.83",
       "--preflight-container",
       "wf-stage-api",
+      "--api-codex-home-readiness-proof",
+      "audit/2026-07-01/api-ready.json",
+      "--worker-codex-home-readiness-proof",
+      "audit/2026-07-01/worker-ready.json",
+      "--codex-auth-state-ref",
+      "codex-home:first-subscriber",
       "--tenant",
       "tenant-primary",
       "--user",
@@ -139,9 +151,11 @@ describe("stage live native execution runner", () => {
         runStageLiveNativeExecutionPlan({
           envFilePath: "E:/the_secrets/projects/wealth-factory-stage/wf-stage.vps2.env",
           sshEnvFilePath: "E:/the_secrets/vps/ssh.env",
-          sshTarget: "deploy@187.77.19.83",
-          preflightContainer: "wf-stage-api",
-          childEnv: {
+      sshTarget: "deploy@187.77.19.83",
+      preflightContainer: "wf-stage-api",
+      apiCodexHomeReadinessProofPath: "audit/2026-07-01/api-ready.json",
+      workerCodexHomeReadinessProofPath: "audit/2026-07-01/worker-ready.json",
+      childEnv: {
             VPS2_SUDO_PASSWORD: "super-secret"
           },
           lanes: [
@@ -193,9 +207,11 @@ describe("stage live native execution runner", () => {
       runStageLiveNativeExecutionPlan({
         envFilePath: "E:/the_secrets/projects/wealth-factory-stage/wf-stage.vps2.env",
         sshEnvFilePath: "E:/the_secrets/vps/ssh.env",
-        sshTarget: "deploy@187.77.19.83",
-        preflightContainer: "wf-stage-api",
-        childEnv: {
+      sshTarget: "deploy@187.77.19.83",
+      preflightContainer: "wf-stage-api",
+      apiCodexHomeReadinessProofPath: "audit/2026-07-01/api-ready.json",
+      workerCodexHomeReadinessProofPath: "audit/2026-07-01/worker-ready.json",
+      childEnv: {
           VPS2_SUDO_PASSWORD: "super-secret"
         },
         lanes: [
@@ -221,5 +237,50 @@ describe("stage live native execution runner", () => {
       stepLabel: "node scripts/prove-live-native-execution.mjs",
       signal: "SIGTERM"
     });
+  });
+
+  it("fails closed before spawning lanes when API or worker Codex readiness proof paths are missing", () => {
+    const spawn = vi.fn();
+
+    let thrown: unknown;
+    try {
+      runStageLiveNativeExecutionPlan({
+        envFilePath: "E:/the_secrets/projects/wealth-factory-stage/wf-stage.vps2.env",
+        sshEnvFilePath: "E:/the_secrets/vps/ssh.env",
+        sshTarget: "deploy@187.77.19.83",
+        preflightContainer: "wf-stage-api",
+        apiCodexHomeReadinessProofPath: "audit/2026-07-01/api-ready.json",
+        workerCodexHomeReadinessProofPath: null,
+        childEnv: {
+          VPS2_SUDO_PASSWORD: "super-secret"
+        },
+        lanes: [
+          {
+            laneName: "primary",
+            workflowId: "wf_connect_first_workflow",
+            profile: {
+              tenantId: "tenant-primary",
+              userId: "user-primary",
+              workflowTemplateId: "template-primary"
+            }
+          }
+        ],
+        spawn
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(spawn).not.toHaveBeenCalled();
+    expect(thrown).toMatchObject({
+      name: "StageLiveNativeExecutionStepError",
+      stepId: "codex_readiness_gate",
+      stepLabel: "Codex auth-home readiness proof gate",
+      status: 1
+    });
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toBe(
+      "Both API and worker Codex auth-home readiness proof paths are required before stage native execution."
+    );
   });
 });

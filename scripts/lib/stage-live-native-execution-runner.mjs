@@ -5,6 +5,14 @@ export function runStageLiveNativeExecutionPlan(input) {
   const stdout = input.stdout ?? process.stdout;
   const spawn = input.spawn ?? spawnSync;
   const cwd = input.cwd ?? process.cwd();
+  if (!input.apiCodexHomeReadinessProofPath || !input.workerCodexHomeReadinessProofPath) {
+    throw new StageLiveNativeExecutionStepError({
+      stepId: "codex_readiness_gate",
+      stepLabel: "Codex auth-home readiness proof gate",
+      status: 1,
+      message: "Both API and worker Codex auth-home readiness proof paths are required before stage native execution."
+    });
+  }
 
   for (const lane of input.lanes) {
     stdout.write(`\n== Stage native execution lane: ${lane.laneName} (${lane.workflowId}) ==\n`);
@@ -22,6 +30,11 @@ export function runStageLiveNativeExecutionPlan(input) {
         input.sshTarget,
         "--preflight-container",
         input.preflightContainer,
+        "--api-codex-home-readiness-proof",
+        input.apiCodexHomeReadinessProofPath,
+        "--worker-codex-home-readiness-proof",
+        input.workerCodexHomeReadinessProofPath,
+        ...(input.codexAuthStateRef ? ["--codex-auth-state-ref", input.codexAuthStateRef] : []),
         "--tenant",
         lane.profile.tenantId,
         "--user",
@@ -67,7 +80,7 @@ function runCommand(input) {
 
 class StageLiveNativeExecutionStepError extends Error {
   constructor(input) {
-    super(`${input.stepLabel} failed with exit status ${input.status}`);
+    super(input.message ?? `${input.stepLabel} failed with exit status ${input.status}`);
     this.name = "StageLiveNativeExecutionStepError";
     this.stepId = input.stepId;
     this.stepLabel = input.stepLabel;

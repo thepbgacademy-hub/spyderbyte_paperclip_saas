@@ -1,0 +1,18 @@
+﻿{
+    "ok": true,
+    "phase": "first_subscriber_package_exclusivity_verified",
+    "packageId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
+    "templates": [
+        {
+            "id": "44444444-4444-4444-8444-444444444444",
+            "tenant_id": "22222222-2222-4222-8222-222222222222",
+            "provider_kind": "openai_chatgpt_codex_subscription"
+        },
+        {
+            "id": "44444444-4444-4444-8444-555555555555",
+            "tenant_id": "22222222-2222-4222-8222-333333333333",
+            "provider_kind": "openai_api"
+        }
+    ],
+    "templateCount": 2
+}

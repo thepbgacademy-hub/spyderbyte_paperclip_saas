@@ -1,0 +1,243 @@
+﻿
+>> npm run build:server
+
+> spyderbyte-paperclip-saas@0.1.0 build:server
+> tsc --project tsconfig.server.json
+
+
+>> remote direct public reservation via wf-stage-api
+
+>> remote fresh harness bootstrap via wf-stage-api
+
+>> remote direct proof product path via wf-stage-api
+
+>> remote native workflow snapshot via wf-stage-api
+
+>> remote native workflow snapshot via wf-stage-api
+
+>> remote native workflow snapshot via wf-stage-api
+
+>> remote native workflow snapshot via wf-stage-api
+{
+  "ok": true,
+  "request": {
+    "tenantId": "22222222-2222-4222-8222-222222222222",
+    "userId": "11111111-1111-4111-8111-111111111111",
+    "role": "member",
+    "workflowId": "wf_connect_first_workflow",
+    "resolvedStartWorkflowId": "44444444-4444-4444-8444-444444444444",
+    "resolvedWorkflowTemplateId": "44444444-4444-4444-8444-444444444444"
+  },
+  "proof": {
+    "startPath": "direct_public_reservation",
+    "apiOrigin": "https://wf-api.spyderbyte.cloud",
+    "portalOrigin": "https://www.spyderbyte.cloud",
+    "codexReadinessGate": {
+      "ok": true,
+      "phase": "codex_readiness_gate_verified",
+      "proofs": {
+        "api": {
+          "ok": true,
+          "phase": "codex_auth_home_ready",
+          "container": "wf-stage-api",
+          "targetTenantId": "22222222-2222-4222-8222-222222222222",
+          "targetWorkflowId": "wf_connect_first_workflow",
+          "authStateRef": "codex-home:first-subscriber",
+          "codexHomeFingerprint": "73a6d07c58247365",
+          "mutationPerformed": false,
+          "dbRowsWritten": false,
+          "workflowRunsTouched": false
+        },
+        "worker": {
+          "ok": true,
+          "phase": "codex_auth_home_ready",
+          "container": "wf-stage-worker",
+          "targetTenantId": "22222222-2222-4222-8222-222222222222",
+          "targetWorkflowId": "wf_connect_first_workflow",
+          "authStateRef": "codex-home:first-subscriber",
+          "codexHomeFingerprint": "73a6d07c58247365",
+          "mutationPerformed": false,
+          "dbRowsWritten": false,
+          "workflowRunsTouched": false
+        }
+      },
+      "notes": [
+        "API and worker Codex auth-home readiness proofs are both green for the requested tenant/workflow.",
+        "Live native execution may proceed to the bounded proof step."
+      ]
+    },
+    "sessionCookieName": "wf_portal_session",
+    "sessionTokenSource": "generated",
+    "expectedExecutionEngine": "wf_native_v1",
+    "timeoutMs": 15000,
+    "envFilePath": "E:/the_secrets/projects/wealth-factory-stage/wf-stage.vps2.env",
+    "sshEnvFilePath": "E:/the_secrets/vps/ssh.env",
+    "remoteVerification": {
+      "sshTarget": "deploy@187.77.19.83",
+      "containerName": "wf-stage-api"
+    }
+  },
+  "result": {
+    "durableResult": {
+      "ok": true,
+      "runId": "eb420710-c786-4801-b54d-5c3adb39f0fc",
+      "postAttemptedAt": "2026-07-01T16:59:45.223Z",
+      "snapshot": {
+        "run": {
+          "id": "eb420710-c786-4801-b54d-5c3adb39f0fc",
+          "status": "queued",
+          "createdAt": "2026-06-16T14:47:15.068Z",
+          "publicWorkflowId": "wf_connect_first_workflow",
+          "workflowTemplateId": "44444444-4444-4444-8444-444444444444",
+          "workflowIdentityKind": "tenant_template",
+          "workflowDefinitionSnapshot": {},
+          "boundSecretReferenceId": "18b250ff-d5de-4380-aa84-1713dc639898",
+          "providerContext": [
+            {
+              "capability": "text_generation",
+              "providerKind": "openai_chatgpt_codex_subscription",
+              "label": "OpenAI Codex",
+              "secretRef": "wfpc_codex_subscription_22222222-2222-4222-8222-222222222222_wf_connect_first_workflow",
+              "metadata": {
+                "codexHome": "/home/deploy/wealth-factory-stage/codex-homes/first-subscriber",
+                "authStateRef": "codex-home:first-subscriber",
+                "codexHomeReady": true,
+                "codexHomeWritable": true,
+                "smokePromptPassed": true,
+                "readinessProofPhase": "codex_auth_home_ready",
+                "codexHomeFingerprint": "73a6d07c58247365",
+                "readinessProofArtifact": "supplied"
+              }
+            }
+          ]
+        },
+        "outbox": {
+          "id": "1e2bc401-3ec3-4357-adf2-1456ac49d1d7",
+          "status": "enqueued",
+          "createdAt": "2026-06-16T14:47:15.068Z",
+          "publicWorkflowId": "wf_connect_first_workflow",
+          "workflowTemplateId": "44444444-4444-4444-8444-444444444444",
+          "workflowIdentityKind": "tenant_template",
+          "attempts": 104,
+          "lastError": null
+        }
+      },
+      "verification": {
+        "ok": true,
+        "phase": "direct_public_reservation_verified",
+        "notes": [
+          "Direct public reservation canonicalized the durable run and queue rows to the tenant-template identity expected by the core built-in worker path.",
+          "Workflow run and queue outbox rows preserve one bound provider context, the resolved workflow_template_id, and an empty workflow_definition_snapshot."
+        ]
+      }
+    },
+    "nativeAcceptance": {
+      "runId": "eb420710-c786-4801-b54d-5c3adb39f0fc",
+      "runStatus": "queued",
+      "workflowPackageId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
+      "workflowTemplateId": "44444444-4444-4444-8444-444444444444",
+      "workflowIdentityKind": "tenant_template",
+      "workflowDefinitionSnapshot": {},
+      "executionEngine": ""
+    },
+    "advancementProof": {
+      "ok": true,
+      "phase": "native_blocked_reached",
+      "notes": [
+        "The queued run advanced into bounded native execution.",
+        "A fresh execution_outcome_committed event for the bootstrapped non-CEO lane recorded outcomeState blocked after the current POST attempt."
+      ],
+      "childLane": {
+        "cardId": "6928fa40-9270-46cb-85c3-1af3a9d4fb93",
+        "persona": "cfo",
+        "title": "Pressure-test the pricing lane",
+        "state": "blocked",
+        "attemptedAt": "2026-07-01T16:59:45.223Z",
+        "executionClaimedAt": null,
+        "laneCount": 1
+      },
+      "outcomeEvent": {
+        "id": "1249ab13-2a07-4e24-bace-978fefca8c51",
+        "cardId": "6928fa40-9270-46cb-85c3-1af3a9d4fb93",
+        "persona": "cfo",
+        "eventKind": "execution_outcome_committed",
+        "createdAt": "2026-07-01T16:59:51.312Z",
+        "payload": {
+          "runState": "blocked",
+          "outcomeState": "blocked",
+          "targetCardId": "6928fa40-9270-46cb-85c3-1af3a9d4fb93",
+          "continuitySummary": "Connect First Workflow pricing review lane for CFO: Pressure-test the pricing lane needs an explicit unblock action. The pricing review cannot be completed because no current offer assumptions, target customer segment, competitor anchors, unit economics, or proposed price points were provided. Without those inputs, pricing pressure and commercial readiness cannot be assessed truthfully.",
+          "postOutcomeActionKind": "await_unblock",
+          "attentionTransitionKind": "requested"
+        }
+      }
+    },
+    "nativeVerification": {
+      "ok": true,
+      "phase": "native_execution_verified",
+      "notes": [
+        "Direct public reservation persisted the durable run and queue rows with the expected bootstrap identity.",
+        "This start path does not persist executionEngine on workflow_definition_snapshot, so native routing is proven by the harness advancement event instead.",
+        "A bootstrapped non-CEO child lane produced a fresh outcome committed event after the current attempt timestamp."
+      ]
+    },
+    "waitingAttentionResolution": {
+      "ok": true,
+      "phase": "native_attention_resolved",
+      "notes": [
+        "The live board returned the current native attention contract for the requested workflow.",
+        "Submitting the bounded native attention resolution through the guarded resolve-attention route returned a successful response."
+      ],
+      "postAttemptedAt": "2026-07-01T16:59:36.165Z",
+      "actionResult": {
+        "status": 200,
+        "body": {
+          "status": "unblocked",
+          "cardId": "6928fa40-9270-46cb-85c3-1af3a9d4fb93",
+          "state": "approved"
+        }
+      }
+    },
+    "roundTripProof": {
+      "ok": true,
+      "phase": "native_blocked_reached",
+      "notes": [
+        "The queued run advanced into bounded native execution.",
+        "A fresh execution_outcome_committed event for the bootstrapped non-CEO lane recorded outcomeState blocked after the current POST attempt."
+      ],
+      "childLane": {
+        "cardId": "6928fa40-9270-46cb-85c3-1af3a9d4fb93",
+        "persona": "cfo",
+        "title": "Pressure-test the pricing lane",
+        "state": "working",
+        "attemptedAt": "2026-07-01T16:59:36.165Z",
+        "executionClaimedAt": "2026-07-01T16:59:53.329Z",
+        "laneCount": 1
+      },
+      "outcomeEvent": {
+        "id": "1249ab13-2a07-4e24-bace-978fefca8c51",
+        "cardId": "6928fa40-9270-46cb-85c3-1af3a9d4fb93",
+        "persona": "cfo",
+        "eventKind": "execution_outcome_committed",
+        "createdAt": "2026-07-01T16:59:51.312Z",
+        "payload": {
+          "runState": "blocked",
+          "outcomeState": "blocked",
+          "targetCardId": "6928fa40-9270-46cb-85c3-1af3a9d4fb93",
+          "continuitySummary": "Connect First Workflow pricing review lane for CFO: Pressure-test the pricing lane needs an explicit unblock action. The pricing review cannot be completed because no current offer assumptions, target customer segment, competitor anchors, unit economics, or proposed price points were provided. Without those inputs, pricing pressure and commercial readiness cannot be assessed truthfully.",
+          "postOutcomeActionKind": "await_unblock",
+          "attentionTransitionKind": "requested"
+        }
+      }
+    },
+    "roundTripVerification": {
+      "ok": true,
+      "phase": "round_trip_verified",
+      "notes": [
+        "The first native execution leg reached a truthful attention state.",
+        "The live board returned a bounded resolve-attention contract and accepted a native attention resolution.",
+        "A fresh native redispatch/advancement was proven after the board action."
+      ]
+    }
+  }
+}

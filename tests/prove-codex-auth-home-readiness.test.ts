@@ -18,6 +18,9 @@ describe("Codex auth-home readiness proof", () => {
     expect(script).toContain("container_not_running");
     expect(script).toContain("codex_cli_missing");
     expect(script).toContain("codex_home_missing");
+    expect(script).toContain("codex_home_not_writable");
+    expect(script).toContain("codexHomeFingerprint");
+    expect(script).toContain("sha256sum");
     expect(script).toContain("codex_smoke_failed");
     expect(script).toContain("timeout");
     expect(script).toContain("smoke=");
@@ -78,12 +81,20 @@ describe("Codex auth-home readiness proof", () => {
         "--execute",
         "--ssh-target",
         "deploy@187.77.19.83",
+        "--target-tenant",
+        "22222222-2222-4222-8222-222222222222",
+        "--target-workflow",
+        "wf_connect_first_workflow",
+        "--auth-state-ref",
+        "codex-home:first-subscriber",
         "--mock-remote-json",
         JSON.stringify({
           ok: true,
           phase: "codex_auth_home_ready",
           codexCliPresent: true,
           codexHomeExists: true,
+          codexHomeWritable: true,
+          codexHomeFingerprint: "73a6d07c58247365",
           smokePromptPassed: true,
           mutationPerformed: false,
           dbRowsWritten: false,
@@ -103,11 +114,16 @@ describe("Codex auth-home readiness proof", () => {
       phase: "codex_auth_home_ready",
       container: "wf-stage-api",
       sshTarget: "deploy@[masked]",
+      targetTenantId: "22222222-2222-4222-8222-222222222222",
+      targetWorkflowId: "wf_connect_first_workflow",
+      authStateRef: "codex-home:first-subscriber",
       codexCliChecked: true,
       codexHomeChecked: true,
       smokePromptChecked: true,
       codexCliPresent: true,
       codexHomeExists: true,
+      codexHomeWritable: true,
+      codexHomeFingerprint: "73a6d07c58247365",
       smokePromptPassed: true,
       mutationPerformed: false,
       dbRowsWritten: false,
@@ -154,6 +170,173 @@ describe("Codex auth-home readiness proof", () => {
     expect(JSON.stringify(parsed)).not.toMatch(/E:\\the_secrets|sk-test|187\.77\.19\.83/i);
   });
 
+  it("surfaces sanitized Codex smoke failure details without leaking credentials", () => {
+    const stdout = execFileSync(
+      process.execPath,
+      [
+        scriptPath,
+        "--execute",
+        "--ssh-target",
+        "deploy@187.77.19.83",
+        "--mock-remote-json",
+        JSON.stringify({
+          ok: false,
+          phase: "codex_smoke_failed",
+          codexCliPresent: true,
+          codexHomeExists: true,
+          codexHomeWritable: true,
+          codexHomeFingerprint: "73a6d07c58247365",
+          smokePromptPassed: false,
+          smokeError:
+            "HTTP 401: Your authentication token has been invalidated. Bearer sk-test E:\\the_secrets\\codex /home/deploy/wealth-factory-stage/codex-homes/first-subscriber",
+          mutationPerformed: false,
+          dbRowsWritten: false,
+          workflowRunsTouched: false
+        })
+      ],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8"
+      }
+    );
+
+    const parsed = JSON.parse(stdout);
+    expect(parsed).toMatchObject({
+      ok: false,
+      phase: "codex_auth_session_revoked",
+      smokePromptPassed: false,
+      smokeError: expect.stringContaining("HTTP 401")
+    });
+    expect(parsed.smokeError).toContain("authentication token has been invalidated");
+    expect(JSON.stringify(parsed)).not.toMatch(
+      /E:\\the_secrets|\/home\/deploy\/wealth-factory-stage\/codex-homes\/first-subscriber|sk-test|Bearer\s+[A-Za-z0-9._-]+|187\.77\.19\.83/i
+    );
+  });
+
+  it("classifies revoked Codex device-auth sessions as an explicit readiness phase", () => {
+    const stdout = execFileSync(
+      process.execPath,
+      [
+        scriptPath,
+        "--execute",
+        "--ssh-target",
+        "deploy@187.77.19.83",
+        "--mock-remote-json",
+        JSON.stringify({
+          ok: false,
+          phase: "codex_smoke_failed",
+          codexCliPresent: true,
+          codexHomeExists: true,
+          codexHomeWritable: true,
+          codexHomeFingerprint: "73a6d07c58247365",
+          smokePromptPassed: false,
+          smokeError: "ERROR: Your access token could not be refreshed because your refresh token was revoked.",
+          mutationPerformed: false,
+          dbRowsWritten: false,
+          workflowRunsTouched: false
+        })
+      ],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8"
+      }
+    );
+
+    const parsed = JSON.parse(stdout);
+    expect(parsed).toMatchObject({
+      ok: false,
+      phase: "codex_auth_session_revoked",
+      codexCliPresent: true,
+      codexHomeExists: true,
+      codexHomeWritable: true,
+      smokePromptPassed: false,
+      mutationPerformed: false,
+      dbRowsWritten: false,
+      workflowRunsTouched: false
+    });
+    expect(parsed.smokeError).toContain("refresh token was revoked");
+  });
+
+  it("keeps non-auth Codex smoke failures generic", () => {
+    const stdout = execFileSync(
+      process.execPath,
+      [
+        scriptPath,
+        "--execute",
+        "--ssh-target",
+        "deploy@187.77.19.83",
+        "--mock-remote-json",
+        JSON.stringify({
+          ok: false,
+          phase: "codex_smoke_failed",
+          codexCliPresent: true,
+          codexHomeExists: true,
+          codexHomeWritable: true,
+          codexHomeFingerprint: "73a6d07c58247365",
+          smokePromptPassed: false,
+          smokeError: "model overloaded before completing smoke prompt",
+          mutationPerformed: false,
+          dbRowsWritten: false,
+          workflowRunsTouched: false
+        })
+      ],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8"
+      }
+    );
+
+    const parsed = JSON.parse(stdout);
+    expect(parsed).toMatchObject({
+      ok: false,
+      phase: "codex_smoke_failed",
+      smokePromptPassed: false,
+      mutationPerformed: false,
+      dbRowsWritten: false,
+      workflowRunsTouched: false
+    });
+    expect(parsed.smokeError).toContain("model overloaded");
+  });
+
+  it("surfaces an unwritable Codex auth home before the smoke prompt", () => {
+    const stdout = execFileSync(
+      process.execPath,
+      [
+        scriptPath,
+        "--execute",
+        "--ssh-target",
+        "deploy@187.77.19.83",
+        "--mock-remote-json",
+        JSON.stringify({
+          ok: false,
+          phase: "codex_home_not_writable",
+          codexCliPresent: true,
+          codexHomeExists: true,
+          codexHomeWritable: false,
+          smokePromptPassed: false,
+          mutationPerformed: false,
+          dbRowsWritten: false,
+          workflowRunsTouched: false
+        })
+      ],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8"
+      }
+    );
+
+    const parsed = JSON.parse(stdout);
+    expect(parsed).toMatchObject({
+      ok: false,
+      phase: "codex_home_not_writable",
+      sshTarget: "deploy@[masked]",
+      codexCliPresent: true,
+      codexHomeExists: true,
+      codexHomeWritable: false,
+      smokePromptPassed: false
+    });
+  });
+
   it("classifies Docker socket permission failures separately from SSH reachability failures", () => {
     const script = readFileSync(scriptPath, "utf8");
 
@@ -190,13 +373,18 @@ describe("Codex auth-home readiness proof", () => {
       paperclipTouched: boolean;
       codexCliChecked: boolean;
       codexHomeChecked: boolean;
+      codexHomeWritable: boolean;
+      targetTenantId: string;
+      targetWorkflowId: string;
+      authStateRef: string;
+      codexHomeFingerprint: string;
       smokePromptChecked: boolean;
       finding: string;
     };
 
     expect(artifact).toMatchObject({
-      phase: "codex_home_missing",
-      ok: false,
+      phase: "codex_auth_home_ready",
+      ok: true,
       sshTarget: "deploy@[masked]",
       mutationPerformed: false,
       dbRowsWritten: false,
@@ -206,10 +394,16 @@ describe("Codex auth-home readiness proof", () => {
       paperclipTouched: false,
       codexCliChecked: true,
       codexHomeChecked: true,
-      smokePromptChecked: false
+      codexHomeWritable: true,
+      targetTenantId: "22222222-2222-4222-8222-222222222222",
+      targetWorkflowId: "wf_connect_first_workflow",
+      authStateRef: "codex-home:first-subscriber",
+      codexHomeFingerprint: "73a6d07c58247365",
+      smokePromptChecked: true
     });
     expect(artifact.finding).toContain("Codex CLI is present");
-    expect(artifact.finding).toContain("does not yet expose a tenant-isolated CODEX_HOME");
+    expect(artifact.finding).toContain("CODEX_HOME exists and is writable");
+    expect(artifact.finding).toContain("non-secret Codex smoke prompt succeeds");
     expect(JSON.stringify(artifact)).not.toMatch(/187\.77\.19\.83|E:\\the_secrets|sk-[A-Za-z0-9_-]+|Bearer\s+[A-Za-z0-9._-]+|postgresql:\/\//i);
   });
 

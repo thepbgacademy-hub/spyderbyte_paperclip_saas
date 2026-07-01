@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live Native Execution Codex Readiness Gate</title>
+  <style>
+    :root {
+      --ink: #16211b;
+      --muted: #667064;
+      --paper: #f6efe1;
+      --card: #fffaf1;
+      --line: #dccfb7;
+      --green: #1e7047;
+      --amber: #9b5e12;
+      --blue: #24556f;
+    }
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: Georgia, "Times New Roman", serif;
+      background:
+        radial-gradient(circle at 8% 0%, rgba(36, 85, 111, 0.2), transparent 32rem),
+        linear-gradient(135deg, #f6efe1, #eee2cd);
+    }
+    main {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 46px 22px 64px;
+    }
+    header {
+      border-bottom: 2px solid var(--line);
+      padding-bottom: 20px;
+      margin-bottom: 26px;
+    }
+    .eyebrow {
+      color: var(--blue);
+      font: 700 0.78rem/1.2 Verdana, sans-serif;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-size: clamp(2rem, 5vw, 4rem);
+      line-height: 0.98;
+      letter-spacing: -0.04em;
+      margin: 0 0 12px;
+    }
+    h2 {
+      margin: 0 0 10px;
+      font-size: 1.25rem;
+    }
+    p {
+      color: var(--muted);
+      font-size: 1rem;
+      line-height: 1.55;
+    }
+    .summary {
+      max-width: 830px;
+      font-size: 1.08rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin: 26px 0;
+    }
+    .card {
+      background: rgba(255, 250, 241, 0.9);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 20px;
+      box-shadow: 0 16px 36px rgba(62, 45, 18, 0.08);
+    }
+    .pill {
+      display: inline-block;
+      margin-bottom: 10px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font: 700 0.76rem/1.2 Verdana, sans-serif;
+    }
+    .ok {
+      color: var(--green);
+      background: rgba(30, 112, 71, 0.12);
+    }
+    .warn {
+      color: var(--amber);
+      background: rgba(155, 94, 18, 0.14);
+    }
+    code {
+      background: rgba(22, 33, 27, 0.08);
+      border-radius: 6px;
+      padding: 1px 5px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.92em;
+    }
+    ul {
+      padding-left: 20px;
+    }
+    li {
+      margin: 7px 0;
+    }
+    a {
+      color: var(--blue);
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">Wealth Factory Launch Guardrail</div>
+      <h1>Live Native Execution Now Requires Green Codex Readiness Proofs</h1>
+      <p class="summary">
+        This phase turned the current launch-blocker rule into executable behavior: live native execution cannot reserve, post, or advance a run until both API and worker Codex auth-home readiness artifacts are supplied, green, target-matched, auth-state matched, fingerprint matched, and non-mutating.
+      </p>
+    </header>
+
+    <section class="grid">
+      <article class="card">
+        <span class="pill ok">Fail Closed</span>
+        <h2>Direct Proof Gate</h2>
+        <p>
+          <code>scripts/prove-live-native-execution.mjs</code> validates the readiness artifacts before building remote config, generating sessions, posting dashboard starts, reserving direct runs, or advancing worker proof.
+        </p>
+      </article>
+      <article class="card">
+        <span class="pill ok">Wrapper Guarded</span>
+        <h2>Stage Runner Gate</h2>
+        <p>
+          The stage wrapper now requires API and worker artifact paths before spawning lane proof commands, then forwards both artifacts plus the expected auth-state reference to each child proof.
+        </p>
+      </article>
+      <article class="card">
+        <span class="pill ok">Reviewer Fixed</span>
+        <h2>Identity Tightened</h2>
+        <p>
+          Reviewer feedback found the first gate did not prove auth-state or CODEX_HOME identity. The final gate now requires <code>authStateRef</code>, <code>codexHomeFingerprint</code>, expected auth-state equality, and matching API/worker fingerprints.
+        </p>
+      </article>
+      <article class="card">
+        <span class="pill warn">Still Blocked</span>
+        <h2>Operator Reauth Next</h2>
+        <p>
+          The current live artifacts still prove <code>codex_auth_session_revoked</code>. The next phase remains out-of-band reauthentication, then fresh API and worker readiness proofs with target tenant/workflow/auth-state metadata.
+        </p>
+      </article>
+    </section>
+
+    <section class="card">
+      <h2>Verification</h2>
+      <ul>
+        <li>Focused tests passed: <code>32</code> tests across readiness proof, gate, live proof script, stage runner, and handoff docs.</li>
+        <li>Build passed: <code>npm run build</code>.</li>
+        <li>Local revoked-artifact script check failed closed before remote work with <code>phase: "codex_readiness_gate_blocked"</code>.</li>
+        <li>GitNexus reported <code>low</code> risk and <code>0</code> affected processes.</li>
+        <li>Sonnet was consulted in headless mode without VPS access; its deploy-first advice was rejected where it conflicted with the current top-of-handoff revoked-auth blocker.</li>
+        <li>Subagents were used for phase discovery, proof seam inspection, and two review passes; all were closed.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Files Updated</h2>
+      <ul>
+        <li><a href="scripts/lib/codex-readiness-proof-gate.mjs">scripts/lib/codex-readiness-proof-gate.mjs</a></li>
+        <li><a href="scripts/prove-live-native-execution.mjs">scripts/prove-live-native-execution.mjs</a></li>
+        <li><a href="scripts/prove-stage-live-native-execution.mjs">scripts/prove-stage-live-native-execution.mjs</a></li>
+        <li><a href="scripts/lib/stage-live-native-execution-runner.mjs">scripts/lib/stage-live-native-execution-runner.mjs</a></li>
+        <li><a href="tests/codex-readiness-proof-gate.test.ts">tests/codex-readiness-proof-gate.test.ts</a></li>
+        <li><a href="tests/live-native-execution-script.test.ts">tests/live-native-execution-script.test.ts</a></li>
+        <li><a href="tests/stage-live-native-execution-runner.test.ts">tests/stage-live-native-execution-runner.test.ts</a></li>
+        <li><a href="tests/handoff-docs.test.ts">tests/handoff-docs.test.ts</a></li>
+        <li><a href="deploy/runbooks/first-subscriber-launch-checklist.md">deploy/runbooks/first-subscriber-launch-checklist.md</a></li>
+        <li><a href="wf-harness/HANDOFF.md">wf-harness/HANDOFF.md</a></li>
+        <li><a href="wf-harness/TODO.md">wf-harness/TODO.md</a></li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

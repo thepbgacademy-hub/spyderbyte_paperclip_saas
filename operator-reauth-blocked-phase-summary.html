@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Wealth Factory Operator Reauth Blocked Phase Summary</title>
+    <style>
+      :root {
+        --ink: #19211c;
+        --muted: #5f6f63;
+        --line: #d7dfd4;
+        --paper: #fbfaf5;
+        --card: #ffffff;
+        --accent: #2f6f4e;
+        --warn: #a15c1b;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top left, rgba(47, 111, 78, 0.14), transparent 34rem),
+          linear-gradient(135deg, #fbfaf5 0%, #eef4ec 100%);
+        color: var(--ink);
+        font-family: Georgia, "Times New Roman", serif;
+        line-height: 1.55;
+      }
+
+      main {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 48px 24px 64px;
+      }
+
+      header {
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 28px;
+        padding-bottom: 24px;
+      }
+
+      h1 {
+        font-size: clamp(2rem, 5vw, 4rem);
+        line-height: 1;
+        margin: 0 0 12px;
+      }
+
+      h2 {
+        font-size: 1.35rem;
+        margin: 0 0 12px;
+      }
+
+      .eyebrow {
+        color: var(--accent);
+        font-family: "Trebuchet MS", sans-serif;
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        margin-bottom: 12px;
+        text-transform: uppercase;
+      }
+
+      .summary {
+        color: var(--muted);
+        font-size: 1.08rem;
+        max-width: 780px;
+      }
+
+      .grid {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        margin: 26px 0;
+      }
+
+      .card {
+        background: rgba(255, 255, 255, 0.88);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: 0 18px 45px rgba(25, 33, 28, 0.08);
+        padding: 20px;
+      }
+
+      .status {
+        border-left: 6px solid var(--warn);
+      }
+
+      strong {
+        color: var(--ink);
+      }
+
+      code {
+        background: #eef4ec;
+        border: 1px solid #dbe5d8;
+        border-radius: 6px;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 0.92em;
+        padding: 2px 5px;
+      }
+
+      ul,
+      ol {
+        margin: 0;
+        padding-left: 1.2rem;
+      }
+
+      li {
+        margin: 8px 0;
+      }
+
+      a {
+        color: var(--accent);
+        font-weight: 700;
+      }
+
+      .links {
+        background: rgba(25, 33, 28, 0.04);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="eyebrow">Wealth Factory Launch Readiness</div>
+        <h1>Operator Reauth Is The Current Phase Gate</h1>
+        <p class="summary">
+          The repository, GitNexus preflight, Sonnet consultation, and reviewer subagent all point to the same boundary:
+          local implementation is complete for the fail-closed readiness gate, and the next launch-advancing step is
+          out-of-band reauthentication of the tenant-isolated Codex home on VPS2.
+        </p>
+      </header>
+
+      <section class="grid" aria-label="phase status">
+        <article class="card status">
+          <h2>Decision</h2>
+          <p>
+            Do <strong>not</strong> keep writing local code before reauth. The docs now explicitly say to stop retrying
+            workflow runs when the readiness proof reports <code>codex_auth_session_revoked</code>.
+          </p>
+        </article>
+
+        <article class="card">
+          <h2>Evidence</h2>
+          <ul>
+            <li>GitNexus preflight reported low risk with zero affected processes for the inspected working set.</li>
+            <li>Sonnet agreed the local implementation is complete and the remaining blocker is operator reauth.</li>
+            <li>Reviewer subagent confirmed no safe local-only launch-advancing slice remains before green artifacts.</li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <h2>Guardrail</h2>
+          <p>
+            The live native proof is intentionally blocked until both API and worker readiness artifacts are
+            <code>codex_auth_home_ready</code>, target-matched, auth-ref-matched, fingerprint-matched, and non-mutating.
+          </p>
+        </article>
+      </section>
+
+      <section class="card">
+        <h2>Next Operator Sequence</h2>
+        <ol>
+          <li>Reauthenticate the tenant-isolated VPS2 Codex home out of band without printing or committing credential material.</li>
+          <li>Rerun readiness against <code>wf-stage-api</code> with the target tenant, <code>wf_connect_first_workflow</code>, and the auth-state ref.</li>
+          <li>Rerun readiness against <code>wf-stage-worker</code> with the same target tenant, workflow, and auth-state ref.</li>
+          <li>Confirm both artifacts return <code>phase: "codex_auth_home_ready"</code> and share the expected Codex home fingerprint.</li>
+          <li>Only then rerun live native execution with both readiness artifacts and the matching auth-state ref.</li>
+        </ol>
+      </section>
+
+      <section class="card">
+        <h2>Do Not Widen</h2>
+        <p>
+          This phase should not touch DNS, Caddy, database repair, Paperclip state, provider binding rewrites, workflow
+          families, export surfaces, scheduler work, or UI expansion. Those would add blast radius without removing the
+          current launch blocker.
+        </p>
+      </section>
+
+      <section class="card links">
+        <h2>Referenced Files</h2>
+        <ul>
+          <li><a href="wf-harness/HANDOFF.md">wf-harness/HANDOFF.md</a></li>
+          <li><a href="wf-harness/TODO.md">wf-harness/TODO.md</a></li>
+          <li><a href="deploy/runbooks/first-subscriber-launch-checklist.md">deploy/runbooks/first-subscriber-launch-checklist.md</a></li>
+          <li><a href="scripts/lib/codex-readiness-proof-gate.mjs">scripts/lib/codex-readiness-proof-gate.mjs</a></li>
+          <li><a href="scripts/prove-codex-auth-home-readiness.mjs">scripts/prove-codex-auth-home-readiness.mjs</a></li>
+          <li><a href="scripts/prove-live-native-execution.mjs">scripts/prove-live-native-execution.mjs</a></li>
+          <li><a href="scripts/prove-stage-live-native-execution.mjs">scripts/prove-stage-live-native-execution.mjs</a></li>
+          <li><a href="tests/codex-readiness-proof-gate.test.ts">tests/codex-readiness-proof-gate.test.ts</a></li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

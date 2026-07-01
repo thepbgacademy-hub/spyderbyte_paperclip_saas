@@ -1,0 +1,37 @@
+﻿{
+  "ok": true,
+  "dryRun": true,
+  "phase": "openai_device_provider_binding_repair_planned",
+  "tenantId": "22222222-2222-4222-8222-222222222222",
+  "workflowId": "wf_connect_first_workflow",
+  "workflowTemplateId": "44444444-4444-4444-8444-444444444444",
+  "providerKind": "openai_chatgpt_codex_subscription",
+  "label": "OpenAI Codex",
+  "codexHomeSupplied": true,
+  "authStateRefSupplied": true,
+  "codexHomeReadyConfirmed": false,
+  "codexHomeReadinessProofSupplied": true,
+  "codexHomeReadinessProofPhase": "codex_auth_home_ready",
+  "plannedSqlContract": [
+    "BEGIN",
+    "SELECT workflow template FOR UPDATE by tenant/workflow to fetch package_id",
+    "UPDATE wfpc.workflow_templates SET provider_kind = $3 WHERE tenant_id = $1 AND id = $2",
+    "UPDATE wfpc.package_provider_requirements SET provider_kind = $2 WHERE package_id = $1 AND provider_kind IN ('openai_api', 'openai_chatgpt_codex_subscription')",
+    "UPDATE wfpc.secret_references SET revoked_at = now() WHERE tenant_id = $1 AND provider_kind = $2 AND revoked_at IS NULL -- dedupe subscription rows only; openai_api remains active fallback",
+    "UPSERT wfpc.secret_references metadata with codexHome/authStateRef references only; no vault_secrets write and never raw Codex auth material",
+    "COMMIT",
+    "do not mutate existing workflow_runs; start a fresh proof run after repair"
+  ],
+  "liveMutationScope": [
+    "wfpc.workflow_templates provider_kind for the requested tenant/workflow template only",
+    "wfpc.package_provider_requirements provider_kind for the target workflow package only",
+    "wfpc.secret_references active subscription-provider reference for the requested tenant/provider only; no vault_secrets write"
+  ],
+  "blockedScope": [
+    "Paperclip containers or provider rows",
+    "DNS, Caddy, launch-host cutover, or unrelated VPS services",
+    "existing bound workflow_runs rows unless a separate fresh proof/rebind phase is explicitly run",
+    "BYOK/API-provider lanes for Anthropic, Gemini/OpenRouter, OpenAI API keys, or other user-owned API accounts"
+  ],
+  "note": "DRY RUN: no network, database, VPS, provider, or workflow mutation performed. Pass --execute only after the stage Codex auth home exists."
+}

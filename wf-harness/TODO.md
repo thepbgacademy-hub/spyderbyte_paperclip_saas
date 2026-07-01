@@ -1,4 +1,4 @@
-# Wealth Factory Harness TODO
+﻿# Wealth Factory Harness TODO
 
 This file tracks the new harness subproject only.
 
@@ -135,6 +135,27 @@ This file tracks the new harness subproject only.
 
 ## Current Next Slice
 
+- [x] Close the worker-side Codex execution wiring gap on the isolated Wealth Factory stage lane.
+  - [x] Add a focused regression requiring `wf-stage-worker` to mount the tenant-isolated `CODEX_HOME`.
+  - [x] Add a focused regression requiring `Dockerfile.worker` to expose `/app/node_modules/.bin` on `PATH`.
+  - [x] Deploy only the isolated `wf-stage-worker` image/config refresh on VPS 2.
+  - [x] Confirm live worker wiring reaches Codex CLI and writable `CODEX_HOME`.
+  - [x] Record the remaining launch blocker as revoked OpenAI device-login state, not worker/container wiring.
+- [x] Re-authenticate the tenant-isolated VPS Codex home out of band, then rerun readiness against both `wf-stage-api` and `wf-stage-worker`.
+  - [x] Promote revoked/expired Codex device auth from generic `codex_smoke_failed` to explicit `codex_auth_session_revoked` proof output so the next operator run has a clear stop condition.
+  - [x] Re-record non-mutating API and worker readiness artifacts with `phase: "codex_auth_session_revoked"` after the classifier change.
+  - [x] Record fresh green targeted artifacts at `audit/2026-07-01/codex-auth-home-readiness-api-after-reauth-targeted.json` and `audit/2026-07-01/codex-auth-home-readiness-worker-after-reauth-targeted.json`.
+- [x] Rerun the bounded live native execution proof only after both Codex auth-home readiness checks return `codex_auth_home_ready`.
+  - [x] Add an executable fail-closed readiness artifact gate so `scripts/prove-live-native-execution.mjs` requires both `--api-codex-home-readiness-proof` and `--worker-codex-home-readiness-proof` before any remote reservation or advancement path can run.
+  - [x] Require both artifacts to be green for the requested tenant/workflow, container-specific (`wf-stage-api` and `wf-stage-worker`), and non-mutating.
+  - [x] Thread the same artifact requirement through `scripts/prove-stage-live-native-execution.mjs` and the stage native execution runner so multi-lane proof wrappers cannot bypass the gate.
+  - [x] Prove the controlled `wf_connect_first_workflow` live native round trip after reauth: `codex_readiness_gate_verified`, `native_blocked_reached`, `native_attention_resolved`, and `round_trip_verified` in `audit/2026-07-01/live-native-execution-after-reauth-connect-first.json`.
+  - [x] Record the wrapper guardrail: the wider stage wrapper must fail closed if connect-first readiness artifacts are reused for another workflow family such as `wf_tax_strategy`.
+- [ ] Next launch-facing slice: prove the browser/client journey on `wf_connect_first_workflow` against the now-green native round-trip lane.
+  - [ ] Use the browser harness to enter the authenticated first-subscriber board path.
+  - [ ] Confirm the tenant can see the native attention state and understand the next action without operator-only context.
+  - [ ] Exercise only the bounded connect-first unblock path; do not widen into other workflow families or export/cutover work.
+
 - [x] Record the browser-harness first-subscriber observation.
   - [x] Launch sandbox Chrome through `E:/REPOS 2/browser-harness`.
   - [x] Confirm the corrected `wf-api` board URL is auth-gated when unauthenticated.
@@ -147,8 +168,8 @@ This file tracks the new harness subproject only.
   - [x] Run a read-only live provider-binding check for the controlled first-subscriber lane and record that the current live run remains bound to `openai_api`, not the OpenAI device/Codex subscription lane.
   - [x] Keep OpenAI device/Codex subscription auth as the preferred lane for this operator-controlled launch proof.
   - [x] Add a dry-run-first operator command for the OpenAI device provider binding repair: `npm run repair:openai-device-provider-binding`.
-  - [x] Keep repair execute mode fail-closed in this slice, even after `--confirm-codex-home-ready`, until a later dedicated DB-mutation phase wires and reviews the live repair.
-  - [x] Record the future repair mutation contract as transaction-scoped and limited to the intended tenant/workflow/provider binding plus `wfpc.package_provider_requirements`, with no mutation of existing `workflow_runs`, Paperclip state, shared-host routing, or BYOK/API-provider lanes.
+  - [x] Keep repair execute mode fail-closed in the dry-run/readiness slice, even after `--confirm-codex-home-ready`, until the dedicated DB-mutation phase wires and reviews the live repair.
+  - [x] Record the repair mutation contract as transaction-scoped and limited to the intended tenant/workflow/provider binding while only verifying the shared `wfpc.package_provider_requirements` seam, with no mutation of existing `workflow_runs`, Paperclip state, shared-host routing, or BYOK/API-provider lanes.
   - [x] Skip incomplete `openai_chatgpt_codex_subscription` rows during runtime provider resolution so placeholder device rows cannot block valid API-key fallback providers.
   - [x] Prove the VPS Codex auth-home readiness gate with `npm run prove:codex-auth-home-readiness -- --execute`, keeping the proof bounded and sanitized with no DB/workflow/DNS/Caddy/provider/Paperclip mutation.
   - [x] Record the truthful VPS readiness result: `docker_permission_denied` in `audit/2026-06-30/vps-codex-auth-home-readiness-proof.json`, with no database, workflow, DNS/Caddy, provider repair, Paperclip, or launch-state mutation.
@@ -157,11 +178,26 @@ This file tracks the new harness subproject only.
   - [x] Rerun `npm run prove:codex-auth-home-readiness -- --execute`; result advanced past Docker access to `codex_cli_missing`, proving the command now reaches `wf-stage-api` without DB/workflow/DNS/Caddy/provider/Paperclip mutation.
   - [x] Package `@openai/codex` into the API runtime image path, build `spyderbyte/api:wf-stage-20260630-codexcli2`, refresh only `wf-stage-api`, and rerun the auth-home readiness proof.
   - [x] Record the new truthful VPS readiness result: `codex_home_missing`; Codex CLI is present, but the API lane does not yet expose a tenant-isolated `CODEX_HOME` directory.
-  - [ ] Provision a tenant-isolated Codex auth home for the Wealth Factory API/worker lane, expose it to `wf-stage-api` as `CODEX_HOME`, then rerun the auth-home readiness proof before any provider binding repair execute phase.
-  - [ ] Create or repair the live OpenAI device/Codex subscription connection with `codexHome` / `authStateRef` metadata, then start or rebind a fresh proof run rather than retrying the old `openai_api`-bound run.
+  - [x] Add the stage compose/env contract for a tenant-isolated `WF_OPENAI_CODEX_HOME` mounted into `wf-stage-api` as `CODEX_HOME`, and harden the proof so an unwritable auth home fails closed before the smoke prompt.
+  - [x] Provision the tenant-isolated Codex auth home on VPS2, refresh only `wf-stage-api`, then rerun the auth-home readiness proof. Result advanced to `codex_smoke_failed`: Codex CLI is present, `CODEX_HOME` exists and is writable, but the VPS auth home does not yet contain authenticated Codex device state.
+  - [x] Install the operator-approved Codex auth state in the tenant-isolated VPS `CODEX_HOME`, then rerun the same readiness proof. Result: `codex_auth_home_ready` with the non-secret smoke prompt passing and no DB/workflow/DNS/Caddy/provider/Paperclip mutation.
+  - [x] Run the secret scan over the Codex auth-home hotzone and changed repository surfaces before any provider binding repair execute phase. Result: no confirmed exposed secrets in the scanned hotzone files or targeted hotzone history; report recorded at `audit/2026-06-30/secret-scan-report.md`.
+  - [x] Harden the OpenAI device provider binding repair execute gate so `--confirm-codex-home-ready` is not enough by itself; execute mode now requires `--codex-home-readiness-proof` and validates the green `codex_auth_home_ready` artifact, including CODEX_HOME fingerprint, before a DB URL can reach the target-scoped transaction.
+  - [x] Implement and locally prove the operator-gated provider-binding repair transaction against the schema-shaped mock DB: workflow template by tenant/id, package provider requirement by package id, tenant subscription-reference revoke, metadata-only `secret_references` upsert, no `vault_secrets`, no `workflow_runs`, no Paperclip, no DNS/Caddy, and no BYOK/API-provider mutation.
+  - [x] Close reviewer findings by binding the execute proof to the CODEX_HOME fingerprint and preventing the `secret_references` upsert from rewriting a row that already belongs to another provider lane.
+  - [x] Close the live stage template-id mismatch by keeping the public proof workflow id (`wf_connect_first_workflow`) separate from the explicit DB workflow template id (`44444444-4444-4444-8444-444444444444`) used by the repair transaction.
+  - [x] Verify the repair upsert dependency against the committed schema seam: `secret_references_tenant_secret_ref_unique` on `(tenant_id, secret_ref)` exists in `supabase/migrations/0002_acid_race_guards.sql`.
+  - [x] Record the first-subscriber limitation: because `secret_references` has no workflow column, the subscription-reference revoke is tenant/provider scoped and must not be generalized beyond the controlled single-workflow first-subscriber lane without a schema/design change.
+  - [x] Create or repair the live OpenAI device/Codex subscription connection with `codexHome` / `authStateRef` metadata, then start or rebind a fresh proof run rather than retrying the old `openai_api`-bound run.
+    - [x] July 1, 2026 live evidence: `audit/2026-07-01/openai-device-provider-binding-repair-execute.json` and `audit/2026-07-01/openai-device-provider-binding-db-postflight.json` prove the controlled first-subscriber workflow template now binds to `openai_chatgpt_codex_subscription`, with a metadata-only active `OpenAI Codex` reference carrying non-secret readiness breadcrumbs.
+    - [x] July 1, 2026 reviewer correction: the package provider requirement is package-scoped and shared by another enabled workflow template, so the repair script now only verifies that seam instead of mutating it, and the live package requirement was restored to `openai_api` in `audit/2026-07-01/package-provider-requirement-blast-radius-restore.json`.
+    - [x] July 1, 2026 live evidence: `audit/2026-07-01/live-native-execution-after-openai-device-binding.json` truthfully returned `fresh_harness_run_conflict` for existing durable run `eb420710-c786-4801-b54d-5c3adb39f0fc`; a fresh proof cannot be created under the current native public uniqueness model.
+    - [x] July 1, 2026 live evidence: `audit/2026-07-01/openai-device-existing-proof-run-rebind.json` proves the existing first-subscriber proof run was rebound to the active Codex subscription provider context and re-enqueued without touching Paperclip, DNS/Caddy, or BYOK/API lanes.
+    - [x] July 1, 2026 local fix: `src/providers/runtime-provider-execution.ts` / `.js` now hydrate `openai_chatgpt_codex_subscription` bindings from metadata without trying to read a vault secret, preserving vault hydration for API-key/BYOK lanes.
+    - [ ] Deploy the resolver fix to the isolated Wealth Factory stage image, then rerun `audit/2026-07-01/live-native-execution-after-openai-device-rebound-run.json` style proof to confirm the live worker no longer reports `bound provider secret was unavailable at execution time`.
   - [ ] Preserve BYOK/API-provider lanes for users who choose Anthropic, Gemini/OpenRouter, OpenAI API keys, or other supported API accounts.
   - [ ] Continue using the browser harness for first-hand login/workflow testing, cataloging each action and blocker before making adjustments.
-  - [x] Keep this observation non-destructive for live infrastructure: no VPS, Docker, Caddy, DNS, database, worker, queue, seed, scheduler, export, dashboard-visual, provider-credential, workflow-family, package-overlay, rollback, or operator mutation.
+  - [x] Keep the browser/provider observation itself non-destructive while recording the later approved VPS operator changes separately: Docker group access, `wf-stage-api` image/container refresh, tenant-isolated Codex home provisioning, and Codex auth-state installation. No Caddy, DNS, database, worker, queue, seed, scheduler, export, dashboard-visual, workflow-family, package-overlay, rollback, Paperclip, BYOK/API-provider lane, or cutover mutation was performed.
 
 - [x] Record and correct the first-subscriber entry URL blocker.
   - [x] Run the required GitNexus preflight first. On June 30, 2026 `gitnexus status` was current at commit `f513872`, and `gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all` reported no changes before edits.
@@ -314,7 +350,7 @@ This file tracks the new harness subproject only.
   - [x] Keep the architecture note explicit: the local `live-run-drive` helper and the direct remote bootstrap path are parallel fail-closed readers, not one shared call chain, so future edits must preserve both seams independently.
   - [x] Keep the helper truthfully narrow after reviewer follow-up: public workflow proofs must now pass an explicit `workflowTemplateId` instead of guessing the tenant's latest template, and queue verification only treats bounded worker-pickup states as success while terminal states fail closed as `queue_terminal_state`.
   - [x] Verify the bounded local seam with `npx vitest run tests/live-run-drive.test.ts tests/live-native-execution-script.test.ts tests/live-native-execution-acceptance.test.ts`, `npx vitest run tests/harness-ui.test.tsx tests/live-harness-export-stage-config.test.ts`, `npm run build`, and `npm run build:server`.
-  - [x] Verify the isolated live stage lane non-destructively on June 28, 2026 with `node scripts/prove-live-native-execution.mjs --env-file E:/the_secrets/projects/wealth-factory-stage/wf-stage.vps2.env --ssh-env-file E:/the_secrets/vps/ssh.env --ssh-target deploy@187.77.19.83 --preflight-container wf-stage-api --tenant 22222222-2222-4222-8222-222222222222 --user 11111111-1111-4111-8111-111111111111 --workflow wf_connect_first_workflow --workflow-template 44444444-4444-4444-8444-444444444444 --timeout-ms 60000 --fresh-run true`; it now returns structured `fresh_harness_run_conflict`, existing run id `eb420710-c786-4801-b54d-5c3adb39f0fc`, and `existing_harness_run_conflicts_with_fresh_proof` instead of the raw uniqueness collision.
+  - [x] Verify the isolated live stage lane non-destructively on June 28, 2026 with `node scripts/prove-live-native-execution.mjs --env-file [redacted-local-secrets-path] --ssh-env-file [redacted-local-secrets-path] --ssh-target deploy@[masked] --preflight-container wf-stage-api --tenant 22222222-2222-4222-8222-222222222222 --user 11111111-1111-4111-8111-111111111111 --workflow wf_connect_first_workflow --workflow-template 44444444-4444-4444-8444-444444444444 --timeout-ms 60000 --fresh-run true`; it now returns structured `fresh_harness_run_conflict`, existing run id `eb420710-c786-4801-b54d-5c3adb39f0fc`, and `existing_harness_run_conflicts_with_fresh_proof` instead of the raw uniqueness collision.
   - [x] Record the bounded live truth explicitly: this slice is safe to verify on the isolated stage lane because it only reads the already-bound durable harness run and returns a precondition; it does not delete, recycle, or widen the one-run-per-workflow uniqueness contract.
 - [x] Complete Phase R1: Repo Noise and Artifact Cleanup from `wf-harness/docs/plans/2026-06-22-post-audit-realignment-plan.md`.
   - [x] Run the required GitNexus preflight first.
@@ -468,7 +504,7 @@ This file tracks the new harness subproject only.
   - [x] Reconcile the handoff wording so the overall board page vs compact `harness-board` cockpit split is described consistently.
   - [x] Make the authenticated harness-board smoke/browser proof resolve shell and API checks from one canonical board selector, and require an explicit workflow selector for the live browser proof.
   - [x] Record the isolated VPS 2 stage-host rollout path in `deploy/runbooks/vps2-isolated-wealth-factory-stage-rollout.md` so live proof can proceed on `wf-api.spyderbyte.cloud` without disturbing the shared `api.spyderbyte.cloud` route.
-  - [x] Run `npm run prove:stage-live` against the isolated `wf-api.spyderbyte.cloud` lane with the real stage env from `E:/the_secrets/projects/wealth-factory-stage/wf-stage.vps2.env`.
+  - [x] Run `npm run prove:stage-live` against the isolated `wf-api.spyderbyte.cloud` lane with the real stage env from `[redacted-local-secrets-path]`.
     - [x] Keep `api.spyderbyte.cloud` unchanged while the isolated proof lane is the canonical launch validation surface.
   - [x] Record the current shared-host exception explicitly: on June 15, 2026 the proof stayed green with `WF_SMOKE_PRIVATE_PORTS=6379,9000,3000,5173,8080,8081,2375` because unrelated VPS 2 test lanes still intentionally held ports `5432`, `8000`, and `8443` open, and that setting is now the codified stage-proof posture rather than a one-off operator workaround.
   - [x] Decide the bounded shipping posture from the current branch: the branch is launch-proof-ready on `wf-api.spyderbyte.cloud`, while any cutover from `api.spyderbyte.cloud` stays a separate deliberate operator decision.
@@ -634,7 +670,7 @@ This file tracks the new harness subproject only.
 - [x] Catch stale draft drift before submit when the live board already has the current request-field contract, so invalid allowed values or hidden stale fields disable submit and require reset instead of depending on a later server rejection.
 - [x] Keep stale draft cleanup bounded when the live board contract refreshes, so removed actions/fields are pruned from local composer state but same-action drift still surfaces with explicit field-level reset reasons.
 - [x] Surface bounded contract-refresh guidance when a live reload prunes stale action drafts, removed request fields, or stale open composers, so concurrency-driven cleanup is visible instead of silent.
-- [x] Keep contract-refresh guidance action-specific enough to name the bounded actions/composers that were pruned, so concurrent board changes do not collapse into a vague “state changed” notice.
+- [x] Keep contract-refresh guidance action-specific enough to name the bounded actions/composers that were pruned, so concurrent board changes do not collapse into a vague "state changed" notice.
 - [x] Keep active contract-refresh guidance visible until dismissal or superseding refresh, and surface that active refresh state in the board pulse so cleanup remains operator-visible instead of quietly expiring.
 - [x] Preserve the last known bounded contract labels and field labels when a live refresh removes an action or field, so concurrency cleanup guidance stays human-readable instead of falling back to raw option values or field keys.
 - [x] Keep contract-refresh guidance structured with bounded affected-action and impact-count metadata so the board page and pulse can summarize concurrency cleanup without inventing page-local status heuristics.
@@ -758,7 +794,7 @@ This file tracks the new harness subproject only.
       - the only tenant with the enabled tax-strategy workflow template on June 28, 2026 was the same isolated stage tenant `22222222-2222-4222-8222-444444444444`
       - a direct parallel harness bootstrap for that tenant/workflow fails closed on `harness_runs_tenant_workflow_unique_idx`
       - therefore the bounded proof moved to operator-preparing a replay-eligible `delivery_failed` state on the current bundle instead of widening the runtime or seeding a new tenant/template lane
-    - [x] Operator-prepare `governance_history_export` and `package_bundle_export` on run `cdc1d911-e9a8-4810-b9f8-40476bc008a9` to `status = delivery_failed` with bounded synthetic error metadata, then rerun `node scripts/prove-live-harness-export.mjs --env-file E:/the_secrets/projects/wealth-factory-stage/wf-stage.vps2.env --ssh-env-file E:/the_secrets/vps/ssh.env --ssh-target deploy@187.77.19.83 --preflight-container wf-stage-api --tenant 22222222-2222-4222-8222-444444444444 --user 11111111-1111-4111-8111-333333333333 --workflow 44444444-4444-4444-8444-666666666666 --run cdc1d911-e9a8-4810-b9f8-40476bc008a9 --board-workflow wf_tax_strategy --mode replay --timeout-ms 60000 --poll-interval-ms 1000 --max-attempts 60` and confirm `ok: true`, `phase: "governance_and_package_export_verified"`, with both deliveries returned to `delivered` at `attemptCount: 2`.
+    - [x] Operator-prepare `governance_history_export` and `package_bundle_export` on run `cdc1d911-e9a8-4810-b9f8-40476bc008a9` to `status = delivery_failed` with bounded synthetic error metadata, then rerun `node scripts/prove-live-harness-export.mjs --env-file [redacted-local-secrets-path] --ssh-env-file [redacted-local-secrets-path] --ssh-target deploy@[masked] --preflight-container wf-stage-api --tenant 22222222-2222-4222-8222-444444444444 --user 11111111-1111-4111-8111-333333333333 --workflow 44444444-4444-4444-8444-666666666666 --run cdc1d911-e9a8-4810-b9f8-40476bc008a9 --board-workflow wf_tax_strategy --mode replay --timeout-ms 60000 --poll-interval-ms 1000 --max-attempts 60` and confirm `ok: true`, `phase: "governance_and_package_export_verified"`, with both deliveries returned to `delivered` at `attemptCount: 2`.
   - [x] Harden the replay-cycle helper after the live proof so a replay-ineligible delivered/current-bundle run fails closed before mutating `WF_OBSIDIAN_EXPORT_ROOT` or waiting through a timeout.
     - [x] Add the explicit `replay_cycle_not_failure_eligible` result with governance/package delivery eligibility details.
     - [x] Thread the remote delivery snapshot into `scripts/prove-live-harness-export-replay-cycle.mjs` so stage proof results use database delivery truth when available.

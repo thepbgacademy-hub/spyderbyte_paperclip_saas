@@ -14,6 +14,7 @@ const isolatedEnvExample = normalizeLineEndings(
 const isolatedRunbook = normalizeLineEndings(
   readFileSync("deploy/runbooks/vps2-isolated-wealth-factory-stage-rollout.md", "utf8")
 );
+const workerDockerfile = normalizeLineEndings(readFileSync("Dockerfile.worker", "utf8"));
 
 describe("VPS2 isolated Wealth Factory stage rollout", () => {
   it("keeps the dedicated stage hostname and route split explicit", () => {
@@ -45,6 +46,10 @@ describe("VPS2 isolated Wealth Factory stage rollout", () => {
     expect(isolatedCompose).toContain("WF_HARNESS_ENABLED_WORKFLOW_IDS: ${WF_HARNESS_ENABLED_WORKFLOW_IDS:-}");
     expect(isolatedCompose).toContain("WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS: ${WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS:-}");
     expect(isolatedCompose).toContain("WF_STORAGE_OAUTH_REDIRECT_ORIGIN: ${WF_STORAGE_OAUTH_REDIRECT_ORIGIN:-}");
+    expect(isolatedCompose).toContain("CODEX_HOME: ${WF_OPENAI_CODEX_HOME:?set WF_OPENAI_CODEX_HOME}");
+    expect(isolatedCompose).toContain(
+      "${WF_OPENAI_CODEX_HOME:?set WF_OPENAI_CODEX_HOME}:${WF_OPENAI_CODEX_HOME:?set WF_OPENAI_CODEX_HOME}"
+    );
     expect(isolatedCompose).toContain("REDIS_URL: ${REDIS_URL:?set REDIS_URL}");
     expect(isolatedCompose).toContain("WF_WORKFLOW_QUEUE_NAME: ${WF_WORKFLOW_QUEUE_NAME:?set WF_WORKFLOW_QUEUE_NAME}");
     expect(isolatedCompose).toContain("PAPERCLIP_BASE_URL: ${PAPERCLIP_BASE_URL:?set PAPERCLIP_BASE_URL}");
@@ -52,6 +57,20 @@ describe("VPS2 isolated Wealth Factory stage rollout", () => {
     expect(isolatedCompose).toMatch(
       /wf-stage-worker:[\s\S]*?networks:\s*\n\s+- ingress\s*\n\s+- paperclip\s*\n\s+- redis/
     );
+  });
+
+  it("mounts Codex device-auth home into the worker execution lane", () => {
+    const workerBlock = serviceBlock(isolatedCompose, "wf-stage-worker");
+
+    expect(workerBlock).toContain("CODEX_HOME: ${WF_OPENAI_CODEX_HOME:?set WF_OPENAI_CODEX_HOME}");
+    expect(workerBlock).toContain("volumes:");
+    expect(workerBlock).toContain(
+      "${WF_OPENAI_CODEX_HOME:?set WF_OPENAI_CODEX_HOME}:${WF_OPENAI_CODEX_HOME:?set WF_OPENAI_CODEX_HOME}"
+    );
+  });
+
+  it("keeps the worker runtime PATH able to find the packaged Codex CLI", () => {
+    expect(workerDockerfile).toContain('ENV PATH="/app/node_modules/.bin:${PATH}"');
   });
 
   it("ships a single env template for the isolated stage lane", () => {
@@ -63,6 +82,9 @@ describe("VPS2 isolated Wealth Factory stage rollout", () => {
     expect(isolatedEnvExample).toContain("WF_STORAGE_OAUTH_REDIRECT_ORIGIN=https://www.spyderbyte.cloud");
     expect(isolatedEnvExample).toContain("WF_WEB_APP_ENTRY_URL=https://wf-api.spyderbyte.cloud/app-assets/");
     expect(isolatedEnvExample).toContain("REDIS_URL=redis://redis:6379");
+    expect(isolatedEnvExample).toContain(
+      "WF_OPENAI_CODEX_HOME=/home/deploy/wealth-factory-stage/codex-homes/first-subscriber"
+    );
     expect(isolatedEnvExample).toContain("WF_WORKFLOW_QUEUE_NAME=wfpc-workflow-runs-stage");
     expect(isolatedEnvExample).toContain("PAPERCLIP_BASE_URL=http://paperclip:3100");
     expect(isolatedEnvExample).toContain("WF_ALLOWED_ORIGINS=https://www.spyderbyte.cloud");
@@ -135,4 +157,13 @@ describe("VPS2 isolated Wealth Factory stage rollout", () => {
 
 function normalizeLineEndings(value: string): string {
   return value.replace(/\r\n/g, "\n");
+}
+
+function serviceBlock(compose: string, serviceName: string): string {
+  const match = compose.match(new RegExp(`\\n  ${serviceName}:\\n[\\s\\S]*?(?=\\n  [a-z0-9-]+:\\n|\\nnetworks:\\n)`));
+  if (!match) {
+    throw new Error(`Missing compose service ${serviceName}`);
+  }
+
+  return match[0];
 }

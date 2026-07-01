@@ -1,0 +1,65 @@
+
+>> npm run build:server
+
+> spyderbyte-paperclip-saas@0.1.0 build:server
+> tsc --project tsconfig.server.json
+
+
+>> remote direct public reservation via wf-stage-api
+
+>> remote fresh harness bootstrap via wf-stage-api
+{
+  "ok": false,
+  "request": {
+    "tenantId": "22222222-2222-4222-8222-222222222222",
+    "userId": "11111111-1111-4111-8111-111111111111",
+    "role": "member",
+    "workflowId": "wf_connect_first_workflow",
+    "resolvedStartWorkflowId": "44444444-4444-4444-8444-444444444444",
+    "resolvedWorkflowTemplateId": "44444444-4444-4444-8444-444444444444"
+  },
+  "proof": {
+    "startPath": "direct_public_reservation",
+    "apiOrigin": "https://wf-api.spyderbyte.cloud",
+    "portalOrigin": "https://www.spyderbyte.cloud",
+    "sessionCookieName": "wf_portal_session",
+    "sessionTokenSource": "generated",
+    "expectedExecutionEngine": "wf_native_v1",
+    "timeoutMs": 120000,
+    "envFilePath": "[redacted-local-secrets-path]",
+    "sshEnvFilePath": "[redacted-local-secrets-path]",
+    "remoteVerification": {
+      "sshTarget": "deploy@[masked]",
+      "containerName": "wf-stage-api"
+    }
+  },
+  "result": {
+    "durableResult": {
+      "ok": false,
+      "error": {
+        "code": "fresh_harness_run_conflict",
+        "existingRunId": "eb420710-c786-4801-b54d-5c3adb39f0fc",
+        "harnessPreparationMode": "existing_harness_run_conflicts_with_fresh_proof"
+      }
+    },
+    "nativeAcceptance": null,
+    "advancementProof": null,
+    "nativeVerification": {
+      "ok": false,
+      "phase": "durable_binding_not_verified",
+      "notes": [
+        "The dashboard start did not reach the existing durable binding proof gate.",
+        "Native execution acceptance is not trusted until the run and outbox rows verify cleanly."
+      ]
+    },
+    "waitingAttentionResolution": null,
+    "roundTripProof": null,
+    "roundTripVerification": {
+      "ok": false,
+      "phase": "native_execution_not_verified",
+      "notes": [
+        "The bounded waiting-lane round-trip proof cannot continue until the first native advancement leg is verified."
+      ]
+    }
+  }
+}

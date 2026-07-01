@@ -1,0 +1,122 @@
+﻿{
+    "ok": true,
+    "checkedAt": "2026-07-01T05:28:45.384733+00:00",
+    "templateRows": [
+        {
+            "id": "44444444-4444-4444-8444-444444444444",
+            "enabled": true,
+            "tenant_id": "22222222-2222-4222-8222-222222222222",
+            "package_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
+            "provider_kind": "openai_chatgpt_codex_subscription"
+        }
+    ],
+    "secretReferences": [
+        {
+            "label": "OpenAI",
+            "active": true,
+            "tenant_id": "22222222-2222-4222-8222-222222222222",
+            "provider_kind": "openai_api",
+            "has_codex_home": false,
+            "has_auth_state_ref": false,
+            "has_codex_home_ready": false,
+            "has_smoke_prompt_passed": false,
+            "has_codex_home_fingerprint": false
+        },
+        {
+            "label": "OpenAI",
+            "active": false,
+            "tenant_id": "22222222-2222-4222-8222-222222222222",
+            "provider_kind": "openai_api",
+            "has_codex_home": false,
+            "has_auth_state_ref": false,
+            "has_codex_home_ready": false,
+            "has_smoke_prompt_passed": false,
+            "has_codex_home_fingerprint": false
+        },
+        {
+            "label": "OpenAI",
+            "active": false,
+            "tenant_id": "22222222-2222-4222-8222-222222222222",
+            "provider_kind": "openai_api",
+            "has_codex_home": false,
+            "has_auth_state_ref": false,
+            "has_codex_home_ready": false,
+            "has_smoke_prompt_passed": false,
+            "has_codex_home_fingerprint": false
+        },
+        {
+            "label": "OpenAI",
+            "active": false,
+            "tenant_id": "22222222-2222-4222-8222-222222222222",
+            "provider_kind": "openai_api",
+            "has_codex_home": false,
+            "has_auth_state_ref": false,
+            "has_codex_home_ready": false,
+            "has_smoke_prompt_passed": false,
+            "has_codex_home_fingerprint": false
+        },
+        {
+            "label": "OpenAI",
+            "active": false,
+            "tenant_id": "22222222-2222-4222-8222-222222222222",
+            "provider_kind": "openai_api",
+            "has_codex_home": false,
+            "has_auth_state_ref": false,
+            "has_codex_home_ready": false,
+            "has_smoke_prompt_passed": false,
+            "has_codex_home_fingerprint": false
+        },
+        {
+            "label": "OpenAI",
+            "active": false,
+            "tenant_id": "22222222-2222-4222-8222-222222222222",
+            "provider_kind": "openai_api",
+            "has_codex_home": false,
+            "has_auth_state_ref": false,
+            "has_codex_home_ready": false,
+            "has_smoke_prompt_passed": false,
+            "has_codex_home_fingerprint": false
+        },
+        {
+            "label": "OpenAI",
+            "active": false,
+            "tenant_id": "22222222-2222-4222-8222-222222222222",
+            "provider_kind": "openai_api",
+            "has_codex_home": false,
+            "has_auth_state_ref": false,
+            "has_codex_home_ready": false,
+            "has_smoke_prompt_passed": false,
+            "has_codex_home_fingerprint": false
+        },
+        {
+            "label": "OpenAI",
+            "active": false,
+            "tenant_id": "22222222-2222-4222-8222-222222222222",
+            "provider_kind": "openai_api",
+            "has_codex_home": false,
+            "has_auth_state_ref": false,
+            "has_codex_home_ready": false,
+            "has_smoke_prompt_passed": false,
+            "has_codex_home_fingerprint": false
+        },
+        {
+            "label": "OpenAI Codex",
+            "active": true,
+            "tenant_id": "22222222-2222-4222-8222-222222222222",
+            "provider_kind": "openai_chatgpt_codex_subscription",
+            "has_codex_home": true,
+            "has_auth_state_ref": true,
+            "has_codex_home_ready": true,
+            "has_smoke_prompt_passed": true,
+            "has_codex_home_fingerprint": true
+        }
+    ],
+    "packageProviderRequirements": [
+        {
+            "required": true,
+            "capability": "content_generation",
+            "package_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
+            "provider_kind": "openai_chatgpt_codex_subscription"
+        }
+    ]
+}

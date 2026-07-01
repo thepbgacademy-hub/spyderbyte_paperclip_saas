@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Codex Auth Session Revoked Readiness Proof</title>
+  <style>
+    :root {
+      --ink: #17201a;
+      --muted: #5c6b60;
+      --paper: #f7f3e8;
+      --card: #fffaf0;
+      --line: #d9cfb7;
+      --ok: #1f6f43;
+      --warn: #9a5b00;
+      --blue: #245a7a;
+    }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(36, 90, 122, 0.18), transparent 36rem),
+        linear-gradient(135deg, #f7f3e8 0%, #eee4cf 100%);
+      line-height: 1.55;
+    }
+    main {
+      max-width: 1060px;
+      margin: 0 auto;
+      padding: 48px 22px 64px;
+    }
+    header {
+      border-bottom: 2px solid var(--line);
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+    }
+    h1 {
+      font-size: clamp(2rem, 5vw, 4rem);
+      line-height: 0.98;
+      margin: 0 0 12px;
+      letter-spacing: -0.04em;
+    }
+    h2 {
+      font-size: 1.35rem;
+      margin: 0 0 12px;
+    }
+    .eyebrow {
+      color: var(--blue);
+      font: 700 0.78rem/1.2 Verdana, sans-serif;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .summary {
+      max-width: 820px;
+      color: var(--muted);
+      font-size: 1.08rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin: 26px 0;
+    }
+    .card {
+      background: rgba(255, 250, 240, 0.86);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 16px 38px rgba(68, 50, 21, 0.08);
+      padding: 20px;
+    }
+    .status {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font: 700 0.78rem/1.2 Verdana, sans-serif;
+      margin-bottom: 10px;
+    }
+    .status.ok {
+      background: rgba(31, 111, 67, 0.12);
+      color: var(--ok);
+    }
+    .status.warn {
+      background: rgba(154, 91, 0, 0.13);
+      color: var(--warn);
+    }
+    code {
+      background: rgba(23, 32, 26, 0.08);
+      border-radius: 6px;
+      padding: 1px 5px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.92em;
+    }
+    ul {
+      padding-left: 20px;
+    }
+    a {
+      color: var(--blue);
+      font-weight: 700;
+    }
+    .links li {
+      margin: 7px 0;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">Wealth Factory Readiness Contract</div>
+      <h1>Codex Auth Session Revoked Proof</h1>
+      <p class="summary">
+        This bounded phase tightened the local/live readiness contract so revoked or expired OpenAI Codex device sessions are reported as
+        <code>codex_auth_session_revoked</code> instead of being buried under a generic smoke failure. The phase stayed inside the readiness-proof seam and did not mutate workflow runs, provider bindings, DNS, Caddy, Paperclip, or deployment images.
+      </p>
+    </header>
+
+    <section class="grid" aria-label="Phase results">
+      <article class="card">
+        <span class="status ok">Contract Clean</span>
+        <h2>Explicit Auth Failure</h2>
+        <p>
+          The readiness proof now classifies revoked OpenAI device auth sessions as <code>codex_auth_session_revoked</code>, while unrelated smoke failures remain <code>codex_smoke_failed</code>.
+        </p>
+      </article>
+
+      <article class="card">
+        <span class="status ok">Live Proof</span>
+        <h2>API + Worker Checked</h2>
+        <p>
+          Non-mutating readiness proofs were recorded for both <code>wf-stage-api</code> and <code>wf-stage-worker</code>. Both containers can see the CLI and tenant Codex home, and both stop at the explicit revoked-session gate.
+        </p>
+      </article>
+
+      <article class="card">
+        <span class="status ok">Scope Guarded</span>
+        <h2>No Drift Added</h2>
+        <p>
+          Reviewer findings were folded back into the artifacts and docs: raw VPS target/home strings were redacted, and the package provider requirement seam is documented as verify-only.
+        </p>
+      </article>
+
+      <article class="card">
+        <span class="status warn">Next Gate</span>
+        <h2>Operator Reauth</h2>
+        <p>
+          The next launch-blocking action is out-of-band reauthentication of the tenant-isolated Codex home, followed by rerunning the same API and worker readiness proof before any live native workflow retry.
+        </p>
+      </article>
+    </section>
+
+    <section class="card">
+      <h2>Verification</h2>
+      <ul>
+        <li>Focused tests: <code>47 passed</code> across readiness, provider-binding repair, runtime execution, VPS stage config, and handoff-doc suites.</li>
+        <li>Build: <code>npm run build</code> passed with TypeScript <code>--noEmit</code>.</li>
+        <li>GitNexus: <code>low</code> risk, <code>0</code> affected processes.</li>
+        <li>Hotzone scan: artifacts/docs have no raw VPS target, raw Codex-home path, or raw local secrets-path matches; remaining matches are intentional test fixtures or policy prose.</li>
+        <li>Sonnet: not consulted in this run because the operating instruction explicitly said not to call Sonnet.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Updated Files</h2>
+      <ul class="links">
+        <li><a href="scripts/prove-codex-auth-home-readiness.mjs">scripts/prove-codex-auth-home-readiness.mjs</a></li>
+        <li><a href="tests/prove-codex-auth-home-readiness.test.ts">tests/prove-codex-auth-home-readiness.test.ts</a></li>
+        <li><a href="tests/handoff-docs.test.ts">tests/handoff-docs.test.ts</a></li>
+        <li><a href="deploy/runbooks/first-subscriber-launch-checklist.md">deploy/runbooks/first-subscriber-launch-checklist.md</a></li>
+        <li><a href="wf-harness/HANDOFF.md">wf-harness/HANDOFF.md</a></li>
+        <li><a href="wf-harness/TODO.md">wf-harness/TODO.md</a></li>
+        <li><a href="audit/2026-07-01/codex-auth-home-readiness-api-auth-session-revoked.json">audit/2026-07-01/codex-auth-home-readiness-api-auth-session-revoked.json</a></li>
+        <li><a href="audit/2026-07-01/codex-auth-home-readiness-worker-auth-session-revoked.json">audit/2026-07-01/codex-auth-home-readiness-worker-auth-session-revoked.json</a></li>
+        <li><a href="audit/2026-07-01/openai-device-provider-binding-repair-execute.json">audit/2026-07-01/openai-device-provider-binding-repair-execute.json</a></li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

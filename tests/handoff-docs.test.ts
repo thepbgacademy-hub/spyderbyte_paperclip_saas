@@ -49,53 +49,120 @@ describe("handoff board-surface wording", () => {
     );
   });
 
-  it("records the browser-harness observation as latest while preserving launch-readiness history", () => {
+  it("records the post-reauth connect-first proof as latest while preserving launch-readiness history", () => {
     expect(latestPhaseCurrentBlock).toContain(
+      "Re-authenticated the tenant-isolated OpenAI Codex device login"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "codex_auth_home_ready"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "codex-auth-home-readiness-api-after-reauth-targeted.json"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "codex-auth-home-readiness-worker-after-reauth-targeted.json"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "live-native-execution-after-reauth-connect-first.json"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "round_trip_verified"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "wf_tax_strategy"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "next launch-facing phase should prove the browser/client journey"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "--api-codex-home-readiness-proof"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "--worker-codex-home-readiness-proof"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "--codex-auth-state-ref"
+    );
+    expect(latestPhase).toContain(
+      "Deployed the bounded worker-side Codex execution wiring fix"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "wf-stage-api"
+    );
+    expect(latestPhase).toContain(
+      "wf-stage-worker"
+    );
+    expect(latestPhase).toContain(
+      "wf-stage-20260701-workercodexhome2"
+    );
+    expect(latestPhase).toContain(
+      "refresh_token_invalidated"
+    );
+    expect(latestPhase).toContain(
+      "re-authenticate the tenant-isolated Codex device login"
+    );
+    expect(latestPhase).toContain("codex-auth-home-readiness-worker-auth-revoked.json");
+    expect(latestPhase).toContain("codex-auth-home-readiness-api-auth-session-revoked.json");
+    expect(latestPhase).toContain("codex-auth-home-readiness-worker-auth-session-revoked.json");
+    expect(latestPhase).toContain("No DNS, Caddy, web image");
+    expect(latestPhase).toContain(
       "Recorded the first-subscriber browser-harness observation"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "authenticated browser session loaded the Wealth Factory board"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "native provider lane is blocked by HTTP `401`"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "OpenAI device/Codex subscription provider binding"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "`audit/2026-06-30/first-subscriber-browser-harness-observation.json`"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "--confirm-codex-home-ready"
     );
-    expect(latestPhaseCurrentBlock).toContain(
-      "remains fail-closed in this slice"
+    expect(latestPhase).toContain(
+      "--codex-home-readiness-proof"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
+      "requires `codexHome`, `authStateRef`, `--confirm-codex-home-ready`, a target-matched `--codex-home-readiness-proof` with a matching CODEX_HOME fingerprint, and an operator-supplied stage DB URL"
+    );
+    expect(latestPhase).toContain(
+      "Implemented the target-scoped transaction contract"
+    );
+    expect(latestPhase).toContain(
+      "must not be generalized to multi-workflow tenants without a schema/design change"
+    );
+    expect(latestPhase).toContain(
       "wfpc.package_provider_requirements"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "incomplete `openai_chatgpt_codex_subscription` rows"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "npm run prove:codex-auth-home-readiness"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "defaults to dry-run without loading secret files"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "Result advanced to `codex_home_missing`"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
+      "Result: `codex_auth_home_ready`"
+    );
+    expect(latestPhase).toContain(
       "vps-codex-auth-home-readiness-proof.json"
     );
-    expect(latestPhaseCurrentBlock).toContain(
-      "do not proceed to OpenAI device provider binding repair execute"
+    expect(latestPhase).toContain(
+      "the Codex auth-home readiness hotzone is safe to proceed from a repository secret-exposure standpoint"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "performs no DB, workflow, DNS/Caddy, provider repair, or Paperclip mutation"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "must not mutate existing `workflow_runs`"
     );
     expect(latestPhase).toContain(
@@ -168,13 +235,35 @@ describe("handoff board-surface wording", () => {
     expect(firstSubscriberLaunchChecklist).toContain("tenant-isolated `CODEX_HOME`");
     expect(firstSubscriberLaunchChecklist).toContain("non-secret smoke prompt");
     expect(firstSubscriberLaunchChecklist).toContain("npm run prove:codex-auth-home-readiness -- --execute");
+    expect(firstSubscriberLaunchChecklist).toContain("--target-tenant <tenant-id>");
+    expect(firstSubscriberLaunchChecklist).toContain("--target-workflow wf_connect_first_workflow");
+    expect(firstSubscriberLaunchChecklist).toContain("--auth-state-ref <auth-state-ref>");
+    expect(firstSubscriberLaunchChecklist).toContain("--codex-home-readiness-proof <path>");
+    expect(firstSubscriberLaunchChecklist).toContain("validate that artifact, including the target tenant/workflow/auth-state reference and CODEX_HOME fingerprint");
     expect(firstSubscriberLaunchChecklist).toContain("must not print raw `CODEX_HOME`");
-    expect(firstSubscriberLaunchChecklist).toContain("Current execute mode still fails closed");
-    expect(firstSubscriberLaunchChecklist).toContain("workflow provider requirement seam");
+    expect(firstSubscriberLaunchChecklist).not.toContain("the_secrets");
+    expect(firstSubscriberLaunchChecklist).toContain("Treat execute mode as an operator-only DB repair lane");
+    expect(firstSubscriberLaunchChecklist).toContain("green target-matched Codex auth-home proof");
+    expect(firstSubscriberLaunchChecklist).toContain("package provider requirement seam");
+    expect(firstSubscriberLaunchChecklist).toContain("secret_references_tenant_secret_ref_unique");
     expect(firstSubscriberLaunchChecklist).toContain("Do not treat the existing `openai_api`-bound run as proof");
     expect(firstSubscriberLaunchChecklist).toContain("must not mutate existing `workflow_runs`");
+    expect(firstSubscriberLaunchChecklist).toContain("--api-codex-home-readiness-proof <api-artifact>");
+    expect(firstSubscriberLaunchChecklist).toContain("--worker-codex-home-readiness-proof <worker-artifact>");
+    expect(firstSubscriberLaunchChecklist).toContain("--codex-auth-state-ref <auth-state-ref>");
+    expect(firstSubscriberLaunchChecklist).toContain("different `CODEX_HOME` fingerprint");
+    expect(firstSubscriberLaunchChecklist).toContain("fail closed before remote reservation or advancement");
+    expect(latestPhaseCurrentBlock).toContain("--api-codex-home-readiness-proof");
+    expect(latestPhaseCurrentBlock).toContain("--worker-codex-home-readiness-proof");
+    expect(latestPhaseCurrentBlock).toContain("--codex-auth-state-ref");
+    expect(latestPhase).toContain("Added a fail-closed Codex auth-home readiness artifact gate");
+    expect(currentNextSlice).toContain("scripts/prove-live-native-execution.mjs");
+    expect(currentNextSlice).toContain("--api-codex-home-readiness-proof");
+    expect(currentNextSlice).toContain("--worker-codex-home-readiness-proof");
     expect(currentNextSlice).toContain("Keep repair execute mode fail-closed");
     expect(currentNextSlice).toContain("`wfpc.package_provider_requirements`");
+    expect(currentNextSlice).toContain("Implement and locally prove the operator-gated provider-binding repair transaction");
+    expect(currentNextSlice).toContain("secret_references_tenant_secret_ref_unique");
     expect(currentNextSlice).toContain("Skip incomplete `openai_chatgpt_codex_subscription` rows");
     expect(currentNextSlice).toContain("Prove the VPS Codex auth-home readiness gate");
     expect(currentNextSlice).toContain("no DB/workflow/DNS/Caddy/provider/Paperclip mutation");

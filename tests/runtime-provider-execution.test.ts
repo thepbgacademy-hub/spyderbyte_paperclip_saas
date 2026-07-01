@@ -35,6 +35,40 @@ describe("runtime provider execution context", () => {
     ]);
   });
 
+  it("hydrates Codex subscription bindings from metadata without vault secret access", async () => {
+    const accessSecretRef = vi.fn();
+    const resolver = createRuntimeProviderExecutionContextResolver({
+      accessSecretRef
+    });
+
+    await expect(
+      resolver.resolveForRun({
+        tenantId: "tenant-1",
+        runId: "run-1",
+        workflowId: "wf_connect_first_workflow",
+        providerBindings: [
+          {
+            capability: "text_generation",
+            providerKind: "openai_chatgpt_codex_subscription",
+            label: "OpenAI Codex",
+            secretRef: "wfpc_codex_subscription_tenant_1_wf_connect_first_workflow",
+            metadata: { codexHome: "/home/deploy/wf/codex", authStateRef: "codex-home:first-subscriber" }
+          }
+        ]
+      })
+    ).resolves.toEqual([
+      {
+        capability: "text_generation",
+        providerKind: "openai_chatgpt_codex_subscription",
+        label: "OpenAI Codex",
+        secretRef: "wfpc_codex_subscription_tenant_1_wf_connect_first_workflow",
+        metadata: { codexHome: "/home/deploy/wf/codex", authStateRef: "codex-home:first-subscriber" },
+        secretValues: {}
+      }
+    ]);
+    expect(accessSecretRef).not.toHaveBeenCalled();
+  });
+
   it("fails closed when vault access returns a non-record secret payload", async () => {
     const resolver = createRuntimeProviderExecutionContextResolver({
       accessSecretRef: vi.fn().mockResolvedValue("sk-openai-secret")

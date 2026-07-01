@@ -1,0 +1,19 @@
+﻿BEGIN
+{
+    "ok": true,
+    "phase": "package_provider_requirement_blast_radius_restored",
+    "reason": "package is shared by multiple enabled workflow templates; subscription binding remains workflow/run scoped",
+    "restoredRows": [
+        {
+            "required": true,
+            "capability": "content_generation",
+            "package_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
+            "provider_kind": "openai_api"
+        }
+    ],
+    "dnsCaddyChanged": false,
+    "paperclipTouched": false,
+    "workflowRunsTouched": false,
+    "byokApiProviderLanesTouched": false
+}
+COMMIT

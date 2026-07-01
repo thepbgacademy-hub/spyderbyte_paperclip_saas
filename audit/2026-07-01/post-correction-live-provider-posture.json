@@ -1,0 +1,7 @@
+﻿{
+    "ok": true,
+    "phase": "post_correction_live_provider_posture",
+    "runProvider": "openai_chatgpt_codex_subscription",
+    "workflowTemplateProvider": "openai_chatgpt_codex_subscription",
+    "packageRequirementProvider": "openai_api"
+}

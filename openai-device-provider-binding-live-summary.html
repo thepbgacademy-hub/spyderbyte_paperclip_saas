@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenAI Device Provider Binding Live Slice</title>
+  <style>
+    :root {
+      --ink: #16211f;
+      --muted: #5c6864;
+      --paper: #f7f4ec;
+      --card: #fffdfa;
+      --line: #d8cebd;
+      --good: #1f7a4d;
+      --warn: #9a5b11;
+      --bad: #9b2f25;
+      --accent: #265f73;
+    }
+    body {
+      margin: 0;
+      font-family: "Aptos", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(38, 95, 115, 0.18), transparent 34rem),
+        linear-gradient(135deg, #f7f4ec, #ece4d4);
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 44px 24px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 24px;
+      padding-bottom: 20px;
+    }
+    h1 {
+      font-size: clamp(2rem, 4vw, 3.8rem);
+      line-height: 0.95;
+      margin: 0 0 12px;
+      letter-spacing: -0.04em;
+    }
+    h2 {
+      margin: 0 0 10px;
+      font-size: 1.15rem;
+    }
+    p {
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin: 22px 0;
+    }
+    .card {
+      background: rgba(255, 253, 250, 0.9);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 18px 45px rgba(22, 33, 31, 0.08);
+    }
+    .status {
+      display: inline-flex;
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .good { background: rgba(31, 122, 77, 0.12); color: var(--good); }
+    .warn { background: rgba(154, 91, 17, 0.13); color: var(--warn); }
+    .bad { background: rgba(155, 47, 37, 0.12); color: var(--bad); }
+    code {
+      background: #efe7d8;
+      border-radius: 6px;
+      padding: 2px 5px;
+    }
+    ul {
+      padding-left: 20px;
+      line-height: 1.55;
+    }
+    a {
+      color: var(--accent);
+      font-weight: 700;
+      text-decoration: none;
+    }
+    a:hover { text-decoration: underline; }
+    footer {
+      margin-top: 28px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="status good">Phase Complete Locally</p>
+      <h1>OpenAI Device Provider Binding Live Slice</h1>
+      <p>Controlled first-subscriber lane repair for Wealth Factory. Scope stayed on the native OpenAI device/Codex subscription seam, with no Paperclip, DNS/Caddy, BYOK/API lane, or generalized tenant repair expansion.</p>
+    </header>
+
+    <section class="grid">
+      <article class="card">
+        <p class="status good">Fixed</p>
+        <h2>Provider Binding</h2>
+        <p>The live workflow template now points to <code>openai_chatgpt_codex_subscription</code>. The active Codex reference carries metadata-only readiness breadcrumbs. The shared package requirement was restored to <code>openai_api</code> after reviewer correction.</p>
+      </article>
+      <article class="card">
+        <p class="status good">Rebound</p>
+        <h2>Existing Proof Run</h2>
+        <p>The existing durable proof run was explicitly rebound from the old <code>openai_api</code> provider context to the active <code>OpenAI Codex</code> subscription context and re-enqueued.</p>
+      </article>
+      <article class="card">
+        <p class="status warn">Next Deploy</p>
+        <h2>Runtime Resolver</h2>
+        <p>Local code now hydrates Codex subscription bindings from metadata without vault access. The isolated VPS stage still needs this resolver fix deployed before the live proof can execute through subscription auth.</p>
+      </article>
+    </section>
+
+    <section class="card">
+      <h2>Evidence</h2>
+      <ul>
+        <li>Readiness proof passed with <code>codex_auth_home_ready</code> and no DB/workflow/Paperclip mutation.</li>
+        <li>Repair execute returned <code>openai_device_provider_binding_repair_executed</code> and kept blocked-scope flags false.</li>
+        <li>Postflight DB proof confirms template and active Codex reference alignment; package requirement scope was corrected after review.</li>
+        <li>Fresh proof attempt truthfully returned <code>fresh_harness_run_conflict</code> under the native public uniqueness model.</li>
+        <li>Rebound proof shows the existing run now carries <code>openai_chatgpt_codex_subscription</code>, then blocks only because the deployed runtime image has not received the resolver fix yet.</li>
+        <li>Reviewer found the package provider requirement seam was package-scoped; live restore evidence confirms that package-level requirement was returned to <code>openai_api</code>.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Verification</h2>
+      <ul>
+        <li><code>npx vitest run tests/runtime-provider-execution.test.ts</code> passed after a red-first subscription metadata hydration test.</li>
+        <li><code>npx vitest run tests/handoff-docs.test.ts tests/runtime-provider-execution.test.ts tests/openai-device-provider-binding-repair-script.test.ts tests/prove-codex-auth-home-readiness.test.ts</code> passed.</li>
+        <li><code>npm run build</code> passed.</li>
+        <li><code>git diff --check</code> passed.</li>
+        <li><code>gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all</code> reported low risk and zero affected processes.</li>
+        <li>Targeted secret scan found no confirmed exposed secrets; July 1 live proof artifacts were sanitized for local secrets-folder paths.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Next Phase</h2>
+      <p>Build and deploy the isolated <code>wf-stage-api</code> image containing the runtime resolver fix, then rerun the same live native proof against the rebound first-subscriber run. This should be a deployment-validation slice, not a new workflow-family or UI expansion.</p>
+    </section>
+
+    <footer>
+      <h2>Updated Files</h2>
+      <ul>
+        <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/src/providers/runtime-provider-execution.ts">src/providers/runtime-provider-execution.ts</a></li>
+        <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/tests/runtime-provider-execution.test.ts">tests/runtime-provider-execution.test.ts</a></li>
+        <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/scripts/repair-openai-device-provider-binding.mjs">scripts/repair-openai-device-provider-binding.mjs</a></li>
+        <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/tests/openai-device-provider-binding-repair-script.test.ts">tests/openai-device-provider-binding-repair-script.test.ts</a></li>
+        <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/deploy/runbooks/first-subscriber-launch-checklist.md">deploy/runbooks/first-subscriber-launch-checklist.md</a></li>
+        <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/wf-harness/TODO.md">wf-harness/TODO.md</a></li>
+        <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/wf-harness/HANDOFF.md">wf-harness/HANDOFF.md</a></li>
+        <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/audit/2026-07-01/">audit/2026-07-01 evidence folder</a></li>
+      </ul>
+    </footer>
+  </main>
+</body>
+</html>

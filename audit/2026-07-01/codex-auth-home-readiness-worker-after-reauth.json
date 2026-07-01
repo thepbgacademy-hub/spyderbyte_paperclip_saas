@@ -1,0 +1,19 @@
+﻿{
+  "ok": true,
+  "dryRun": false,
+  "phase": "codex_auth_home_ready",
+  "container": "wf-stage-worker",
+  "targetWorkflowId": "wf_connect_first_workflow",
+  "sshTarget": "deploy@[masked]",
+  "codexCliChecked": true,
+  "codexHomeChecked": true,
+  "smokePromptChecked": true,
+  "codexCliPresent": true,
+  "codexHomeExists": true,
+  "codexHomeWritable": true,
+  "codexHomeFingerprint": "73a6d07c58247365",
+  "smokePromptPassed": true,
+  "mutationPerformed": false,
+  "dbRowsWritten": false,
+  "workflowRunsTouched": false
+}

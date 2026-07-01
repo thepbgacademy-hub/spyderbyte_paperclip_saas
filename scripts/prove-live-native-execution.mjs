@@ -8,6 +8,7 @@ import { resolveLiveNativeAttention } from "./lib/live-harness-board-roundtrip.m
 import { waitForNativeExecutionAcceptance } from "./lib/live-native-execution-acceptance.mjs";
 import { buildNativeExecutionAcceptanceOptions } from "./lib/live-native-execution-proof-options.mjs";
 import { resolveNativeProofStartSelector } from "./lib/native-proof-lane-model.mjs";
+import { validateCodexReadinessProofGate } from "./lib/codex-readiness-proof-gate.mjs";
 import { DEFAULT_STAGE_PROOF_ENV_FILE, DEFAULT_STAGE_SSH_ENV_FILE, parseStageProofArgs, resolveNodeCommand } from "./lib/stage-live-proof.mjs";
 import { loadScriptEnv } from "./lib/script-env.mjs";
 
@@ -26,6 +27,28 @@ const env = {
 const tenantId = requireArg(args, "tenant");
 const userId = requireArg(args, "user");
 const workflowId = requireArg(args, "workflow");
+const codexReadinessGate = validateCodexReadinessProofGate({
+  apiCodexHomeReadinessProofPath: args["api-codex-home-readiness-proof"],
+  workerCodexHomeReadinessProofPath: args["worker-codex-home-readiness-proof"],
+  expectedTenantId: tenantId,
+  expectedWorkflowId: workflowId,
+  expectedAuthStateRef: args["codex-auth-state-ref"] ?? env.WF_OPENAI_CODEX_AUTH_STATE_REF
+});
+if (!codexReadinessGate.ok) {
+  process.exitCode = 1;
+  process.stdout.write(
+    JSON.stringify(
+      {
+        ok: false,
+        phase: codexReadinessGate.phase,
+        codexReadinessGate
+      },
+      null,
+      2
+    ) + "\n"
+  );
+  process.exit();
+}
 const workflowTemplateOverride = normalizeValue(args["workflow-template"] ?? env.WF_STAGE_WORKFLOW_TEMPLATE_ID);
 const role = parseRole(args.role ?? env.WF_STAGE_PROOF_ROLE);
 const expiresInMinutes = parseExpiresInMinutes(args["expires-in-minutes"] ?? env.WF_STAGE_PROOF_TOKEN_TTL_MINUTES);
@@ -189,6 +212,7 @@ process.stdout.write(
         startPath,
         apiOrigin: browserProofBaseUrl,
         portalOrigin: browserProofPortalOrigin,
+        codexReadinessGate,
         sessionCookieName,
         sessionTokenSource: sessionTokenResolution.source,
         expectedExecutionEngine,

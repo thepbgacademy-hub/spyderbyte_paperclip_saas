@@ -42,6 +42,13 @@ export function createRuntimeProviderExecutionContextResolver(options: {
 
       return Promise.all(
         input.providerBindings.map(async (binding) => {
+          if (binding.providerKind === "openai_chatgpt_codex_subscription") {
+            return {
+              ...binding,
+              secretValues: {}
+            };
+          }
+
           let secretValues: unknown;
           try {
             secretValues = await options.accessSecretRef({

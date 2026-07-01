@@ -40,6 +40,13 @@ const preflightContainer = validateContainerToken(
   normalizeValue(args["preflight-container"] ?? env.WF_STAGE_PREFLIGHT_CONTAINER) ?? "wf-stage-api",
   "preflight-container"
 );
+const apiCodexHomeReadinessProofPath = normalizeValue(
+  args["api-codex-home-readiness-proof"] ?? env.WF_STAGE_API_CODEX_HOME_READINESS_PROOF
+);
+const workerCodexHomeReadinessProofPath = normalizeValue(
+  args["worker-codex-home-readiness-proof"] ?? env.WF_STAGE_WORKER_CODEX_HOME_READINESS_PROOF
+);
+const codexAuthStateRef = normalizeValue(args["codex-auth-state-ref"] ?? env.WF_OPENAI_CODEX_AUTH_STATE_REF);
 
 if (!sshTarget) {
   throw new Error("WF_STAGE_SSH_TARGET or VPS2_USER/VPS2_HOST is required for stage native execution proof");
@@ -52,6 +59,9 @@ try {
     sshEnvFilePath,
     sshTarget,
     preflightContainer,
+    apiCodexHomeReadinessProofPath,
+    workerCodexHomeReadinessProofPath,
+    codexAuthStateRef,
     childEnv,
     lanes: selectedLanes.map((lane) => ({
       ...lane,

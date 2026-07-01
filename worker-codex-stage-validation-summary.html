@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Worker Codex Stage Validation Summary</title>
+    <style>
+      :root {
+        --ink: #17211c;
+        --muted: #53615a;
+        --paper: #f7f3ea;
+        --card: #fffaf0;
+        --line: #d8cdbb;
+        --accent: #2f6f4e;
+        --warn: #9b4d20;
+      }
+      body {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(47, 111, 78, 0.18), transparent 30rem),
+          linear-gradient(135deg, #f7f3ea, #eee3d0);
+      }
+      main {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 48px 22px;
+      }
+      header {
+        border-bottom: 2px solid var(--line);
+        margin-bottom: 24px;
+      }
+      h1 {
+        font-size: clamp(2rem, 5vw, 4rem);
+        line-height: 0.95;
+        margin: 0 0 12px;
+      }
+      .lede {
+        color: var(--muted);
+        font-size: 1.1rem;
+        max-width: 760px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 16px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 18px;
+        box-shadow: 0 12px 30px rgba(37, 28, 16, 0.08);
+      }
+      .card h2 {
+        margin-top: 0;
+        font-size: 1.2rem;
+      }
+      .ok {
+        color: var(--accent);
+        font-weight: 700;
+      }
+      .warn {
+        color: var(--warn);
+        font-weight: 700;
+      }
+      code {
+        background: rgba(47, 111, 78, 0.1);
+        padding: 0.12rem 0.32rem;
+        border-radius: 6px;
+      }
+      ul {
+        padding-left: 1.2rem;
+      }
+      a {
+        color: var(--accent);
+      }
+      footer {
+        margin-top: 28px;
+        padding-top: 18px;
+        border-top: 2px solid var(--line);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Worker Codex Stage Validation</h1>
+        <p class="lede">Bounded phase summary for the isolated Wealth Factory stage lane. This phase fixed worker-side Codex execution wiring and identified the remaining launch blocker as revoked OpenAI device-auth state, not container or provider-resolution wiring.</p>
+      </header>
+
+      <section class="grid" aria-label="phase outcomes">
+        <article class="card">
+          <h2>What Changed</h2>
+          <p><span class="ok">Worker wiring closed.</span> The worker image now exposes <code>/app/node_modules/.bin</code> on <code>PATH</code>, and <code>wf-stage-worker</code> receives the tenant-isolated <code>CODEX_HOME</code> mount.</p>
+        </article>
+        <article class="card">
+          <h2>Live VPS Result</h2>
+          <p><span class="warn">Auth is the blocker.</span> API and worker both pass CLI/home checks, then fail Codex smoke with <code>refresh_token_invalidated</code>. The device login must be renewed before live native execution can pass.</p>
+        </article>
+        <article class="card">
+          <h2>Scope Control</h2>
+          <p>No DNS, Caddy, web image, Paperclip state, database/package requirement rows, onboarding UI, or shared host cutover was widened. GitNexus reported low risk and no affected processes.</p>
+        </article>
+      </section>
+
+      <section class="card">
+        <h2>Verification</h2>
+        <ul>
+          <li><code>npx vitest run tests/runtime-provider-execution.test.ts tests/openai-device-provider-binding-repair-script.test.ts tests/prove-codex-auth-home-readiness.test.ts tests/vps2-isolated-stage-config.test.ts tests/handoff-docs.test.ts --pool=forks --poolOptions.forks.singleFork=true</code>: 45 tests passed.</li>
+          <li><code>npm run build</code>: passed.</li>
+          <li><code>gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all</code>: low risk, 0 affected processes.</li>
+          <li>Reviewer subagent found two issues; both were fixed and regression-tested.</li>
+          <li>New live artifacts were scanned for local secrets paths, raw Codex-home paths, bearer tokens, API-key-shaped strings, and token fields; no hotzone hits remained in the new artifacts.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2>Next Step</h2>
+        <p>Re-authenticate the tenant-isolated Codex device-login state on VPS 2 out of band, without printing or committing credential material. Then rerun readiness against both <code>wf-stage-api</code> and <code>wf-stage-worker</code>; only after both return <code>codex_auth_home_ready</code>, rerun the bounded live native execution proof.</p>
+      </section>
+
+      <footer>
+        <h2>Files Updated</h2>
+        <ul>
+          <li><a href="Dockerfile.worker">Dockerfile.worker</a></li>
+          <li><a href="deploy/docker-compose.vps2-isolated-stage.yml">deploy/docker-compose.vps2-isolated-stage.yml</a></li>
+          <li><a href="scripts/prove-codex-auth-home-readiness.mjs">scripts/prove-codex-auth-home-readiness.mjs</a></li>
+          <li><a href="scripts/repair-openai-device-provider-binding.mjs">scripts/repair-openai-device-provider-binding.mjs</a></li>
+          <li><a href="tests/prove-codex-auth-home-readiness.test.ts">tests/prove-codex-auth-home-readiness.test.ts</a></li>
+          <li><a href="tests/openai-device-provider-binding-repair-script.test.ts">tests/openai-device-provider-binding-repair-script.test.ts</a></li>
+          <li><a href="tests/vps2-isolated-stage-config.test.ts">tests/vps2-isolated-stage-config.test.ts</a></li>
+          <li><a href="tests/handoff-docs.test.ts">tests/handoff-docs.test.ts</a></li>
+          <li><a href="deploy/runbooks/first-subscriber-launch-checklist.md">deploy/runbooks/first-subscriber-launch-checklist.md</a></li>
+          <li><a href="wf-harness/HANDOFF.md">wf-harness/HANDOFF.md</a></li>
+          <li><a href="wf-harness/TODO.md">wf-harness/TODO.md</a></li>
+          <li><a href="audit/2026-07-01/codex-auth-home-readiness-api-auth-revoked.json">audit/2026-07-01/codex-auth-home-readiness-api-auth-revoked.json</a></li>
+          <li><a href="audit/2026-07-01/codex-auth-home-readiness-worker-auth-revoked.json">audit/2026-07-01/codex-auth-home-readiness-worker-auth-revoked.json</a></li>
+          <li><a href="audit/2026-07-01/live-native-execution-after-resolver-deploy.json">audit/2026-07-01/live-native-execution-after-resolver-deploy.json</a></li>
+        </ul>
+      </footer>
+    </main>
+  </body>
+</html>

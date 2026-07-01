@@ -1,0 +1,25 @@
+﻿{
+    "ok": true,
+    "run": {
+        "id": "eb420710-c786-4801-b54d-5c3adb39f0fc",
+        "label": "OpenAI Codex",
+        "status": "queued",
+        "capability": "text_generation",
+        "hasCodexHome": true,
+        "providerKind": "openai_chatgpt_codex_subscription",
+        "hasAuthStateRef": true,
+        "hasCodexHomeReady": true,
+        "hasSmokePromptPassed": true,
+        "hasCodexHomeFingerprint": true,
+        "boundSecretReferencePresent": true
+    },
+    "phase": "openai_device_existing_proof_run_rebound_sanitized",
+    "outbox": {
+        "status": "enqueued",
+        "claimCleared": true,
+        "lastErrorCleared": true
+    },
+    "dnsCaddyChanged": false,
+    "paperclipTouched": false,
+    "byokApiProviderLanesTouched": false
+}

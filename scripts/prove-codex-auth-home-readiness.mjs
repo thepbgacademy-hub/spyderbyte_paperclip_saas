@@ -11,6 +11,9 @@ const args = parseArgs(process.argv.slice(2));
 const execute = args.execute === "true";
 const container = validateContainerToken(normalizeValue(args.container ?? process.env.WF_STAGE_PREFLIGHT_CONTAINER) ?? DEFAULT_CONTAINER);
 const timeoutMs = parseTimeoutMs(args["timeout-ms"] ?? process.env.WF_CODEX_AUTH_HOME_PROOF_TIMEOUT_MS);
+const targetTenantId = normalizeValue(args["target-tenant"] ?? process.env.WF_CODEX_AUTH_HOME_TARGET_TENANT);
+const targetWorkflowId = normalizeValue(args["target-workflow"] ?? process.env.WF_CODEX_AUTH_HOME_TARGET_WORKFLOW);
+const authStateRef = normalizeValue(args["auth-state-ref"] ?? process.env.WF_OPENAI_CODEX_AUTH_STATE_REF);
 
 if (!execute) {
   writeJson({
@@ -18,6 +21,9 @@ if (!execute) {
     dryRun: true,
     phase: "codex_auth_home_readiness_dry_run",
     container,
+    targetTenantSupplied: Boolean(targetTenantId),
+    targetWorkflowSupplied: Boolean(targetWorkflowId),
+    authStateRefSupplied: Boolean(authStateRef),
     sshTargetSupplied: Boolean(normalizeValue(args["ssh-target"] ?? process.env.WF_STAGE_SSH_TARGET) ?? buildDefaultSshTarget(process.env)),
     sshEnvFileSupplied: Boolean(normalizeValue(args["ssh-env-file"] ?? process.env.WF_STAGE_SSH_ENV_FILE) ?? DEFAULT_STAGE_SSH_ENV_FILE),
     timeoutMs,
@@ -25,6 +31,7 @@ if (!execute) {
       "container running",
       "Codex CLI present inside worker lane",
       "CODEX_HOME set and resolves to a directory",
+      "CODEX_HOME is writable by the container user",
       "non-secret Codex smoke prompt succeeds"
     ],
     mutationPerformed: false,
@@ -114,34 +121,55 @@ function buildContainerReadinessScript({ timeoutMs }) {
     "command -v codex >/dev/null 2>&1",
     "if [ $? -ne 0 ]; then printf '{\"ok\":false,\"phase\":\"codex_cli_missing\",\"codexCliPresent\":false,\"mutationPerformed\":false,\"dbRowsWritten\":false,\"workflowRunsTouched\":false}'; exit 0; fi",
     "if [ -z \"$CODEX_HOME\" ] || [ ! -d \"$CODEX_HOME\" ]; then printf '{\"ok\":false,\"phase\":\"codex_home_missing\",\"codexCliPresent\":true,\"codexHomeExists\":false,\"mutationPerformed\":false,\"dbRowsWritten\":false,\"workflowRunsTouched\":false}'; exit 0; fi",
+    "if [ ! -w \"$CODEX_HOME\" ]; then printf '{\"ok\":false,\"phase\":\"codex_home_not_writable\",\"codexCliPresent\":true,\"codexHomeExists\":true,\"codexHomeWritable\":false,\"mutationPerformed\":false,\"dbRowsWritten\":false,\"workflowRunsTouched\":false}'; exit 0; fi",
+    "codex_home_fingerprint=$(printf '%s' \"$CODEX_HOME\" | sha256sum | awk '{print substr($1,1,16)}')",
     `printf 'Reply with exactly READY and no punctuation.' | timeout ${timeoutSeconds} codex exec --skip-git-repo-check --ephemeral --ignore-user-config --ignore-rules --color never - >/tmp/wf-codex-smoke.out 2>/tmp/wf-codex-smoke.err`,
     "status=$?",
     "smoke=$(tr -d '\\r' </tmp/wf-codex-smoke.out | tail -n 1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')",
-    "if [ $status -ne 0 ] || [ \"$smoke\" != \"READY\" ]; then rm -f /tmp/wf-codex-smoke.out /tmp/wf-codex-smoke.err; printf '{\"ok\":false,\"phase\":\"codex_smoke_failed\",\"codexCliPresent\":true,\"codexHomeExists\":true,\"smokePromptPassed\":false,\"mutationPerformed\":false,\"dbRowsWritten\":false,\"workflowRunsTouched\":false}'; exit 0; fi",
+    "if [ $status -ne 0 ] || [ \"$smoke\" != \"READY\" ]; then smoke_error_json=$(node -e \"const fs=require('fs'); const text=fs.existsSync('/tmp/wf-codex-smoke.err') ? fs.readFileSync('/tmp/wf-codex-smoke.err','utf8').split(/\\\\r?\\\\n/).slice(-12).join('\\\\n') : ''; process.stdout.write(JSON.stringify(text.slice(0,2000)));\" 2>/dev/null || printf '\"codex smoke failed\"'); rm -f /tmp/wf-codex-smoke.out /tmp/wf-codex-smoke.err; printf '{\"ok\":false,\"phase\":\"codex_smoke_failed\",\"codexCliPresent\":true,\"codexHomeExists\":true,\"codexHomeWritable\":true,\"codexHomeFingerprint\":\"%s\",\"smokePromptPassed\":false,\"smokeError\":%s,\"mutationPerformed\":false,\"dbRowsWritten\":false,\"workflowRunsTouched\":false}' \"$codex_home_fingerprint\" \"$smoke_error_json\"; exit 0; fi",
     "rm -f /tmp/wf-codex-smoke.out /tmp/wf-codex-smoke.err",
-    "printf '{\"ok\":true,\"phase\":\"codex_auth_home_ready\",\"codexCliPresent\":true,\"codexHomeExists\":true,\"smokePromptPassed\":true,\"mutationPerformed\":false,\"dbRowsWritten\":false,\"workflowRunsTouched\":false}'"
+    "printf '{\"ok\":true,\"phase\":\"codex_auth_home_ready\",\"codexCliPresent\":true,\"codexHomeExists\":true,\"codexHomeWritable\":true,\"codexHomeFingerprint\":\"%s\",\"smokePromptPassed\":true,\"mutationPerformed\":false,\"dbRowsWritten\":false,\"workflowRunsTouched\":false}' \"$codex_home_fingerprint\""
   ].join("; ");
 }
 
 function sanitizeRemoteResult({ remoteResult, container, sshTarget }) {
-  const phase = typeof remoteResult.phase === "string" ? remoteResult.phase : "codex_readiness_output_invalid";
+  const phase = classifyReadinessPhase(remoteResult);
   return {
     ok: Boolean(remoteResult.ok),
     dryRun: false,
     phase,
     container,
+    ...(targetTenantId ? { targetTenantId } : {}),
+    ...(targetWorkflowId ? { targetWorkflowId } : {}),
+    ...(authStateRef ? { authStateRef } : {}),
     sshTarget: maskSshTarget(sshTarget),
     codexCliChecked: Object.hasOwn(remoteResult, "codexCliPresent"),
     codexHomeChecked: Object.hasOwn(remoteResult, "codexHomeExists"),
     smokePromptChecked: Object.hasOwn(remoteResult, "smokePromptPassed"),
     codexCliPresent: Boolean(remoteResult.codexCliPresent),
     codexHomeExists: Boolean(remoteResult.codexHomeExists),
+    ...(Object.hasOwn(remoteResult, "codexHomeWritable") ? { codexHomeWritable: Boolean(remoteResult.codexHomeWritable) } : {}),
+    ...(typeof remoteResult.codexHomeFingerprint === "string" ? { codexHomeFingerprint: remoteResult.codexHomeFingerprint } : {}),
     smokePromptPassed: Boolean(remoteResult.smokePromptPassed),
+    ...(remoteResult.smokeError ? { smokeError: scrubSensitiveText(String(remoteResult.smokeError)) } : {}),
     mutationPerformed: Boolean(remoteResult.mutationPerformed),
     dbRowsWritten: Boolean(remoteResult.dbRowsWritten),
     workflowRunsTouched: Boolean(remoteResult.workflowRunsTouched),
     ...(remoteResult.error ? { error: scrubSensitiveText(String(remoteResult.error)) } : {})
   };
+}
+
+function classifyReadinessPhase(remoteResult) {
+  const phase = typeof remoteResult.phase === "string" ? remoteResult.phase : "codex_readiness_output_invalid";
+  const smokeError = typeof remoteResult.smokeError === "string" ? remoteResult.smokeError : "";
+  if (
+    phase === "codex_smoke_failed" &&
+    /refresh_token_invalidated|refresh token was revoked|session has ended|authentication token has been invalidated/i.test(smokeError)
+  ) {
+    return "codex_auth_session_revoked";
+  }
+
+  return phase;
 }
 
 function parseArgs(values) {
@@ -199,6 +227,7 @@ function scrubSensitiveText(value) {
     .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer <redacted>")
     .replace(/postgres(?:ql)?:\/\/\S+/gi, "postgresql://<redacted>")
     .replace(/CODEX_HOME=[^\s]+/g, "CODEX_HOME=<redacted>")
+    .replace(/\/home\/deploy\/wealth-factory-stage\/codex-homes\/[^\s"']+/g, "<codex-home>")
     .replace(/E:\\the_secrets/gi, "<secrets-dir>");
 }
 

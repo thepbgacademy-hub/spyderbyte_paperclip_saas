@@ -32,6 +32,12 @@ describe("live native execution proof script", () => {
     expect(script).toContain("roundTripProof");
     expect(script).toContain("native_blocked_reached");
     expect(script).toContain("buildNativeExecutionAcceptanceOptions");
+    expect(script).toContain("validateCodexReadinessProofGate");
+    expect(script).toContain("api-codex-home-readiness-proof");
+    expect(script).toContain("worker-codex-home-readiness-proof");
+    expect(script).toContain("codex-auth-state-ref");
+    expect(script).toContain("WF_OPENAI_CODEX_AUTH_STATE_REF");
+    expect(script).toContain("phase: codexReadinessGate.phase");
     expect(script).toContain("taxEvidenceSummary");
     expect(script).not.toContain("upsertRemoteTaxStrategyPrerequisiteSnapshot");
     expect(script).not.toContain("harness_tax_strategy_prerequisite_snapshots");
@@ -93,5 +99,17 @@ describe("live native execution proof script", () => {
     expect(script).not.toContain("resolvePreexistingNativeAttention");
     expect(script).not.toContain("preexisting_attention_resolution_failed");
     expect(script).not.toContain("decision: \"start_next_lane\"");
+  });
+
+  it("requires green API and worker Codex auth-home readiness artifacts before remote native proof work", () => {
+    const script = readFileSync("scripts/prove-live-native-execution.mjs", "utf8");
+
+    expect(script.indexOf("const codexReadinessGate = validateCodexReadinessProofGate")).toBeLessThan(
+      script.indexOf("const durableResult =")
+    );
+    expect(script).toContain("expectedTenantId: tenantId");
+    expect(script).toContain("expectedWorkflowId: workflowId");
+    expect(script).toContain("expectedAuthStateRef");
+    expect(script).toContain("process.exitCode = 1");
   });
 });

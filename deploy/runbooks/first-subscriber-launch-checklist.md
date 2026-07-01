@@ -21,6 +21,9 @@ Before subscriber handoff, confirm these committed evidence artifacts are still 
 - `audit/2026-06-29/stage-live-stability-summary.json`
 - `audit/2026-06-29/launch-tenant-ceiling-and-jitter-policy.json`
 - `audit/2026-06-29/stage-operator-controls-read-only-confirmation.json`
+- `audit/2026-07-01/codex-auth-home-readiness-api-after-reauth-targeted.json`
+- `audit/2026-07-01/codex-auth-home-readiness-worker-after-reauth-targeted.json`
+- `audit/2026-07-01/live-native-execution-after-reauth-connect-first.json`
 
 Run a fresh authenticated public-host proof immediately before handoff:
 
@@ -38,14 +41,23 @@ The first-subscriber workflow must not be retried on the old `openai_api` provid
 2. Provision a tenant-isolated `CODEX_HOME` path for the first-subscriber tenant; do not reuse an operator-global `.codex` home.
 3. Confirm the auth-state reference points to the tenant-isolated Codex device-login state and never to a raw token committed in the repo or printed in logs.
 4. Run a non-secret smoke prompt from the same worker/container lane that will execute native provider calls.
-   - Use `npm run prove:codex-auth-home-readiness -- --execute` for the bounded readiness proof. The proof may inspect the configured worker container, Codex CLI, `CODEX_HOME` presence, and a non-secret smoke prompt only.
-   - The proof must not print raw `CODEX_HOME`, auth-state contents, session cookies, bearer tokens, VPS credentials, or paths under `the_secrets`.
-5. Run `npm run repair:openai-device-provider-binding` in dry-run mode and confirm the plan targets only the intended tenant/workflow/provider.
-6. Keep this slice in dry-run/readiness mode. Current execute mode still fails closed until a later dedicated DB-mutation phase wires and reviews the live repair.
-7. When that later phase exists, it must update the workflow provider requirement seam as well as the provider binding, otherwise a fresh run can fail entitlement before credentials bind.
-8. Start a fresh proof run after repair. Do not treat the existing `openai_api`-bound run as proof that device auth is being used.
+   - Use `npm run prove:codex-auth-home-readiness -- --execute --target-tenant <tenant-id> --target-workflow wf_connect_first_workflow --auth-state-ref <auth-state-ref>` for the bounded readiness proof. The proof may inspect the configured worker container, Codex CLI, `CODEX_HOME` presence, and a non-secret smoke prompt only.
+   - The proof must not print raw `CODEX_HOME`, auth-state contents, session cookies, bearer tokens, VPS credentials, or local secrets-folder paths.
+5. Run `npm run repair:openai-device-provider-binding` in dry-run mode and confirm the plan targets only the intended tenant/workflow/provider. For the live stage first-subscriber lane, pass the public workflow id as `--workflow wf_connect_first_workflow` and the resolved stage template UUID as `--workflow-template 44444444-4444-4444-8444-444444444444`.
+6. Before any later execute attempt, pass `--codex-home-readiness-proof <path>` pointing at the green `codex_auth_home_ready` artifact. The script must validate that artifact, including the target tenant/workflow/auth-state reference and CODEX_HOME fingerprint, instead of trusting `--confirm-codex-home-ready` alone.
+7. Treat execute mode as an operator-only DB repair lane, not a normal launch step. It may run only after the green target-matched Codex auth-home proof, explicit operator confirmation, and a stage DB URL are supplied.
+8. The execute transaction must update the workflow template provider binding for the explicit `--workflow-template` row and only verify that the package provider requirement seam exists. It must not rewrite `wfpc.package_provider_requirements` because that seam is package-scoped, not tenant/workflow-scoped.
+9. The repair intentionally revokes active `openai_chatgpt_codex_subscription` references for the target tenant before upserting the new metadata-only reference. This is safe only for the controlled first-subscriber single-workflow lane; do not reuse it as a general multi-workflow tenant repair without redesign.
+10. Confirm the `(tenant_id, secret_ref)` uniqueness seam exists through `secret_references_tenant_secret_ref_unique` before live execute; the repair upsert depends on that schema guard.
+11. Start a fresh proof run after repair. Do not treat the existing `openai_api`-bound run as proof that device auth is being used.
+12. If the native public uniqueness model returns `fresh_harness_run_conflict`, explicitly rebind the single controlled first-subscriber proof run before rerunning acceptance. The rebind must replace only that run's `bound_secret_reference_id` / single-entry `bound_provider_context` with the active `openai_chatgpt_codex_subscription` reference and re-enqueue that run's outbox row.
+13. The worker runtime must hydrate `openai_chatgpt_codex_subscription` from metadata, not from `wfpc_private.vault_secrets`. If live proof reports `bound provider secret was unavailable at execution time`, deploy the resolver fix before retrying the same lane.
+14. The isolated `wf-stage-worker` must receive the same tenant-isolated `CODEX_HOME` mount as `wf-stage-api`, and the worker image must expose `/app/node_modules/.bin` on `PATH` so the packaged Codex CLI is available to native execution.
+15. If the readiness proof reports `codex_auth_session_revoked`, stop retrying workflow runs. The container wiring is past CLI/home checks, but the OpenAI device-login state has expired or been revoked. Re-authenticate the tenant-isolated Codex home out of band, rerun the readiness proof against both `wf-stage-api` and `wf-stage-worker`, and only then rerun native execution acceptance.
+16. Pass the green API and worker readiness artifacts into live native execution with `--api-codex-home-readiness-proof <api-artifact>`, `--worker-codex-home-readiness-proof <worker-artifact>`, and `--codex-auth-state-ref <auth-state-ref>` unless `WF_OPENAI_CODEX_AUTH_STATE_REF` is already set in the operator env. The proof must fail closed before remote reservation or advancement if either artifact is missing, mismatched, revoked, mutation-tainted, pointed at the wrong auth-state reference, or tied to a different `CODEX_HOME` fingerprint.
+17. Current connect-first baseline: after operator reauthentication, `wf_connect_first_workflow` passed the bounded live native round trip with `codex_readiness_gate_verified`, `native_blocked_reached`, `native_attention_resolved`, and `round_trip_verified`. Do not reuse these connect-first readiness artifacts to prove another workflow family; each family needs matching tenant/workflow/auth-state readiness artifacts.
 
-The repair plan is intentionally scoped to the active provider binding for the controlled first-subscriber lane. It must not mutate existing `workflow_runs`, Paperclip state, DNS/Caddy/shared-host routing, or BYOK/API-provider lanes.
+The repair plan is intentionally scoped to the active provider binding for the controlled first-subscriber lane. It must not mutate existing `workflow_runs`, Paperclip state, DNS/Caddy/shared-host routing, `wfpc_private.vault_secrets`, or BYOK/API-provider lanes. A later explicit proof-run rebind may mutate exactly one controlled first-subscriber `workflow_runs` row and its matching outbox row; do not generalize that into tenant-wide run rewrites.
 
 ## Tenant Safety Gate
 
