@@ -84,7 +84,7 @@ describe("handoff board-surface wording", () => {
       "defaults to dry-run without loading secret files"
     );
     expect(latestPhaseCurrentBlock).toContain(
-      "Result: `docker_permission_denied`"
+      "Result advanced to `codex_cli_missing`"
     );
     expect(latestPhaseCurrentBlock).toContain(
       "vps-codex-auth-home-readiness-proof.json"
@@ -178,8 +178,8 @@ describe("handoff board-surface wording", () => {
     expect(currentNextSlice).toContain("Skip incomplete `openai_chatgpt_codex_subscription` rows");
     expect(currentNextSlice).toContain("Prove the VPS Codex auth-home readiness gate");
     expect(currentNextSlice).toContain("no DB/workflow/DNS/Caddy/provider/Paperclip mutation");
-    expect(currentNextSlice).toContain("`docker_permission_denied`");
-    expect(currentNextSlice).toContain("Restore or approve bounded Docker operator access");
+    expect(currentNextSlice).toContain("`codex_cli_missing`");
+    expect(currentNextSlice).toContain("Provision or refresh only the isolated Wealth Factory API image/lane");
     expect(currentNextSlice).toContain("`sudo usermod -aG docker deploy`");
     expect(currentNextSlice).toContain("no mutation of existing `workflow_runs`");
     expect(currentNextSlice).toContain("Preserve BYOK/API-provider lanes");

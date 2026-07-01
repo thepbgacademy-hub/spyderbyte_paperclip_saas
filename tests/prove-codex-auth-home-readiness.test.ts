@@ -192,7 +192,7 @@ describe("Codex auth-home readiness proof", () => {
     };
 
     expect(artifact).toMatchObject({
-      phase: "docker_permission_denied",
+      phase: "codex_cli_missing",
       ok: false,
       sshTarget: "deploy@[masked]",
       mutationPerformed: false,
@@ -201,12 +201,12 @@ describe("Codex auth-home readiness proof", () => {
       dnsCaddyChanged: false,
       providerRepairExecuted: false,
       paperclipTouched: false,
-      codexCliChecked: false,
+      codexCliChecked: true,
       codexHomeChecked: false,
       smokePromptChecked: false
     });
-    expect(artifact.finding).toContain("cannot inspect Docker");
-    expect(artifact.finding).toContain("were not checked");
+    expect(artifact.finding).toContain("Codex CLI is not present");
+    expect(artifact.finding).toContain("smoke prompt checks were not reached");
     expect(JSON.stringify(artifact)).not.toMatch(/187\.77\.19\.83|E:\\the_secrets|sk-[A-Za-z0-9_-]+|Bearer\s+[A-Za-z0-9._-]+|postgresql:\/\//i);
   });
 });

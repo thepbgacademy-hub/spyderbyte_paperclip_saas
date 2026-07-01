@@ -1,11 +1,11 @@
 {
-  "phase": "docker_permission_denied",
+  "phase": "codex_cli_missing",
   "ok": false,
   "dryRun": false,
-  "timestamp": "2026-06-30T20:26:00.000-05:00",
+  "timestamp": "2026-06-30T20:46:00.000-05:00",
   "container": "wf-stage-api",
   "sshTarget": "deploy@[masked]",
-  "codexCliChecked": false,
+  "codexCliChecked": true,
   "codexHomeChecked": false,
   "smokePromptChecked": false,
   "codexCliPresent": false,
@@ -17,6 +17,7 @@
   "dnsCaddyChanged": false,
   "providerRepairExecuted": false,
   "paperclipTouched": false,
-  "finding": "The bounded VPS proof reached the isolated Wealth Factory host, but the deploy SSH user cannot inspect Docker without elevated operator access. Codex CLI and CODEX_HOME were not checked because the proof never reached container inspection.",
-  "nextRequiredPhase": "Restore or approve bounded Docker operator access for the Wealth Factory deploy lane, then rerun the same Codex auth-home readiness proof before starting, refreshing, or repairing wf-stage-api."
+  "operatorAccessChange": "Approved operator access change completed: deploy was added to the docker group on VPS2, then a fresh SSH proof reached wf-stage-api.",
+  "finding": "The bounded VPS proof reached the isolated Wealth Factory wf-stage-api container and checked for the Codex CLI. The Codex CLI is not present in the container lane yet, so CODEX_HOME and smoke prompt checks were not reached.",
+  "nextRequiredPhase": "Provision or refresh only the isolated Wealth Factory API image/lane so the Codex CLI is available, then rerun the same Codex auth-home readiness proof before any provider binding repair execute phase."
 }

@@ -46,8 +46,8 @@ The first harness implementation slice is now built and verified:
 - Ran the bounded VPS Codex auth-home readiness proof against the isolated Wealth Factory lane. Result: `docker_permission_denied`; the proof reached the host, but the deploy SSH user cannot inspect Docker without elevated operator access.
 - Recorded sanitized evidence at `audit/2026-06-30/vps-codex-auth-home-readiness-proof.json`. The evidence confirms no DB rows, `workflow_runs`, DNS/Caddy, provider repair, Paperclip, or launch-state mutation was performed.
 - Confirmed the access diagnosis with a read-only VPS check: `deploy` belongs to `deploy sudo users`, while `/var/run/docker.sock` is owned by `root:docker`; Docker API access therefore fails before the proof can inspect `wf-stage-api`.
-- Operator-only remediation option: run `sudo usermod -aG docker deploy` on VPS2, open a fresh SSH session, then rerun `npm run prove:codex-auth-home-readiness -- --execute`. Do not automate this from the repo because Docker group membership is host-root-equivalent.
-- Decision: do not proceed to OpenAI device provider binding repair execute, fresh proof-run rebind, or `wf-stage-api` start/refresh until bounded Docker operator access is restored or explicitly approved, the isolated stage API lane is running, the worker/API image has Codex CLI available, and a tenant-isolated `CODEX_HOME` can pass the same readiness proof.
+- Ran the approved operator access command `sudo usermod -aG docker deploy`, opened a fresh proof path, and reran `npm run prove:codex-auth-home-readiness -- --execute`. Result advanced to `codex_cli_missing`, so the proof now reaches `wf-stage-api` but the container image does not include Codex CLI yet.
+- Decision: do not proceed to OpenAI device provider binding repair execute or fresh proof-run rebind until the isolated stage API lane includes Codex CLI and a tenant-isolated `CODEX_HOME` can pass the same readiness proof.
 - Added:
   - `audit/2026-06-30/first-subscriber-browser-harness-observation.json`
   - `tests/first-subscriber-browser-harness-observation.test.ts`

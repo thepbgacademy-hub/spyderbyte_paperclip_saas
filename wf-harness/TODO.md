@@ -153,8 +153,9 @@ This file tracks the new harness subproject only.
   - [x] Prove the VPS Codex auth-home readiness gate with `npm run prove:codex-auth-home-readiness -- --execute`, keeping the proof bounded and sanitized with no DB/workflow/DNS/Caddy/provider/Paperclip mutation.
   - [x] Record the truthful VPS readiness result: `docker_permission_denied` in `audit/2026-06-30/vps-codex-auth-home-readiness-proof.json`, with no database, workflow, DNS/Caddy, provider repair, Paperclip, or launch-state mutation.
   - [x] Confirm the Docker access diagnosis without mutation: VPS2 `deploy` is in `deploy sudo users`, while `/var/run/docker.sock` is owned by `root:docker`, so Docker inspection fails until an operator grants or otherwise authorizes Docker access.
-  - [ ] Operator-approved access command, if chosen out of band: `sudo usermod -aG docker deploy`, then start a fresh SSH session and rerun `npm run prove:codex-auth-home-readiness -- --execute`.
-  - [ ] Restore or approve bounded Docker operator access for the Wealth Factory deploy lane, then rerun the auth-home readiness proof before starting, refreshing, or repairing `wf-stage-api`.
+  - [x] Run the approved operator access command `sudo usermod -aG docker deploy`, then start a fresh SSH proof session.
+  - [x] Rerun `npm run prove:codex-auth-home-readiness -- --execute`; result advanced past Docker access to `codex_cli_missing`, proving the command now reaches `wf-stage-api` without DB/workflow/DNS/Caddy/provider/Paperclip mutation.
+  - [ ] Provision or refresh only the isolated Wealth Factory API image/lane so the Codex CLI is available, then rerun the auth-home readiness proof before checking `CODEX_HOME` and smoke prompt.
   - [ ] Create or repair the live OpenAI device/Codex subscription connection with `codexHome` / `authStateRef` metadata, then start or rebind a fresh proof run rather than retrying the old `openai_api`-bound run.
   - [ ] Preserve BYOK/API-provider lanes for users who choose Anthropic, Gemini/OpenRouter, OpenAI API keys, or other supported API accounts.
   - [ ] Continue using the browser harness for first-hand login/workflow testing, cataloging each action and blocker before making adjustments.
