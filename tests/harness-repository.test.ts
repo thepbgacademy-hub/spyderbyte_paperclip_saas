@@ -32,6 +32,7 @@ const completionPackageSnapshotsMigration = readFileSync("supabase/migrations/00
 const governanceHistorySnapshotsMigration = readFileSync("supabase/migrations/0028_wf_harness_governance_history_snapshots.sql", "utf8");
 const cardExecutionClaimsMigration = readFileSync("supabase/migrations/0029_wf_harness_card_execution_claims.sql", "utf8");
 const taxStrategyPrerequisiteSnapshotsMigration = readFileSync("supabase/migrations/0033_wf_harness_tax_strategy_prerequisite_snapshots.sql", "utf8");
+const resultApprovalStatesMigration = readFileSync("supabase/migrations/0034_wf_harness_result_approval_states.sql", "utf8");
 const execFileAsync = promisify(execFile);
 
 const HARNESS_POSTGRES_IMAGE = "postgres:16-alpine";
@@ -192,6 +193,104 @@ describe("harness persistence records", () => {
       status: "approved",
       approvedCardId: "approved_card_1"
     });
+  });
+
+  it("persists result approval states per tenant and run in the in-memory repository", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const firstRun = createHarnessRunRecord({
+      tenantId: "tenant-approval-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const secondRun = createHarnessRunRecord({
+      tenantId: "tenant-approval-2",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+
+    await repository.insertRun(firstRun);
+    await repository.insertRun(secondRun);
+    await repository.upsertResultApprovalState({
+      tenantId: firstRun.tenantId,
+      runId: firstRun.id,
+      resultId: "result-241",
+      approvalState: "Awaiting review",
+      updatedAt: "2026-07-01T20:00:00.000Z"
+    });
+    await repository.upsertResultApprovalState({
+      tenantId: firstRun.tenantId,
+      runId: firstRun.id,
+      resultId: "result-241",
+      approvalState: "Approved",
+      actorUserId: "user-approval-1",
+      decisionNote: "Approved after founder review.",
+      updatedAt: "2026-07-01T20:05:00.000Z"
+    });
+    await repository.upsertResultApprovalState({
+      tenantId: secondRun.tenantId,
+      runId: secondRun.id,
+      resultId: "result-241",
+      approvalState: "Revision needed",
+      updatedAt: "2026-07-01T20:10:00.000Z"
+    });
+
+    await expect(
+      repository.listResultApprovalStatesForRun({
+        tenantId: firstRun.tenantId,
+        runId: firstRun.id
+      })
+    ).resolves.toEqual({
+      "result-241": "Approved"
+    });
+    await expect(
+      repository.getResultApprovalState({
+        tenantId: firstRun.tenantId,
+        runId: firstRun.id,
+        resultId: "result-241"
+      })
+    ).resolves.toMatchObject({
+      tenantId: firstRun.tenantId,
+      runId: firstRun.id,
+      resultId: "result-241",
+      approvalState: "Approved",
+      actorUserId: "user-approval-1",
+      decisionNote: "Approved after founder review.",
+      createdAt: "2026-07-01T20:00:00.000Z",
+      updatedAt: "2026-07-01T20:05:00.000Z"
+    });
+    await expect(
+      repository.listResultApprovalStatesForRun({
+        tenantId: secondRun.tenantId,
+        runId: secondRun.id
+      })
+    ).resolves.toEqual({
+      "result-241": "Revision needed"
+    });
+    await expect(
+      repository.listResultApprovalStatesForRun({
+        tenantId: firstRun.tenantId,
+        runId: secondRun.id
+      })
+    ).resolves.toEqual({});
+    await expect(
+      repository.upsertResultApprovalState({
+        tenantId: firstRun.tenantId,
+        runId: secondRun.id,
+        resultId: "result-242",
+        approvalState: "Approved",
+        updatedAt: "2026-07-01T20:15:00.000Z"
+      })
+    ).rejects.toThrow("result approval state run tenant mismatch");
   });
 
   it("normalizes Postgres Date run timestamps into ISO strings when mapping repository rows", async () => {
@@ -1058,9 +1157,131 @@ describe("harness persistence migration", () => {
     expect(boardMemoryMigration).toMatch(/deliverable_owner_conflict/i);
     expect(boardMemoryMigration).toMatch(/completed_lanes_only/i);
   });
+
+  it("creates durable result approval state storage scoped to tenant and run", () => {
+    expect(resultApprovalStatesMigration).toMatch(/create unique index if not exists harness_runs_id_tenant_unique_idx/i);
+    expect(resultApprovalStatesMigration).toMatch(/on wfpc\.harness_runs \(id, tenant_id\)/i);
+    expect(resultApprovalStatesMigration).toMatch(/create table if not exists wfpc\.harness_result_approval_states/i);
+    expect(resultApprovalStatesMigration).toMatch(/tenant_id uuid not null references wfpc\.tenants\(id\) on delete cascade/i);
+    expect(resultApprovalStatesMigration).toMatch(/foreign key \(run_id, tenant_id\) references wfpc\.harness_runs\(id, tenant_id\) on delete cascade/i);
+    expect(resultApprovalStatesMigration).toMatch(/approval_state text not null check \(approval_state in \('Awaiting review', 'Approved', 'Revision needed'\)\)/i);
+    expect(resultApprovalStatesMigration).toMatch(/primary key \(tenant_id, run_id, result_id\)/i);
+    expect(resultApprovalStatesMigration).toMatch(/enable row level security/i);
+    expect(resultApprovalStatesMigration).toMatch(/wfpc_private\.is_tenant_member\(tenant_id\)/i);
+  });
 });
 
 describeIfDocker("harness persistence real Postgres transaction proof", () => {
+  it(
+    "round-trips result approval states through the real Postgres repository mapping",
+    async () => {
+      const database = requireDisposableHarnessDatabase();
+      const firstClient = await createDisposableHarnessProofRepositoryClient(database.connectionString);
+      const secondClient = await createDisposableHarnessProofRepositoryClient(database.connectionString);
+      const setupClient = new Client({ connectionString: database.connectionString });
+      await setupClient.connect();
+
+      try {
+        const tenantId = randomUUID();
+        const otherTenantId = randomUUID();
+        const run = createHarnessRunRecord({
+          tenantId,
+          workflowId: "wf_connect_first_workflow",
+          packageId: "pkg_bib_connect",
+          orchestratorPersona: "ceo",
+          runtimeContext: {
+            providerKind: "openai_api",
+            credentialLabel: "Primary OpenAI"
+          }
+        });
+        const otherRun = createHarnessRunRecord({
+          tenantId: otherTenantId,
+          workflowId: "wf_connect_first_workflow",
+          packageId: "pkg_bib_connect",
+          orchestratorPersona: "ceo",
+          runtimeContext: {
+            providerKind: "openai_api",
+            credentialLabel: "Primary OpenAI"
+          }
+        });
+
+        await resetHarnessProofDatabase(setupClient);
+        await seedHarnessProofPrerequisites(setupClient, tenantId);
+        await seedHarnessProofPrerequisites(setupClient, otherTenantId);
+        await firstClient.repository.insertRun(run);
+        await firstClient.repository.insertRun(otherRun);
+        await firstClient.repository.upsertResultApprovalState({
+          tenantId,
+          runId: run.id,
+          resultId: "result-241",
+          approvalState: "Awaiting review",
+          updatedAt: "2026-07-01T20:00:00.000Z"
+        });
+        await firstClient.repository.upsertResultApprovalState({
+          tenantId,
+          runId: run.id,
+          resultId: "result-241",
+          approvalState: "Approved",
+          actorUserId: "user-approval-1",
+          decisionNote: "Approved after founder review.",
+          updatedAt: "2026-07-01T20:05:00.000Z"
+        });
+        await firstClient.repository.upsertResultApprovalState({
+          tenantId: otherTenantId,
+          runId: otherRun.id,
+          resultId: "result-241",
+          approvalState: "Revision needed",
+          updatedAt: "2026-07-01T20:10:00.000Z"
+        });
+
+        await expect(
+          secondClient.repository.listResultApprovalStatesForRun({
+            tenantId,
+            runId: run.id
+          })
+        ).resolves.toEqual({
+          "result-241": "Approved"
+        });
+        await expect(
+          secondClient.repository.getResultApprovalState({
+            tenantId,
+            runId: run.id,
+            resultId: "result-241"
+          })
+        ).resolves.toMatchObject({
+          tenantId,
+          runId: run.id,
+          resultId: "result-241",
+          approvalState: "Approved",
+          actorUserId: "user-approval-1",
+          decisionNote: "Approved after founder review.",
+          createdAt: "2026-07-01T20:00:00.000Z",
+          updatedAt: "2026-07-01T20:05:00.000Z"
+        });
+        await expect(
+          secondClient.repository.listResultApprovalStatesForRun({
+            tenantId,
+            runId: otherRun.id
+          })
+        ).resolves.toEqual({});
+        await expect(
+          firstClient.repository.upsertResultApprovalState({
+            tenantId,
+            runId: otherRun.id,
+            resultId: "result-242",
+            approvalState: "Approved",
+            updatedAt: "2026-07-01T20:15:00.000Z"
+          })
+        ).rejects.toThrow();
+      } finally {
+        await setupClient.end();
+        await firstClient.close();
+        await secondClient.close();
+      }
+    },
+    120_000
+  );
+
   it(
     "round-trips harness board decisions through the real Postgres repository mapping",
     async () => {
@@ -2520,6 +2741,7 @@ async function resetHarnessProofDatabase(client: Client) {
   await client.query(completionPackageSnapshotsMigration);
   await client.query(governanceHistorySnapshotsMigration);
   await client.query(cardExecutionClaimsMigration);
+  await client.query(resultApprovalStatesMigration);
 }
 
 async function seedHarnessProofPrerequisites(client: Client, tenantId: string) {

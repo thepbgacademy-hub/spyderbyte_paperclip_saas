@@ -49,44 +49,62 @@ describe("handoff board-surface wording", () => {
     );
   });
 
-  it("records the post-reauth connect-first proof as latest while preserving launch-readiness history", () => {
+  it("records backend result approval durability as latest while preserving launch-readiness history", () => {
     expect(latestPhaseCurrentBlock).toContain(
+      "local-first backend durability foundation for result approval state"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "wfpc.harness_result_approval_states"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "upsertResultApprovalState"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "disposable Postgres cross-client round-trip"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "does not wire the dashboard UI"
+    );
+    expect(latestPhaseCurrentBlock).toContain(
+      "UI/API bridging should be separate"
+    );
+    expect(latestPhase).toContain(
       "Re-authenticated the tenant-isolated OpenAI Codex device login"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "codex_auth_home_ready"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "codex-auth-home-readiness-api-after-reauth-targeted.json"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "codex-auth-home-readiness-worker-after-reauth-targeted.json"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "live-native-execution-after-reauth-connect-first.json"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "round_trip_verified"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "wf_tax_strategy"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "next launch-facing phase should prove the browser/client journey"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "--api-codex-home-readiness-proof"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "--worker-codex-home-readiness-proof"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "--codex-auth-state-ref"
     );
     expect(latestPhase).toContain(
       "Deployed the bounded worker-side Codex execution wiring fix"
     );
-    expect(latestPhaseCurrentBlock).toContain(
+    expect(latestPhase).toContain(
       "wf-stage-api"
     );
     expect(latestPhase).toContain(
@@ -253,9 +271,9 @@ describe("handoff board-surface wording", () => {
     expect(firstSubscriberLaunchChecklist).toContain("--codex-auth-state-ref <auth-state-ref>");
     expect(firstSubscriberLaunchChecklist).toContain("different `CODEX_HOME` fingerprint");
     expect(firstSubscriberLaunchChecklist).toContain("fail closed before remote reservation or advancement");
-    expect(latestPhaseCurrentBlock).toContain("--api-codex-home-readiness-proof");
-    expect(latestPhaseCurrentBlock).toContain("--worker-codex-home-readiness-proof");
-    expect(latestPhaseCurrentBlock).toContain("--codex-auth-state-ref");
+    expect(latestPhase).toContain("--api-codex-home-readiness-proof");
+    expect(latestPhase).toContain("--worker-codex-home-readiness-proof");
+    expect(latestPhase).toContain("--codex-auth-state-ref");
     expect(latestPhase).toContain("Added a fail-closed Codex auth-home readiness artifact gate");
     expect(currentNextSlice).toContain("scripts/prove-live-native-execution.mjs");
     expect(currentNextSlice).toContain("--api-codex-home-readiness-proof");

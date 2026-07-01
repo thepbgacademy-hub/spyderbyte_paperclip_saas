@@ -22,6 +22,13 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
+- Added the local-first backend durability foundation for result approval state without widening the browser/UI path.
+- Added `supabase/migrations/0034_wf_harness_result_approval_states.sql`, creating `wfpc.harness_result_approval_states` keyed by `(tenant_id, run_id, result_id)`, with bounded approval states, tenant/run foreign keys, tenant updated index, RLS enabled, and member read policy through `wfpc_private.is_tenant_member(tenant_id)`.
+- Added harness repository types and additive in-memory/Postgres methods: `upsertResultApprovalState`, `getResultApprovalState`, and `listResultApprovalStatesForRun`.
+- Added local TDD coverage in `tests/harness-repository.test.ts` proving latest-state overwrite, tenant/run isolation, migration shape, and disposable Postgres cross-client round-trip.
+- Scope truth: this phase intentionally does not wire the dashboard UI, dashboard API, board-service, HTTP mutation route, localStorage precedence, live VPS deployment, or cross-device browser proof. Those are the next bounded phase once this repository/database foundation is committed.
+- GitNexus/Sonnet/subagent boundary: Sonnet recommended a local-first backend durability phase and no VPS access; explorer subagents confirmed the run-scoped repository seam and warned that UI/API bridging should be separate because the dashboard client currently drops unknown artifact fields.
+
 - Closed the first-subscriber browser happy-path residual risk on the isolated `wf-api.spyderbyte.cloud` lane.
 - Browser-harness proof initially reproduced the issue: after `Start workflow` -> `Approve result`, a fresh `/results` navigation reverted the Connect-first result from `Approved` / `Ready to download` back to `Awaiting review`.
 - Added a tracked TypeScript browser-shell persistence seam for result approval state in `apps/web/src/result-approval-storage.ts` and wired `apps/web/src/App.tsx` to hydrate/write the bounded approval-state map through `localStorage`.

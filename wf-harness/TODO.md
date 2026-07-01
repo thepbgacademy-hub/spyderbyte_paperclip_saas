@@ -10,7 +10,12 @@ This file tracks the new harness subproject only.
   - [x] Add a dedicated production-bundle verification script so local ignored JS mirrors cannot silently hide missing tracked TypeScript behavior.
   - [x] Deploy only the isolated `wf-stage-web` asset refresh and API-shell asset URL update needed for the proof.
   - [x] Prove live browser journey: Home -> Start workflow -> Results -> Approve result -> fresh Results -> Download artifact retains `Approved` and `Ready to download`.
-  - [ ] Decide whether launch requires backend/cross-device result approval durability; if yes, implement that as a separate API/database persistence phase rather than widening this browser-shell fix.
+  - [x] Decide whether launch requires backend/cross-device result approval durability; backend persistence is launch-relevant and is being implemented as separate bounded phases rather than widening the browser-shell fix.
+- [x] Add local-first backend result approval durability foundation.
+  - [x] Add a run-scoped `wfpc.harness_result_approval_states` table keyed by `(tenant_id, run_id, result_id)` with bounded approval states and member read RLS.
+  - [x] Add additive harness repository methods for upserting, fetching, and listing result approval states without touching board-service, dashboard UI, HTTP routes, or VPS deployment.
+  - [x] Prove in-memory repository latest-state behavior, tenant/run isolation, migration shape, and disposable Postgres cross-client round-trip.
+  - [ ] Next bounded phase: bridge backend approval state into the dashboard API/client contract, define backend-vs-localStorage precedence, then prove browser/device/session continuity locally before any VPS deployment.
 - [x] Approve first harness direction.
 - [x] Write v1 design spec.
 - [x] Review and refine the v1 design spec.

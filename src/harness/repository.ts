@@ -21,6 +21,8 @@ import type {
   HarnessExportDeliveryAttemptClaim,
   HarnessExportDeliveryReceipt,
   HarnessExportDeliveryOutcomeUpdate,
+  HarnessResultApprovalState,
+  HarnessResultApprovalStateRecord,
   HarnessCardState,
   HarnessExportDeliveryRecord,
   HarnessRunRecord,
@@ -54,6 +56,24 @@ export interface HarnessRepository {
   listCardContinuityForRun(runId: string): Promise<HarnessCardContinuityRecord[]>;
   insertDecision(decision: HarnessBoardDecisionRecord): Promise<void>;
   listDecisionsForRun(runId: string): Promise<HarnessBoardDecisionRecord[]>;
+  upsertResultApprovalState(input: {
+    tenantId: string;
+    runId: string;
+    resultId: string;
+    approvalState: HarnessResultApprovalState;
+    actorUserId?: string | null;
+    decisionNote?: string | null;
+    updatedAt: string;
+  }): Promise<HarnessResultApprovalStateRecord>;
+  getResultApprovalState(input: {
+    tenantId: string;
+    runId: string;
+    resultId: string;
+  }): Promise<HarnessResultApprovalStateRecord | null>;
+  listResultApprovalStatesForRun(input: {
+    tenantId: string;
+    runId: string;
+  }): Promise<Record<string, HarnessResultApprovalState>>;
   upsertCompletionPackageSnapshot(record: HarnessCompletionPackageSnapshotRecord): Promise<HarnessCompletionPackageSnapshotRecord>;
   getCompletionPackageSnapshot(runId: string): Promise<HarnessCompletionPackageSnapshotRecord | null>;
   upsertGovernanceHistorySnapshot(record: HarnessGovernanceHistorySnapshotRecord): Promise<HarnessGovernanceHistorySnapshotRecord>;
@@ -87,6 +107,7 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
   const events = new Map<string, HarnessCardEventRecord[]>();
   const continuity = new Map<string, HarnessCardContinuityRecord>();
   const decisions = new Map<string, HarnessBoardDecisionRecord[]>();
+  const resultApprovalStates = new Map<string, HarnessResultApprovalStateRecord>();
   const completionPackageSnapshots = new Map<string, HarnessCompletionPackageSnapshotRecord>();
   const governanceHistorySnapshots = new Map<string, HarnessGovernanceHistorySnapshotRecord>();
   const taxStrategyPrerequisiteSnapshots = new Map<string, HarnessTaxStrategyPrerequisiteSnapshotRecord>();
@@ -322,6 +343,41 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
       return [...(decisions.get(runId) ?? [])]
         .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
         .map((decision) => ({ ...decision }));
+    },
+
+    async upsertResultApprovalState(input) {
+      const run = runs.get(input.runId);
+      if (!run || run.tenantId !== input.tenantId) {
+        throw new Error("result approval state run tenant mismatch");
+      }
+      const key = createResultApprovalStateKey(input);
+      const existing = resultApprovalStates.get(key);
+      const record: HarnessResultApprovalStateRecord = {
+        tenantId: input.tenantId,
+        runId: input.runId,
+        resultId: input.resultId,
+        approvalState: input.approvalState,
+        actorUserId: input.actorUserId ?? null,
+        decisionNote: input.decisionNote ?? null,
+        createdAt: existing?.createdAt ?? input.updatedAt,
+        updatedAt: input.updatedAt
+      };
+      resultApprovalStates.set(key, record);
+      return { ...record };
+    },
+
+    async getResultApprovalState(input) {
+      const record = resultApprovalStates.get(createResultApprovalStateKey(input));
+      return record ? { ...record } : null;
+    },
+
+    async listResultApprovalStatesForRun(input) {
+      return Object.fromEntries(
+        [...resultApprovalStates.values()]
+          .filter((record) => record.tenantId === input.tenantId && record.runId === input.runId)
+          .sort((left, right) => left.resultId.localeCompare(right.resultId))
+          .map((record) => [record.resultId, record.approvalState])
+      );
     },
 
     async upsertCompletionPackageSnapshot(record) {
@@ -900,6 +956,60 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
         [runId]
       );
       return result.rows.map(mapHarnessBoardDecisionRow).filter((decision): decision is HarnessBoardDecisionRecord => decision !== null);
+    },
+
+    async upsertResultApprovalState(input) {
+      const result = await client.query(
+        `insert into wfpc.harness_result_approval_states
+          (tenant_id, run_id, result_id, approval_state, actor_user_id, decision_note, created_at, updated_at)
+         values ($1, $2, $3, $4, $5, $6, $7::timestamptz, $7::timestamptz)
+         on conflict (tenant_id, run_id, result_id) do update
+           set approval_state = excluded.approval_state,
+               actor_user_id = excluded.actor_user_id,
+               decision_note = excluded.decision_note,
+               updated_at = excluded.updated_at
+         returning tenant_id, run_id, result_id, approval_state, actor_user_id, decision_note, created_at, updated_at`,
+        [
+          input.tenantId,
+          input.runId,
+          input.resultId,
+          input.approvalState,
+          input.actorUserId ?? null,
+          input.decisionNote ?? null,
+          input.updatedAt
+        ]
+      );
+      return mapHarnessResultApprovalStateRow(result.rows[0])!;
+    },
+
+    async getResultApprovalState(input) {
+      const result = await client.query(
+        `select tenant_id, run_id, result_id, approval_state, actor_user_id, decision_note, created_at, updated_at
+         from wfpc.harness_result_approval_states
+         where tenant_id = $1
+           and run_id = $2
+           and result_id = $3
+         limit 1`,
+        [input.tenantId, input.runId, input.resultId]
+      );
+      return mapHarnessResultApprovalStateRow(result.rows[0]);
+    },
+
+    async listResultApprovalStatesForRun(input) {
+      const result = await client.query(
+        `select tenant_id, run_id, result_id, approval_state, actor_user_id, decision_note, created_at, updated_at
+         from wfpc.harness_result_approval_states
+         where tenant_id = $1
+           and run_id = $2
+         order by result_id asc`,
+        [input.tenantId, input.runId]
+      );
+      return Object.fromEntries(
+        result.rows
+          .map(mapHarnessResultApprovalStateRow)
+          .filter((record): record is HarnessResultApprovalStateRecord => record !== null)
+          .map((record) => [record.resultId, record.approvalState])
+      );
     },
 
     async upsertCompletionPackageSnapshot(record) {
@@ -1483,6 +1593,24 @@ function mapHarnessTaxStrategyPrerequisiteSnapshotRow(row: unknown): HarnessTaxS
   };
 }
 
+function mapHarnessResultApprovalStateRow(row: unknown): HarnessResultApprovalStateRecord | null {
+  const record = asRecord(row);
+  if (!record.tenant_id || !record.run_id || !record.result_id || !record.approval_state) {
+    return null;
+  }
+
+  return {
+    tenantId: String(record.tenant_id),
+    runId: String(record.run_id),
+    resultId: String(record.result_id),
+    approvalState: String(record.approval_state) as HarnessResultApprovalState,
+    actorUserId: typeof record.actor_user_id === "string" ? record.actor_user_id : null,
+    decisionNote: typeof record.decision_note === "string" ? record.decision_note : null,
+    createdAt: asIsoTimestamp(record.created_at) ?? String(record.created_at),
+    updatedAt: asIsoTimestamp(record.updated_at) ?? String(record.updated_at)
+  };
+}
+
 function mapHarnessExportDeliveryRow(row: unknown): HarnessExportDeliveryRecord {
   const record = asRecord(row);
   const placement = asRecord(record.placement_manifest);
@@ -1564,6 +1692,10 @@ function asIsoTimestamp(value: unknown): string | null {
     return value.toISOString();
   }
   return null;
+}
+
+function createResultApprovalStateKey(input: { tenantId: string; runId: string; resultId: string }): string {
+  return `${input.tenantId}:${input.runId}:${input.resultId}`;
 }
 
 function mapHarnessRunRow(row: unknown): HarnessRunRecord | null {

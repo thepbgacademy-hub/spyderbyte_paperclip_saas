@@ -4,6 +4,7 @@ import type { ProviderKind } from "../db/types.js";
 
 export type HarnessRunState = "queued" | "planning" | "active" | "waiting" | "blocked" | "assembling" | "done" | "failed" | "cancelled";
 export type HarnessCardState = "queued" | "planning" | "approved" | "working" | "waiting" | "blocked" | "done" | "cancelled";
+export type HarnessResultApprovalState = "Awaiting review" | "Approved" | "Revision needed";
 export type HarnessPersona = string;
 export type HarnessDeliverableType = string;
 export type HarnessCardEventKind =
@@ -178,6 +179,17 @@ export interface HarnessBoardDecisionRecord {
   recommendationSummary: string | null;
   objectionSummary: string | null;
   createdAt: string;
+}
+
+export interface HarnessResultApprovalStateRecord {
+  tenantId: string;
+  runId: string;
+  resultId: string;
+  approvalState: HarnessResultApprovalState;
+  actorUserId: string | null;
+  decisionNote: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface HarnessCompletionPackageGovernanceItem {

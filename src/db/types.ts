@@ -2,6 +2,7 @@ export type TenantRole = "owner" | "admin" | "member" | "operator";
 export type WorkflowRunStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 export type HarnessRunStatus = "queued" | "planning" | "active" | "waiting" | "blocked" | "assembling" | "done" | "failed" | "cancelled";
 export type HarnessCardStatus = "queued" | "planning" | "approved" | "working" | "waiting" | "blocked" | "done" | "cancelled";
+export type HarnessResultApprovalStatus = "Awaiting review" | "Approved" | "Revision needed";
 export type HarnessCardEventKind =
   | "created"
   | "state_changed"
@@ -160,6 +161,17 @@ export type HarnessBoardDecisionRow = {
   recommendationSummary: string | null;
   objectionSummary: string | null;
   createdAt: string;
+};
+
+export type HarnessResultApprovalStateRow = {
+  tenantId: string;
+  runId: string;
+  resultId: string;
+  approvalState: HarnessResultApprovalStatus;
+  actorUserId: string | null;
+  decisionNote: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type HarnessCompletionPackageSnapshotRow = {
