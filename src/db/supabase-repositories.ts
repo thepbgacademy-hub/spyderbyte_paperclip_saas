@@ -1,6 +1,7 @@
 import type { ProviderCapability } from "../packages/package-types.js";
 import type { ProviderKind } from "../providers/provider-types.js";
 import type { RuntimeProviderConnection } from "../providers/runtime-provider-resolution.js";
+import type { HarnessResultApprovalStatus } from "./types.js";
 import type { TransactionRunner } from "./acid-guard-repository.js";
 
 export type QueryClient = {
@@ -56,6 +57,10 @@ function toStorageConnectorPublicTarget(value: unknown): Record<string, string> 
     ...(folderLabel ? { folderLabel } : {}),
     ...(bucketLabel ? { bucketLabel } : {})
   };
+}
+
+function readHarnessResultApprovalStatus(value: unknown): HarnessResultApprovalStatus | null {
+  return value === "Awaiting review" || value === "Approved" || value === "Revision needed" ? value : null;
 }
 
 export function createSupabaseRepositories(client: QueryClient) {
@@ -238,6 +243,55 @@ export function createSupabaseRepositories(client: QueryClient) {
           expiresAt: String(record.expires_at)
         };
       });
+    },
+
+    async resolveHarnessRunIdForArtifact(input: DashboardScope & { artifactId: string }): Promise<string | null> {
+      const result = await client.query(
+        `select harness_runs.id as harness_run_id
+         from wfpc.artifact_metadata artifacts
+         join wfpc.workflow_runs runs
+           on runs.id = artifacts.workflow_run_id
+          and runs.tenant_id = artifacts.tenant_id
+         join wfpc.harness_runs harness_runs
+           on harness_runs.tenant_id = artifacts.tenant_id
+          and harness_runs.workflow_id = runs.public_workflow_id
+         where artifacts.tenant_id = $1
+           and artifacts.id = $2
+           and artifacts.purged_at is null
+         order by harness_runs.updated_at desc
+         limit 1`,
+        [input.tenantId, input.artifactId]
+      );
+      return readOptionalTrimmedString(asRecord(result.rows[0]).harness_run_id) ?? null;
+    },
+
+    async listResultApprovalStates(input: DashboardScope): Promise<Record<string, HarnessResultApprovalStatus>> {
+      const result = await client.query(
+        `select artifacts.id as result_id,
+                approval.approval_state
+         from wfpc.artifact_metadata artifacts
+         join wfpc.workflow_runs runs
+           on runs.id = artifacts.workflow_run_id
+          and runs.tenant_id = artifacts.tenant_id
+         join wfpc.harness_runs harness_runs
+           on harness_runs.tenant_id = artifacts.tenant_id
+          and harness_runs.workflow_id = runs.public_workflow_id
+         join wfpc.harness_result_approval_states approval
+           on approval.tenant_id = artifacts.tenant_id
+          and approval.run_id = harness_runs.id
+          and approval.result_id = artifacts.id::text
+         where artifacts.tenant_id = $1
+           and artifacts.purged_at is null
+         order by approval.updated_at desc`,
+        [input.tenantId]
+      );
+
+      return Object.fromEntries(
+        result.rows
+          .map(asRecord)
+          .map((record) => [readOptionalTrimmedString(record.result_id), readHarnessResultApprovalStatus(record.approval_state)] as const)
+          .filter((entry): entry is [string, HarnessResultApprovalStatus] => entry[0] !== undefined && entry[1] !== null)
+      );
     },
 
     async listProviderConnections(input: DashboardScope) {

@@ -20,7 +20,17 @@ This file tracks the new harness subproject only.
   - [x] Map and sanitize API-provided approval states in the browser dashboard client.
   - [x] Define backend-over-localStorage precedence through a bounded merge helper while retaining local storage as fallback only.
   - [x] Prove the contract with focused API, client, and browser-state tests.
-  - [ ] Next bounded phase: add the explicit result-to-harness-run identity resolver before wiring repository-backed dashboard approval reads; do not infer this from `artifact_metadata.workflow_run_id` until the harness-run mapping is proven.
+- [x] Wire repository-backed dashboard approval reads through an explicit result-to-harness-run identity resolver.
+  - [x] Resolve dashboard result ids as `wfpc.artifact_metadata.id` through `workflow_runs.public_workflow_id` to `harness_runs.workflow_id`.
+  - [x] Return dashboard approval states as a flat `{ [resultId]: approvalState }` map without exposing workflow run ids or harness run ids.
+  - [x] Prove missing harness identity returns an empty map instead of a dashboard 500.
+  - [x] Wire the runtime dashboard API to the repository-backed reader.
+- [x] Prove local browser behavior for repository-backed result approval readiness.
+  - [x] Add `npm run prove:dashboard-result-approval-browser` as a local browser-harness launch gate.
+  - [x] Prove bootstrapped backend approval state wins over stale `localStorage` in the rendered dashboard shell.
+  - [x] Prove a Home -> Results navigation round trip does not revert the approval state.
+  - [x] Prove the empty approval-state path renders safely for a second result.
+  - [ ] Next bounded phase: run the matched non-destructive VPS proof on the isolated Wealth Factory lane only; do not widen into new workflow families, deployment cleanup, Paperclip state, shared hosts, or provider repair unless a separate phase explicitly chooses that scope.
 - [x] Approve first harness direction.
 - [x] Write v1 design spec.
 - [x] Review and refine the v1 design spec.

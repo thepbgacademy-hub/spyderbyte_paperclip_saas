@@ -8,6 +8,7 @@
     "build:server": "tsc --project tsconfig.server.json",
     "build:web": "vite build apps/web",
     "verify:web-result-approval-bundle": "node scripts/verify-web-result-approval-bundle.mjs",
+    "prove:dashboard-result-approval-browser": "node scripts/prove-dashboard-result-approval-browser.mjs",
     "dev:web": "vite apps/web --host 127.0.0.1 --port 5173",
     "e2e": "playwright test -c apps/web/playwright.config.ts",
     "e2e:live": "playwright test -c apps/web/playwright.live.config.ts",

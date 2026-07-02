@@ -22,6 +22,20 @@ The first harness implementation slice is now built and verified:
 
 ## Latest Phase
 
+- Added and ran a local browser-harness proof for dashboard result approval readiness before VPS live testing.
+- New command: `npm run prove:dashboard-result-approval-browser`. It starts a local Vite shell, drives Chrome through browser-harness/CDP, seeds stale browser storage (`Revision needed`), injects a backend bootstrap approval state (`Approved`), loads `/results`, and confirms the rendered shell shows `Approved` plus `Download readiness: Ready to download`.
+- The proof also navigates Home -> Results to confirm the persisted merged state does not revert, and renders a second result with no backend approval row to cover the empty-state path.
+- Verification passed locally with `npm run build`, `npm run build:server`, focused dashboard/runtime Vitest coverage, `npm run build:web`, `npm run verify:web-result-approval-bundle`, `npm run prove:dashboard-result-approval-browser`, and `git diff --check`.
+- Scope truth: this is local launch-readiness proof for the dashboard approval-read seam. It does not deploy, touch VPS, mutate live data, change provider credentials, widen workflow families, or modify Paperclip state. The next bounded phase is a matched non-destructive VPS proof on the isolated Wealth Factory lane only.
+- Sonnet agreed the browser-harness proof was the correct next gate and warned not to widen into mid-session reactive dashboard refresh during this phase.
+
+- Wired repository-backed dashboard approval reads through an explicit result-to-harness-run identity resolver.
+- Added `resolveHarnessRunIdForArtifact` and `listResultApprovalStates` to the Supabase repository read surface. Dashboard result ids remain `wfpc.artifact_metadata.id`; the resolver crosses from `artifact_metadata.workflow_run_id` to `workflow_runs.public_workflow_id`, then to `harness_runs.workflow_id`, before reading `wfpc.harness_result_approval_states`.
+- Wired `runtime-server` so authenticated dashboard reads can receive repository-backed `resultApprovalStates` through the existing dashboard API contract.
+- Added regression coverage in `tests/supabase-repositories.test.ts` proving the happy path, the missing-harness-identity empty-map path, and the guard against treating `artifact_metadata.workflow_run_id` as a harness run id.
+- Scope truth: this is a read-only dashboard approval-state resolver. It does not add new mutations, schema migrations, caching, live VPS deployment, or broad dashboard UI changes. The next bounded step before VPS live testing is a local browser-harness proof using a seeded/bootstrapped approval-state scenario.
+- Sonnet/subagent boundary: Sonnet recommended committing the dashboard bridge first, then implementing the resolver via public workflow identity. A read-only subagent confirmed the same seam and explicitly warned against `approval.run_id = artifacts.workflow_run_id`.
+
 - Bridged result approval state into the dashboard API/client contract without adding new routes, mutations, VPS deployment, or UI redesign.
 - Added an additive `resultApprovalStates` DTO field to the authenticated dashboard API. The dependency is optional so existing callers remain stable; when supplied, it is scoped by tenant/user and returned through the guarded dashboard response.
 - Added dashboard-client mapping and sanitization so only bounded approval states (`Awaiting review`, `Approved`, `Revision needed`) reach the browser snapshot.

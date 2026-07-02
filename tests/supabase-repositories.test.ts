@@ -87,6 +87,66 @@ describe("Supabase wfpc repositories", () => {
     expect(JSON.stringify(await repositories.listStorageConnectors({ tenantId: "tenant-1" }))).not.toMatch(/secret|vault|oauth|privatepath|private/i);
   });
 
+  it("resolves dashboard artifact ids to harness run ids through public workflow identity", async () => {
+    const query = createQuery({
+      "from wfpc.artifact_metadata artifacts": [{ harness_run_id: "harness-run-1" }]
+    });
+    const repositories = createSupabaseRepositories({ query });
+
+    await expect(
+      repositories.resolveHarnessRunIdForArtifact({
+        tenantId: "tenant-1",
+        artifactId: "artifact-1"
+      })
+    ).resolves.toBe("harness-run-1");
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("runs.public_workflow_id"), ["tenant-1", "artifact-1"]);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("harness_runs.workflow_id = runs.public_workflow_id"), [
+      "tenant-1",
+      "artifact-1"
+    ]);
+  });
+
+  it("returns null when a dashboard artifact has no matching harness run identity", async () => {
+    const query = createQuery({
+      "from wfpc.artifact_metadata artifacts": []
+    });
+    const repositories = createSupabaseRepositories({ query });
+
+    await expect(
+      repositories.resolveHarnessRunIdForArtifact({
+        tenantId: "tenant-1",
+        artifactId: "artifact-1"
+      })
+    ).resolves.toBeNull();
+  });
+
+  it("lists result approval states only for artifacts that resolve to harness run identities", async () => {
+    const query = createQuery({
+      "from wfpc.artifact_metadata artifacts": [
+        { result_id: "artifact-1", approval_state: "Approved" },
+        { result_id: "artifact-2", approval_state: "Revision needed" }
+      ]
+    });
+    const repositories = createSupabaseRepositories({ query });
+
+    await expect(repositories.listResultApprovalStates({ tenantId: "tenant-1" })).resolves.toEqual({
+      "artifact-1": "Approved",
+      "artifact-2": "Revision needed"
+    });
+    expect(JSON.stringify(await repositories.listResultApprovalStates({ tenantId: "tenant-1" }))).not.toMatch(/run[_-]?id|harness/i);
+  });
+
+  it("does not treat artifact workflow_run_id as a harness run id when no public workflow identity matches", async () => {
+    const query = createQuery({
+      "from wfpc.artifact_metadata artifacts": []
+    });
+    const repositories = createSupabaseRepositories({ query });
+
+    await expect(repositories.listResultApprovalStates({ tenantId: "tenant-1" })).resolves.toEqual({});
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("harness_runs.workflow_id = runs.public_workflow_id"), ["tenant-1"]);
+    expect(query).not.toHaveBeenCalledWith(expect.stringContaining("approval.run_id = artifacts.workflow_run_id"), expect.anything());
+  });
+
   it("resolves a workflow template start identity through the package key seam", async () => {
     const query = createQuery({
       "from wfpc.workflow_templates workflows": [

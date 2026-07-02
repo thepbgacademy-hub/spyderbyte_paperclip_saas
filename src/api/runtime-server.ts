@@ -502,6 +502,7 @@ export function createDashboardRuntime(options: {
     listWorkflows: (input) => listTenantDashboardWorkflows({ ...input, repositories }),
     listPackages: repositories.listPackages,
     listArtifacts: repositories.listArtifacts,
+    listResultApprovalStates: repositories.listResultApprovalStates,
     listProviderConnections: repositories.listProviderConnections,
     listStorageConnectors: repositories.listStorageConnectors,
     getPlatformLoad: repositories.getPlatformLoad,
