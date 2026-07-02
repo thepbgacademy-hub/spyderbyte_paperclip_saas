@@ -43,6 +43,9 @@ describe("live native execution proof script", () => {
     expect(script).not.toContain("harness_tax_strategy_prerequisite_snapshots");
     expect(script).toContain("wf_tax_strategy");
     expect(script).toContain("Founder tax posture documentation is now supplied.");
+    expect(script).toContain("Connect First pricing inputs are now supplied:");
+    expect(script).toContain("delivery cost is $625");
+    expect(script).toContain("buyer-value proof is founder time saved");
     expect(script).toContain("shouldProveAttentionRoundTrip");
     expect(script).toContain("verifyWaitingRoundTrip");
     expect(script).toContain("workflow_templates");

@@ -241,6 +241,12 @@ This file tracks implementation progress. Keep it current after every phase.
 
 ## Current Live Adapter Blocker
 
+- [ ] Clear current Wealth Factory live rehearsal blockers before broader live client testing.
+  - [x] Fix package entitlement checks so live harness writes accept either public package keys (`pkg_bib_connect`) or canonical package UUIDs stored on current workflow/run rows.
+  - [x] Add a bounded redispatch proof/fix for the outbox-to-BullMQ handoff where a `resolve-attention` redispatch row can be marked `enqueued` without a matching BullMQ job being present; the enqueuer now fails closed unless the deterministic BullMQ job is observable.
+  - [x] Create or bind a dedicated rehearsal tenant with a valid provider context before using the secondary sample-company lane for live operator testing; do not copy the primary tenant's Codex/device auth state across tenants.
+  - [x] Re-run the secondary sample-company walkthrough only after the provider binding is valid, then verify unblock/resume -> worker pickup -> done -> CEO review without manual queue insertion. Evidence: `audit/2026-07-02/secondary-subscriber-terminal-done-native-proof.json` and `audit/2026-07-02/secondary-subscriber-board-state-terminal-done.json`.
+
 - [x] Bring up a private-only staged API and worker lane on the VPS with the current repo runtime.
 - [x] Prove the staged lane can reserve, enqueue, pick up, and hydrate a tenant-scoped provider secret.
 - [x] Prove the staged lane can authenticate to Paperclip with a company-scoped bearer token.

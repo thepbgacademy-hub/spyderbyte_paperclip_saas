@@ -107,7 +107,7 @@ describe("live attention round-trip verification", () => {
     });
   });
 
-  it("fails honestly for wf_connect_first_workflow when the first native leg never reaches waiting or blocked attention", () => {
+  it("accepts wf_connect_first_workflow as native-complete when the live lane finishes directly", () => {
     expect(
       verifyWaitingRoundTrip({
         workflowId: "wf_connect_first_workflow",
@@ -124,10 +124,11 @@ describe("live attention round-trip verification", () => {
         }
       })
     ).toEqual({
-      ok: false,
-      phase: "native_attention_not_reached",
+      ok: true,
+      phase: "round_trip_not_required",
       notes: [
-        "The first native advancement leg did not land in a waiting or blocked attention state, so the bounded resolve-attention round-trip cannot be proven honestly."
+        "wf_connect_first_workflow completed directly on the first native execution leg without surfacing a waiting or blocked attention seam.",
+        "The bounded attention round-trip proof is skipped because the live lane already reached a truthful done outcome."
       ]
     });
   });

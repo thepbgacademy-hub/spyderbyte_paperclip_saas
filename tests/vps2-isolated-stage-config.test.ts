@@ -50,6 +50,9 @@ describe("VPS2 isolated Wealth Factory stage rollout", () => {
     expect(isolatedCompose).toContain(
       "${WF_OPENAI_CODEX_HOME:?set WF_OPENAI_CODEX_HOME}:${WF_OPENAI_CODEX_HOME:?set WF_OPENAI_CODEX_HOME}"
     );
+    expect(isolatedCompose).toContain(
+      "${WF_SECONDARY_OPENAI_CODEX_HOME:-${WF_OPENAI_CODEX_HOME:?set WF_OPENAI_CODEX_HOME}}:${WF_SECONDARY_OPENAI_CODEX_HOME:-${WF_OPENAI_CODEX_HOME:?set WF_OPENAI_CODEX_HOME}}"
+    );
     expect(isolatedCompose).toContain("REDIS_URL: ${REDIS_URL:?set REDIS_URL}");
     expect(isolatedCompose).toContain("WF_WORKFLOW_QUEUE_NAME: ${WF_WORKFLOW_QUEUE_NAME:?set WF_WORKFLOW_QUEUE_NAME}");
     expect(isolatedCompose).toContain("PAPERCLIP_BASE_URL: ${PAPERCLIP_BASE_URL:?set PAPERCLIP_BASE_URL}");
@@ -66,6 +69,9 @@ describe("VPS2 isolated Wealth Factory stage rollout", () => {
     expect(workerBlock).toContain("volumes:");
     expect(workerBlock).toContain(
       "${WF_OPENAI_CODEX_HOME:?set WF_OPENAI_CODEX_HOME}:${WF_OPENAI_CODEX_HOME:?set WF_OPENAI_CODEX_HOME}"
+    );
+    expect(workerBlock).toContain(
+      "${WF_SECONDARY_OPENAI_CODEX_HOME:-${WF_OPENAI_CODEX_HOME:?set WF_OPENAI_CODEX_HOME}}:${WF_SECONDARY_OPENAI_CODEX_HOME:-${WF_OPENAI_CODEX_HOME:?set WF_OPENAI_CODEX_HOME}}"
     );
   });
 
@@ -84,6 +90,9 @@ describe("VPS2 isolated Wealth Factory stage rollout", () => {
     expect(isolatedEnvExample).toContain("REDIS_URL=redis://redis:6379");
     expect(isolatedEnvExample).toContain(
       "WF_OPENAI_CODEX_HOME=/home/deploy/wealth-factory-stage/codex-homes/first-subscriber"
+    );
+    expect(isolatedEnvExample).toContain(
+      "WF_SECONDARY_OPENAI_CODEX_HOME=/home/deploy/wealth-factory-stage/codex-homes/second-subscriber"
     );
     expect(isolatedEnvExample).toContain("WF_WORKFLOW_QUEUE_NAME=wfpc-workflow-runs-stage");
     expect(isolatedEnvExample).toContain("PAPERCLIP_BASE_URL=http://paperclip:3100");

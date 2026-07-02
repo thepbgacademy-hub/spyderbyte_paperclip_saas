@@ -36,14 +36,17 @@ export function createBullmqWorkflowRunEnqueuer(options: WorkflowQueueConnection
         createdByUserId: input.userId
         , idempotencyKey: input.idempotencyKey
       });
+      const jobId = createBullmqSafeJobId(input.idempotencyKey);
 
       try {
         await queue.add("workflow-run", payload, {
-          jobId: createBullmqSafeJobId(input.idempotencyKey)
+          jobId
         });
+        await assertBullmqJobObservable(queue, jobId);
         return "enqueued";
       } catch (error) {
         if (isDuplicateJobError(error)) {
+          await assertBullmqJobObservable(queue, jobId);
           return "already_queued";
         }
         throw error;
@@ -59,6 +62,13 @@ export function createBullmqWorkflowRunEnqueuer(options: WorkflowQueueConnection
 
 export function createBullmqSafeJobId(idempotencyKey: string): string {
   return `wfq_${createHash("sha256").update(idempotencyKey).digest("hex")}`;
+}
+
+async function assertBullmqJobObservable(queue: Queue<WorkflowQueuePayload>, jobId: string) {
+  const job = await queue.getJob(jobId);
+  if (!job) {
+    throw new Error("BullMQ workflow job was not observable after enqueue");
+  }
 }
 
 export function createBullmqWorkflowConsumer(options: WorkflowQueueConnectionOptions & {

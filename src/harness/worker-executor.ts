@@ -828,12 +828,34 @@ export async function commitHarnessWorkerLaneOutcome(input: {
       postOutcomeAction && postOutcomeAction.kind !== "dispatch_next_lane"
         ? postOutcomeAction
         : null;
+    const nextAttentionSnapshot = nextAttention
+      ? buildAttentionSnapshot({
+          action: nextAttention,
+          cards: cardsAfterOutcome,
+          continuity: continuityAfterOutcome
+        })
+      : null;
+    const sameCurrentAttention =
+      Boolean(currentAttention && nextAttention && isSameAttentionAction(currentAttention.action, nextAttention));
+    const currentAttentionStillFresh =
+      Boolean(
+        currentAttention
+        && nextAttention
+        && isSameAttentionAction(currentAttention.action, nextAttention)
+        && (
+          nextAttention.kind !== "await_unblock"
+          || (
+            nextAttentionSnapshot
+            && isSameAttentionSnapshot(currentAttention.snapshot, nextAttentionSnapshot)
+          )
+        )
+      );
     const attentionTransition = deriveAttentionTransition({
       currentAttention: currentAttention?.action ?? null,
       nextAttention
     });
 
-    if (currentAttention && (!nextAttention || !isSameAttentionAction(currentAttention.action, nextAttention))) {
+    if (currentAttention && (!nextAttention || !currentAttentionStillFresh)) {
       await repository.insertEvent(
         createHarnessCardEventRecord({
           cardId: "cardId" in currentAttention.action ? currentAttention.action.cardId : updatedCard.id,
@@ -848,7 +870,7 @@ export async function commitHarnessWorkerLaneOutcome(input: {
 
     if (
       nextAttention
-      && (!currentAttention || !isSameAttentionAction(currentAttention.action, nextAttention))
+      && (!currentAttention || !currentAttentionStillFresh)
     ) {
       await repository.insertEvent(
         createHarnessCardEventRecord({
@@ -867,7 +889,10 @@ export async function commitHarnessWorkerLaneOutcome(input: {
         cardId: updatedCard.id,
         outcomeState: input.state,
         runState: latestRunState,
-        attentionTransitionKind: attentionTransition.kind,
+        attentionTransitionKind:
+          sameCurrentAttention && !currentAttentionStillFresh
+            ? "requested"
+            : attentionTransition.kind,
         ...(postOutcomeAction ? { postOutcomeAction } : {}),
         ...(continuity.latestResultSummary ? { latestResultSummary: continuity.latestResultSummary } : {}),
         ...(continuity.continuitySummary ? { continuitySummary: continuity.continuitySummary } : {}),
@@ -1668,6 +1693,17 @@ function buildAttentionSnapshot(input: {
         }
       : {})
   };
+}
+
+function isSameAttentionSnapshot(left: HarnessAttentionSnapshot, right: HarnessAttentionSnapshot): boolean {
+  return (
+    left.statusLabel === right.statusLabel
+    && left.summary === right.summary
+    && left.reasonLabel === right.reasonLabel
+    && left.targetCardId === right.targetCardId
+    && left.targetPersona === right.targetPersona
+    && left.targetTitle === right.targetTitle
+  );
 }
 
 function deriveAttentionTransition(input: {

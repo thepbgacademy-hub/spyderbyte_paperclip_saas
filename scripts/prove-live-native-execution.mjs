@@ -1038,6 +1038,9 @@ function verifyNativeAcceptance({ durableResult, nativeAcceptance, advancementPr
 }
 
 function resolveAttentionResumeSummary({ workflowId, phase }) {
+  if (workflowId === "wf_connect_first_workflow" && phase === "native_blocked_reached") {
+    return "Connect First pricing inputs are now supplied: current package price is $2,500 with a tested $2,750 target, delivery cost is $625, sales cost is $300, discounts are capped at 5%, conversion sensitivity is moderate above $2,750 and high above $3,000, competitor anchors are $1,500 to $3,500, and buyer-value proof is founder time saved plus faster operating-system clarity.";
+  }
   if (workflowId === "wf_tax_strategy" && phase === "native_blocked_reached") {
     return "Founder tax posture documentation is now supplied. Resume the tax strategy lane from the latest restructuring assumptions workbook and finalize the bounded tax review.";
   }

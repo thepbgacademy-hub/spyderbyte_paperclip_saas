@@ -134,7 +134,7 @@ export function createSupabaseRepositories(client: QueryClient) {
           and purchases.starts_at <= now()
           and (purchases.ends_at is null or purchases.ends_at > now())
          where installs.tenant_id = $1
-           and packages.package_key = $2
+           and (packages.package_key = $2 or packages.id::text = $2)
            and installs.status = 'active'
          limit 1`,
         [input.tenantId, input.packageId]

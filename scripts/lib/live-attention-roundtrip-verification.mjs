@@ -25,12 +25,12 @@ export function verifyWaitingRoundTrip({
     };
   }
 
-  if (workflowId === "wf_tax_strategy" && advancementProof?.phase === "native_done_reached") {
+  if (advancementProof?.phase === "native_done_reached") {
     return {
       ok: true,
       phase: "round_trip_not_required",
       notes: [
-        "wf_tax_strategy completed directly on the first native execution leg without surfacing a waiting or blocked attention seam.",
+        `${workflowId} completed directly on the first native execution leg without surfacing a waiting or blocked attention seam.`,
         "The bounded attention round-trip proof is skipped because the live lane already reached a truthful done outcome."
       ]
     };

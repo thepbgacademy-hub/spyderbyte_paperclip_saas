@@ -19,6 +19,7 @@ describe("OpenAI device provider binding repair script", () => {
     expect(script).toContain("openai_chatgpt_codex_subscription");
     expect(script).toContain("--execute");
     expect(script).toContain("--codex-home-readiness-proof");
+    expect(script).toContain("--rebind-existing-run");
     expect(script).toContain("workflow-template");
     expect(script).toContain("codexHomeFingerprint");
     expect(script).toContain("codexHome");
@@ -297,7 +298,7 @@ describe("OpenAI device provider binding repair script", () => {
     expect(script).not.toContain("wfpc.package_provider_requirements provider_kind for the target workflow package only");
     expect(script).toContain("openai_chatgpt_codex_subscription");
     expect(script).toContain("no vault_secrets write");
-    expect(script).toContain("do not mutate existing workflow_runs");
+    expect(script).toContain("do not mutate existing workflow_runs unless --rebind-existing-run supplies an exact stale run id");
     expect(script).toContain("codexHomeReady:");
     expect(script).toContain("codexHomeWritable:");
     expect(script).toContain("codexHomeFingerprint:");
@@ -306,7 +307,8 @@ describe("OpenAI device provider binding repair script", () => {
     expect(acidMigration).toContain("on wfpc.secret_references (tenant_id, secret_ref)");
     expect(script).toContain("where wfpc.secret_references.provider_kind = excluded.provider_kind");
     expect(script).not.toMatch(/insert\s+into\s+wfpc_private\.vault_secrets/i);
-    expect(script).not.toMatch(/UPDATE\s+wfpc\.workflow_runs/i);
+    expect(script).toMatch(/UPDATE\s+wfpc\.workflow_runs/i);
+    expect(script).toContain("REBIND_EXACT_EXISTING_WORKFLOW_RUN");
     expect(script).not.toMatch(/DELETE\s+FROM/i);
   });
 
@@ -394,6 +396,49 @@ describe("OpenAI device provider binding repair script", () => {
       "UPSERT_CODEX_SUBSCRIPTION_SECRET_REFERENCE",
       "COMMIT"
     ]);
+    expect(JSON.stringify(parsed)).not.toMatch(/sk-[A-Za-z0-9_-]+|Bearer\s+[A-Za-z0-9._-]+|postgresql:\/\/|the_secrets/i);
+  });
+
+  it("can rebind one exact stale workflow run after the normal provider repair gates pass", () => {
+    const stdout = execFileSync(
+      process.execPath,
+      [
+        scriptPath,
+        "--tenant",
+        "22222222-2222-4222-8222-222222222222",
+        "--workflow",
+        "wf_connect_first_workflow",
+        "--workflow-template",
+        "44444444-4444-4444-8444-444444444444",
+        "--codex-home",
+        "/home/deploy/wealth-factory-stage/codex-homes/first-subscriber",
+        "--auth-state-ref",
+        "codex-home:first-subscriber",
+        "--rebind-existing-run",
+        "169c4ac8-ea8d-48fe-accc-6dcc60d4dd4d",
+        "--execute",
+        "--confirm-codex-home-ready",
+        "--codex-home-readiness-proof",
+        readinessProofPath
+      ],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          NODE_ENV: "test",
+          WF_REPAIR_PROVIDER_BINDING_MOCK_DB: "success"
+        }
+      }
+    );
+
+    const parsed = JSON.parse(stdout);
+    expect(parsed).toMatchObject({
+      ok: true,
+      workflowRunsTouched: true,
+      reboundExistingRunId: "169c4ac8-ea8d-48fe-accc-6dcc60d4dd4d"
+    });
+    expect(parsed.executedSql).toContain("REBIND_EXACT_EXISTING_WORKFLOW_RUN");
     expect(JSON.stringify(parsed)).not.toMatch(/sk-[A-Za-z0-9_-]+|Bearer\s+[A-Za-z0-9._-]+|postgresql:\/\/|the_secrets/i);
   });
 

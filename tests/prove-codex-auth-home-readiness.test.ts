@@ -58,6 +58,40 @@ describe("Codex auth-home readiness proof", () => {
     expect(JSON.stringify(parsed)).not.toMatch(/187\.77\.19\.83|sk-[A-Za-z0-9_-]+|Bearer\s+[A-Za-z0-9._-]+|postgresql:\/\/|the_secrets/i);
   });
 
+  it("accepts a target Codex home for isolated rehearsal readiness without leaking the path", () => {
+    const stdout = execFileSync(
+      process.execPath,
+      [
+        scriptPath,
+        "--codex-home",
+        "/home/deploy/wealth-factory-stage/codex-homes/second-subscriber"
+      ],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          WF_STAGE_SSH_TARGET: "deploy@187.77.19.83",
+          WF_STAGE_PREFLIGHT_CONTAINER: "wf-stage-api"
+        }
+      }
+    );
+
+    const parsed = JSON.parse(stdout);
+    expect(parsed).toMatchObject({
+      ok: true,
+      dryRun: true,
+      phase: "codex_auth_home_readiness_dry_run",
+      container: "wf-stage-api",
+      codexHomeSupplied: true,
+      mutationPerformed: false,
+      dbRowsWritten: false,
+      workflowRunsTouched: false
+    });
+    expect(JSON.stringify(parsed)).not.toContain("second-subscriber");
+    expect(JSON.stringify(parsed)).not.toMatch(/\/home\/deploy\/wealth-factory-stage\/codex-homes/i);
+  });
+
   it("fails closed before execute when no SSH target can be resolved", () => {
     expect(() =>
       execFileSync(process.execPath, [scriptPath, "--execute", "--ssh-env-file", "missing.env"], {
@@ -255,6 +289,50 @@ describe("Codex auth-home readiness proof", () => {
       workflowRunsTouched: false
     });
     expect(parsed.smokeError).toContain("refresh token was revoked");
+  });
+
+  it("classifies missing Codex device-auth sessions as an explicit readiness phase", () => {
+    const stdout = execFileSync(
+      process.execPath,
+      [
+        scriptPath,
+        "--execute",
+        "--ssh-target",
+        "deploy@187.77.19.83",
+        "--mock-remote-json",
+        JSON.stringify({
+          ok: false,
+          phase: "codex_smoke_failed",
+          codexCliPresent: true,
+          codexHomeExists: true,
+          codexHomeWritable: true,
+          codexHomeFingerprint: "1a7a49f7c4a90fea",
+          smokePromptPassed: false,
+          smokeError: "unexpected status 401 Unauthorized: Missing Bearer basic authentication in header",
+          mutationPerformed: false,
+          dbRowsWritten: false,
+          workflowRunsTouched: false
+        })
+      ],
+      {
+        cwd: process.cwd(),
+        encoding: "utf8"
+      }
+    );
+
+    const parsed = JSON.parse(stdout);
+    expect(parsed).toMatchObject({
+      ok: false,
+      phase: "codex_auth_session_missing",
+      codexCliPresent: true,
+      codexHomeExists: true,
+      codexHomeWritable: true,
+      smokePromptPassed: false,
+      mutationPerformed: false,
+      dbRowsWritten: false,
+      workflowRunsTouched: false
+    });
+    expect(parsed.smokeError).toContain("Missing Bearer");
   });
 
   it("keeps non-auth Codex smoke failures generic", () => {

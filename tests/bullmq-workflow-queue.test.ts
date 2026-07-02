@@ -10,6 +10,7 @@ import { WorkerRuntimeClosingError } from "../src/worker/runtime-closing-error.j
 
 const mocks = vi.hoisted(() => ({
   add: vi.fn(),
+  getJob: vi.fn(),
   queueClose: vi.fn().mockResolvedValue(undefined),
   workerRun: vi.fn().mockResolvedValue(undefined),
   workerClose: vi.fn().mockResolvedValue(undefined),
@@ -30,6 +31,7 @@ vi.mock("bullmq", () => ({
   },
   Queue: mocks.queueCtor.mockImplementation(() => ({
     add: mocks.add,
+    getJob: mocks.getJob,
     close: mocks.queueClose
   })),
   Worker: mocks.workerCtor.mockImplementation((_name, processor) => ({
@@ -49,10 +51,12 @@ vi.mock("ioredis", () => ({
 
 afterEach(() => {
   vi.clearAllMocks();
+  mocks.getJob.mockResolvedValue({ id: "job-observed" });
 });
 
 describe("bullmq workflow queue", () => {
   it("maps reservation inputs to safe BullMQ payloads", async () => {
+    mocks.getJob.mockResolvedValue({ id: createBullmqSafeJobId("tenant-1:workflow-1:run-1") });
     mocks.add.mockResolvedValue({ id: "job-1" });
     const idempotencyKey = "tenant-1:workflow-1:run-1";
 
@@ -104,6 +108,7 @@ describe("bullmq workflow queue", () => {
 
   it("treats duplicate BullMQ job ids as already queued", async () => {
     mocks.add.mockRejectedValue(new Error("Job with this id already exists"));
+    mocks.getJob.mockResolvedValue({ id: createBullmqSafeJobId("tenant-1:workflow-1:run-1") });
 
     const enqueuer = createBullmqWorkflowRunEnqueuer({
       redisUrl: "redis://localhost:6379",
@@ -125,6 +130,7 @@ describe("bullmq workflow queue", () => {
   it("uses a BullMQ-safe deterministic job id while preserving the original idempotency key in the payload", async () => {
     mocks.add.mockResolvedValue({ id: "job-redispatch-1" });
     const idempotencyKey = "tenant-1:workflow-1:run-1:redispatch:resume_lane:abc123def456";
+    mocks.getJob.mockResolvedValue({ id: createBullmqSafeJobId(idempotencyKey) });
 
     const enqueuer = createBullmqWorkflowRunEnqueuer({
       redisUrl: "redis://localhost:6379",
@@ -154,6 +160,31 @@ describe("bullmq workflow queue", () => {
       {
         jobId: createBullmqSafeJobId(idempotencyKey)
       }
+    );
+  });
+
+  it("fails closed when BullMQ reports enqueue success but the deterministic job cannot be observed", async () => {
+    mocks.add.mockResolvedValue({ id: "job-missing" });
+    mocks.getJob.mockResolvedValue(null);
+
+    const enqueuer = createBullmqWorkflowRunEnqueuer({
+      redisUrl: "redis://localhost:6379",
+      queueName: "wfpc-workflow-runs"
+    });
+
+    await expect(
+      enqueuer.enqueueOnce({
+        tenantId: "tenant-1",
+        userId: "user-1",
+        workflowId: "workflow-1",
+        workflowTemplateId: "workflow-1",
+        runId: "run-1",
+        idempotencyKey: "tenant-1:workflow-1:run-1:redispatch:unblock_lane:abc123def456"
+      })
+    ).rejects.toThrow("BullMQ workflow job was not observable after enqueue");
+
+    expect(mocks.getJob).toHaveBeenCalledWith(
+      createBullmqSafeJobId("tenant-1:workflow-1:run-1:redispatch:unblock_lane:abc123def456")
     );
   });
 

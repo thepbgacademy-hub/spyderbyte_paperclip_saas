@@ -8,6 +8,7 @@ const args = parseArgs(process.argv.slice(2));
 const tenantId = readArg(args, "tenant");
 const workflowId = readArg(args, "workflow");
 const workflowTemplateId = readArg(args, "workflow-template") ?? workflowId;
+const rebindExistingRunId = readArg(args, "rebind-existing-run");
 const codexHome = normalizeValue(args["codex-home"] ?? process.env.WF_OPENAI_CODEX_HOME);
 const authStateRef = normalizeValue(args["auth-state-ref"] ?? process.env.WF_OPENAI_CODEX_AUTH_STATE_REF);
 const codexHomeReadinessProofPath = normalizeValue(
@@ -55,8 +56,9 @@ const plannedSqlContract = [
   "ASSERT package provider requirement remains present; do not mutate package-scoped requirements in this lane",
   "UPDATE wfpc.secret_references SET revoked_at = now() WHERE tenant_id = $1 AND provider_kind = $2 AND revoked_at IS NULL -- dedupe subscription rows only; openai_api remains active fallback",
   "UPSERT wfpc.secret_references metadata with codexHome/authStateRef and non-secret readiness breadcrumbs only; no vault_secrets write and never raw Codex auth material",
+  "OPTIONAL REBIND_EXACT_EXISTING_WORKFLOW_RUN updates one tenant/workflow/run bound provider context only when --rebind-existing-run is supplied",
   "COMMIT",
-  "do not mutate existing workflow_runs; start a fresh proof run after repair"
+  "do not mutate existing workflow_runs unless --rebind-existing-run supplies an exact stale run id"
 ];
 
 if (execute && !dbUrl && !isTestMockDbEnabled()) {
@@ -70,7 +72,8 @@ if (execute) {
     workflowTemplateId,
     codexHome,
     authStateRef,
-    dbUrl
+    dbUrl,
+    rebindExistingRunId
   });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   process.exit(0);
@@ -90,16 +93,18 @@ const plan = {
   codexHomeReadyConfirmed,
   codexHomeReadinessProofSupplied: Boolean(codexHomeReadinessProofPath),
   codexHomeReadinessProofPhase: codexHomeReadinessProof?.phase ?? null,
+  rebindExistingRunSupplied: Boolean(rebindExistingRunId),
   plannedSqlContract,
   liveMutationScope: [
     "wfpc.workflow_templates provider_kind for the requested tenant/workflow template only",
     "verify package provider requirement seam exists without mutating package-scoped provider_kind",
-    "wfpc.secret_references active subscription-provider reference for the requested tenant/provider only; no vault_secrets write"
+    "wfpc.secret_references active subscription-provider reference for the requested tenant/provider only; no vault_secrets write",
+    "wfpc.workflow_runs bound provider context for one exact tenant/workflow/run only when --rebind-existing-run is supplied"
   ],
   blockedScope: [
     "Paperclip containers or provider rows",
     "DNS, Caddy, launch-host cutover, or unrelated VPS services",
-    "existing bound workflow_runs rows unless a separate fresh proof/rebind phase is explicitly run",
+    "existing bound workflow_runs rows unless this operator explicitly supplies --rebind-existing-run for one stale run",
     "BYOK/API-provider lanes for Anthropic, Gemini/OpenRouter, OpenAI API keys, or other user-owned API accounts"
   ],
   note: execute
@@ -239,6 +244,49 @@ async function executeRepairTransaction(input) {
     if (secretReference.rowCount === 0) {
       throw new Error("Codex subscription secret reference was not activated; existing secret_ref belongs to a different provider lane");
     }
+    const secretReferenceId = secretReference.rows[0]?.id;
+    if (!secretReferenceId) {
+      throw new Error("Codex subscription secret reference did not return an id");
+    }
+
+    let workflowRunsTouched = false;
+    if (input.rebindExistingRunId) {
+      const providerContext = [
+        {
+          capability: "text_generation",
+          providerKind: PROVIDER_KIND,
+          label: "OpenAI Codex",
+          secretRef,
+          metadata
+        }
+      ];
+      const rebound = await trackedQuery(
+        client,
+        executedSql,
+        "REBIND_EXACT_EXISTING_WORKFLOW_RUN",
+        `update wfpc.workflow_runs
+         set bound_secret_reference_id = $5,
+             bound_provider_context = $6::jsonb,
+             updated_at = now()
+         where tenant_id = $1
+           and id = $2
+           and public_workflow_id = $3
+           and workflow_template_id = $4
+         returning id`,
+        [
+          input.tenantId,
+          input.rebindExistingRunId,
+          input.workflowId,
+          input.workflowTemplateId,
+          secretReferenceId,
+          JSON.stringify(providerContext)
+        ]
+      );
+      if (rebound.rowCount !== 1) {
+        throw new Error("exact stale workflow run was not rebound; expected one tenant/workflow/run match");
+      }
+      workflowRunsTouched = true;
+    }
 
     await trackedQuery(client, executedSql, "COMMIT", "COMMIT");
     return {
@@ -255,11 +303,13 @@ async function executeRepairTransaction(input) {
       codexHomeReadyConfirmed,
       codexHomeReadinessProofSupplied: true,
       codexHomeReadinessProofPhase: codexHomeReadinessProof?.phase ?? null,
+      rebindExistingRunSupplied: Boolean(input.rebindExistingRunId),
       workflowTemplateUpdated: true,
       packageProviderRequirementUpdated: false,
       codexSubscriptionReferencesRevoked: revoked.rowCount ?? 0,
       secretReferenceActivated: true,
-      workflowRunsTouched: false,
+      workflowRunsTouched,
+      reboundExistingRunId: input.rebindExistingRunId ?? null,
       paperclipTouched: false,
       dnsCaddyChanged: false,
       byokApiProviderLanesTouched: false,
@@ -334,6 +384,9 @@ function createMockRepairClient(mode) {
         return mode === "conflicting-secret-ref"
           ? { rows: [], rowCount: 0 }
           : { rows: [{ id: "secret-reference-1" }], rowCount: 1 };
+      }
+      if (normalized.startsWith("update wfpc.workflow_runs")) {
+        return { rows: [{ id: "169c4ac8-ea8d-48fe-accc-6dcc60d4dd4d" }], rowCount: 1 };
       }
       throw new Error(`unexpected mock repair SQL: ${String(sql).slice(0, 80)}`);
     },

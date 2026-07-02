@@ -10,6 +10,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const args = parseArgs(process.argv.slice(2));
 const execute = args.execute === "true";
 const container = validateContainerToken(normalizeValue(args.container ?? process.env.WF_STAGE_PREFLIGHT_CONTAINER) ?? DEFAULT_CONTAINER);
+const targetCodexHome = validateCodexHomePath(normalizeValue(args["codex-home"] ?? process.env.WF_OPENAI_CODEX_HOME));
 const timeoutMs = parseTimeoutMs(args["timeout-ms"] ?? process.env.WF_CODEX_AUTH_HOME_PROOF_TIMEOUT_MS);
 const targetTenantId = normalizeValue(args["target-tenant"] ?? process.env.WF_CODEX_AUTH_HOME_TARGET_TENANT);
 const targetWorkflowId = normalizeValue(args["target-workflow"] ?? process.env.WF_CODEX_AUTH_HOME_TARGET_WORKFLOW);
@@ -21,6 +22,7 @@ if (!execute) {
     dryRun: true,
     phase: "codex_auth_home_readiness_dry_run",
     container,
+    codexHomeSupplied: Boolean(targetCodexHome),
     targetTenantSupplied: Boolean(targetTenantId),
     targetWorkflowSupplied: Boolean(targetWorkflowId),
     authStateRefSupplied: Boolean(authStateRef),
@@ -56,12 +58,12 @@ if (!sshTarget) {
 const mockRemoteJson = normalizeValue(args["mock-remote-json"]);
 const remoteResult = mockRemoteJson
   ? JSON.parse(mockRemoteJson)
-  : runRemoteReadinessCheck({ sshTarget, container, timeoutMs });
+  : runRemoteReadinessCheck({ sshTarget, container, targetCodexHome, timeoutMs });
 
 writeJson(sanitizeRemoteResult({ remoteResult, container, sshTarget }));
 
-function runRemoteReadinessCheck({ sshTarget, container, timeoutMs }) {
-  const remoteCommand = buildRemoteCommand({ container, timeoutMs });
+function runRemoteReadinessCheck({ sshTarget, container, targetCodexHome, timeoutMs }) {
+  const remoteCommand = buildRemoteCommand({ container, targetCodexHome, timeoutMs });
   const result = spawnSync("ssh", [sshTarget, remoteCommand], {
     cwd: process.cwd(),
     encoding: "utf8",
@@ -96,7 +98,7 @@ function runRemoteReadinessCheck({ sshTarget, container, timeoutMs }) {
   }
 }
 
-function buildRemoteCommand({ container, timeoutMs }) {
+function buildRemoteCommand({ container, targetCodexHome, timeoutMs }) {
   const escapedContainer = shellEscape(container);
   const inspectScript = [
     `inspectOutput=$(docker inspect -f '{{.State.Running}}' ${escapedContainer} 2>&1)`,
@@ -110,7 +112,8 @@ function buildRemoteCommand({ container, timeoutMs }) {
     "fi",
     "if [ \"$inspectOutput\" != \"true\" ]; then printf '{\"ok\":false,\"phase\":\"container_not_running\",\"mutationPerformed\":false,\"dbRowsWritten\":false,\"workflowRunsTouched\":false}'; exit 0; fi"
   ].join("\n");
-  const dockerCommand = `${inspectScript}\ndocker exec ${escapedContainer} sh -c ${shellEscape(buildContainerReadinessScript({ timeoutMs }))}`;
+  const codexHomeEnvArg = targetCodexHome ? ` -e CODEX_HOME=${shellEscape(targetCodexHome)}` : "";
+  const dockerCommand = `${inspectScript}\ndocker exec${codexHomeEnvArg} ${escapedContainer} sh -c ${shellEscape(buildContainerReadinessScript({ timeoutMs }))}`;
   return dockerCommand;
 }
 
@@ -168,6 +171,12 @@ function classifyReadinessPhase(remoteResult) {
   ) {
     return "codex_auth_session_revoked";
   }
+  if (
+    phase === "codex_smoke_failed" &&
+    /missing bearer|missing authentication|no auth token|unauthorized: missing/i.test(smokeError)
+  ) {
+    return "codex_auth_session_missing";
+  }
 
   return phase;
 }
@@ -200,6 +209,16 @@ function buildDefaultSshTarget(env) {
 function validateContainerToken(value) {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)) {
     throw new Error("--container must be a shell-safe Docker container token");
+  }
+  return value;
+}
+
+function validateCodexHomePath(value) {
+  if (!value) {
+    return null;
+  }
+  if (!/^\/[A-Za-z0-9._/-]+$/.test(value) || value.includes("..")) {
+    throw new Error("--codex-home must be an absolute shell-safe VPS path");
   }
   return value;
 }

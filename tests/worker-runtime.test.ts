@@ -741,7 +741,8 @@ describe("worker runtime", () => {
       expect.objectContaining({
         cardId: "card_cfo",
         runId: "run-1",
-        continuitySummary: "CFO should continue this active pricing review lane: Pressure-test the pricing lane.",
+        continuitySource: "resume_override",
+        continuitySummary: "Resume the pricing lane from the revised assumptions workbook.",
         latestResultSummary: "Initial pricing floor is stable."
       })
     );

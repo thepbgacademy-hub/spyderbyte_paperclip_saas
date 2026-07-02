@@ -1,0 +1,22 @@
+﻿{
+  "ok": true,
+  "dryRun": false,
+  "phase": "codex_auth_home_ready",
+  "container": "wf-stage-worker",
+  "targetTenantId": "22222222-2222-4222-8222-333333333333",
+  "targetWorkflowId": "wf_connect_first_workflow",
+  "authStateRef": "second-subscriber-openai-device",
+  "sshTarget": "deploy@[masked]",
+  "codexCliChecked": true,
+  "codexHomeChecked": true,
+  "smokePromptChecked": true,
+  "codexCliPresent": true,
+  "codexHomeExists": true,
+  "codexHomeWritable": true,
+  "codexHomeFingerprint": "1a7a49f7c4a90fea",
+  "smokePromptPassed": true,
+  "mutationPerformed": false,
+  "dbRowsWritten": false,
+  "workflowRunsTouched": false
+}
+

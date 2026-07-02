@@ -338,9 +338,9 @@ describe("Supabase wfpc repositories", () => {
     );
   });
 
-  it("requires active package installs by public package key instead of raw package uuid identity", async () => {
+  it("requires active package installs by public package key or canonical package uuid identity", async () => {
     const query = createQuery({
-      "from wfpc.tenant_package_installs installs": [{ id: "install-1" }]
+      "from wfpc.tenant_package_installs installs": [{ id: "install-1" }, { id: "install-2" }]
     });
     const repositories = createSupabaseRepositories({ query });
 
@@ -351,9 +351,17 @@ describe("Supabase wfpc repositories", () => {
       })
     ).resolves.toBeUndefined();
 
+    await expect(
+      repositories.requireActivePackageInstall({
+        tenantId: "tenant-1",
+        packageId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1"
+      })
+    ).resolves.toBeUndefined();
+
     expect(String(query.mock.calls[0]?.[0])).toMatch(/join wfpc\.wealth_factory_packages packages\s+on packages\.id = installs\.package_id/i);
-    expect(String(query.mock.calls[0]?.[0])).toMatch(/packages\.package_key = \$2/i);
+    expect(String(query.mock.calls[0]?.[0])).toMatch(/packages\.package_key = \$2 or packages\.id::text = \$2/i);
     expect(query.mock.calls[0]?.[1]).toEqual(["tenant-1", "pkg_bib_connect"]);
+    expect(query.mock.calls[1]?.[1]).toEqual(["tenant-1", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1"]);
   });
 
   it("lists active installed package public keys for overlay registry resolution", async () => {
