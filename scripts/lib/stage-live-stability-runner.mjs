@@ -20,6 +20,7 @@ export async function runStageStabilityPlan(input) {
         sshTarget: plan.sshTarget,
         proofContainer: plan.proofContainer,
         sudoPassword,
+        env: baseEnv,
         stdout,
         cwd,
         spawn
@@ -75,16 +76,17 @@ function runStep(input) {
 }
 
 function runRemoteFairnessStep(input) {
-  const { step, sshTarget, proofContainer, sudoPassword, stdout, cwd, spawn } = input;
+  const { step, sshTarget, proofContainer, sudoPassword, env, stdout, cwd, spawn } = input;
   stdout.write(`\n>> ${step.label} (remote ${proofContainer})\n`);
   assertShellSafeContainerToken(proofContainer, "proof-container");
   const forwardedArgs = extractForwardedArgs(step.args);
+  const forwardedEnvArgs = buildRemoteFairnessEnvArgs(env);
   const innerCommand = `cd /app && node scripts/prove-live-fairness.mjs ${forwardedArgs
     .map((value) => `'${shellEscapeSingleQuotes(value)}'`)
     .join(" ")}`.trim();
   const remoteCommand =
     `printf '%s\\n' '${shellEscapeSingleQuotes(sudoPassword)}' | sudo -S -p '' ` +
-    `docker exec ${shellEscapeSingleQuotes(proofContainer)} sh -lc '${shellEscapeSingleQuotes(innerCommand)}'`;
+    `docker exec ${forwardedEnvArgs} ${shellEscapeSingleQuotes(proofContainer)} sh -lc '${shellEscapeSingleQuotes(innerCommand)}'`;
   const result = spawn("ssh", [sshTarget, remoteCommand], {
     cwd,
     stdio: "inherit"
@@ -95,6 +97,16 @@ function runRemoteFairnessStep(input) {
   if (result.error) {
     throw result.error;
   }
+}
+
+function buildRemoteFairnessEnvArgs(env = {}) {
+  const apiOrigin = normalizeOrigin(env.WF_LIVE_BASE_URL ?? env.WF_STAGE_API_ORIGIN);
+  const portalOrigin = normalizeOrigin(env.WF_SMOKE_PORTAL_URL ?? env.WF_STAGE_PORTAL_ORIGIN);
+  const entries = [
+    ["WF_LIVE_BASE_URL", apiOrigin],
+    ["WF_SMOKE_PORTAL_URL", portalOrigin]
+  ].filter(([, value]) => value);
+  return entries.map(([key, value]) => `-e ${key}='${shellEscapeSingleQuotes(value)}'`).join(" ");
 }
 
 function extractForwardedArgs(stepArgs) {
@@ -113,4 +125,8 @@ function assertShellSafeContainerToken(value, optionName) {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(String(value ?? ""))) {
     throw new Error(`Stage stability ${optionName} must be a shell-safe container token`);
   }
+}
+
+function normalizeOrigin(value) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim().replace(/\/$/, "") : null;
 }

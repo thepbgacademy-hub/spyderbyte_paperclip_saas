@@ -1491,12 +1491,19 @@ async function persistWorkerStartState(input: {
     );
   }
 
+  const shouldPreserveResumeOverride =
+    laneStateChanged
+    && existingContinuity?.continuitySource === "resume_override"
+    && input.previousLaneState === "approved"
+    && input.claimedLane.state === "working";
   const updatedContinuity = laneStateChanged
     ? createHarnessCardContinuityRecord({
         cardId: input.claimedLane.id,
         runId: input.run.id,
-        continuitySource: "state_transition",
-        continuitySummary: createActiveResumeSummary(input.claimedLane),
+        continuitySource: shouldPreserveResumeOverride ? "resume_override" : "state_transition",
+        continuitySummary: shouldPreserveResumeOverride
+          ? existingContinuity.continuitySummary
+          : createActiveResumeSummary(input.claimedLane),
         latestResultSummary: existingContinuity?.latestResultSummary ?? null,
         absorbedWorkItems: existingContinuity?.absorbedWorkItems ?? []
       })

@@ -34,7 +34,8 @@ body {
     radial-gradient(circle at top left, rgba(110, 140, 102, 0.18), transparent 24%),
     linear-gradient(145deg, #08110d, #0f1613 46%, #111916 100%);
   color: var(--text-primary);
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 button,

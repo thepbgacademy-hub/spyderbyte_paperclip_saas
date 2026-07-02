@@ -15,6 +15,11 @@ CLAUDE.md
 sudo_deploy.txt
 audit/2026-06-19/
 audit/2026-06-22/
+audit/2026-07-02/*.log
+audit/2026-07-02/*.jsonl
+audit/2026-07-02/codex-auth-home-readiness-*-stage-browser.json
+audit/2026-07-02/live-dashboard-result-approval-states-proof.json
+audit/2026-07-02/stage-live-soak-capacity-proof.json
 api_stage*.log
 proof_*.log
 tmp_stage_*.json

@@ -178,6 +178,35 @@ describe("stage live stability helper", () => {
     ]));
   });
 
+  it("propagates lane overrides through stage-live, native execution, fairness, and soak steps", () => {
+    const plan = buildStageStabilityPlan({
+      args: parseStageStabilityArgs(["--lanes", "primary"]),
+      env: {
+        WF_STAGE_API_ORIGIN: "https://wf-api.spyderbyte.cloud",
+        WF_STAGE_PORTAL_ORIGIN: "https://www.spyderbyte.cloud",
+        WF_PORTAL_SESSION_COOKIE_NAME: "wf_portal_session",
+        SUPABASE_DB_URL: "postgresql://demo:secret@supabase-db:5432/postgres",
+        VPS2_USER: "deploy",
+        VPS2_HOST: "187.77.19.83"
+      }
+    });
+
+    const proofStep = plan.steps.find((step: { id: string }) => step.id === "stage-live-proof");
+    const nativeExecutionStep = plan.steps.find((step: { id: string }) => step.id === "stage-live-native-execution");
+    const fairnessStep = plan.steps.find((step: { id: string }) => step.id === "stage-live-fairness");
+    const soakStep = plan.steps.find((step: { id: string }) => step.id === "stage-live-soak");
+
+    expect(plan.lanes.map((lane: { laneName: string }) => lane.laneName)).toEqual(["primary"]);
+    expect(proofStep.args).toEqual(expect.arrayContaining(["--lanes", "primary"]));
+    expect(nativeExecutionStep.args).toEqual(expect.arrayContaining(["--lanes", "primary"]));
+    expect(fairnessStep.args).toContain("primary:22222222-2222-4222-8222-222222222222:11111111-1111-4111-8111-111111111111:wf_connect_first_workflow:1");
+    expect(fairnessStep.args).not.toContain("tertiary:22222222-2222-4222-8222-444444444444:11111111-1111-4111-8111-333333333333:wf_tax_strategy:1");
+    expect(fairnessStep.args).toEqual(expect.arrayContaining(["--mode", "progress"]));
+    expect(soakStep.args).toContain("primary:22222222-2222-4222-8222-222222222222:11111111-1111-4111-8111-111111111111:wf_connect_first_workflow:1");
+    expect(soakStep.args).not.toContain("quinary:22222222-2222-4222-8222-666666666666:11111111-1111-4111-8111-555555555555:wf_package_followup:1");
+    expect(soakStep.args).toEqual(expect.arrayContaining(["--mode", "progress"]));
+  });
+
   it("fails closed on unknown lane names", () => {
     expect(() =>
       buildStageStabilityPlan({

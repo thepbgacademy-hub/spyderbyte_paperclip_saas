@@ -121,6 +121,8 @@ describe("stage live native execution runner", () => {
       "--workflow-template",
       "template-tertiary"
     ]));
+    expect(tertiaryArgs).not.toContain("--api-codex-home-readiness-proof");
+    expect(tertiaryArgs).not.toContain("--worker-codex-home-readiness-proof");
 
     const quinaryArgs = spawn.mock.calls[2]?.[1] as string[];
     expect(quinaryArgs).toEqual(expect.arrayContaining([
@@ -129,6 +131,8 @@ describe("stage live native execution runner", () => {
       "--workflow-template",
       "template-quinary"
     ]));
+    expect(quinaryArgs).not.toContain("--api-codex-home-readiness-proof");
+    expect(quinaryArgs).not.toContain("--worker-codex-home-readiness-proof");
 
     const firstOptions = spawn.mock.calls[0]?.[2] as { env: NodeJS.ProcessEnv; cwd: string; shell: boolean; stdio: string };
     expect(firstOptions.env?.VPS2_SUDO_PASSWORD).toBe("super-secret");
@@ -239,7 +243,7 @@ describe("stage live native execution runner", () => {
     });
   });
 
-  it("fails closed before spawning lanes when API or worker Codex readiness proof paths are missing", () => {
+  it("fails closed before spawning Codex-subscription lanes when API or worker Codex readiness proof paths are missing", () => {
     const spawn = vi.fn();
 
     let thrown: unknown;
@@ -280,7 +284,46 @@ describe("stage live native execution runner", () => {
     });
     expect(thrown).toBeInstanceOf(Error);
     expect((thrown as Error).message).toBe(
-      "Both API and worker Codex auth-home readiness proof paths are required before stage native execution."
+      "Both API and worker Codex auth-home readiness proof paths are required before stage native execution for wf_connect_first_workflow."
     );
+  });
+
+  it("does not require Codex readiness proof paths for non-Codex-subscription lanes", () => {
+    const spawn = vi.fn().mockReturnValue({ status: 0, error: null });
+
+    runStageLiveNativeExecutionPlan({
+      envFilePath: "E:/the_secrets/projects/wealth-factory-stage/wf-stage.vps2.env",
+      sshEnvFilePath: "E:/the_secrets/vps/ssh.env",
+      sshTarget: "deploy@187.77.19.83",
+      preflightContainer: "wf-stage-api",
+      apiCodexHomeReadinessProofPath: null,
+      workerCodexHomeReadinessProofPath: null,
+      childEnv: {
+        VPS2_SUDO_PASSWORD: "super-secret"
+      },
+      lanes: [
+        {
+          laneName: "tertiary",
+          workflowId: "wf_tax_strategy",
+          profile: {
+            tenantId: "tenant-tertiary",
+            userId: "user-tertiary",
+            workflowTemplateId: "template-tertiary"
+          }
+        }
+      ],
+      spawn
+    });
+
+    expect(spawn).toHaveBeenCalledTimes(1);
+    const args = spawn.mock.calls[0]?.[1] as string[];
+    expect(args).not.toContain("--api-codex-home-readiness-proof");
+    expect(args).not.toContain("--worker-codex-home-readiness-proof");
+    expect(args).toEqual(expect.arrayContaining([
+      "--workflow",
+      "wf_tax_strategy",
+      "--workflow-template",
+      "template-tertiary"
+    ]));
   });
 });

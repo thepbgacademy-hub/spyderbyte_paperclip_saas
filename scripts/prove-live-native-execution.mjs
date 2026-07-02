@@ -12,6 +12,8 @@ import { validateCodexReadinessProofGate } from "./lib/codex-readiness-proof-gat
 import { DEFAULT_STAGE_PROOF_ENV_FILE, DEFAULT_STAGE_SSH_ENV_FILE, parseStageProofArgs, resolveNodeCommand } from "./lib/stage-live-proof.mjs";
 import { loadScriptEnv } from "./lib/script-env.mjs";
 
+const CODEX_SUBSCRIPTION_WORKFLOW_IDS = new Set(["wf_connect_first_workflow"]);
+
 const args = parseStageProofArgs(process.argv.slice(2));
 const seedEnvFilePath = normalizeValue(args["env-file"] ?? process.env.WF_STAGE_ENV_FILE) ?? DEFAULT_STAGE_PROOF_ENV_FILE;
 const sshEnvFilePath = normalizeValue(args["ssh-env-file"] ?? process.env.WF_STAGE_SSH_ENV_FILE) ?? DEFAULT_STAGE_SSH_ENV_FILE;
@@ -27,7 +29,8 @@ const env = {
 const tenantId = requireArg(args, "tenant");
 const userId = requireArg(args, "user");
 const workflowId = requireArg(args, "workflow");
-const codexReadinessGate = validateCodexReadinessProofGate({
+const codexReadinessGate = resolveCodexReadinessGate({
+  workflowId,
   apiCodexHomeReadinessProofPath: args["api-codex-home-readiness-proof"],
   workerCodexHomeReadinessProofPath: args["worker-codex-home-readiness-proof"],
   expectedTenantId: tenantId,
@@ -1052,6 +1055,20 @@ function resolveAttentionTaxStrategyEvidence({ workflowId, phase }) {
     taxEvidenceTaxYear: "2025",
     taxEvidenceEntityType: "llc"
   };
+}
+
+function resolveCodexReadinessGate(input) {
+  if (!CODEX_SUBSCRIPTION_WORKFLOW_IDS.has(input.workflowId)) {
+    return {
+      ok: true,
+      phase: "codex_readiness_gate_not_required",
+      notes: [
+        `Codex auth-home readiness is not required for ${input.workflowId}; this lane does not use the OpenAI Codex subscription provider.`
+      ]
+    };
+  }
+
+  return validateCodexReadinessProofGate(input);
 }
 
 function verifyDirectNativeReservation({

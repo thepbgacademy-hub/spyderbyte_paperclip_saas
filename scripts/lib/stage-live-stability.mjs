@@ -64,6 +64,7 @@ export function buildStageStabilityPlan({ args, env }) {
     );
   const focusContainers = parseFocusContainers(args["focus-container"] ?? env.WF_STAGE_FOCUS_CONTAINERS);
   const laneNames = parseLaneNames(args.lanes ?? env.WF_STAGE_STABILITY_LANES);
+  const laneArgValue = laneNames.join(",");
   const lanes = laneNames.map((laneName) => {
     const profile = DEMO_PROFILES[laneName];
     if (!profile) {
@@ -99,6 +100,7 @@ export function buildStageStabilityPlan({ args, env }) {
     lanes: lanes.map((lane) => ({ ...lane, runs: soakRunCount(lane.laneName) })),
     cycles: 8
   });
+  const pressureMode = isPrimaryLaunchLaneOnly(laneNames) ? "progress" : "drain";
 
   return {
     envFilePath,
@@ -126,7 +128,9 @@ export function buildStageStabilityPlan({ args, env }) {
           "--ssh-env-file",
           sshEnvFilePath,
           "--ssh-target",
-          sshTarget
+          sshTarget,
+          "--lanes",
+          laneArgValue
         ]
       },
       {
@@ -146,7 +150,9 @@ export function buildStageStabilityPlan({ args, env }) {
           "--preflight-container",
           proofContainer,
           "--ssh-target",
-          sshTarget
+          sshTarget,
+          "--lanes",
+          laneArgValue
         ]
       },
       {
@@ -158,7 +164,7 @@ export function buildStageStabilityPlan({ args, env }) {
           "prove:live-fairness",
           "--",
           "--mode",
-          "drain",
+          pressureMode,
           "--order",
           "staggered",
           "--cycles",
@@ -207,7 +213,7 @@ export function buildStageStabilityPlan({ args, env }) {
           ...focusContainers.flatMap((container) => ["--focus-container", container]),
           "--",
           "--mode",
-          "drain",
+          pressureMode,
           "--order",
           "staggered",
           "--cycles",
@@ -253,6 +259,10 @@ function soakRunCount(laneName) {
     : laneName === "secondary" || laneName === "tertiary"
       ? 2
       : 1;
+}
+
+function isPrimaryLaunchLaneOnly(laneNames) {
+  return laneNames.length === 1 && laneNames[0] === "primary";
 }
 
 function buildDefaultAuditPath(filename) {

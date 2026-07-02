@@ -101,15 +101,17 @@ describe("live native execution proof script", () => {
     expect(script).not.toContain("decision: \"start_next_lane\"");
   });
 
-  it("requires green API and worker Codex auth-home readiness artifacts before remote native proof work", () => {
+  it("requires green API and worker Codex auth-home readiness artifacts before remote Codex-subscription proof work", () => {
     const script = readFileSync("scripts/prove-live-native-execution.mjs", "utf8");
 
-    expect(script.indexOf("const codexReadinessGate = validateCodexReadinessProofGate")).toBeLessThan(
+    expect(script.indexOf("const codexReadinessGate = resolveCodexReadinessGate")).toBeLessThan(
       script.indexOf("const durableResult =")
     );
     expect(script).toContain("expectedTenantId: tenantId");
     expect(script).toContain("expectedWorkflowId: workflowId");
     expect(script).toContain("expectedAuthStateRef");
     expect(script).toContain("process.exitCode = 1");
+    expect(script).toContain("CODEX_SUBSCRIPTION_WORKFLOW_IDS");
+    expect(script).toContain("codex_readiness_gate_not_required");
   });
 });

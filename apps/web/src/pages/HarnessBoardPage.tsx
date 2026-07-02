@@ -236,6 +236,17 @@ const styles = {
     padding: "0.55rem 0.7rem",
     width: "100%"
   } satisfies CSSProperties,
+  textAreaField: {
+    background: "rgba(2, 6, 23, 0.72)",
+    border: "1px solid rgba(125, 211, 252, 0.28)",
+    borderRadius: "12px",
+    color: "#e2e8f0",
+    fontSize: "0.78rem",
+    minHeight: "8.5rem",
+    padding: "0.65rem 0.75rem",
+    resize: "vertical",
+    width: "100%"
+  } satisfies CSSProperties,
   codeBlock: {
     background: "rgba(2, 6, 23, 0.72)",
     border: "1px solid rgba(148, 163, 184, 0.16)",
@@ -716,6 +727,31 @@ export function canSubmitContractActionState(actionState: {
   driftedFields: HarnessContractActionIssue[];
 }) {
   return actionState.missingRequiredFields.length === 0 && actionState.driftedFields.length === 0;
+}
+
+function shouldPollAfterActionResult(actionResult: HarnessBoardActionResult): actionResult is Extract<
+  HarnessBoardActionResult,
+  { cardId: string; state: "approved" | "working" }
+> {
+  return (
+    "cardId" in actionResult
+    && "state" in actionResult
+    && (actionResult.state === "approved" || actionResult.state === "working")
+  );
+}
+
+function boardLaneForActionState(state: "approved" | "working") {
+  return state === "approved" ? "planning" : "working";
+}
+
+function cardMatchesActionState(
+  card: HarnessBoardResponse["cards"][number] | undefined,
+  actionResult: Extract<HarnessBoardActionResult, { cardId: string; state: "approved" | "working" }>
+) {
+  if (!card) {
+    return false;
+  }
+  return card.id === actionResult.cardId && card.lane === boardLaneForActionState(actionResult.state);
 }
 
 export function describeContractActionIssue(issue: HarnessContractActionIssue) {
@@ -2124,7 +2160,9 @@ export function HarnessBoardPage(props: {
         }),
         attempt.actionMethod
       );
-      const nextBoard = await harnessBoardClient.fetchBoard();
+      const nextBoard = shouldPollAfterActionResult(actionResult)
+        ? await pollBoardAfterActionResult(actionResult)
+        : await harnessBoardClient.fetchBoard();
       const preferredCardId = "cardId" in actionResult ? actionResult.cardId : null;
       applyBoardState(nextBoard, preferredCardId, "live");
       if (!input.preserveDraftOnSuccess) {
@@ -2157,6 +2195,21 @@ export function HarnessBoardPage(props: {
     } finally {
       setSubmittingActionKey(null);
     }
+  }
+
+  async function pollBoardAfterActionResult(
+    actionResult: Extract<HarnessBoardActionResult, { cardId: string; state: "approved" | "working" }>
+  ) {
+    let latestBoard = await harnessBoardClient.fetchBoard();
+    for (let attemptIndex = 0; attemptIndex < 8; attemptIndex += 1) {
+      const latestCard = latestBoard.cards.find((card) => card.id === actionResult.cardId);
+      if (!cardMatchesActionState(latestCard, actionResult)) {
+        return latestBoard;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1_250));
+      latestBoard = await harnessBoardClient.fetchBoard();
+    }
+    return latestBoard;
   }
 
   useEffect(() => {
@@ -2521,6 +2574,21 @@ export function HarnessBoardPage(props: {
                       {`${field.label} no longer matches the allowed values for this live contract field.`}
                     </p>
                   ) : null}
+                </>
+              ) : field.label === "Resume summary" || field.name === "resumeSummary" || field.name === "resume_summary" ? (
+                <>
+                  <textarea
+                    style={styles.textAreaField}
+                    value={value}
+                    placeholder={
+                      field.suggestedValue
+                      ?? "Add the missing business inputs or assumptions that let this lane continue."
+                    }
+                    onChange={(event) => setDraftValue(input.actionKey, field.name, event.target.value)}
+                  />
+                  <p style={styles.statusNotice}>
+                    Add the concrete tenant-safe context the worker needs before this lane resumes.
+                  </p>
                 </>
               ) : (
                 <input

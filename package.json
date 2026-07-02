@@ -18,6 +18,8 @@
     "create:runtime-session-token": "npm run build:server && node scripts/create-runtime-session-token.mjs",
     "check:live-runtime": "node scripts/check-live-runtime-readiness.mjs",
     "prove:stage-live": "node scripts/prove-stage-live-deployment.mjs",
+    "prove:live-dashboard-result-approval": "node scripts/prove-live-dashboard-result-approval.mjs",
+    "prove:live-dashboard-browser-journey": "node scripts/prove-live-dashboard-browser-journey.mjs",
     "prove:public-launch-host": "node scripts/prove-public-launch-host.mjs",
     "prove:codex-auth-home-readiness": "node scripts/prove-codex-auth-home-readiness.mjs",
     "prove:stage-live-native-execution": "node scripts/prove-stage-live-native-execution.mjs",

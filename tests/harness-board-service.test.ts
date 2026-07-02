@@ -2133,6 +2133,54 @@ describe("harness board service", () => {
     expect(hydrated.pendingAttention).toBeUndefined();
   });
 
+  it("requires a substantive unblock summary before a blocked lane can re-enter execution", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "blocked"
+    });
+
+    await expect(
+      service.resolvePendingAttention({
+        authorization: "Bearer valid",
+        runId: board.runId,
+        command: "unblock_lane",
+        resumeSummary: "Cleared."
+      })
+    ).rejects.toThrow(/substantive unblock summary/i);
+
+    const persistedCard = await repository.getCard(created.cardId);
+    expect(persistedCard?.state).toBe("blocked");
+  });
+
   it("keeps the unblock action handle stable within one attention cycle but refreshes it after a new blocked cycle", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
@@ -3030,7 +3078,8 @@ describe("harness board service", () => {
         runId: board.runId,
         command: "unblock_lane",
         actionToken: board.pendingAttention?.actionHandle ?? "",
-        resumeSummary: "Founder tax posture documentation is now supplied.",
+        resumeSummary:
+          "Founder tax posture documentation is now supplied and confirmed, so the blocked tax review lane can resume with complete prerequisite evidence.",
         taxStrategyPrerequisiteEvidence: {
           summary: "Founder tax posture documents were confirmed for bounded tax review.",
           confirmedBy: "operator",

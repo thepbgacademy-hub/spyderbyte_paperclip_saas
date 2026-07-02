@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const require = createRequire(import.meta.url);
 const {
   buildRemoteDockerStatsCommand,
+  buildRemoteProofCommand,
   buildRemoteQueueSnapshotCommand,
   buildCapacityVerdict,
   DEFAULT_SATURATION_THRESHOLDS,
@@ -21,6 +22,27 @@ describe("live soak capacity helpers", () => {
     expect(buildRemoteQueueSnapshotCommand({ queueContainer: "wealth-factory-api-stage2" })).toBe(
       "docker exec wealth-factory-api-stage2 node scripts/inspect-live-queue-snapshot.mjs"
     );
+  });
+
+  it("forwards only public launch origins to remote proof containers", () => {
+    const command = buildRemoteProofCommand({
+      proofArgs: ["--mode", "progress"],
+      proofContainer: "wf-stage-api",
+      sudoPassword: "safe-password",
+      env: {
+        WF_LIVE_BASE_URL: "https://wf-api.spyderbyte.cloud/",
+        WF_SMOKE_PORTAL_URL: "https://www.spyderbyte.cloud/",
+        WF_API_SESSION_SIGNING_KEY: "do-not-forward"
+      }
+    });
+
+    expect(command).toContain("-e WF_LIVE_BASE_URL='https://wf-api.spyderbyte.cloud'");
+    expect(command).toContain("-e WF_SMOKE_PORTAL_URL='https://www.spyderbyte.cloud'");
+    expect(command).not.toContain("WF_API_SESSION_SIGNING_KEY");
+    expect(command).not.toContain("do-not-forward");
+    expect(command).toContain("node scripts/prove-live-fairness.mjs");
+    expect(command).toContain("--mode");
+    expect(command).toContain("progress");
   });
 
   it("extracts the actual secret from either labeled helper text or a raw single-line file", () => {

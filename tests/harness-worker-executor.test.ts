@@ -1450,6 +1450,73 @@ describe("harness worker executor", () => {
     );
   });
 
+  it("preserves an unblock resume override when an approved lane is claimed for work", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const run = createHarnessRunRecord({
+      tenantId: "tenant-1",
+      workflowId: "wf_connect_first_workflow",
+      packageId: "pkg_bib_connect",
+      orchestratorPersona: "ceo",
+      runtimeContext: {
+        providerKind: "openai_api",
+        credentialLabel: "Primary OpenAI"
+      }
+    });
+    const ceoCard = createHarnessCardRecord({
+      runId: run.id,
+      persona: "ceo",
+      title: "Plan run",
+      deliverableType: "plan"
+    });
+    const cfoCard = createHarnessCardRecord({
+      runId: run.id,
+      parentCardId: ceoCard.id,
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    });
+    cfoCard.state = "approved";
+    const unblockSummary =
+      "Sample company sells a $2,500 strategy package to service businesses with a 65% margin target and competitor anchors between $1,500 and $3,500.";
+
+    await repository.insertRun(run);
+    await repository.insertCard(ceoCard);
+    await repository.insertCard(cfoCard);
+    await repository.upsertCardContinuity(
+      createHarnessCardContinuityRecord({
+        cardId: cfoCard.id,
+        runId: run.id,
+        continuitySource: "resume_override",
+        continuitySummary: unblockSummary,
+        latestResultSummary: null,
+        absorbedWorkItems: []
+      })
+    );
+
+    const dispatch = await buildHarnessWorkerDispatch({
+      repository,
+      tenantId: "tenant-1",
+      runId: run.id,
+      workflowId: "wf_connect_first_workflow"
+    });
+    const continuity = await repository.getCardContinuity(cfoCard.id);
+
+    expect(dispatch.laneExecution).toEqual(
+      expect.objectContaining({
+        cardId: cfoCard.id,
+        state: "working",
+        resumeFocus: unblockSummary
+      })
+    );
+    expect(continuity).toEqual(
+      expect.objectContaining({
+        cardId: cfoCard.id,
+        continuitySource: "resume_override",
+        continuitySummary: unblockSummary
+      })
+    );
+  });
+
   it("persists dispatch provenance when resuming an already-claimed working lane", async () => {
     const repository = createInMemoryHarnessRepository();
     const run = createHarnessRunRecord({

@@ -50,7 +50,10 @@ describe("stage live stability runner", () => {
       plan,
       baseEnv: {
         WF_STAGE_ENV_FILE: plan.envFilePath,
-        WF_STAGE_SSH_ENV_FILE: plan.sshEnvFilePath
+        WF_STAGE_SSH_ENV_FILE: plan.sshEnvFilePath,
+        WF_STAGE_API_ORIGIN: "https://wf-api.spyderbyte.cloud",
+        WF_STAGE_PORTAL_ORIGIN: "https://www.spyderbyte.cloud",
+        WF_API_SESSION_SIGNING_KEY: "do-not-forward-this-secret"
       },
       sudoPassword: "super-secret",
       stdout: { write: (chunk: string) => stdout.push(String(chunk)) },
@@ -89,6 +92,12 @@ describe("stage live stability runner", () => {
     const fairnessArgs = spawn.mock.calls[2]?.[1] as string[];
     expect(fairnessArgs[0]).toBe("deploy@187.77.19.83");
     expect(fairnessArgs[1]).toContain("cd /app && node scripts/prove-live-fairness.mjs");
+    expect(fairnessArgs[1]).toContain("-e WF_LIVE_BASE_URL=");
+    expect(fairnessArgs[1]).toContain("https://wf-api.spyderbyte.cloud");
+    expect(fairnessArgs[1]).toContain("-e WF_SMOKE_PORTAL_URL=");
+    expect(fairnessArgs[1]).toContain("https://www.spyderbyte.cloud");
+    expect(fairnessArgs[1]).not.toContain("WF_API_SESSION_SIGNING_KEY");
+    expect(fairnessArgs[1]).not.toContain("do-not-forward-this-secret");
     expect(fairnessArgs[1]).toContain("wf_connect_first_workflow");
     expect(fairnessArgs[1]).toContain("wf_package_followup");
     expect(fairnessArgs[1]).not.toContain("workflow_templates");

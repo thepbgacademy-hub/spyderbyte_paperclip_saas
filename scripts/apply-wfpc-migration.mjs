@@ -985,6 +985,68 @@ try {
       throw new Error("Harness tax strategy prerequisite snapshot migration did not produce the required schema shape");
     }
   }
+  const queryHarnessResultApprovalStatesReady = () =>
+    client.query(
+      `select
+        exists (
+          select 1
+          from information_schema.tables
+          where table_schema = 'wfpc'
+            and table_name = 'harness_result_approval_states'
+        ) as has_harness_result_approval_states,
+        exists (
+          select 1
+          from pg_constraint
+          where conrelid = to_regclass('wfpc.harness_result_approval_states')
+            and contype = 'p'
+            and lower(pg_get_constraintdef(oid)) like '%tenant_id%'
+            and lower(pg_get_constraintdef(oid)) like '%run_id%'
+            and lower(pg_get_constraintdef(oid)) like '%result_id%'
+        ) as has_result_approval_primary_key,
+        exists (
+          select 1
+          from pg_constraint
+          where conname = 'harness_result_approval_states_run_tenant_fk'
+            and conrelid = to_regclass('wfpc.harness_result_approval_states')
+        ) as has_result_approval_run_tenant_fk,
+        exists (
+          select 1
+          from pg_constraint
+          where conrelid = to_regclass('wfpc.harness_result_approval_states')
+            and lower(pg_get_constraintdef(oid)) like '%awaiting review%'
+            and lower(pg_get_constraintdef(oid)) like '%approved%'
+            and lower(pg_get_constraintdef(oid)) like '%revision needed%'
+        ) as has_result_approval_state_check,
+        exists (
+          select 1
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+          where n.nspname = 'wfpc'
+            and c.relname = 'harness_result_approval_states'
+            and c.relrowsecurity
+        ) as has_result_approval_rls,
+        exists (
+          select 1
+          from pg_policies
+          where schemaname = 'wfpc'
+            and tablename = 'harness_result_approval_states'
+            and policyname = 'members can read harness result approval states'
+        ) as has_result_approval_policy`
+    );
+  let harnessResultApprovalStatesExisting = await queryHarnessResultApprovalStatesReady();
+  let harnessResultApprovalStatesReady = Object.values(
+    harnessResultApprovalStatesExisting.rows[0] ?? {}
+  ).every(Boolean);
+  if (!harnessResultApprovalStatesReady) {
+    await client.query(readFileSync("supabase/migrations/0034_wf_harness_result_approval_states.sql", "utf8"));
+    harnessResultApprovalStatesExisting = await queryHarnessResultApprovalStatesReady();
+    harnessResultApprovalStatesReady = Object.values(
+      harnessResultApprovalStatesExisting.rows[0] ?? {}
+    ).every(Boolean);
+    if (!harnessResultApprovalStatesReady) {
+      throw new Error("Harness result approval states migration did not produce the required schema shape");
+    }
+  }
   const queryDurablePublicWorkflowIdentityReady = () =>
     client.query(
       `select
@@ -1076,6 +1138,7 @@ try {
           !harnessCompletionPackageSnapshotsReady ||
           !harnessGovernanceHistorySnapshotsReady ||
           !harnessTaxStrategyPrerequisiteSnapshotsReady ||
+          !harnessResultApprovalStatesReady ||
           !durablePublicWorkflowIdentityReady,
         tableCount: rows.length,
         tables: rows.map((row) => row.table_name)

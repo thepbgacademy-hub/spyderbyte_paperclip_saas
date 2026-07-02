@@ -4197,6 +4197,13 @@ export function createHarnessBoardService(options: {
           throw new HarnessCardProgressionConflictError("Harness attention target lane was not found");
         }
 
+        const trimmedResumeSummary = request.resumeSummary?.trim();
+        if (request.command === "unblock_lane" && !isSubstantiveUnblockSummary(trimmedResumeSummary)) {
+          throw new HarnessCardProgressionConflictError(
+            "Harness lane unblock requires a substantive unblock summary before execution can resume"
+          );
+        }
+
         const nextState = request.command === "resume_lane" ? "working" : "approved";
         const expectedState = request.command === "resume_lane" ? "waiting" : "blocked";
         if (targetCard.state !== expectedState) {
@@ -4220,7 +4227,6 @@ export function createHarnessBoardService(options: {
           })
         );
 
-        const trimmedResumeSummary = request.resumeSummary?.trim();
         await recordCardStateContinuity({
           repository,
           card: updatedCard,
@@ -5642,6 +5648,14 @@ function createHarnessAuditEvent(input: {
     entityId: input.entityId,
     metadata: input.metadata
   };
+}
+
+function isSubstantiveUnblockSummary(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  const words = value.split(/\s+/u).filter(Boolean);
+  return value.length >= 40 && words.length >= 8;
 }
 
 function createHarnessExportAuditEvent(input: {
@@ -9640,8 +9654,11 @@ function buildPendingAttentionView(input: {
     {
       name: "resumeSummary",
       label: action.kind === "await_lane_resume" ? "Resume summary" : "Unblock summary",
-      description: "Optional tenant-safe note describing what changed before execution resumes.",
-      required: false
+      description:
+        action.kind === "await_lane_resume"
+          ? "Optional tenant-safe note describing what changed before execution resumes."
+          : "Required tenant-safe note with the concrete inputs or assumptions that clear this blocker.",
+      required: action.kind === "await_unblock"
     },
     ...(founderTaxPrerequisiteAttention ? buildTaxStrategyPrerequisiteRequestFields() : [])
   ];

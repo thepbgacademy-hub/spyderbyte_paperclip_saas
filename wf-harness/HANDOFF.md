@@ -1588,3 +1588,47 @@ Everything below this heading is archived pre-freeze context for the deferred `m
     - `npx vitest run tests/harness-e2e-run-loop.test.ts tests/harness-worker-executor.test.ts tests/harness-board-service.test.ts`
     - `npm run build`
   - Scope guardrail: do not export execution claim tokens in future tenant-facing artifacts. They are private worker coordination data, not customer memory or package output.
+
+- Closed the bounded live dashboard result-approval read proof on July 2, 2026:
+  - Added `scripts/prove-live-dashboard-result-approval.mjs` and `npm run prove:live-dashboard-result-approval` as a dry-run-first, read-only live dashboard proof. The executed path only performs `GET /api/dashboard` with a scoped portal session cookie and sanitizes the returned dashboard body to workflows, artifacts, and `resultApprovalStates`.
+  - Added focused coverage in `tests/live-dashboard-result-approval-proof.test.ts` and `tests/harness-result-approval-states-migration.test.ts`.
+  - Patched `scripts/apply-wfpc-migration.mjs` so the live migration helper verifies/applies `0034_wf_harness_result_approval_states.sql` and fails closed unless the table, composite primary key, run+tenant FK, approval-state check, RLS, and read policy all exist.
+  - Sonnet headless recommended the narrow path: commit/push local green work, add the GET-only proof, avoid web/worker redeploys, and use at most a single isolated `wf-stage-api` refresh if the current stage image lacked the resolver.
+  - The first live proof against `https://wf-api.spyderbyte.cloud` returned HTTP 200 without `resultApprovalStates`, proving the stage API image was stale. The isolated VPS2 lane was refreshed only for `wf-stage-api` to `spyderbyte/api:wf-stage-20260702-dashboardapproval1`.
+  - The refreshed API then returned HTTP 500, and a read-only schema check showed `wfpc.harness_result_approval_states` was missing. Applied only the idempotent `0034_wf_harness_result_approval_states.sql` migration inside the existing stage API container; no rows were seeded and no provider, DNS, web, worker, Paperclip, or shared-domain surfaces were changed.
+  - Final live proof:
+    - `npm run prove:live-dashboard-result-approval -- --execute --base-url https://wf-api.spyderbyte.cloud --portal-origin https://www.spyderbyte.cloud --tenant 22222222-2222-4222-8222-222222222222 --user 11111111-1111-4111-8111-111111111111 --expires-in-minutes 10`
+    - result: `ok: true`, HTTP 200, `resultApprovalStatesPresent: true`, `resultApprovalStatesShape: "object"`, count `0`, sanitized workflow `Connect First Workflow`.
+  - Evidence artifact: `audit/2026-07-02/live-dashboard-result-approval-states-proof.json`.
+  - Next recommended phase: use browser harness against the refreshed Wealth Factory lane to prove the public dashboard journey end-to-end before running the full non-destructive stage-stability suite.
+
+- Closed the first launch-lane live-testing readiness gate on July 2, 2026:
+  - Added the browser-harness public dashboard journey proof at `scripts/prove-live-dashboard-browser-journey.mjs` and wired `npm run prove:live-dashboard-browser-journey`.
+  - The proof is dry-run-first and mutation-free: it mints or accepts a scoped portal session, sets the portal cookie through the browser harness/CDP lane, opens `/board?workflowId=wf_connect_first_workflow`, verifies the Wealth Factory dashboard shell, board page, results page, result-approval localStorage shape, and confirms forbidden social-media drift text is absent.
+  - Kept Codex auth-home readiness scoped to the actual Codex-subscription launch workflow `wf_connect_first_workflow`. Non-Codex/domain-pack lanes no longer inherit the primary Codex readiness proof requirement.
+  - Propagated explicit `--lanes primary` through stage-live, native execution, fairness, and soak so launch readiness is proved against the first-client lane instead of silently widening to unbuilt tax/package families.
+  - Remote fairness and soak now forward only public API/portal origins into proof containers. API session signing keys, provider credentials, and other secrets are not forwarded through proof commands.
+  - The primary launch lane uses progress-mode pressure because `wf_connect_first_workflow` is attention-gated by design and may truthfully block for user review. Broader future family gates still retain drain-mode expectations unless explicitly narrowed.
+  - Sonnet headless was consulted for consideration only and agreed with the two-tier gate: primary `wf_connect_first_workflow` is the blocking launch-readiness lane; `wf_tax_strategy` and package follow-up belong to later matched domain-specific prompt/data pack acceptance because those packs are not built yet.
+  - GitNexus was refreshed before the phase and indexed current commit `07cbb11`; `detect-changes` reported low risk on tracked changes before this final documentation patch. Re-run GitNexus after committing/pushing this phase.
+  - Verification evidence:
+    - `npm run prove:live-dashboard-result-approval -- --execute --base-url https://wf-api.spyderbyte.cloud --portal-origin https://www.spyderbyte.cloud --tenant 22222222-2222-4222-8222-222222222222 --user 11111111-1111-4111-8111-111111111111 --expires-in-minutes 10`
+    - `npm run prove:live-dashboard-browser-journey -- --execute --base-url https://wf-api.spyderbyte.cloud --portal-origin https://www.spyderbyte.cloud --tenant 22222222-2222-4222-8222-222222222222 --user 11111111-1111-4111-8111-111111111111 --workflow wf_connect_first_workflow --expires-in-minutes 10`
+    - `npm run prove:stage-stability -- --lanes primary`
+  - Sanitized artifact: `audit/2026-07-02/stage-stability-primary-launch-readiness-summary.json`.
+  - Raw July 2 soak/log/jsonl captures remain local-only because they include live stage topology and run identifiers.
+  - Next recommended phase: start human/operator live testing on the primary `wf_connect_first_workflow` lane with the OpenAI device connector or BYOK provider path, then separately schedule full-family domain-pack acceptance after the tax/package prompt and data packs exist.
+
+- Captured and corrected the first human/operator live dashboard blocker loop on July 2, 2026:
+  - Live symptom: the CFO `Pressure-test the pricing lane` card was unblocked from the dashboard, moved to an approved/planning posture, but did not naturally progress to the next working lane after repeated refreshes.
+  - Root-cause split:
+    - The original redispatch outbox row was marked `enqueued`, but the matching BullMQ job was absent from the isolated stage queue.
+    - A bounded manual restage proved the worker path still functions: the card moved `approved -> working`, then truthfully re-blocked because no pricing model, target customer assumptions, competitor anchors, current price points, margin constraints, or revised pricing hypotheses were supplied.
+  - Product correction: lane unblocks now require a substantive tenant-safe `resumeSummary` before blocked work can re-enter execution; vague notes like `Cleared.` fail closed and leave the card blocked.
+  - Live deployment: refreshed only the isolated Wealth Factory stage API/worker images to `spyderbyte/api:wf-stage-20260702-unblockcontract1` and `spyderbyte/worker:wf-stage-20260702-unblockcontract1`, then restarted only `wf-stage-api` and `wf-stage-worker`.
+  - Live verification: `https://wf-api.spyderbyte.cloud/api/harness/board?workflowId=wf_connect_first_workflow` now reports `pendingAttention.kind = "await_unblock"` and `resumeSummary.required = true` with the concrete-input unblock description.
+  - Verification commands:
+    - `npx vitest run tests/harness-board-service.test.ts`
+    - `npx vitest run tests/runtime-server.test.ts tests/queue-outbox-worker.test.ts`
+    - `npm run build:server`
+  - Next live-testing move: refresh the public dashboard and unblock the CFO pricing lane only after entering sample-company pricing assumptions. Do not treat this as a workflow-family expansion, prompt-pack build, export phase, DNS/Caddy change, shared VPS cleanup, Paperclip repair, or provider-auth change.

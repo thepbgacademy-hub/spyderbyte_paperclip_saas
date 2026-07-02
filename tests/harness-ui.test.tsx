@@ -1873,7 +1873,13 @@ describe("harness board UI", () => {
   });
 
   it("renders bounded resolve-attention guidance directly from the harness contract", () => {
-    const markup = renderToStaticMarkup(<HarnessBoardPage initialBoard={resolveAttentionBoardResponse} />);
+    const resumeOnlyBoardResponse: HarnessBoardResponse = {
+      ...resolveAttentionBoardResponse,
+      pendingApprovals: []
+    };
+    const markup = renderToStaticMarkup(
+      <HarnessBoardPage initialBoard={resumeOnlyBoardResponse} initialControlMode="live" />
+    );
 
     expect(markup).toContain("Resume lane");
     expect(markup).toContain("Attention recovery");
@@ -1881,7 +1887,7 @@ describe("harness board UI", () => {
     expect(markup).toContain("Resolve the lane follow-up from the Board action panel; do not bypass it with a manual worker restart or stale action token.");
     expect(markup).toContain("Recovery path: resolve lane follow-up before worker progress resumes.");
     expect(markup).toContain("Waiting on lane resume");
-    expect(markup).toContain("1 lane follow-up and 1 pending approval are shaping the next move.");
+    expect(markup).toContain("1 lane follow-up is shaping the next move.");
     expect(markup).toContain("Resume the pricing lane once the tenant confirms the updated revenue assumption.");
     expect(markup).toContain("POST /api/harness/runs/run_ui_test_2/resolve-attention");
     expect(markup).toContain("Action family: resolve attention");
@@ -1890,6 +1896,8 @@ describe("harness board UI", () => {
     expect(markup).toContain("Resume summary");
     expect(markup).toContain("Hide composer for Resume lane");
     expect(markup).toContain("Live request fields for Resume lane");
+    expect(markup).toContain("<textarea");
+    expect(markup).toContain("Add the concrete tenant-safe context the worker needs before this lane resumes.");
     expect(markup).toContain("&quot;resolution&quot;:&quot;resume_lane&quot;");
   });
 

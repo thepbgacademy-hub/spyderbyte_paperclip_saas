@@ -1,20 +1,15 @@
 import process from "node:process";
 import { spawnSync } from "node:child_process";
 
+const CODEX_SUBSCRIPTION_WORKFLOW_IDS = new Set(["wf_connect_first_workflow"]);
+
 export function runStageLiveNativeExecutionPlan(input) {
   const stdout = input.stdout ?? process.stdout;
   const spawn = input.spawn ?? spawnSync;
   const cwd = input.cwd ?? process.cwd();
-  if (!input.apiCodexHomeReadinessProofPath || !input.workerCodexHomeReadinessProofPath) {
-    throw new StageLiveNativeExecutionStepError({
-      stepId: "codex_readiness_gate",
-      stepLabel: "Codex auth-home readiness proof gate",
-      status: 1,
-      message: "Both API and worker Codex auth-home readiness proof paths are required before stage native execution."
-    });
-  }
 
   for (const lane of input.lanes) {
+    const codexReadinessArgs = resolveCodexReadinessArgs(input, lane);
     stdout.write(`\n== Stage native execution lane: ${lane.laneName} (${lane.workflowId}) ==\n`);
     runCommand({
       stepId: lane.workflowId,
@@ -30,11 +25,7 @@ export function runStageLiveNativeExecutionPlan(input) {
         input.sshTarget,
         "--preflight-container",
         input.preflightContainer,
-        "--api-codex-home-readiness-proof",
-        input.apiCodexHomeReadinessProofPath,
-        "--worker-codex-home-readiness-proof",
-        input.workerCodexHomeReadinessProofPath,
-        ...(input.codexAuthStateRef ? ["--codex-auth-state-ref", input.codexAuthStateRef] : []),
+        ...codexReadinessArgs,
         "--tenant",
         lane.profile.tenantId,
         "--user",
@@ -54,6 +45,28 @@ export function runStageLiveNativeExecutionPlan(input) {
       spawn
     });
   }
+}
+
+function resolveCodexReadinessArgs(input, lane) {
+  if (!CODEX_SUBSCRIPTION_WORKFLOW_IDS.has(lane.workflowId)) {
+    return [];
+  }
+  if (!input.apiCodexHomeReadinessProofPath || !input.workerCodexHomeReadinessProofPath) {
+    throw new StageLiveNativeExecutionStepError({
+      stepId: "codex_readiness_gate",
+      stepLabel: "Codex auth-home readiness proof gate",
+      status: 1,
+      message: `Both API and worker Codex auth-home readiness proof paths are required before stage native execution for ${lane.workflowId}.`
+    });
+  }
+
+  return [
+    "--api-codex-home-readiness-proof",
+    input.apiCodexHomeReadinessProofPath,
+    "--worker-codex-home-readiness-proof",
+    input.workerCodexHomeReadinessProofPath,
+    ...(input.codexAuthStateRef ? ["--codex-auth-state-ref", input.codexAuthStateRef] : [])
+  ];
 }
 
 function runCommand(input) {

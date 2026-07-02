@@ -47,6 +47,16 @@ export function buildRemoteQueueSnapshotCommand({ queueContainer }) {
   return `docker exec ${normalized} node scripts/inspect-live-queue-snapshot.mjs`;
 }
 
+export function buildRemoteProofCommand({ proofArgs, proofContainer, sudoPassword, env = {} }) {
+  const escapedProofArgs = proofArgs.map((value) => `'${shellEscapeSingleQuotes(value)}'`).join(" ");
+  const innerCommand = `cd /app && node scripts/prove-live-fairness.mjs ${escapedProofArgs}`.trim();
+  const dockerCommand = `docker exec ${buildRemoteProofEnvArgs(env)} ${shellEscapeSingleQuotes(proofContainer)} sh -lc '${shellEscapeSingleQuotes(innerCommand)}'`;
+  if (!sudoPassword) {
+    return dockerCommand;
+  }
+  return `printf '%s\\n' '${shellEscapeSingleQuotes(sudoPassword)}' | sudo -S -p '' ${dockerCommand}`;
+}
+
 export function parseRemoteQueueSnapshotStdout(stdout, { observedAt }) {
   const jsonText = extractFirstJsonObject(stdout);
   const parsed = JSON.parse(jsonText);
@@ -172,4 +182,22 @@ function isSustainedHotspot(container) {
   const ratio = Number(container?.hotSampleRatios?.any ?? 0);
   const hotSamples = Number(container?.hotSamples?.any ?? 0);
   return hotSamples >= 2 && (streak >= 3 || ratio >= 0.3);
+}
+
+function buildRemoteProofEnvArgs(env = {}) {
+  const apiOrigin = normalizeOrigin(env.WF_LIVE_BASE_URL ?? env.WF_STAGE_API_ORIGIN);
+  const portalOrigin = normalizeOrigin(env.WF_SMOKE_PORTAL_URL ?? env.WF_STAGE_PORTAL_ORIGIN);
+  const entries = [
+    ["WF_LIVE_BASE_URL", apiOrigin],
+    ["WF_SMOKE_PORTAL_URL", portalOrigin]
+  ].filter(([, value]) => value);
+  return entries.map(([key, value]) => `-e ${key}='${shellEscapeSingleQuotes(value)}'`).join(" ");
+}
+
+function normalizeOrigin(value) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim().replace(/\/$/, "") : null;
+}
+
+function shellEscapeSingleQuotes(value) {
+  return String(value).replace(/'/g, `'\"'\"'`);
 }

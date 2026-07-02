@@ -8,6 +8,7 @@ import { clearTimeout, setTimeout } from "node:timers";
 import {
   buildCapacityVerdict,
   DEFAULT_SATURATION_THRESHOLDS,
+  buildRemoteProofCommand,
   buildRemoteDockerStatsCommand,
   buildRemoteQueueSnapshotCommand,
   parseSecretFileContents,
@@ -53,7 +54,8 @@ const proofChild = createProofProcess({
   proofArgs,
   proofSshTarget,
   proofContainer,
-  sudoPassword
+  sudoPassword,
+  env
 });
 
 const proofStdoutChunks = [];
@@ -432,7 +434,7 @@ function parseProofStdout(stdout) {
   }
 }
 
-function createProofProcess({ proofArgs, proofSshTarget, proofContainer, sudoPassword }) {
+function createProofProcess({ proofArgs, proofSshTarget, proofContainer, sudoPassword, env }) {
   if (!proofSshTarget || !proofContainer) {
     return spawn(process.execPath, ["scripts/prove-live-fairness.mjs", ...proofArgs], {
       cwd: process.cwd(),
@@ -443,22 +445,8 @@ function createProofProcess({ proofArgs, proofSshTarget, proofContainer, sudoPas
     });
   }
 
-  return spawn("ssh", [proofSshTarget, buildRemoteProofCommand({ proofArgs, proofContainer, sudoPassword })], {
+  return spawn("ssh", [proofSshTarget, buildRemoteProofCommand({ proofArgs, proofContainer, sudoPassword, env })], {
     cwd: process.cwd(),
     stdio: ["ignore", "pipe", "pipe"]
   });
-}
-
-function buildRemoteProofCommand({ proofArgs, proofContainer, sudoPassword }) {
-  const escapedProofArgs = proofArgs.map((value) => `'${shellEscapeSingleQuotes(value)}'`).join(" ");
-  const innerCommand = `cd /app && node scripts/prove-live-fairness.mjs ${escapedProofArgs}`.trim();
-  const dockerCommand = `docker exec ${shellEscapeSingleQuotes(proofContainer)} sh -lc '${shellEscapeSingleQuotes(innerCommand)}'`;
-  if (!sudoPassword) {
-    return dockerCommand;
-  }
-  return `printf '%s\\n' '${shellEscapeSingleQuotes(sudoPassword)}' | sudo -S -p '' ${dockerCommand}`;
-}
-
-function shellEscapeSingleQuotes(value) {
-  return String(value).replace(/'/g, `'\"'\"'`);
 }

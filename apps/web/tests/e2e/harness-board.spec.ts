@@ -39,3 +39,17 @@ test("board route shows clean persona progress and opens the drawer", async ({ p
   await expect(cardDrawer).toContainText("Outcome");
   await expect(cardDrawer).toContainText("Continuity memory");
 });
+
+test("board page exposes document-level vertical scrolling for below-the-fold cards", async ({ page }) => {
+  await page.goto("/board?workflowId=wf_connect_first_workflow");
+
+  await expect(page.getByTestId("page-board")).toBeVisible();
+  await expect(page.getByText("Completion package")).toBeAttached();
+
+  await expect
+    .poll(() => page.evaluate(() => document.scrollingElement ? document.scrollingElement.scrollHeight > document.scrollingElement.clientHeight : false))
+    .toBe(true);
+
+  await page.mouse.wheel(0, 900);
+  await expect.poll(() => page.evaluate(() => document.scrollingElement?.scrollTop ?? 0)).toBeGreaterThan(0);
+});
