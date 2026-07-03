@@ -96,7 +96,7 @@ describe("deployment POC config", () => {
     expect(apiDockerfile).toContain("COPY scripts ./scripts");
     expect(webDockerfile).toContain("RUN npm run build:web");
     expect(webDockerfile).toContain("COPY deploy/nginx/web.conf /etc/nginx/conf.d/default.conf");
-    expect(webDockerfile).toContain("COPY --from=build /app/dist ./");
+    expect(webDockerfile).toContain("COPY --from=build /app/apps/web/dist ./");
     expect(webDockerfile).toContain('EXPOSE 3000');
     expect(webDockerfile).toContain('CMD ["nginx", "-g", "daemon off;"]');
     expect(webNginx).toContain("listen 3000;");
