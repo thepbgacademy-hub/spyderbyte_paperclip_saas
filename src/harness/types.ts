@@ -63,6 +63,7 @@ export const HARNESS_DELIVERABLE_TYPES = [
 export interface HarnessRuntimeContext {
   providerKind: ProviderKind;
   credentialLabel: string;
+  previousRunId?: string;
   secretValues?: never;
 }
 
@@ -429,10 +430,14 @@ export function isHarnessDeliverableType(value: string): value is (typeof HARNES
 export function createHarnessRuntimeContext(input: {
   providerKind: ProviderKind;
   credentialLabel: string;
+  previousRunId?: string;
 } & Record<string, unknown>): HarnessRuntimeContext {
   return {
     providerKind: input.providerKind,
-    credentialLabel: input.credentialLabel
+    credentialLabel: input.credentialLabel,
+    ...(typeof input.previousRunId === "string" && input.previousRunId.length > 0
+      ? { previousRunId: input.previousRunId }
+      : {})
   };
 }
 
@@ -444,6 +449,7 @@ export function createHarnessRunRecord(input: {
   runtimeContext: {
     providerKind: ProviderKind;
     credentialLabel: string;
+    previousRunId?: string;
   } & Record<string, unknown>;
 }): HarnessRunRecord {
   const timestamp = new Date().toISOString();

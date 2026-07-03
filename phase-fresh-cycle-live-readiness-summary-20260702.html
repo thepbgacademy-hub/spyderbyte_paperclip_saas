@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wealth Factory Fresh-Cycle Live Readiness Summary</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #07110f;
+        --panel: #101c22;
+        --card: #142532;
+        --ink: #f6efe3;
+        --muted: #a9c3ce;
+        --line: #2d4654;
+        --accent: #79d7ff;
+        --ok: #93e6b5;
+        --warn: #ffd479;
+      }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", "Aptos", sans-serif;
+        background: radial-gradient(circle at top left, #123545 0, var(--bg) 42%);
+        color: var(--ink);
+      }
+      main {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 40px 24px 56px;
+      }
+      header {
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        padding: 32px;
+        background: linear-gradient(135deg, rgba(121, 215, 255, 0.16), rgba(16, 28, 34, 0.92));
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+      }
+      h1, h2, h3 {
+        margin: 0;
+        line-height: 1.1;
+      }
+      h1 {
+        font-size: clamp(2.1rem, 5vw, 4.3rem);
+        letter-spacing: -0.05em;
+      }
+      h2 {
+        font-size: 1.3rem;
+        margin-bottom: 14px;
+      }
+      p {
+        color: var(--muted);
+        line-height: 1.65;
+      }
+      .eyebrow {
+        color: var(--accent);
+        font-weight: 800;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 18px;
+        margin-top: 22px;
+      }
+      .card {
+        background: rgba(20, 37, 50, 0.78);
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        padding: 20px;
+      }
+      .card strong {
+        color: var(--ink);
+      }
+      .status {
+        display: inline-block;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(147, 230, 181, 0.14);
+        color: var(--ok);
+        font-weight: 800;
+      }
+      .warning {
+        background: rgba(255, 212, 121, 0.12);
+        color: var(--warn);
+      }
+      section {
+        margin-top: 24px;
+        padding: 24px;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: rgba(16, 28, 34, 0.82);
+      }
+      ul {
+        margin: 12px 0 0;
+        padding-left: 20px;
+        color: var(--muted);
+        line-height: 1.65;
+      }
+      code {
+        color: var(--accent);
+      }
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .links {
+        columns: 2 320px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="eyebrow">Fresh-Cycle Live Readiness</div>
+        <h1>Closed boards can now intentionally start the next Wealth Factory cycle.</h1>
+        <p>
+          This phase corrected the completed-board dead end and removed the stale database uniqueness rule that prevented
+          historical fresh cycles, while adding a safer successor uniqueness guard to prevent duplicate next cycles.
+        </p>
+        <div class="grid">
+          <div class="card"><span class="status">Green</span><p><strong>Focused board proofs</strong><br />Closed board exposes one bounded <code>start_fresh_cycle</code> action and starts a new run.</p></div>
+          <div class="card"><span class="status">Green</span><p><strong>Migration proofs</strong><br />Tenant/workflow history is allowed, but duplicate successors from the same completed run are blocked.</p></div>
+          <div class="card"><span class="status warning">High seam</span><p><strong>GitNexus blast radius</strong><br />High risk due core harness lifecycle touch points, but contained to the fresh-cycle harness boundary.</p></div>
+        </div>
+      </header>
+
+      <section>
+        <h2>What Changed</h2>
+        <ul>
+          <li>Added a closed-cycle CEO review action so completed boards are not inert after exports are delivered.</li>
+          <li>Stamped fresh-cycle runs with <code>runtimeContext.previousRunId</code> for safe predecessor lineage.</li>
+          <li>Replaced the stale unique tenant/workflow run index with a latest-run lookup index.</li>
+          <li>Added a partial unique successor index so one completed run cannot spawn multiple successor cycles.</li>
+          <li>Updated migration helper verification so stage/live setup fails closed if the new schema shape is missing.</li>
+          <li>Preserved <code>previousRunId</code> through Postgres runtime-context mapping without allowing secret values through.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Verification</h2>
+        <div class="grid">
+          <div class="card"><h3>Board Lifecycle</h3><p><code>npx vitest run tests/harness-board-service.test.ts -t "exposes a bounded fresh-cycle action after a completed board cycle|resolves CEO review attention by starting a fresh cycle|fails closed when final-assembly CEO review receives"</code></p><p>Passed: 3 focused tests.</p></div>
+          <div class="card"><h3>Migration + Repository</h3><p><code>npx vitest run tests/harness-fresh-cycle-runs-migration.test.ts tests/harness-repository.test.ts -t "creates run, card, and event records|harness fresh-cycle runs migration|removes tenant workflow uniqueness|stores multiple fresh-cycle runs"</code></p><p>Passed: 4 focused tests.</p></div>
+          <div class="card"><h3>Build + Review</h3><p><code>npm run build:server</code> passed. GitNexus was refreshed earlier and final change detection reported high risk confined to harness lifecycle flows.</p><p>Subagent reviewer Ampere completed review passes; duplicate-successor, Postgres mapping, and JS mirror drift findings were corrected.</p><p>Sonnet reviewed the completed local diff in headless mode and found no blockers. Its low-risk in-memory latest-run ordering note was also corrected and tested.</p></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Live Note</h2>
+        <p>
+          The stage database migration was applied non-destructively and verified earlier on the isolated Wealth Factory lane.
+          The live board still needs the updated API image/restart before the new closed-board action appears at
+          <code>wf-api.spyderbyte.cloud</code>.
+        </p>
+      </section>
+
+      <section>
+        <h2>Updated Files</h2>
+        <div class="links">
+          <p><a href="scripts/apply-wfpc-migration.mjs">scripts/apply-wfpc-migration.mjs</a></p>
+          <p><a href="src/harness/board-service.ts">src/harness/board-service.ts</a></p>
+          <p><a href="src/harness/post-outcome.ts">src/harness/post-outcome.ts</a></p>
+          <p><a href="src/harness/repository.ts">src/harness/repository.ts</a></p>
+          <p><a href="src/harness/types.ts">src/harness/types.ts</a></p>
+          <p><a href="supabase/migrations/0035_wf_harness_fresh_cycle_runs.sql">supabase/migrations/0035_wf_harness_fresh_cycle_runs.sql</a></p>
+          <p><a href="tests/harness-board-service.test.ts">tests/harness-board-service.test.ts</a></p>
+          <p><a href="tests/harness-fresh-cycle-runs-migration.test.ts">tests/harness-fresh-cycle-runs-migration.test.ts</a></p>
+          <p><a href="tests/harness-repository.test.ts">tests/harness-repository.test.ts</a></p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

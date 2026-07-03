@@ -1047,6 +1047,51 @@ try {
       throw new Error("Harness result approval states migration did not produce the required schema shape");
     }
   }
+  const queryHarnessFreshCycleRunsReady = () =>
+    client.query(
+      `select
+        not exists (
+          select 1
+          from pg_indexes
+          where schemaname = 'wfpc'
+            and indexname = 'harness_runs_tenant_workflow_unique_idx'
+        ) as has_no_tenant_workflow_unique_index,
+        exists (
+          select 1
+          from pg_indexes
+          where schemaname = 'wfpc'
+            and indexname = 'harness_runs_tenant_workflow_latest_idx'
+            and lower(indexdef) like '%tenant_id%'
+            and lower(indexdef) like '%workflow_id%'
+            and lower(indexdef) like '%updated_at desc%'
+            and lower(indexdef) like '%created_at desc%'
+        ) as has_latest_run_lookup_index,
+        exists (
+          select 1
+          from pg_indexes
+          where schemaname = 'wfpc'
+            and indexname = 'harness_runs_previous_run_successor_unique_idx'
+            and lower(indexdef) like '%unique%'
+            and lower(indexdef) like '%tenant_id%'
+            and lower(indexdef) like '%workflow_id%'
+            and lower(indexdef) like '%previousrunid%'
+            and lower(indexdef) like '%where%'
+        ) as has_previous_run_successor_unique_index`
+    );
+  let harnessFreshCycleRunsExisting = await queryHarnessFreshCycleRunsReady();
+  let harnessFreshCycleRunsReady = Object.values(
+    harnessFreshCycleRunsExisting.rows[0] ?? {}
+  ).every(Boolean);
+  if (!harnessFreshCycleRunsReady) {
+    await client.query(readFileSync("supabase/migrations/0035_wf_harness_fresh_cycle_runs.sql", "utf8"));
+    harnessFreshCycleRunsExisting = await queryHarnessFreshCycleRunsReady();
+    harnessFreshCycleRunsReady = Object.values(
+      harnessFreshCycleRunsExisting.rows[0] ?? {}
+    ).every(Boolean);
+    if (!harnessFreshCycleRunsReady) {
+      throw new Error("Harness fresh-cycle runs migration did not produce the required schema shape");
+    }
+  }
   const queryDurablePublicWorkflowIdentityReady = () =>
     client.query(
       `select
@@ -1139,6 +1184,7 @@ try {
           !harnessGovernanceHistorySnapshotsReady ||
           !harnessTaxStrategyPrerequisiteSnapshotsReady ||
           !harnessResultApprovalStatesReady ||
+          !harnessFreshCycleRunsReady ||
           !durablePublicWorkflowIdentityReady,
         tableCount: rows.length,
         tables: rows.map((row) => row.table_name)

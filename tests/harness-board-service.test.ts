@@ -1574,6 +1574,90 @@ describe("harness board service", () => {
     );
   });
 
+  it("exposes a bounded fresh-cycle action after a completed board cycle", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "done",
+      resultSummary: "Pricing floor is stable enough for launch."
+    });
+    await service.completeRun({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      completionSummary: "The CEO packaged the final business-facing outcome."
+    });
+
+    const closedBoard = await service.listBoardState({ authorization: "Bearer valid" });
+
+    expect(closedBoard.boardState).toBe("closed");
+    expect(closedBoard.pendingAttention).toEqual(
+      expect.objectContaining({
+        kind: "queue_ceo_review",
+        runState: "done",
+        actionRoute: "review-attention",
+        actionPath: `/api/harness/runs/${board.runId}/review-attention`,
+        allowedDecisions: ["start_fresh_cycle"],
+        recommendedOptionValue: "start_fresh_cycle"
+      })
+    );
+    expect(closedBoard.pendingAttention?.actionOptions).toEqual([
+      expect.objectContaining({
+        value: "start_fresh_cycle",
+        exampleRequest: { decision: "start_fresh_cycle", mode: "clean" }
+      })
+    ]);
+
+    const freshCycle = await service.reviewPendingAttention({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      decision: "start_fresh_cycle",
+      mode: "clean",
+      actionToken: closedBoard.pendingAttention?.actionHandle
+    });
+
+    expect(freshCycle).toEqual({
+      status: "fresh_cycle_started",
+      runId: expect.any(String),
+      reopenedProposalCount: 0
+    });
+    expect(freshCycle.runId).not.toBe(board.runId);
+    await expect(repository.getRun(freshCycle.runId)).resolves.toEqual(
+      expect.objectContaining({
+        runtimeContext: expect.objectContaining({
+          previousRunId: board.runId
+        })
+      })
+    );
+  });
+
   it("fails closed when final-assembly CEO review receives a next-lane-only decision", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({

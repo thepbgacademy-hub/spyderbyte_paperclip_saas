@@ -127,6 +127,7 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
       const matchingRuns = [...runs.values()].filter(
         (run) => run.tenantId === input.tenantId && run.workflowId === input.workflowId
       );
+      matchingRuns.sort(compareHarnessRunsByOldestFirst);
       return matchingRuns.at(-1) ?? null;
     },
 
@@ -1855,10 +1856,20 @@ function mergeBoundedStrings(existing: readonly string[], nextValues: readonly s
   return merged.slice(-6);
 }
 
+function compareHarnessRunsByOldestFirst(left: HarnessRunRecord, right: HarnessRunRecord): number {
+  if (left.updatedAt !== right.updatedAt) {
+    return left.updatedAt.localeCompare(right.updatedAt);
+  }
+  return left.createdAt.localeCompare(right.createdAt);
+}
+
 function normalizeRuntimeContext(value: unknown): HarnessRunRecord["runtimeContext"] {
   const record = asRecord(value);
   return {
     providerKind: String(record.providerKind ?? record.provider_kind ?? "generic_api") as HarnessRunRecord["runtimeContext"]["providerKind"],
-    credentialLabel: String(record.credentialLabel ?? record.credential_label ?? "Connected provider")
+    credentialLabel: String(record.credentialLabel ?? record.credential_label ?? "Connected provider"),
+    ...(typeof record.previousRunId === "string" && record.previousRunId.length > 0
+      ? { previousRunId: record.previousRunId }
+      : {})
   };
 }

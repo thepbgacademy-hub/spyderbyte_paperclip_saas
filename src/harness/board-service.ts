@@ -5567,7 +5567,8 @@ async function seedFreshHarnessRun(input: {
     packageId: input.fromRun.packageId,
     runtimeContext: {
       providerKind: input.fromRun.runtimeContext.providerKind,
-      credentialLabel: input.fromRun.runtimeContext.credentialLabel
+      credentialLabel: input.fromRun.runtimeContext.credentialLabel,
+      previousRunId: input.fromRun.id
     }
   });
 
@@ -9816,6 +9817,54 @@ function buildPendingAttentionView(input: {
               ] satisfies HarnessActionOptionView[],
               recommendedOptionValue: "complete_run" as const,
               allowedDecisions: ["complete_run", "start_fresh_cycle"] as HarnessAttentionReviewDecision[]
+            }
+          : action.runState === "done"
+          ? {
+              actionRoute: "review-attention" as const,
+              actionPath: `/api/harness/runs/${encodeURIComponent(input.run.id)}/review-attention`,
+              actionMethod: "POST" as const,
+              actionHandle: createPendingAttentionActionToken({
+                runId: input.run.id,
+                action,
+                requestedAt: currentAttentionRequestedAt,
+                cycleMarker: pendingAttentionCycleMarker
+              }),
+              actionLabel: "Start next cycle",
+              actionDescription: "Start the next bounded board cycle from this completed package.",
+              requestFields: [
+                {
+                  name: "decision",
+                  label: "Review decision",
+                  description: "Choose the bounded next-cycle action for this completed board.",
+                  required: true,
+                  allowedValues: ["start_fresh_cycle"]
+                },
+                {
+                  name: "mode",
+                  label: "Fresh-cycle mode",
+                  description: "Choose whether the next cycle should reopen deferred work or start clean.",
+                  required: false,
+                  supportedWhenValue: "start_fresh_cycle",
+                  allowedValues: ["reopen_deferred", "clean"]
+                }
+              ] satisfies HarnessActionRequestFieldView[],
+              actionOptions: [
+                {
+                  value: "start_fresh_cycle",
+                  label: "Start fresh cycle",
+                  description: "Open the next board cycle from this completed package.",
+                  emphasis: "primary",
+                  nextEffectSummary: "A new run starts from this completed board while the delivered package remains immutable.",
+                  requiresConfirmation: true,
+                  confirmationLabel: "Start a clean new board cycle from this delivered package?",
+                  exampleRequest: {
+                    decision: "start_fresh_cycle",
+                    mode: "clean"
+                  }
+                }
+              ] satisfies HarnessActionOptionView[],
+              recommendedOptionValue: "start_fresh_cycle" as const,
+              allowedDecisions: ["start_fresh_cycle"] as HarnessAttentionReviewDecision[]
             }
           : {
               actionRoute: "pending-approvals" as const,

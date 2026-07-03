@@ -11,7 +11,7 @@ export type HarnessPostOutcomeAction =
   | {
       kind: "queue_ceo_review";
       runState: HarnessRunRecord["state"];
-      reason: "final_assembly" | "governance_backlog" | "governance_hold" | "next_lane_decision";
+      reason: "final_assembly" | "governance_backlog" | "governance_hold" | "next_lane_decision" | "cycle_closed";
       completedCardId?: string;
       nextCardId?: string;
     }
@@ -84,6 +84,14 @@ export function determineHarnessPostOutcomeAction(input: {
       kind: "queue_ceo_review",
       runState: input.runState,
       reason: hasOpenGovernance ? "governance_hold" : "final_assembly"
+    };
+  }
+
+  if (input.runState === "done") {
+    return {
+      kind: "queue_ceo_review",
+      runState: input.runState,
+      reason: "cycle_closed"
     };
   }
 
@@ -173,6 +181,8 @@ export function humanizePostOutcomeReason(
       return "Governance hold";
     case "next_lane_decision":
       return "Next lane decision";
+    case "cycle_closed":
+      return "Cycle closed";
     default:
       return reason;
   }
@@ -270,6 +280,8 @@ function describeCeoReviewSummary(
       return "The board needs CEO review because governance work is still shaping what can move next.";
     case "next_lane_decision":
       return "The board needs CEO review to decide the next bounded lane move after the latest completed child lane.";
+    case "cycle_closed":
+      return "The board cycle is closed and packaged; CEO can intentionally start the next bounded cycle.";
     default:
       return "The board needs CEO review before work can continue.";
   }
@@ -315,6 +327,7 @@ function parseAttentionActionPayload(
       || reason === "governance_backlog"
       || reason === "governance_hold"
       || reason === "next_lane_decision"
+      || reason === "cycle_closed"
     ) {
       return {
         kind: "queue_ceo_review",

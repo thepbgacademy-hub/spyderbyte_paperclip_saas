@@ -33,6 +33,7 @@ const governanceHistorySnapshotsMigration = readFileSync("supabase/migrations/00
 const cardExecutionClaimsMigration = readFileSync("supabase/migrations/0029_wf_harness_card_execution_claims.sql", "utf8");
 const taxStrategyPrerequisiteSnapshotsMigration = readFileSync("supabase/migrations/0033_wf_harness_tax_strategy_prerequisite_snapshots.sql", "utf8");
 const resultApprovalStatesMigration = readFileSync("supabase/migrations/0034_wf_harness_result_approval_states.sql", "utf8");
+const freshCycleRunsMigration = readFileSync("supabase/migrations/0035_wf_harness_fresh_cycle_runs.sql", "utf8");
 const execFileAsync = promisify(execFile);
 
 const HARNESS_POSTGRES_IMAGE = "postgres:16-alpine";
@@ -77,6 +78,7 @@ describe("harness persistence records", () => {
       runtimeContext: {
         providerKind: "openai_api",
         credentialLabel: "Primary OpenAI",
+        previousRunId: "11111111-1111-4111-8111-111111111111",
         secretValues: { apiKey: "sk-secret" }
       } as never
     });
@@ -102,7 +104,8 @@ describe("harness persistence records", () => {
     expect(event.cardId).toBe(card.id);
     expect(run.runtimeContext).toEqual({
       providerKind: "openai_api",
-      credentialLabel: "Primary OpenAI"
+      credentialLabel: "Primary OpenAI",
+      previousRunId: "11111111-1111-4111-8111-111111111111"
     });
     expect("secretValues" in run.runtimeContext).toBe(false);
   });
@@ -193,6 +196,49 @@ describe("harness persistence records", () => {
       status: "approved",
       approvedCardId: "approved_card_1"
     });
+  });
+
+  it("finds the latest in-memory run by timestamps instead of insertion order", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const tenantId = "tenant-123";
+    const olderInsertedLast = {
+      ...createHarnessRunRecord({
+        tenantId,
+        workflowId: "wf_connect_first_workflow",
+        packageId: "pkg_bib_connect",
+        orchestratorPersona: "ceo",
+        runtimeContext: {
+          providerKind: "openai_api",
+          credentialLabel: "Primary OpenAI"
+        }
+      }),
+      createdAt: "2026-07-01T10:00:00.000Z",
+      updatedAt: "2026-07-01T10:00:00.000Z"
+    };
+    const newerInsertedFirst = {
+      ...createHarnessRunRecord({
+        tenantId,
+        workflowId: "wf_connect_first_workflow",
+        packageId: "pkg_bib_connect",
+        orchestratorPersona: "ceo",
+        runtimeContext: {
+          providerKind: "openai_api",
+          credentialLabel: "Primary OpenAI"
+        }
+      }),
+      createdAt: "2026-07-01T11:00:00.000Z",
+      updatedAt: "2026-07-01T11:00:00.000Z"
+    };
+
+    await repository.insertRun(newerInsertedFirst);
+    await repository.insertRun(olderInsertedLast);
+
+    await expect(repository.findLatestRunForTenantWorkflow({
+      tenantId,
+      workflowId: "wf_connect_first_workflow"
+    })).resolves.toEqual(expect.objectContaining({
+      id: newerInsertedFirst.id
+    }));
   });
 
   it("persists result approval states per tenant and run in the in-memory repository", async () => {
@@ -1169,9 +1215,106 @@ describe("harness persistence migration", () => {
     expect(resultApprovalStatesMigration).toMatch(/enable row level security/i);
     expect(resultApprovalStatesMigration).toMatch(/wfpc_private\.is_tenant_member\(tenant_id\)/i);
   });
+
+  it("removes tenant workflow uniqueness so fresh cycles can retain historical runs", () => {
+    expect(freshCycleRunsMigration).toMatch(/drop index if exists wfpc\.harness_runs_tenant_workflow_unique_idx/i);
+    expect(freshCycleRunsMigration).toMatch(/create index if not exists harness_runs_tenant_workflow_latest_idx/i);
+    expect(freshCycleRunsMigration).toMatch(/on wfpc\.harness_runs \(tenant_id, workflow_id, updated_at desc, created_at desc\)/i);
+    expect(freshCycleRunsMigration).toMatch(/create unique index if not exists harness_runs_previous_run_successor_unique_idx/i);
+    expect(freshCycleRunsMigration).toMatch(/runtime_context ->> 'previousRunId'/i);
+    expect(freshCycleRunsMigration).toMatch(/where runtime_context \? 'previousRunId'/i);
+  });
 });
 
 describeIfDocker("harness persistence real Postgres transaction proof", () => {
+  it(
+    "stores multiple fresh-cycle runs for the same tenant workflow and resolves the newest run",
+    async () => {
+      const database = requireDisposableHarnessDatabase();
+      const client = new Client({ connectionString: database.connectionString });
+      await client.connect();
+      const repository = createPostgresHarnessRepository({
+        query: async (sql: string, values: readonly unknown[]) => {
+          const result = await client.query(sql, [...values]);
+          return { rows: result.rows };
+        }
+      });
+
+      try {
+        await resetHarnessProofDatabase(client);
+        const tenantId = randomUUID();
+        await seedHarnessProofPrerequisites(client, tenantId);
+        const firstRun = {
+          ...createHarnessRunRecord({
+            tenantId,
+            workflowId: "wf_connect_first_workflow",
+            packageId: "pkg_bib_connect",
+            orchestratorPersona: "ceo",
+            runtimeContext: {
+              providerKind: "openai_api",
+              credentialLabel: "Primary OpenAI"
+            }
+          }),
+          state: "done" as const,
+          createdAt: "2026-07-01T10:00:00.000Z",
+          updatedAt: "2026-07-01T10:00:00.000Z"
+        };
+        const secondRun = {
+          ...createHarnessRunRecord({
+            tenantId,
+            workflowId: "wf_connect_first_workflow",
+            packageId: "pkg_bib_connect",
+            orchestratorPersona: "ceo",
+            runtimeContext: {
+              providerKind: "openai_api",
+              credentialLabel: "Primary OpenAI",
+              previousRunId: firstRun.id
+            }
+          }),
+          state: "planning" as const,
+          createdAt: "2026-07-01T11:00:00.000Z",
+          updatedAt: "2026-07-01T11:00:00.000Z"
+        };
+
+        await repository.insertRun(firstRun);
+        await repository.insertRun(secondRun);
+
+        await expect(repository.findLatestRunForTenantWorkflow({
+          tenantId,
+          workflowId: "wf_connect_first_workflow"
+        })).resolves.toEqual(expect.objectContaining({
+          id: secondRun.id,
+          state: "planning",
+          runtimeContext: expect.objectContaining({
+            previousRunId: firstRun.id
+          })
+        }));
+
+        const duplicateSuccessor = {
+          ...createHarnessRunRecord({
+            tenantId,
+            workflowId: "wf_connect_first_workflow",
+            packageId: "pkg_bib_connect",
+            orchestratorPersona: "ceo",
+            runtimeContext: {
+              providerKind: "openai_api",
+              credentialLabel: "Primary OpenAI",
+              previousRunId: firstRun.id
+            }
+          }),
+          state: "planning" as const,
+          createdAt: "2026-07-01T12:00:00.000Z",
+          updatedAt: "2026-07-01T12:00:00.000Z"
+        };
+
+        await expect(repository.insertRun(duplicateSuccessor)).rejects.toThrow();
+      } finally {
+        await client.end();
+      }
+    },
+    120_000
+  );
+
   it(
     "round-trips result approval states through the real Postgres repository mapping",
     async () => {
@@ -2742,6 +2885,7 @@ async function resetHarnessProofDatabase(client: Client) {
   await client.query(governanceHistorySnapshotsMigration);
   await client.query(cardExecutionClaimsMigration);
   await client.query(resultApprovalStatesMigration);
+  await client.query(freshCycleRunsMigration);
 }
 
 async function seedHarnessProofPrerequisites(client: Client, tenantId: string) {
