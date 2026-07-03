@@ -7,6 +7,8 @@ const harnessBoardPath = process.env.WF_LIVE_HARNESS_BOARD_PATH ?? "/board";
 const harnessWorkflowId = process.env.WF_LIVE_HARNESS_WORKFLOW_ID ?? "";
 const sessionCookieName = process.env.WF_LIVE_SESSION_COOKIE_NAME ?? "wf_portal_session";
 const sessionCookieValue = process.env.WF_LIVE_SESSION_COOKIE_VALUE ?? "";
+const expectedShellHeading =
+  process.env.WF_LIVE_EXPECT_SHELL_HEADING ?? (new URL(shellPath, "https://wealthfactory.local").pathname === "/board" ? "Board" : "Home");
 const expectedUnauthShellStatuses = parseStatuses(process.env.WF_LIVE_EXPECT_UNAUTH_SHELL_STATUSES ?? "401,403");
 const forbiddenText = /paperclip|prompt|skill|command|tool call|raw activity|internal log|service token|vault:\/\/|wf_secret_|access_token=|api[_-]?key[:=]|authorization[:=]|Bearer\s+|sk-[A-Za-z0-9_-]+|pc-(company|run|agent|goal|task)-/i;
 const forbiddenHarnessPrivateFields = /orchestratorHandoff|boardContext|postOutcomeDirectives/i;
@@ -73,7 +75,7 @@ test("live authenticated shell serves bootstrap and app assets", async ({ contex
   await expect(page.locator("#wf-dashboard-bootstrap")).toHaveCount(1);
   await expect(page.locator("script[type='module']")).toHaveAttribute("src", new RegExp(`^${escapeRegExp(expectedAssetBaseUrl)}`));
   await expect(page.getByTestId("dashboard-shell")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Home", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: expectedShellHeading, exact: true })).toBeVisible();
   await expect(page.locator("body")).not.toContainText(forbiddenText);
   expect(response).not.toBeNull();
   expect(response!.status()).toBe(200);
