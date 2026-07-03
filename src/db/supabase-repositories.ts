@@ -183,6 +183,30 @@ export function createSupabaseRepositories(client: QueryClient) {
       };
     },
 
+    async resolveWorkflowTemplateStartIdentityByPackageKey(input: DashboardScope & { workflowPackageId: string }) {
+      const result = await client.query(
+        `select workflows.id, packages.package_key
+         from wfpc.workflow_templates workflows
+         join wfpc.wealth_factory_packages packages
+           on packages.id = workflows.package_id
+         where workflows.tenant_id = $1
+           and packages.package_key = $2
+           and workflows.enabled = true
+         order by workflows.created_at asc, workflows.id asc
+         limit 1`,
+        [input.tenantId, input.workflowPackageId]
+      );
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      const record = asRecord(result.rows[0]);
+      return {
+        workflowTemplateId: String(record.id),
+        workflowPackageId: String(record.package_key),
+      };
+    },
+
     async listPackages(input: DashboardScope) {
       const result = await client.query(
         `select p.id, p.name, p.kind, i.status

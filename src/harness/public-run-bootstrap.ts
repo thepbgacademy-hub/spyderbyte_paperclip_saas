@@ -55,6 +55,10 @@ export function hasPublicWorkflowHarnessBootstrap(workflowId: string): boolean {
   return workflowId in PUBLIC_WORKFLOW_BOOTSTRAPS;
 }
 
+export function getPublicWorkflowHarnessBootstrap(workflowId: string): PublicWorkflowBootstrap | null {
+  return PUBLIC_WORKFLOW_BOOTSTRAPS[workflowId] ?? null;
+}
+
 export async function seedPublicWorkflowHarnessRun(input: {
   repository: Pick<HarnessRepository, "insertRun" | "insertCard" | "insertEvent" | "upsertCardContinuity">;
   tenantId: string;

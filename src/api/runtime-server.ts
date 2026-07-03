@@ -318,7 +318,10 @@ async function listTenantDashboardWorkflows(input: {
 async function resolveWorkflowStartTarget(input: {
   tenantId: string;
   workflowId: string;
-  repositories: Pick<ReturnType<typeof createSupabaseRepositories>, "resolveWorkflowTemplateStartIdentity">;
+  repositories: Pick<
+    ReturnType<typeof createSupabaseRepositories>,
+    "resolveWorkflowTemplateStartIdentity" | "resolveWorkflowTemplateStartIdentityByPackageKey"
+  >;
   registry: ReturnType<typeof createHarnessWorkflowRegistry>;
 }) {
   const definition = (() => {
@@ -329,9 +332,13 @@ async function resolveWorkflowStartTarget(input: {
     }
   })();
   if (definition) {
+    const templateIdentity = await input.repositories.resolveWorkflowTemplateStartIdentityByPackageKey({
+      tenantId: input.tenantId,
+      workflowPackageId: definition.packageId
+    });
     return {
       publicWorkflowId: input.workflowId,
-      workflowTemplateId: null,
+      workflowTemplateId: templateIdentity?.workflowTemplateId ?? null,
       definition
     };
   }
@@ -842,6 +849,72 @@ export function createDashboardRuntime(options: {
               idempotencyKey: redispatchQueueJobId
             });
             if (!stagedRedispatch.staged) {
+              const installedPackages = await resolveTenantInstalledOverlayPackages({ tenantId: dispatch.tenantId, repositories });
+              const registry = createHarnessWorkflowRegistry({
+                harnessEnabledWorkflowIds:
+                  options.env.runtimeEnv.WF_HARNESS_ENABLED_WORKFLOW_IDS?.split(",").map((entry) => entry.trim()).filter(Boolean) ?? [],
+                nativeExecutorEnabledWorkflowIds:
+                  options.env.runtimeEnv.WF_NATIVE_EXECUTOR_ENABLED_WORKFLOW_IDS?.split(",").map((entry) => entry.trim()).filter(Boolean) ?? [],
+                installedPackages
+              });
+              const resolvedTarget = await resolveWorkflowStartTarget({
+                tenantId: dispatch.tenantId,
+                workflowId: dispatch.workflowId,
+                repositories,
+                registry
+              });
+              const definition = resolvedTarget.definition;
+              const publicWorkflowId = resolvedTarget.publicWorkflowId;
+              const workflowTemplateId = resolvedTarget.workflowTemplateId;
+              if (
+                definition &&
+                definition.publicStartEnabled === true &&
+                definition.executionEngine === "wf_native_v1" &&
+                hasPublicWorkflowHarnessBootstrap(publicWorkflowId)
+              ) {
+                const reservation = workflowRunReservation;
+                if (!reservation) {
+                  console.warn("Fresh harness cycle cannot reserve a missing workflow run without a queue enqueuer", {
+                    runId: dispatch.runId,
+                    workflowId: dispatch.workflowId,
+                    mode: dispatch.mode
+                  });
+                  return;
+                }
+                await reservation.reserveAndEnqueue({
+                  tenantId: dispatch.tenantId,
+                  userId: dispatch.userId,
+                  workflowId: publicWorkflowId,
+                  ...(definition.providerKind
+                    ? {
+                        workflowTemplateId: null,
+                        workflowIdentityKind: "installed_package_overlay" as const,
+                        workflowPackageId: definition.packageId,
+                        workflowDefinitionSnapshot: {
+                          publicWorkflowId,
+                          packageId: definition.packageId,
+                          executionEngine: definition.executionEngine,
+                          requiredCapabilities: [...definition.requiredCapabilities],
+                          providerKind: definition.providerKind
+                        }
+                      }
+                    : {
+                        workflowTemplateId: workflowTemplateId ?? dispatch.workflowId,
+                        workflowIdentityKind: "tenant_template" as const
+                      }),
+                  runId: dispatch.runId,
+                  idempotencyKey: redispatchQueueJobId,
+                  ...(definition.providerKind
+                    ? {
+                        workflowBinding: {
+                          packageId: definition.packageId,
+                          providerKind: definition.providerKind
+                        }
+                      }
+                    : {})
+                });
+                return;
+              }
               console.warn("Fresh harness cycle redispatch staging did not return an outbox row", {
                 runId: dispatch.runId,
                 workflowId: dispatch.workflowId,

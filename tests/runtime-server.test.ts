@@ -283,6 +283,7 @@ vi.mock("../src/db/supabase-repositories.js", () => ({
     countActiveWorkflowRuns: vi.fn().mockResolvedValue(0),
     requireTenantMember: vi.fn(),
     requireActivePackageInstall: vi.fn(),
+    resolveWorkflowTemplateStartIdentityByPackageKey: vi.fn().mockResolvedValue(null),
     listWorkflows: vi.fn().mockResolvedValue([
       { id: "workflow-template-1", name: "Connect First Workflow", providerKind: "openai_api", enabled: true }
     ]),
@@ -2283,6 +2284,84 @@ describe("runtime server", () => {
     expect(redispatchQuery?.mock.calls[0]?.[1]?.[3]).toMatch(/^tenant_123:wf_connect_first_workflow:run_124:redispatch:fresh_cycle_reopen_deferred:[a-f0-9]{12}$/i);
 
     await runtime.close();
+  });
+
+  it("reserves native public fresh cycles when redispatch has no existing workflow run", async () => {
+    const enqueueOnce = vi.fn().mockResolvedValue("enqueued");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const runtime = createDashboardRuntime({
+      env: {
+        supabaseDbUrl: TEST_SUPABASE_DB_URL,
+        supabaseDbSsl: "false",
+        allowedOrigins: ["https://www.spyderbyte.cloud"],
+        apiPort: 8081,
+        vaultMasterKey: "test-master-key-with-enough-length",
+        runtimeEnv: {
+          WF_HARNESS_ENABLED_WORKFLOW_IDS: "wf_connect_first_workflow"
+        }
+      },
+      auth: { authenticate: vi.fn() },
+      workflowQueueEnqueuer: { enqueueOnce }
+    });
+
+    const repositories = vi.mocked(createSupabaseRepositories).mock.results.at(-1)?.value;
+    repositories?.resolveWorkflowTemplateStartIdentityByPackageKey?.mockResolvedValue({
+      workflowTemplateId: "44444444-4444-4444-8444-444444444444",
+      workflowPackageId: "pkg_bib_connect"
+    });
+    const transactionRunner = vi.mocked(createPgTransactionRunner).mock.results.at(-1)?.value as { __query?: ReturnType<typeof vi.fn> } | undefined;
+    const originalImplementation = transactionRunner?.__query?.getMockImplementation();
+    transactionRunner?.__query?.mockImplementation(async (sql: string, values: readonly unknown[] = []) => {
+      if (sql.includes("insert into wfpc.workflow_queue_outbox") && sql.includes("select runs.tenant_id")) {
+        return { rows: [] };
+      }
+      if (sql.includes("from wfpc.workflow_templates") && sql.includes("for update")) {
+        return {
+          rows: [
+            {
+              id: "44444444-4444-4444-8444-444444444444",
+              package_id: "11111111-1111-4111-8111-111111111111",
+              provider_kind: "openai_api"
+            }
+          ]
+        };
+      }
+      return originalImplementation ? originalImplementation(sql, values) : { rows: [] };
+    });
+
+    try {
+      const boardServiceOptions = vi.mocked(createHarnessBoardService).mock.calls.at(-1)?.[0];
+      expect(boardServiceOptions?.onFreshCycleDispatch).toEqual(expect.any(Function));
+
+      await boardServiceOptions?.onFreshCycleDispatch?.({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        runId: "run_124",
+        workflowId: "wf_connect_first_workflow",
+        actionToken: "fresh-cycle-token-123",
+        mode: "clean",
+        reopenedProposalCount: 0
+      });
+
+      expect(enqueueOnce).not.toHaveBeenCalled();
+      expect(warnSpy).not.toHaveBeenCalled();
+      const sql = transactionRunner?.__query?.mock.calls.map(([statement]) => String(statement)).join("\n") ?? "";
+      const reservationValues = transactionRunner?.__query?.mock.calls
+        .filter(([statement]) => String(statement).includes("insert into wfpc.workflow_run_reservations"))
+        .map(([, params]) => params);
+      expect(sql).toMatch(/insert into wfpc\.workflow_run_reservations/i);
+      expect(sql).toMatch(/insert into wfpc\.workflow_runs/i);
+      expect(sql).toMatch(/insert into wfpc\.workflow_queue_outbox/i);
+      expect(reservationValues?.some((params) => params?.[1] === "wf_connect_first_workflow" && params?.[2] === "44444444-4444-4444-8444-444444444444")).toBe(true);
+    } finally {
+      if (originalImplementation) {
+        transactionRunner?.__query?.mockImplementation(originalImplementation);
+      } else {
+        transactionRunner?.__query?.mockReset();
+      }
+      warnSpy.mockRestore();
+      await runtime.close();
+    }
   });
 
   it("does not warn when fresh-cycle redispatch staging succeeds", async () => {

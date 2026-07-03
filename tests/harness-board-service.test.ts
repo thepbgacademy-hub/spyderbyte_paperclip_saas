@@ -1640,7 +1640,7 @@ describe("harness board service", () => {
       runId: board.runId,
       decision: "start_fresh_cycle",
       mode: "clean",
-      actionToken: closedBoard.pendingAttention?.actionHandle
+      ...(closedBoard.pendingAttention?.actionHandle ? { actionToken: closedBoard.pendingAttention.actionHandle } : {})
     });
 
     expect(freshCycle).toEqual({
@@ -8599,6 +8599,75 @@ describe("harness board service", () => {
     });
     expect(latestBoard.runId).toBe(reopened.runId);
     expect(latestBoard.pendingApprovals).toEqual([]);
+  });
+
+  it("seeds the native public workflow lane when starting a clean fresh cycle", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow"]
+      })
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "done",
+      resultSummary: "Pricing floor is stable enough for launch."
+    });
+    await service.completeRun({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      completionSummary: "The CEO packaged the final business-facing outcome."
+    });
+
+    const reopened = await service.startFreshCycle({
+      authorization: "Bearer valid",
+      runId: board.runId,
+      mode: "clean"
+    });
+    const freshCards = await repository.listCardsForRun(reopened.runId);
+    const seededLane = freshCards.find((card) => card.persona === "cfo" && card.title === "Pressure-test the pricing lane");
+    const latestBoard = await service.listBoardState({ authorization: "Bearer valid" });
+
+    expect(seededLane).toMatchObject({
+      deliverableType: "pricing_review",
+      state: "approved"
+    });
+    await expect(repository.getCardContinuity(seededLane!.id)).resolves.toMatchObject({
+      continuitySummary: "CFO should begin this approved pricing review lane: Pressure-test the pricing lane."
+    });
+    expect(latestBoard.runId).toBe(reopened.runId);
+    expect(latestBoard.cards).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          persona: "CFO",
+          title: "Pressure-test the pricing lane",
+          deliverableLabel: "Pricing Review"
+        })
+      ])
+    );
   });
 
   it("keeps raw defer notes out of the tenant-facing board activity feed", async () => {

@@ -601,6 +601,42 @@ describe("default native executor", () => {
     });
   });
 
+  it("accepts uppercase fenced structured draft payloads across the staged native path", async () => {
+    const fetch = createConnectFirstRawMultiStepFetch({
+      step1Output:
+        "```json\n{\"state\":\"done\",\"analysis\":\"The supplied delivery, sales, discount, conversion, and buyer-value assumptions are enough to complete the bounded pricing review.\",\"nextAction\":\"Return the bounded pricing recommendation to CEO review.\"}\n```",
+      step2Output:
+        "```JSON\n{\"state\":\"done\",\"summary\":\"Recommended moving to CEO review with a $2,750 launch price, discounting capped at 5%, and buyer-value proof anchored to faster guided execution versus custom consulting.\"}\n```",
+      step3Output:
+        "```json\n{\"approved\":true,\"reason\":\"The drafted lane outcome stays bounded to the pricing review evidence and one CEO handoff.\"}\n```"
+    });
+    const executor = createDefaultNativeExecutor({
+      fetch: fetch as unknown as typeof globalThis.fetch
+    });
+
+    await expect(
+      executor.execute({
+        tenantId: "tenant-1",
+        runId: "run-uppercase-fenced-draft-1",
+        workflowId: "wf_connect_first_workflow",
+        executionEnvelope: buildExecutionEnvelope(),
+        providerBinding: {
+          capability: "text_generation",
+          providerKind: "openai_api",
+          label: "Primary OpenAI",
+          secretRef: "wf_secret_openai",
+          metadata: {},
+          secretValues: { apiKey: "sk-tenant" }
+        }
+      })
+    ).resolves.toEqual({
+      state: "done",
+      resultSummary:
+        "Completed the Connect First Workflow pricing review lane for CFO: Pressure-test the pricing lane. " +
+        "Recommended moving to CEO review with a $2,750 launch price, discounting capped at 5%, and buyer-value proof anchored to faster guided execution versus custom consulting."
+    });
+  });
+
   it("treats prior staged model output as quoted lane data instead of raw prompt instructions", async () => {
     const fetch = createConnectFirstMultiStepFetch({
       interpretationState: "done",

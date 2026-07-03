@@ -285,6 +285,15 @@ const styles = {
     fontWeight: 700,
     padding: "0.52rem 0.8rem"
   } satisfies CSSProperties,
+  recommendedActionButton: {
+    background: "linear-gradient(135deg, rgba(125, 211, 252, 0.34), rgba(14, 165, 233, 0.92))",
+    border: "1px solid rgba(186, 230, 253, 0.72)",
+    boxShadow: "0 12px 34px rgba(14, 165, 233, 0.2)",
+    color: "#f8fafc",
+    fontSize: "0.86rem",
+    minHeight: "2.6rem",
+    padding: "0.72rem 1.05rem"
+  } satisfies CSSProperties,
   actionButtonDisabled: {
     cursor: "not-allowed",
     opacity: 0.55
@@ -1849,6 +1858,17 @@ function decorateActionFeedbackForCurrentContract(
   };
 }
 
+export function describeUnavailableContractActionFeedback(actionLabel: string): HarnessBoardFeedback {
+  return {
+    message: `${actionLabel} is visible, but this browser does not currently have the complete live board contract needed to submit it.`,
+    recoveryTitle: "Safe next step",
+    recoverySteps: [
+      "Reload the live board so the browser has the current action handle and request fields.",
+      "If the action is still visible after reload, use the large recommended action button from the refreshed Board action panel."
+    ]
+  };
+}
+
 function renderBoardFeedback(
   title: string,
   feedback: HarnessBoardFeedback | null,
@@ -2497,6 +2517,11 @@ export function HarnessBoardPage(props: {
     noticeLabel: string;
   }) {
     if (!liveActionsEnabled || !input.exampleRequest || !input.actionHandle) {
+      const actionLabel = input.noticeLabel || "Board action";
+      setPendingActionAttempt(null);
+      setActionFailureCause(null);
+      setActionNotice(null);
+      setActionError(describeUnavailableContractActionFeedback(actionLabel));
       return;
     }
 
@@ -2575,7 +2600,7 @@ export function HarnessBoardPage(props: {
                     </p>
                   ) : null}
                 </>
-              ) : field.label === "Resume summary" || field.name === "resumeSummary" || field.name === "resume_summary" ? (
+              ) : field.label === "Resume summary" || field.name === "resumeSummary" || String(field.name) === "resume_summary" ? (
                 <>
                   <textarea
                     style={styles.textAreaField}
@@ -2677,6 +2702,7 @@ export function HarnessBoardPage(props: {
   const actionPanelStyles = {
     actionButtonRow: styles.actionButtonRow,
     actionButton: styles.actionButton,
+    recommendedActionButton: styles.recommendedActionButton,
     actionButtonDisabled: styles.actionButtonDisabled,
     actionSummary: styles.actionSummary,
     contractMeta: styles.contractMeta,

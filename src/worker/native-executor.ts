@@ -619,7 +619,7 @@ function tryParseStagedValidation(text: string): ConnectFirstValidation | null {
 }
 
 function normalizeStructuredJsonObjectText(text: string): string | null {
-  const trimmed = text.trim().replace(/^```(?:json)?\s*/u, "").replace(/\s*```$/u, "");
+  const trimmed = text.trim().replace(/^```(?:json)?\s*/iu, "").replace(/\s*```$/u, "");
   if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) {
     return null;
   }

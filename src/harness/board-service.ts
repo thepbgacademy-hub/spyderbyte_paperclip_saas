@@ -51,6 +51,7 @@ import type {
   HarnessCeoLoopBoardSnapshot,
   HarnessCeoGoalPlan
 } from "./ceo-goal-executor.js";
+import { getPublicWorkflowHarnessBootstrap } from "./public-run-bootstrap.js";
 
 export type HarnessBoardActivityItem = {
   id: string;
@@ -5561,6 +5562,7 @@ async function seedFreshHarnessRun(input: {
   runtime: ReturnType<typeof createHarnessRuntime>;
   fromRun: HarnessRunRecord;
 }): Promise<HarnessRunRecord> {
+  const bootstrap = getPublicWorkflowHarnessBootstrap(input.fromRun.workflowId);
   const session = input.runtime.startRun({
     tenantId: input.fromRun.tenantId,
     workflowId: input.fromRun.workflowId,
@@ -5574,11 +5576,33 @@ async function seedFreshHarnessRun(input: {
 
   const run = transitionHarnessRun(session.run, "active");
   const ceoCard = session.ceoCard;
+  const lane = bootstrap
+    ? input.runtime.createApprovedChildCard(run.id, {
+        persona: bootstrap.persona,
+        title: bootstrap.title,
+        deliverableType: bootstrap.deliverableType
+      })
+    : null;
+  const cards = lane ? [ceoCard, lane] : [ceoCard];
 
   await input.repository.insertRun(run);
-  await input.repository.insertCard(ceoCard);
-  for (const event of createBootstrapEvents(ceoCard)) {
-    await input.repository.insertEvent(event);
+  for (const card of cards) {
+    await input.repository.insertCard(card);
+    for (const event of createBootstrapEvents(card)) {
+      await input.repository.insertEvent(event);
+    }
+  }
+
+  if (lane && bootstrap) {
+    await input.repository.upsertCardContinuity(
+      createHarnessCardContinuityRecord({
+        cardId: lane.id,
+        runId: run.id,
+        continuitySummary: bootstrap.continuitySummary,
+        latestResultSummary: null,
+        absorbedWorkItems: []
+      })
+    );
   }
 
   return run;

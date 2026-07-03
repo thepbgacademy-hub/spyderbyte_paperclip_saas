@@ -78,7 +78,9 @@ export function createNativeOpenAITextGenerator(options?: {
 
         try {
           const generated = await codexSubscriptionTextRunner({
-            prompt: input.prompt,
+            prompt: input.preserveStructuredOutput
+              ? reinforceStructuredCodexPrompt(input.prompt)
+              : input.prompt,
             codexHome,
             authStateRef,
             ...(typeof input.maxOutputTokens === "number" ? { maxOutputTokens: input.maxOutputTokens } : {}),
@@ -206,6 +208,16 @@ export function createNativeOpenAITextGenerator(options?: {
       };
     }
   };
+}
+
+function reinforceStructuredCodexPrompt(prompt: string): string {
+  return [
+    prompt,
+    "",
+    "Final answer contract: return exactly one JSON object that matches the requested shape.",
+    "Do not wrap the JSON in Markdown fences, do not add prose, and do not add extra keys.",
+    "If you cannot satisfy the requested shape, return the closest valid blocked/waiting JSON object allowed by the prompt."
+  ].join("\n");
 }
 
 export function createCodexCliSubscriptionTextRunner(options?: {

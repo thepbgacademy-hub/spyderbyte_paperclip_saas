@@ -174,6 +174,42 @@ describe("ACID guard repository", () => {
     ]);
   });
 
+  it("allows OpenAI subscription bindings to satisfy OpenAI API text-generation package requirements", async () => {
+    const client = createSequencedClient([
+      [{ paused_at: null }],
+      [{ tenant_id: "tenant-1" }],
+      [{ id: "workflow-1", package_id: "package-1", provider_kind: "openai_chatgpt_codex_subscription" }],
+      [{ id: "install-1", package_id: "package-1" }],
+      [{ id: "requirement-1", capability: "content_generation", provider_kind: "openai_api" }],
+      [{ id: "secret-1", secret_ref: "wf_secret_codex_subscription", label: "OpenAI Codex", metadata: { authStateRef: "codex://tenant" } }],
+      [{ id: "reservation-1" }],
+      []
+    ]);
+    const repository = createAcidGuardRepository(createTransactionRunner(client));
+
+    await expect(
+      repository.reserveWorkflowRun({
+        tenantId: "tenant-1",
+        userId: "user-1",
+        workflowTemplateId: "workflow-1",
+        runId: "run-1",
+        idempotencyKey: "idem-1"
+      })
+    ).resolves.toEqual({ reserved: true, runId: "run-1" });
+
+    const sql = client.query.mock.calls.map(([statement]) => String(statement)).join("\n");
+    expect(sql).toMatch(/openai_chatgpt_codex_subscription' and provider_kind = 'openai_api'/i);
+    const workflowRunInsertCall = client.query.mock.calls.find(([statement]) => String(statement).includes("insert into wfpc.workflow_runs"));
+    const insertedContext = JSON.parse(String(workflowRunInsertCall?.[1]?.[9]));
+    expect(insertedContext).toEqual([
+      expect.objectContaining({
+        capability: "text_generation",
+        providerKind: "openai_chatgpt_codex_subscription",
+        secretRef: "wf_secret_codex_subscription"
+      })
+    ]);
+  });
+
   it("reserves an explicitly public installed-package overlay without requiring a workflow_templates row lookup", async () => {
     const client = createSequencedClient([
       [{ paused_at: null }],

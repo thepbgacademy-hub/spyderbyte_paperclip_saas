@@ -18,6 +18,7 @@ import {
   describeBoardActionFeedback,
   describeBoardContractRefreshImpact,
   describeBoardLoadFeedback,
+  describeUnavailableContractActionFeedback,
   getContractActionState,
   getBoardContractActionDescriptorMap,
   getBoardContractActionFieldMap,
@@ -2661,6 +2662,26 @@ describe("harness board UI", () => {
       resolution: "resume_lane",
       resumeSummary: "Resume CFO lane",
       actionHandle: "test-resolve-token"
+    });
+  });
+
+  it("renders the recommended live board action as a primary submit control", () => {
+    const markup = renderToStaticMarkup(
+      <HarnessBoardPage initialBoard={boardResponse} initialControlMode="live" />
+    );
+
+    expect(markup).toContain("Approve proposal (recommended) primary action");
+    expect(markup).toContain("min-height:2.6rem");
+  });
+
+  it("describes unavailable live action submits without silently swallowing the click", () => {
+    expect(describeUnavailableContractActionFeedback("Start fresh cycle")).toEqual({
+      message: "Start fresh cycle is visible, but this browser does not currently have the complete live board contract needed to submit it.",
+      recoveryTitle: "Safe next step",
+      recoverySteps: [
+        "Reload the live board so the browser has the current action handle and request fields.",
+        "If the action is still visible after reload, use the large recommended action button from the refreshed Board action panel."
+      ]
     });
   });
 

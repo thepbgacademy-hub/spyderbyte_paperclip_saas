@@ -63,6 +63,44 @@ describe("native OpenAI text generator", () => {
     } satisfies Partial<NativeOpenAIExecutionError>);
   });
 
+  it("reinforces JSON-only final output for Codex subscription structured native responses", async () => {
+    const codexSubscriptionTextRunner = vi.fn().mockResolvedValue({
+      outputText: "{\"state\":\"done\",\"summary\":\"Validated the pricing lane.\"}",
+      model: "codex-subscription"
+    });
+    const generator = createNativeOpenAITextGenerator({
+      fetch: vi.fn() as unknown as typeof globalThis.fetch,
+      codexSubscriptionTextRunner
+    });
+
+    await expect(
+      generator.generateText({
+        binding: {
+          capability: "text_generation",
+          providerKind: "openai_chatgpt_codex_subscription",
+          label: "OpenAI Codex",
+          secretRef: "wf_secret_codex",
+          metadata: { codexHome: "E:/wf-auth/tenant-1/codex", authStateRef: "codex-auth-state" },
+          secretValues: {}
+        },
+        prompt: "Return strict JSON only with this shape: {\"state\":\"done|waiting|blocked|cancelled\",\"summary\":\"...\"}.",
+        preserveStructuredOutput: true
+      })
+    ).resolves.toEqual({
+      outputText: "{\"state\":\"done\",\"summary\":\"Validated the pricing lane.\"}",
+      model: "codex-subscription"
+    });
+
+    const runnerInput = codexSubscriptionTextRunner.mock.calls[0]?.[0];
+    expect(runnerInput?.preserveStructuredOutput).toBe(true);
+    expect(runnerInput?.prompt).toContain(
+      "Final answer contract: return exactly one JSON object that matches the requested shape."
+    );
+    expect(runnerInput?.prompt).toContain("Do not wrap the JSON in Markdown fences");
+    expect(runnerInput?.prompt).toContain("do not add prose");
+    expect(runnerInput?.prompt).toContain("do not add extra keys");
+  });
+
   it("calls the Responses API with the bound api key and optional project header", async () => {
     const fetch = vi.fn().mockResolvedValue({
       ok: true,

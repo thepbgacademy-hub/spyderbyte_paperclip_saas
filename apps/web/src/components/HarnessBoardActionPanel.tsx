@@ -17,6 +17,7 @@ type ActionOptionState = {
 type ActionPanelStyles = {
   actionButtonRow: CSSProperties;
   actionButton: CSSProperties;
+  recommendedActionButton: CSSProperties;
   actionButtonDisabled: CSSProperties;
   actionSummary: CSSProperties;
   contractMeta: CSSProperties;
@@ -98,15 +99,19 @@ export function HarnessBoardActionPanel(props: {
           <div style={styles.actionButtonRow}>
             {actionOptions.map((option) => {
               const optionState = resolveOptionState(option);
+              const isRecommended = option.value === recommendedOptionValue;
 
               return (
                 <button
                   key={option.value}
                   style={{
                     ...styles.actionButton,
+                    ...(isRecommended ? styles.recommendedActionButton : {}),
                     ...(optionState.disabled ? styles.actionButtonDisabled : {})
                   }}
                   type="button"
+                  aria-label={isRecommended ? `${getOptionButtonLabel(option, recommendedOptionValue)} primary action` : undefined}
+                  title={optionState.disabled ? "This action is waiting for the current board contract fields before it can submit." : undefined}
                   disabled={optionState.disabled}
                   onClick={() =>
                     actionPath

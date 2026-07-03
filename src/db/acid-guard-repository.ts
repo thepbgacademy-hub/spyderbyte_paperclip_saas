@@ -187,8 +187,16 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
           `select id, capability, provider_kind
            from wfpc.package_provider_requirements
            where package_id = $1
-             and (provider_kind is null or provider_kind = $2)
-           order by case when provider_kind = $2 then 0 else 1 end, capability`,
+             and (
+               provider_kind is null
+               or provider_kind = $2
+               or ($2 = 'openai_chatgpt_codex_subscription' and provider_kind = 'openai_api')
+             )
+           order by case
+             when provider_kind = $2 then 0
+             when $2 = 'openai_chatgpt_codex_subscription' and provider_kind = 'openai_api' then 1
+             else 2
+           end, capability`,
           [workflowRow.package_id, workflowRow.provider_kind]
         );
         if (providerRequirement.rows.length === 0) {
