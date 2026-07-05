@@ -18,6 +18,9 @@ type ActionPanelStyles = {
   actionButtonRow: CSSProperties;
   actionButton: CSSProperties;
   recommendedActionButton: CSSProperties;
+  recommendedActionCallout: CSSProperties;
+  recommendedActionTitle: CSSProperties;
+  recommendedActionBody: CSSProperties;
   actionButtonDisabled: CSSProperties;
   actionSummary: CSSProperties;
   contractMeta: CSSProperties;
@@ -79,6 +82,7 @@ export function HarnessBoardActionPanel(props: {
     styles,
     submittingActionKey
   } = props;
+  const recommendedOption = actionOptions?.find((option) => option.value === recommendedOptionValue);
 
   return (
     <>
@@ -96,6 +100,12 @@ export function HarnessBoardActionPanel(props: {
       {renderActionOptions(actionOptions, recommendedOptionValue)}
       {actionOptions?.length ? (
         <>
+          {recommendedOption ? (
+            <div style={styles.recommendedActionCallout}>
+              <p style={styles.recommendedActionTitle}>{`Next step: ${recommendedOption.label}`}</p>
+              <p style={styles.recommendedActionBody}>Use the highlighted action below when the board context is ready.</p>
+            </div>
+          ) : null}
           <div style={styles.actionButtonRow}>
             {actionOptions.map((option) => {
               const optionState = resolveOptionState(option);

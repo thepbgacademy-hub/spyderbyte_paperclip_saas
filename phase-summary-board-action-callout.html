@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wealth Factory Board Action Callout Summary</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #020617;
+        --panel: #0f172a;
+        --panel-soft: #111c32;
+        --text: #f8fafc;
+        --muted: #bae6fd;
+        --accent: #38bdf8;
+        --line: rgba(125, 211, 252, 0.24);
+      }
+
+      body {
+        background:
+          radial-gradient(circle at top left, rgba(14, 165, 233, 0.22), transparent 30%),
+          var(--bg);
+        color: var(--text);
+        font-family: "Aptos", "Segoe UI", sans-serif;
+        margin: 0;
+        padding: 32px;
+      }
+
+      main {
+        display: grid;
+        gap: 20px;
+        margin: 0 auto;
+        max-width: 1040px;
+      }
+
+      header,
+      section {
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(8, 47, 73, 0.72));
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        box-shadow: 0 24px 70px rgba(2, 8, 23, 0.42);
+        padding: 24px;
+      }
+
+      h1,
+      h2,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        font-size: clamp(2rem, 4vw, 3.2rem);
+        line-height: 1;
+        margin-bottom: 12px;
+      }
+
+      h2 {
+        color: var(--accent);
+        font-size: 0.9rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+
+      .card {
+        background: rgba(15, 23, 42, 0.72);
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 20px;
+        padding: 18px;
+      }
+
+      .label {
+        color: var(--muted);
+        font-size: 0.82rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      a {
+        color: var(--muted);
+      }
+
+      code {
+        background: rgba(2, 6, 23, 0.7);
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        border-radius: 999px;
+        color: var(--muted);
+        padding: 2px 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="label">Launch Readiness Slice</p>
+        <h1>Board Action Visibility Improved</h1>
+        <p>
+          The live board now surfaces the contract-recommended action as an explicit customer-safe
+          next-step callout before the action buttons, reducing the chance that users miss the
+          primary action during live testing.
+        </p>
+      </header>
+
+      <section>
+        <h2>What Changed</h2>
+        <div class="grid">
+          <article class="card">
+            <p class="label">UI Behavior</p>
+            <p>
+              Added a visible <strong>Next step</strong> callout based on the existing recommended
+              action from the live board contract.
+            </p>
+          </article>
+          <article class="card">
+            <p class="label">Scope Control</p>
+            <p>
+              No backend contract, workflow execution, credential, provider, or lane-state behavior
+              was changed.
+            </p>
+          </article>
+          <article class="card">
+            <p class="label">TDD Proof</p>
+            <p>
+              Added a focused failing UI assertion first, then implemented the minimal render path
+              needed to make it pass.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>Verification</h2>
+        <div class="grid">
+          <article class="card">
+            <p class="label">Focused UI</p>
+            <p><code>npx vitest run tests/harness-ui.test.tsx</code></p>
+            <p>57 tests passed.</p>
+          </article>
+          <article class="card">
+            <p class="label">Type Build</p>
+            <p><code>npm run build</code></p>
+            <p>TypeScript build completed with <code>tsc --noEmit</code>.</p>
+          </article>
+          <article class="card">
+            <p class="label">GitNexus</p>
+            <p>
+              Pre-flight seam check was current before edits. Reindex should run after this commit
+              lands so the new UI touch points are reflected.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>Updated Files</h2>
+        <ul>
+          <li>
+            <a href="apps/web/src/components/HarnessBoardActionPanel.tsx">apps/web/src/components/HarnessBoardActionPanel.tsx</a>
+          </li>
+          <li>
+            <a href="apps/web/src/pages/HarnessBoardPage.tsx">apps/web/src/pages/HarnessBoardPage.tsx</a>
+          </li>
+          <li>
+            <a href="tests/harness-ui.test.tsx">tests/harness-ui.test.tsx</a>
+          </li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

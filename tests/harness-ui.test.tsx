@@ -2674,6 +2674,15 @@ describe("harness board UI", () => {
     expect(markup).toContain("min-height:2.6rem");
   });
 
+  it("surfaces the recommended live board action as an explicit next-step callout", () => {
+    const markup = renderToStaticMarkup(
+      <HarnessBoardPage initialBoard={boardResponse} initialControlMode="live" />
+    );
+
+    expect(markup).toContain("Next step: Approve proposal");
+    expect(markup).toContain("Use the highlighted action below when the board context is ready.");
+  });
+
   it("describes unavailable live action submits without silently swallowing the click", () => {
     expect(describeUnavailableContractActionFeedback("Start fresh cycle")).toEqual({
       message: "Start fresh cycle is visible, but this browser does not currently have the complete live board contract needed to submit it.",

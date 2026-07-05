@@ -294,6 +294,28 @@ const styles = {
     minHeight: "2.6rem",
     padding: "0.72rem 1.05rem"
   } satisfies CSSProperties,
+  recommendedActionCallout: {
+    background: "linear-gradient(135deg, rgba(14, 165, 233, 0.18), rgba(15, 23, 42, 0.74))",
+    border: "1px solid rgba(125, 211, 252, 0.32)",
+    borderRadius: "18px",
+    boxShadow: "0 18px 42px rgba(14, 165, 233, 0.12)",
+    display: "grid",
+    gap: "0.35rem",
+    marginTop: "0.85rem",
+    padding: "0.9rem 1rem"
+  } satisfies CSSProperties,
+  recommendedActionTitle: {
+    color: "#f8fafc",
+    fontSize: "1rem",
+    fontWeight: 800,
+    margin: 0
+  } satisfies CSSProperties,
+  recommendedActionBody: {
+    color: "#bae6fd",
+    fontSize: "0.84rem",
+    lineHeight: 1.45,
+    margin: 0
+  } satisfies CSSProperties,
   actionButtonDisabled: {
     cursor: "not-allowed",
     opacity: 0.55
@@ -2703,6 +2725,9 @@ export function HarnessBoardPage(props: {
     actionButtonRow: styles.actionButtonRow,
     actionButton: styles.actionButton,
     recommendedActionButton: styles.recommendedActionButton,
+    recommendedActionCallout: styles.recommendedActionCallout,
+    recommendedActionTitle: styles.recommendedActionTitle,
+    recommendedActionBody: styles.recommendedActionBody,
     actionButtonDisabled: styles.actionButtonDisabled,
     actionSummary: styles.actionSummary,
     contractMeta: styles.contractMeta,
