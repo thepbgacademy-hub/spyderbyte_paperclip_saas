@@ -1,5 +1,6 @@
 import type { ProviderCapability } from "../packages/package-types.js";
 import { listInstalledPackageDefinitions } from "../packages/package-catalog.js";
+import { normalizeCodexSubscriptionMetadata } from "../providers/codex-subscription-metadata.js";
 import type { ProviderKind } from "../providers/provider-types.js";
 import type { QueryClient } from "./supabase-repositories.js";
 
@@ -276,7 +277,7 @@ export function createAcidGuardRepository(runner: TransactionRunner) {
                 providerKind: String(workflowRow.provider_kind),
                 label: String(credentialRow.label),
                 secretRef: String(credentialRow.secret_ref),
-                metadata: asObject(credentialRow.metadata)
+                metadata: normalizeBoundProviderMetadata(String(workflowRow.provider_kind), asObject(credentialRow.metadata))
               }
             ])
           ]
@@ -681,6 +682,14 @@ function asRecord(row: unknown): Record<string, unknown> {
 
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function normalizeBoundProviderMetadata(providerKind: string, metadata: Record<string, unknown>): Record<string, unknown> {
+  if (providerKind !== "openai_chatgpt_codex_subscription") {
+    return metadata;
+  }
+
+  return normalizeCodexSubscriptionMetadata(metadata);
 }
 
 function normalizeWorkflowDefinitionSnapshot(

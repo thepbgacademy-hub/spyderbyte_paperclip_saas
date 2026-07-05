@@ -1,4 +1,5 @@
 import type { ProviderCapability } from "../packages/package-types.js";
+import { normalizeCodexSubscriptionMetadata } from "./codex-subscription-metadata.js";
 import type { ProviderKind } from "./provider-types.js";
 
 export type RuntimeProviderConnection = {
@@ -74,11 +75,19 @@ export function createRuntimeProviderResolver(options: {
           providerKind: chosen.providerKind,
           label: chosen.label,
           secretRef: chosen.secretRef,
-          metadata: chosen.metadata
+          metadata: normalizeRuntimeProviderMetadata(chosen.providerKind, chosen.metadata)
         };
       });
     }
   };
+}
+
+function normalizeRuntimeProviderMetadata(providerKind: ProviderKind, metadata: Record<string, unknown>): Record<string, unknown> {
+  if (providerKind !== "openai_chatgpt_codex_subscription") {
+    return metadata;
+  }
+
+  return normalizeCodexSubscriptionMetadata(metadata);
 }
 
 function choosePreferredConnection(

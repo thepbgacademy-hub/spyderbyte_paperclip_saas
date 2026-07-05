@@ -1,5 +1,31 @@
 import { randomUUID } from "node:crypto";
 
+function normalizeCodexAuthStateRef(value) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed === "codex-home:first-subscriber" ? "first-subscriber-openai-device" : trimmed;
+}
+
+function normalizeBoundProviderMetadata(providerKind, metadata) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return {};
+  }
+
+  if (providerKind !== "openai_chatgpt_codex_subscription") {
+    return metadata;
+  }
+
+  const normalized = { ...metadata };
+  const authStateRef = normalizeCodexAuthStateRef(normalized.authStateRef);
+  if (authStateRef) {
+    normalized.authStateRef = authStateRef;
+  }
+  return normalized;
+}
+
 export function createLiveRunRequest(input) {
   const runId = input.runId ?? randomUUID();
   return {
@@ -163,7 +189,10 @@ export async function reserveLiveWorkflowRun(input) {
           providerKind: String(workflowRow.provider_kind),
           label: String(credentialRow.label),
           secretRef: String(credentialRow.secret_ref),
-          metadata: credentialRow.metadata && typeof credentialRow.metadata === "object" ? credentialRow.metadata : {}
+          metadata: normalizeBoundProviderMetadata(
+            String(workflowRow.provider_kind),
+            credentialRow.metadata && typeof credentialRow.metadata === "object" ? credentialRow.metadata : {}
+          )
         }
       ])
     ]
@@ -503,7 +532,10 @@ async function reuseExistingNativePublicRunIfPresent(input) {
           providerKind: input.providerKind,
           label: String(input.credentialRow.label),
           secretRef: String(input.credentialRow.secret_ref),
-          metadata: input.credentialRow.metadata && typeof input.credentialRow.metadata === "object" ? input.credentialRow.metadata : {}
+          metadata: normalizeBoundProviderMetadata(
+            input.providerKind,
+            input.credentialRow.metadata && typeof input.credentialRow.metadata === "object" ? input.credentialRow.metadata : {}
+          )
         }
       ])
     ]

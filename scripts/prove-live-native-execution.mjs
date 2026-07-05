@@ -9,6 +9,7 @@ import { waitForNativeExecutionAcceptance } from "./lib/live-native-execution-ac
 import { buildNativeExecutionAcceptanceOptions } from "./lib/live-native-execution-proof-options.mjs";
 import { resolveNativeProofStartSelector } from "./lib/native-proof-lane-model.mjs";
 import { validateCodexReadinessProofGate } from "./lib/codex-readiness-proof-gate.mjs";
+import { validateExpectedAuthStateRefOnRunBinding } from "./lib/live-native-binding-consistency.mjs";
 import { DEFAULT_STAGE_PROOF_ENV_FILE, DEFAULT_STAGE_SSH_ENV_FILE, parseStageProofArgs, resolveNodeCommand } from "./lib/stage-live-proof.mjs";
 import { loadScriptEnv } from "./lib/script-env.mjs";
 
@@ -155,7 +156,9 @@ const nativeVerification = verifyNativeAcceptance({
   durableResult,
   nativeAcceptance,
   advancementProof,
-  expectedExecutionEngine
+  expectedExecutionEngine,
+  workflowId,
+  expectedAuthStateRef: args["codex-auth-state-ref"] ?? env.WF_OPENAI_CODEX_AUTH_STATE_REF
 });
 const waitingAttentionResolution =
   shouldProveAttentionRoundTrip &&
@@ -977,7 +980,7 @@ async function loadRemoteNativeExecutionState({ sshTarget, sudoPassword, contain
   };
 }
 
-function verifyNativeAcceptance({ durableResult, nativeAcceptance, advancementProof, expectedExecutionEngine }) {
+function verifyNativeAcceptance({ durableResult, nativeAcceptance, advancementProof, expectedExecutionEngine, workflowId, expectedAuthStateRef }) {
   if (!durableResult.ok) {
     return {
       ok: false,
@@ -1022,6 +1025,19 @@ function verifyNativeAcceptance({ durableResult, nativeAcceptance, advancementPr
     };
   }
 
+  const bindingConsistency = validateExpectedAuthStateRefOnRunBinding({
+    expectedAuthStateRef,
+    workflowId,
+    durableSnapshot: durableResult.snapshot ?? null
+  });
+  if (!bindingConsistency.ok) {
+    return {
+      ok: false,
+      phase: bindingConsistency.phase,
+      notes: bindingConsistency.notes
+    };
+  }
+
   return {
     ok: true,
     phase: "native_execution_verified",
@@ -1029,6 +1045,7 @@ function verifyNativeAcceptance({ durableResult, nativeAcceptance, advancementPr
       durableResult.verification?.phase === "durable_binding_verified"
         ? "Dashboard run request returned HTTP 202 and the durable binding proof passed."
         : "Direct public reservation persisted the durable run and queue rows with the expected bootstrap identity.",
+      ...bindingConsistency.notes,
       nativeAcceptance.executionEngine
         ? `The durable workflow_definition_snapshot executionEngine is ${expectedExecutionEngine}.`
         : "This start path does not persist executionEngine on workflow_definition_snapshot, so native routing is proven by the harness advancement event instead.",

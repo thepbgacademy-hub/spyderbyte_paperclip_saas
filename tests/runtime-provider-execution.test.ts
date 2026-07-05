@@ -62,7 +62,7 @@ describe("runtime provider execution context", () => {
         providerKind: "openai_chatgpt_codex_subscription",
         label: "OpenAI Codex",
         secretRef: "wfpc_codex_subscription_tenant_1_wf_connect_first_workflow",
-        metadata: { codexHome: "/home/deploy/wf/codex", authStateRef: "codex-home:first-subscriber" },
+        metadata: { codexHome: "/home/deploy/wf/codex", authStateRef: "first-subscriber-openai-device" },
         secretValues: {}
       }
     ]);

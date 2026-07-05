@@ -10,7 +10,7 @@ const workflowId = readArg(args, "workflow");
 const workflowTemplateId = readArg(args, "workflow-template") ?? workflowId;
 const rebindExistingRunId = readArg(args, "rebind-existing-run");
 const codexHome = normalizeValue(args["codex-home"] ?? process.env.WF_OPENAI_CODEX_HOME);
-const authStateRef = normalizeValue(args["auth-state-ref"] ?? process.env.WF_OPENAI_CODEX_AUTH_STATE_REF);
+const authStateRef = normalizeAuthStateRef(args["auth-state-ref"] ?? process.env.WF_OPENAI_CODEX_AUTH_STATE_REF);
 const codexHomeReadinessProofPath = normalizeValue(
   args["codex-home-readiness-proof"] ?? process.env.WF_OPENAI_CODEX_HOME_READINESS_PROOF
 );
@@ -139,6 +139,15 @@ function readArg(parsed, name) {
 
 function normalizeValue(value) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function normalizeAuthStateRef(value) {
+  const normalized = normalizeValue(value);
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized === "codex-home:first-subscriber" ? "first-subscriber-openai-device" : normalized;
 }
 
 async function executeRepairTransaction(input) {

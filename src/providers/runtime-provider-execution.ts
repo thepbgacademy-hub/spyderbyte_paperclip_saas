@@ -1,4 +1,5 @@
 import type { RuntimeProviderBinding } from "./runtime-provider-resolution.js";
+import { normalizeCodexSubscriptionMetadata } from "./codex-subscription-metadata.js";
 
 export type RuntimeProviderExecutionBinding = RuntimeProviderBinding & {
   secretValues: Record<string, string>;
@@ -45,6 +46,7 @@ export function createRuntimeProviderExecutionContextResolver(options: {
           if (binding.providerKind === "openai_chatgpt_codex_subscription") {
             return {
               ...binding,
+              metadata: normalizeCodexSubscriptionMetadata(binding.metadata),
               secretValues: {}
             };
           }

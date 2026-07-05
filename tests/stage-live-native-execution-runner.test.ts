@@ -39,7 +39,7 @@ describe("stage live native execution runner", () => {
       preflightContainer: "wf-stage-api",
       apiCodexHomeReadinessProofPath: "audit/2026-07-01/api-ready.json",
       workerCodexHomeReadinessProofPath: "audit/2026-07-01/worker-ready.json",
-      codexAuthStateRef: "codex-home:first-subscriber",
+      codexAuthStateRef: "first-subscriber-openai-device",
       childEnv: {
         VPS2_SUDO_PASSWORD: "super-secret"
       },
@@ -103,7 +103,7 @@ describe("stage live native execution runner", () => {
       "--worker-codex-home-readiness-proof",
       "audit/2026-07-01/worker-ready.json",
       "--codex-auth-state-ref",
-      "codex-home:first-subscriber",
+      "first-subscriber-openai-device",
       "--tenant",
       "tenant-primary",
       "--user",

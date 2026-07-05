@@ -804,6 +804,10 @@ export function createDashboardRuntime(options: {
             command: "resume_lane" | "unblock_lane";
             state: "working" | "approved";
           }) => {
+            const workflowQueueEnqueuer = options.workflowQueueEnqueuer;
+            if (!workflowQueueEnqueuer) {
+              return;
+            }
             const redispatchQueueJobId = createRedispatchQueueJobId({
               tenantId: dispatch.tenantId,
               workflowId: dispatch.workflowId,
@@ -824,7 +828,15 @@ export function createDashboardRuntime(options: {
                 cardId: dispatch.cardId,
                 command: dispatch.command
               });
+              return;
             }
+            await workflowQueueEnqueuer.enqueueOnce({
+              tenantId: dispatch.tenantId,
+              userId: dispatch.userId,
+              workflowId: dispatch.workflowId,
+              runId: dispatch.runId,
+              idempotencyKey: redispatchQueueJobId
+            });
           },
           onFreshCycleDispatch: async (dispatch: {
             tenantId: string;
@@ -835,6 +847,10 @@ export function createDashboardRuntime(options: {
             mode: "reopen_deferred" | "clean";
             reopenedProposalCount: number;
           }) => {
+            const workflowQueueEnqueuer = options.workflowQueueEnqueuer;
+            if (!workflowQueueEnqueuer) {
+              return;
+            }
             const redispatchQueueJobId = createRedispatchQueueJobId({
               tenantId: dispatch.tenantId,
               workflowId: dispatch.workflowId,
@@ -921,7 +937,15 @@ export function createDashboardRuntime(options: {
                 mode: dispatch.mode,
                 reopenedProposalCount: dispatch.reopenedProposalCount
               });
+              return;
             }
+            await workflowQueueEnqueuer.enqueueOnce({
+              tenantId: dispatch.tenantId,
+              userId: dispatch.userId,
+              workflowId: dispatch.workflowId,
+              runId: dispatch.runId,
+              idempotencyKey: redispatchQueueJobId
+            });
           },
           onReviewedNextLaneDispatch: async (dispatch: {
             tenantId: string;
@@ -933,6 +957,10 @@ export function createDashboardRuntime(options: {
             decision: "start_next_lane" | "request_changes";
             state: "working";
           }) => {
+            const workflowQueueEnqueuer = options.workflowQueueEnqueuer;
+            if (!workflowQueueEnqueuer) {
+              return;
+            }
             const redispatchQueueJobId = createRedispatchQueueJobId({
               tenantId: dispatch.tenantId,
               workflowId: dispatch.workflowId,
@@ -953,7 +981,15 @@ export function createDashboardRuntime(options: {
                 cardId: dispatch.cardId,
                 decision: dispatch.decision
               });
+              return;
             }
+            await workflowQueueEnqueuer.enqueueOnce({
+              tenantId: dispatch.tenantId,
+              userId: dispatch.userId,
+              workflowId: dispatch.workflowId,
+              runId: dispatch.runId,
+              idempotencyKey: redispatchQueueJobId
+            });
           }
         }
       : {}),

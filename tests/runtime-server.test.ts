@@ -2155,7 +2155,13 @@ describe("runtime server", () => {
       state: "working"
     });
 
-    expect(enqueueOnce).not.toHaveBeenCalled();
+    expect(enqueueOnce).toHaveBeenCalledWith({
+      tenantId: "tenant_123",
+      userId: "user_123",
+      workflowId: "wf_connect_first_workflow",
+      runId: "run_123",
+      idempotencyKey: expect.stringMatching(/^tenant_123:wf_connect_first_workflow:run_123:redispatch:resume_lane:[a-f0-9]{12}$/i)
+    });
     const redispatchQuery = (vi.mocked(createPgTransactionRunner).mock.results.at(-1)?.value as { __query?: ReturnType<typeof vi.fn> } | undefined)?.__query;
     const sql = redispatchQuery?.mock.calls.map(([statement]) => String(statement)).join("\n") ?? "";
     expect(sql).toMatch(/insert into wfpc\.workflow_queue_outbox/i);
@@ -2196,12 +2202,17 @@ describe("runtime server", () => {
       })
     ).resolves.toBeUndefined();
 
-    expect(enqueueOnce).not.toHaveBeenCalled();
+    expect(enqueueOnce).toHaveBeenCalledWith({
+      tenantId: "tenant_123",
+      userId: "user_123",
+      workflowId: "wf_connect_first_workflow",
+      runId: "run_123",
+      idempotencyKey: expect.stringMatching(/^tenant_123:wf_connect_first_workflow:run_123:redispatch:resume_lane:[a-f0-9]{12}$/i)
+    });
     expect(warnSpy).not.toHaveBeenCalled();
     const redispatchQuery = (vi.mocked(createPgTransactionRunner).mock.results.at(-1)?.value as { __query?: ReturnType<typeof vi.fn> } | undefined)?.__query;
     const sql = redispatchQuery?.mock.calls.map(([statement]) => String(statement)).join("\n") ?? "";
     expect(sql).toMatch(/insert into wfpc\.workflow_queue_outbox/i);
-    expect(enqueueOnce).not.toHaveBeenCalled();
 
     warnSpy.mockRestore();
     await runtime.close();
@@ -2236,7 +2247,13 @@ describe("runtime server", () => {
       state: "approved"
     });
 
-    expect(enqueueOnce).not.toHaveBeenCalled();
+    expect(enqueueOnce).toHaveBeenCalledWith({
+      tenantId: "tenant_123",
+      userId: "user_123",
+      workflowId: "wf_connect_first_workflow",
+      runId: "run_124",
+      idempotencyKey: expect.stringMatching(/^tenant_123:wf_connect_first_workflow:run_124:redispatch:fresh_cycle_reopen_deferred:[a-f0-9]{12}$/i)
+    });
     const redispatchQuery = (vi.mocked(createPgTransactionRunner).mock.results.at(-1)?.value as { __query?: ReturnType<typeof vi.fn> } | undefined)?.__query;
     const sql = redispatchQuery?.mock.calls.map(([statement]) => String(statement)).join("\n") ?? "";
     expect(sql).toMatch(/insert into wfpc\.workflow_queue_outbox/i);
@@ -2275,7 +2292,13 @@ describe("runtime server", () => {
       reopenedProposalCount: 1
     });
 
-    expect(enqueueOnce).not.toHaveBeenCalled();
+    expect(enqueueOnce).toHaveBeenCalledWith({
+      tenantId: "tenant_123",
+      userId: "user_123",
+      workflowId: "wf_connect_first_workflow",
+      runId: "run_124",
+      idempotencyKey: expect.stringMatching(/^tenant_123:wf_connect_first_workflow:run_124:redispatch:fresh_cycle_reopen_deferred:[a-f0-9]{12}$/i)
+    });
     const redispatchQuery = (vi.mocked(createPgTransactionRunner).mock.results.at(-1)?.value as { __query?: ReturnType<typeof vi.fn> } | undefined)?.__query;
     const sql = redispatchQuery?.mock.calls.map(([statement]) => String(statement)).join("\n") ?? "";
     expect(sql).toMatch(/insert into wfpc\.workflow_queue_outbox/i);
@@ -2393,12 +2416,17 @@ describe("runtime server", () => {
       })
     ).resolves.toBeUndefined();
 
-    expect(enqueueOnce).not.toHaveBeenCalled();
+    expect(enqueueOnce).toHaveBeenCalledWith({
+      tenantId: "tenant_123",
+      userId: "user_123",
+      workflowId: "wf_connect_first_workflow",
+      runId: "run_124",
+      idempotencyKey: expect.stringMatching(/^tenant_123:wf_connect_first_workflow:run_124:redispatch:fresh_cycle_reopen_deferred:[a-f0-9]{12}$/i)
+    });
     expect(warnSpy).not.toHaveBeenCalled();
     const redispatchQuery = (vi.mocked(createPgTransactionRunner).mock.results.at(-1)?.value as { __query?: ReturnType<typeof vi.fn> } | undefined)?.__query;
     const sql = redispatchQuery?.mock.calls.map(([statement]) => String(statement)).join("\n") ?? "";
     expect(sql).toMatch(/insert into wfpc\.workflow_queue_outbox/i);
-    expect(enqueueOnce).not.toHaveBeenCalled();
 
     warnSpy.mockRestore();
     await runtime.close();

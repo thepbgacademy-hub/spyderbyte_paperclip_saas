@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const scriptPath = "scripts/repair-openai-device-provider-binding.mjs";
-const readinessProofPath = "audit/2026-06-30/vps-codex-auth-home-readiness-proof.json";
+const readinessProofPath = "audit/2026-07-02/codex-auth-home-readiness-api-stage-browser.json";
 
 describe("OpenAI device provider binding repair script", () => {
   it("is exposed as a dry-run-first npm operator command", () => {
@@ -78,7 +78,7 @@ describe("OpenAI device provider binding repair script", () => {
         "--codex-home",
         "/home/deploy/wealth-factory-stage/codex-homes/first-subscriber",
         "--auth-state-ref",
-        "codex-home:first-subscriber",
+        "first-subscriber-openai-device",
         "--codex-home-readiness-proof",
         readinessProofPath
       ],
@@ -181,7 +181,7 @@ describe("OpenAI device provider binding repair script", () => {
         "--codex-home",
         "/home/deploy/wealth-factory-stage/codex-homes/first-subscriber",
         "--auth-state-ref",
-        "codex-home:first-subscriber",
+        "first-subscriber-openai-device",
         "--codex-home-readiness-proof",
         proofPath
       ],
@@ -267,7 +267,7 @@ describe("OpenAI device provider binding repair script", () => {
           "--codex-home",
           "/home/deploy/wealth-factory-stage/codex-homes/different-subscriber",
           "--auth-state-ref",
-          "codex-home:first-subscriber",
+          "first-subscriber-openai-device",
           "--execute",
           "--confirm-codex-home-ready",
           "--codex-home-readiness-proof",
@@ -325,7 +325,7 @@ describe("OpenAI device provider binding repair script", () => {
           "--codex-home",
           "/home/deploy/wealth-factory-stage/codex-homes/first-subscriber",
           "--auth-state-ref",
-          "codex-home:first-subscriber",
+          "first-subscriber-openai-device",
           "--execute",
           "--confirm-codex-home-ready",
           "--codex-home-readiness-proof",
@@ -354,7 +354,7 @@ describe("OpenAI device provider binding repair script", () => {
         "--codex-home",
         "/home/deploy/wealth-factory-stage/codex-homes/first-subscriber",
         "--auth-state-ref",
-        "codex-home:first-subscriber",
+        "first-subscriber-openai-device",
         "--execute",
         "--confirm-codex-home-ready",
         "--codex-home-readiness-proof",
@@ -413,7 +413,7 @@ describe("OpenAI device provider binding repair script", () => {
         "--codex-home",
         "/home/deploy/wealth-factory-stage/codex-homes/first-subscriber",
         "--auth-state-ref",
-        "codex-home:first-subscriber",
+        "first-subscriber-openai-device",
         "--rebind-existing-run",
         "169c4ac8-ea8d-48fe-accc-6dcc60d4dd4d",
         "--execute",
@@ -455,7 +455,7 @@ describe("OpenAI device provider binding repair script", () => {
           "--codex-home",
           "/home/deploy/wealth-factory-stage/codex-homes/first-subscriber",
           "--auth-state-ref",
-          "codex-home:first-subscriber",
+          "first-subscriber-openai-device",
           "--execute",
           "--confirm-codex-home-ready",
           "--codex-home-readiness-proof",
@@ -488,7 +488,7 @@ describe("OpenAI device provider binding repair script", () => {
           "--codex-home",
           "/home/deploy/wealth-factory-stage/codex-homes/first-subscriber",
           "--auth-state-ref",
-          "codex-home:first-subscriber",
+          "first-subscriber-openai-device",
           "--execute",
           "--confirm-codex-home-ready",
           "--codex-home-readiness-proof",
@@ -521,7 +521,7 @@ describe("OpenAI device provider binding repair script", () => {
           "--codex-home",
           "/home/deploy/wealth-factory-stage/codex-homes/first-subscriber",
           "--auth-state-ref",
-          "codex-home:first-subscriber",
+          "first-subscriber-openai-device",
           "--execute",
           "--confirm-codex-home-ready",
           "--codex-home-readiness-proof",
