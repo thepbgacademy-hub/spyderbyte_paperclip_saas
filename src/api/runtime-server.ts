@@ -538,7 +538,7 @@ export function createDashboardRuntime(options: {
               definition.publicStartEnabled === true &&
               definition.executionEngine === "wf_native_v1" &&
               hasPublicWorkflowHarnessBootstrap(publicWorkflowId)
-                ? await harnessRepository.findLatestRunForTenantWorkflow({
+                ? await harnessRepository.findLatestActionableRunForTenantWorkflow({
                     tenantId: input.tenantId,
                     workflowId: publicWorkflowId
                   })

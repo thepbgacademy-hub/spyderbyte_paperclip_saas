@@ -34,6 +34,7 @@ export interface HarnessRepository {
   insertRun(run: HarnessRunRecord): Promise<void>;
   getRun(runId: string): Promise<HarnessRunRecord | null>;
   findLatestRunForTenantWorkflow(input: { tenantId: string; workflowId: string }): Promise<HarnessRunRecord | null>;
+  findLatestActionableRunForTenantWorkflow(input: { tenantId: string; workflowId: string }): Promise<HarnessRunRecord | null>;
   updateRunState(input: { runId: string; state: HarnessRunState }): Promise<HarnessRunRecord | null>;
   insertCard(card: HarnessCardRecord): Promise<void>;
   getCard(cardId: string): Promise<HarnessCardRecord | null>;
@@ -126,6 +127,14 @@ export function createInMemoryHarnessRepository(): HarnessRepository {
     async findLatestRunForTenantWorkflow(input) {
       const matchingRuns = [...runs.values()].filter(
         (run) => run.tenantId === input.tenantId && run.workflowId === input.workflowId
+      );
+      matchingRuns.sort(compareHarnessRunsByOldestFirst);
+      return matchingRuns.at(-1) ?? null;
+    },
+
+    async findLatestActionableRunForTenantWorkflow(input) {
+      const matchingRuns = [...runs.values()].filter(
+        (run) => run.tenantId === input.tenantId && run.workflowId === input.workflowId && isActionableHarnessRunState(run.state)
       );
       matchingRuns.sort(compareHarnessRunsByOldestFirst);
       return matchingRuns.at(-1) ?? null;
@@ -678,6 +687,20 @@ export function createPostgresHarnessRepository(client: QueryClient): HarnessRep
          from wfpc.harness_runs
          where tenant_id = $1
            and workflow_id = $2
+         order by updated_at desc, created_at desc
+         limit 1`,
+        [input.tenantId, input.workflowId]
+      );
+      return mapHarnessRunRow(result.rows[0]);
+    },
+
+    async findLatestActionableRunForTenantWorkflow(input) {
+      const result = await client.query(
+        `select id, tenant_id, workflow_id, package_id, orchestrator_persona, state, runtime_context, created_at, updated_at
+         from wfpc.harness_runs
+         where tenant_id = $1
+           and workflow_id = $2
+           and state in ('queued', 'planning', 'active', 'waiting', 'blocked', 'assembling')
          order by updated_at desc, created_at desc
          limit 1`,
         [input.tenantId, input.workflowId]
@@ -1861,6 +1884,10 @@ function compareHarnessRunsByOldestFirst(left: HarnessRunRecord, right: HarnessR
     return left.updatedAt.localeCompare(right.updatedAt);
   }
   return left.createdAt.localeCompare(right.createdAt);
+}
+
+function isActionableHarnessRunState(state: HarnessRunState): boolean {
+  return state === "queued" || state === "planning" || state === "active" || state === "waiting" || state === "blocked" || state === "assembling";
 }
 
 function normalizeRuntimeContext(value: unknown): HarnessRunRecord["runtimeContext"] {

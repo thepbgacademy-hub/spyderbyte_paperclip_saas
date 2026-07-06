@@ -2037,6 +2037,63 @@ describe("harness HTTP boundary", () => {
     expect(response.body).toEqual({ status: "unblocked", cardId: "card_blocked_1", state: "approved" });
   });
 
+  it("forwards structured pricing unblock evidence on a connect-first unblock resolution", async () => {
+    const resolvePendingAttention = vi
+      .fn()
+      .mockResolvedValue({ status: "unblocked", cardId: "card_blocked_1", state: "approved" });
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      resolvePendingAttention,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const payload = {
+      resolution: "unblock_lane",
+      actionHandle: "test-resolve-token",
+      deliveryCost: "$625 per delivery",
+      salesCost: "$180 onboarding and close effort",
+      discountPolicy: "Cap discounting at 5% with approval required beyond that cap.",
+      conversionSensitivity: "Dropping below $2,750 likely improves close rate but breaks the 65% margin floor.",
+      buyerValueProof: "Founder time saved and faster guided execution still defend a premium above the $2,500 package."
+    };
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/resolve-attention",
+      body: payload,
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        cookie: "wf_session=abc",
+        "content-type": "application/json"
+      },
+      bodyByteLength: JSON.stringify(payload).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(200);
+    expect(resolvePendingAttention).toHaveBeenCalledWith({
+      authorization: "Bearer valid",
+      cookie: "wf_session=abc",
+      runId: "run_123",
+      command: "unblock_lane",
+      actionToken: "test-resolve-token",
+      pricingLaneUnblockEvidence: {
+        deliveryCost: "$625 per delivery",
+        salesCost: "$180 onboarding and close effort",
+        discountPolicy: "Cap discounting at 5% with approval required beyond that cap.",
+        conversionSensitivity: "Dropping below $2,750 likely improves close rate but breaks the 65% margin floor.",
+        buyerValueProof: "Founder time saved and faster guided execution still defend a premium above the $2,500 package."
+      }
+    });
+    expect(response.body).toEqual({ status: "unblocked", cardId: "card_blocked_1", state: "approved" });
+  });
+
   it("rejects partial bounded tax prerequisite evidence on an unblock resolution", async () => {
     const resolvePendingAttention = vi.fn();
     const handler = createHarnessHttpHandler({
@@ -2067,6 +2124,45 @@ describe("harness HTTP boundary", () => {
         resolution: "unblock_lane",
         actionHandle: "test-resolve-token",
         taxEvidenceSummary: "Founder tax posture documents were confirmed for bounded tax review."
+      }).length,
+      ip: "203.0.113.10"
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ code: "invalid_request" });
+    expect(resolvePendingAttention).not.toHaveBeenCalled();
+  });
+
+  it("rejects partial structured pricing unblock evidence on an unblock resolution", async () => {
+    const resolvePendingAttention = vi.fn();
+    const handler = createHarnessHttpHandler({
+      allowedOrigins: ["https://portal.wealthfactory.test"],
+      listBoardState: vi.fn(),
+      decideProposal: vi.fn(),
+      createTopLevelChildCard: vi.fn(),
+      advanceChildCard: vi.fn(),
+      completeRun: vi.fn(),
+      resolvePendingAttention,
+      rateLimiter: { consume: vi.fn().mockResolvedValue({ allowed: true, remaining: 9, resetAt: Date.now() + 60_000 }) }
+    });
+
+    const response = await handler({
+      method: "POST",
+      path: "/api/harness/runs/run_123/resolve-attention",
+      body: {
+        resolution: "unblock_lane",
+        actionHandle: "test-resolve-token",
+        deliveryCost: "$625 per delivery"
+      },
+      headers: {
+        origin: "https://portal.wealthfactory.test",
+        authorization: "Bearer valid",
+        "content-type": "application/json"
+      },
+      bodyByteLength: JSON.stringify({
+        resolution: "unblock_lane",
+        actionHandle: "test-resolve-token",
+        deliveryCost: "$625 per delivery"
       }).length,
       ip: "203.0.113.10"
     });

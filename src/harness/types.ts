@@ -291,6 +291,14 @@ export interface HarnessTaxStrategyPrerequisiteEvidenceInput {
   entityType: string;
 }
 
+export interface HarnessPricingLaneUnblockEvidenceInput {
+  deliveryCost: string;
+  salesCost: string;
+  discountPolicy: string;
+  conversionSensitivity: string;
+  buyerValueProof: string;
+}
+
 export interface HarnessTaxStrategyPrerequisiteSnapshot {
   evidence: HarnessTaxStrategyPrerequisiteEvidenceItem[];
 }

@@ -45,7 +45,7 @@ describe("live native binding consistency", () => {
     });
   });
 
-  it("fails closed when the live binding still carries an older auth-state alias", () => {
+  it("accepts the older first-subscriber auth-state alias as equivalent to the canonical runtime value", () => {
     expect(
       validateExpectedAuthStateRefOnRunBinding({
         expectedAuthStateRef: "first-subscriber-openai-device",
@@ -63,11 +63,34 @@ describe("live native binding consistency", () => {
         }
       })
     ).toMatchObject({
-      ok: false,
-      phase: "binding_auth_state_ref_mismatch",
+      ok: true,
+      phase: "binding_auth_state_ref_verified",
       notes: [
-        "The live bound provider context for wf_connect_first_workflow carried authStateRef codex-home:first-subscriber, expected first-subscriber-openai-device."
+        "The live bound provider context for wf_connect_first_workflow matched authStateRef first-subscriber-openai-device."
       ]
+    });
+  });
+
+  it("accepts the legacy and canonical first-subscriber aliases as the same live binding seam", () => {
+    expect(
+      validateExpectedAuthStateRefOnRunBinding({
+        expectedAuthStateRef: "codex-home:first-subscriber",
+        workflowId: "wf_connect_first_workflow",
+        durableSnapshot: {
+          run: {
+            providerContext: [
+              {
+                metadata: {
+                  authStateRef: "first-subscriber-openai-device"
+                }
+              }
+            ]
+          }
+        }
+      })
+    ).toMatchObject({
+      ok: true,
+      phase: "binding_auth_state_ref_verified"
     });
   });
 });

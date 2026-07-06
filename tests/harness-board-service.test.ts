@@ -3104,6 +3104,104 @@ describe("harness board service", () => {
     );
   });
 
+  it("adds structured pricing unblock fields to the connect-first pricing unblock seam", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid", workflowId: "wf_connect_first_workflow" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      workflowId: "wf_connect_first_workflow",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await repository.insertEvent({
+      id: "event_connect_first_pricing_blocked_outcome",
+      cardId: created.cardId,
+      eventKind: "execution_outcome_committed",
+      payload: {
+        outcomeState: "blocked",
+        postOutcomeActionKind: "await_unblock",
+        continuitySummary:
+          "Pricing review remains blocked until the business inputs are supplied for margin, discount, conversion, and buyer-value validation."
+      },
+      createdAt: "2026-07-05T00:10:00.000Z"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "blocked",
+      resumeSummary:
+        "Pricing review remains blocked until the business inputs are supplied for margin, discount, conversion, and buyer-value validation."
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid", workflowId: "wf_connect_first_workflow" });
+
+    expect(board.pendingAttention).toEqual(
+      expect.objectContaining({
+        kind: "await_unblock",
+        requestFields: expect.arrayContaining([
+          expect.objectContaining({
+            name: "deliveryCost",
+            required: true
+          }),
+          expect.objectContaining({
+            name: "salesCost",
+            required: true
+          }),
+          expect.objectContaining({
+            name: "discountPolicy",
+            required: true
+          }),
+          expect.objectContaining({
+            name: "conversionSensitivity",
+            required: true
+          }),
+          expect.objectContaining({
+            name: "buyerValueProof",
+            required: true
+          })
+        ]),
+        actionOptions: expect.arrayContaining([
+          expect.objectContaining({
+            exampleRequest: expect.objectContaining({
+              resolution: "unblock_lane",
+              deliveryCost: expect.any(String),
+              salesCost: expect.any(String),
+              discountPolicy: expect.any(String),
+              conversionSensitivity: expect.any(String),
+              buyerValueProof: expect.any(String)
+            })
+          })
+        ])
+      })
+    );
+    expect(board.pendingAttention?.requestFields?.find((field) => field.name === "resumeSummary")).toEqual(
+      expect.objectContaining({
+        required: false
+      })
+    );
+  });
+
   it("persists bounded founder-tax prerequisite evidence when resolving the matching tax-strategy unblock seam", async () => {
     const repository = createInMemoryHarnessRepository();
     const service = createHarnessBoardService({
@@ -3193,6 +3291,96 @@ describe("harness board service", () => {
           })
         ]
       })
+    );
+  });
+
+  it("synthesizes a substantive unblock summary from structured pricing evidence for the connect-first pricing seam", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const service = createHarnessBoardService({
+      authenticate: vi.fn().mockResolvedValue({
+        tenantId: "tenant_123",
+        userId: "user_123",
+        role: "member"
+      }),
+      requireTenantMember: vi.fn().mockResolvedValue(undefined),
+      requireActivePackageInstall: vi.fn().mockResolvedValue(undefined),
+      repository,
+      runAtomically: async (work) => work(repository),
+      workflowRegistry: createHarnessWorkflowRegistry({
+        harnessEnabledWorkflowIds: ["wf_connect_first_workflow", "wf_tax_strategy"]
+      })
+    });
+
+    await service.listBoardState({ authorization: "Bearer valid", workflowId: "wf_connect_first_workflow" });
+    const created = await expectCreatedCard(service.createTopLevelChildCard({
+      authorization: "Bearer valid",
+      workflowId: "wf_connect_first_workflow",
+      persona: "cfo",
+      title: "Pressure-test the pricing lane",
+      deliverableType: "pricing_review"
+    }));
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "working"
+    });
+    await repository.insertEvent({
+      id: "event_connect_first_pricing_blocked_outcome_persist",
+      cardId: created.cardId,
+      eventKind: "execution_outcome_committed",
+      payload: {
+        outcomeState: "blocked",
+        postOutcomeActionKind: "await_unblock",
+        continuitySummary:
+          "Pricing review remains blocked until the business inputs are supplied for margin, discount, conversion, and buyer-value validation."
+      },
+      createdAt: "2026-07-05T00:15:00.000Z"
+    });
+    await service.advanceChildCard({
+      authorization: "Bearer valid",
+      cardId: created.cardId,
+      state: "blocked",
+      resumeSummary:
+        "Pricing review remains blocked until the business inputs are supplied for margin, discount, conversion, and buyer-value validation."
+    });
+
+    const board = await service.listBoardState({ authorization: "Bearer valid", workflowId: "wf_connect_first_workflow" });
+    await expect(
+      service.resolvePendingAttention({
+        authorization: "Bearer valid",
+        runId: board.runId,
+        command: "unblock_lane",
+        actionToken: board.pendingAttention?.actionHandle ?? "",
+        pricingLaneUnblockEvidence: {
+          deliveryCost: "$625 per delivery",
+          salesCost: "$180 onboarding and close effort",
+          discountPolicy: "Cap discounting at 5% with approval required beyond that cap.",
+          conversionSensitivity: "Dropping below $2,750 likely improves close rate but breaks the 65% margin floor.",
+          buyerValueProof: "Founder time saved and faster guided execution still defend a premium above the $2,500 package."
+        }
+      })
+    ).resolves.toEqual({
+      status: "unblocked",
+      cardId: created.cardId,
+      state: "approved"
+    });
+
+    const continuity = await repository.getCardContinuity(created.cardId);
+    expect(continuity).toEqual(
+      expect.objectContaining({
+        cardId: created.cardId,
+        continuitySummary: expect.stringContaining("Delivery cost: $625 per delivery.")
+      })
+    );
+    expect(continuity?.continuitySummary).toContain("Sales cost: $180 onboarding and close effort.");
+    expect(continuity?.continuitySummary).toContain(
+      "Discount policy: Cap discounting at 5% with approval required beyond that cap."
+    );
+    expect(continuity?.continuitySummary).toContain(
+      "Conversion sensitivity: Dropping below $2,750 likely improves close rate but breaks the 65% margin floor."
+    );
+    expect(continuity?.continuitySummary).toContain(
+      "Buyer-value proof: Founder time saved and faster guided execution still defend a premium above the $2,500 package."
     );
   });
 

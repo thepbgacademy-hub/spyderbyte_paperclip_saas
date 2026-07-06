@@ -121,6 +121,8 @@ function swapUtf16Bytes(buffer) {
 
 function validateSingleProof({ label, proof, expectedContainer, expectedTenantId, expectedWorkflowId, expectedAuthStateRef }) {
   const notes = [];
+  const normalizedExpectedAuthStateRef = normalizeAuthStateRef(expectedAuthStateRef);
+  const normalizedObservedAuthStateRef = normalizeAuthStateRef(proof.authStateRef);
   if (proof.ok !== true) {
     notes.push(`${label} readiness proof ok is ${String(proof.ok)}, expected true.`);
   }
@@ -136,10 +138,10 @@ function validateSingleProof({ label, proof, expectedContainer, expectedTenantId
   if (normalizeValue(expectedWorkflowId) && proof.targetWorkflowId !== expectedWorkflowId) {
     notes.push(`${label} readiness proof targetWorkflowId is ${String(proof.targetWorkflowId)}, expected ${expectedWorkflowId}.`);
   }
-  if (normalizeValue(expectedAuthStateRef) && proof.authStateRef !== expectedAuthStateRef) {
+  if (normalizedExpectedAuthStateRef && normalizedObservedAuthStateRef !== normalizedExpectedAuthStateRef) {
     notes.push(`${label} readiness proof authStateRef is ${String(proof.authStateRef)}, expected ${expectedAuthStateRef}.`);
   }
-  if (!normalizeValue(proof.authStateRef)) {
+  if (!normalizedObservedAuthStateRef) {
     notes.push(`${label} readiness proof did not include authStateRef.`);
   }
   if (!normalizeValue(proof.codexHomeFingerprint)) {
@@ -186,4 +188,13 @@ function summarizeProof(proof) {
 
 function normalizeValue(value) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function normalizeAuthStateRef(value) {
+  const normalized = normalizeValue(value);
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized === "codex-home:first-subscriber" ? "first-subscriber-openai-device" : normalized;
 }

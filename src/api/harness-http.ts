@@ -20,6 +20,7 @@ import {
   isHarnessCardState,
   isHarnessChildPersona,
   isHarnessDeliverableType,
+  type HarnessPricingLaneUnblockEvidenceInput,
   type HarnessTaxStrategyPrerequisiteEvidenceInput,
   normalizeHarnessDeliverableType,
   normalizeHarnessPersona
@@ -90,6 +91,7 @@ type HarnessApi = {
     command: HarnessAttentionResolutionCommand;
     actionToken: string;
     resumeSummary?: string;
+    pricingLaneUnblockEvidence?: HarnessPricingLaneUnblockEvidenceInput;
     taxStrategyPrerequisiteEvidence?: HarnessTaxStrategyPrerequisiteEvidenceInput;
   }): Promise<
     | { status: "resumed"; cardId: string; state: "working" }
@@ -406,10 +408,21 @@ export function createHarnessHttpHandler(options: {
           return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
         }
         const resumeSummary = readOptionalString(bodyInput?.resumeSummary);
+        const deliveryCost = readRequiredString(bodyInput?.deliveryCost);
+        const salesCost = readRequiredString(bodyInput?.salesCost);
+        const discountPolicy = readRequiredString(bodyInput?.discountPolicy);
+        const conversionSensitivity = readRequiredString(bodyInput?.conversionSensitivity);
+        const buyerValueProof = readRequiredString(bodyInput?.buyerValueProof);
         const taxEvidenceSummary = readRequiredString(bodyInput?.taxEvidenceSummary);
         const taxEvidenceConfirmedBy = readRequiredString(bodyInput?.taxEvidenceConfirmedBy);
         const taxEvidenceTaxYear = readRequiredString(bodyInput?.taxEvidenceTaxYear);
         const taxEvidenceEntityType = readRequiredString(bodyInput?.taxEvidenceEntityType);
+        const hasAnyPricingEvidenceField = Boolean(
+          deliveryCost || salesCost || discountPolicy || conversionSensitivity || buyerValueProof
+        );
+        const hasCompletePricingEvidenceFieldSet = Boolean(
+          deliveryCost && salesCost && discountPolicy && conversionSensitivity && buyerValueProof
+        );
         const hasAnyTaxEvidenceField = Boolean(
           taxEvidenceSummary || taxEvidenceConfirmedBy || taxEvidenceTaxYear || taxEvidenceEntityType
         );
@@ -417,6 +430,9 @@ export function createHarnessHttpHandler(options: {
           taxEvidenceSummary && taxEvidenceConfirmedBy && taxEvidenceTaxYear && taxEvidenceEntityType
         );
         if (hasAnyTaxEvidenceField && !hasCompleteTaxEvidenceFieldSet) {
+          return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
+        }
+        if (hasAnyPricingEvidenceField && !hasCompletePricingEvidenceFieldSet) {
           return { status: 400, headers: { ...securityHeaders, ...corsHeaders }, body: { code: "invalid_request" } };
         }
         const resolveAttentionRequest: Parameters<NonNullable<typeof options.resolvePendingAttention>>[0] = {
@@ -428,6 +444,15 @@ export function createHarnessHttpHandler(options: {
         };
         if (resumeSummary) {
           resolveAttentionRequest.resumeSummary = resumeSummary;
+        }
+        if (hasCompletePricingEvidenceFieldSet) {
+          resolveAttentionRequest.pricingLaneUnblockEvidence = {
+            deliveryCost,
+            salesCost,
+            discountPolicy,
+            conversionSensitivity,
+            buyerValueProof
+          };
         }
         if (hasCompleteTaxEvidenceFieldSet) {
           resolveAttentionRequest.taxStrategyPrerequisiteEvidence = {

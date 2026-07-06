@@ -183,6 +183,12 @@ function toNativeProviderFailureOutcome(error: unknown): NativeExecutionOutcome 
       resumeSummary:
         error.reason === "provider_kind_unsupported"
           ? "Native execution could not continue because the bound provider kind is not supported by the current native executor."
+          : error.reason === "codex_subscription_auth_missing"
+            ? "Native execution could not continue because the Codex subscription binding is missing its isolated auth metadata. Keep this lane blocked until the subscription-backed provider binding is repaired."
+            : error.reason === "codex_subscription_failed"
+              ? isCodexSubscriptionSessionRevoked(error.message)
+                ? "Native execution could not continue because the Codex subscription session ended and must be signed in again. Keep this lane blocked until the isolated Codex device login is refreshed for this provider lane."
+                : "Native execution reached the Codex subscription lane but the isolated subscription runner failed before a usable response was returned."
           : error.reason === "secret_missing"
             ? "Native execution could not continue because the bound provider secret is missing the required API key at execution time."
           : error.reason === "request_failed"
@@ -196,4 +202,8 @@ function toNativeProviderFailureOutcome(error: unknown): NativeExecutionOutcome 
   }
 
   return null;
+}
+
+function isCodexSubscriptionSessionRevoked(message: string): boolean {
+  return /refresh_token_invalidated|token_invalidated|refresh token was revoked|session has ended|sign in again/i.test(message);
 }

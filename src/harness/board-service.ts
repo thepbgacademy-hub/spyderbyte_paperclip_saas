@@ -10,6 +10,7 @@ import type {
   HarnessCompletionPackageSnapshotRecord,
   HarnessExportDeliveryRecord,
   HarnessGovernanceHistorySnapshotRecord,
+  HarnessPricingLaneUnblockEvidenceInput,
   HarnessRunRecord,
   HarnessTaxStrategyPrerequisiteEvidenceInput
 } from "./types.js";
@@ -852,6 +853,11 @@ export type HarnessActionRequestFieldView = {
     | "resumeSummary"
     | "completionSummary"
     | "mode"
+    | "deliveryCost"
+    | "salesCost"
+    | "discountPolicy"
+    | "conversionSensitivity"
+    | "buyerValueProof"
     | "taxEvidenceSummary"
     | "taxEvidenceConfirmedBy"
     | "taxEvidenceTaxYear"
@@ -4117,6 +4123,7 @@ export function createHarnessBoardService(options: {
       command: HarnessAttentionResolutionCommand;
       actionToken?: string;
       resumeSummary?: string;
+      pricingLaneUnblockEvidence?: HarnessPricingLaneUnblockEvidenceInput;
       taxStrategyPrerequisiteEvidence?: HarnessTaxStrategyPrerequisiteEvidenceInput;
     }): Promise<{ status: "resumed"; cardId: string; state: "working" } | { status: "unblocked"; cardId: string; state: "approved" }> {
       const access = await authorizeHarnessRunRequest({
@@ -4198,8 +4205,29 @@ export function createHarnessBoardService(options: {
           throw new HarnessCardProgressionConflictError("Harness attention target lane was not found");
         }
 
+        const connectFirstPricingAttention = isConnectFirstPricingUnblockAttention({
+          run,
+          action: pendingAttention,
+          targetCard
+        });
         const trimmedResumeSummary = request.resumeSummary?.trim();
-        if (request.command === "unblock_lane" && !isSubstantiveUnblockSummary(trimmedResumeSummary)) {
+        const normalizedPricingEvidence = request.pricingLaneUnblockEvidence
+          ? normalizePricingLaneUnblockEvidenceInput(request.pricingLaneUnblockEvidence)
+          : null;
+        if (request.pricingLaneUnblockEvidence && !normalizedPricingEvidence) {
+          throw new HarnessCardProgressionConflictError("Harness pricing unblock evidence is incomplete");
+        }
+        if (request.pricingLaneUnblockEvidence && !connectFirstPricingAttention) {
+          throw new HarnessCardProgressionConflictError(
+            "Harness pricing unblock evidence only applies to the Connect First pricing unblock seam"
+          );
+        }
+        const effectiveResumeSummary =
+          trimmedResumeSummary
+          ?? (connectFirstPricingAttention && normalizedPricingEvidence
+            ? createPricingLaneUnblockResumeSummary(normalizedPricingEvidence)
+            : undefined);
+        if (request.command === "unblock_lane" && !isSubstantiveUnblockSummary(effectiveResumeSummary)) {
           throw new HarnessCardProgressionConflictError(
             "Harness lane unblock requires a substantive unblock summary before execution can resume"
           );
@@ -4231,7 +4259,7 @@ export function createHarnessBoardService(options: {
         await recordCardStateContinuity({
           repository,
           card: updatedCard,
-          ...(trimmedResumeSummary ? { resumeSummary: trimmedResumeSummary } : {})
+          ...(effectiveResumeSummary ? { resumeSummary: effectiveResumeSummary } : {})
         });
         if (
           request.command === "unblock_lane"
@@ -5467,7 +5495,7 @@ async function getOrCreateCurrentRun(input: {
   workflowDefinition: WealthFactoryWorkflowDefinition;
 }): Promise<HarnessRunRecord> {
   return (
-    (await input.repository.findLatestRunForTenantWorkflow({
+    (await input.repository.findLatestActionableRunForTenantWorkflow({
       tenantId: input.tenantId,
       workflowId: input.workflowDefinition.publicId
     })) ??
@@ -5489,7 +5517,7 @@ async function ensureSeededHarnessRun(input: {
   workflowDefinition: WealthFactoryWorkflowDefinition;
 }): Promise<HarnessRunRecord> {
   const seedWork = async (repository: HarnessRepository) => {
-    const existing = await repository.findLatestRunForTenantWorkflow({
+    const existing = await repository.findLatestActionableRunForTenantWorkflow({
       tenantId: input.tenantId,
       workflowId: input.workflowDefinition.publicId
     });
@@ -5513,7 +5541,7 @@ async function ensureSeededHarnessRun(input: {
     return await seedWork(input.repository);
   } catch (error) {
     if (isUniqueConstraintViolation(error)) {
-      const existing = await input.repository.findLatestRunForTenantWorkflow({
+      const existing = await input.repository.findLatestActionableRunForTenantWorkflow({
         tenantId: input.tenantId,
         workflowId: input.workflowDefinition.publicId
       });
@@ -9652,6 +9680,11 @@ function buildPendingAttentionView(input: {
     action,
     requiredArtifactName
   });
+  const connectFirstPricingAttention = isConnectFirstPricingUnblockAttention({
+    run: input.run,
+    action,
+    targetCard
+  });
   const pendingApprovalCount = input.proposals.filter(
     (proposal) => proposal.status === "proposed" || proposal.status === "deferred"
   ).length;
@@ -9682,15 +9715,27 @@ function buildPendingAttentionView(input: {
       description:
         action.kind === "await_lane_resume"
           ? "Optional tenant-safe note describing what changed before execution resumes."
-          : "Required tenant-safe note with the concrete inputs or assumptions that clear this blocker.",
-      required: action.kind === "await_unblock"
+          : connectFirstPricingAttention
+            ? "Optional tenant-safe note. If you fill the pricing evidence fields below, the board will compose the unblock summary for this seam."
+            : "Required tenant-safe note with the concrete inputs or assumptions that clear this blocker.",
+      required: action.kind === "await_unblock" && !connectFirstPricingAttention
     },
+    ...(connectFirstPricingAttention ? buildPricingLaneUnblockRequestFields() : []),
     ...(founderTaxPrerequisiteAttention ? buildTaxStrategyPrerequisiteRequestFields() : [])
   ];
   const primaryActionExampleRequest =
     action.kind === "await_lane_resume"
       ? { resolution: "resume_lane" }
-      : founderTaxPrerequisiteAttention
+      : connectFirstPricingAttention
+        ? {
+            resolution: "unblock_lane",
+            deliveryCost: "$625 per delivery",
+            salesCost: "$180 onboarding and close effort",
+            discountPolicy: "Cap discounting at 5% with approval required beyond that cap.",
+            conversionSensitivity: "Dropping below $2,750 likely improves close rate but breaks the 65% margin floor.",
+            buyerValueProof: "Founder time saved and faster guided execution still defend a premium above the $2,500 package."
+          }
+        : founderTaxPrerequisiteAttention
         ? {
             resolution: "unblock_lane",
             taxEvidenceSummary: "Founder tax posture documents were confirmed for bounded tax review.",
@@ -10007,6 +10052,83 @@ function buildTaxStrategyPrerequisiteRequestFields(): HarnessActionRequestFieldV
       required: true
     }
   ];
+}
+
+function buildPricingLaneUnblockRequestFields(): HarnessActionRequestFieldView[] {
+  return [
+    {
+      name: "deliveryCost",
+      label: "Delivery cost",
+      description: "Capture the bounded delivery cost assumption that supports this pricing unblock step.",
+      required: true
+    },
+    {
+      name: "salesCost",
+      label: "Sales cost",
+      description: "Capture the bounded sales or onboarding cost assumption tied to this pricing review.",
+      required: true
+    },
+    {
+      name: "discountPolicy",
+      label: "Discount policy",
+      description: "State the concrete discounting rule or approval cap that should govern this offer.",
+      required: true
+    },
+    {
+      name: "conversionSensitivity",
+      label: "Conversion sensitivity",
+      description: "Describe how pricing changes are expected to affect conversion inside this bounded review.",
+      required: true
+    },
+    {
+      name: "buyerValueProof",
+      label: "Buyer-value proof",
+      description: "Record the tenant-safe proof that buyers still value this offer above the lower anchor.",
+      required: true
+    }
+  ];
+}
+
+function isConnectFirstPricingUnblockAttention(input: {
+  run: HarnessRunRecord;
+  action: HarnessPostOutcomeAction;
+  targetCard: HarnessCardRecord | null;
+}): boolean {
+  return input.action.kind === "await_unblock"
+    && input.run.workflowId === "wf_connect_first_workflow"
+    && normalizeHarnessPersona(input.targetCard?.persona ?? "") === "cfo"
+    && normalizeHarnessDeliverableType(input.targetCard?.deliverableType ?? "") === "pricing_review";
+}
+
+function normalizePricingLaneUnblockEvidenceInput(
+  input: HarnessPricingLaneUnblockEvidenceInput
+): HarnessPricingLaneUnblockEvidenceInput | null {
+  const deliveryCost = input.deliveryCost.trim();
+  const salesCost = input.salesCost.trim();
+  const discountPolicy = input.discountPolicy.trim();
+  const conversionSensitivity = input.conversionSensitivity.trim();
+  const buyerValueProof = input.buyerValueProof.trim();
+  if (!deliveryCost || !salesCost || !discountPolicy || !conversionSensitivity || !buyerValueProof) {
+    return null;
+  }
+
+  return {
+    deliveryCost,
+    salesCost,
+    discountPolicy,
+    conversionSensitivity,
+    buyerValueProof
+  };
+}
+
+function createPricingLaneUnblockResumeSummary(input: HarnessPricingLaneUnblockEvidenceInput): string {
+  return [
+    `Delivery cost: ${input.deliveryCost}.`,
+    `Sales cost: ${input.salesCost}.`,
+    `Discount policy: ${input.discountPolicy}.`,
+    `Conversion sensitivity: ${input.conversionSensitivity}.`,
+    `Buyer-value proof: ${input.buyerValueProof}.`
+  ].join(" ");
 }
 
 function isFounderTaxPosturePrerequisiteAttention(input: {

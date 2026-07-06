@@ -121,6 +121,31 @@ describe("Codex readiness proof gate", () => {
     });
   });
 
+  it("accepts the legacy and canonical first-subscriber auth-state aliases as the same seam", () => {
+    const dir = mkdtempSync(join(tmpdir(), "wf-codex-alias-"));
+    const apiProof = writeProof(dir, "api.json", {
+      ...greenProof("wf-stage-api"),
+      authStateRef: "codex-home:first-subscriber"
+    });
+    const workerProof = writeProof(dir, "worker.json", {
+      ...greenProof("wf-stage-worker"),
+      authStateRef: "first-subscriber-openai-device"
+    });
+
+    expect(
+      validateCodexReadinessProofGate({
+        apiCodexHomeReadinessProofPath: apiProof,
+        workerCodexHomeReadinessProofPath: workerProof,
+        expectedTenantId: "tenant-1",
+        expectedWorkflowId: "wf_connect_first_workflow",
+        expectedAuthStateRef: "first-subscriber-openai-device"
+      })
+    ).toMatchObject({
+      ok: true,
+      phase: "codex_readiness_gate_verified"
+    });
+  });
+
   it("fails closed when auth-state references or CODEX_HOME fingerprints are missing or mismatched", () => {
     const dir = mkdtempSync(join(tmpdir(), "wf-codex-identity-"));
     const apiProof = writeProof(dir, "api.json", greenProof("wf-stage-api"));

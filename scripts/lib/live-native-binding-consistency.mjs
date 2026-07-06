@@ -1,10 +1,11 @@
 export function validateExpectedAuthStateRefOnRunBinding(input) {
-  const expectedAuthStateRef = normalizeValue(input.expectedAuthStateRef);
+  const expectedAuthStateRef = normalizeAuthStateRef(input.expectedAuthStateRef);
   const workflowId = normalizeValue(input.workflowId);
   const snapshot = input.durableSnapshot;
   const providerContext = Array.isArray(snapshot?.run?.providerContext) ? snapshot.run.providerContext : [];
   const firstBinding = providerContext[0];
-  const observedAuthStateRef = normalizeValue(firstBinding?.metadata?.authStateRef);
+  const observedAuthStateRef = normalizeAuthStateRef(firstBinding?.metadata?.authStateRef);
+  const rawObservedAuthStateRef = normalizeValue(firstBinding?.metadata?.authStateRef);
 
   if (!expectedAuthStateRef) {
     return {
@@ -47,7 +48,7 @@ export function validateExpectedAuthStateRefOnRunBinding(input) {
       ok: false,
       phase: "binding_auth_state_ref_mismatch",
       notes: [
-        `The live bound provider context for ${workflowId} carried authStateRef ${observedAuthStateRef}, expected ${expectedAuthStateRef}.`
+        `The live bound provider context for ${workflowId} carried authStateRef ${rawObservedAuthStateRef}, expected ${input.expectedAuthStateRef}.`
       ]
     };
   }
@@ -56,11 +57,20 @@ export function validateExpectedAuthStateRefOnRunBinding(input) {
     ok: true,
     phase: "binding_auth_state_ref_verified",
     notes: [
-      `The live bound provider context for ${workflowId} matched authStateRef ${expectedAuthStateRef}.`
+      `The live bound provider context for ${workflowId} matched authStateRef ${input.expectedAuthStateRef}.`
     ]
   };
 }
 
 function normalizeValue(value) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function normalizeAuthStateRef(value) {
+  const normalized = normalizeValue(value);
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized === "codex-home:first-subscriber" ? "first-subscriber-openai-device" : normalized;
 }

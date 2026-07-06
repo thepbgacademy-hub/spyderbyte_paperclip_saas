@@ -241,6 +241,61 @@ describe("harness persistence records", () => {
     }));
   });
 
+  it("prefers the latest actionable in-memory run over newer terminal history", async () => {
+    const repository = createInMemoryHarnessRepository();
+    const tenantId = "tenant-123";
+    const actionableRun = {
+      ...createHarnessRunRecord({
+        tenantId,
+        workflowId: "wf_connect_first_workflow",
+        packageId: "pkg_bib_connect",
+        orchestratorPersona: "ceo",
+        runtimeContext: {
+          providerKind: "openai_api",
+          credentialLabel: "Primary OpenAI"
+        }
+      }),
+      state: "planning" as const,
+      createdAt: "2026-07-01T11:00:00.000Z",
+      updatedAt: "2026-07-01T11:00:00.000Z"
+    };
+    const newerTerminalRun = {
+      ...createHarnessRunRecord({
+        tenantId,
+        workflowId: "wf_connect_first_workflow",
+        packageId: "pkg_bib_connect",
+        orchestratorPersona: "ceo",
+        runtimeContext: {
+          providerKind: "openai_api",
+          credentialLabel: "Primary OpenAI",
+          previousRunId: actionableRun.id
+        }
+      }),
+      state: "done" as const,
+      createdAt: "2026-07-01T12:00:00.000Z",
+      updatedAt: "2026-07-01T12:00:00.000Z"
+    };
+
+    await repository.insertRun(actionableRun);
+    await repository.insertRun(newerTerminalRun);
+
+    await expect(repository.findLatestRunForTenantWorkflow({
+      tenantId,
+      workflowId: "wf_connect_first_workflow"
+    })).resolves.toEqual(expect.objectContaining({
+      id: newerTerminalRun.id,
+      state: "done"
+    }));
+
+    await expect(repository.findLatestActionableRunForTenantWorkflow({
+      tenantId,
+      workflowId: "wf_connect_first_workflow"
+    })).resolves.toEqual(expect.objectContaining({
+      id: actionableRun.id,
+      state: "planning"
+    }));
+  });
+
   it("persists result approval states per tenant and run in the in-memory repository", async () => {
     const repository = createInMemoryHarnessRepository();
     const firstRun = createHarnessRunRecord({
@@ -1288,6 +1343,14 @@ describeIfDocker("harness persistence real Postgres transaction proof", () => {
           runtimeContext: expect.objectContaining({
             previousRunId: firstRun.id
           })
+        }));
+
+        await expect(repository.findLatestActionableRunForTenantWorkflow({
+          tenantId,
+          workflowId: "wf_connect_first_workflow"
+        })).resolves.toEqual(expect.objectContaining({
+          id: secondRun.id,
+          state: "planning"
         }));
 
         const duplicateSuccessor = {
