@@ -2,6 +2,21 @@
 
 This file tracks implementation progress. Keep it current after every phase.
 
+## Active Reboot Track
+
+- [x] Create reboot branch `codex/wealth-factory-blueprint`.
+- [x] Rebuild GitNexus on the reboot branch for a clean seam/blast-radius baseline.
+- [x] Add reboot plan doc that makes the blueprint the new source of truth.
+- [x] Phase B1: Define the blueprint-native factory domain skeleton and phase boundaries.
+- [ ] Phase B2: Stand up the new implementation foundation for workspace/package/run/station/deliverable primitives.
+- [ ] Phase B3: Select and implement the first bounded blueprint-native vertical slice end to end.
+
+## Reboot Notes
+
+- The historical Paperclip-backed and harness-native work remains in this repository as reference material.
+- New customer-facing build work should now follow `docs/wealth-factory-reboot-plan-2026-07-06.md`.
+- Older completed phases below are historical record, not the active plan of record for the reboot branch.
+
 ## Completed
 
 - [x] Phase 0: Repository and local skeleton.
