@@ -104,6 +104,22 @@ describe("live native execution proof script", () => {
     expect(script).not.toContain("decision: \"start_next_lane\"");
   });
 
+  it("resets canonical bootstrap continuity when rearming an existing proof lane", () => {
+    const script = readFileSync("scripts/prove-live-native-execution.mjs", "utf8");
+
+    expect(script).toContain("const bootstrap = repairBootstrap[workflowId];");
+    expect(script).toContain("No proof repair bootstrap is registered for");
+    expect(script).toContain("await repository.upsertCardContinuity(");
+    expect(script).toContain("cardId: existingLaneId,");
+    expect(script).toContain("runId: existingRunId,");
+    expect(script).toContain("continuitySummary: bootstrap.continuitySummary,");
+    expect(script).toContain("latestResultSummary: null,");
+    expect(script).toContain("absorbedWorkItems: []");
+    expect(script.lastIndexOf("await repository.upsertCardContinuity(")).toBeGreaterThan(
+      script.indexOf("const rearmedLane = await repository.updateCardState({ cardId: existingLaneId, state: 'approved' });")
+    );
+  });
+
   it("requires green API and worker Codex auth-home readiness artifacts before remote Codex-subscription proof work", () => {
     const script = readFileSync("scripts/prove-live-native-execution.mjs", "utf8");
 
