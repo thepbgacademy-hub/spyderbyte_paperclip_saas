@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wealth Factory Phase B8 Summary</title>
+    <style>
+      :root {
+        --bg: #07131a;
+        --panel: #0d1f2b;
+        --card: #132b3a;
+        --ink: #f3f6f8;
+        --muted: #9fb6c3;
+        --accent: #7fd0ff;
+        --success: #7ee0a1;
+        --border: #244354;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        background: linear-gradient(180deg, #061018 0%, #0a1720 100%);
+        color: var(--ink);
+      }
+
+      main {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 32px 20px 48px;
+      }
+
+      h1, h2, h3, p { margin: 0; }
+
+      .hero, .section, .card {
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 22px;
+      }
+
+      .hero {
+        padding: 28px;
+        background: linear-gradient(135deg, #12324a 0%, #0d1f2b 72%);
+      }
+
+      .eyebrow {
+        color: var(--accent);
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .hero h1 {
+        margin-top: 10px;
+        font-size: 42px;
+        line-height: 1.05;
+      }
+
+      .hero p {
+        margin-top: 14px;
+        max-width: 780px;
+        color: var(--muted);
+        line-height: 1.6;
+        font-size: 17px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        margin-top: 22px;
+      }
+
+      .card {
+        padding: 18px;
+        background: var(--card);
+      }
+
+      .card h3 {
+        font-size: 15px;
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      .metric {
+        margin-top: 10px;
+        font-size: 31px;
+        font-weight: 800;
+      }
+
+      .section {
+        margin-top: 22px;
+        padding: 24px;
+      }
+
+      .section h2 {
+        font-size: 24px;
+      }
+
+      .section p.lead {
+        margin-top: 10px;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      ul {
+        margin: 16px 0 0;
+        padding-left: 18px;
+      }
+
+      li {
+        margin-top: 10px;
+        line-height: 1.6;
+      }
+
+      .pill {
+        display: inline-block;
+        margin-top: 14px;
+        padding: 7px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(126, 224, 161, 0.34);
+        color: var(--success);
+        background: rgba(126, 224, 161, 0.08);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .files a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+
+      .files a:hover {
+        text-decoration: underline;
+      }
+
+      code {
+        font-family: Consolas, "SFMono-Regular", monospace;
+        color: #d4f1ff;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <div class="eyebrow">Wealth Factory Reboot</div>
+        <h1>Phase B8 Completed</h1>
+        <p>
+          The first bounded revised-positioning approval loop now closes cleanly: the fresh
+          <code>revision_1</code> approval can resolve to a completed run, the active approval seam is pinned to the
+          live deliverable/approval pair, forged wider revisions are rejected, and terminally completed runs cannot
+          restart the positioning station.
+        </p>
+        <div class="grid">
+          <article class="card">
+            <h3>Focused tests</h3>
+            <div class="metric">40/40</div>
+          </article>
+          <article class="card">
+            <h3>Build</h3>
+            <div class="metric">Green</div>
+          </article>
+          <article class="card">
+            <h3>GitNexus</h3>
+            <div class="metric">Low risk</div>
+          </article>
+          <article class="card">
+            <h3>B8 stance</h3>
+            <div class="metric">Terminal</div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>What Changed</h2>
+        <p class="lead">
+          This phase stayed inside one bounded approval-closure seam and did not widen into downstream continuation,
+          persistence, or new station families.
+        </p>
+        <ul>
+          <li>Named and documented Phase B8 in the reboot docs and TODO before implementation.</li>
+          <li>Added the revised-approval happy-path proof that closes <code>revision_1</code> to terminal completion.</li>
+          <li>Added regression coverage for fabricated original approval pairs against a revised run.</li>
+          <li>Added regression coverage for forged wider revision pairs and restart attempts after terminal completion.</li>
+          <li>Extended the run state with explicit active approval/deliverable tracking while waiting for approval.</li>
+          <li>Extended the run state with explicit bounded approval-family provenance for <code>original</code> versus <code>revision_1</code>.</li>
+          <li>Extended the run state with bounded completion-station tracking so B8-completed runs cannot re-enter positioning.</li>
+          <li>Bounded the approval-completion seam so only the original approval family or the first revised approval family can complete the run.</li>
+        </ul>
+        <div class="pill">No downstream continuation added</div>
+      </section>
+
+      <section class="section">
+        <h2>Verification</h2>
+        <ul>
+          <li><code>npx vitest run tests/factory-domain-types.test.ts tests/factory-package-registry.test.ts tests/factory-intake-run-service.test.ts tests/factory-positioning-station-service.test.ts tests/factory-approval-service.test.ts tests/runtime-native-execution.test.ts</code></li>
+          <li><code>npm run build</code></li>
+          <li><code>gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all</code></li>
+        </ul>
+      </section>
+
+      <section class="section">
+        <h2>Subagents Used</h2>
+        <ul>
+          <li>Explorer <strong>Plato</strong>: defined the exact B8 boundary and out-of-scope list from reboot docs.</li>
+          <li>Worker <strong>Hume</strong>: identified the smallest B8 proof surface and likely write set.</li>
+          <li>Reviewer <strong>Chandrasekhar</strong>: found the first active-approval seam escape hatch.</li>
+          <li>Reviewer <strong>Laplace</strong>: found the terminal restart and forged wider revision edge cases, then re-reviewed the bounded fix set.</li>
+        </ul>
+      </section>
+
+      <section class="section files">
+        <h2>Updated Files</h2>
+        <ul>
+          <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/src/factory/runs/intake-run-service.ts">src/factory/runs/intake-run-service.ts</a></li>
+          <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/src/factory/runs/positioning-station-service.ts">src/factory/runs/positioning-station-service.ts</a></li>
+          <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/tests/factory-positioning-station-service.test.ts">tests/factory-positioning-station-service.test.ts</a></li>
+          <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/TODO.md">TODO.md</a></li>
+          <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/docs/wealth-factory-domain-skeleton-2026-07-06.md">docs/wealth-factory-domain-skeleton-2026-07-06.md</a></li>
+          <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/docs/superpowers/plans/2026-07-06-wealth-factory-blueprint-reboot.md">docs/superpowers/plans/2026-07-06-wealth-factory-blueprint-reboot.md</a></li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

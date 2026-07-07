@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wealth Factory Phase B7 Summary</title>
+    <style>
+      :root {
+        --bg: #07131a;
+        --panel: #0d1f2b;
+        --card: #132b3a;
+        --ink: #f3f6f8;
+        --muted: #9fb6c3;
+        --accent: #7fd0ff;
+        --success: #7ee0a1;
+        --border: #244354;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        background: linear-gradient(180deg, #061018 0%, #0a1720 100%);
+        color: var(--ink);
+      }
+
+      main {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 32px 20px 48px;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      .hero,
+      .section,
+      .card {
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 22px;
+      }
+
+      .hero {
+        padding: 28px;
+        background: linear-gradient(135deg, #12324a 0%, #0d1f2b 72%);
+      }
+
+      .eyebrow {
+        color: var(--accent);
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .hero h1 {
+        margin-top: 10px;
+        font-size: 42px;
+        line-height: 1.05;
+      }
+
+      .hero p {
+        margin-top: 14px;
+        max-width: 760px;
+        color: var(--muted);
+        line-height: 1.6;
+        font-size: 17px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        margin-top: 22px;
+      }
+
+      .card {
+        padding: 18px;
+        background: var(--card);
+      }
+
+      .card h3 {
+        font-size: 15px;
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      .metric {
+        margin-top: 10px;
+        font-size: 31px;
+        font-weight: 800;
+      }
+
+      .section {
+        margin-top: 22px;
+        padding: 24px;
+      }
+
+      .section h2 {
+        font-size: 24px;
+      }
+
+      .section p.lead {
+        margin-top: 10px;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      ul {
+        margin: 16px 0 0;
+        padding-left: 18px;
+      }
+
+      li {
+        margin-top: 10px;
+        line-height: 1.6;
+      }
+
+      .pill {
+        display: inline-block;
+        margin-top: 14px;
+        padding: 7px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(126, 224, 161, 0.34);
+        color: var(--success);
+        background: rgba(126, 224, 161, 0.08);
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .files a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+
+      .files a:hover {
+        text-decoration: underline;
+      }
+
+      code {
+        font-family: Consolas, "SFMono-Regular", monospace;
+        color: #d4f1ff;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <div class="eyebrow">Wealth Factory Reboot</div>
+        <h1>Phase B7 Completed</h1>
+        <p>
+          The first bounded same-family revision loop is now fail-closed and documented: a
+          <code>changes_requested</code> positioning review must pause for bounded revision input, produce a
+          revised positioning brief, and create a fresh approval request without widening into downstream continuation
+          or generic revision machinery.
+        </p>
+        <div class="grid">
+          <article class="card">
+            <h3>Focused tests</h3>
+            <div class="metric">34/34</div>
+          </article>
+          <article class="card">
+            <h3>Build</h3>
+            <div class="metric">Green</div>
+          </article>
+          <article class="card">
+            <h3>GitNexus</h3>
+            <div class="metric">Low risk</div>
+          </article>
+          <article class="card">
+            <h3>Reviewer status</h3>
+            <div class="metric">Clear</div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>What Changed</h2>
+        <p class="lead">
+          This phase stayed inside one positioning-family loop and tightened the revision seam rather than widening the
+          engine.
+        </p>
+        <ul>
+          <li>Aligned blueprint/package identity handling on the native <code>packageId</code> seam.</li>
+          <li>Added fail-closed approval guards for malformed pending approval shapes.</li>
+          <li>Changed the <code>changes_requested</code> path to pause in <code>waiting_for_input</code> so the old completion path cannot be reused.</li>
+          <li>Pinned the revision seam to the original first-loop positioning brief and original first-loop approval only.</li>
+          <li>Rejected blank change summaries and blocked any direct or indirect second revision generation.</li>
+          <li>Tightened the TODO wording so B7 explicitly forbids downstream station continuation.</li>
+        </ul>
+        <div class="pill">Bounded B7 contract preserved</div>
+      </section>
+
+      <section class="section">
+        <h2>Verification</h2>
+        <ul>
+          <li><code>npx vitest run tests/factory-domain-types.test.ts tests/factory-package-registry.test.ts tests/factory-intake-run-service.test.ts tests/factory-positioning-station-service.test.ts tests/factory-approval-service.test.ts tests/runtime-native-execution.test.ts</code></li>
+          <li><code>npm run build</code></li>
+          <li><code>gitnexus detect-changes --repo spyderbyte_paperclip_saas --scope all</code></li>
+        </ul>
+      </section>
+
+      <section class="section">
+        <h2>Subagents Used</h2>
+        <ul>
+          <li>Explorer <strong>Maxwell</strong>: checked B7 doc/source-of-truth boundary.</li>
+          <li>Worker <strong>Arendt</strong>: checked for missing B7 guardrail tests.</li>
+          <li>Reviewer <strong>Planck</strong>: reviewed drift, bypasses, malformed-shape risks, and over-widening after implementation.</li>
+        </ul>
+      </section>
+
+      <section class="section files">
+        <h2>Updated Files</h2>
+        <ul>
+          <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/src/factory/packages/package-install-service.ts">src/factory/packages/package-install-service.ts</a></li>
+          <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/src/factory/runs/intake-run-service.ts">src/factory/runs/intake-run-service.ts</a></li>
+          <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/src/factory/runs/positioning-station-service.ts">src/factory/runs/positioning-station-service.ts</a></li>
+          <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/tests/factory-approval-service.test.ts">tests/factory-approval-service.test.ts</a></li>
+          <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/tests/factory-positioning-station-service.test.ts">tests/factory-positioning-station-service.test.ts</a></li>
+          <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/TODO.md">TODO.md</a></li>
+          <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/docs/wealth-factory-domain-skeleton-2026-07-06.md">docs/wealth-factory-domain-skeleton-2026-07-06.md</a></li>
+          <li><a href="file:///E:/REPOS/spyderbyte_paperclip_saas/docs/superpowers/plans/2026-07-06-wealth-factory-blueprint-reboot.md">docs/superpowers/plans/2026-07-06-wealth-factory-blueprint-reboot.md</a></li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

@@ -8,8 +8,14 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Rebuild GitNexus on the reboot branch for a clean seam/blast-radius baseline.
 - [x] Add reboot plan doc that makes the blueprint the new source of truth.
 - [x] Phase B1: Define the blueprint-native factory domain skeleton and phase boundaries.
-- [ ] Phase B2: Stand up the new implementation foundation for workspace/package/run/station/deliverable primitives.
-- [ ] Phase B3: Select and implement the first bounded blueprint-native vertical slice end to end.
+- [x] Phase B2: Stand up the initial blueprint-native package/run/station foundation primitives.
+- [x] Phase B3: Select and implement the first bounded blueprint-native vertical slice end to end.
+- [x] Phase B4: Widen the reboot slice into the first post-intake analysis station family without inheriting the historical harness/runtime backlog.
+- [x] Phase B5: Add the first bounded approval entity and resolution seam for the positioning brief without widening into persistence, assembly, or generic checkpoint frameworks.
+- [x] Phase B6: Add the first bounded changes-requested approval outcome for the positioning brief without widening into generic rework orchestration or a new workflow family.
+- [x] Phase B7: Add the first bounded same-family revision loop for the positioning brief so changes requested can produce a revised brief and a fresh approval request without widening into persistence, generic workflow orchestration, or downstream station continuation.
+- [x] Phase B8: Close the first bounded revised-positioning approval loop so the fresh approval request on `revision_1` can resolve to a completed run without widening into downstream continuation or additional revision generations.
+- [ ] Later reboot phase: Define the specialist-function architecture so business-guidance expertise is preserved without requiring the legacy CEO/CFO/CMO persona shell.
 
 ## Reboot Notes
 

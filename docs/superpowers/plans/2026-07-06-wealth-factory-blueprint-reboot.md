@@ -8,6 +8,8 @@
 
 **Tech Stack:** TypeScript, Vitest, existing repo workspace, GitNexus preflight, Markdown planning docs.
 
+> **Implementation note:** The Task 3 and Task 4 code snippets below are intentionally minimal seed examples. The shipped reboot slice is allowed to be stricter than these examples as long as it stays inside the B1/B2/B3 boundaries from the domain skeleton doc.
+
 ---
 
 ### Task 1: Lock the reboot source of truth
@@ -314,12 +316,12 @@ describe("startIntakeRun", () => {
   it("creates a run positioned at the intake station", () => {
     const run = startIntakeRun({
       workspaceId: "ws_123",
-      packageKey: "connect-first",
+      packageId: "connect-first",
     });
 
     expect(run.status).toBe("waiting_for_input");
     expect(run.currentStationKey).toBe("intake");
-    expect(run.packageKey).toBe("connect-first");
+    expect(run.packageId).toBe("connect-first");
   });
 });
 ```
@@ -339,19 +341,19 @@ import type { RunStatus } from "../domain/types";
 export interface IntakeRun {
   id: string;
   workspaceId: string;
-  packageKey: string;
+  packageId: string;
   currentStationKey: string;
   status: RunStatus;
 }
 
 export function startIntakeRun(input: {
   workspaceId: string;
-  packageKey: string;
+  packageId: string;
 }): IntakeRun {
   return {
     id: "run_intake_seed",
     workspaceId: input.workspaceId,
-    packageKey: input.packageKey,
+    packageId: input.packageId,
     currentStationKey: "intake",
     status: "waiting_for_input",
   };
@@ -384,6 +386,132 @@ git commit -m "feat: seed intake run slice"
 - Spec coverage: this plan covers the reboot anchor, domain skeleton, implementation foundation, and first bounded intake slice.
 - Placeholder scan: no `TBD`, `TODO`, or vague implementation notes are left in the task steps.
 - Type consistency: `PackageKind`, `RunStatus`, `StationKind`, `BlueprintPackageDefinition`, and `startIntakeRun` are named consistently across the planned files and tests.
+
+## B3 Addendum
+
+The implemented B3 slice is intentionally stricter than the initial seed examples:
+
+- `PackageInstall` uses `packageId` to match the domain skeleton source of truth.
+- `PackageKind` is carried in the shared domain types so future `expansion` work does not require a retrofit.
+- The shipped intake slice proves `workspace -> installed blueprint -> production run -> intake station -> founder profile deliverable`, not just a stubbed `startIntakeRun(...)`.
+
+## B4 Addendum
+
+The next bounded widening after B3 is:
+
+- `completed intake run -> positioning analysis station -> positioning brief deliverable -> waiting_for_approval`
+
+This phase remains intentionally out of scope for:
+
+- approval entity persistence
+- checkpoint resolution commands
+- assembly-family work
+- historical harness/runtime board inheritance
+
+## B5 Addendum
+
+The next bounded widening after B4 is:
+
+- `positioning brief deliverable -> approval request -> approval resolution -> completed run`
+
+This phase remains intentionally out of scope for:
+
+- database persistence or repository wiring for approvals
+- generic checkpoint orchestration
+- changes-requested or resume/rework routing
+- any post-approval next-station continuation
+- assembly-family work
+- historical harness/runtime or board-action integration
+
+## B6 Addendum
+
+The next bounded widening after B5 is:
+
+- `positioning approval -> changes requested -> bounded re-entry to positioning`
+
+This phase remains intentionally out of scope for:
+
+- generic rework workflow engines
+- persistence or repository wiring for rework history
+- introducing a new downstream station family
+- assembly-family continuation
+- historical harness/runtime or board-action integration
+
+## B7 Addendum
+
+The next bounded widening after B6 is:
+
+- `changes requested -> revised positioning brief -> fresh approval request`
+
+This phase remains intentionally out of scope for:
+
+- persistence or repository wiring for revision history
+- generic revision or rework workflow engines
+- multiple revision generations beyond the first bounded loop
+- downstream station continuation after re-approval
+- assembly-family continuation
+- historical harness/runtime or board-action integration
+
+## B8 Addendum
+
+The next bounded widening after B7 is:
+
+- `revised positioning brief -> fresh approval request -> approval resolution -> completed run`
+
+This phase remains intentionally out of scope for:
+
+- additional revision generations after `revision_1`
+- downstream station continuation after revised approval
+- generic checkpoint or revision orchestration
+- persistence or repository wiring for approval history
+- assembly-family continuation
+- historical harness/runtime or board-action integration
+
+## Forward Modeling Note
+
+The current B1-B7 reboot lane intentionally keeps package identity minimal so the domain can be proven without introducing persistence or publishing infrastructure. That simplification must not become permanent.
+
+Before any later phase adds package persistence, publishing, install history, or update flows, the model should separate:
+
+- stable package identity
+- immutable published package-version identity
+
+Expected consequence:
+
+- runs should pin a specific package-version seam at start time
+- installs should record both package identity and installed version identity
+- the current proof-slice shortcut where package identity is minimally modeled should be retired before those later phases widen the model
+
+## Specialist-Function Addendum
+
+The reboot preserves the business-guidance expertise from the older CEO/CFO/CMO-style system, but the active source of truth is now function over title.
+
+That means:
+
+- keep the expertise
+- allow naming to change
+- bind the expertise to station ownership, deliverables, approvals, and handoffs
+
+Recommended function set for a later dedicated phase:
+
+- direction
+- finance
+- market
+- operations
+- offer
+
+This specialist-function architecture is intentionally not part of B1-B5 engine proof work except where a bounded slice needs a temporary `personaKey` binding.
+
+Recommended future specialist-to-station map:
+
+- direction -> intake, founder profile synthesis, strategic priorities, decision checkpoints
+- finance -> pricing, margin, cost structure, revenue sensitivity, financial approvals
+- market -> positioning, messaging, audience clarity, go-to-market framing
+- operations -> delivery design, SOPs, implementation readiness, handoff packaging
+- offer -> offer shaping, package design, objection handling, conversion review
+
+Design rule:
+each station family should have one primary specialist-function owner, with additional expertise entering only through bounded handoffs or approvals.
 
 ## Execution Handoff
 
