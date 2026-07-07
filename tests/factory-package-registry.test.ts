@@ -8,18 +8,33 @@ describe("factory package registry", () => {
     const pkg = createBlueprintPackage({
       key: "connect-first",
       title: "Connect First Operating System",
-      stations: [{ key: "intake", kind: "structured_interview", title: "Intake Station" }]
+      stations: [
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        }
+      ]
     });
 
     expect(pkg.kind).toBe("blueprint");
     expect(pkg.stations[0]?.key).toBe("intake");
+    expect(pkg.stations[0]?.familyKey).toBe("intake");
   });
 
   it("keeps blueprint-native packages inside the shared package kind union", () => {
     const pkg = createBlueprintPackage({
       key: "connect-first",
       title: "Connect First Operating System",
-      stations: [{ key: "intake", kind: "structured_interview", title: "Intake Station" }]
+      stations: [
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        }
+      ]
     });
 
     const kind: PackageKind = pkg.kind;
@@ -37,14 +52,26 @@ describe("factory package registry", () => {
       createBlueprintPackage({
         key: "broken",
         title: "Broken Package",
-        stations: [{ key: "legacy", kind: "legacy_board_unblock" as never, title: "Legacy Board Action" }]
+        stations: [
+          {
+            key: "legacy",
+            familyKey: "intake",
+            kind: "legacy_board_unblock" as never,
+            title: "Legacy Board Action"
+          }
+        ]
       })
     ).toThrow('Unsupported station kind "legacy_board_unblock" for blueprint package "broken"');
   });
 
   it("returns a defensive copy of the declared station definitions", () => {
     const stations: StationDefinition[] = [
-      { key: "intake", kind: "structured_interview", title: "Intake Station" }
+      {
+        key: "intake",
+        familyKey: "intake",
+        kind: "structured_interview",
+        title: "Intake Station"
+      }
     ];
     const pkg = createBlueprintPackage({
       key: "connect-first",
@@ -52,9 +79,21 @@ describe("factory package registry", () => {
       stations
     });
 
-    stations[0] = { key: "mutated", kind: "analysis" as const, title: "Mutated Station" };
+    stations[0] = {
+      key: "mutated",
+      familyKey: "positioning",
+      kind: "analysis" as const,
+      title: "Mutated Station"
+    };
 
-    expect(pkg.stations).toEqual([{ key: "intake", kind: "structured_interview", title: "Intake Station" }]);
+    expect(pkg.stations).toEqual([
+      {
+        key: "intake",
+        familyKey: "intake",
+        kind: "structured_interview",
+        title: "Intake Station"
+      }
+    ]);
     expect(pkg.stations).not.toBe(stations);
   });
 
@@ -64,10 +103,37 @@ describe("factory package registry", () => {
         key: "duplicate-intake",
         title: "Duplicate Intake Package",
         stations: [
-          { key: "intake", kind: "structured_interview", title: "First Intake Station" },
-          { key: "intake", kind: "analysis", title: "Second Intake Station" }
+          {
+            key: "intake",
+            familyKey: "intake",
+            kind: "structured_interview",
+            title: "First Intake Station"
+          },
+          {
+            key: "intake",
+            familyKey: "positioning",
+            kind: "analysis",
+            title: "Second Intake Station"
+          }
         ]
       })
     ).toThrow('Duplicate station key "intake" is not allowed for blueprint package "duplicate-intake"');
+  });
+
+  it("keeps the station family binding needed to derive specialist ownership later", () => {
+    const pkg = createBlueprintPackage({
+      key: "connect-first",
+      title: "Connect First Operating System",
+      stations: [
+        {
+          key: "positioning",
+          familyKey: "positioning",
+          kind: "analysis",
+          title: "Positioning Station"
+        }
+      ]
+    });
+
+    expect(pkg.stations[0]?.familyKey).toBe("positioning");
   });
 });

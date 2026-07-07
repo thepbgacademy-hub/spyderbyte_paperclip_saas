@@ -4,7 +4,8 @@ import { DEFAULT_RUN_STATUS_ORDER, isTerminalRunStatus } from "../src/factory/do
 import type {
   Approval,
   FounderProfileDeliverable,
-  PositioningBriefDeliverable
+  PositioningBriefDeliverable,
+  StationDefinition
 } from "../src/factory/domain/types.js";
 
 describe("factory run status domain", () => {
@@ -87,5 +88,24 @@ describe("factory run status domain", () => {
     expect(approval.stationKey).toBe("positioning");
     expect(approval.status).toBe("pending");
     expect(approval.resolvedAt).toBeNull();
+  });
+
+  it("supports specialist-bound station definitions instead of a legacy persona shell", () => {
+    const intakeStation: StationDefinition = {
+      key: "intake",
+      familyKey: "intake",
+      kind: "structured_interview",
+      title: "Intake Station"
+    };
+
+    const positioningStation: StationDefinition = {
+      key: "positioning",
+      familyKey: "positioning",
+      kind: "analysis",
+      title: "Positioning Station"
+    };
+
+    expect(intakeStation.familyKey).toBe("intake");
+    expect(positioningStation.familyKey).toBe("positioning");
   });
 });

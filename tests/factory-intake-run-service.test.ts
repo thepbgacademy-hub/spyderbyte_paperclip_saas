@@ -16,7 +16,14 @@ describe("factory intake run service", () => {
     const blueprint = createBlueprintPackage({
       key: "connect-first",
       title: "Connect First Operating System",
-      stations: [{ key: "intake", kind: "structured_interview", title: "Intake Station" }]
+      stations: [
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        }
+      ]
     });
     const packageInstall = installBlueprintPackage({
       id: "install_123",
@@ -84,7 +91,14 @@ describe("factory intake run service", () => {
     const blueprint = createBlueprintPackage({
       key: "connect-first",
       title: "Connect First Operating System",
-      stations: [{ key: "intake", kind: "structured_interview", title: "Intake Station" }]
+      stations: [
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        }
+      ]
     });
     const packageInstall = installBlueprintPackage({
       id: "install_999",
@@ -114,7 +128,14 @@ describe("factory intake run service", () => {
     const blueprint = createBlueprintPackage({
       key: "connect-first",
       title: "Connect First Operating System",
-      stations: [{ key: "offer", kind: "analysis", title: "Offer Station" }]
+      stations: [
+        {
+          key: "offer",
+          familyKey: "offer_shaping",
+          kind: "analysis",
+          title: "Offer Station"
+        }
+      ]
     });
     const packageInstall = installBlueprintPackage({
       id: "install_123",
@@ -144,12 +165,26 @@ describe("factory intake run service", () => {
     const installedBlueprint = createBlueprintPackage({
       key: "connect-first",
       title: "Connect First Operating System",
-      stations: [{ key: "intake", kind: "structured_interview", title: "Intake Station" }]
+      stations: [
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        }
+      ]
     });
     const requestedBlueprint = createBlueprintPackage({
       key: "pricing-review",
       title: "Pricing Review System",
-      stations: [{ key: "intake", kind: "structured_interview", title: "Pricing Intake Station" }]
+      stations: [
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Pricing Intake Station"
+        }
+      ]
     });
     const packageInstall = installBlueprintPackage({
       id: "install_123",
@@ -181,7 +216,14 @@ describe("factory intake run service", () => {
     const blueprint = createBlueprintPackage({
       key: "connect-first",
       title: "Connect First Operating System",
-      stations: [{ key: "intake", kind: "structured_interview", title: "Intake Station" }]
+      stations: [
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        }
+      ]
     });
     const packageInstall = installBlueprintPackage({
       id: "install_123",
@@ -220,3 +262,4 @@ describe("factory intake run service", () => {
     ).toThrow('Run "run_123" is bound to install "install_123", not "install_456"');
   });
 });
+

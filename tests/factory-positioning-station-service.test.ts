@@ -24,8 +24,18 @@ describe("factory positioning station service", () => {
       key: "connect-first",
       title: "Connect First Operating System",
       stations: [
-        { key: "intake", kind: "structured_interview", title: "Intake Station" },
-        { key: "positioning", kind: "analysis", title: "Positioning Station" }
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        },
+        {
+          key: "positioning",
+          familyKey: "positioning",
+          kind: "analysis",
+          title: "Positioning Station"
+        }
       ]
     });
     const packageInstall = installBlueprintPackage({
@@ -119,7 +129,14 @@ describe("factory positioning station service", () => {
     const blueprint = createBlueprintPackage({
       key: "connect-first",
       title: "Connect First Operating System",
-      stations: [{ key: "intake", kind: "structured_interview", title: "Intake Station" }]
+      stations: [
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        }
+      ]
     });
     const packageInstall = installBlueprintPackage({
       id: "install_123",
@@ -169,8 +186,18 @@ describe("factory positioning station service", () => {
       key: "connect-first",
       title: "Connect First Operating System",
       stations: [
-        { key: "intake", kind: "structured_interview", title: "Intake Station" },
-        { key: "positioning", kind: "analysis", title: "Positioning Station" }
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        },
+        {
+          key: "positioning",
+          familyKey: "positioning",
+          kind: "analysis",
+          title: "Positioning Station"
+        }
       ]
     });
     const packageInstall = installBlueprintPackage({
@@ -208,8 +235,18 @@ describe("factory positioning station service", () => {
       key: "connect-first",
       title: "Connect First Operating System",
       stations: [
-        { key: "intake", kind: "structured_interview", title: "Intake Station" },
-        { key: "positioning", kind: "analysis", title: "Positioning Station" }
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        },
+        {
+          key: "positioning",
+          familyKey: "positioning",
+          kind: "analysis",
+          title: "Positioning Station"
+        }
       ]
     });
     const packageInstall = installBlueprintPackage({
@@ -273,8 +310,18 @@ describe("factory positioning station service", () => {
       key: "connect-first",
       title: "Connect First Operating System",
       stations: [
-        { key: "intake", kind: "structured_interview", title: "Intake Station" },
-        { key: "positioning", kind: "analysis", title: "Positioning Station" }
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        },
+        {
+          key: "positioning",
+          familyKey: "positioning",
+          kind: "analysis",
+          title: "Positioning Station"
+        }
       ]
     });
     const packageInstall = installBlueprintPackage({
@@ -331,16 +378,36 @@ describe("factory positioning station service", () => {
       key: "connect-first",
       title: "Connect First Operating System",
       stations: [
-        { key: "intake", kind: "structured_interview", title: "Intake Station" },
-        { key: "positioning", kind: "analysis", title: "Positioning Station" }
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        },
+        {
+          key: "positioning",
+          familyKey: "positioning",
+          kind: "analysis",
+          title: "Positioning Station"
+        }
       ]
     });
     const otherBlueprint = createBlueprintPackage({
       key: "scale-offer",
       title: "Scale Offer Operating System",
       stations: [
-        { key: "intake", kind: "structured_interview", title: "Intake Station" },
-        { key: "positioning", kind: "analysis", title: "Positioning Station" }
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        },
+        {
+          key: "positioning",
+          familyKey: "positioning",
+          kind: "analysis",
+          title: "Positioning Station"
+        }
       ]
     });
     const packageInstall = installBlueprintPackage({
@@ -391,8 +458,18 @@ describe("factory positioning station service", () => {
       key: "connect-first",
       title: "Connect First Operating System",
       stations: [
-        { key: "intake", kind: "structured_interview", title: "Intake Station" },
-        { key: "positioning", kind: "analysis", title: "Positioning Station" }
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        },
+        {
+          key: "positioning",
+          familyKey: "positioning",
+          kind: "analysis",
+          title: "Positioning Station"
+        }
       ]
     });
     const packageInstall = installBlueprintPackage({
@@ -464,8 +541,18 @@ describe("factory positioning station service", () => {
       key: "connect-first",
       title: "Connect First Operating System",
       stations: [
-        { key: "intake", kind: "structured_interview", title: "Intake Station" },
-        { key: "positioning", kind: "analysis", title: "Positioning Station" }
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        },
+        {
+          key: "positioning",
+          familyKey: "positioning",
+          kind: "analysis",
+          title: "Positioning Station"
+        }
       ]
     });
     const packageInstall = installBlueprintPackage({
@@ -539,8 +626,18 @@ describe("factory positioning station service", () => {
       key: "connect-first",
       title: "Connect First Operating System",
       stations: [
-        { key: "intake", kind: "structured_interview", title: "Intake Station" },
-        { key: "positioning", kind: "analysis", title: "Positioning Station" }
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        },
+        {
+          key: "positioning",
+          familyKey: "positioning",
+          kind: "analysis",
+          title: "Positioning Station"
+        }
       ]
     });
     const packageInstall = installBlueprintPackage({
@@ -615,8 +712,18 @@ describe("factory positioning station service", () => {
       key: "connect-first",
       title: "Connect First Operating System",
       stations: [
-        { key: "intake", kind: "structured_interview", title: "Intake Station" },
-        { key: "positioning", kind: "analysis", title: "Positioning Station" }
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        },
+        {
+          key: "positioning",
+          familyKey: "positioning",
+          kind: "analysis",
+          title: "Positioning Station"
+        }
       ]
     });
     const packageInstall = installBlueprintPackage({
@@ -693,8 +800,18 @@ describe("factory positioning station service", () => {
       key: "connect-first",
       title: "Connect First Operating System",
       stations: [
-        { key: "intake", kind: "structured_interview", title: "Intake Station" },
-        { key: "positioning", kind: "analysis", title: "Positioning Station" }
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        },
+        {
+          key: "positioning",
+          familyKey: "positioning",
+          kind: "analysis",
+          title: "Positioning Station"
+        }
       ]
     });
     const packageInstall = installBlueprintPackage({
@@ -805,8 +922,18 @@ describe("factory positioning station service", () => {
       key: "connect-first",
       title: "Connect First Operating System",
       stations: [
-        { key: "intake", kind: "structured_interview", title: "Intake Station" },
-        { key: "positioning", kind: "analysis", title: "Positioning Station" }
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        },
+        {
+          key: "positioning",
+          familyKey: "positioning",
+          kind: "analysis",
+          title: "Positioning Station"
+        }
       ]
     });
     const packageInstall = installBlueprintPackage({
@@ -902,8 +1029,18 @@ describe("factory positioning station service", () => {
       key: "connect-first",
       title: "Connect First Operating System",
       stations: [
-        { key: "intake", kind: "structured_interview", title: "Intake Station" },
-        { key: "positioning", kind: "analysis", title: "Positioning Station" }
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        },
+        {
+          key: "positioning",
+          familyKey: "positioning",
+          kind: "analysis",
+          title: "Positioning Station"
+        }
       ]
     });
     const packageInstall = installBlueprintPackage({
@@ -1004,8 +1141,18 @@ describe("factory positioning station service", () => {
       key: "connect-first",
       title: "Connect First Operating System",
       stations: [
-        { key: "intake", kind: "structured_interview", title: "Intake Station" },
-        { key: "positioning", kind: "analysis", title: "Positioning Station" }
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        },
+        {
+          key: "positioning",
+          familyKey: "positioning",
+          kind: "analysis",
+          title: "Positioning Station"
+        }
       ]
     });
     const packageInstall = installBlueprintPackage({
@@ -1107,8 +1254,18 @@ describe("factory positioning station service", () => {
       key: "connect-first",
       title: "Connect First Operating System",
       stations: [
-        { key: "intake", kind: "structured_interview", title: "Intake Station" },
-        { key: "positioning", kind: "analysis", title: "Positioning Station" }
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        },
+        {
+          key: "positioning",
+          familyKey: "positioning",
+          kind: "analysis",
+          title: "Positioning Station"
+        }
       ]
     });
     const packageInstall = installBlueprintPackage({
@@ -1205,8 +1362,18 @@ describe("factory positioning station service", () => {
       key: "connect-first",
       title: "Connect First Operating System",
       stations: [
-        { key: "intake", kind: "structured_interview", title: "Intake Station" },
-        { key: "positioning", kind: "analysis", title: "Positioning Station" }
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        },
+        {
+          key: "positioning",
+          familyKey: "positioning",
+          kind: "analysis",
+          title: "Positioning Station"
+        }
       ]
     });
     const packageInstall = installBlueprintPackage({
@@ -1301,8 +1468,18 @@ describe("factory positioning station service", () => {
       key: "connect-first",
       title: "Connect First Operating System",
       stations: [
-        { key: "intake", kind: "structured_interview", title: "Intake Station" },
-        { key: "positioning", kind: "analysis", title: "Positioning Station" }
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        },
+        {
+          key: "positioning",
+          familyKey: "positioning",
+          kind: "analysis",
+          title: "Positioning Station"
+        }
       ]
     });
     const packageInstall = installBlueprintPackage({
@@ -1393,8 +1570,18 @@ describe("factory positioning station service", () => {
       key: "connect-first",
       title: "Connect First Operating System",
       stations: [
-        { key: "intake", kind: "structured_interview", title: "Intake Station" },
-        { key: "positioning", kind: "analysis", title: "Positioning Station" }
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        },
+        {
+          key: "positioning",
+          familyKey: "positioning",
+          kind: "analysis",
+          title: "Positioning Station"
+        }
       ]
     });
     const packageInstall = installBlueprintPackage({
@@ -1494,8 +1681,18 @@ describe("factory positioning station service", () => {
       key: "connect-first",
       title: "Connect First Operating System",
       stations: [
-        { key: "intake", kind: "structured_interview", title: "Intake Station" },
-        { key: "positioning", kind: "analysis", title: "Positioning Station" }
+        {
+          key: "intake",
+          familyKey: "intake",
+          kind: "structured_interview",
+          title: "Intake Station"
+        },
+        {
+          key: "positioning",
+          familyKey: "positioning",
+          kind: "analysis",
+          title: "Positioning Station"
+        }
       ]
     });
     const packageInstall = installBlueprintPackage({
@@ -1598,3 +1795,5 @@ describe("factory positioning station service", () => {
     );
   });
 });
+
+

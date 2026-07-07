@@ -1,4 +1,32 @@
 export type PackageKind = "blueprint" | "expansion";
+export type SpecialistKey = "direction" | "finance" | "market" | "operations" | "offer";
+export type StationFamilyKey =
+  | "intake"
+  | "founder_profile_synthesis"
+  | "strategic_priorities"
+  | "decision_checkpoints"
+  | "launch_direction_review"
+  | "pricing_analysis"
+  | "margin_review"
+  | "cost_structure_review"
+  | "revenue_sensitivity_review"
+  | "financial_approval_checkpoints"
+  | "positioning"
+  | "messaging_refinement"
+  | "audience_clarity_review"
+  | "market_offer_framing"
+  | "campaign_direction_review"
+  | "delivery_design"
+  | "workflow_sequencing"
+  | "sop_drafting"
+  | "implementation_readiness_review"
+  | "handoff_packaging"
+  | "offer_shaping"
+  | "package_design"
+  | "objection_handling_review"
+  | "conversion_review"
+  | "launch_offer_validation";
+export type DeliverableKind = "founder_profile" | "positioning_brief";
 
 export type RunStatus =
   | "draft"
@@ -21,6 +49,7 @@ export interface Workspace {
 
 export interface StationDefinition {
   key: string;
+  familyKey: StationFamilyKey;
   title: string;
   kind: StationKind;
 }
@@ -67,7 +96,7 @@ export interface Approval {
 
 export interface FounderProfileDeliverable extends FactoryStationOutputBase {
   stationKey: "intake";
-  kind: "founder_profile";
+  kind: Extract<DeliverableKind, "founder_profile">;
   title: "Founder Profile";
   body: {
     founderName: string;
@@ -80,7 +109,7 @@ export interface FounderProfileDeliverable extends FactoryStationOutputBase {
 
 export interface PositioningBriefDeliverable extends FactoryStationOutputBase {
   stationKey: "positioning";
-  kind: "positioning_brief";
+  kind: Extract<DeliverableKind, "positioning_brief">;
   title: "Positioning Brief";
   body: {
     headline: string;

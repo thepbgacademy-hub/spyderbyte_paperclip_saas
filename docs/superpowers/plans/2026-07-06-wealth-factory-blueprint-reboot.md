@@ -467,6 +467,28 @@ This phase remains intentionally out of scope for:
 - assembly-family continuation
 - historical harness/runtime or board-action integration
 
+## B9 Addendum
+
+The next bounded widening after B8 is:
+
+- `specialist roster -> station-family ownership -> deliverable ownership -> bounded approval/handoff expectations`
+
+This phase remains intentionally out of scope for:
+
+- persistence or schema changes for specialist metadata
+- UI/dashboard presentation changes
+- generic multi-specialist workflow engines
+- unconstrained prompt-persona routing
+- historical harness/runtime or board-action integration
+
+The intended implementation shape is:
+
+- keep the canonical roster function-first (`direction`, `finance`, `market`, `operations`, `offer`)
+- bind specialist ownership at the station-definition layer
+- validate one primary specialist owner per station family
+- reuse existing bounded approval behavior instead of inventing new policy kinds
+- keep executable handoff expectations narrow to the currently shipped intake/positioning slice
+
 ## Forward Modeling Note
 
 The current B1-B7 reboot lane intentionally keeps package identity minimal so the domain can be proven without introducing persistence or publishing infrastructure. That simplification must not become permanent.

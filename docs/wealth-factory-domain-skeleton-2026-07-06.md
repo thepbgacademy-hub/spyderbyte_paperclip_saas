@@ -391,6 +391,17 @@ Recommended slice:
 Reason:
 It proves the reboot domain can approve the first bounded revision output and terminate the run cleanly without widening into downstream station continuation, extra revision generations, or generic loop engines.
 
+### Phase B9
+
+Purpose:
+Define the specialist-function architecture as a bounded domain-layer contract.
+
+Recommended slice:
+`specialist roster -> station-family ownership -> deliverable ownership -> bounded approval/handoff expectations`
+
+Reason:
+It preserves the business-guidance expertise promised by the blueprint without reintroducing the legacy CEO/CFO/CMO persona shell, widening into persistence, or turning specialist functions into unconstrained prompt personas.
+
 ## Later Dedicated Phase
 
 ### Specialist Architecture Phase
@@ -405,6 +416,23 @@ Expected outputs:
 - station-family ownership by specialist function
 - deliverable ownership expectations
 - approval and handoff expectations between specialist functions
+
+Current B9 implementation seam:
+
+- `StationDefinition` now carries a bounded `familyKey` field so specialist ownership can be derived without a second station-level source of truth.
+- The canonical specialist roster is codified in `src/factory/specialists/specialist-registry.ts`.
+- Station-family ownership is fail-closed and derived from the specialist registry.
+- Deliverable ownership is codified for the currently active reboot slice outputs (`founder_profile`, `positioning_brief`).
+- Executable approval/handoff expectations remain intentionally bounded to the currently shipped station families:
+  - `intake` -> no approval, handoff target `market`
+  - `positioning` -> customer checkpoint, no further specialist handoff in the current slice
+
+Out of scope for the B9 seam:
+
+- persistence or schema changes for specialist metadata
+- UI presentation changes
+- generalized downstream multi-specialist workflow graphs
+- unconstrained specialist prompt routing
 
 Out of scope for this later phase:
 
