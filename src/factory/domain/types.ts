@@ -47,9 +47,18 @@ export interface Workspace {
   createdAt: string;
 }
 
+export interface BlueprintPersonaDefinition {
+  key: string;
+  name: string;
+  tagline: string;
+  specialistKey: SpecialistKey;
+  allowedStationKeys: string[];
+}
+
 export interface StationDefinition {
   key: string;
   familyKey: StationFamilyKey;
+  personaKey: string;
   title: string;
   kind: StationKind;
 }
@@ -67,6 +76,7 @@ export interface BlueprintPackageDefinition {
   key: string;
   title: string;
   kind: Extract<PackageKind, "blueprint">;
+  personas: BlueprintPersonaDefinition[];
   stations: StationDefinition[];
 }
 

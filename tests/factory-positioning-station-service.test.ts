@@ -12,6 +12,70 @@ import {
   startPositioningAnalysisStation
 } from "../src/factory/runs/positioning-station-service.js";
 
+function createCurrentSliceBlueprint(input?: { key?: string; title?: string }) {
+  return createBlueprintPackage({
+    key: input?.key ?? "connect-first",
+    title: input?.title ?? "Connect First Operating System",
+    personas: [
+      {
+        key: "founder_guide",
+        name: "Founder Guide",
+        tagline: "Guides the founder through intake.",
+        specialistKey: "direction",
+        allowedStationKeys: ["intake"]
+      },
+      {
+        key: "market_strategist",
+        name: "Market Strategist",
+        tagline: "Shapes the positioning brief.",
+        specialistKey: "market",
+        allowedStationKeys: ["positioning"]
+      }
+    ],
+    stations: [
+      {
+        key: "intake",
+        familyKey: "intake",
+        personaKey: "founder_guide",
+        kind: "structured_interview",
+        title: "Intake Station"
+      },
+      {
+        key: "positioning",
+        familyKey: "positioning",
+        personaKey: "market_strategist",
+        kind: "analysis",
+        title: "Positioning Station"
+      }
+    ]
+  });
+}
+
+function createIntakeOnlyBlueprint(input?: { key?: string; title?: string }) {
+  return createBlueprintPackage({
+    key: input?.key ?? "connect-first",
+    title: input?.title ?? "Connect First Operating System",
+    personas: [
+      {
+        key: "founder_guide",
+        name: "Founder Guide",
+        tagline: "Guides the founder through intake.",
+        specialistKey: "direction",
+        allowedStationKeys: ["intake"]
+      }
+    ],
+    stations: [
+      {
+        key: "intake",
+        familyKey: "intake",
+        personaKey: "founder_guide",
+        kind: "structured_interview",
+        title: "Intake Station"
+      }
+    ]
+  });
+}
+
 describe("factory positioning station service", () => {
   it("widens the reboot slice from intake into one bounded analysis station family", () => {
     const workspace = createWorkspace({
@@ -20,24 +84,7 @@ describe("factory positioning station service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T20:00:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          kind: "structured_interview",
-          title: "Intake Station"
-        },
-        {
-          key: "positioning",
-          familyKey: "positioning",
-          kind: "analysis",
-          title: "Positioning Station"
-        }
-      ]
-    });
+    const blueprint = createCurrentSliceBlueprint();
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -126,18 +173,7 @@ describe("factory positioning station service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T20:00:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          kind: "structured_interview",
-          title: "Intake Station"
-        }
-      ]
-    });
+    const blueprint = createIntakeOnlyBlueprint();
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -182,24 +218,7 @@ describe("factory positioning station service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T20:00:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          kind: "structured_interview",
-          title: "Intake Station"
-        },
-        {
-          key: "positioning",
-          familyKey: "positioning",
-          kind: "analysis",
-          title: "Positioning Station"
-        }
-      ]
-    });
+    const blueprint = createCurrentSliceBlueprint();
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -231,24 +250,7 @@ describe("factory positioning station service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T20:00:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          kind: "structured_interview",
-          title: "Intake Station"
-        },
-        {
-          key: "positioning",
-          familyKey: "positioning",
-          kind: "analysis",
-          title: "Positioning Station"
-        }
-      ]
-    });
+    const blueprint = createCurrentSliceBlueprint();
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -306,24 +308,7 @@ describe("factory positioning station service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T20:00:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          kind: "structured_interview",
-          title: "Intake Station"
-        },
-        {
-          key: "positioning",
-          familyKey: "positioning",
-          kind: "analysis",
-          title: "Positioning Station"
-        }
-      ]
-    });
+    const blueprint = createCurrentSliceBlueprint();
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -374,42 +359,8 @@ describe("factory positioning station service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T20:00:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          kind: "structured_interview",
-          title: "Intake Station"
-        },
-        {
-          key: "positioning",
-          familyKey: "positioning",
-          kind: "analysis",
-          title: "Positioning Station"
-        }
-      ]
-    });
-    const otherBlueprint = createBlueprintPackage({
-      key: "scale-offer",
-      title: "Scale Offer Operating System",
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          kind: "structured_interview",
-          title: "Intake Station"
-        },
-        {
-          key: "positioning",
-          familyKey: "positioning",
-          kind: "analysis",
-          title: "Positioning Station"
-        }
-      ]
-    });
+    const blueprint = createCurrentSliceBlueprint();
+    const otherBlueprint = createCurrentSliceBlueprint({ key: "scale-offer", title: "Scale Offer Operating System" });
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -454,24 +405,7 @@ describe("factory positioning station service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T20:00:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          kind: "structured_interview",
-          title: "Intake Station"
-        },
-        {
-          key: "positioning",
-          familyKey: "positioning",
-          kind: "analysis",
-          title: "Positioning Station"
-        }
-      ]
-    });
+    const blueprint = createCurrentSliceBlueprint();
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -537,24 +471,7 @@ describe("factory positioning station service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T20:00:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          kind: "structured_interview",
-          title: "Intake Station"
-        },
-        {
-          key: "positioning",
-          familyKey: "positioning",
-          kind: "analysis",
-          title: "Positioning Station"
-        }
-      ]
-    });
+    const blueprint = createCurrentSliceBlueprint();
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -622,24 +539,7 @@ describe("factory positioning station service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T20:00:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          kind: "structured_interview",
-          title: "Intake Station"
-        },
-        {
-          key: "positioning",
-          familyKey: "positioning",
-          kind: "analysis",
-          title: "Positioning Station"
-        }
-      ]
-    });
+    const blueprint = createCurrentSliceBlueprint();
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -708,24 +608,7 @@ describe("factory positioning station service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T20:00:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          kind: "structured_interview",
-          title: "Intake Station"
-        },
-        {
-          key: "positioning",
-          familyKey: "positioning",
-          kind: "analysis",
-          title: "Positioning Station"
-        }
-      ]
-    });
+    const blueprint = createCurrentSliceBlueprint();
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -796,24 +679,7 @@ describe("factory positioning station service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T20:00:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          kind: "structured_interview",
-          title: "Intake Station"
-        },
-        {
-          key: "positioning",
-          familyKey: "positioning",
-          kind: "analysis",
-          title: "Positioning Station"
-        }
-      ]
-    });
+    const blueprint = createCurrentSliceBlueprint();
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -918,24 +784,7 @@ describe("factory positioning station service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T20:00:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          kind: "structured_interview",
-          title: "Intake Station"
-        },
-        {
-          key: "positioning",
-          familyKey: "positioning",
-          kind: "analysis",
-          title: "Positioning Station"
-        }
-      ]
-    });
+    const blueprint = createCurrentSliceBlueprint();
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -1025,24 +874,7 @@ describe("factory positioning station service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T20:00:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          kind: "structured_interview",
-          title: "Intake Station"
-        },
-        {
-          key: "positioning",
-          familyKey: "positioning",
-          kind: "analysis",
-          title: "Positioning Station"
-        }
-      ]
-    });
+    const blueprint = createCurrentSliceBlueprint();
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -1137,24 +969,7 @@ describe("factory positioning station service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T20:00:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          kind: "structured_interview",
-          title: "Intake Station"
-        },
-        {
-          key: "positioning",
-          familyKey: "positioning",
-          kind: "analysis",
-          title: "Positioning Station"
-        }
-      ]
-    });
+    const blueprint = createCurrentSliceBlueprint();
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -1250,24 +1065,7 @@ describe("factory positioning station service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T20:00:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          kind: "structured_interview",
-          title: "Intake Station"
-        },
-        {
-          key: "positioning",
-          familyKey: "positioning",
-          kind: "analysis",
-          title: "Positioning Station"
-        }
-      ]
-    });
+    const blueprint = createCurrentSliceBlueprint();
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -1358,24 +1156,7 @@ describe("factory positioning station service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T20:00:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          kind: "structured_interview",
-          title: "Intake Station"
-        },
-        {
-          key: "positioning",
-          familyKey: "positioning",
-          kind: "analysis",
-          title: "Positioning Station"
-        }
-      ]
-    });
+    const blueprint = createCurrentSliceBlueprint();
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -1464,24 +1245,7 @@ describe("factory positioning station service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T20:00:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          kind: "structured_interview",
-          title: "Intake Station"
-        },
-        {
-          key: "positioning",
-          familyKey: "positioning",
-          kind: "analysis",
-          title: "Positioning Station"
-        }
-      ]
-    });
+    const blueprint = createCurrentSliceBlueprint();
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -1566,24 +1330,7 @@ describe("factory positioning station service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T20:00:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          kind: "structured_interview",
-          title: "Intake Station"
-        },
-        {
-          key: "positioning",
-          familyKey: "positioning",
-          kind: "analysis",
-          title: "Positioning Station"
-        }
-      ]
-    });
+    const blueprint = createCurrentSliceBlueprint();
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -1677,24 +1424,7 @@ describe("factory positioning station service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T20:00:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          kind: "structured_interview",
-          title: "Intake Station"
-        },
-        {
-          key: "positioning",
-          familyKey: "positioning",
-          kind: "analysis",
-          title: "Positioning Station"
-        }
-      ]
-    });
+    const blueprint = createCurrentSliceBlueprint();
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -1795,5 +1525,7 @@ describe("factory positioning station service", () => {
     );
   });
 });
+
+
 
 

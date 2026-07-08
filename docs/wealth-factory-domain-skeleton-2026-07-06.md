@@ -402,6 +402,34 @@ Recommended slice:
 Reason:
 It preserves the business-guidance expertise promised by the blueprint without reintroducing the legacy CEO/CFO/CMO persona shell, widening into persistence, or turning specialist functions into unconstrained prompt personas.
 
+### Phase B10
+
+Purpose:
+Bind the current reboot slice to blueprint-style package-declared personas without widening into manifest loading or later workflow families.
+
+Recommended slice:
+`package-declared personas -> station persona references -> install-safe validation for intake/positioning`
+
+Reason:
+It proves the reboot package seam can carry blueprint-native persona declarations and fail-closed station bindings while staying strictly inside the current intake/positioning slice.
+
+Bounded implementation shape:
+
+- `BlueprintPackageDefinition` declares `personas`
+- each persona declares `allowedStationKeys`
+- each station declares `personaKey`
+- package construction fails closed on undeclared references, duplicate persona keys, and allowlist drift
+- current slice keeps a reboot-local compatibility check between `persona.specialistKey` and station-family specialist ownership from B9
+
+Out of scope for B10:
+
+- manifest file loading
+- persistence or schema changes
+- prompt files
+- UI/dashboard presentation changes
+- worker/runtime execution changes
+- quality-check personas or later blueprint families
+
 ## Later Dedicated Phase
 
 ### Specialist Architecture Phase

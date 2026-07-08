@@ -16,10 +16,20 @@ describe("factory intake run service", () => {
     const blueprint = createBlueprintPackage({
       key: "connect-first",
       title: "Connect First Operating System",
+      personas: [
+        {
+          key: "founder_guide",
+          name: "Founder Guide",
+          tagline: "Guides the founder through intake.",
+          specialistKey: "direction",
+          allowedStationKeys: ["intake"]
+        }
+      ],
       stations: [
         {
           key: "intake",
           familyKey: "intake",
+          personaKey: "founder_guide",
           kind: "structured_interview",
           title: "Intake Station"
         }
@@ -91,10 +101,20 @@ describe("factory intake run service", () => {
     const blueprint = createBlueprintPackage({
       key: "connect-first",
       title: "Connect First Operating System",
+      personas: [
+        {
+          key: "founder_guide",
+          name: "Founder Guide",
+          tagline: "Guides the founder through intake.",
+          specialistKey: "direction",
+          allowedStationKeys: ["intake"]
+        }
+      ],
       stations: [
         {
           key: "intake",
           familyKey: "intake",
+          personaKey: "founder_guide",
           kind: "structured_interview",
           title: "Intake Station"
         }
@@ -128,12 +148,22 @@ describe("factory intake run service", () => {
     const blueprint = createBlueprintPackage({
       key: "connect-first",
       title: "Connect First Operating System",
+      personas: [
+        {
+          key: "market_strategist",
+          name: "Market Strategist",
+          tagline: "Shapes the positioning brief.",
+          specialistKey: "market",
+          allowedStationKeys: ["positioning"]
+        }
+      ],
       stations: [
         {
-          key: "offer",
-          familyKey: "offer_shaping",
+          key: "positioning",
+          familyKey: "positioning",
+          personaKey: "market_strategist",
           kind: "analysis",
-          title: "Offer Station"
+          title: "Positioning Station"
         }
       ]
     });
@@ -165,10 +195,20 @@ describe("factory intake run service", () => {
     const installedBlueprint = createBlueprintPackage({
       key: "connect-first",
       title: "Connect First Operating System",
+      personas: [
+        {
+          key: "founder_guide",
+          name: "Founder Guide",
+          tagline: "Guides the founder through intake.",
+          specialistKey: "direction",
+          allowedStationKeys: ["intake"]
+        }
+      ],
       stations: [
         {
           key: "intake",
           familyKey: "intake",
+          personaKey: "founder_guide",
           kind: "structured_interview",
           title: "Intake Station"
         }
@@ -177,10 +217,20 @@ describe("factory intake run service", () => {
     const requestedBlueprint = createBlueprintPackage({
       key: "pricing-review",
       title: "Pricing Review System",
+      personas: [
+        {
+          key: "founder_guide",
+          name: "Founder Guide",
+          tagline: "Guides the founder through intake.",
+          specialistKey: "direction",
+          allowedStationKeys: ["intake"]
+        }
+      ],
       stations: [
         {
           key: "intake",
           familyKey: "intake",
+          personaKey: "founder_guide",
           kind: "structured_interview",
           title: "Pricing Intake Station"
         }
@@ -216,10 +266,20 @@ describe("factory intake run service", () => {
     const blueprint = createBlueprintPackage({
       key: "connect-first",
       title: "Connect First Operating System",
+      personas: [
+        {
+          key: "founder_guide",
+          name: "Founder Guide",
+          tagline: "Guides the founder through intake.",
+          specialistKey: "direction",
+          allowedStationKeys: ["intake"]
+        }
+      ],
       stations: [
         {
           key: "intake",
           familyKey: "intake",
+          personaKey: "founder_guide",
           kind: "structured_interview",
           title: "Intake Station"
         }

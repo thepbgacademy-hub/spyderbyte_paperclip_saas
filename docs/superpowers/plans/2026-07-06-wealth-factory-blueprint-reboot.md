@@ -489,6 +489,29 @@ The intended implementation shape is:
 - reuse existing bounded approval behavior instead of inventing new policy kinds
 - keep executable handoff expectations narrow to the currently shipped intake/positioning slice
 
+## B10 Addendum
+
+The next bounded widening after B9 is:
+
+- `package-declared personas -> station persona references -> install-safe persona/station validation`
+
+This phase remains intentionally out of scope for:
+
+- manifest file loading
+- persistence or schema changes
+- prompt files
+- UI/dashboard presentation changes
+- worker/runtime execution changes
+- quality-check personas or later blueprint families
+
+The intended implementation shape is:
+
+- declare bounded personas directly on the reboot package definition
+- require each station to reference a declared `personaKey`
+- require each persona to declare its allowed station keys
+- fail closed on undeclared persona references, duplicate persona keys, and persona allowlist drift
+- keep the B9 specialist-to-station-family ownership check as a reboot-local compatibility guard only
+
 ## Forward Modeling Note
 
 The current B1-B7 reboot lane intentionally keeps package identity minimal so the domain can be proven without introducing persistence or publishing infrastructure. That simplification must not become permanent.

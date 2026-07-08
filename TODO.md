@@ -16,6 +16,7 @@ This file tracks implementation progress. Keep it current after every phase.
 - [x] Phase B7: Add the first bounded same-family revision loop for the positioning brief so changes requested can produce a revised brief and a fresh approval request without widening into persistence, generic workflow orchestration, or downstream station continuation.
 - [x] Phase B8: Close the first bounded revised-positioning approval loop so the fresh approval request on `revision_1` can resolve to a completed run without widening into downstream continuation or additional revision generations.
 - [x] Phase B9: Define the specialist-function architecture so business-guidance expertise is preserved without requiring the legacy CEO/CFO/CMO persona shell.
+- [x] Phase B10: Add the bounded package-declared persona contract for the intake/positioning reboot slice without widening into manifests, persistence, UI, or runtime execution changes.
 
 ## Reboot Notes
 

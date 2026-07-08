@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_RUN_STATUS_ORDER, isTerminalRunStatus } from "../src/factory/domain/run-status.js";
 import type {
   Approval,
+  BlueprintPersonaDefinition,
   FounderProfileDeliverable,
   PositioningBriefDeliverable,
   StationDefinition
@@ -91,9 +92,25 @@ describe("factory run status domain", () => {
   });
 
   it("supports specialist-bound station definitions instead of a legacy persona shell", () => {
+    const founderGuide: BlueprintPersonaDefinition = {
+      key: "founder_guide",
+      name: "Founder Guide",
+      tagline: "Guides the founder through intake.",
+      specialistKey: "direction",
+      allowedStationKeys: ["intake"]
+    };
+    const marketStrategist: BlueprintPersonaDefinition = {
+      key: "market_strategist",
+      name: "Market Strategist",
+      tagline: "Shapes the positioning brief.",
+      specialistKey: "market",
+      allowedStationKeys: ["positioning"]
+    };
+
     const intakeStation: StationDefinition = {
       key: "intake",
       familyKey: "intake",
+      personaKey: "founder_guide",
       kind: "structured_interview",
       title: "Intake Station"
     };
@@ -101,11 +118,18 @@ describe("factory run status domain", () => {
     const positioningStation: StationDefinition = {
       key: "positioning",
       familyKey: "positioning",
+      personaKey: "market_strategist",
       kind: "analysis",
       title: "Positioning Station"
     };
 
+    expect(founderGuide.specialistKey).toBe("direction");
+    expect(founderGuide.allowedStationKeys).toEqual(["intake"]);
+    expect(marketStrategist.specialistKey).toBe("market");
+    expect(marketStrategist.allowedStationKeys).toEqual(["positioning"]);
     expect(intakeStation.familyKey).toBe("intake");
+    expect(intakeStation.personaKey).toBe("founder_guide");
     expect(positioningStation.familyKey).toBe("positioning");
+    expect(positioningStation.personaKey).toBe("market_strategist");
   });
 });
