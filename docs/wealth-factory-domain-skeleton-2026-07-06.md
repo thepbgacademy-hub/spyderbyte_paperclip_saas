@@ -421,6 +421,21 @@ Bounded implementation shape:
 - package construction fails closed on undeclared references, duplicate persona keys, and allowlist drift
 - current slice keeps a reboot-local compatibility check between `persona.specialistKey` and station-family specialist ownership from B9
 
+Current B10 enforcement seam:
+
+- the active enforcement seam is `createBlueprintPackage(...)` in `src/factory/packages/package-registry.ts`
+- it currently fails closed on:
+  - duplicate persona keys
+  - undeclared `personaKey` references
+  - persona `allowedStationKeys` drift
+  - station families outside the bounded `intake` / `positioning` slice
+  - reboot-local B9 specialist-owner mismatch between `persona.specialistKey` and `station.familyKey`
+- this is intentionally a package-construction guardrail, not yet a manifest-loader or persistence-layer guardrail
+
+Residual risk:
+
+- any future code path that constructs `BlueprintPackageDefinition` objects without going through `createBlueprintPackage(...)` could bypass the current fail-closed checks and must add an equivalent validation seam
+
 Out of scope for B10:
 
 - manifest file loading

@@ -512,6 +512,17 @@ The intended implementation shape is:
 - fail closed on undeclared persona references, duplicate persona keys, and persona allowlist drift
 - keep the B9 specialist-to-station-family ownership check as a reboot-local compatibility guard only
 
+Recorded enforcement note:
+
+- the active B10 enforcement seam is `createBlueprintPackage(...)`
+- the current constructor-level guard fails closed on:
+  - duplicate persona keys
+  - undeclared `personaKey` references
+  - persona allowlist drift
+  - station families outside the bounded `intake` / `positioning` slice
+  - reboot-local B9 specialist-owner mismatch
+- if a later phase introduces direct object construction, manifest loading, or persistence hydration without routing through this seam, it must add an equivalent validation guard before widening the model
+
 ## Forward Modeling Note
 
 The current B1-B7 reboot lane intentionally keeps package identity minimal so the domain can be proven without introducing persistence or publishing infrastructure. That simplification must not become permanent.
