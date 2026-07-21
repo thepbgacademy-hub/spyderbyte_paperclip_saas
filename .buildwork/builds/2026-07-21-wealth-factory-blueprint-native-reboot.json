@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 13,
+  "revision": 14,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -10,7 +10,7 @@
     "workspace": ".",
     "parent_build_id": null,
     "created_at": "2026-07-21T12:39:15Z",
-    "updated_at": "2026-07-21T17:40:00Z"
+    "updated_at": "2026-07-21T18:05:00Z"
   },
   "objective": {
     "summary": "Ship SpyderByte Foundry: a software platform where a solo founder buys a workflow package for a market segment (social media manager, coach, website builder and more), connects their own AI provider account, and runs guided staged workflows that generate their company's operating documents, brand assets and procedures, approving each station before anything is finalized, then exports files they keep forever. Pricing is a one-time package of $600-$2,000 plus $19-$49/month platform access after included months. Twelve clients from a successful market-fit launch are waiting to purchase as of 2026-07-21, and the build is roughly 7 weeks past its intended launch. The engine is being rebuilt blueprint-native because the previous platform, a rebranded Paperclip, was a single-user agent runtime by design and could not carry multiple tenants, and because its only working secret-injection path persisted subscriber provider secrets onto issue objects. Success is not 'the tickets closed' - it is a paying customer completing purchase to export unaided.",
@@ -346,6 +346,10 @@
     {
       "id": "OQ-010",
       "text": "CLAUDE.md is gitignored in this repo, so the pointer telling a fresh session to read the build record never reaches GitHub. The record itself commits fine. Should CLAUDE.md be un-ignored, or should a committed docs/START-HERE.md carry the pointer instead? Only matters for a clone on another machine; a session in this working directory still sees the local file."
+    },
+    {
+      "id": "OQ-011",
+      "text": "This session can commit but cannot push - the permission classifier blocks git push and also blocks the settings skill that would grant it. Every future record revision will need an owner push. Add a Bash permission rule for git push to settings.json, or accept manual pushes as the workflow?"
     }
   ],
   "tasks": [
@@ -1132,7 +1136,7 @@
     {
       "id": "TASK-025",
       "title": "Commit the uncommitted reboot phases B11-B35, chunked by ticket group",
-      "status": "active",
+      "status": "completed",
       "owner": "unassigned",
       "dependencies": [
         "TASK-024"
@@ -1176,16 +1180,19 @@
           "type": "secret-scan",
           "summary": "63 changed paths scanned for private keys, provider key prefixes, JWT service-role values and embedded Postgres passwords. The only match is a template literal interpolating a variable in a pre-existing test, not a literal secret. .env is gitignored and was not committed.",
           "reference": "git grep over HEAD"
+        },
+        {
+          "type": "git",
+          "summary": "Pushed to origin 2026-07-21 by the owner: branch foundry/mvp-baseline created on github.com/thepbgacademy-hub/spyderbyte_paperclip_saas at f7d1624, 180 objects written. Verified independently by fetch - the remote head matches local and the branch reports neither ahead nor behind.",
+          "reference": "git ls-remote --heads origin foundry/mvp-baseline"
         }
       ],
       "handoffs": [],
-      "blockers": [
-        "Push to origin is blocked: the environment's permission classifier denied git push. The owner must run it, or grant the permission. Nothing else in this task remains."
-      ],
+      "blockers": [],
       "risks": [
         "RISK-001"
       ],
-      "progress": "Commits complete and verified 2026-07-21; push outstanding. Chunking followed DEC-014 by ticket group. Honest caveat recorded in the first commit message: cross-cutting source files could not be split per phase without interactive staging, so intermediate commits are snapshots and only the final tree is verified green. One straggler, factory-credential-vault.ts, landed in the final commit rather than its Ticket 10 chunk. Remaining command: git push -u origin foundry/mvp-baseline"
+      "progress": "Completed 2026-07-21. Twenty-five phases that existed only on one workstation now exist on GitHub across nine commits: six ticket-group chunks per DEC-014, plus three record commits. Push was performed by the owner because the environment's permission classifier blocks git push from this session, and blocks the settings skill that would grant it. Future record commits succeed locally but will need the same owner push."
     },
     {
       "id": "TASK-026",
@@ -2205,8 +2212,8 @@
     {
       "id": "RISK-001",
       "text": "Twenty-five completed phases (B11-B35) exist only in the working tree; the last reboot commit is 967fd06 (B10). A workspace loss or a careless checkout destroys the entire Ticket 07-12 body of work.",
-      "severity": "high",
-      "mitigation": "TASK-025 commits the work in six ticket-group chunks per DEC-014 and pushes to origin. This is the immediate next action."
+      "severity": "low",
+      "mitigation": "CLOSED 2026-07-21. All twenty-five phases and the work record are on origin at foundry/mvp-baseline (f7d1624), verified by fetch. The work no longer exists in only one place. Residual risk is only that ongoing record revisions accumulate locally until someone pushes."
     },
     {
       "id": "RISK-002",
@@ -2567,6 +2574,13 @@
       "actor": "orchestrator",
       "action": "retire-dormant-containers-and-correct-port-plan",
       "details": "Corrected a wrong claim previously recorded here: closing the Redis, Postgres and Kong ports needs no container repointing, because the only public-IP reference in any running container is the Paperclip board origin. The vault's vps2-deploy.env disagrees with deployed reality and the host is authoritative. Added TASK-065 and stopped four dormant standalone containers - three pressure-test workers and the superseded stage2 API - after capturing their full configuration, verifying afterwards that the public site and all mini apps were unaffected. Held back wealth-factory-api, which is reverse-proxied by api.spyderbyte.cloud on thin traffic evidence, and paperclip, which the wf-stage containers still reference. Added RISK-025 covering the configuration dumps, which contain environment values and must be deleted once retirement is final."
+    },
+    {
+      "revision": 14,
+      "timestamp": "2026-07-21T18:05:00Z",
+      "actor": "orchestrator",
+      "action": "close-commit-task",
+      "details": "Owner pushed foundry/mvp-baseline to origin at f7d1624. Verified independently: the remote head matches local and the branch is neither ahead nor behind. TASK-025 completed and RISK-001, the highest risk carried by this record since adoption, lowered to low - twenty-five phases of work and the record itself no longer exist on a single workstation. Added OQ-011 on whether to grant this session git push or keep manual pushes as the workflow."
     }
   ]
 }
