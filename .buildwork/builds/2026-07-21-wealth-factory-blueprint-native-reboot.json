@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 14,
+  "revision": 15,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -10,7 +10,7 @@
     "workspace": ".",
     "parent_build_id": null,
     "created_at": "2026-07-21T12:39:15Z",
-    "updated_at": "2026-07-21T18:05:00Z"
+    "updated_at": "2026-07-21T18:35:00Z"
   },
   "objective": {
     "summary": "Ship SpyderByte Foundry: a software platform where a solo founder buys a workflow package for a market segment (social media manager, coach, website builder and more), connects their own AI provider account, and runs guided staged workflows that generate their company's operating documents, brand assets and procedures, approving each station before anything is finalized, then exports files they keep forever. Pricing is a one-time package of $600-$2,000 plus $19-$49/month platform access after included months. Twelve clients from a successful market-fit launch are waiting to purchase as of 2026-07-21, and the build is roughly 7 weeks past its intended launch. The engine is being rebuilt blueprint-native because the previous platform, a rebranded Paperclip, was a single-user agent runtime by design and could not carry multiple tenants, and because its only working secret-injection path persisted subscriber provider secrets onto issue objects. Success is not 'the tickets closed' - it is a paying customer completing purchase to export unaided.",
@@ -1375,7 +1375,7 @@
     {
       "id": "TASK-034",
       "title": "Close the public exposure of Redis, Postgres, Kong and Paperclip on VPS2",
-      "status": "pending",
+      "status": "blocked",
       "owner": "unassigned",
       "dependencies": [],
       "acceptance_criteria": [
@@ -1407,19 +1407,27 @@
         }
       ],
       "handoffs": [],
-      "blockers": [],
+      "blockers": [
+        "This session cannot close the ports. The deploy user has passwordless sudo for docker only; ufw and iptables both return 'sudo: a password is required', so no firewall rule can be added.",
+        "Rebinding published ports to 127.0.0.1 instead would require editing root-owned compose files at /root/supabase/docker/ and recreating the Supabase stack, which would briefly interrupt every application on the box, not just this build."
+      ],
       "risks": [
         "RISK-005",
         "RISK-015"
       ],
-      "progress": "Scoped and corrected 2026-07-21 by direct read-only host inspection. Closing the database, Redis and Kong ports needs no preparatory work. Remediation itself remains an owner action: firewall changes on a shared production host carrying unrelated tenants are outside what this session performs unattended.",
+      "progress": "Blocked on privilege, not on knowledge. The full closure plan is recorded; execution needs root or the Hostinger panel. Authentication is in place on every exposed service and no compromise is evidenced, so this is deliberate hygiene rather than an emergency.",
       "findings": [
         "Port ownership: 32768 is redis-tzbr-redis-1, 32770 is hermes-agent, 53324 is paperclip, 5432 and 6543 are supabase-pooler, 8000 and 8443 are supabase-kong, 80/443 are supabase-caddy.",
         "No customer application binds an exposed port. Caddy fronts www, sgt, automation, playground, api, wf-api, concierge, affiliate-api and executive-council on 443. n8n binds 127.0.0.1:5678 and sgt-mini-app 127.0.0.1:8080.",
         "CORRECTION 2026-07-21: an earlier reading of this record claimed seven containers loop through the public IP for database and Redis access and must be repointed before any port closes. Direct inspection of the running containers shows the only public-IP reference is WF_PAPERCLIP_BOARD_ORIGIN, plus VPS_IP and PAPERCLIP_ALLOWED_HOSTNAMES on Paperclip itself. Postgres and Redis are already reached by internal Docker names. No repointing is required to close five of the six ports.",
         "The local vault file vps2-deploy.env carries a public-IP Postgres connection string that does NOT match the deployed container environment. Vault documentation and deployed reality have diverged; the host is authoritative.",
         "Redis has requirepass configured, so the exposed instance requires authentication.",
-        "Container management split: wf-stage-api and wf-stage-worker belong to compose project wealth-factory-stage at /home/deploy/wealth-factory-stage/docker-compose.vps2-isolated-stage.yml. wealth-factory-api, wealth-factory-api-stage2 and the three proof workers are standalone with no compose project, so recreating them depends on captured configuration rather than a checked-in file."
+        "Container management split: wf-stage-api and wf-stage-worker belong to compose project wealth-factory-stage at /home/deploy/wealth-factory-stage/docker-compose.vps2-isolated-stage.yml. wealth-factory-api, wealth-factory-api-stage2 and the three proof workers are standalone with no compose project, so recreating them depends on captured configuration rather than a checked-in file.",
+        "Closure requires root. Supabase is compose project 'supabase' at /root/supabase/docker/docker-compose.yml (plus s3 and caddy overlays); Redis is compose project 'redis-tzbr' at /docker/redis-tzbr/docker-compose.yml. Both are root-owned.",
+        "Docker publishes ports by writing its own iptables rules that bypass ufw's default chains, so a plain 'ufw deny 6379' will appear to succeed and change nothing. Restricting Docker-published ports requires rules in the DOCKER-USER chain.",
+        "Preferred method is DOCKER-USER iptables rules, which take effect without restarting or recreating any container and therefore cannot disturb the unrelated tenants sharing this host. Rebinding compose ports is the more disruptive alternative.",
+        "The containers named with random suffixes - redis-tzbr, paperclip-gwry, hermes-agent-rava, n8n-bmzj - match the Hostinger VPS panel deployment pattern, so their exposure may be adjustable through the Hostinger control panel without touching the host at all.",
+        "Priority if only one port is closed: 32768 Redis. Internet-facing Redis is a standing target with a history of severe CVEs, even with requirepass set."
       ]
     },
     {
@@ -2156,7 +2164,7 @@
     {
       "id": "TASK-065",
       "title": "Retire the dormant Wealth Factory containers on VPS2",
-      "status": "active",
+      "status": "blocked",
       "owner": "orchestrator",
       "dependencies": [],
       "acceptance_criteria": [
@@ -2193,12 +2201,18 @@
         "Unblocks the capacity measurement of TASK-061 by removing idle workers from the box."
       ],
       "blockers": [
-        "wealth-factory-api is held: it is reverse-proxied by api.spyderbyte.cloud and the traffic evidence is too thin to call it unused. Owner decision needed.",
-        "paperclip is held: wf-stage-api and wf-stage-worker still carry its board origin and service tokens, so it should be retired together with port 53324 rather than alone."
+        "wealth-factory-api MUST NOT be retired: affiliate-api, wf-stage-web, wf-stage-api and wf-stage-worker all reference api.spyderbyte.cloud in their environment. affiliate-api is a live customer-facing app unrelated to this build.",
+        "paperclip retirement stays sequenced with closing port 53324 and with the wf-stage containers that hold its board origin and tokens.",
+        "Removing the four stopped containers needs an owner decision; they are stopped and reversible today, and removal is not."
       ],
-      "progress": "Deliberately stopped rather than removed. docker stop is undone with docker start; docker rm on a standalone container with no compose file is not undoable without the captured config. Two of the six candidates were held back rather than actioned, because the owner's go-ahead was given against an assessment that has since been corrected.",
+      "progress": "Four dormant containers stopped and holding. wealth-factory-api is now positively excluded from retirement rather than merely deferred, on evidence that a live unrelated app points at its hostname. This is exactly the outcome the owner was worried about, and it was caught because the traffic evidence was treated as weak and re-checked rather than acted on.",
       "risks": [
         "RISK-016"
+      ],
+      "findings": [
+        "RETRACTION: the earlier evidence that api.spyderbyte.cloud receives no traffic is worthless. Caddy has zero log directives configured, so it never wrote access logs at all. The single request observed in 24 hours was startup noise, not a traffic sample. An absence of logs was mistaken for an absence of traffic.",
+        "Five running containers reference api.spyderbyte.cloud in their environment: affiliate-api, wf-stage-web, wf-stage-api, wf-stage-worker and wealth-factory-api itself. affiliate-api belongs to an unrelated live product, so the hostname is in active use and wealth-factory-api stays.",
+        "The four stopped containers remain stopped with no observed impact: the public site returned 200 and every mini app kept running."
       ]
     }
   ],
@@ -2352,6 +2366,12 @@
       "text": "Container configuration dumps written to /home/deploy/container-retirement-2026-07-21 on VPS2 contain full environment values, including provider and service tokens. They were created by this session as a recreate-safety net.",
       "severity": "medium",
       "mitigation": "Permissions set to owner-only at creation. TASK-065 requires deleting them once retirement is final; they should not outlive the decision they protect."
+    },
+    {
+      "id": "RISK-026",
+      "text": "Caddy runs with no access logging configured, so the platform has no record of who reaches which hostname. This session nearly retired a live service on the strength of an empty log, and any future traffic-based decision has the same blind spot.",
+      "severity": "medium",
+      "mitigation": "Enable access logging in the Caddyfile before making further keep-or-retire decisions based on traffic. Until then, environment references between containers are the only reliable usage evidence."
     }
   ],
   "artifacts": [
@@ -2581,6 +2601,13 @@
       "actor": "orchestrator",
       "action": "close-commit-task",
       "details": "Owner pushed foundry/mvp-baseline to origin at f7d1624. Verified independently: the remote head matches local and the branch is neither ahead nor behind. TASK-025 completed and RISK-001, the highest risk carried by this record since adoption, lowered to low - twenty-five phases of work and the record itself no longer exist on a single workstation. Added OQ-011 on whether to grant this session git push or keep manual pushes as the workflow."
+    },
+    {
+      "revision": 15,
+      "timestamp": "2026-07-21T18:35:00Z",
+      "actor": "orchestrator",
+      "action": "block-port-closure-and-save-wealth-factory-api",
+      "details": "Retracted the traffic evidence for api.spyderbyte.cloud: Caddy has no log directives configured, so the earlier 'no traffic' reading was an absence of logging rather than an absence of traffic. Environment inspection shows five containers reference that hostname including affiliate-api, an unrelated live product, so wealth-factory-api is now positively excluded from retirement. TASK-034 moved to blocked: the deploy user has passwordless sudo for docker only, so no firewall rule can be added, and the alternative of rebinding root-owned Supabase compose ports would interrupt every tenant on the host. Recorded the full closure plan for whoever holds root, including the Docker iptables bypass that makes plain ufw rules ineffective. Added RISK-026 on the missing access logging."
     }
   ]
 }
