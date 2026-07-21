@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 12,
+  "revision": 13,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -10,7 +10,7 @@
     "workspace": ".",
     "parent_build_id": null,
     "created_at": "2026-07-21T12:39:15Z",
-    "updated_at": "2026-07-21T17:05:00Z"
+    "updated_at": "2026-07-21T17:40:00Z"
   },
   "objective": {
     "summary": "Ship SpyderByte Foundry: a software platform where a solo founder buys a workflow package for a market segment (social media manager, coach, website builder and more), connects their own AI provider account, and runs guided staged workflows that generate their company's operating documents, brand assets and procedures, approving each station before anything is finalized, then exports files they keep forever. Pricing is a one-time package of $600-$2,000 plus $19-$49/month platform access after included months. Twelve clients from a successful market-fit launch are waiting to purchase as of 2026-07-21, and the build is roughly 7 weeks past its intended launch. The engine is being rebuilt blueprint-native because the previous platform, a rebranded Paperclip, was a single-user agent runtime by design and could not carry multiple tenants, and because its only working secret-injection path persisted subscriber provider secrets onto issue objects. Success is not 'the tickets closed' - it is a paying customer completing purchase to export unaided.",
@@ -1372,11 +1372,9 @@
       "owner": "unassigned",
       "dependencies": [],
       "acceptance_criteria": [
-        "The seven containers whose env references the public IP are repointed to internal Docker hostnames FIRST: wf-stage-api, wf-stage-worker, wealth-factory-api-stage2, wealth-factory-worker-proof-a, -b and -c, and paperclip. Closing ports before repointing breaks the stage lane",
-        "External 32768 (Redis) is closed or firewalled",
-        "External 5432 and 6543 (Supabase pooler) are closed or allowlisted",
-        "External 53324 (Paperclip) is closed or allowlisted, and can simply go with the retired lane",
-        "8000 and 8443 (Kong) are public by explicit decision rather than by default; customer traffic already reaches Supabase through Caddy on 443",
+        "External 32768 (Redis), 5432 and 6543 (Supabase pooler), and 8000 and 8443 (Kong) are closed or allowlisted. Verified 2026-07-21: no running container reaches these through the public IP, so closing them requires no repointing",
+        "External 53324 (Paperclip) is closed together with the retirement of the Paperclip lane. It is the only exposed port any container references by public IP, through WF_PAPERCLIP_BOARD_ORIGIN on the wf-stage containers",
+        "Kong on 8000 and 8443 is public by explicit decision rather than by default; customer traffic already reaches Supabase through Caddy on 443",
         "No customer-facing service is disturbed: every mini app and site rides Caddy on 80/443, and n8n and sgt-mini-app bind to localhost only",
         "TODO.md's completed claim that external 8443 is no longer reachable is corrected, because it is reachable",
         "Credential rotation is considered after closure; authentication is in place and no compromise is evidenced, so this is prudence rather than emergency",
@@ -1407,13 +1405,14 @@
         "RISK-005",
         "RISK-015"
       ],
-      "progress": "Scoped 2026-07-21 by direct read-only host inspection. Sequence is repoint, then close, then verify - not close first. Remediation remains an owner action: firewall and container changes on a shared production host carrying unrelated tenants are outside what this session will perform unattended.",
+      "progress": "Scoped and corrected 2026-07-21 by direct read-only host inspection. Closing the database, Redis and Kong ports needs no preparatory work. Remediation itself remains an owner action: firewall changes on a shared production host carrying unrelated tenants are outside what this session performs unattended.",
       "findings": [
-        "Port ownership confirmed on the host: 32768 is redis-tzbr-redis-1, 32770 is hermes-agent, 53324 is paperclip, 5432 and 6543 are supabase-pooler, 8000 and 8443 are supabase-kong, and 80/443 are supabase-caddy.",
-        "No customer application binds an exposed port. Caddy fronts www, sgt, automation, playground, api, wf-api, concierge, affiliate-api and executive-council on 443. n8n binds 127.0.0.1:5678 and sgt-mini-app binds 127.0.0.1:8080, neither externally reachable.",
-        "Seven containers carry the public IP in their environment and therefore loop out through the public interface and back in: wf-stage-api, wf-stage-worker, wealth-factory-api-stage2, wealth-factory-worker-proof-a/b/c and paperclip. These are what would break if ports closed without repointing.",
-        "Four of those seven are retirement candidates already tracked by OQ-009 and RISK-016, so the real repointing work is wf-stage-api and wf-stage-worker.",
-        "Redis has requirepass configured on the container command, so the exposed instance requires authentication."
+        "Port ownership: 32768 is redis-tzbr-redis-1, 32770 is hermes-agent, 53324 is paperclip, 5432 and 6543 are supabase-pooler, 8000 and 8443 are supabase-kong, 80/443 are supabase-caddy.",
+        "No customer application binds an exposed port. Caddy fronts www, sgt, automation, playground, api, wf-api, concierge, affiliate-api and executive-council on 443. n8n binds 127.0.0.1:5678 and sgt-mini-app 127.0.0.1:8080.",
+        "CORRECTION 2026-07-21: an earlier reading of this record claimed seven containers loop through the public IP for database and Redis access and must be repointed before any port closes. Direct inspection of the running containers shows the only public-IP reference is WF_PAPERCLIP_BOARD_ORIGIN, plus VPS_IP and PAPERCLIP_ALLOWED_HOSTNAMES on Paperclip itself. Postgres and Redis are already reached by internal Docker names. No repointing is required to close five of the six ports.",
+        "The local vault file vps2-deploy.env carries a public-IP Postgres connection string that does NOT match the deployed container environment. Vault documentation and deployed reality have diverged; the host is authoritative.",
+        "Redis has requirepass configured, so the exposed instance requires authentication.",
+        "Container management split: wf-stage-api and wf-stage-worker belong to compose project wealth-factory-stage at /home/deploy/wealth-factory-stage/docker-compose.vps2-isolated-stage.yml. wealth-factory-api, wealth-factory-api-stage2 and the three proof workers are standalone with no compose project, so recreating them depends on captured configuration rather than a checked-in file."
       ]
     },
     {
@@ -2146,6 +2145,54 @@
         "RISK-022",
         "RISK-023"
       ]
+    },
+    {
+      "id": "TASK-065",
+      "title": "Retire the dormant Wealth Factory containers on VPS2",
+      "status": "active",
+      "owner": "orchestrator",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "The three pressure-test workers and the superseded stage2 API are stopped, so capacity measurement is not polluted by them",
+        "Configuration is captured before removal so any container can be recreated",
+        "wealth-factory-api is resolved: it is fronted by api.spyderbyte.cloud, so its retirement needs confirmation that nothing depends on that hostname",
+        "Paperclip retirement is sequenced with closing port 53324 and with the wf-stage containers that reference its board origin",
+        "The captured configuration dumps are deleted once retirement is final, since they contain environment values"
+      ],
+      "write_scope": [
+        "VPS2 runtime"
+      ],
+      "artifacts": [
+        "/home/deploy/container-retirement-2026-07-21/ (config dumps, owner-only permissions)"
+      ],
+      "evidence": [
+        {
+          "type": "host-action",
+          "summary": "Stopped 2026-07-21, reversibly: wealth-factory-worker-proof-a, -b and -c (running since 2026-05-21) and wealth-factory-api-stage2 (running since 2026-05-20). Full docker inspect configuration captured to /home/deploy/container-retirement-2026-07-21 beforehand. Nothing was removed; docker start restores all four.",
+          "reference": "docker stop on four standalone containers"
+        },
+        {
+          "type": "verification",
+          "summary": "After stopping, https://www.spyderbyte.cloud returned HTTP 200 and https://wf-api.spyderbyte.cloud returned HTTP 401 as expected for an auth-gated surface. All 33 remaining containers including every mini app, Supabase service and Caddy stayed running.",
+          "reference": "curl status checks and docker ps after the change"
+        },
+        {
+          "type": "host-survey",
+          "summary": "Dormancy evidence: each proof worker and wealth-factory-api produced a single log line in seven days. Caddy logged one request in 24 hours, to www.spyderbyte.cloud only, with no traffic to api.spyderbyte.cloud - though the low total suggests access logging may be incomplete, so this is weak evidence rather than proof of disuse.",
+          "reference": "docker logs since 7d and since 24h"
+        }
+      ],
+      "handoffs": [
+        "Unblocks the capacity measurement of TASK-061 by removing idle workers from the box."
+      ],
+      "blockers": [
+        "wealth-factory-api is held: it is reverse-proxied by api.spyderbyte.cloud and the traffic evidence is too thin to call it unused. Owner decision needed.",
+        "paperclip is held: wf-stage-api and wf-stage-worker still carry its board origin and service tokens, so it should be retired together with port 53324 rather than alone."
+      ],
+      "progress": "Deliberately stopped rather than removed. docker stop is undone with docker start; docker rm on a standalone container with no compose file is not undoable without the captured config. Two of the six candidates were held back rather than actioned, because the owner's go-ahead was given against an assessment that has since been corrected.",
+      "risks": [
+        "RISK-016"
+      ]
     }
   ],
   "risks": [
@@ -2243,7 +2290,7 @@
       "id": "RISK-016",
       "text": "Three pressure-test workers (wealth-factory-worker-proof-a/b/c) and two superseded wealth-factory API containers have run for 2 months on the deployment target. Any future capacity measurement is polluted by them, and the older API generation may still hold live queue and database connections.",
       "severity": "medium",
-      "mitigation": "Decide per container whether to retire it before Ticket 28 measures blueprint-native capacity; retirement is an owner action on a shared production host."
+      "mitigation": "Four of the five dormant containers were stopped 2026-07-21 under TASK-065, reversibly and with configuration captured. wealth-factory-api is held pending confirmation that api.spyderbyte.cloud is unused."
     },
     {
       "id": "RISK-017",
@@ -2292,6 +2339,12 @@
       "text": "Internal code says factory while customers must only ever see foundry. Without enforcement, the internal word leaks into UI copy, error messages, email templates or export headers - the likeliest path being an agent or developer reading src/factory and matching its vocabulary.",
       "severity": "medium",
       "mitigation": "CON-011 makes the split conditional on a failing check over the built bundle, following the B31a guard pattern already proven in this codebase."
+    },
+    {
+      "id": "RISK-025",
+      "text": "Container configuration dumps written to /home/deploy/container-retirement-2026-07-21 on VPS2 contain full environment values, including provider and service tokens. They were created by this session as a recreate-safety net.",
+      "severity": "medium",
+      "mitigation": "Permissions set to owner-only at creation. TASK-065 requires deleting them once retirement is final; they should not outlive the decision they protect."
     }
   ],
   "artifacts": [
@@ -2507,6 +2560,13 @@
       "actor": "orchestrator",
       "action": "commit-b11-b35",
       "details": "Committed the twenty-five uncommitted phases to the new foundry/mvp-baseline branch as six ticket-group commits plus a housekeeping commit carrying the work record, closing the highest risk in this record. Working tree is clean, typecheck passes and all 219 blueprint-native tests pass on the committed state, and a secret scan over the 63 changed paths found no literal credentials. TASK-025 moved to active rather than completed because the push to origin was denied by the environment's permission classifier and remains an owner action; RISK-001 is not closed until the work exists somewhere other than this workstation."
+    },
+    {
+      "revision": 13,
+      "timestamp": "2026-07-21T17:40:00Z",
+      "actor": "orchestrator",
+      "action": "retire-dormant-containers-and-correct-port-plan",
+      "details": "Corrected a wrong claim previously recorded here: closing the Redis, Postgres and Kong ports needs no container repointing, because the only public-IP reference in any running container is the Paperclip board origin. The vault's vps2-deploy.env disagrees with deployed reality and the host is authoritative. Added TASK-065 and stopped four dormant standalone containers - three pressure-test workers and the superseded stage2 API - after capturing their full configuration, verifying afterwards that the public site and all mini apps were unaffected. Held back wealth-factory-api, which is reverse-proxied by api.spyderbyte.cloud on thin traffic evidence, and paperclip, which the wf-stage containers still reference. Added RISK-025 covering the configuration dumps, which contain environment values and must be deleted once retirement is final."
     }
   ]
 }
