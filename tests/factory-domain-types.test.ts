@@ -4,7 +4,10 @@ import { DEFAULT_RUN_STATUS_ORDER, isTerminalRunStatus } from "../src/factory/do
 import type {
   Approval,
   BlueprintPersonaDefinition,
+  CredentialAccessAuditIntent,
   FounderProfileDeliverable,
+  MaskedPowerSourceCredential,
+  PowerSourceCredential,
   PositioningBriefDeliverable,
   StationDefinition
 } from "../src/factory/domain/types.js";
@@ -76,7 +79,8 @@ describe("factory run status domain", () => {
       id: "approval_run_123_positioning",
       workspaceId: "ws_123",
       runId: "run_123",
-      packageId: "connect-first",
+      packageId: "pkg_connect_first",
+      packageVersionId: "pkg_connect_first@1.0.0",
       packageInstallId: "install_123",
       stationKey: "positioning",
       deliverableId: "deliverable_run_123_positioning_brief",
@@ -88,6 +92,7 @@ describe("factory run status domain", () => {
 
     expect(approval.stationKey).toBe("positioning");
     expect(approval.status).toBe("pending");
+    expect(approval.packageVersionId).toBe("pkg_connect_first@1.0.0");
     expect(approval.resolvedAt).toBeNull();
   });
 
@@ -131,5 +136,57 @@ describe("factory run status domain", () => {
     expect(intakeStation.personaKey).toBe("founder_guide");
     expect(positioningStation.familyKey).toBe("positioning");
     expect(positioningStation.personaKey).toBe("market_strategist");
+  });
+
+  it("defines a masked power-source credential shape separate from encrypted storage and decrypt audit", () => {
+    const credential: PowerSourceCredential = {
+      id: "credential_123",
+      workspaceId: "workspace_123",
+      providerKind: "openai_api",
+      label: "Founder OpenAI key",
+      last4: "cret",
+      keyVersion: "v1",
+      validationStatus: "pending",
+      validationMessage: "Validation is queued.",
+      lastValidatedAt: null,
+      encryptedPayload: {
+        ciphertext: "ciphertext",
+        iv: "iv",
+        tag: "tag",
+        wrappedDataKey: "wrapped",
+        wrappedDataKeyIv: "wrapped-iv",
+        wrappedDataKeyTag: "wrapped-tag"
+      },
+      createdAt: "2026-07-11T12:00:00.000Z",
+      deletedAt: null
+    };
+    const masked: MaskedPowerSourceCredential = {
+      id: credential.id,
+      workspaceId: credential.workspaceId,
+      providerKind: credential.providerKind,
+      label: credential.label,
+      last4: credential.last4,
+      keyVersion: credential.keyVersion,
+      validationStatus: credential.validationStatus,
+      validationMessage: credential.validationMessage,
+      lastValidatedAt: credential.lastValidatedAt,
+      createdAt: credential.createdAt,
+      deletedAt: credential.deletedAt,
+      masked: true
+    };
+    const audit: CredentialAccessAuditIntent = {
+      id: "credential_access_123",
+      workspaceId: credential.workspaceId,
+      credentialId: credential.id,
+      runId: "run_123",
+      purpose: "worker_execution",
+      accessedAt: "2026-07-11T12:01:00.000Z"
+    };
+
+    expect(masked).not.toHaveProperty("encryptedPayload");
+    expect(masked.masked).toBe(true);
+    expect(masked.last4).toBe("cret");
+    expect(audit.runId).toBe("run_123");
+    expect(audit.purpose).toBe("worker_execution");
   });
 });

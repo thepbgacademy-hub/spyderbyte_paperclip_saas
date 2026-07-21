@@ -27,6 +27,10 @@ export type StationFamilyKey =
   | "conversion_review"
   | "launch_offer_validation";
 export type DeliverableKind = "founder_profile" | "positioning_brief";
+export type PowerSourceProviderKind = "openai_api" | "anthropic_api" | "gemini_api" | "openrouter_api" | "xai_grok_api";
+export type CredentialValidationStatus = "pending" | "valid" | "invalid";
+export type CredentialValidationJobReason = "credential_created" | "weekly_revalidation";
+export type CredentialValidationJobStatus = "queued" | "processing" | "succeeded" | "failed";
 
 export type RunStatus =
   | "draft"
@@ -72,20 +76,147 @@ interface FactoryStationOutputBase {
 }
 
 export interface BlueprintPackageDefinition {
-  id: string;
+  packageId: string;
   key: string;
+  version: string;
+  packageVersionId: string;
   title: string;
   kind: Extract<PackageKind, "blueprint">;
+  permissions: PackagePermissionSnapshot["permissions"];
+  budgets: PackagePermissionSnapshot["budgets"];
+  source?: {
+    kind: "manifest" | "twfpkg";
+    contentHash: string;
+  };
   personas: BlueprintPersonaDefinition[];
   stations: StationDefinition[];
+}
+
+export interface PackagePermissionSnapshot {
+  permissions: {
+    tools: string[];
+    externalActions: Record<string, "approval_required" | "denied">;
+    dataAccess: {
+      tenantScopeOnly: boolean;
+      packageScopeOnly: boolean;
+      readableDeliverables: "own_package" | "declared_dependencies";
+    };
+  };
+  budgets: {
+    maxRunCostUsd: number;
+    maxRunMinutes: number;
+    maxStepCostUsd: number;
+    approvalRequiredAboveUsd: number;
+  };
+}
+
+export interface PackagePermissionDiff {
+  addedTools: string[];
+  widenedExternalActions: Array<{
+    action: string;
+    from: "approval_required" | "denied" | null;
+    to: "approval_required" | "denied";
+  }>;
+  budgetIncreases: Array<{
+    budget: keyof PackagePermissionSnapshot["budgets"];
+    from: number;
+    to: number;
+  }>;
+}
+
+export type PackageInstallAuditAction =
+  | "package_installed"
+  | "package_disabled"
+  | "package_enabled"
+  | "package_updated"
+  | "package_rolled_back"
+  | "package_uninstalled";
+
+export interface PackageInstallAuditIntent {
+  action: PackageInstallAuditAction;
+  workspaceId: string;
+  packageInstallId: string;
+  packageId: string;
+  packageVersionId: string;
+  occurredAt: string;
+  metadata: {
+    previousPackageVersionId?: string;
+    permissionDiff?: PackagePermissionDiff;
+  };
 }
 
 export interface PackageInstall {
   id: string;
   workspaceId: string;
   packageId: string;
+  packageVersionId: string;
+  previousPackageVersionId: string | null;
+  status: "enabled" | "disabled" | "uninstalled";
   installedAt: string;
+  updatedAt: string | null;
+  disabledAt: string | null;
+  uninstalledAt: string | null;
   enabled: boolean;
+  permissionSnapshot: PackagePermissionSnapshot;
+  permissionDiff: PackagePermissionDiff | null;
+}
+
+export interface PowerSourceCredential {
+  id: string;
+  workspaceId: string;
+  providerKind: PowerSourceProviderKind;
+  label: string;
+  last4: string;
+  keyVersion: string;
+  validationStatus: CredentialValidationStatus;
+  validationMessage: string;
+  lastValidatedAt: string | null;
+  encryptedPayload: {
+    ciphertext: string;
+    iv: string;
+    tag: string;
+    wrappedDataKey: string;
+    wrappedDataKeyIv: string;
+    wrappedDataKeyTag: string;
+  };
+  createdAt: string;
+  deletedAt: string | null;
+}
+
+export interface MaskedPowerSourceCredential {
+  id: string;
+  workspaceId: string;
+  providerKind: PowerSourceProviderKind;
+  label: string;
+  last4: string;
+  keyVersion: string;
+  validationStatus: CredentialValidationStatus;
+  validationMessage: string;
+  lastValidatedAt: string | null;
+  createdAt: string;
+  deletedAt: string | null;
+  masked: true;
+}
+
+export interface CredentialValidationJob {
+  id: string;
+  workspaceId: string;
+  credentialId: string;
+  reason: CredentialValidationJobReason;
+  status: CredentialValidationJobStatus;
+  requestedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  message: string | null;
+}
+
+export interface CredentialAccessAuditIntent {
+  id: string;
+  workspaceId: string;
+  credentialId: string;
+  runId: string;
+  purpose: string;
+  accessedAt: string;
 }
 
 export type ApprovalStatus = "pending" | "approved" | "changes_requested";
@@ -95,6 +226,7 @@ export interface Approval {
   workspaceId: string;
   runId: string;
   packageId: string;
+  packageVersionId: string;
   packageInstallId: string;
   stationKey: "positioning";
   deliverableId: string;

@@ -16,7 +16,9 @@ import type { IntakeRun } from "./intake-run-service.js";
 function resolvePositioningStation(blueprint: BlueprintPackageDefinition) {
   const positioningStation = blueprint.stations.find((station) => station.key === "positioning");
   if (!positioningStation || positioningStation.kind !== "analysis") {
-    throw new Error(`Blueprint package "${blueprint.id}" does not define a positioning analysis station`);
+    throw new Error(
+      `Blueprint package "${blueprint.packageId}" does not define a positioning analysis station`
+    );
   }
 
   return positioningStation;
@@ -38,9 +40,15 @@ function assertInstallMatchesBlueprint(
   packageInstall: PackageInstall,
   blueprint: BlueprintPackageDefinition
 ) {
-  if (packageInstall.packageId !== blueprint.id) {
+  if (packageInstall.packageId !== blueprint.packageId) {
     throw new Error(
-      `Blueprint install "${packageInstall.id}" is bound to package "${packageInstall.packageId}", not "${blueprint.id}"`
+      `Blueprint install "${packageInstall.id}" is bound to package "${packageInstall.packageId}", not "${blueprint.packageId}"`
+    );
+  }
+
+  if (packageInstall.packageVersionId !== blueprint.packageVersionId) {
+    throw new Error(
+      `Blueprint install "${packageInstall.id}" is bound to package version "${packageInstall.packageVersionId}", not "${blueprint.packageVersionId}"`
     );
   }
 }
@@ -63,17 +71,6 @@ function isFirstRevisedPositioningApprovalContract(
   );
 }
 
-function isBoundedPositioningApprovalContract(
-  runId: string,
-  approval: Approval,
-  brief: PositioningBriefDeliverable
-) {
-  return (
-    isOriginalPositioningApprovalContract(runId, approval, brief) ||
-    isFirstRevisedPositioningApprovalContract(runId, approval, brief)
-  );
-}
-
 export function startPositioningAnalysisStation(input: {
   run: IntakeRun;
   workspace: Workspace;
@@ -88,8 +85,16 @@ export function startPositioningAnalysisStation(input: {
     throw new Error(`Run "${input.run.id}" does not belong to workspace "${input.workspace.id}"`);
   }
 
-  if (input.run.packageId !== input.blueprint.id) {
-    throw new Error(`Run "${input.run.id}" does not target blueprint package "${input.blueprint.id}"`);
+  if (input.run.packageId !== input.blueprint.packageId) {
+    throw new Error(
+      `Run "${input.run.id}" does not target blueprint package "${input.blueprint.packageId}"`
+    );
+  }
+
+  if (input.run.packageVersionId !== input.blueprint.packageVersionId) {
+    throw new Error(
+      `Run "${input.run.id}" is pinned to package version "${input.run.packageVersionId}", not "${input.blueprint.packageVersionId}"`
+    );
   }
 
   if (input.run.packageInstallId !== input.packageInstall.id) {
@@ -139,8 +144,16 @@ export function completePositioningAnalysis(input: {
     throw new Error(`Run "${input.run.id}" does not belong to workspace "${input.workspace.id}"`);
   }
 
-  if (input.run.packageId !== input.blueprint.id) {
-    throw new Error(`Run "${input.run.id}" does not target blueprint package "${input.blueprint.id}"`);
+  if (input.run.packageId !== input.blueprint.packageId) {
+    throw new Error(
+      `Run "${input.run.id}" does not target blueprint package "${input.blueprint.packageId}"`
+    );
+  }
+
+  if (input.run.packageVersionId !== input.blueprint.packageVersionId) {
+    throw new Error(
+      `Run "${input.run.id}" is pinned to package version "${input.run.packageVersionId}", not "${input.blueprint.packageVersionId}"`
+    );
   }
 
   if (input.run.packageInstallId !== input.packageInstall.id) {
@@ -187,7 +200,8 @@ export function completePositioningAnalysis(input: {
     id: `approval_${input.run.id}_positioning`,
     workspaceId: input.workspace.id,
     runId: input.run.id,
-    packageId: input.blueprint.id,
+    packageId: input.blueprint.packageId,
+    packageVersionId: input.blueprint.packageVersionId,
     packageInstallId: input.packageInstall.id,
     stationKey: "positioning",
     deliverableId: deliverable.id,
@@ -226,8 +240,16 @@ export function approvePositioningAnalysis(input: {
     throw new Error(`Run "${input.run.id}" does not belong to workspace "${input.workspace.id}"`);
   }
 
-  if (input.run.packageId !== input.blueprint.id) {
-    throw new Error(`Run "${input.run.id}" does not target blueprint package "${input.blueprint.id}"`);
+  if (input.run.packageId !== input.blueprint.packageId) {
+    throw new Error(
+      `Run "${input.run.id}" does not target blueprint package "${input.blueprint.packageId}"`
+    );
+  }
+
+  if (input.run.packageVersionId !== input.blueprint.packageVersionId) {
+    throw new Error(
+      `Run "${input.run.id}" is pinned to package version "${input.run.packageVersionId}", not "${input.blueprint.packageVersionId}"`
+    );
   }
 
   if (input.run.packageInstallId !== input.packageInstall.id) {
@@ -254,7 +276,8 @@ export function approvePositioningAnalysis(input: {
   if (
     input.approval.workspaceId !== input.workspace.id ||
     input.approval.runId !== input.run.id ||
-    input.approval.packageId !== input.blueprint.id ||
+    input.approval.packageId !== input.blueprint.packageId ||
+    input.approval.packageVersionId !== input.blueprint.packageVersionId ||
     input.approval.packageInstallId !== input.packageInstall.id ||
     input.approval.stationKey !== "positioning" ||
     input.approval.deliverableId !== input.positioningBrief.id
@@ -329,8 +352,16 @@ export function requestChangesForPositioningAnalysis(input: {
     throw new Error(`Run "${input.run.id}" does not belong to workspace "${input.workspace.id}"`);
   }
 
-  if (input.run.packageId !== input.blueprint.id) {
-    throw new Error(`Run "${input.run.id}" does not target blueprint package "${input.blueprint.id}"`);
+  if (input.run.packageId !== input.blueprint.packageId) {
+    throw new Error(
+      `Run "${input.run.id}" does not target blueprint package "${input.blueprint.packageId}"`
+    );
+  }
+
+  if (input.run.packageVersionId !== input.blueprint.packageVersionId) {
+    throw new Error(
+      `Run "${input.run.id}" is pinned to package version "${input.run.packageVersionId}", not "${input.blueprint.packageVersionId}"`
+    );
   }
 
   if (input.run.packageInstallId !== input.packageInstall.id) {
@@ -357,7 +388,8 @@ export function requestChangesForPositioningAnalysis(input: {
   if (
     input.approval.workspaceId !== input.workspace.id ||
     input.approval.runId !== input.run.id ||
-    input.approval.packageId !== input.blueprint.id ||
+    input.approval.packageId !== input.blueprint.packageId ||
+    input.approval.packageVersionId !== input.blueprint.packageVersionId ||
     input.approval.packageInstallId !== input.packageInstall.id ||
     input.approval.stationKey !== "positioning" ||
     input.approval.deliverableId !== input.positioningBrief.id
@@ -421,8 +453,16 @@ export function revisePositioningAnalysisAfterChangesRequested(input: {
     throw new Error(`Run "${input.run.id}" does not belong to workspace "${input.workspace.id}"`);
   }
 
-  if (input.run.packageId !== input.blueprint.id) {
-    throw new Error(`Run "${input.run.id}" does not target blueprint package "${input.blueprint.id}"`);
+  if (input.run.packageId !== input.blueprint.packageId) {
+    throw new Error(
+      `Run "${input.run.id}" does not target blueprint package "${input.blueprint.packageId}"`
+    );
+  }
+
+  if (input.run.packageVersionId !== input.blueprint.packageVersionId) {
+    throw new Error(
+      `Run "${input.run.id}" is pinned to package version "${input.run.packageVersionId}", not "${input.blueprint.packageVersionId}"`
+    );
   }
 
   if (input.run.packageInstallId !== input.packageInstall.id) {
@@ -461,7 +501,8 @@ export function revisePositioningAnalysisAfterChangesRequested(input: {
   if (
     input.previousApproval.workspaceId !== input.workspace.id ||
     input.previousApproval.runId !== input.run.id ||
-    input.previousApproval.packageId !== input.blueprint.id ||
+    input.previousApproval.packageId !== input.blueprint.packageId ||
+    input.previousApproval.packageVersionId !== input.blueprint.packageVersionId ||
     input.previousApproval.packageInstallId !== input.packageInstall.id ||
     input.previousApproval.stationKey !== "positioning" ||
     input.previousApproval.id !== `approval_${input.run.id}_positioning` ||
@@ -506,7 +547,8 @@ export function revisePositioningAnalysisAfterChangesRequested(input: {
     id: `approval_${input.run.id}_positioning_revision_1`,
     workspaceId: input.workspace.id,
     runId: input.run.id,
-    packageId: input.blueprint.id,
+    packageId: input.blueprint.packageId,
+    packageVersionId: input.blueprint.packageVersionId,
     packageInstallId: input.packageInstall.id,
     stationKey: "positioning",
     deliverableId: deliverable.id,

@@ -12,15 +12,24 @@ const ALLOWED_STATION_KINDS: ReadonlySet<StationKind> = new Set([
   "checkpoint",
   "assembly"
 ]);
-const ALLOWED_B10_STATION_FAMILIES = new Set(["intake", "positioning"]);
+const ALLOWED_REBOOT_STATION_FAMILIES = new Set(["intake", "positioning"]);
+
+export function derivePackageVersionId(packageId: string, version: string) {
+  return `${packageId}@${version}`;
+}
 
 export function isStationKindAllowed(kind: string): kind is StationKind {
   return ALLOWED_STATION_KINDS.has(kind as StationKind);
 }
 
 export function createBlueprintPackage(input: {
+  packageId: string;
   key: string;
+  version: string;
   title: string;
+  source?: BlueprintPackageDefinition["source"];
+  permissions?: BlueprintPackageDefinition["permissions"];
+  budgets?: BlueprintPackageDefinition["budgets"];
   personas: BlueprintPersonaDefinition[];
   stations: StationDefinition[];
 }): BlueprintPackageDefinition {
@@ -52,9 +61,9 @@ export function createBlueprintPackage(input: {
       );
     }
 
-    if (!ALLOWED_B10_STATION_FAMILIES.has(station.familyKey)) {
+    if (!ALLOWED_REBOOT_STATION_FAMILIES.has(station.familyKey)) {
       throw new Error(
-        `Station family "${station.familyKey}" is outside the bounded B10 intake/positioning slice for blueprint package "${input.key}"`
+        `Station family "${station.familyKey}" is outside the bounded intake/positioning reboot slice for blueprint package "${input.key}"`
       );
     }
 
@@ -93,12 +102,42 @@ export function createBlueprintPackage(input: {
     }
   }
 
-  return {
-    id: input.key,
+  const packageDefinition: BlueprintPackageDefinition = {
+    packageId: input.packageId,
     key: input.key,
+    version: input.version,
+    packageVersionId: derivePackageVersionId(input.packageId, input.version),
     title: input.title,
     kind: "blueprint",
+    permissions: input.permissions ?? {
+      tools: [],
+      externalActions: {},
+      dataAccess: {
+        tenantScopeOnly: true,
+        packageScopeOnly: true,
+        readableDeliverables: "own_package"
+      }
+    },
+    budgets: input.budgets ?? {
+      maxRunCostUsd: 0,
+      maxRunMinutes: 0,
+      maxStepCostUsd: 0,
+      approvalRequiredAboveUsd: 0
+    },
     personas,
     stations
   };
+
+  packageDefinition.permissions = {
+    tools: [...packageDefinition.permissions.tools],
+    externalActions: { ...packageDefinition.permissions.externalActions },
+    dataAccess: { ...packageDefinition.permissions.dataAccess }
+  };
+  packageDefinition.budgets = { ...packageDefinition.budgets };
+
+  if (input.source) {
+    packageDefinition.source = { ...input.source };
+  }
+
+  return packageDefinition;
 }

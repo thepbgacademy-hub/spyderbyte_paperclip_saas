@@ -10,6 +10,7 @@ export interface IntakeRun {
   id: string;
   workspaceId: string;
   packageId: string;
+  packageVersionId: string;
   packageInstallId: string;
   activeDeliverableId: string | null;
   activeApprovalId: string | null;
@@ -32,7 +33,7 @@ export interface IntakeAnswers {
 function resolveIntakeStation(blueprint: BlueprintPackageDefinition) {
   const intakeStation = blueprint.stations.find((station) => station.key === "intake");
   if (!intakeStation || intakeStation.kind !== "structured_interview") {
-    throw new Error(`Blueprint package "${blueprint.id}" does not define an intake station`);
+    throw new Error(`Blueprint package "${blueprint.packageId}" does not define an intake station`);
   }
 
   return intakeStation;
@@ -54,9 +55,15 @@ function assertInstallMatchesBlueprint(
   packageInstall: PackageInstall,
   blueprint: BlueprintPackageDefinition
 ) {
-  if (packageInstall.packageId !== blueprint.id) {
+  if (packageInstall.packageId !== blueprint.packageId) {
     throw new Error(
-      `Blueprint install "${packageInstall.id}" is bound to package "${packageInstall.packageId}", not "${blueprint.id}"`
+      `Blueprint install "${packageInstall.id}" is bound to package "${packageInstall.packageId}", not "${blueprint.packageId}"`
+    );
+  }
+
+  if (packageInstall.packageVersionId !== blueprint.packageVersionId) {
+    throw new Error(
+      `Blueprint install "${packageInstall.id}" is bound to package version "${packageInstall.packageVersionId}", not "${blueprint.packageVersionId}"`
     );
   }
 }
@@ -75,7 +82,8 @@ export function startIntakeRun(input: {
   return {
     id: input.id,
     workspaceId: input.workspace.id,
-    packageId: input.blueprint.id,
+    packageId: input.blueprint.packageId,
+    packageVersionId: input.blueprint.packageVersionId,
     packageInstallId: input.packageInstall.id,
     activeDeliverableId: null,
     activeApprovalId: null,
@@ -105,8 +113,16 @@ export function submitIntakeAnswers(input: {
     throw new Error(`Run "${input.run.id}" does not belong to workspace "${input.workspace.id}"`);
   }
 
-  if (input.run.packageId !== input.blueprint.id) {
-    throw new Error(`Run "${input.run.id}" does not target blueprint package "${input.blueprint.id}"`);
+  if (input.run.packageId !== input.blueprint.packageId) {
+    throw new Error(
+      `Run "${input.run.id}" does not target blueprint package "${input.blueprint.packageId}"`
+    );
+  }
+
+  if (input.run.packageVersionId !== input.blueprint.packageVersionId) {
+    throw new Error(
+      `Run "${input.run.id}" is pinned to package version "${input.run.packageVersionId}", not "${input.blueprint.packageVersionId}"`
+    );
   }
 
   if (input.run.packageInstallId !== input.packageInstall.id) {

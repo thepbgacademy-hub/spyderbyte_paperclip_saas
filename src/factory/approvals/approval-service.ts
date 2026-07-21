@@ -5,6 +5,7 @@ export function createApprovalRequest(input: {
   workspaceId: string;
   runId: string;
   packageId: string;
+  packageVersionId: string;
   packageInstallId: string;
   stationKey: Approval["stationKey"];
   deliverableId: string;
@@ -15,6 +16,7 @@ export function createApprovalRequest(input: {
     workspaceId: input.workspaceId,
     runId: input.runId,
     packageId: input.packageId,
+    packageVersionId: input.packageVersionId,
     packageInstallId: input.packageInstallId,
     stationKey: input.stationKey,
     deliverableId: input.deliverableId,
