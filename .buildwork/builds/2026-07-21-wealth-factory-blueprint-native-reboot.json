@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 11,
+  "revision": 12,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -10,7 +10,7 @@
     "workspace": ".",
     "parent_build_id": null,
     "created_at": "2026-07-21T12:39:15Z",
-    "updated_at": "2026-07-21T16:45:00Z"
+    "updated_at": "2026-07-21T17:05:00Z"
   },
   "objective": {
     "summary": "Ship SpyderByte Foundry: a software platform where a solo founder buys a workflow package for a market segment (social media manager, coach, website builder and more), connects their own AI provider account, and runs guided staged workflows that generate their company's operating documents, brand assets and procedures, approving each station before anything is finalized, then exports files they keep forever. Pricing is a one-time package of $600-$2,000 plus $19-$49/month platform access after included months. Twelve clients from a successful market-fit launch are waiting to purchase as of 2026-07-21, and the build is roughly 7 weeks past its intended launch. The engine is being rebuilt blueprint-native because the previous platform, a rebranded Paperclip, was a single-user agent runtime by design and could not carry multiple tenants, and because its only working secret-injection path persisted subscriber provider secrets onto issue objects. Success is not 'the tickets closed' - it is a paying customer completing purchase to export unaided.",
@@ -1132,7 +1132,7 @@
     {
       "id": "TASK-025",
       "title": "Commit the uncommitted reboot phases B11-B35, chunked by ticket group",
-      "status": "pending",
+      "status": "active",
       "owner": "unassigned",
       "dependencies": [
         "TASK-024"
@@ -1147,14 +1147,45 @@
       "write_scope": [
         "repository history"
       ],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "eba87e3 feat(ticket-07): manifest loader, package identity split, content hash (B11-B14)",
+        "81adef8 feat(ticket-08): operator catalog publication and durable lifecycle (B15-B17)",
+        "5de879f feat(ticket-09): tenant package install lifecycle end to end (B18-B26)",
+        "4c0c6fb feat(ticket-10): Power Source credential vault and masked API (B27-B28)",
+        "e223e0e feat(ticket-11): provider registry and provider-native completion mappers (B29-B30)",
+        "87cf2d9 feat(ticket-12): credential validation lifecycle, queue and exact-job processing (B31-B35)",
+        "696f26c chore: adopt build under beginning-builds and restructure around customer outcome"
+      ],
+      "evidence": [
+        {
+          "type": "git",
+          "summary": "Seven commits on branch foundry/mvp-baseline, cut from codex/wealth-factory-blueprint at 967fd06. Six chunks by ticket group per DEC-014 plus one housekeeping commit carrying the work record. Working tree is clean: git status --porcelain returns nothing.",
+          "reference": "git log --oneline 967fd06..HEAD"
+        },
+        {
+          "type": "typecheck",
+          "summary": "npm run build (tsc --noEmit) passes with zero errors on the committed tree",
+          "reference": "npm run build"
+        },
+        {
+          "type": "test-run",
+          "summary": "Blueprint-native suite passes on the committed tree: 26 test files, 219 tests, 0 failures",
+          "reference": "npx vitest run tests/factory-*.test.ts tests/bullmq-factory-*.test.ts --reporter=dot"
+        },
+        {
+          "type": "secret-scan",
+          "summary": "63 changed paths scanned for private keys, provider key prefixes, JWT service-role values and embedded Postgres passwords. The only match is a template literal interpolating a variable in a pre-existing test, not a literal secret. .env is gitignored and was not committed.",
+          "reference": "git grep over HEAD"
+        }
+      ],
       "handoffs": [],
-      "blockers": [],
+      "blockers": [
+        "Push to origin is blocked: the environment's permission classifier denied git push. The owner must run it, or grant the permission. Nothing else in this task remains."
+      ],
       "risks": [
         "RISK-001"
       ],
-      "progress": "Verified 2026-07-21: last reboot commit is 967fd06 (B10). 36 untracked paths and 15 modified files carry B11-B35. Owner confirmed B35 freshly verified. Commit shape decided in DEC-014."
+      "progress": "Commits complete and verified 2026-07-21; push outstanding. Chunking followed DEC-014 by ticket group. Honest caveat recorded in the first commit message: cross-cutting source files could not be split per phase without interactive staging, so intermediate commits are snapshots and only the final tree is verified green. One straggler, factory-credential-vault.ts, landed in the final commit rather than its Ticket 10 chunk. Remaining command: git push -u origin foundry/mvp-baseline"
     },
     {
       "id": "TASK-026",
@@ -2344,6 +2375,11 @@
         "type": "reachability-probe",
         "summary": "Six VPS2 ports confirmed publicly reachable, contradicting TODO.md's completed claim that external 8443 is no longer reachable",
         "reference": "TASK-034"
+      },
+      {
+        "type": "git",
+        "summary": "Phases B11-B35 committed 2026-07-21 as six ticket-group commits plus a record commit on foundry/mvp-baseline; working tree clean; typecheck and 219 tests green on the committed state. Push to origin still pending owner action.",
+        "reference": "TASK-025"
       }
     ],
     "final_status": "pending"
@@ -2464,6 +2500,13 @@
       "actor": "orchestrator",
       "action": "scope-port-remediation-and-branch",
       "details": "Mapped every exposed VPS2 port to its owning container by read-only host inspection, confirming no customer application binds one: all mini apps and sites ride Caddy on 443, and n8n and sgt-mini-app bind localhost only. Identified the seven containers that loop through the public IP and must be repointed to internal hostnames before any port closes, or the stage lane breaks. Lowered RISK-015 from high to medium on evidence that Redis has requirepass configured and Postgres requires a password, correcting an assessment originally made on reachability alone. Recorded DEC-037 and updated CON-004 for the new foundry/mvp-baseline branch, and added OQ-010 noting that CLAUDE.md is gitignored so the record pointer does not reach GitHub."
+    },
+    {
+      "revision": 12,
+      "timestamp": "2026-07-21T17:05:00Z",
+      "actor": "orchestrator",
+      "action": "commit-b11-b35",
+      "details": "Committed the twenty-five uncommitted phases to the new foundry/mvp-baseline branch as six ticket-group commits plus a housekeeping commit carrying the work record, closing the highest risk in this record. Working tree is clean, typecheck passes and all 219 blueprint-native tests pass on the committed state, and a secret scan over the 63 changed paths found no literal credentials. TASK-025 moved to active rather than completed because the push to origin was denied by the environment's permission classifier and remains an owner action; RISK-001 is not closed until the work exists somewhere other than this workstation."
     }
   ]
 }
