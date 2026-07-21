@@ -1,0 +1,2469 @@
+{
+  "$schema": "beginning-builds/build-work.schema.json",
+  "schema_version": "1.0.0",
+  "revision": 11,
+  "build": {
+    "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
+    "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
+    "type": "software",
+    "status": "active",
+    "workspace": ".",
+    "parent_build_id": null,
+    "created_at": "2026-07-21T12:39:15Z",
+    "updated_at": "2026-07-21T16:45:00Z"
+  },
+  "objective": {
+    "summary": "Ship SpyderByte Foundry: a software platform where a solo founder buys a workflow package for a market segment (social media manager, coach, website builder and more), connects their own AI provider account, and runs guided staged workflows that generate their company's operating documents, brand assets and procedures, approving each station before anything is finalized, then exports files they keep forever. Pricing is a one-time package of $600-$2,000 plus $19-$49/month platform access after included months. Twelve clients from a successful market-fit launch are waiting to purchase as of 2026-07-21, and the build is roughly 7 weeks past its intended launch. The engine is being rebuilt blueprint-native because the previous platform, a rebranded Paperclip, was a single-user agent runtime by design and could not carry multiple tenants, and because its only working secret-injection path persisted subscriber provider secrets onto issue objects. Success is not 'the tickets closed' - it is a paying customer completing purchase to export unaided.",
+    "deliverables": [
+      "Purchase to provisioning: Stripe checkout for three tiers that grants platform access immediately with no manual step",
+      "Guided Power Source setup for five API providers (OpenAI, Anthropic, OpenRouter, Gemini, Grok) and two subscription device connectors (OpenAI, Grok), masked and validated",
+      "Run budget enforcement on by default, metered in dollars for API keys and in request pacing plus station cooldowns for subscription connectors",
+      "A staged workflow run: intake, stations staffed by specialist functions, deliverables produced per station, all persisted",
+      "The Foreman: a single conversational guide, grounded in the customer's live run, that answers questions and advises on next steps - the only persona with a chat surface",
+      "Approval gates where nothing finalizes without the customer approving or requesting changes",
+      "Export of every generated deliverable, in formats the customer keeps",
+      "Self-serve subscription management including online cancellation",
+      "Tenant isolation proven by test, not assumed, on the live database",
+      "Runs that pause and resume across provider session loss rather than failing and discarding approved work",
+      "A deployment the team can operate: one VPS to start, tenant placement stubbed for later multi-node growth"
+    ],
+    "out_of_scope": [
+      "Expanding the legacy Paperclip-adapter lane; it is retired as product direction and survives only as reference and recorded lessons",
+      "Live VPS deployment, live provider calls and production data mutation from any bounded reboot phase (Ticket 28 is the deliberate exception)",
+      "Reintroducing the CEO/CFO/CMO persona shell as an architectural requirement",
+      "Adopting the master blueprint's idealized greenfield stack (PostgreSQL 16 + Drizzle, fresh monorepo scaffold) in place of this repo's existing Supabase/Postgres SQL migrations"
+    ],
+    "acceptance_criteria": [
+      "A customer completes Stripe checkout and reaches a working factory floor with their package installed, without any manual operator step",
+      "A customer connects an API key or a device connector through guided setup, and no plaintext credential is ever returned by any surface",
+      "A run cannot exceed its budget: dollar-capped for API keys, paced and cooled down for subscription connectors, on by default",
+      "A workflow run produces deliverables station by station, and every deliverable survives refresh, logout and worker restart",
+      "No deliverable finalizes without an explicit customer approval or change request",
+      "A customer can ask the Foreman about their run's progress and next step at any point, and receives an answer grounded in that run's actual state",
+      "The Foreman cannot approve, finalize or advance anything on the customer's behalf; approvals remain explicit UI actions",
+      "A customer exports everything their workflows generated",
+      "A customer cancels their subscription online without contacting support",
+      "A second tenant provably cannot read the first tenant's rows, proven by a test that fails when isolation is broken",
+      "A run whose provider session is revoked mid-flow pauses with completed stations intact, and resumes after re-authorization",
+      "The owner and one staff member each complete a full client-simulating workflow before the first external client is onboarded",
+      "No user-facing surface says Wealth Factory",
+      "npm run build passes and the blueprint-native suite passes",
+      "All reboot-lane work is committed and pushed to codex/wealth-factory-blueprint"
+    ]
+  },
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "text": "Wealth Factory owns BYOK end to end: tenant provider credentials are stored under envelope encryption and decrypted only just-in-time for a bound worker context."
+    },
+    {
+      "id": "REQ-002",
+      "text": "Package identity must separate stable packageId from immutable packageVersionId; runs and installs pin a specific package version."
+    },
+    {
+      "id": "REQ-003",
+      "text": "Operator catalog lifecycle is forward-only and immutable: published -> deprecated -> yanked, with duplicate packageId@version rejected."
+    },
+    {
+      "id": "REQ-004",
+      "text": "Tenant package lifecycle actions (install, disable, enable, update, rollback, uninstall) require owner/admin authorization and tenant-scoped install lookup, and emit audit intent."
+    },
+    {
+      "id": "REQ-005",
+      "text": "Package updates that widen permissions require explicit consent before they are applied."
+    },
+    {
+      "id": "REQ-006",
+      "text": "Uninstall is non-destructive by default and requires exact typed confirmation; deliverable and data deletion are separate actions."
+    },
+    {
+      "id": "REQ-007",
+      "text": "The blueprint-native queue namespace must be isolated from all legacy wfpc-* and Paperclip-shaped queues."
+    },
+    {
+      "id": "REQ-008",
+      "text": "Provider adapters must normalize usage and cost and sanitize provider errors before they cross the factory boundary."
+    },
+    {
+      "id": "REQ-009",
+      "text": "Credential validation is queued on save, processed by exact job id, and re-validated on a weekly eligibility rule, with auth failures invalidating the credential."
+    },
+    {
+      "id": "REQ-010",
+      "text": "Business-guidance expertise from the retired persona shell is preserved as specialist functions (direction, finance, market, operations, offer) bound to station ownership, deliverables, approvals and handoffs."
+    },
+    {
+      "id": "REQ-011",
+      "text": "The policy engine is default-deny over a closed PolicyAction union, per master blueprint Section 15."
+    },
+    {
+      "id": "REQ-012",
+      "text": "User-facing surfaces must carry no residual internal or Paperclip-flavored terminology at launch (Ticket 30)."
+    }
+  ],
+  "constraints": [
+    {
+      "id": "CON-001",
+      "text": "Every phase is a bounded seam: it states what it does not widen into, and that boundary is honored rather than opportunistically exceeded."
+    },
+    {
+      "id": "CON-002",
+      "text": "Pure domain first, then ports, then adapters, then transport, then runtime. No phase may reach past its layer."
+    },
+    {
+      "id": "CON-003",
+      "text": "Reboot-lane phases must not touch the VPS, live databases, Paperclip state, provider credentials or live provider endpoints."
+    },
+    {
+      "id": "CON-004",
+      "text": "Work happens on branch foundry/mvp-baseline of origin github.com/thepbgacademy-hub/spyderbyte_paperclip_saas, cut from codex/wealth-factory-blueprint at 967fd06. The legacy lane is not modified by reboot phases."
+    },
+    {
+      "id": "CON-005",
+      "text": "Secret values are never written into records, docs, coordination artifacts or test fixtures; only env-var names or secret-manager references."
+    },
+    {
+      "id": "CON-006",
+      "text": "Capacity is measured before it is purchased. The 2-tenants-per-VPS figure came from Paperclip, a single-user engine that ran agent workloads locally. In the blueprint-native model inference happens at the customer's provider, so the worker is I/O-bound and density is unknown until measured. Run wave one on a single VPS, measure, then buy hardware against evidence."
+    },
+    {
+      "id": "CON-007",
+      "text": "Do not revert unrelated dirty worktree changes; the tree carries multiple phases of uncommitted work that must be separated, not discarded."
+    },
+    {
+      "id": "CON-008",
+      "text": "Scope is governed by what the landing page promises twelve paying customers. Work that serves no promise on that page is post-MVP unless it is a safety, security or legal requirement."
+    },
+    {
+      "id": "CON-009",
+      "text": "Only the Foreman has a chat surface. Specialist personas produce deliverables and never converse with the customer. Adding a second chattable persona reintroduces the agent-org-chart mental model the master blueprint explicitly rejected."
+    },
+    {
+      "id": "CON-010",
+      "text": "Foreman conversation is grounded in bounded context - the active run's state, its station outputs, budget consumed and what is awaiting the customer. It is not open-ended retrieval across the tenant's history."
+    },
+    {
+      "id": "CON-011",
+      "text": "Customer-facing vocabulary lives in one copy layer and is enforced by a failing check, not by discipline. Internal engineering names may keep the word factory only while that guard exists and is proven able to fail; if the guard is removed, the internal names must be renamed instead."
+    }
+  ],
+  "decisions": [
+    {
+      "id": "DEC-001",
+      "text": "Rebuild blueprint-native rather than refactor the legacy Paperclip-adapter stack, on a dedicated reboot branch with a fresh GitNexus baseline.",
+      "rationale": "The legacy harness/runtime backlog was being inherited into every new slice; a clean seam baseline made blast radius knowable."
+    },
+    {
+      "id": "DEC-002",
+      "text": "Separate stable packageId from immutable packageVersionId, with the bounded slice deriving packageVersionId as ${packageId}@${version}.",
+      "rationale": "The B1-B7 minimal package identity was a proof shortcut; persistence, publishing, install history and update flows all require version pinning, so the split had to land before those phases widened the model."
+    },
+    {
+      "id": "DEC-003",
+      "text": "Retire the CEO/CFO/CMO persona shell and bind expertise to specialist functions (direction, finance, market, operations, offer) instead of titles.",
+      "rationale": "Function over title keeps the business-guidance expertise while letting station ownership, approvals and handoffs define who acts."
+    },
+    {
+      "id": "DEC-004",
+      "text": "The credential validation repository is the authoritative state machine; BullMQ carries only a deterministic job reference and never infers claims from queue order.",
+      "rationale": "Transport-authoritative queues produced the legacy outbox/BullMQ drift where a row could be marked enqueued with no observable job; repository authority makes claim and duplicate suppression provable."
+    },
+    {
+      "id": "DEC-005",
+      "text": "Blueprint-native queues use the wealth-factory-* namespace and fail closed on any wfpc-* or paperclip-shaped name or prefix (B31a guard).",
+      "rationale": "Namespace isolation had to be mechanically enforced before any BullMQ client existed, so no phase could accidentally consume legacy jobs."
+    },
+    {
+      "id": "DEC-006",
+      "text": "Credential API surfaces return masked values only; no decrypt endpoint exists, and decrypt is worker-bound and audited.",
+      "rationale": "Plain issue-level env overrides were proven effective but unsafe on the legacy lane because values persisted on the issue object; the blueprint lane must not repeat that."
+    },
+    {
+      "id": "DEC-007",
+      "text": "Superseded by DEC-012. Previously: four tenants per VPS is the strict launch upper cap with 120 seconds between tenant start windows.",
+      "rationale": "That cap was measured against the Paperclip execution model (four-tenant staggered peaks of 474.71% CPU, 2990370980 bytes memory, 1405 PIDs). The evidence is retained as a legacy-lane finding but does not govern the blueprint-native runtime."
+    },
+    {
+      "id": "DEC-008",
+      "text": "Entitlements.canInstall(...) stays a narrow boolean with an allow-all dev implementation until Ticket 25 replaces it with the real Stripe-backed driver.",
+      "rationale": "Keeps the install lane shippable without dragging billing scope into Ticket 09."
+    },
+    {
+      "id": "DEC-009",
+      "text": "Owner answer 2026-07-21 (resolves OQ-001): the master blueprint at E:\\REPOS 2\\wealth_clip\\THE_WEALTH_FACTORY_MASTER_BLUEPRINT.md is the external source of truth for ticket scope. Verified 2026-07-21 to enumerate 30 tickets, not 25. Repo docs must gain a ticket index or an explicit pointer rather than silently citing ticket numbers.",
+      "rationale": "Phases cited Tickets 07-12 and a future Ticket 25 with no in-repo definition, so remaining scope was unknowable from the repo alone."
+    },
+    {
+      "id": "DEC-010",
+      "text": "Owner answer 2026-07-21 (resolves OQ-002): the Paperclip-style lane is retired as product direction. Its code and docs remain in the repo as reference and recorded lessons, but the reboot branch must not expand it.",
+      "rationale": "The reboot replaces the execution model; keeping two live lanes was producing drifting plans and duplicated effort."
+    },
+    {
+      "id": "DEC-011",
+      "text": "Owner answer 2026-07-21 (resolves OQ-003): for the reboot branch the authoritative handoff is the reboot docs plus this build record. wf-harness/HANDOFF.md belongs to the retired codex/wf-harness-design lane and must be banner-marked historical.",
+      "rationale": "Root HANDOFF.md contradicted itself, naming wf-harness authoritative and then overriding it for this branch."
+    },
+    {
+      "id": "DEC-012",
+      "text": "Owner answer 2026-07-21 (resolves OQ-005): plan for 2 tenants per VPS. The 4-tenant goal was revised to 2 during the Paperclip era because Paperclip could not carry more than roughly 2 concurrent tenants; the blueprint-native runtime inherits that as a planning figure until its own soak evidence exists.",
+      "rationale": "The old numbers measured Paperclip's process model, not the native worker. Treating 2 as a planning assumption rather than a proven ceiling keeps capacity honest in both directions."
+    },
+    {
+      "id": "DEC-013",
+      "text": "Owner answer 2026-07-21 (resolves OQ-006): in-memory adapters first for TDD and bounded service proofs, then a durable Supabase/Postgres adapter against this repo's SQL migrations. The master blueprint's idealized PostgreSQL 16 + Drizzle target is not adopted for this codebase.",
+      "rationale": "This repo already carries a Supabase/Postgres migration lineage; switching ORM and database tooling mid-reboot would be an unbounded refactor with no product payoff."
+    },
+    {
+      "id": "DEC-014",
+      "text": "Owner answer 2026-07-21 (resolves OQ-004): commit B11-B35 chunked by ticket group (07, 08, 09, 10, 11, 12). A single adoption checkpoint through B35 is the accepted fallback if separating the dirty tree proves brittle.",
+      "rationale": "Per-ticket chunks stay reviewable and bisectable; the fallback exists so the uncommitted-work risk is never held open on account of staging difficulty."
+    },
+    {
+      "id": "DEC-015",
+      "text": "This .buildwork record supersedes the earlier Codex-authored record at .codex/builds/2026-07-19-wealth-factory-blueprint-reboot.json, whose evidence for phase B35 has been folded into TASK-024.",
+      "rationale": "Two coordination records for one build is the same drift problem as two handoff docs. The .codex record is also written against a variant schema that the current validator rejects."
+    },
+    {
+      "id": "DEC-016",
+      "text": "Owner account 2026-07-21: Fable 5 produced an independent project design derived from the Paperclip idea. That design is not being forced into shape as the implementation. Instead the build borrows only the Paperclip parts it needs and hand-builds the rest.",
+      "rationale": "Reshaping a whole generated project costs more than it returns; selective borrowing keeps each bounded phase's blast radius knowable, which is the same reason DEC-001 chose a clean-seam rebuild."
+    },
+    {
+      "id": "DEC-017",
+      "text": "Owner account 2026-07-21: VPS2 (hostinger-vps, Ubuntu 24.04, 15GB RAM) is the intended deployment target for the Wealth Factory SaaS. Credentials live in the local vault at E:\\the_secrets and are referenced by location only; no secret value enters this record.",
+      "rationale": "Ticket 28's deployment stack needs a named target, and the existing container/lane layout on VPS2 constrains what that stack can assume."
+    },
+    {
+      "id": "DEC-019",
+      "text": "Codex proposal accepted 2026-07-21 (closes OQ-007): Phase B36 is a required gate. Ticket 13 is blocked until master-blueprint Tickets 01-06 are audited against the current foundation and each classified accept, adapt, or replace. Verified present in TODO.md, the reboot plan and the domain skeleton.",
+      "rationale": "B1-B35 advanced the package, install, provider, credential and queue seams without ever proving the scaffold, schema, auth, tenant isolation, RBAC and audit foundation beneath them. Ticket 13's run data model is the first thing that would hard-bind to that foundation, so inheriting it by accident becomes expensive exactly there."
+    },
+    {
+      "id": "DEC-020",
+      "text": "Phase numbering follows the repo docs. Where this record and the repo disagree, the repo wins: consumer/service composition was renumbered from B36 to B37 because Codex claimed B36 for the foundation gate in three repo documents.",
+      "rationale": "Two phases sharing a number is the same class of defect as two build records or two handoff docs, and the repo docs are the surface a fresh session reads first."
+    },
+    {
+      "id": "DEC-021",
+      "text": "Code intelligence for this build runs through GitNexus with GITNEXUS_HOME set to E:\\GitNexusHome and the repo path E:\\REPOS\\spyderbyte_paperclip_saas, per docs/build.md. Because PowerShell is unreliable on this machine, invoke the query tool through bash with the environment variable inline rather than via a PowerShell session variable.",
+      "rationale": "The documented invocation assumes PowerShell; recording the bash fallback keeps the tool usable when that shell misbehaves."
+    },
+    {
+      "id": "DEC-018",
+      "text": "The Paperclip pressure-test results are retained as an anti-pattern reference: they define what the blueprint-native runtime must avoid, not a performance target to reproduce.",
+      "rationale": "They are the only concurrency evidence this project has, and discarding them with the lane would lose the one measured account of how the old execution model failed under tenant load."
+    },
+    {
+      "id": "DEC-022",
+      "text": "Owner discussion 2026-07-21: MVP is defined by the landing page's promises, not by the ticket list. The thirty master-blueprint tickets are demoted to backlog and become the means, not the definition of done.",
+      "rationale": "Twenty-five completed phases produced a package marketplace for a catalog of one, while every promise made to paying customers remained unbuilt. Ordering by architecture rather than by customer outcome is what put the build seven weeks past launch."
+    },
+    {
+      "id": "DEC-023",
+      "text": "Owner decision 2026-07-21: customers may connect API keys for OpenAI, Anthropic, OpenRouter, Gemini or Grok, and may alternatively use OpenAI or Grok subscription device connectors, both of which have been tested. BYOK is validated by the market-fit launch: all twelve waiting clients were told they supply their own provider and agreed.",
+      "rationale": "BYOK is a stated feature rather than a friction point - the customer pays their provider directly with no markup - and the device connectors let a subscription holder run workflows without buying API credit."
+    },
+    {
+      "id": "DEC-024",
+      "text": "Owner decision 2026-07-21: tenant data lives in one central Postgres for MVP. Per-VPS databases are deferred, not rejected. Each tenant carries an assigned node reference so placement can arrive later without a data migration.",
+      "rationale": "The size concern applies to binary assets, not relational rows: text deliverables for hundreds of clients stay in the tens of gigabytes, which Postgres does not notice, while assets belong in object storage and the customer's own drive. Per-VPS databases would mean one migration lineage, backup regime and restore test per box, on a codebase that already carries five duplicated migration numbers, and would make cross-tenant reporting and tenant relocation into projects. Central now does not block per-VPS later; the reverse consolidation is far harder."
+    },
+    {
+      "id": "DEC-025",
+      "text": "Owner decision 2026-07-21: tenant placement across VPS nodes is stubbed, not built. Add the assignment field and run wave one on a single node.",
+      "rationale": "Building a placement engine before measuring the native worker's footprint would repeat the over-build pattern this restructure exists to correct."
+    },
+    {
+      "id": "DEC-026",
+      "text": "Owner decision 2026-07-21: run budgets are one enforcement seam with two meters. API-key connections are capped in dollars per run; subscription device connectors are governed by request pacing over a rolling window plus cooldowns between stations. Both pause the run rather than failing it.",
+      "rationale": "The two connector types fail in different currencies - money versus throttling - but the platform's response is identical, so one seam serves both. Cooldowns additionally relieve VPS pressure and make runs resumable, which is the same machinery session-loss recovery needs."
+    },
+    {
+      "id": "DEC-027",
+      "text": "Owner concern adopted 2026-07-21: provider session fragility is a first-class design requirement across four seams - distinguishing session loss from outage or bad key, pausing rather than failing the run, resuming from the stopped station after re-authorization, and warning before expiry where lifetime is knowable.",
+      "rationale": "Device sessions demonstrably get revoked; a prior proof document records exactly that. At $600-$2,000 per package, silently discarding approved work when a session expires produces refund conversations with the market-fit cohort."
+    },
+    {
+      "id": "DEC-028",
+      "text": "Owner decision 2026-07-21: the product is renamed from Wealth Factory to SpyderByte Foundry for copyright reasons. User-facing surfaces must carry the new name; internal identifiers (queue namespaces, image tags, session issuers, table prefixes) are frozen as-is for launch.",
+      "rationale": "Renaming internal identifiers delivers nothing to a customer and would churn the one guard with proven falsifiability evidence. If the copyright issue was a trademark complaint, whether non-public identifiers must also change is a legal question for whoever raised it."
+    },
+    {
+      "id": "DEC-029",
+      "text": "Owner decision 2026-07-21: the twelve waiting clients are onboarded in waves of two to three, beginning with the owner plus one staff member simulating real client workflows.",
+      "rationale": "Waves match the unmeasured concurrency ceiling, surface defects before the eleventh client meets them, and convert the build's weakest technical constraint into a deliberate rollout plan."
+    },
+    {
+      "id": "DEC-030",
+      "text": "The completed catalog, publishing and install-lifecycle work (Tickets 07-09, phases B11-B26) is parked, not discarded. It re-enters when a second package or a real marketplace exists.",
+      "rationale": "The code is correct, tested and reviewed; it is simply early. Customers buy one package for their segment, so publish/deprecate/yank, rollback, permission-diff consent and content-hashed archives serve no current promise."
+    },
+    {
+      "id": "DEC-031",
+      "text": "Google Drive and Dropbox delivery is post-MVP. Plain export satisfies the page's promise that customers download and keep their files.",
+      "rationale": "Sync is an OAuth integration with consent, refresh and failure surfaces that no customer was promised, and the legacy storage OAuth path still returns 503."
+    },
+    {
+      "id": "DEC-032",
+      "text": "The B36 foundation gate is answered by driving a walking skeleton through the foundation rather than by an abstract audit. The classification of Tickets 01-06 as accept, adapt or replace becomes the skeleton's output.",
+      "rationale": "An audit produces a document; a skeleton answers the same question and leaves the build closer to launch. At seven weeks overdue, the failure mode to avoid is analyzing instead of shipping."
+    },
+    {
+      "id": "DEC-033",
+      "text": "Root cause of the reboot, recorded definitively: Paperclip was a single-user agent runtime by design and failed under multi-tenant load, and its only working env-injection path persisted subscriber secrets onto issue objects.",
+      "rationale": "Supersedes the earlier framing that the reboot was about capacity tuning. It was an architectural mismatch plus a security defect, which is why adaptation was not an option."
+    },
+    {
+      "id": "DEC-034",
+      "text": "Owner decision 2026-07-21: the platform gets a conversational guide called the Foreman, with two jobs - orchestrating the sub-agent station workflows to spec, and answering and advising the customer. This deliberately re-adds a capability the master blueprint removed.",
+      "rationale": "The blueprint rejected 'CEO/CTO framing' as the wrong mental model and 'board chat' as a congested task-manager dashboard. Both objections are sound and are preserved here: the Foreman is not an org chart the customer manages, and chat sits beside the production line rather than replacing it. What the blueprint over-corrected on was conversation itself - dropping a paying customer into a mechanical conveyor with nobody to ask is below current product expectations. Foreman also avoids the rejected words: it reads as someone running your floor, not an executive you employ."
+    },
+    {
+      "id": "DEC-035",
+      "text": "Foreman design rules: advisory only, with approvals remaining explicit UI actions; conversation metered inside the same two-meter run budget as station work; failure messages about provider session loss or budget exhaustion generated by the system, never by the Foreman; and no other persona given a chat surface.",
+      "rationale": "Approvals inferred from conversation are a liability against the page's promise that nothing ships without approval. Unmetered chat lets a talkative customer exhaust their own subscription rate window and starve the run that chat exists to explain. And an agent cannot deliver the message that its own provider connection died."
+    },
+    {
+      "id": "DEC-036",
+      "text": "Owner decision 2026-07-21: customer-facing vocabulary moves from factory to foundry throughout - the brand, the floor, the line and all UI copy. Internal engineering identifiers that use the word factory (src/factory, factory-credential-*, queue namespace constants) are retained, because there the word denotes the factory software pattern rather than the brand, and the copyright issue attached to the name Wealth Factory. This split is conditional on mechanism: a single copy layer owns every customer-facing label, and a check fails the build when brand or internal vocabulary reaches a user-visible surface. Without that guard the split is not safe to keep.",
+      "rationale": "The master blueprint already prescribes exactly this split: neutral engineering names internally, customer-facing labels in the UI copy layer only, so branding can evolve without schema changes. Renaming internal modules would churn roughly fifty files and the proven queue-namespace guard for zero customer benefit, mid-way through an uncommitted tree."
+    },
+    {
+      "id": "DEC-037",
+      "text": "Owner decision 2026-07-21: the restructured build and the uncommitted phases B11-B35 land on a new branch, foundry/mvp-baseline, cut from the current head of codex/wealth-factory-blueprint and pushed to origin. The old branch pointer is left untouched as a fallback.",
+      "rationale": "Twenty-five phases and the entire work record existed only on one workstation. Pushing them gives a future session a recoverable, current starting point instead of a branch twenty-five phases in arrears, and a new branch avoids moving a pointer other work may depend on."
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "OQ-008",
+      "text": "Does the blueprint-native runtime get its own Redis instance on VPS2, or another database on the instance already shared by the wf-stage, BullMQ and Paperclip lanes? RISK-011 makes this a deployment-shape decision, and TASK-054's live survey should inform it before Ticket 28."
+    },
+    {
+      "id": "OQ-009",
+      "text": "Which long-running VPS2 containers are still needed: wealth-factory-api (image 20260512), wealth-factory-api-stage2:boardsession, and the three wealth-factory-worker-proof-a/b/c pressure-test workers? All five have run 2 months, and RISK-016 says they distort any capacity measurement Ticket 28 depends on."
+    },
+    {
+      "id": "OQ-010",
+      "text": "CLAUDE.md is gitignored in this repo, so the pointer telling a fresh session to read the build record never reaches GitHub. The record itself commits fine. Should CLAUDE.md be un-ignored, or should a committed docs/START-HERE.md carry the pointer instead? Only matters for a clone on another machine; a session in this working directory still sees the local file."
+    }
+  ],
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "title": "B0-B3: reboot foundation, factory domain skeleton, package/run/station primitives and first bounded vertical slice",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "Reboot branch and plan doc exist and name the blueprint the source of truth",
+        "Factory domain types, run and station primitives exist and are exercised end to end by one bounded slice"
+      ],
+      "write_scope": [
+        "src/factory/domain",
+        "src/factory/runs",
+        "docs/wealth-factory-reboot-plan-2026-07-06.md"
+      ],
+      "artifacts": [
+        "src/factory/domain/types.ts",
+        "src/factory/runs/intake-run-service.ts",
+        "src/factory/runs/positioning-station-service.ts",
+        "docs/wealth-factory-reboot-plan-2026-07-06.md",
+        "docs/wealth-factory-domain-skeleton-2026-07-06.md"
+      ],
+      "evidence": [
+        {
+          "type": "code-inspection",
+          "summary": "Factory domain, intake run and positioning station services exist on branch codex/wealth-factory-blueprint",
+          "reference": "src/factory/domain/types.ts, src/factory/runs/"
+        },
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: blueprint-native suite passes, 26 files / 219 tests",
+          "reference": "npx vitest run tests/factory-*.test.ts tests/bullmq-factory-*.test.ts --reporter=dot"
+        }
+      ],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-002",
+      "title": "B4: widen the reboot slice into the first post-intake analysis station family",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-001"
+      ],
+      "acceptance_criteria": [
+        "An analysis station family runs after intake without inheriting the legacy harness/runtime backlog"
+      ],
+      "write_scope": [
+        "src/factory/runs"
+      ],
+      "artifacts": [
+        "src/factory/runs/positioning-station-service.ts",
+        "phase-b4-analysis-station-summary-20260706.html"
+      ],
+      "evidence": [
+        {
+          "type": "code-inspection",
+          "summary": "Positioning/analysis station service present with no legacy harness imports",
+          "reference": "src/factory/runs/positioning-station-service.ts"
+        },
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: blueprint-native suite green",
+          "reference": "npx vitest run tests/factory-*.test.ts --reporter=dot"
+        }
+      ],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-003",
+      "title": "B5-B8: bounded approval entity, changes-requested outcome, same-family revision loop and revised-approval closure",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-002"
+      ],
+      "acceptance_criteria": [
+        "A positioning brief can be approved, sent back with changes requested, revised once, and re-approved to a completed run",
+        "No generic checkpoint/workflow-orchestration framework was introduced"
+      ],
+      "write_scope": [
+        "src/factory/approvals",
+        "src/factory/runs"
+      ],
+      "artifacts": [
+        "src/factory/approvals/approval-service.ts",
+        "tests/factory-approval-service.test.ts",
+        "phase-b5-approval-seam-summary-20260706.html",
+        "phase-b7-summary-2026-07-07.html",
+        "phase-b8-summary-2026-07-07.html"
+      ],
+      "evidence": [
+        {
+          "type": "code-inspection",
+          "summary": "Approval service implements resolve/changes-requested/revision transitions",
+          "reference": "src/factory/approvals/approval-service.ts"
+        },
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: tests/factory-approval-service.test.ts passes within the green suite",
+          "reference": "npx vitest run tests/factory-*.test.ts --reporter=dot"
+        }
+      ],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-004",
+      "title": "B9-B10: specialist-function architecture and bounded package-declared persona contract",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-003"
+      ],
+      "acceptance_criteria": [
+        "Business-guidance expertise is expressed as specialist functions bound to stations, without the CEO/CFO/CMO persona shell",
+        "The persona contract is declared by the package and does not reach into manifests, persistence, UI or runtime"
+      ],
+      "write_scope": [
+        "src/factory/packages",
+        "docs"
+      ],
+      "artifacts": [
+        "src/factory/packages/package-registry.ts",
+        "phase-b10-summary-2026-07-07.html"
+      ],
+      "evidence": [
+        {
+          "type": "code-inspection",
+          "summary": "Package-declared persona contract present in the package registry seam",
+          "reference": "src/factory/packages/package-registry.ts"
+        },
+        {
+          "type": "git",
+          "summary": "Committed as 737ad6a (feat: add bounded persona contract for reboot phase b10) and 967fd06 (docs: record persona contract enforcement seam) — the last committed reboot phase",
+          "reference": "git log --oneline"
+        }
+      ],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-005",
+      "title": "B11: manifest-backed blueprint loader for the intake/positioning slice",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-004"
+      ],
+      "acceptance_criteria": [
+        "A manifest can be loaded into a blueprint package without archives, persistence or runtime execution"
+      ],
+      "write_scope": [
+        "src/factory/packages"
+      ],
+      "artifacts": [
+        "src/factory/packages/package-manifest-loader.ts",
+        "tests/factory-package-manifest-loader.test.ts",
+        "tests/factory-package-manifest-fixtures.ts"
+      ],
+      "evidence": [
+        {
+          "type": "code-inspection",
+          "summary": "Manifest loader and fixtures exist; file is untracked (uncommitted phase)",
+          "reference": "src/factory/packages/package-manifest-loader.ts"
+        },
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: manifest loader tests pass in the green suite",
+          "reference": "npx vitest run tests/factory-package-manifest-loader.test.ts"
+        }
+      ],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-006",
+      "title": "B12-B13: separate stable package identity from immutable package-version identity",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-005"
+      ],
+      "acceptance_criteria": [
+        "packageId is explicit on the blueprint contract and kept separate from package key/slug",
+        "packageVersionId is derived deterministically as ${packageId}@${version} for the bounded slice"
+      ],
+      "write_scope": [
+        "src/factory/packages",
+        "src/factory/domain"
+      ],
+      "artifacts": [
+        "src/factory/packages/package-registry.ts",
+        "src/factory/domain/types.ts",
+        "phase-b12-package-version-identity-summary-2026-07-08.html",
+        "phase-b13-stable-package-id-summary-2026-07-08.html"
+      ],
+      "evidence": [
+        {
+          "type": "code-inspection",
+          "summary": "Package and version identity are distinct types on the blueprint contract",
+          "reference": "src/factory/domain/types.ts"
+        },
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: package identity coverage green",
+          "reference": "npx vitest run tests/factory-*.test.ts --reporter=dot"
+        }
+      ],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-007",
+      "title": "B14 (Ticket 07): package content-hash/source seam and read-only .twfpkg archive loader",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-006"
+      ],
+      "acceptance_criteria": [
+        "Repacking the same package content yields a stable content hash",
+        "The archive loader is read-only and does not widen into catalog, publishing, persistence, runtime, UI or tenant lifecycle"
+      ],
+      "write_scope": [
+        "src/factory/packages"
+      ],
+      "artifacts": [
+        "src/factory/packages/package-manifest-loader.ts",
+        "phase-b14-package-content-hash-summary-2026-07-09.html"
+      ],
+      "evidence": [
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: content-hash stability coverage passes",
+          "reference": "npx vitest run tests/factory-package-manifest-loader.test.ts"
+        }
+      ],
+      "handoffs": [
+        "Closes master blueprint Ticket 07 (package manifest schema and validator) for the reboot lane."
+      ],
+      "blockers": []
+    },
+    {
+      "id": "TASK-008",
+      "title": "B15-B16 (Ticket 08): pure operator catalog publication and immutable published/deprecated/yanked lifecycle",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-007"
+      ],
+      "acceptance_criteria": [
+        "Publishing validates a .twfpkg, derives an immutable published package-version record and rejects duplicate packageId@version",
+        "Lifecycle projections are forward-only and emit audit intent"
+      ],
+      "write_scope": [
+        "src/factory/packages"
+      ],
+      "artifacts": [
+        "src/factory/packages/package-catalog-service.ts",
+        "tests/factory-package-catalog-service.test.ts"
+      ],
+      "evidence": [
+        {
+          "type": "code-inspection",
+          "summary": "Catalog service implements publish/deprecate/yank projections with duplicate rejection",
+          "reference": "src/factory/packages/package-catalog-service.ts"
+        },
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: catalog service tests pass",
+          "reference": "npx vitest run tests/factory-package-catalog-service.test.ts"
+        }
+      ],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-009",
+      "title": "B17: durable operator blueprint catalog migration with identity/content guards",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-008"
+      ],
+      "acceptance_criteria": [
+        "Migration enforces immutable identity/content and forward-only lifecycle integrity without wiring API, auth, RLS or tenant lifecycle surfaces"
+      ],
+      "write_scope": [
+        "supabase/migrations"
+      ],
+      "artifacts": [
+        "supabase/migrations/0036_factory_blueprint_catalog.sql",
+        "tests/factory-blueprint-catalog-migration.test.ts"
+      ],
+      "evidence": [
+        {
+          "type": "code-inspection",
+          "summary": "Migration 0036 exists and is untracked (uncommitted phase)",
+          "reference": "supabase/migrations/0036_factory_blueprint_catalog.sql"
+        },
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: migration shape test passes",
+          "reference": "npx vitest run tests/factory-blueprint-catalog-migration.test.ts"
+        }
+      ],
+      "handoffs": [
+        "Closes master blueprint Ticket 08 (catalog and publishing, operator) at the domain and schema level; the operator catalog UI is Ticket 27."
+      ],
+      "blockers": []
+    },
+    {
+      "id": "TASK-010",
+      "title": "B18 (Ticket 09): pure tenant install lifecycle seam with permission/budget snapshots, consent, rollback and audit intent",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-009"
+      ],
+      "acceptance_criteria": [
+        "Install, widened-permission consent, rollback, disable/enable and uninstall exist as pure projections with audit intent and no routes, RBAC, persistence, entitlements, Stripe or UI"
+      ],
+      "write_scope": [
+        "src/factory/packages"
+      ],
+      "artifacts": [
+        "src/factory/packages/package-install-service.ts",
+        "tests/factory-package-install-service.test.ts"
+      ],
+      "evidence": [
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: install lifecycle projection tests pass",
+          "reference": "npx vitest run tests/factory-package-install-service.test.ts"
+        }
+      ],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-011",
+      "title": "B19: tenant package install and lifecycle event migration anchored to the B17 catalog tables",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-010"
+      ],
+      "acceptance_criteria": [
+        "Install and lifecycle event tables exist and reference the catalog tables without wiring routes, RBAC writes, entitlements, Stripe, UI, runtime or legacy install tables"
+      ],
+      "write_scope": [
+        "supabase/migrations"
+      ],
+      "artifacts": [
+        "supabase/migrations/0037_factory_blueprint_package_installs.sql",
+        "tests/factory-blueprint-package-installs-migration.test.ts"
+      ],
+      "evidence": [
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: install migration shape test passes",
+          "reference": "npx vitest run tests/factory-blueprint-package-installs-migration.test.ts"
+        }
+      ],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-012",
+      "title": "B20: package install repository port and in-memory adapter for B18 projections in the B19 shape",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-011"
+      ],
+      "acceptance_criteria": [
+        "A repository port persists lifecycle projections into the migration-shaped contract with an in-memory adapter and no HTTP, Supabase, Stripe, UI or runtime wiring"
+      ],
+      "write_scope": [
+        "src/factory/packages"
+      ],
+      "artifacts": [
+        "src/factory/packages/package-install-repository.ts",
+        "tests/factory-package-install-repository.test.ts"
+      ],
+      "evidence": [
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: install repository tests pass",
+          "reference": "npx vitest run tests/factory-package-install-repository.test.ts"
+        }
+      ],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-013",
+      "title": "B21-B25: tenant package application services for install, disable/enable, update with consent, rollback and non-destructive uninstall",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-012"
+      ],
+      "acceptance_criteria": [
+        "Every lifecycle method is owner/admin gated, tenant-scoped and identity-checked against the package key",
+        "Update enforces widened-permission consent; rollback validates the previous version and guards enabled state; uninstall requires exact typed confirmation and is non-destructive",
+        "Persistence goes through the B20 port with audit events"
+      ],
+      "write_scope": [
+        "src/factory/packages"
+      ],
+      "artifacts": [
+        "src/factory/packages/package-install-application-service.ts",
+        "tests/factory-package-install-application-service.test.ts"
+      ],
+      "evidence": [
+        {
+          "type": "code-inspection",
+          "summary": "Application service exposes install/disable/enable/update/rollback/uninstall with authorization and identity guards",
+          "reference": "src/factory/packages/package-install-application-service.ts"
+        },
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: application service tests pass",
+          "reference": "npx vitest run tests/factory-package-install-application-service.test.ts"
+        }
+      ],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-014",
+      "title": "B26 (Ticket 09 close): tenant install API and HTTP endpoint acceptance seam",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-013"
+      ],
+      "acceptance_criteria": [
+        "HTTP endpoints accept install, disable, enable, update with consent, rollback and non-destructive uninstall without Supabase adapters, live runtime, Stripe, UI or deletion actions"
+      ],
+      "write_scope": [
+        "src/api"
+      ],
+      "artifacts": [
+        "src/api/factory-package-install-api.ts",
+        "src/api/factory-package-install-http.ts",
+        "tests/factory-package-install-api.test.ts",
+        "tests/factory-package-install-http.test.ts"
+      ],
+      "evidence": [
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: install API and HTTP acceptance tests pass",
+          "reference": "npx vitest run tests/factory-package-install-api.test.ts tests/factory-package-install-http.test.ts"
+        }
+      ],
+      "handoffs": [
+        "Closes master blueprint Ticket 09 (package install lifecycle, tenant) at the service and HTTP level; the Blueprints page UX is Ticket 24."
+      ],
+      "blockers": []
+    },
+    {
+      "id": "TASK-015",
+      "title": "B27 (Ticket 10): Power Source credential vault with envelope encryption, masked behavior, audited worker-bound decrypt and key re-wrap",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-014"
+      ],
+      "acceptance_criteria": [
+        "Create/list/delete are masked; decrypt is worker-bound and audited",
+        "Tamper and wrong-key attempts fail; key re-wrap is proven",
+        "No provider adapters, HTTP routes, Supabase adapters, UI, OAuth or runtime wiring"
+      ],
+      "write_scope": [
+        "src/factory/power-sources"
+      ],
+      "artifacts": [
+        "src/factory/power-sources/factory-credential-service.ts",
+        "tests/factory-credential-vault.test.ts",
+        "tests/factory-credential-service.test.ts"
+      ],
+      "evidence": [
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: vault and credential service tests pass, including tamper/wrong-key failure paths",
+          "reference": "npx vitest run tests/factory-credential-vault.test.ts tests/factory-credential-service.test.ts"
+        }
+      ],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-016",
+      "title": "B28 (Ticket 10 close): credential API and HTTP acceptance seam for owner/admin create, masked list and soft delete",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-015"
+      ],
+      "acceptance_criteria": [
+        "No plaintext is returned by any endpoint",
+        "No decrypt endpoint, provider validation, Supabase adapter, UI, OAuth or runtime wiring is added"
+      ],
+      "write_scope": [
+        "src/api"
+      ],
+      "artifacts": [
+        "src/api/factory-credential-api.ts",
+        "src/api/factory-credential-http.ts",
+        "tests/factory-credential-api.test.ts",
+        "tests/factory-credential-http.test.ts"
+      ],
+      "evidence": [
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: credential API and HTTP tests pass including masked-response coverage",
+          "reference": "npx vitest run tests/factory-credential-api.test.ts tests/factory-credential-http.test.ts"
+        }
+      ],
+      "handoffs": [
+        "Closes master blueprint Ticket 10 (credential encryption and storage) at the service and HTTP level; the Power Sources UI is Ticket 23."
+      ],
+      "blockers": []
+    },
+    {
+      "id": "TASK-017",
+      "title": "B29 (Ticket 11): provider interface, versioned capability registry, provider-key mapping, capability matcher, cost estimator and adapter shells",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-016"
+      ],
+      "acceptance_criteria": [
+        "A pure provider abstraction exists with no credential validation queues, worker decrypt/injection, rate limiting, live smoke calls, Supabase adapters, UI or runtime execution"
+      ],
+      "write_scope": [
+        "src/factory/providers"
+      ],
+      "artifacts": [
+        "src/factory/providers",
+        "tests/factory-provider-registry.test.ts"
+      ],
+      "evidence": [
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: provider registry tests pass",
+          "reference": "npx vitest run tests/factory-provider-registry.test.ts"
+        }
+      ],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-018",
+      "title": "B30 (Ticket 11 close): provider-native completion request/response mappers for OpenAI, Anthropic, OpenRouter, Google and xAI",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-017"
+      ],
+      "acceptance_criteria": [
+        "Mappers cover tool turns and structured-output schemas, and normalize usage/cost with sanitized error mapping",
+        "No live provider calls, usage ledger writes, budgets, retries, Redis, Supabase adapters, UI or runtime execution"
+      ],
+      "write_scope": [
+        "src/factory/providers"
+      ],
+      "artifacts": [
+        "src/factory/providers",
+        "tests/factory-provider-completion-adapters.test.ts"
+      ],
+      "evidence": [
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: completion adapter tests pass for all five providers",
+          "reference": "npx vitest run tests/factory-provider-completion-adapters.test.ts"
+        }
+      ],
+      "handoffs": [
+        "Closes master blueprint Ticket 11 (provider adapters and capability registry) at the mapping level; live provider calls arrive with Ticket 16."
+      ],
+      "blockers": []
+    },
+    {
+      "id": "TASK-019",
+      "title": "B31 (Ticket 12): in-process credential validation lifecycle seam",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-018"
+      ],
+      "acceptance_criteria": [
+        "Credentials are pending-on-save, queued for validation, projected from a provider-backed result, eligible for weekly revalidation, and invalidated on auth failure",
+        "No BullMQ/Redis boot, Supabase adapters, live provider calls, UI, run pausing, retries or budget accounting"
+      ],
+      "write_scope": [
+        "src/factory/power-sources"
+      ],
+      "artifacts": [
+        "src/factory/power-sources/factory-credential-validation-service.ts",
+        "tests/factory-credential-validation-service.test.ts"
+      ],
+      "evidence": [
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: validation service tests pass",
+          "reference": "npx vitest run tests/factory-credential-validation-service.test.ts"
+        }
+      ],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-020",
+      "title": "B31a: isolate the blueprint-native BullMQ namespace with fail-closed legacy-name rejection",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-019"
+      ],
+      "acceptance_criteria": [
+        "Queue names and prefixes are asserted Wealth Factory-only and reject wfpc-* and Paperclip-shaped namespaces",
+        "No queues created, no Redis touched, no worker boot"
+      ],
+      "write_scope": [
+        "src/factory/queues"
+      ],
+      "artifacts": [
+        "src/factory/queues/factory-queue-names.ts",
+        "tests/factory-queue-isolation.test.ts"
+      ],
+      "evidence": [
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: tests/factory-queue-isolation.test.ts passes, 13 tests",
+          "reference": "npx vitest run tests/factory-queue-isolation.test.ts",
+          "falsifiability": "Injected a short-circuit into isLegacyQueueNamespace in src/factory/queues/factory-queue-names.ts so it always returned false; 9 of 13 tests failed, confirming the guard is load-bearing rather than vacuously green. Injection reverted and re-run confirmed 13/13 green with a clean working-tree diff."
+        }
+      ],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-021",
+      "title": "B32: credential validation queue port and repository-backed adapter",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-020"
+      ],
+      "acceptance_criteria": [
+        "Create-time validation jobs and validation processing route through the queue port while preserving the B31a namespace guard, with no BullMQ/Redis client, worker boot, live calls, Supabase adapters, retry policy or UI"
+      ],
+      "write_scope": [
+        "src/factory/queues"
+      ],
+      "artifacts": [
+        "src/factory/queues/factory-credential-validation-queue.ts",
+        "tests/factory-credential-validation-queue.test.ts"
+      ],
+      "evidence": [
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: validation queue port tests pass",
+          "reference": "npx vitest run tests/factory-credential-validation-queue.test.ts"
+        }
+      ],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-022",
+      "title": "B33: isolated BullMQ/Redis transport adapter behind the validation queue port",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-021"
+      ],
+      "acceptance_criteria": [
+        "The transport publishes only a deterministic job reference; the repository stays authoritative for claim, completion, requeue and duplicate suppression",
+        "Failed publication or a duplicate error without an observable BullMQ job removes the repository job so recovery is not suppressed by stale state"
+      ],
+      "write_scope": [
+        "src/factory/queues"
+      ],
+      "artifacts": [
+        "src/factory/queues/bullmq-factory-credential-validation-queue.ts",
+        "tests/bullmq-factory-credential-validation-queue.test.ts"
+      ],
+      "evidence": [
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: BullMQ transport adapter tests pass",
+          "reference": "npx vitest run tests/bullmq-factory-credential-validation-queue.test.ts"
+        }
+      ],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-023",
+      "title": "B34: isolated BullMQ credential-validation consumer shell with exact payload passthrough",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-022"
+      ],
+      "acceptance_criteria": [
+        "The consumer uses the guarded wealth-factory-validations-v1 namespace, passes the exact { jobId } payload to an injected processor, exposes start/readiness/cleanup controls, and infers nothing from queue order"
+      ],
+      "write_scope": [
+        "src/factory/queues"
+      ],
+      "artifacts": [
+        "src/factory/queues/bullmq-factory-credential-validation-consumer.ts",
+        "tests/bullmq-factory-credential-validation-consumer.test.ts"
+      ],
+      "evidence": [
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: consumer shell tests pass",
+          "reference": "npx vitest run tests/bullmq-factory-credential-validation-consumer.test.ts"
+        }
+      ],
+      "handoffs": [
+        "The consumer is deliberately not composed with the validation service; composition is TASK-026."
+      ],
+      "blockers": []
+    },
+    {
+      "id": "TASK-024",
+      "title": "B35 (Ticket 12 close): exact credential-validation job claiming and service processing by transport job ID",
+      "status": "completed",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-023"
+      ],
+      "acceptance_criteria": [
+        "claimQueuedValidationJobById / claimById / processValidationJob({ jobId }) exist and process exactly the referenced job",
+        "A missing or non-queued job returns null without a provider call",
+        "The BullMQ adapter delegates exact claims to the repository and does not mutate transport state during claimById"
+      ],
+      "write_scope": [
+        "src/factory/power-sources",
+        "src/factory/queues"
+      ],
+      "artifacts": [
+        "src/factory/power-sources/factory-credential-repository.ts",
+        "src/factory/power-sources/factory-credential-validation-service.ts",
+        "src/factory/queues/factory-credential-validation-queue.ts",
+        "src/factory/queues/bullmq-factory-credential-validation-queue.ts",
+        "docs/superpowers/plans/2026-07-15-factory-credential-exact-job-processing.md"
+      ],
+      "evidence": [
+        {
+          "type": "test-run",
+          "summary": "Re-derived 2026-07-21: exact-claim and exact-processing tests pass across queue, service and BullMQ adapter suites",
+          "reference": "npx vitest run tests/factory-credential-validation-queue.test.ts tests/factory-credential-validation-service.test.ts tests/bullmq-factory-credential-validation-queue.test.ts"
+        },
+        {
+          "type": "typecheck",
+          "summary": "Re-derived 2026-07-21: npm run build (tsc --noEmit) passes with zero errors",
+          "reference": "npm run build"
+        },
+        {
+          "type": "prior-record",
+          "summary": "Folded from the superseded Codex record TASK-035 (2026-07-19): TDD red evidence captured twice (lastValidatedAt null on exact-job result; pending/null DTO on auth-failure return) before the fixes; focused run of the four validation suites gave 4 files / 40 tests passed; npx tsc --noEmit passed; git diff --check passed with CRLF warnings only; one fresh spec reviewer and three fresh quality reviewers reviewed the slice, the first two quality reviewers found stale DTO issues that were fixed, and the final reviewer approved.",
+          "reference": ".codex/builds/2026-07-19-wealth-factory-blueprint-reboot.json"
+        }
+      ],
+      "handoffs": [
+        "Latest completed reboot phase at adoption time; closes master blueprint Ticket 12. Next bounded phase is consumer/service composition (TASK-026)."
+      ],
+      "blockers": []
+    },
+    {
+      "id": "TASK-025",
+      "title": "Commit the uncommitted reboot phases B11-B35, chunked by ticket group",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-024"
+      ],
+      "acceptance_criteria": [
+        "Six commits land in order on codex/wealth-factory-blueprint: Ticket 07 (B11-B14), Ticket 08 (B15-B17), Ticket 09 (B18-B26), Ticket 10 (B27-B28), Ticket 11 (B29-B30), Ticket 12 (B31-B35)",
+        "The typecheck and the blueprint-native suite pass on the final committed tree",
+        "git status --porcelain shows no remaining uncommitted blueprint-native work",
+        "The branch is pushed to origin (thepbgacademy-hub/spyderbyte_paperclip_saas)",
+        "Fallback per DEC-014: if separating the dirty tree proves brittle, a single adoption checkpoint through B35 is acceptable and the reason is recorded here"
+      ],
+      "write_scope": [
+        "repository history"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "risks": [
+        "RISK-001"
+      ],
+      "progress": "Verified 2026-07-21: last reboot commit is 967fd06 (B10). 36 untracked paths and 15 modified files carry B11-B35. Owner confirmed B35 freshly verified. Commit shape decided in DEC-014."
+    },
+    {
+      "id": "TASK-026",
+      "title": "B37: compose the B34 consumer with the validation service (renumbered from B36)",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-025"
+      ],
+      "acceptance_criteria": [
+        "The consumer's injected processor calls processValidationJob({ jobId }) with the exact transport payload",
+        "Composition adds no scheduling, retry/backoff policy, persistence adapter, API/UI surface or live provider call"
+      ],
+      "write_scope": [
+        "src/factory/queues",
+        "src/factory/power-sources"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "Renumbered to B37 on 2026-07-21. This record originally labelled consumer/service composition as B36, but Codex has since written B36 into TODO.md, the reboot plan and the domain skeleton as the Tickets 01-06 foundation gate. The repo docs win the phase name; this task takes the next free number."
+    },
+    {
+      "id": "TASK-027",
+      "title": "Worker boot / composition root for the blueprint-native validation lane",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-026"
+      ],
+      "acceptance_criteria": [
+        "A composition root boots the consumer against the guarded namespace with explicit lifecycle controls",
+        "The legacy wfpc-* worker path is untouched and cannot be reached from this boot path"
+      ],
+      "write_scope": [
+        "src/worker",
+        "src/factory/queues"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-028",
+      "title": "Validation scheduling and retry/backoff policy",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-027"
+      ],
+      "acceptance_criteria": [
+        "Weekly revalidation eligibility is driven by a repeatable schedule rather than ad-hoc calls",
+        "Retry/backoff policy is explicit and does not let the transport override repository authority"
+      ],
+      "write_scope": [
+        "src/factory/queues"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-029",
+      "title": "Durable Supabase/Postgres adapters for the factory repository ports",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-025"
+      ],
+      "acceptance_criteria": [
+        "Catalog, package install and credential repositories have durable adapters matching migrations 0036/0037 and the credential schema",
+        "Tenant scoping and RLS are proven by tests, not assumed",
+        "In-memory adapters remain available for tests per DEC-013"
+      ],
+      "write_scope": [
+        "src/factory",
+        "supabase/migrations"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "risks": [
+        "RISK-002"
+      ],
+      "progress": "MVP CRITICAL PATH - central Postgres per DEC-024. Persistence is what turns the completed in-memory domain work into a product; nothing the customer was promised survives a refresh without it."
+    },
+    {
+      "id": "TASK-030",
+      "title": "Ticket 16: run orchestrator and step processor with live provider execution",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-029",
+        "TASK-035",
+        "TASK-036",
+        "TASK-037"
+      ],
+      "acceptance_criteria": [
+        "The run engine implements the master blueprint Section 22 algorithm with prompt assembly, provider selection, the tool loop, output validation and quality-check personas",
+        "A run-steps BullMQ processor executes steps in the worker",
+        "A station executes through a tenant-resolved provider using a just-in-time decrypted credential, with shared/operator credentials unavailable on the normal subscriber path"
+      ],
+      "write_scope": [
+        "src/factory",
+        "src/worker"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "MVP CRITICAL PATH - the run engine is the product. Thinnest form: one workflow, its stations, its deliverables."
+    },
+    {
+      "id": "TASK-031",
+      "title": "Ticket 25: Stripe purchases and the real Entitlements driver",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-029"
+      ],
+      "acceptance_criteria": [
+        "Stripe Checkout covers Blueprint and Expansion purchases with webhook handling and billing_records",
+        "Entitlements.canInstall reflects real entitlements and fails closed, replacing the dev allow-all of DEC-008"
+      ],
+      "write_scope": [
+        "src/factory/packages",
+        "src/api"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "MVP CRITICAL PATH - purchase and instant provisioning are the first promise on the page, and the real Entitlements driver replaces the dev allow-all of DEC-008."
+    },
+    {
+      "id": "TASK-032",
+      "title": "Legacy lane: determine a safe Paperclip secret-injection path for issue-centric execution",
+      "status": "cancelled",
+      "owner": "unassigned",
+      "dependencies": [],
+      "acceptance_criteria": [],
+      "write_scope": [],
+      "artifacts": [
+        "docs/paperclip-secret-ref-mapping.md",
+        "TODO.md"
+      ],
+      "evidence": [],
+      "handoffs": [
+        "The unsafe finding is retained as a design constraint for the blueprint lane and is the basis of DEC-006."
+      ],
+      "blockers": [],
+      "progress": "Cancelled 2026-07-21 under DEC-010: the Paperclip lane is retired as product direction, so no safe secret_ref injection path needs to be found. The finding that plain issue-level env overrides persist secret values on the issue object is preserved as a lesson.",
+      "findings": [
+        "Plain issue-level env overrides are technically effective on the installed Paperclip build but unsafe for subscriber secrets because values persist on the issue object.",
+        "POST /api/companies/:companyId/runs is not supported by the installed build; execution is issue-centric with executionRunId exposed shortly after assignment-triggered launch."
+      ]
+    },
+    {
+      "id": "TASK-033",
+      "title": "Legacy lane: complete live VPS deployment prerequisites for the Paperclip execution path",
+      "status": "cancelled",
+      "owner": "unassigned",
+      "dependencies": [],
+      "acceptance_criteria": [],
+      "write_scope": [],
+      "artifacts": [
+        "TODO.md"
+      ],
+      "evidence": [],
+      "handoffs": [
+        "Blueprint-native deployment is Ticket 28 (TASK-048), which supersedes this work rather than continuing it."
+      ],
+      "blockers": [],
+      "progress": "Cancelled 2026-07-21 under DEC-010. Redeploying the Paperclip-model API container, starting its worker and seeding paperclip_company_mappings all serve a retired execution model."
+    },
+    {
+      "id": "TASK-034",
+      "title": "Close the public exposure of Redis, Postgres, Kong and Paperclip on VPS2",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "The seven containers whose env references the public IP are repointed to internal Docker hostnames FIRST: wf-stage-api, wf-stage-worker, wealth-factory-api-stage2, wealth-factory-worker-proof-a, -b and -c, and paperclip. Closing ports before repointing breaks the stage lane",
+        "External 32768 (Redis) is closed or firewalled",
+        "External 5432 and 6543 (Supabase pooler) are closed or allowlisted",
+        "External 53324 (Paperclip) is closed or allowlisted, and can simply go with the retired lane",
+        "8000 and 8443 (Kong) are public by explicit decision rather than by default; customer traffic already reaches Supabase through Caddy on 443",
+        "No customer-facing service is disturbed: every mini app and site rides Caddy on 80/443, and n8n and sgt-mini-app bind to localhost only",
+        "TODO.md's completed claim that external 8443 is no longer reachable is corrected, because it is reachable",
+        "Credential rotation is considered after closure; authentication is in place and no compromise is evidenced, so this is prudence rather than emergency",
+        "npm run smoke:external passes against the decided policy"
+      ],
+      "write_scope": [
+        "deploy",
+        "scripts/external-smoke-security.mjs"
+      ],
+      "artifacts": [
+        "TODO.md"
+      ],
+      "evidence": [
+        {
+          "type": "reachability-probe",
+          "summary": "From the owner's workstation on 2026-07-21, TCP connect succeeded to VPS2 on all six of 32768 (Redis), 5432 and 6543 (Postgres pooler), 8000 and 8443 (Kong) and 53324 (Paperclip). Probe only; no authentication was attempted against any service.",
+          "reference": "Test-NetConnection against the VPS2 host on each port"
+        },
+        {
+          "type": "host-survey",
+          "summary": "ss -tln on the host shows all six ports plus 22, 80, 443 and 32770 bound to 0.0.0.0 and ::, so the exposure is a bind-level fact rather than a probe artifact",
+          "reference": "ssh deploy@VPS2 ss -tln"
+        }
+      ],
+      "handoffs": [],
+      "blockers": [],
+      "risks": [
+        "RISK-005",
+        "RISK-015"
+      ],
+      "progress": "Scoped 2026-07-21 by direct read-only host inspection. Sequence is repoint, then close, then verify - not close first. Remediation remains an owner action: firewall and container changes on a shared production host carrying unrelated tenants are outside what this session will perform unattended.",
+      "findings": [
+        "Port ownership confirmed on the host: 32768 is redis-tzbr-redis-1, 32770 is hermes-agent, 53324 is paperclip, 5432 and 6543 are supabase-pooler, 8000 and 8443 are supabase-kong, and 80/443 are supabase-caddy.",
+        "No customer application binds an exposed port. Caddy fronts www, sgt, automation, playground, api, wf-api, concierge, affiliate-api and executive-council on 443. n8n binds 127.0.0.1:5678 and sgt-mini-app binds 127.0.0.1:8080, neither externally reachable.",
+        "Seven containers carry the public IP in their environment and therefore loop out through the public interface and back in: wf-stage-api, wf-stage-worker, wealth-factory-api-stage2, wealth-factory-worker-proof-a/b/c and paperclip. These are what would break if ports closed without repointing.",
+        "Four of those seven are retirement candidates already tracked by OQ-009 and RISK-016, so the real repointing work is wf-stage-api and wf-stage-worker.",
+        "Redis has requirepass configured on the container command, so the exposed instance requires authentication."
+      ]
+    },
+    {
+      "id": "TASK-035",
+      "title": "Ticket 13: run and deliverable data model",
+      "status": "blocked",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-029",
+        "TASK-053"
+      ],
+      "acceptance_criteria": [
+        "runs, run_steps, run_events, deliverables and approvals tables exist per master blueprint Section 9, with status enums, transitions and tenant-scoped read APIs"
+      ],
+      "write_scope": [
+        "supabase/migrations",
+        "src/factory"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [
+        "Blocked by the Phase B36 gate (TASK-053): Tickets 01-06 must be classified accept/adapt/replace before this run data model lands on the current foundation."
+      ]
+    },
+    {
+      "id": "TASK-036",
+      "title": "Ticket 14: policy engine",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-035"
+      ],
+      "acceptance_criteria": [
+        "A closed PolicyAction union, evaluate() and the ordered rule pipeline with default-deny are implemented per master blueprint Section 15"
+      ],
+      "write_scope": [
+        "src/factory"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-037",
+      "title": "Ticket 15: typed tool registry",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-035"
+      ],
+      "acceptance_criteria": [
+        "structured_interview, document_generation, deliverable_write, brand_profile_update and web_research_readonly are typed implementations receiving TenantContext and RunContext from the engine"
+      ],
+      "write_scope": [
+        "src/factory"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-038",
+      "title": "Ticket 17: budgets, usage tracking and cost attribution",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-030"
+      ],
+      "acceptance_criteria": [
+        "usage_events, budget_policies and budget_incidents exist with transactional spend totals on runs/steps, projection math feeding the policy engine, and budget-approval creation"
+      ],
+      "write_scope": [
+        "src/factory",
+        "supabase/migrations"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-039",
+      "title": "Ticket 18: watchdog and recovery sweep",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-030"
+      ],
+      "acceptance_criteria": [
+        "Maintenance repeatable jobs implement stuck-step failure past time budget, orphaned-job re-queue after crashes, and run-resume on worker boot"
+      ],
+      "write_scope": [
+        "src/worker",
+        "src/factory/queues"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "POST-MVP - watchdog and recovery sweep. Wave-based onboarding means failures are caught by humans first."
+    },
+    {
+      "id": "TASK-040",
+      "title": "Ticket 19: SSE real-time pipeline",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-030"
+      ],
+      "acceptance_criteria": [
+        "Redis pub/sub fan-out reaches GET /api/w/:tenant/runs/:id/events with Last-Event-ID replay from run_events and heartbeats"
+      ],
+      "write_scope": [
+        "src/api",
+        "src/worker"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "POST-MVP - SSE realtime. Polling is adequate for twelve clients onboarded in waves."
+    },
+    {
+      "id": "TASK-041",
+      "title": "Ticket 20: Assembly Line UI (Factory Floor)",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-040"
+      ],
+      "acceptance_criteria": [
+        "The Factory Floor page renders the station line, persona cards, deliverable tray and progress/budget header, driven by the SSE hook across the full Section 18 visual state set"
+      ],
+      "write_scope": [
+        "apps/web"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "MVP CRITICAL PATH (thin) - the staged production line is the product's core metaphor and what the customer watches. Full Section 18 visual state set is post-MVP."
+    },
+    {
+      "id": "TASK-042",
+      "title": "Ticket 21: storage service and file handling",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-029"
+      ],
+      "acceptance_criteria": [
+        "StorageService put/get/delete/getSignedUrl works on the local-disk driver with a files table and tenant-scoped pathing, and Ticket 08 archive staging is migrated onto it"
+      ],
+      "write_scope": [
+        "src/factory",
+        "supabase/migrations"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "PARTIAL MVP - object storage is needed for generated assets so they never land in Postgres (DEC-024). Drive and Dropbox sync is post-MVP per DEC-031."
+    },
+    {
+      "id": "TASK-043",
+      "title": "Ticket 22: Launch Kit, checkpoints and deliverable editing",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-041",
+        "TASK-042"
+      ],
+      "acceptance_criteria": [
+        "Launch Kit (grouped deliverables, reader, version history), Needs You decision cards with Approve / Request changes / Reject, direct deliverable editing, and Markdown single/zip plus PDF export all work"
+      ],
+      "write_scope": [
+        "apps/web",
+        "src/api"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "MVP CRITICAL PATH (export half) - the page promises customers download and keep everything. Launch Kit polish and version history are post-MVP."
+    },
+    {
+      "id": "TASK-044",
+      "title": "Ticket 23: settings and onboarding flow",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-041"
+      ],
+      "acceptance_criteria": [
+        "Settings covers Power Sources UI, Run Budgets, Members, Workspace and a Billing placeholder; first-run onboarding runs post-purchase landing to connect Power Source to start run to intake form"
+      ],
+      "write_scope": [
+        "apps/web"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "MVP CRITICAL PATH (thin) - guided Power Source setup and online cancellation are both promised on the page. Full settings surface is post-MVP."
+    },
+    {
+      "id": "TASK-045",
+      "title": "Ticket 24: Blueprints page and package UX",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-041"
+      ],
+      "acceptance_criteria": [
+        "Installed packages show status/version/changelog, the update flow presents a permission-diff consent UI, Expansions are browsable, and disable/uninstall flows carry correct messaging"
+      ],
+      "write_scope": [
+        "apps/web"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [
+        "Consumes the TASK-014 install HTTP seam; the consent UI must reflect the widened-permission rule of REQ-005."
+      ],
+      "blockers": [],
+      "progress": "POST-MVP per DEC-030 - customers buy one package for their segment and do not browse a catalog."
+    },
+    {
+      "id": "TASK-046",
+      "title": "Ticket 26: email notifications",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-030"
+      ],
+      "acceptance_criteria": [
+        "The Mailer stub is replaced with SMTP and the notification set covers verify/reset, checkpoint needed, run completed, run paused/blocked, budget approval needed and operator backup failure"
+      ],
+      "write_scope": [
+        "src/api",
+        "src/factory"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "POST-MVP - email notifications beyond what purchase and account access require."
+    },
+    {
+      "id": "TASK-047",
+      "title": "Ticket 27: operator area",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-041"
+      ],
+      "acceptance_criteria": [
+        "/operator provides catalog UI over Ticket 08, a tenants list with read-only audited view-as, a run health board, provider incident toggles, audit search and a system health page"
+      ],
+      "write_scope": [
+        "apps/web",
+        "src/api"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "POST-MVP - operator area. Twelve clients can be administered directly."
+    },
+    {
+      "id": "TASK-048",
+      "title": "Ticket 28: deployment stack",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-030"
+      ],
+      "acceptance_criteria": [
+        "deploy/docker-compose.yml, api/worker Dockerfiles, Caddy config (SSL, SPA serving, SSE-safe /api proxy) and deploy/scripts deploy.sh, backup.sh and restore.sh exist per Section 21",
+        "Capacity assumptions follow CON-006 (1-2 tenants per VPS) until fresh blueprint-native soak evidence replaces them"
+      ],
+      "write_scope": [
+        "deploy"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-049",
+      "title": "Ticket 29: security hardening pass",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-048"
+      ],
+      "acceptance_criteria": [
+        "Helmet + CSP, HSTS via Caddy, dependency audit and license checker in CI, log-redaction serializer tests, and a scripted checklist verifying every Section 24 control"
+      ],
+      "write_scope": [
+        "src",
+        "deploy",
+        "scripts"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-050",
+      "title": "Ticket 30: launch readiness",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-049"
+      ],
+      "acceptance_criteria": [
+        "No residual internal or Paperclip-flavored terminology remains on user-facing surfaces (REQ-012)",
+        "Legal pages exist as attorney-review placeholders",
+        "A load sanity check runs on the VPS class and the Section 28 acceptance suite passes"
+      ],
+      "write_scope": [
+        "apps/web",
+        "docs",
+        "tests"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-051",
+      "title": "Establish single source of truth across the repo's planning docs",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "A repo doc carries the master blueprint's 30-ticket index plus an explicit pointer to E:\\REPOS 2\\wealth_clip\\THE_WEALTH_FACTORY_MASTER_BLUEPRINT.md as external source of truth (DEC-009)",
+        "The same doc records every other external planning source with its location and status, including the Fable 5 independent design referenced in DEC-016, so borrowed parts can be traced to their origin",
+        "Root HANDOFF.md stops contradicting itself and names the reboot docs plus this build record authoritative for codex/wealth-factory-blueprint (DEC-011)",
+        "wf-harness/HANDOFF.md and TODO.md carry supersession banners reading as historical reference only, with no new items added or ticked there",
+        "Genuinely operational docs (runbooks, canonical commands) stay live and are referenced from this record rather than bannered"
+      ],
+      "write_scope": [
+        "docs",
+        "HANDOFF.md",
+        "TODO.md",
+        "wf-harness/HANDOFF.md"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "risks": [
+        "RISK-004",
+        "RISK-006"
+      ]
+    },
+    {
+      "id": "TASK-052",
+      "title": "Retire the duplicate Codex build record under .codex/",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [],
+      "acceptance_criteria": [
+        ".codex/builds/2026-07-19-wealth-factory-blueprint-reboot.json is marked superseded by this record and no longer receives updates",
+        "Any evidence it holds that is not already in this record is folded in before it is retired",
+        "Future Codex-driven sessions write to .buildwork/ through the merge engine rather than a parallel directory"
+      ],
+      "write_scope": [
+        ".codex",
+        ".buildwork"
+      ],
+      "artifacts": [
+        ".codex/builds/2026-07-19-wealth-factory-blueprint-reboot.json"
+      ],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "risks": [
+        "RISK-004"
+      ],
+      "progress": "Found 2026-07-21 during owner Q&A. The record covers only phase B35 (its TASK-035), was at revision 5, status active, and is written against a variant schema the current validator rejects (requirements and history as bare strings, extensions.software outside extensions.data). Its B35 evidence has already been folded into TASK-024 as prior-record evidence. Later the same day Codex wrote to it again to add the B36 gate, so the drift this task exists to stop is active and ongoing, not historical. Urgency raised accordingly.",
+      "findings": [
+        "Concurrent-write proof 2026-07-21: Codex added the B36 foundation gate to the .codex record and to three repo docs while this .buildwork record was the declared authority. The two records disagreed on what B36 means until DEC-020 resolved it.",
+        "The .codex record's task ids restart independently (its TASK-035 is phase B35; this record's TASK-035 is Ticket 13), so cross-record references by task id are actively unsafe."
+      ]
+    },
+    {
+      "id": "TASK-053",
+      "title": "Phase B36 gate: classify Tickets 01-06 from what the walking skeleton proves",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-055"
+      ],
+      "acceptance_criteria": [
+        "Each of Tickets 01-06 is classified accept, adapt or replace, using evidence produced by driving the walking skeleton through the foundation",
+        "Every adapt or replace classification becomes its own task before Ticket 13 starts",
+        "The five duplicated migration sequence numbers are resolved, since apply-order is currently undefined by filename",
+        "The classification states whether the legacy foundation is being inherited deliberately or by accident"
+      ],
+      "write_scope": [
+        "docs"
+      ],
+      "artifacts": [
+        "supabase/migrations/0001_initial_tenant_model.sql",
+        "tests/tenant-rls.test.ts"
+      ],
+      "evidence": [],
+      "handoffs": [
+        "Blocks TASK-035 (Ticket 13). Gate defined by Codex on 2026-07-21 in TODO.md, the reboot plan and the domain skeleton; verified present in all three."
+      ],
+      "blockers": [],
+      "findings": [
+        "Preliminary scan 2026-07-21, not the audit itself: the tenant foundation is Paperclip-era, established in supabase/migrations/0001_initial_tenant_model.sql with coverage in tests/tenant-rls.test.ts.",
+        "Of 41 migrations, only 0036 and 0037 are blueprint-native; 0001-0035 are legacy Paperclip and wf-harness lineage. Ticket 13's run data model would land directly on that base.",
+        "The migration lineage has five duplicated sequence numbers, each used by two unrelated migrations: 0005 (bound_provider_context, private_encrypted_vault), 0006 (single_active_provider_lane, vault_storage_secret_kinds), 0007 (private_storage_connector_secrets, secret_revocation_reasons), 0013 (paperclip_company_issue_agents, wf_harness_runs_cards), 0014 (paperclip_secret_binding_synced_status, wf_harness_subcard_proposals). Ordering between each pair is therefore undefined by filename, which the B36 audit must resolve before Ticket 02 can be classified accept."
+      ],
+      "progress": "Method changed 2026-07-21 per DEC-032: the gate's question survives but is answered by the walking skeleton (TASK-055) rather than by an abstract audit. Codex's original framing and the repo docs that define B36 remain valid; only the method changed, and the skeleton leaves a working artifact where an audit would leave a document."
+    },
+    {
+      "id": "TASK-054",
+      "title": "Survey VPS2 containers and lanes to ground the Ticket 28 deployment stack",
+      "status": "completed",
+      "owner": "unassigned",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "The running container inventory, network/lane layout and reverse-proxy configuration on VPS2 are recorded",
+        "Which lanes belong to the retired Paperclip model versus other tenants of the box is identified, so Ticket 28 knows what it may not disturb",
+        "The survey is strictly read-only; no container, volume, network, DNS or data mutation"
+      ],
+      "write_scope": [
+        "docs"
+      ],
+      "artifacts": [],
+      "evidence": [
+        {
+          "type": "host-survey",
+          "summary": "docker ps returned 38 running containers including both Wealth Factory generations and the three leftover proof workers",
+          "reference": "ssh deploy@VPS2 docker ps"
+        },
+        {
+          "type": "host-survey",
+          "summary": "docker stats --no-stream: paperclip 888.1MiB, wf-stage-api 49.07MiB, worker-proof-a/b/c 36.48/34.21/35.23MiB, redis 13.17MiB, all under 0.35 percent CPU while idle",
+          "reference": "ssh deploy@VPS2 docker stats --no-stream"
+        }
+      ],
+      "handoffs": [
+        "Feeds TASK-048 (Ticket 28 deployment stack) and TASK-034 (external port exposure)."
+      ],
+      "blockers": [],
+      "progress": "Completed 2026-07-21. Root cause of the earlier failure was tooling, not credentials: the key IS loaded in the Windows ssh-agent service, but the Bash tool runs Git Bash, whose ssh cannot see that agent. Connecting through the Windows OpenSSH client succeeded immediately. Survey was strictly read-only (docker ps, docker stats --no-stream, ss -tln, free, loadavg, plus an external TCP reachability probe). Nothing on the host was modified.",
+      "findings": [
+        "Host srv1605805, Ubuntu, 4 CPUs, 15GB RAM, up 81 days, 38 running containers. Idle at survey time: load 0.20, about 5GB used.",
+        "Two generations of Wealth Factory containers run at once: wealth-factory-api (image 20260512) and wealth-factory-api-stage2:boardsession, both up 2 months, alongside newer wf-stage-api/web/worker up 2 weeks.",
+        "Three leftover pressure-test workers, wealth-factory-worker-proof-a/b/c, have run 2 months and still report healthy. They are soak-test infrastructure rather than product.",
+        "Paperclip runs as ghcr.io/hostinger/hvps-paperclip:latest on 0.0.0.0:53324 using 888MiB, roughly 8x any single wf-stage container and by far the largest Wealth Factory-adjacent consumer.",
+        "Redis is one redis:alpine container bound to 0.0.0.0:32768, confirming the shared-instance topology of RISK-011 against the live host instead of documentation.",
+        "A full self-hosted Supabase stack (kong, db, auth, storage, realtime, studio, pooler, analytics, vector, imgproxy, edge-functions, meta, rest) plus caddy occupies most remaining containers.",
+        "Unrelated tenants share the box: executive-council api/miniapp/worker, pbg-ambassador, sgt-bots, sgt-mini-app, affiliate-api, concierge-bot, spyderbyte-site, n8n and hermes-agent. A blueprint-native deployment is a guest here, not the owner.",
+        "sudo is not passwordless for non-docker commands, so ufw state could not be read; firewall posture is unconfirmed from inside the host."
+      ]
+    },
+    {
+      "id": "TASK-055",
+      "title": "Walking skeleton: drive one thin customer path through the real foundation",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-025"
+      ],
+      "acceptance_criteria": [
+        "A real user logs in, a real tenant row exists, and one hardcoded package is installed against the live database",
+        "One station executes through one real provider using a stored credential, and its deliverable persists and is viewable after logout",
+        "A second tenant provably cannot read the first tenant's rows, proven by a test that fails when RLS is broken",
+        "Auth, tenant context, RBAC and audit events are exercised by the path rather than inspected in the abstract",
+        "Every defect the slice surfaces is recorded as a task before it is fixed"
+      ],
+      "write_scope": [
+        "src/factory",
+        "src/api",
+        "supabase/migrations",
+        "apps/web"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "MVP CRITICAL PATH - first build action after the tree is committed. Replaces the abstract B36 audit per DEC-032. This is the smallest thing that turns 25 phases of in-memory domain code into something a person can use."
+    },
+    {
+      "id": "TASK-056",
+      "title": "Submit SpyderByte Foundry for Stripe approval",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "The application is submitted with the compliance-reviewed landing page and policies",
+        "Feedback rounds are tracked to closure",
+        "Approval status is recorded here, since it gates all revenue"
+      ],
+      "write_scope": [
+        "external"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "MVP CRITICAL PATH, EXTERNAL LATENCY - owner committed to submitting 2026-07-21. Start immediately and in parallel; no engineering work shortens this queue.",
+      "risks": [
+        "RISK-021"
+      ]
+    },
+    {
+      "id": "TASK-057",
+      "title": "Verify OpenAI and xAI terms permit subscription device connectors on a commercial platform",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "Current terms for both providers are read against the actual integration, in which the customer's own subscription session drives runs on a third-party platform",
+        "Where ambiguous, the provider is asked directly rather than assumed",
+        "The outcome is recorded before device connectors are advertised as a supported option",
+        "If not permitted, affected customers are identified before onboarding rather than after"
+      ],
+      "write_scope": [
+        "docs"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "MVP CRITICAL PATH, LEGAL - distinct from the customer-facing copy assigned to Fable. Disclaimer text protects against customer disputes; it does not change how a provider reads its own terms.",
+      "risks": [
+        "RISK-017"
+      ]
+    },
+    {
+      "id": "TASK-058",
+      "title": "Provider session fragility: detect, pause, resume, warn",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-055"
+      ],
+      "acceptance_criteria": [
+        "Session loss is distinguishable from provider outage and from an invalid credential, with a distinct customer message",
+        "A run losing its provider mid-flow pauses with completed stations and approved deliverables intact",
+        "After re-authorization the run resumes from the station it stopped at",
+        "Where session lifetime is knowable, the customer is warned before expiry rather than after failure"
+      ],
+      "write_scope": [
+        "src/factory",
+        "src/api",
+        "apps/web"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "MVP CRITICAL PATH - required by DEC-027. Shares resumability machinery with the budget pacing of TASK-059.",
+      "risks": [
+        "RISK-018"
+      ]
+    },
+    {
+      "id": "TASK-059",
+      "title": "Run budget enforcement: one seam, two meters",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-055"
+      ],
+      "acceptance_criteria": [
+        "API-key connections enforce a per-run dollar ceiling, on by default",
+        "Subscription connectors enforce request pacing over a rolling window plus cooldowns between stations",
+        "Exceeding either meter pauses the run with work intact rather than failing it",
+        "The default is active without the customer configuring anything, as the landing page promises"
+      ],
+      "write_scope": [
+        "src/factory"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "MVP CRITICAL PATH - the page promises this to paying customers on their own provider accounts. The thin slice of Ticket 17: enforcement only, not the usage ledger or cost attribution."
+    },
+    {
+      "id": "TASK-060",
+      "title": "Rebrand user-facing surfaces from Wealth Factory to SpyderByte Foundry",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-025"
+      ],
+      "acceptance_criteria": [
+        "No user-facing surface, email, document or export header says Wealth Factory",
+        "Customer-facing vocabulary moves from factory to foundry - the floor, the line and all UI copy - per DEC-036",
+        "Internal engineering identifiers using the word factory are deliberately left unchanged, and that decision is visible in the code so nobody 'fixes' it later",
+        "The stale generated .js mirrors under apps/web/src are removed or excluded before renaming, since they shadow the tracked .ts during Vite builds and would silently serve the old name",
+        "Whether non-public identifiers must change is confirmed with whoever raised the copyright issue",
+        "One copy layer owns every customer-facing label, so internal names never reach a user-visible surface directly",
+        "A check fails the build when 'Wealth Factory', or 'factory' as customer-facing vocabulary, appears in rendered output outside the copy layer",
+        "The check runs against the built web bundle, not only against source, so a stale generated .js mirror cannot silently reintroduce the old name",
+        "The check is proven able to fail: reintroduce a forbidden string, watch it go red, revert, and record the injection as falsifiability evidence"
+      ],
+      "write_scope": [
+        "apps/web",
+        "src/api",
+        "docs"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [
+        "Guard pattern already proven in this codebase twice: the B31a queue-namespace guard fails closed on legacy names (with falsifiability evidence under TASK-020), and verify:web-result-approval-bundle greps the built bundle rather than the source."
+      ],
+      "blockers": [],
+      "progress": "MVP CRITICAL PATH. Surface is small: roughly 48 user-facing Wealth Factory strings, most of them in the legacy harness board client. Sequence after TASK-025 so the rename lands as its own reviewable commit rather than mixing into the uncommitted tree. Known trap: apps/web/src carries .js files shadowing tracked .ts, which already caused a deployable build to diverge from source once during the harness work. Owner accepted the internal/external split on 2026-07-21 conditional on the names not drifting, so the copy layer and its guard are part of this task rather than a follow-up. One guard covers both risks: vocabulary leaking into customer surfaces, and the stale .js shadow serving an old name from a build that no longer matches source."
+    },
+    {
+      "id": "TASK-061",
+      "title": "Measure the blueprint-native worker's real capacity footprint",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-055"
+      ],
+      "acceptance_criteria": [
+        "Peak worker CPU and memory during a real run are captured, with time split between waiting on the provider and computing locally",
+        "Tenants-per-node is derived from that measurement rather than inherited from Paperclip",
+        "PDF and document rendering is measured separately, since a headless renderer may prove to be the real density limit rather than running workflows",
+        "The result decides whether additional VPS nodes are purchased at all"
+      ],
+      "write_scope": [
+        "docs"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "Gates hardware spend and the placement decision. Expect a very different answer from Paperclip's: inference now runs on the customer's provider, so the worker should be I/O-bound."
+    },
+    {
+      "id": "TASK-062",
+      "title": "Wave-based onboarding plan for the twelve waiting clients",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-055"
+      ],
+      "acceptance_criteria": [
+        "Owner and one staff member each complete a full client-simulating workflow before any external client is onboarded",
+        "Clients are onboarded in waves of two to three with a defect review between waves",
+        "Each wave's failures are recorded here before the next wave opens"
+      ],
+      "write_scope": [
+        "docs"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "MVP CRITICAL PATH - per DEC-029. Matches the unmeasured concurrency ceiling and protects the market-fit cohort.",
+      "risks": [
+        "RISK-020"
+      ]
+    },
+    {
+      "id": "TASK-063",
+      "title": "Reconcile landing page promises with what the platform actually does",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "The spend-cap promise is qualified for subscription connectors, which have no dollar meter",
+        "The advertised provider list matches what guided setup supports and what the twelve clients were told",
+        "Any promise the MVP will not meet is corrected before Stripe review rather than after"
+      ],
+      "write_scope": [
+        "external",
+        "docs"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "MVP CRITICAL PATH - the page is a contract with twelve buyers holding $600-$2,000 each. Best done before the Stripe submission of TASK-056 rather than as a later correction.",
+      "risks": [
+        "RISK-019"
+      ]
+    },
+    {
+      "id": "TASK-064",
+      "title": "The Foreman: conversational guide grounded in the customer's live run",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-055",
+        "TASK-059"
+      ],
+      "acceptance_criteria": [
+        "A chat surface sits beside the production line on the run view and is available throughout a run",
+        "Foreman answers are grounded in the active run's real state: current station, what is complete, what awaits the customer, budget consumed",
+        "The Foreman can recommend and explain the next action but cannot approve, finalize or advance anything",
+        "Foreman conversation is metered inside the same run budget as station work, and pauses under the same rules",
+        "Provider session loss and budget exhaustion are reported by system messages, not by the Foreman",
+        "No specialist persona exposes a chat surface"
+      ],
+      "write_scope": [
+        "src/factory",
+        "src/api",
+        "apps/web"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [
+        "Depends on the run state model from TASK-055 and the budget seam from TASK-059; both must exist before chat can be grounded or metered."
+      ],
+      "blockers": [],
+      "progress": "MVP CRITICAL PATH - owner requirement 2026-07-21, added after the restructure and therefore net-new scope on an already-late build. Thin version only: one panel, one persona, one run's context, advisory. Deferred to post-MVP: cross-run memory, proactive nudges, tool use by the Foreman, and any retrieval beyond the active run.",
+      "risks": [
+        "RISK-022",
+        "RISK-023"
+      ]
+    }
+  ],
+  "risks": [
+    {
+      "id": "RISK-015",
+      "text": "VPS2 exposes Redis (32768), Postgres via the Supabase pooler (5432, 6543), Kong (8000, 8443) and Paperclip (53324) to the public internet. Refined 2026-07-21 after host inspection: Redis has requirepass configured and Postgres requires a password, so these are authenticated services exposed rather than open doors, and there is no evidence of compromise. The residual risk is that internet-facing Redis is a standing target with a history of severe CVEs, and the credentials behind these ports sit in plaintext in a local vault and in container env.",
+      "severity": "medium",
+      "mitigation": "TASK-034 repoints the seven containers that loop through the public IP onto internal Docker hostnames, then closes or allowlists the ports. Credential rotation is prudence rather than emergency given authentication is in place. Severity lowered from high after evidence; it was raised on reachability alone before auth was known."
+    },
+    {
+      "id": "RISK-001",
+      "text": "Twenty-five completed phases (B11-B35) exist only in the working tree; the last reboot commit is 967fd06 (B10). A workspace loss or a careless checkout destroys the entire Ticket 07-12 body of work.",
+      "severity": "high",
+      "mitigation": "TASK-025 commits the work in six ticket-group chunks per DEC-014 and pushes to origin. This is the immediate next action."
+    },
+    {
+      "id": "RISK-002",
+      "text": "Every factory repository is in-memory only. The catalog and install migrations exist but nothing reads or writes them, so the persistence contract is asserted by migration-shape tests rather than by a live adapter.",
+      "severity": "high",
+      "mitigation": "TASK-029 adds durable Supabase/Postgres adapters with tenant-scoping and RLS proven by tests, per DEC-013."
+    },
+    {
+      "id": "RISK-003",
+      "text": "Retired-lane residue: the legacy Paperclip code, docs and TODO entries remain in the repo and on the branch, so a future session can still mistake them for active direction.",
+      "severity": "medium",
+      "mitigation": "DEC-010 retires the lane, TASK-032 and TASK-033 are cancelled with rationale, and TASK-051 banners the stale docs."
+    },
+    {
+      "id": "RISK-004",
+      "text": "Coordination drift: two build records (.buildwork and .codex) and two handoff docs described this build, on two branches, with the root pointer contradicting itself.",
+      "severity": "medium",
+      "mitigation": "DEC-011 and DEC-015 name single sources of truth; TASK-051 and TASK-052 execute the cleanup."
+    },
+    {
+      "id": "RISK-005",
+      "text": "External 5432 and 8000 remain reachable on the deployed host per the open smoke-gate items, independent of which product lane is active.",
+      "severity": "medium",
+      "mitigation": "TASK-034 stays active despite the lane retirement and closes or allowlists them, then re-runs the external smoke gate."
+    },
+    {
+      "id": "RISK-006",
+      "text": "The master blueprint lives outside the repo at E:\\REPOS 2\\wealth_clip and is not version-controlled with the code, so ticket scope can drift or become unavailable to a future session.",
+      "severity": "medium",
+      "mitigation": "TASK-051 imports the ticket index into repo docs with an explicit pointer to the external source of truth."
+    },
+    {
+      "id": "RISK-007",
+      "text": "The master blueprint's idealized target (fresh monorepo, PostgreSQL 16 + Drizzle) diverges from this repo's actual Supabase/Postgres SQL migration lineage, so blueprint ticket text will not map literally onto this codebase for schema-heavy tickets (13, 17, 21).",
+      "severity": "medium",
+      "mitigation": "DEC-013 records the deliberate divergence; each schema-heavy ticket must translate the blueprint's intent rather than copy its stack."
+    },
+    {
+      "id": "RISK-008",
+      "text": "Tickets 01-06 are assumed satisfied by the legacy foundation but have never been audited against the blueprint. Ticket 13's run data model would land on an unverified auth/tenant/RLS/RBAC/audit base.",
+      "severity": "medium",
+      "mitigation": "TASK-053 audits them and answers OQ-007 before TASK-035 begins."
+    },
+    {
+      "id": "RISK-009",
+      "text": "Three planning sources now describe this product: the master blueprint, the Fable 5 independent design, and this repo's reboot docs. Only the first two are outside the repo, and the Fable 5 design has no recorded location, so a future session cannot tell which borrowed part came from where.",
+      "severity": "medium",
+      "mitigation": "TASK-051 records the location and status of every external planning source, including the Fable 5 design, alongside the master blueprint pointer."
+    },
+    {
+      "id": "RISK-010",
+      "text": "VPS2 hosts roughly 40 containers across multiple unrelated projects. A blueprint-native deployment that assumes an empty box could disturb neighbours, and the 2-tenant planning figure has never been checked against what the box is already carrying.",
+      "severity": "medium",
+      "mitigation": "TASK-054 surveys the lanes read-only before TASK-048 writes the deployment stack."
+    },
+    {
+      "id": "RISK-011",
+      "text": "Per vault documentation, one Redis instance on VPS2 serves the wf-stage lane, BullMQ and Paperclip on databases 0, 1 and 2 behind a single shared password. The B31a queue-name guard prevents namespace collision but not shared-process failure: memory pressure, an eviction policy change or a credential rotation hits all three lanes at once.",
+      "severity": "medium",
+      "mitigation": "TASK-054 confirms the topology live, then TASK-048 decides whether the blueprint-native runtime gets its own Redis instance rather than another database on the shared one."
+    },
+    {
+      "id": "RISK-013",
+      "text": "Two coordination records are being written concurrently by two agents. On 2026-07-21 Codex added the B36 gate to .codex and to three repo docs while this record was the declared authority, and the two disagreed on what B36 named. Task ids also collide across records with different meanings.",
+      "severity": "high",
+      "mitigation": "TASK-052 retires the .codex record; until it does, phase names come from the repo docs (DEC-020) and no task id may be cited across records without naming which record it belongs to."
+    },
+    {
+      "id": "RISK-014",
+      "text": "Five migration sequence numbers are each used twice by unrelated migrations (0005, 0006, 0007, 0013, 0014), so apply-order between each pair is undefined by filename. Any tool or fresh environment that orders migrations lexically may replay them differently than the environment they were developed against.",
+      "severity": "high",
+      "mitigation": "The B36 gate (TASK-053) must resolve the ordering before Ticket 02 can be classified accept, and before TASK-029 builds durable adapters on that lineage."
+    },
+    {
+      "id": "RISK-012",
+      "text": "The documented wf-stage environment sets the queue name wfpc-workflow-runs-stage, the exact shape the blueprint-native guard rejects. Copying that environment file forward when deploying the native lane would fail closed at boot, or worse, invite someone to weaken the guard to make a deploy work.",
+      "severity": "medium",
+      "mitigation": "TASK-048 must author a fresh blueprint-native environment rather than deriving it from wf-stage; the guard's falsifiability evidence under TASK-020 records what it protects."
+    },
+    {
+      "id": "RISK-016",
+      "text": "Three pressure-test workers (wealth-factory-worker-proof-a/b/c) and two superseded wealth-factory API containers have run for 2 months on the deployment target. Any future capacity measurement is polluted by them, and the older API generation may still hold live queue and database connections.",
+      "severity": "medium",
+      "mitigation": "Decide per container whether to retire it before Ticket 28 measures blueprint-native capacity; retirement is an owner action on a shared production host."
+    },
+    {
+      "id": "RISK-017",
+      "text": "Subscription device connectors for OpenAI and Grok may fall outside those providers' terms when a subscription session drives a third-party commercial platform. If a provider reads it that way, a advertised connection option dies after customers have paid for it.",
+      "severity": "high",
+      "mitigation": "TASK-057 verifies current terms with both providers before the connectors are advertised. Customer-facing copy is a separate job and does not close this."
+    },
+    {
+      "id": "RISK-018",
+      "text": "Device sessions expire and are revoked mid-run. Without pause-and-resume, a revocation discards approved work from a run the customer paid $600-$2,000 to execute.",
+      "severity": "high",
+      "mitigation": "DEC-027 makes session fragility a design requirement across four seams; TASK-058 implements it."
+    },
+    {
+      "id": "RISK-019",
+      "text": "The landing page states per-run spend caps are on by default, without qualifying connector type. A subscription-connector customer has no dollar meter, so the promise cannot be met literally for them.",
+      "severity": "medium",
+      "mitigation": "TASK-063 reconciles page copy with the two-meter model before Stripe review, not after."
+    },
+    {
+      "id": "RISK-020",
+      "text": "The twelve waiting clients are the market-fit cohort. A failed or half-working delivery damages the exact relationships that validated the product, and the page carries a refund policy against $600-$2,000 purchases.",
+      "severity": "high",
+      "mitigation": "DEC-029 onboards in waves behind an owner and staff dry run, so defects are found internally first."
+    },
+    {
+      "id": "RISK-021",
+      "text": "Stripe approval has not been submitted. It is an external review queue with unknown latency that gates all revenue and no amount of engineering shortens it.",
+      "severity": "high",
+      "mitigation": "TASK-056 submits it immediately and in parallel with the build."
+    },
+    {
+      "id": "RISK-022",
+      "text": "Unmetered Foreman conversation competes with station work for the same customer provider budget. On a subscription connector especially, a talkative customer can burn the rate-limit window and stall the very run they are asking about.",
+      "severity": "medium",
+      "mitigation": "DEC-035 puts chat inside the run budget seam of TASK-059 rather than alongside it."
+    },
+    {
+      "id": "RISK-023",
+      "text": "Foreman chat is the most natural surface in the product to keep extending, and the master blueprint rejected board chat precisely because it grew into a congested task-manager dashboard that displaced the assembly line. Scope creep here is likely rather than hypothetical.",
+      "severity": "medium",
+      "mitigation": "CON-009 and CON-010 bound it to one persona and one run's context; the production line stays the primary surface and chat stays beside it."
+    },
+    {
+      "id": "RISK-024",
+      "text": "Internal code says factory while customers must only ever see foundry. Without enforcement, the internal word leaks into UI copy, error messages, email templates or export headers - the likeliest path being an agent or developer reading src/factory and matching its vocabulary.",
+      "severity": "medium",
+      "mitigation": "CON-011 makes the split conditional on a failing check over the built bundle, following the B31a guard pattern already proven in this codebase."
+    }
+  ],
+  "artifacts": [
+    "TODO.md",
+    "docs/wealth-factory-reboot-plan-2026-07-06.md",
+    "docs/wealth-factory-domain-skeleton-2026-07-06.md",
+    "docs/superpowers/plans/2026-07-06-wealth-factory-blueprint-reboot.md",
+    "docs/superpowers/plans/2026-07-15-factory-credential-exact-job-processing.md",
+    "E:\\REPOS 2\\wealth_clip\\THE_WEALTH_FACTORY_MASTER_BLUEPRINT.md",
+    "src/factory",
+    "src/api/factory-credential-api.ts",
+    "src/api/factory-credential-http.ts",
+    "src/api/factory-package-install-api.ts",
+    "src/api/factory-package-install-http.ts",
+    "supabase/migrations/0036_factory_blueprint_catalog.sql",
+    "supabase/migrations/0037_factory_blueprint_package_installs.sql",
+    "tests",
+    ".codex/builds/2026-07-19-wealth-factory-blueprint-reboot.json",
+    "docs/build.md",
+    "https://www.spyderbyte.cloud (landing page - the customer-facing contract)"
+  ],
+  "verification": {
+    "required_checks": [
+      "npm run build",
+      "npx vitest run tests/factory-*.test.ts tests/bullmq-factory-*.test.ts --reporter=dot",
+      "git status --porcelain shows no uncommitted blueprint-native work",
+      "git log origin/codex/wealth-factory-blueprint contains the six ticket-group commits"
+    ],
+    "results": [
+      {
+        "type": "typecheck",
+        "summary": "npm run build (tsc --noEmit) passed with zero errors on 2026-07-21",
+        "reference": "npm run build"
+      },
+      {
+        "type": "test-run",
+        "summary": "Blueprint-native suite passed on 2026-07-21: 26 test files, 219 tests, 0 failures",
+        "reference": "npx vitest run tests/factory-*.test.ts tests/bullmq-factory-*.test.ts --reporter=dot"
+      },
+      {
+        "type": "git",
+        "summary": "Working tree is NOT clean: 36 untracked paths and 15 modified files carry phases B11-B35; last reboot commit is 967fd06 (B10). The third and fourth required checks currently fail.",
+        "reference": "git status --porcelain"
+      },
+      {
+        "type": "git",
+        "summary": "Origin remote verified 2026-07-21 as https://github.com/thepbgacademy-hub/spyderbyte_paperclip_saas.git on branch codex/wealth-factory-blueprint",
+        "reference": "git remote -v"
+      },
+      {
+        "type": "doc-inspection",
+        "summary": "Master blueprint verified 2026-07-21 to enumerate 30 tickets (01-30), not 25; Tickets 07-12 correspond to the completed reboot phases and 13-30 are outstanding",
+        "reference": "E:\\REPOS 2\\wealth_clip\\THE_WEALTH_FACTORY_MASTER_BLUEPRINT.md lines 712-1290"
+      },
+      {
+        "type": "access-attempt",
+        "summary": "VPS2 survey blocked 2026-07-21: SSH reached deploy@VPS2 and the server accepted the offered public key, but the local private key is passphrase-protected and no ssh-agent was running, so no container inventory could be taken. Two credential sets were tried and both name the same identity file. No commands ran on the host.",
+        "reference": "TASK-054"
+      },
+      {
+        "type": "doc-inspection",
+        "summary": "VPS2 lane layout partially reconstructed 2026-07-21 from local vault documentation rather than the host: wf-stage web/api/worker images, self-hosted Supabase, one shared Redis across three lanes, the legacy wfpc-workflow-runs-stage queue name, single-concurrency worker settings and tenant-credentials-required provider mode. Intended configuration only; unconfirmed against running containers.",
+        "reference": "TASK-054 findings"
+      },
+      {
+        "type": "doc-inspection",
+        "summary": "Phase B36 gate verified present 2026-07-21 in TODO.md (unchecked phase entry) and in the reboot plan's 'B36 Gate: Foundation Tickets 01-06 Before Ticket 13' section, which blocks Ticket 13 pending reconciliation of Tickets 01-06.",
+        "reference": "TODO.md; docs/superpowers/plans/2026-07-06-wealth-factory-blueprint-reboot.md"
+      },
+      {
+        "type": "code-intelligence",
+        "summary": "GitNexus FTS query ran successfully through bash with GITNEXUS_HOME inline, returning keyword-fallback results (index may be stale). Top foundation hits: supabase/migrations/0001_initial_tenant_model.sql and tests/tenant-rls.test.ts.",
+        "reference": "node E:\\GitNexusHome\tools\\gitnexus-fts-query.mjs --repo-path E:\\REPOS\\spyderbyte_paperclip_saas --query \"tenant RLS policy row level security membership\" --limit 8"
+      },
+      {
+        "type": "host-survey",
+        "summary": "VPS2 access achieved 2026-07-21 via the Windows OpenSSH client with the key already loaded in the Windows ssh-agent; Git Bash ssh cannot reach that agent, which is why earlier attempts failed. Read-only survey completed and nothing on the host was modified.",
+        "reference": "TASK-054"
+      },
+      {
+        "type": "reachability-probe",
+        "summary": "Six VPS2 ports confirmed publicly reachable, contradicting TODO.md's completed claim that external 8443 is no longer reachable",
+        "reference": "TASK-034"
+      }
+    ],
+    "final_status": "pending"
+  },
+  "extensions": {
+    "enabled": [
+      "software",
+      "multi-agent"
+    ],
+    "data": {
+      "software": {
+        "languages": [
+          "TypeScript",
+          "SQL"
+        ],
+        "frameworks": [
+          "Vitest",
+          "BullMQ",
+          "Supabase/Postgres",
+          "Vite",
+          "Playwright"
+        ],
+        "entry_points": [
+          "src/api/server-main.ts",
+          "src/worker/worker-main.ts",
+          "apps/web"
+        ],
+        "test_commands": [
+          "npm run build",
+          "npx vitest run tests/factory-*.test.ts tests/bullmq-factory-*.test.ts --reporter=dot",
+          "GITNEXUS_HOME='E:\\GitNexusHome' node E:\\GitNexusHome\tools\\gitnexus-fts-query.mjs --repo-path E:\\REPOS\\spyderbyte_paperclip_saas --query \"<terms>\" --limit 8"
+        ],
+        "deployment_targets": [
+          "VPS Docker (api, worker, Caddy) per master blueprint Ticket 28"
+        ]
+      },
+      "multi-agent": {
+        "orchestrator_id": "orchestrator",
+        "assignments": [],
+        "merge_policy": "orchestrator-controlled"
+      }
+    }
+  },
+  "history": [
+    {
+      "revision": 1,
+      "timestamp": "2026-07-21T12:39:15Z",
+      "actor": "initializer",
+      "action": "initialize",
+      "details": "Created draft build 2026-07-21-wealth-factory-blueprint-native-reboot"
+    },
+    {
+      "revision": 2,
+      "timestamp": "2026-07-21T12:45:00Z",
+      "actor": "orchestrator",
+      "action": "adopt-and-backfill",
+      "details": "Backfilled the in-progress Wealth Factory blueprint reboot from TODO.md, the reboot plan and its phase addenda, and direct code/git verification. Phases B0-B35 recorded as TASK-001..TASK-024 completed with re-derived evidence (typecheck clean; 26 files / 219 tests green). Remaining reboot work recorded as TASK-025..TASK-031 and the parked legacy Paperclip lane as TASK-032..TASK-034. Falsifiability injection run against the B31a queue namespace guard. Status moved draft -> active."
+    },
+    {
+      "revision": 3,
+      "timestamp": "2026-07-21T13:10:00Z",
+      "actor": "orchestrator",
+      "action": "resolve-open-questions-and-extend-scope",
+      "details": "Owner answered the six adoption open questions [rev-3]; recorded as DEC-009 through DEC-014 and OQ-001..OQ-006 closed. Verified the external master blueprint enumerates 30 tickets (not 25) and mapped Tickets 13-30 into TASK-035..TASK-050, with Ticket 16 as TASK-030 and Ticket 25 as TASK-031. Legacy Paperclip lane retired per DEC-010: TASK-032 and TASK-033 cancelled with findings preserved, TASK-034 kept active as live-host security hygiene. DEC-007 tenant cap superseded by DEC-012 and CON-006 (1-2 tenants per VPS pending fresh evidence). Discovered a duplicate Codex-authored record at .codex/builds/2026-07-19-wealth-factory-blueprint-reboot.json; its B35 evidence folded into TASK-024 and its retirement recorded as TASK-052 under DEC-015. Added TASK-051 (single source of truth across planning docs) and TASK-053 with new OQ-007 (Tickets 01-06 foundation audit)."
+    },
+    {
+      "revision": 4,
+      "timestamp": "2026-07-21T13:35:00Z",
+      "actor": "orchestrator",
+      "action": "record-origin-context",
+      "details": "Recorded the owner's account of how this build came to be: a Paperclip rebrand of the Wealth Factory SaaS whose pressure tests showed Paperclip could not carry more than roughly 2 concurrent tenants against a 4-tenant goal, so the goal was revised to 2 and the results became an avoid-guide (DEC-018, CON-006, DEC-012 refined). Recorded the Fable 5 independent design and the borrow-what-is-needed approach (DEC-016) and VPS2 as the deployment target with credentials referenced by vault location only (DEC-017). Added TASK-054 (read-only VPS2 lane survey), blocked because the local SSH private key is passphrase-protected and no agent is running; the attempt is recorded in verification results and no command ran on the host. Added RISK-009 (three planning sources, Fable 5 design has no recorded location) and RISK-010 (VPS2 already carries roughly 40 containers)."
+    },
+    {
+      "revision": 5,
+      "timestamp": "2026-07-21T13:50:00Z",
+      "actor": "orchestrator",
+      "action": "record-vps2-lane-findings",
+      "details": "Second VPS2 credential set supplied by the owner names the same passphrase-protected identity file, so TASK-054 stays blocked and no command has run on the host. Reconstructed a partial lane layout from local vault documentation instead and recorded it as TASK-054 findings, explicitly marked as intended configuration rather than observed host state. Added RISK-011 (one Redis instance shared across the wf-stage, BullMQ and Paperclip lanes behind a single password, which queue-name isolation does not protect against) and RISK-012 (the documented stage environment carries the legacy wfpc-workflow-runs-stage queue name that the B31a guard rejects, so the native deployment must not inherit it)."
+    },
+    {
+      "revision": 6,
+      "timestamp": "2026-07-21T14:15:00Z",
+      "actor": "orchestrator",
+      "action": "adopt-b36-gate",
+      "details": "Adopted Codex's Phase B36 gate as DEC-019 after verifying it in TODO.md and the reboot plan: Ticket 13 (TASK-035) is now status blocked and depends on TASK-053, which became the B36 audit requiring an accept/adapt/replace classification per Ticket 01-06. OQ-007 closed by that decision. Resolved a phase-name collision by renumbering consumer/service composition from B36 to B37 (DEC-020) because the repo docs claimed B36 first. Recorded GitNexus invocation with a bash fallback for the flaky PowerShell (DEC-021). Preliminary foundation scan added to TASK-053 findings: only 2 of 41 migrations are blueprint-native, and five sequence numbers are duplicated across unrelated migrations, raised as RISK-014. Codex writing to the .codex record again while this record held authority raised as RISK-013 and folded into TASK-052. Added OQ-008 on whether the native runtime gets its own Redis instance on VPS2."
+    },
+    {
+      "revision": 7,
+      "timestamp": "2026-07-21T14:40:00Z",
+      "actor": "orchestrator",
+      "action": "complete-vps2-survey",
+      "details": "VPS2 access resolved and the read-only survey completed, closing TASK-054. The blocker was tooling rather than credentials: the key was already loaded in the Windows ssh-agent, which Git Bash's ssh cannot see, and the Windows OpenSSH client connected immediately. The survey confirmed 38 containers, the single shared Redis instance behind RISK-011, two live Wealth Factory generations plus three two-month-old pressure-test workers (RISK-016, OQ-009), and unrelated tenants sharing the box. Probing from the workstation confirmed six ports publicly reachable including Redis and Postgres, raised as RISK-015 and escalating TASK-034 to urgent, which also falsifies TODO.md's completed claim that external 8443 is no longer reachable. No remediation was performed, because firewall and container changes on a shared production host are the owner's call."
+    },
+    {
+      "revision": 8,
+      "timestamp": "2026-07-21T15:30:00Z",
+      "actor": "orchestrator",
+      "action": "restructure-around-customer-outcome",
+      "details": "Restructured the record from architecture to customer outcome after an owner strategy discussion. Objective and acceptance criteria rewritten from the landing page's promises, which are a contract with twelve waiting buyers at $600-$2,000 each; the thirty tickets are demoted to backlog (DEC-022). Recorded the validated BYOK model with five API providers and two device connectors (DEC-023), central Postgres with stubbed node placement (DEC-024, DEC-025), the two-meter run budget (DEC-026), session fragility as a design requirement (DEC-027), the SpyderByte Foundry rename with internal identifiers frozen (DEC-028), wave-based onboarding (DEC-029), the marketplace work parked rather than discarded (DEC-030), Drive sync deferred (DEC-031), B36 answered by walking skeleton (DEC-032), and the definitive root cause that Paperclip was single-user by design (DEC-033). Added TASK-055 through TASK-063 covering the skeleton, Stripe submission, provider terms verification, session fragility, budget enforcement, the rename, capacity measurement, wave onboarding and page reconciliation. Existing tasks marked MVP critical path or post-MVP. Added RISK-017 through RISK-021."
+    },
+    {
+      "revision": 9,
+      "timestamp": "2026-07-21T16:05:00Z",
+      "actor": "orchestrator",
+      "action": "add-foreman-and-foundry-vocabulary",
+      "details": "Added the Foreman conversational guide as an owner requirement (DEC-034), recorded as net-new MVP scope in TASK-064. Verified first that the master blueprint had deliberately rejected both CEO/CTO framing and board chat; the Foreman is designed to preserve those objections while restoring conversation, and the name avoids the rejected executive framing. Four design rules recorded as DEC-035 - advisory only, metered inside the run budget, system-generated failure messages, and no other chattable persona - with CON-009 and CON-010 bounding the surface and its context. Added RISK-022 (chat starving the run it explains) and RISK-023 (chat growing into the dashboard the blueprint rejected). Recorded the factory-to-foundry vocabulary change with internal engineering names retained (DEC-036), matching the blueprint's own prescription of a UI copy layer over neutral internal names, and expanded TASK-060 with the stale .js shadowing trap."
+    },
+    {
+      "revision": 10,
+      "timestamp": "2026-07-21T16:20:00Z",
+      "actor": "orchestrator",
+      "action": "make-vocabulary-split-enforceable",
+      "details": "Owner accepted keeping internal factory naming on the condition that the names do not drift. Converted that condition from prose into mechanism: CON-011 makes the internal/external split conditional on a copy layer plus a check that fails the build when brand or internal vocabulary reaches a customer-visible surface, and requires the internal names to be renamed instead if the guard is ever removed. Expanded TASK-060 with the copy layer, the guard, a requirement that it run against the built bundle rather than source, and a falsifiability injection. Added RISK-024. Followed the B31a queue-namespace guard pattern already proven in this codebase."
+    },
+    {
+      "revision": 11,
+      "timestamp": "2026-07-21T16:45:00Z",
+      "actor": "orchestrator",
+      "action": "scope-port-remediation-and-branch",
+      "details": "Mapped every exposed VPS2 port to its owning container by read-only host inspection, confirming no customer application binds one: all mini apps and sites ride Caddy on 443, and n8n and sgt-mini-app bind localhost only. Identified the seven containers that loop through the public IP and must be repointed to internal hostnames before any port closes, or the stage lane breaks. Lowered RISK-015 from high to medium on evidence that Redis has requirepass configured and Postgres requires a password, correcting an assessment originally made on reachability alone. Recorded DEC-037 and updated CON-004 for the new foundry/mvp-baseline branch, and added OQ-010 noting that CLAUDE.md is gitignored so the record pointer does not reach GitHub."
+    }
+  ]
+}

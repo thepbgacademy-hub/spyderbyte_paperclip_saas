@@ -196,7 +196,7 @@ Core fields:
 - `status`
 
 Forward note:
-The reboot B1-B7 slice currently allows the package `id` seam to align closely with the package key so the engine can be proven without persistence or publishing infrastructure. Before any later phase widens into publishing, persistence, installs with history, or package updates, the domain must separate stable package identity from immutable package-version identity so installs and runs can pin an exact published version without a breaking retrofit.
+The reboot B1-B12 slice now treats `packageId` as the stable package identity seam and keeps `key` as the customer-facing key/slug seam. Phase B13 should make that split explicit everywhere in the reboot blueprint contract and derive the bounded slice `packageVersionId` as `${packageId}@${version}` before any outward widening into archives, publishing, persistence, runtime, or UI.
 
 ### PackageInstall
 
@@ -212,7 +212,7 @@ Core fields:
 - `enabled`
 
 Forward note:
-In a later persistence/versioning phase, `packageId` should remain the stable package identity while installs gain an explicit version seam such as `packageVersionId`, so a production run can remain anchored to the exact published blueprint revision active at run start.
+Phase B13 should keep `packageId` as the stable package identity while installs gain an explicit `packageVersionId` seam using `${packageId}@${version}`, so a production run can remain anchored to the exact reboot-slice package version active at run start without widening into publishing APIs, archives, or persistence/schema work.
 
 ### ProviderCredential
 
@@ -242,6 +242,9 @@ Core fields:
 - `currentStationKey`
 - `startedAt`
 - `completedAt`
+
+Forward note:
+Phase B13 should keep `packageInstallId` as the install reference while making the package-version pin explicit at the run seam via the install's deterministic `packageVersionId` value `${packageId}@${version}`. This phase stays strictly out of runtime execution changes, UI, quality-check personas, and later workflow families.
 
 ### Station
 
@@ -436,6 +439,32 @@ Residual risk:
 
 - any future code path that constructs `BlueprintPackageDefinition` objects without going through `createBlueprintPackage(...)` could bypass the current fail-closed checks and must add an equivalent validation seam
 
+### Phase B11
+
+Purpose:
+Add the first bounded manifest-backed blueprint source for the current reboot slice.
+
+Recommended slice:
+`complete bounded manifest -> pure loader -> existing package constructor seam -> intake/positioning tests`
+
+Reason:
+It proves the reboot can load blueprint-style declarative package content without widening into package archives, persistence, or engine/runtime execution changes.
+
+Bounded implementation shape:
+
+- introduce a pure loader for a complete-but-bounded current-slice manifest contract
+- keep required top-level blueprint manifest sections present, even when many are pass-through in this phase
+- route loaded personas and stations through `createBlueprintPackage(...)` so B10 enforcement remains authoritative
+- keep the bounded loader limited to the currently shipped `intake` / `positioning` slice
+
+Out of scope for B11:
+
+- zip or directory package loading
+- package publishing, install history, or persistence seams
+- template rendering, prompt execution, or UI manifest panels
+- quality-check personas
+- later workflow families beyond `intake` / `positioning`
+
 Out of scope for B10:
 
 - manifest file loading
@@ -444,6 +473,585 @@ Out of scope for B10:
 - UI/dashboard presentation changes
 - worker/runtime execution changes
 - quality-check personas or later blueprint families
+
+### Phase B12
+
+Purpose:
+Separate stable package identity from immutable package-version identity for the current reboot slice.
+
+Recommended slice:
+`packageId -> packageVersionId (${packageId}@${version}) -> package install pin -> run pin`
+
+Reason:
+It proves the reboot domain can name a stable package separately from the exact immutable version consumed by installs and runs, without widening into package archives, publishing APIs, persistence/schema work, runtime execution, UI, quality-check personas, or later workflow families.
+
+Bounded implementation shape:
+
+- keep `packageId` as the current reboot slice's stable package identity seam, while explicitly deferring any later package-id-vs-package-key publishing/persistence split
+- introduce deterministic `packageVersionId` as `${packageId}@${version}`
+- bind the current slice version seam only at domain/package/install/run boundaries
+- require installs and runs in the current slice to describe their exact package-version pin using that deterministic seam
+- keep manifest loading, package construction, and current intake/positioning slice assumptions compatible with the bounded B12 identity split
+
+Out of scope for B12:
+
+- package archives or zip/directory loading changes
+- publishing APIs or package release workflow changes
+- persistence or schema changes
+- runtime or worker execution changes
+- UI/dashboard presentation changes
+- quality-check personas
+- later workflow families beyond `intake` / `positioning`
+
+### Phase B13
+
+Purpose:
+Make stable `packageId` explicit on the reboot blueprint contract before moving outward.
+
+Recommended slice:
+`explicit packageId -> separate package key/slug -> packageVersionId (${packageId}@${version}) -> install/run/approval pin continuity`
+
+Reason:
+It closes the remaining identity ambiguity in the reboot slice before any archive, publishing, persistence, runtime, or UI widening can lock the wrong seam in place.
+
+Bounded implementation shape:
+
+- expose `packageId` explicitly on the reboot blueprint/package contract
+- keep `key` as the customer/package slug seam only
+- derive deterministic `packageVersionId` as `${packageId}@${version}`
+- require installs, runs, and approvals in the current slice to pin the explicit stable identity and deterministic version identity together
+- prove the split with focused tests where slug/title can change without changing package identity
+
+Out of scope for B13:
+
+- package archives or zip/directory loading changes
+- publishing APIs or package release workflow changes
+- persistence or schema changes
+- runtime or worker execution changes
+- UI/dashboard presentation changes
+- quality-check personas
+- later workflow families beyond `intake` / `positioning`
+
+### Phase B14
+
+Purpose:
+Add the bounded package content-hash/source seam required by blueprint Ticket 07 before moving to catalog or install lifecycle work.
+
+Recommended slice:
+`validated manifest -> deterministic package content hash -> package source metadata -> minimal read-only .twfpkg archive load`
+
+Reason:
+It completes the current package-identity foundation by proving the platform can name the exact validated package content it loaded, including stable hashes across archive repacking, without introducing operator publishing or tenant lifecycle behavior too early.
+
+Bounded implementation shape:
+
+- compute deterministic `sha256:` content hashes from sorted package entry paths and canonicalized JSON content
+- attach package source metadata to manifest/archive-loaded `BlueprintPackageDefinition` values
+- add a minimal read-only `.twfpkg` zip load path that extracts root `manifest.json` and routes through the existing manifest/package constructor guardrails
+- prove hash stability across repacking with identical content and hash changes when package content changes
+
+Out of scope for B14:
+
+- operator catalog endpoints
+- package publishing, deprecation, yanking, or archive storage
+- tenant install/update/rollback/disable/uninstall lifecycle changes
+- persistence or schema changes
+- runtime or worker execution changes
+- UI/dashboard presentation changes
+- quality-check personas
+- later workflow families beyond `intake` / `positioning`
+
+### Phase B15
+
+Purpose:
+Start the operator catalog/publishing ticket without prematurely adopting its API, database, storage, or operator-console layers.
+
+Recommended slice:
+`validated .twfpkg -> immutable published package-version record -> duplicate-version rejection -> audit intent`
+
+Reason:
+Package identity and content provenance are now established. This adds the narrow publication contract that later persistence and operator delivery layers will adopt, while keeping their infrastructure explicitly deferred.
+
+Bounded implementation shape:
+
+- validate an uploaded archive only through the existing archive manifest loader
+- publish a record anchored to `packageId`, `version`, `packageVersionId`, and source content hash
+- reject any second publish of the same `packageId@version`, regardless of content
+- produce a pure audit-intent object rather than calling the current tenant-shaped audit sink
+
+Out of scope for B15:
+
+- HTTP/API routes, operator middleware, or authorization
+- database schema, persistence, or storage/archive retention
+- deprecation or yanking actions
+- tenant install/update/rollback/disable/uninstall lifecycle changes
+- runtime/worker execution changes
+- UI/dashboard presentation changes
+- legacy package catalog reuse
+
+### Phase B16
+
+Purpose:
+Finish the catalog lifecycle portion of Ticket 08 while preserving the distinction between immutable package content/version records and catalog visibility.
+
+Recommended slice:
+`published lifecycle -> deprecated lifecycle -> yanked lifecycle, each with audit intent`
+
+Bounded implementation shape:
+
+- retain the B15 published package-version record as immutable identity/content data
+- create a separate immutable catalog lifecycle projection keyed by `packageVersionId` and source content hash
+- allow only `published -> deprecated`, `published -> yanked`, and `deprecated -> yanked`
+- reject repeated, backward, and restore transitions
+- return pure audit intent for deprecate and yank actions
+
+Out of scope for B16:
+
+- HTTP/API routes, operator middleware, and authorization
+- database schema, persistence, storage, and archive retention
+- restore/un-yank behavior
+- tenant installation/update lifecycle changes
+- runtime/worker execution changes
+- UI/dashboard presentation changes
+- legacy package catalog reuse
+
+### Phase B17
+
+Purpose:
+Add the first durable database contract for the new blueprint catalog without attaching it to the legacy tenant package lane.
+
+Recommended slice:
+`operator-owned package tables -> immutable package/version content -> forward-only lifecycle constraints`
+
+Bounded implementation shape:
+
+- add `wfpc.factory_blueprint_packages` and `wfpc.factory_blueprint_package_versions`
+- keep package and package-version identity, manifest, content hash, and publication provenance immutable
+- persist only the `published`, `deprecated`, and `yanked` catalog states
+- enforce lifecycle actor/timestamp completeness, chronology, and forward-only transitions in SQL
+- keep version history from being deleted through a package-row cascade
+
+Out of scope for B17:
+
+- reuse of `wfpc.wealth_factory_packages` or any legacy catalog table
+- live migration-helper wiring or VPS application
+- API routes, operator authentication, RLS, or audit persistence
+- archive-byte storage and tenant install lifecycle
+- runtime/worker execution changes
+- UI/dashboard presentation changes
+
+### Phase B18
+
+Purpose:
+Start the tenant-facing package install lifecycle from blueprint Ticket 09 without attaching it to API, persistence, payments, or UI surfaces yet.
+
+Recommended slice:
+`manifest permissions -> install snapshot -> bounded lifecycle transition -> audit intent`
+
+Bounded implementation shape:
+
+- carry normalized manifest permissions and budgets on the blueprint package definition
+- deep-copy package permission and budget snapshots when a workspace installs a package
+- model the pure lifecycle transitions `enabled -> disabled -> enabled`, update, rollback, and uninstall
+- block updates that widen tools, external actions, or budgets unless explicit consent is provided
+- return audit intents for lifecycle transitions so durable audit wiring can be added later without reverse engineering the domain contract
+
+Out of scope for B18:
+
+- tenant install database tables or repository wiring
+- HTTP routes, RBAC middleware, entitlement checks, Stripe, or operator/customer UI
+- durable audit persistence
+- package archive storage, catalog mutation, or catalog lifecycle changes
+- runtime/worker execution changes
+- expanding beyond the current intake/positioning reboot slice
+
+### Phase B19
+
+Purpose:
+Add the first durable tenant package install storage contract for blueprint Ticket 09 without routing through the legacy package install lane.
+
+Recommended slice:
+`B17 catalog version -> tenant install projection -> lifecycle event log -> tenant read RLS`
+
+Bounded implementation shape:
+
+- add `wfpc.factory_blueprint_package_installs` anchored to `wfpc.factory_blueprint_package_versions`
+- persist the B18 lifecycle projection fields, including install status, permission snapshot, permission diff, and lifecycle timestamps
+- add `wfpc.factory_blueprint_package_install_events` for durable install/update/rollback/disable/enable/uninstall audit events
+- allow tenant members to read their install and event records through RLS
+- keep uninstall non-destructive: deliverables are never deleted by uninstall
+
+Out of scope for B19:
+
+- reusing or mutating `wfpc.tenant_package_installs` or `wfpc.wealth_factory_packages`
+- HTTP routes, owner/admin write enforcement, entitlement checks, Stripe, or UI
+- repository/service wiring or dual-writes from the B18 pure lifecycle helpers
+- package archive storage, catalog mutation, or catalog lifecycle changes
+- runtime/worker execution changes
+- expanding beyond the current intake/positioning reboot slice
+
+### Phase B20
+
+Purpose:
+Add the first repository boundary for persisting blueprint-native package install lifecycle state without introducing tenant endpoints or legacy package install storage.
+
+Recommended slice:
+`B18 install transition -> B19-shaped repository port -> in-memory adapter proof`
+
+Bounded implementation shape:
+
+- define a `FactoryPackageInstallRepository` port for saving a `PackageInstall` with its paired `PackageInstallAuditIntent`
+- map domain install fields to the B19 install row shape
+- map audit intents to B19 lifecycle event rows with deterministic event IDs
+- enforce tenant-scoped reads and install/audit identity matching at the adapter boundary
+- preserve deep-copied permission snapshots and diffs on reads
+
+Out of scope for B20:
+
+- claiming Ticket 09 endpoint acceptance is complete
+- HTTP routes, owner/admin RBAC enforcement, entitlement checks, Stripe, or UI
+- Supabase client wiring or live database application
+- reusing or mutating `wfpc.tenant_package_installs` or `wfpc.wealth_factory_packages`
+- runtime/worker execution changes
+- expanding beyond the current intake/positioning reboot slice
+
+### Phase B21
+
+Purpose:
+Add the first tenant package install application-service boundary for Ticket 09 while keeping it install-only.
+
+Recommended slice:
+`owner/admin actor -> entitlement check -> B18 install transition -> B20 repository save`
+
+Bounded implementation shape:
+
+- define a narrow actor shape for owner/admin/member install authorization
+- define an `Entitlements.canInstall(...)` interface with a dev allow-all implementation for later Stripe replacement
+- fail closed when the requested package key does not match the resolved blueprint package
+- compose `installBlueprintPackage(...)`, `createPackageInstalledAuditIntent(...)`, and `FactoryPackageInstallRepository.saveLifecycleEvent(...)`
+- keep successful installs persisted with one paired `package_installed` lifecycle event
+
+Out of scope for B21:
+
+- completing Ticket 09 endpoint/RBAC acceptance
+- HTTP routes, middleware/session role mapping, Supabase adapters, Stripe, or UI
+- update, rollback, disable, enable, or uninstall application methods
+- reusing or mutating `wfpc.tenant_package_installs` or `wfpc.wealth_factory_packages`
+- runtime/worker execution changes
+- expanding beyond the current intake/positioning reboot slice
+
+### Phase B22
+
+Purpose:
+Add the first non-install tenant package lifecycle application-service boundary for Ticket 09 while keeping the slice limited to disable/enable.
+
+Recommended slice:
+`owner/admin actor -> tenant-scoped install lookup -> B18 disable/enable transition -> B20 repository save`
+
+Bounded implementation shape:
+
+- reuse the B21 actor shape for owner/admin/member lifecycle authorization
+- tenant-scope package install lookup through the B20 repository before any lifecycle transition
+- hydrate the repository row back into the B18 `PackageInstall` domain contract without losing timestamps, version pointers, permission snapshots, or permission diffs
+- call the existing B18 `disableBlueprintPackageInstall` and `enableBlueprintPackageInstall` helpers instead of hand-building status or audit payloads
+- persist the transition through the B20 `saveLifecycleEvent(...)` contract so install state and audit event remain coupled
+- fail closed for cross-tenant install ids, member actors, and uninstalled installs
+
+Out of scope for B22:
+
+- completing Ticket 09 endpoint/RBAC acceptance
+- HTTP routes, middleware/session role mapping, Supabase adapters, Stripe, or UI
+- update, rollback, uninstall, or permission-widening consent application methods
+- in-flight run pause/resume worker semantics beyond the install status transition
+- reusing or mutating `wfpc.tenant_package_installs` or `wfpc.wealth_factory_packages`
+- runtime/worker execution changes
+- expanding beyond the current intake/positioning reboot slice
+
+### Phase B23
+
+Purpose:
+Add the update tenant package lifecycle application-service boundary for Ticket 09 while keeping rollback, uninstall, routes, and runtime behavior deferred.
+
+Recommended slice:
+`owner/admin actor -> package-key check -> tenant-scoped install lookup -> B18 update transition -> B20 repository save`
+
+Bounded implementation shape:
+
+- reuse the B21/B22 actor shape for owner/admin/member lifecycle authorization
+- fail closed when the requested package key does not match the resolved blueprint package key
+- tenant-scope package install lookup through the B20 repository before applying an update
+- block updates unless the current install is enabled, so update does not implicitly re-enable disabled installs
+- block same-version updates, so no-op updates do not emit lifecycle audit noise
+- call the existing B18 `updateBlueprintPackageInstall` helper so permission diffs and consent enforcement stay centralized
+- persist the transition through the B20 `saveLifecycleEvent(...)` contract so install state and audit event remain coupled
+- return the updated install with `permissionDiff` for later API/UI consent-display layers
+
+Out of scope for B23:
+
+- completing Ticket 09 endpoint/RBAC acceptance
+- HTTP routes, middleware/session role mapping, Supabase adapters, Stripe, or UI
+- rollback or uninstall application methods
+- entitlement checks beyond the install-only B21 seam
+- in-flight run version pinning or runtime worker behavior
+- reusing or mutating `wfpc.tenant_package_installs` or `wfpc.wealth_factory_packages`
+- expanding beyond the current intake/positioning reboot slice
+
+### Phase B24
+
+Purpose:
+Add the rollback tenant package lifecycle application-service boundary for Ticket 09 while keeping uninstall, routes, runtime behavior, and full rollback consent acceptance deferred.
+
+Recommended slice:
+`owner/admin actor -> package-key check -> tenant-scoped install lookup -> B18 rollback transition -> B20 repository save`
+
+Bounded implementation shape:
+
+- reuse the B21-B23 actor shape for owner/admin/member lifecycle authorization
+- fail closed when the requested package key does not match the resolved rollback blueprint package key
+- tenant-scope package install lookup through the B20 repository before applying rollback
+- block rollback unless the current install is enabled, so rollback does not implicitly re-enable disabled installs
+- call the existing B18 `rollbackBlueprintPackageInstall` helper so package identity, previous-version validation, snapshot replacement, and audit intent stay centralized
+- persist the transition through the B20 `saveLifecycleEvent(...)` contract so install state and audit event remain coupled
+- preserve the original package-version snapshot when rolling back
+
+Out of scope for B24:
+
+- completing Ticket 09 endpoint/RBAC acceptance
+- HTTP routes, middleware/session role mapping, Supabase adapters, Stripe, or UI
+- uninstall application methods
+- rollback permission-widening consent beyond the existing B18 helper behavior
+- runtime deliverable version marking or run version-pinning behavior
+- reusing or mutating `wfpc.tenant_package_installs` or `wfpc.wealth_factory_packages`
+- expanding beyond the current intake/positioning reboot slice
+
+### Phase B25
+
+Purpose:
+Add the uninstall tenant package lifecycle application-service boundary for Ticket 09 while keeping routes, runtime run cancellation, destructive data deletion, and payment/refund behavior deferred.
+
+Recommended slice:
+`owner/admin actor -> tenant-scoped install lookup -> package identity check -> exact typed confirmation -> B18 uninstall transition -> B20 repository save`
+
+Bounded implementation shape:
+
+- reuse the B21-B24 actor shape for owner/admin/member lifecycle authorization
+- tenant-scope package install lookup through the B20 repository before applying uninstall
+- fail closed when the requested package identity does not match the persisted install package identity
+- require exact typed confirmation shaped as `UNINSTALL <packageKey>` derived from the persisted package identity before emitting the uninstall lifecycle event
+- call the existing B18 `uninstallBlueprintPackageInstall` helper so uninstall status, disabled state, timestamping, and audit intent stay centralized
+- persist the transition through the B20 `saveLifecycleEvent(...)` contract so install state and audit event remain coupled
+- allow disabled installs to uninstall without implicitly re-enabling them
+- preserve the blueprint non-destructive uninstall rule: deliverables and Launch Kit outputs are never deleted by uninstall
+
+Out of scope for B25:
+
+- completing Ticket 09 endpoint/RBAC acceptance
+- HTTP routes, middleware/session role mapping, Supabase adapters, Stripe, refund handling, or UI
+- runtime run cancellation, run queue draining, or worker behavior
+- deliverable deletion, Launch Kit deletion, or separate delete-data actions
+- entitlement revocation or billing lifecycle side effects
+- reusing or mutating `wfpc.tenant_package_installs` or `wfpc.wealth_factory_packages`
+- expanding beyond the current intake/positioning reboot slice
+
+### Phase B26
+
+Purpose:
+Close the bounded Ticket 09 tenant endpoint acceptance seam after the B18-B25 lifecycle/application slices.
+
+Recommended slice:
+`authenticated tenant request -> owner/admin application API -> lifecycle action -> guarded HTTP response`
+
+Bounded implementation shape:
+
+- add a tenant package install API facade that authenticates the actor, resolves the tenant install role, loads/re-validates the requested blueprint package version, and delegates to the B21-B25 application-service lifecycle actions
+- expose the accepted Ticket 09 action routes through a guarded HTTP handler:
+  - `POST /api/factory/package-installs`
+  - `POST /api/factory/package-installs/:installId/disable`
+  - `POST /api/factory/package-installs/:installId/enable`
+  - `POST /api/factory/package-installs/:installId/update`
+  - `POST /api/factory/package-installs/:installId/rollback`
+  - `POST /api/factory/package-installs/:installId/uninstall`
+- map widened-permission updates to a `permission_widening_requires_consent` response that preserves the permission diff for later UI/operator display
+- preserve the non-destructive uninstall contract by returning `deliverablesDeleted: false` and `launchKitDeleted: false`
+- prove owner/admin access, member rejection, unauthenticated rejection, entitlement rejection, lifecycle statuses, audit event ordering, CORS/request guards, malformed payload handling, and permission-widening consent behavior with focused tests
+
+Out of scope for B26:
+
+- Supabase/Postgres repository adapters or live runtime dependency wiring
+- customer UI for the lifecycle actions
+- Stripe/refund behavior, entitlement revocation, or billing lifecycle side effects
+- runtime pause/cancel workers, queue draining, or in-flight run behavior
+- deliverable deletion, Launch Kit deletion, or separate delete-data actions
+- reusing or mutating `wfpc.tenant_package_installs` or `wfpc.wealth_factory_packages`
+- expanding beyond the current intake/positioning reboot slice
+
+### Phase B27: Ticket 10 Power Source credential seam
+
+Phase B27 starts Ticket 10 by adding the first blueprint-native credential boundary for Power Sources.
+
+What changed:
+
+- added a factory credential vault using AES-256-GCM envelope encryption
+- generated a per-credential data key and wrapped it with a versioned 32-byte base64 master key
+- added masked Power Source credential create/list/delete service behavior
+- added a worker-bound decrypt seam that requires a purpose and writes a credential access audit intent
+- proved ciphertext-only storage, wrong-key failure, tamper detection, and key re-wrap without changing credential ciphertext
+
+Out of scope for B27:
+
+- provider adapters or provider capability registry work from Ticket 11
+- credential validation scheduling or status lifecycle work from Ticket 12
+- HTTP routes, UI, OAuth, Supabase/Postgres adapters, live runtime wiring, or worker execution integration
+- reuse or mutation of the legacy provider credential endpoints as the new factory source of truth
+- expanding beyond the current intake/positioning reboot slice
+
+### Phase B28: Ticket 10 credential API and HTTP seam
+
+Phase B28 completes the bounded Ticket 10 tenant API/HTTP acceptance seam for Power Source credential CRUD.
+
+What changed:
+
+- added an authenticated factory credential API for owner/admin create, masked list, and soft delete
+- added guarded HTTP routes for `POST /api/factory/credentials`, `GET /api/factory/credentials`, and `DELETE /api/factory/credentials/:credentialId`
+- preserved the B27 service/vault boundary so API responses never return plaintext or encrypted material
+- mapped unauthenticated, forbidden, invalid provider, blank label, empty secret, malformed credential id, and missing credential cases to tenant-safe errors
+- proved invalid origins, request guards, rate-limit path, malformed payloads, and malformed route decoding fail closed
+
+Out of scope for B28:
+
+- decrypt endpoints or browser access to plaintext credential material
+- provider validation, status lifecycle, validation queues, or weekly revalidation from Ticket 12
+- provider adapters or capability registry behavior from Ticket 11
+- Supabase/Postgres adapters, live runtime wiring, worker queue integration, UI, OAuth, rotation, restore, or package-scoped credential semantics
+
+### Phase B29: Ticket 11 provider registry and adapter contract seam
+
+Phase B29 starts Ticket 11 by adding the first blueprint-native provider abstraction without wiring it into credential validation or runtime execution.
+
+What changed:
+
+- added a shared `LLMProvider` interface for the blueprint provider keys: `anthropic`, `openai`, `openrouter`, `google`, and `xai`
+- added a static versioned provider capability registry with model id, context window, structured-output support, tool-use support, cost rates, and tier
+- added a pure requirement matcher for package capability requirements to eligible provider/model pairs
+- added pure cost estimation from registry rates
+- added an explicit Power Source credential-kind mapping layer so `gemini_api` maps to the blueprint `google` provider key
+- added injected adapter shells for all five provider keys so validation/completion response normalization can compile without live HTTP calls
+
+Out of scope for B29:
+
+- credential validation jobs, async status updates, weekly revalidation, or invalidation hooks from Ticket 12
+- worker decrypt/injection, run execution, queue wiring, rate limiting, retries, usage-event persistence, or budget enforcement
+- live provider smoke calls, real HTTP fixtures, customer UI, Supabase/Postgres adapters, OAuth, or fallback/shared operator provider behavior
+- mutation of B27/B28 credential API/service contracts or any browser/API path that returns plaintext credential material
+
+### Phase B30: Ticket 11 completion adapter mapper seam
+
+Phase B30 continues Ticket 11 by making the shared `LLMProvider.complete(...)` contract executable against injected mocked HTTP clients, without live provider calls or runtime wiring.
+
+What changed:
+
+- added provider-native completion request mappers for OpenAI, Anthropic, OpenRouter, Google, and xAI
+- mapped shared system prompts, ordered messages, tool definitions, tool-result turns, and JSON-schema response formats into provider-specific request shapes
+- normalized mocked provider success responses into the shared `CompletionResult` shape with text, request id, token usage, and registry-derived cost
+- normalized completion error statuses into tenant-safe provider messages without leaking raw provider bodies or submitted secrets
+- preserved the B29 registry, cost estimation, provider-key mapping, and injected HTTP client boundary
+
+Out of scope for B30:
+
+- credential validation queues, async credential statuses, weekly revalidation, or invalidation hooks from Ticket 12
+- worker-only credential decrypt/injection, run execution, queue wiring, retries, rate limiting, usage ledger writes, budget enforcement, Redis, or database imports
+- live provider smoke scripts or real provider calls
+- customer UI, Supabase/Postgres adapters, OAuth, fallback/shared operator provider behavior, or mutation of B27/B28 credential API/service contracts
+
+### Phase B31: Ticket 12 credential validation lifecycle seam
+
+Phase B31 starts Ticket 12 with the smallest in-process validation lifecycle that can later be wired to a real worker queue.
+
+What changed:
+
+- added credential validation status fields to encrypted Power Source credentials and masked credential DTOs: `pending`, `valid`, or `invalid`, plus a tenant-safe validation message and `lastValidatedAt`
+- changed credential creation to return immediately as `pending` and enqueue a validation job without returning plaintext
+- added a validation job repository seam to the in-memory credential repository
+- added a credential validation service that claims the next queued job, decrypts through the existing vault boundary, maps the Power Source provider kind to the Ticket 11 provider adapter, calls `validateCredential`, and projects a sanitized valid/invalid status
+- added weekly revalidation eligibility for active valid credentials whose last validation is at least seven days old
+- added an auth-failure invalidation helper for later run-execution integration
+
+Out of scope for B31:
+
+- BullMQ, Redis, worker boot/shutdown, repeatable-job registration, or `apps/worker` integration
+- Supabase/Postgres adapters or schema migration for validation jobs/status fields
+- live provider validation calls, OAuth flows, customer UI, runtime run pausing/resume behavior, retries/backoff, usage ledger writes, or budget accounting
+
+### Phase B31a Addendum: Queue Namespace Isolation
+
+B31a adds a blueprint-only guardrail before any B32 worker queue wiring:
+
+- canonical factory queue prefix: `wealth-factory-blueprint-v1`
+- credential validation queue name: `wealth-factory-validations-v1`
+- reserved runtime queue name: `wealth-factory-runs-v1`
+- legacy `wfpc-*` and Paperclip-shaped queue names or Redis key prefixes are rejected before a BullMQ queue can be constructed
+
+This addendum intentionally does not create queues, inspect Redis, delete historical jobs, boot workers, or migrate live queue state. Its job is to prevent future blueprint wiring from silently inheriting the older Paperclip queue namespace.
+
+### Phase B32: Credential Validation Queue Port
+
+Phase B32 adds the first blueprint-native queue seam for Ticket 12 without introducing a live queue client.
+
+What changed:
+
+- added a `FactoryCredentialValidationQueue` port for enqueue, claim, complete, and open-job duplicate checks
+- added a repository-backed adapter that keeps the B31 validation job repository as the source of truth
+- enforced the B31a Wealth Factory queue namespace before the adapter can be constructed
+- routed create-time credential validation jobs through the queue port
+- routed validation processing, completion, and weekly revalidation duplicate checks through the same queue port
+
+The queue port also owns the failure boundary: credential creation persists the encrypted credential before enqueueing and removes it if enqueueing fails; retryable provider outcomes are requeued as open jobs rather than terminally completed. Repository implementations must provide an atomic queued-to-processing claim so a durable adapter cannot double-claim work.
+
+### Phase B33: BullMQ Transport Adapter
+
+Phase B33 adds the first real transport adapter behind the B32 queue port. It publishes tenant-safe validation job references to the isolated `wealth-factory-validations-v1` BullMQ queue using the `wealth-factory-blueprint-v1` prefix, while the repository remains authoritative for enqueue, claim, completion, requeue, and duplicate suppression state.
+
+### Phase B34: Controlled BullMQ Consumer Shell
+
+Phase B34 adds a factory-local BullMQ consumer shell behind the B33 transport. It consumes the exact `{ jobId }` payload, preserves the guarded factory queue namespace, and exposes controlled lifecycle and job-event seams for a future worker path. It does not claim repository work itself and does not wire worker boot/runtime, scheduling, retry/backoff policy, persistence, API/UI, provider execution, or legacy queues.
+
+### Phase B35: Exact Credential Validation Job Processing
+
+Phase B35 adds the exact repository and service path needed by the B33/B34 credential-validation transport contract. A validation payload shaped as `{ jobId }` can now claim and process only the matching queued repository job through `claimById` and `processValidationJob({ jobId })`.
+
+The repository remains the source of truth. The BullMQ adapter delegates exact claims to the repository-backed queue and leaves transport state unchanged during the claim. The validation service shares its post-claim behavior across next-job and exact-job processing and returns the updated persisted credential projection after successful validation or auth-failure invalidation.
+
+This phase does not compose the consumer into a worker, boot runtime processing, add scheduler or retry/backoff policy, add Supabase/Postgres adapters, expose API/UI surfaces, call live providers, touch the VPS, or access legacy queues.
+
+### Historical B32/B33 Transport Notes
+
+The following notes remain attached to the credential-validation queue and transport foundation, not to the B36 gate.
+
+The repository contract performs the open-job check and insert atomically, and the transport adapter removes that repository job when publishing fails or a duplicate error cannot be verified as observable. This keeps transport failure recoverable without making Redis the source of truth.
+
+The adapter exposes explicit resource cleanup but does not start a worker, register repeatable jobs, define retry/backoff policy, add Supabase/Postgres persistence, wire runtime/API/UI surfaces, or alter legacy Paperclip queues.
+
+Out of scope for B32:
+
+- BullMQ or Redis client construction
+- worker boot/shutdown, repeatable weekly job registration, or queue retry/backoff policy
+- Supabase/Postgres adapters or live database migration
+- live provider validation calls, OAuth, customer UI, runtime run pausing/resume behavior, usage ledger writes, or budget accounting
+
+### Phase B36: Foundation Ticket Reconciliation Gate
+
+Phase B36 must run before Ticket 13. The reboot track has advanced B1-B35 against the new blueprint-native model, but master-blueprint Tickets 01-06 were not independently audited in this branch. Ticket 13 must not introduce the run and deliverable data model on top of an inherited legacy foundation unless that foundation is explicitly accepted as blueprint-compatible.
+
+B36 reconciles:
+
+- Ticket 01 scaffold/workspace shape
+- Ticket 02 core schema and tenant-owned table conventions
+- Ticket 03 auth/session model
+- Ticket 04 tenant context and RLS expectations
+- Ticket 05 RBAC roles and permission checks
+- Ticket 06 append-only audit event contract
+
+Each item should end with one of three outcomes: accept current foundation, adapt current foundation with bounded changes, or replace before Ticket 13.
 
 ## Later Dedicated Phase
 

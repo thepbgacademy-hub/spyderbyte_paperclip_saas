@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { createWorkspace } from "../src/factory/workspaces/workspace-service.js";
-import { createBlueprintPackage } from "../src/factory/packages/package-registry.js";
+import { loadBlueprintPackageManifest } from "../src/factory/packages/package-manifest-loader.js";
 import { installBlueprintPackage } from "../src/factory/packages/package-install-service.js";
 import { startIntakeRun, submitIntakeAnswers } from "../src/factory/runs/intake-run-service.js";
+import {
+  createIntakeOnlyManifest,
+  createPositioningOnlyManifest
+} from "./factory-package-manifest-fixtures.js";
 
 describe("factory intake run service", () => {
   it("drives the first blueprint-native vertical slice from workspace to founder profile deliverable", () => {
@@ -13,28 +17,7 @@ describe("factory intake run service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T18:15:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      personas: [
-        {
-          key: "founder_guide",
-          name: "Founder Guide",
-          tagline: "Guides the founder through intake.",
-          specialistKey: "direction",
-          allowedStationKeys: ["intake"]
-        }
-      ],
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          personaKey: "founder_guide",
-          kind: "structured_interview",
-          title: "Intake Station"
-        }
-      ]
-    });
+    const blueprint = loadBlueprintPackageManifest(createIntakeOnlyManifest());
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -52,7 +35,8 @@ describe("factory intake run service", () => {
 
     expect(startedRun.status).toBe("waiting_for_input");
     expect(startedRun.currentStationKey).toBe("intake");
-    expect(startedRun.packageId).toBe("connect-first");
+    expect(startedRun.packageId).toBe("pkg_connect_first");
+    expect(startedRun.packageVersionId).toBe("pkg_connect_first@1.0.0");
     expect(startedRun.packageInstallId).toBe("install_123");
 
     const completed = submitIntakeAnswers({
@@ -98,28 +82,7 @@ describe("factory intake run service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T18:15:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      personas: [
-        {
-          key: "founder_guide",
-          name: "Founder Guide",
-          tagline: "Guides the founder through intake.",
-          specialistKey: "direction",
-          allowedStationKeys: ["intake"]
-        }
-      ],
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          personaKey: "founder_guide",
-          kind: "structured_interview",
-          title: "Intake Station"
-        }
-      ]
-    });
+    const blueprint = loadBlueprintPackageManifest(createIntakeOnlyManifest());
     const packageInstall = installBlueprintPackage({
       id: "install_999",
       workspaceId: "ws_other",
@@ -145,28 +108,7 @@ describe("factory intake run service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T18:15:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      personas: [
-        {
-          key: "market_strategist",
-          name: "Market Strategist",
-          tagline: "Shapes the positioning brief.",
-          specialistKey: "market",
-          allowedStationKeys: ["positioning"]
-        }
-      ],
-      stations: [
-        {
-          key: "positioning",
-          familyKey: "positioning",
-          personaKey: "market_strategist",
-          kind: "analysis",
-          title: "Positioning Station"
-        }
-      ]
-    });
+    const blueprint = loadBlueprintPackageManifest(createPositioningOnlyManifest());
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -182,7 +124,7 @@ describe("factory intake run service", () => {
         blueprint,
         startedAt: "2026-07-06T18:17:00.000Z"
       })
-    ).toThrow('Blueprint package "connect-first" does not define an intake station');
+    ).toThrow('Blueprint package "pkg_connect_first" does not define an intake station');
   });
 
   it("fails closed when the installed blueprint does not match the requested blueprint package", () => {
@@ -192,50 +134,14 @@ describe("factory intake run service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T18:15:00.000Z"
     });
-    const installedBlueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      personas: [
-        {
-          key: "founder_guide",
-          name: "Founder Guide",
-          tagline: "Guides the founder through intake.",
-          specialistKey: "direction",
-          allowedStationKeys: ["intake"]
-        }
-      ],
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          personaKey: "founder_guide",
-          kind: "structured_interview",
-          title: "Intake Station"
-        }
-      ]
-    });
-    const requestedBlueprint = createBlueprintPackage({
-      key: "pricing-review",
-      title: "Pricing Review System",
-      personas: [
-        {
-          key: "founder_guide",
-          name: "Founder Guide",
-          tagline: "Guides the founder through intake.",
-          specialistKey: "direction",
-          allowedStationKeys: ["intake"]
-        }
-      ],
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          personaKey: "founder_guide",
-          kind: "structured_interview",
-          title: "Pricing Intake Station"
-        }
-      ]
-    });
+    const installedBlueprint = loadBlueprintPackageManifest(createIntakeOnlyManifest());
+    const requestedBlueprint = loadBlueprintPackageManifest(
+      createIntakeOnlyManifest({
+        packageId: "pkg_pricing_review",
+        packageKey: "pricing-review",
+        name: "Pricing Review System"
+      })
+    );
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -252,7 +158,40 @@ describe("factory intake run service", () => {
         startedAt: "2026-07-06T18:17:00.000Z"
       })
     ).toThrow(
-      'Blueprint install "install_123" is bound to package "connect-first", not "pricing-review"'
+      'Blueprint install "install_123" is bound to package "pkg_connect_first", not "pkg_pricing_review"'
+    );
+  });
+
+  it("fails closed when the installed blueprint version does not match the requested blueprint version", () => {
+    const workspace = createWorkspace({
+      id: "ws_123",
+      name: "Acme Advisory",
+      slug: "acme-advisory",
+      createdAt: "2026-07-06T18:15:00.000Z"
+    });
+    const installedManifest = createIntakeOnlyManifest();
+    const requestedManifest = createIntakeOnlyManifest();
+    requestedManifest.version = "1.1.0";
+
+    const installedBlueprint = loadBlueprintPackageManifest(installedManifest);
+    const requestedBlueprint = loadBlueprintPackageManifest(requestedManifest);
+    const packageInstall = installBlueprintPackage({
+      id: "install_123",
+      workspaceId: workspace.id,
+      blueprint: installedBlueprint,
+      installedAt: "2026-07-06T18:16:00.000Z"
+    });
+
+    expect(() =>
+      startIntakeRun({
+        id: "run_123",
+        workspace,
+        packageInstall,
+        blueprint: requestedBlueprint,
+        startedAt: "2026-07-06T18:17:00.000Z"
+      })
+    ).toThrow(
+      'Blueprint install "install_123" is bound to package version "pkg_connect_first@1.0.0", not "pkg_connect_first@1.1.0"'
     );
   });
 
@@ -263,28 +202,7 @@ describe("factory intake run service", () => {
       slug: "acme-advisory",
       createdAt: "2026-07-06T18:15:00.000Z"
     });
-    const blueprint = createBlueprintPackage({
-      key: "connect-first",
-      title: "Connect First Operating System",
-      personas: [
-        {
-          key: "founder_guide",
-          name: "Founder Guide",
-          tagline: "Guides the founder through intake.",
-          specialistKey: "direction",
-          allowedStationKeys: ["intake"]
-        }
-      ],
-      stations: [
-        {
-          key: "intake",
-          familyKey: "intake",
-          personaKey: "founder_guide",
-          kind: "structured_interview",
-          title: "Intake Station"
-        }
-      ]
-    });
+    const blueprint = loadBlueprintPackageManifest(createIntakeOnlyManifest());
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,

@@ -49,7 +49,9 @@ function createMarketStrategistPersona(): BlueprintPersonaDefinition {
 describe("factory package registry", () => {
   it("builds a blueprint-native package definition", () => {
     const pkg = createBlueprintPackage({
+      packageId: "pkg_connect_first",
       key: "connect-first",
+      version: "1.0.0",
       title: "Connect First Operating System",
       personas: [createFounderGuidePersona()],
       stations: [
@@ -64,6 +66,10 @@ describe("factory package registry", () => {
     });
 
     expect(pkg.kind).toBe("blueprint");
+    expect(pkg.packageId).toBe("pkg_connect_first");
+    expect(pkg.key).toBe("connect-first");
+    expect(pkg.version).toBe("1.0.0");
+    expect(pkg.packageVersionId).toBe("pkg_connect_first@1.0.0");
     expect(pkg.personas[0]?.key).toBe("founder_guide");
     expect(pkg.stations[0]?.key).toBe("intake");
     expect(pkg.stations[0]?.familyKey).toBe("intake");
@@ -72,7 +78,9 @@ describe("factory package registry", () => {
 
   it("keeps blueprint-native packages inside the shared package kind union", () => {
     const pkg = createBlueprintPackage({
+      packageId: "pkg_connect_first",
       key: "connect-first",
+      version: "1.0.0",
       title: "Connect First Operating System",
       personas: [createFounderGuidePersona()],
       stations: [
@@ -99,7 +107,9 @@ describe("factory package registry", () => {
   it("rejects package definitions that try to bypass the bounded station catalog", () => {
     expect(() =>
       createBlueprintPackage({
+        packageId: "pkg_broken",
         key: "broken",
+        version: "1.0.0",
         title: "Broken Package",
         personas: createBoundedPersonas(),
         stations: [
@@ -127,7 +137,9 @@ describe("factory package registry", () => {
     ];
     const personas = [createFounderGuidePersona()];
     const pkg = createBlueprintPackage({
+      packageId: "pkg_connect_first",
       key: "connect-first",
+      version: "1.0.0",
       title: "Connect First Operating System",
       personas,
       stations
@@ -165,7 +177,9 @@ describe("factory package registry", () => {
   it("rejects duplicate station keys so blueprint-native packages stay deterministic", () => {
     expect(() =>
       createBlueprintPackage({
+        packageId: "pkg_duplicate_intake",
         key: "duplicate-intake",
+        version: "1.0.0",
         title: "Duplicate Intake Package",
         personas: createBoundedPersonas(),
         stations: [
@@ -190,7 +204,9 @@ describe("factory package registry", () => {
 
   it("keeps the station family binding needed to derive specialist ownership later", () => {
     const pkg = createBlueprintPackage({
+      packageId: "pkg_connect_first",
       key: "connect-first",
+      version: "1.0.0",
       title: "Connect First Operating System",
       personas: [createMarketStrategistPersona()],
       stations: [
@@ -210,7 +226,9 @@ describe("factory package registry", () => {
   it("fails closed when a station references an undeclared persona", () => {
     expect(() =>
       createBlueprintPackage({
+        packageId: "pkg_missing_persona",
         key: "missing-persona",
+        version: "1.0.0",
         title: "Missing Persona Package",
         personas: createBoundedPersonas(),
         stations: [
@@ -231,7 +249,9 @@ describe("factory package registry", () => {
   it("fails closed when duplicate persona keys are declared", () => {
     expect(() =>
       createBlueprintPackage({
+        packageId: "pkg_duplicate_personas",
         key: "duplicate-personas",
+        version: "1.0.0",
         title: "Duplicate Persona Package",
         personas: [createFounderGuidePersona(), createFounderGuidePersona()],
         stations: [
@@ -252,7 +272,9 @@ describe("factory package registry", () => {
   it("fails closed when a persona is assigned outside its allowed stations", () => {
     expect(() =>
       createBlueprintPackage({
+        packageId: "pkg_wrong_binding",
         key: "wrong-binding",
+        version: "1.0.0",
         title: "Wrong Binding Package",
         personas: createBoundedPersonas(),
         stations: [
@@ -273,7 +295,9 @@ describe("factory package registry", () => {
   it("fails closed when a persona specialist binding conflicts with the station family owner", () => {
     expect(() =>
       createBlueprintPackage({
+        packageId: "pkg_wrong_specialist",
         key: "wrong-specialist",
+        version: "1.0.0",
         title: "Wrong Specialist Package",
         personas: [
           {
@@ -302,7 +326,9 @@ describe("factory package registry", () => {
   it("fails closed when a persona allowlist references an undeclared station key", () => {
     expect(() =>
       createBlueprintPackage({
+        packageId: "pkg_dangling_allowlist",
         key: "dangling-allowlist",
+        version: "1.0.0",
         title: "Dangling Allowlist Package",
         personas: [
           {
@@ -331,7 +357,9 @@ describe("factory package registry", () => {
   it("fails closed when a later station family is declared before that reboot slice ships", () => {
     expect(() =>
       createBlueprintPackage({
+        packageId: "pkg_future_family",
         key: "future-family",
+        version: "1.0.0",
         title: "Future Family Package",
         personas: [
           {
@@ -353,7 +381,102 @@ describe("factory package registry", () => {
         ]
       })
     ).toThrow(
-      'Station family "pricing_analysis" is outside the bounded B10 intake/positioning slice for blueprint package "future-family"'
+      'Station family "pricing_analysis" is outside the bounded intake/positioning reboot slice for blueprint package "future-family"'
     );
+  });
+
+  it("keeps stable package identity when the customer-facing slug changes", () => {
+    const original = createBlueprintPackage({
+      packageId: "pkg_connect_first",
+      key: "connect-first",
+      version: "1.0.0",
+      title: "Connect First Operating System",
+      personas: [createFounderGuidePersona()],
+      stations: [
+        {
+          key: "intake",
+          familyKey: "intake",
+          personaKey: "founder_guide",
+          kind: "structured_interview",
+          title: "Intake Station"
+        }
+      ]
+    });
+    const renamedSlug = createBlueprintPackage({
+      packageId: "pkg_connect_first",
+      key: "connect-foundation",
+      version: "1.0.0",
+      title: "Connect Foundation Operating System",
+      personas: [createFounderGuidePersona()],
+      stations: [
+        {
+          key: "intake",
+          familyKey: "intake",
+          personaKey: "founder_guide",
+          kind: "structured_interview",
+          title: "Intake Station"
+        }
+      ]
+    });
+
+    expect(original.packageId).toBe(renamedSlug.packageId);
+    expect(original.key).not.toBe(renamedSlug.key);
+    expect(original.packageVersionId).toBe("pkg_connect_first@1.0.0");
+    expect(renamedSlug.packageVersionId).toBe("pkg_connect_first@1.0.0");
+  });
+
+  it("derives packageVersionId from stable package identity and version only", () => {
+    const original = createBlueprintPackage({
+      packageId: "pkg_connect_first",
+      key: "connect-first",
+      version: "1.0.0",
+      title: "Connect First Operating System",
+      personas: [createFounderGuidePersona()],
+      stations: [
+        {
+          key: "intake",
+          familyKey: "intake",
+          personaKey: "founder_guide",
+          kind: "structured_interview",
+          title: "Intake Station"
+        }
+      ]
+    });
+    const sameIdentityNewVersion = createBlueprintPackage({
+      packageId: "pkg_connect_first",
+      key: "connect-foundation",
+      version: "1.1.0",
+      title: "Connect Foundation Operating System",
+      personas: [createFounderGuidePersona()],
+      stations: [
+        {
+          key: "intake",
+          familyKey: "intake",
+          personaKey: "founder_guide",
+          kind: "structured_interview",
+          title: "Intake Station"
+        }
+      ]
+    });
+    const differentIdentity = createBlueprintPackage({
+      packageId: "pkg_scale_offer",
+      key: "connect-first",
+      version: "1.0.0",
+      title: "Scale Offer Operating System",
+      personas: [createFounderGuidePersona()],
+      stations: [
+        {
+          key: "intake",
+          familyKey: "intake",
+          personaKey: "founder_guide",
+          kind: "structured_interview",
+          title: "Intake Station"
+        }
+      ]
+    });
+
+    expect(original.packageVersionId).toBe("pkg_connect_first@1.0.0");
+    expect(sameIdentityNewVersion.packageVersionId).toBe("pkg_connect_first@1.1.0");
+    expect(differentIdentity.packageVersionId).toBe("pkg_scale_offer@1.0.0");
   });
 });

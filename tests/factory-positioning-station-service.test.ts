@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createWorkspace } from "../src/factory/workspaces/workspace-service.js";
-import { createBlueprintPackage } from "../src/factory/packages/package-registry.js";
+import { loadBlueprintPackageManifest } from "../src/factory/packages/package-manifest-loader.js";
 import { installBlueprintPackage } from "../src/factory/packages/package-install-service.js";
 import { submitIntakeAnswers, startIntakeRun } from "../src/factory/runs/intake-run-service.js";
 import {
@@ -11,69 +11,47 @@ import {
   requestChangesForPositioningAnalysis,
   startPositioningAnalysisStation
 } from "../src/factory/runs/positioning-station-service.js";
+import {
+  createCurrentSliceManifest,
+  createIntakeOnlyManifest
+} from "./factory-package-manifest-fixtures.js";
 
-function createCurrentSliceBlueprint(input?: { key?: string; title?: string }) {
-  return createBlueprintPackage({
-    key: input?.key ?? "connect-first",
-    title: input?.title ?? "Connect First Operating System",
-    personas: [
-      {
-        key: "founder_guide",
-        name: "Founder Guide",
-        tagline: "Guides the founder through intake.",
-        specialistKey: "direction",
-        allowedStationKeys: ["intake"]
-      },
-      {
-        key: "market_strategist",
-        name: "Market Strategist",
-        tagline: "Shapes the positioning brief.",
-        specialistKey: "market",
-        allowedStationKeys: ["positioning"]
-      }
-    ],
-    stations: [
-      {
-        key: "intake",
-        familyKey: "intake",
-        personaKey: "founder_guide",
-        kind: "structured_interview",
-        title: "Intake Station"
-      },
-      {
-        key: "positioning",
-        familyKey: "positioning",
-        personaKey: "market_strategist",
-        kind: "analysis",
-        title: "Positioning Station"
-      }
-    ]
-  });
+function createCurrentSliceBlueprint(input?: {
+  packageId?: string;
+  key?: string;
+  title?: string;
+}) {
+  const manifestInput =
+    input && (input.packageId || input.key || input.title)
+      ? {
+          ...(input.packageId ? { packageId: input.packageId } : {}),
+          ...(input.key ? { packageKey: input.key } : {}),
+          ...(input.title ? { name: input.title } : {})
+        }
+      : undefined;
+
+  return loadBlueprintPackageManifest(
+    createCurrentSliceManifest(manifestInput)
+  );
 }
 
-function createIntakeOnlyBlueprint(input?: { key?: string; title?: string }) {
-  return createBlueprintPackage({
-    key: input?.key ?? "connect-first",
-    title: input?.title ?? "Connect First Operating System",
-    personas: [
-      {
-        key: "founder_guide",
-        name: "Founder Guide",
-        tagline: "Guides the founder through intake.",
-        specialistKey: "direction",
-        allowedStationKeys: ["intake"]
-      }
-    ],
-    stations: [
-      {
-        key: "intake",
-        familyKey: "intake",
-        personaKey: "founder_guide",
-        kind: "structured_interview",
-        title: "Intake Station"
-      }
-    ]
-  });
+function createIntakeOnlyBlueprint(input?: {
+  packageId?: string;
+  key?: string;
+  title?: string;
+}) {
+  const manifestInput =
+    input && (input.packageId || input.key || input.title)
+      ? {
+          ...(input.packageId ? { packageId: input.packageId } : {}),
+          ...(input.key ? { packageKey: input.key } : {}),
+          ...(input.title ? { name: input.title } : {})
+        }
+      : undefined;
+
+  return loadBlueprintPackageManifest(
+    createIntakeOnlyManifest(manifestInput)
+  );
 }
 
 describe("factory positioning station service", () => {
@@ -155,7 +133,8 @@ describe("factory positioning station service", () => {
       id: "approval_run_123_positioning",
       workspaceId: workspace.id,
       runId: "run_123",
-      packageId: "connect-first",
+      packageId: "pkg_connect_first",
+      packageVersionId: "pkg_connect_first@1.0.0",
       packageInstallId: "install_123",
       stationKey: "positioning",
       deliverableId: "deliverable_run_123_positioning_brief",
@@ -208,7 +187,7 @@ describe("factory positioning station service", () => {
         packageInstall,
         blueprint
       })
-    ).toThrow('Blueprint package "connect-first" does not define a positioning analysis station');
+    ).toThrow('Blueprint package "pkg_connect_first" does not define a positioning analysis station');
   });
 
   it("fails closed when positioning analysis is started from a run that is not complete at intake", () => {
@@ -360,7 +339,11 @@ describe("factory positioning station service", () => {
       createdAt: "2026-07-06T20:00:00.000Z"
     });
     const blueprint = createCurrentSliceBlueprint();
-    const otherBlueprint = createCurrentSliceBlueprint({ key: "scale-offer", title: "Scale Offer Operating System" });
+    const otherBlueprint = createCurrentSliceBlueprint({
+      packageId: "pkg_scale_offer",
+      key: "scale-offer",
+      title: "Scale Offer Operating System"
+    });
     const packageInstall = installBlueprintPackage({
       id: "install_123",
       workspaceId: workspace.id,
@@ -395,7 +378,57 @@ describe("factory positioning station service", () => {
         packageInstall,
         blueprint: otherBlueprint
       })
-    ).toThrow('Blueprint install "install_123" is bound to package "connect-first", not "scale-offer"');
+    ).toThrow('Blueprint install "install_123" is bound to package "pkg_connect_first", not "pkg_scale_offer"');
+  });
+
+  it("fails closed when positioning analysis receives the same package identity at a different version", () => {
+    const workspace = createWorkspace({
+      id: "ws_123",
+      name: "Acme Advisory",
+      slug: "acme-advisory",
+      createdAt: "2026-07-06T20:00:00.000Z"
+    });
+    const installedBlueprint = createCurrentSliceBlueprint();
+    const otherManifest = createCurrentSliceManifest();
+    otherManifest.version = "1.1.0";
+    const otherBlueprint = loadBlueprintPackageManifest(otherManifest);
+    const packageInstall = installBlueprintPackage({
+      id: "install_123",
+      workspaceId: workspace.id,
+      blueprint: installedBlueprint,
+      installedAt: "2026-07-06T20:01:00.000Z"
+    });
+    const intakeRun = startIntakeRun({
+      id: "run_123",
+      workspace,
+      packageInstall,
+      blueprint: installedBlueprint,
+      startedAt: "2026-07-06T20:02:00.000Z"
+    });
+    const intakeCompletion = submitIntakeAnswers({
+      run: intakeRun,
+      workspace,
+      packageInstall,
+      blueprint: installedBlueprint,
+      answers: {
+        founderName: "Avery Stone",
+        businessName: "Acme Advisory",
+        primaryGoal: "Reach the first ten consulting clients",
+        targetAudience: "Solo founders"
+      },
+      completedAt: "2026-07-06T20:03:00.000Z"
+    });
+
+    expect(() =>
+      startPositioningAnalysisStation({
+        run: intakeCompletion.run,
+        workspace,
+        packageInstall,
+        blueprint: otherBlueprint
+      })
+    ).toThrow(
+      'Blueprint install "install_123" is bound to package version "pkg_connect_first@1.0.0", not "pkg_connect_first@1.1.0"'
+    );
   });
 
   it("approves the persisted positioning checkpoint and completes the run", () => {
@@ -766,7 +799,8 @@ describe("factory positioning station service", () => {
       id: "approval_run_123_positioning_revision_1",
       workspaceId: workspace.id,
       runId: "run_123",
-      packageId: "connect-first",
+      packageId: "pkg_connect_first",
+      packageVersionId: "pkg_connect_first@1.0.0",
       packageInstallId: "install_123",
       stationKey: "positioning",
       deliverableId: "deliverable_run_123_positioning_brief_revision_1",
@@ -948,7 +982,8 @@ describe("factory positioning station service", () => {
           id: "approval_run_123_positioning",
           workspaceId: workspace.id,
           runId: "run_123",
-          packageId: blueprint.id,
+          packageId: blueprint.packageId,
+          packageVersionId: blueprint.packageVersionId,
           packageInstallId: packageInstall.id,
           stationKey: "positioning",
           deliverableId: analysisCompletion.deliverable.id,
@@ -1043,7 +1078,8 @@ describe("factory positioning station service", () => {
           id: "approval_run_123_positioning",
           workspaceId: workspace.id,
           runId: "run_123",
-          packageId: blueprint.id,
+          packageId: blueprint.packageId,
+          packageVersionId: blueprint.packageVersionId,
           packageInstallId: packageInstall.id,
           stationKey: "positioning",
           deliverableId: analysisCompletion.deliverable.id,
@@ -1309,7 +1345,8 @@ describe("factory positioning station service", () => {
           id: "approval_run_123_positioning_revision_2",
           workspaceId: workspace.id,
           runId: "run_123",
-          packageId: blueprint.id,
+          packageId: blueprint.packageId,
+          packageVersionId: blueprint.packageVersionId,
           packageInstallId: packageInstall.id,
           stationKey: "positioning",
           deliverableId: "deliverable_run_123_positioning_brief_revision_2",

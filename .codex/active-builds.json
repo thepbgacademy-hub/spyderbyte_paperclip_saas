@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0.0",
+  "revision": 1,
+  "generated_at": "2026-07-19T20:35:33Z",
+  "builds": {
+    "2026-07-19-wealth-factory-blueprint-reboot": {
+      "path": ".codex/builds/2026-07-19-wealth-factory-blueprint-reboot.json",
+      "title": "Wealth Factory Blueprint Reboot",
+      "type": "software",
+      "status": "draft",
+      "revision": 1
+    }
+  }
+}

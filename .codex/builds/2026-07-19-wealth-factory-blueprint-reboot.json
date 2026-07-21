@@ -1,0 +1,204 @@
+{
+  "$schema": "../references/build-work.schema.json",
+  "schema_version": "1.0.0",
+  "revision": 6,
+  "build": {
+    "id": "2026-07-19-wealth-factory-blueprint-reboot",
+    "title": "Wealth Factory Blueprint Reboot",
+    "type": "software",
+    "status": "active",
+    "workspace": "E:\\REPOS\\spyderbyte_paperclip_saas",
+    "parent": null,
+    "created_at": "2026-07-19T20:35:33Z",
+    "updated_at": "2026-07-21T00:00:00Z"
+  },
+  "objective": {
+    "summary": "Adopt the in-progress Wealth Factory blueprint reboot branch and continue bounded blueprint-native implementation slices against the master blueprint, TODO work list, and reboot planning docs.",
+    "deliverables": [
+      "Blueprint-native TypeScript source and tests in E:\\REPOS\\spyderbyte_paperclip_saas",
+      "Per-slice docs and TODO entries that record verified scope and remaining work",
+      "Fresh subagent implementation and review passes for slices that require delegated work"
+    ],
+    "out_of_scope": [
+      "VPS deployment unless a ticket explicitly calls for live validation",
+      "Legacy Paperclip-style workflow expansion on the reboot branch",
+      "Unbounded refactors, UI polish, commerce wiring, or runtime bootstrapping before their numbered blueprint tickets"
+    ],
+    "acceptance_criteria": [
+      "Each active slice maps directly to TODO.md and the blueprint/reboot docs before implementation",
+      "New behavior is covered with TDD-style failing tests before implementation whenever production code changes",
+      "Focused tests and type/lint checks are run or explicitly reported with the exact blocker",
+      "Fresh reviewer agents inspect completed slices and are closed after reporting"
+    ]
+  },
+  "requirements": [
+    "Use branch codex/wealth-factory-blueprint in E:\\REPOS\\spyderbyte_paperclip_saas",
+    "Use TODO.md as the work list and THE_WEALTH_FACTORY_MASTER_BLUEPRINT.md plus reboot docs as guardrails",
+    "Keep package, credential, queue, and worker work bounded to the current ticket",
+    "Use Wealth Factory queue namespaces and avoid legacy wfpc or Paperclip-shaped queues in the reboot code"
+  ],
+  "constraints": [
+    "Do not revert unrelated dirty worktree changes",
+    "Do not give subagents stale prior context unless explicitly necessary",
+    "Do not let subagents make independent scope decisions",
+    "Close subagents after their assigned work or review is complete",
+    "Do not access the VPS for this local B35 closeout"
+  ],
+  "decisions": [
+    "B35 is the current adopted slice because B34 created a BullMQ consumer that receives an exact jobId payload, while the service still needed an exact repository claim path.",
+    "The repository remains authoritative; BullMQ transport adapters delegate exact claims to repository-backed queue behavior and do not mutate BullMQ state during claimById.",
+    "B36 is a required foundation reconciliation gate before Ticket 13 because master-blueprint Tickets 01-06 were not independently audited by the reboot track."
+  ],
+  "open_questions": [
+    "Before Ticket 13 begins, which parts of master-blueprint Tickets 01-06 are already satisfied by current repo infrastructure, which need bounded adaptation, and which must be rebuilt for the blueprint-native runtime?"
+  ],
+  "tasks": [
+    {
+      "id": "TASK-035",
+      "title": "Phase B35 exact credential validation job processing",
+      "status": "completed",
+      "owner": "codex",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "Repository can atomically claim a queued credential validation job by exact jobId and returns null for missing or non-queued jobs",
+        "Queue port exposes claimById and both repository-backed and BullMQ adapters preserve repository authority",
+        "Validation service exposes processValidationJob({ jobId }) and shares post-claim validation behavior with processNextValidationJob",
+        "Focused validation queue, service, BullMQ queue, and consumer tests pass",
+        "Scope review confirms no worker boot, runtime wiring, scheduling, retry policy, persistence adapter, API/UI, live provider call, VPS action, or legacy queue access was added"
+      ],
+      "write_scope": [
+        "tasks[id=TASK-035]"
+      ],
+      "artifacts": [
+        "docs/superpowers/plans/2026-07-15-factory-credential-exact-job-processing.md",
+        "src/factory/power-sources/factory-credential-repository.ts",
+        "src/factory/queues/factory-credential-validation-queue.ts",
+        "src/factory/queues/bullmq-factory-credential-validation-queue.ts",
+        "src/factory/power-sources/factory-credential-validation-service.ts",
+        "tests/factory-credential-validation-queue.test.ts",
+        "tests/factory-credential-validation-service.test.ts",
+        "tests/bullmq-factory-credential-validation-queue.test.ts"
+      ],
+      "evidence": [
+        "TDD red evidence: added exact-job result lastValidatedAt assertion and observed tests/factory-credential-validation-service.test.ts fail with returned lastValidatedAt null.",
+        "TDD red evidence: added auth-failure return DTO assertion and observed tests/factory-credential-validation-service.test.ts fail with returned pending/null DTO.",
+        "Focused verification passed: npx vitest run tests/factory-credential-validation-queue.test.ts tests/factory-credential-validation-service.test.ts tests/bullmq-factory-credential-validation-queue.test.ts tests/bullmq-factory-credential-validation-consumer.test.ts --reporter=dot => 4 files, 40 tests passed.",
+        "TypeScript verification passed: npx tsc --noEmit.",
+        "Whitespace verification passed: git diff --check exited 0 with only CRLF warnings from the broader dirty tree.",
+        "Fresh spec reviewer 019f7c1e-d2d5-78c3-b570-d118cd4eea6c approved B35 compliance and was closed.",
+        "Fresh quality reviewers 019f7c21-100b-7e42-99da-54a12af21e78 and 019f7c25-cec3-74f0-8745-5b8f83177820 found stale DTO issues that were fixed and closed.",
+        "Final fresh quality reviewer 019f7c29-d894-7030-913e-a2e155af7f45 approved the corrected slice and was closed."
+      ],
+      "handoffs": [],
+      "blockers": []
+    },
+    {
+      "id": "TASK-036",
+      "title": "Phase B36 foundation Tickets 01-06 reconciliation gate",
+      "status": "ready",
+      "owner": "codex",
+      "dependencies": [
+        "TASK-035"
+      ],
+      "acceptance_criteria": [
+        "Master-blueprint Tickets 01-06 are inspected directly and mapped to current repo scaffolding, schema, auth/session, tenant context/RLS, RBAC, and audit-event surfaces",
+        "Each foundation ticket is classified as accepted as-is, requiring bounded adaptation, or requiring replacement before Ticket 13",
+        "Any required pre-Ticket-13 adaptations are captured as bounded follow-up tasks before run/deliverable data modeling proceeds",
+        "Docs record that Ticket 13 is blocked from inheriting an unaudited legacy Paperclip foundation"
+      ],
+      "write_scope": [
+        "tasks[id=TASK-036]"
+      ],
+      "artifacts": [
+        "TODO.md",
+        "docs/superpowers/plans/2026-07-06-wealth-factory-blueprint-reboot.md",
+        "docs/wealth-factory-domain-skeleton-2026-07-06.md",
+        "E:\\REPOS 2\\wealth_clip\\THE_WEALTH_FACTORY_MASTER_BLUEPRINT.md"
+      ],
+      "evidence": [
+        "TODO.md now records Phase B36 as an open pre-Ticket-13 foundation reconciliation gate.",
+        "docs/superpowers/plans/2026-07-06-wealth-factory-blueprint-reboot.md now records the B36 gate, exact Tickets 01-06 coverage, and accept/adapt/replace outcomes.",
+        "docs/wealth-factory-domain-skeleton-2026-07-06.md now mirrors the B36 architectural gate."
+      ],
+      "handoffs": [],
+      "blockers": []
+    }
+  ],
+  "risks": [
+    "The worktree contains many prior uncommitted reboot files, so B35 changes must be reviewed in their bounded file set.",
+    "A local dependency-resolution problem can obscure TypeScript source verification if node type definitions are unavailable; this was corrected locally by restoring dependencies with npm install.",
+    "Ticket 13 could inherit unverified legacy foundation assumptions unless B36 reconciles master-blueprint Tickets 01-06 first."
+  ],
+  "artifacts": [
+    "TODO.md",
+    "docs/superpowers/plans/2026-07-06-wealth-factory-blueprint-reboot.md",
+    "docs/wealth-factory-domain-skeleton-2026-07-06.md",
+    "E:\\REPOS 2\\wealth_clip\\THE_WEALTH_FACTORY_MASTER_BLUEPRINT.md"
+  ],
+  "verification": {
+    "required_checks": [
+      "npx vitest run tests/factory-credential-validation-queue.test.ts tests/factory-credential-validation-service.test.ts tests/bullmq-factory-credential-validation-queue.test.ts tests/bullmq-factory-credential-validation-consumer.test.ts --reporter=dot",
+      "npx tsc --noEmit",
+      "git diff --check",
+      "powershell -NoProfile -File C:\\Users\\homes\\.codex\\skills\\beginning-builds\\scripts\\validate-build.ps1 -File E:\\REPOS\\spyderbyte_paperclip_saas\\.codex\\builds\\2026-07-19-wealth-factory-blueprint-reboot.json"
+    ],
+    "results": [
+      "npm install restored missing node_modules/@types/node without package.json or package-lock.json content changes.",
+      "npx vitest run tests/factory-credential-validation-queue.test.ts tests/factory-credential-validation-service.test.ts tests/bullmq-factory-credential-validation-queue.test.ts tests/bullmq-factory-credential-validation-consumer.test.ts --reporter=dot => 4 files, 40 tests passed.",
+      "npx tsc --noEmit => passed.",
+      "git diff --check => passed with CRLF warnings only."
+    ],
+    "final_status": "pending"
+  },
+  "extensions": {
+    "enabled": [
+      "software",
+      "multi-agent"
+    ],
+    "software": {
+      "languages": [
+        "TypeScript"
+      ],
+      "frameworks": [
+        "Vitest",
+        "BullMQ"
+      ],
+      "entry_points": [
+        "src/factory/power-sources/factory-credential-validation-service.ts",
+        "src/factory/queues/bullmq-factory-credential-validation-consumer.ts"
+      ],
+      "test_commands": [
+        "npx vitest run tests/factory-credential-validation-queue.test.ts tests/factory-credential-validation-service.test.ts tests/bullmq-factory-credential-validation-queue.test.ts tests/bullmq-factory-credential-validation-consumer.test.ts --reporter=dot",
+        "npx tsc --noEmit"
+      ],
+      "deployment_targets": [
+        "Local repository only for B35"
+      ]
+    },
+    "multi-agent": {
+      "orchestrator_id": "codex-main",
+      "assignments": [],
+      "merge_policy": "orchestrator-controlled"
+    }
+  },
+  "history": [
+    "2026-07-19T20:35:33Z: Initialized adoption record for existing Wealth Factory blueprint reboot branch.",
+    "2026-07-19T20:41:00Z: Populated current B35 task from direct TODO, blueprint, and B35 plan inspection.",
+    {
+      "event": "status-transition",
+      "from": "draft",
+      "to": "ready",
+      "orchestrator": "codex-main",
+      "timestamp": "2026-07-19T20:37:26Z"
+    },
+    {
+      "event": "status-transition",
+      "from": "ready",
+      "to": "active",
+      "orchestrator": "codex-main",
+      "timestamp": "2026-07-19T20:37:35Z"
+    },
+    "2026-07-19T20:56:00Z: Completed B35 verification, reviewer closeout, and documentation updates.",
+    "2026-07-21T00:00:00Z: Recorded B36 as the pre-Ticket-13 foundation reconciliation gate for master-blueprint Tickets 01-06."
+  ]
+}

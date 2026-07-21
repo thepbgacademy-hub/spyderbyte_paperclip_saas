@@ -51,7 +51,6 @@ describe("runtime native execution failure mapping", () => {
           summary: "Resume the pricing lane from the refreshed assumptions.",
           latestResultSummary: null,
           absorbedWorkCount: 0,
-          latestAbsorbedWork: null,
           absorbedWorkTrail: []
         },
         orchestratorHandoff: {
@@ -180,7 +179,6 @@ describe("runtime native execution failure mapping", () => {
           summary: "Resume the pricing lane from the refreshed assumptions.",
           latestResultSummary: null,
           absorbedWorkCount: 0,
-          latestAbsorbedWork: null,
           absorbedWorkTrail: []
         },
         orchestratorHandoff: {
