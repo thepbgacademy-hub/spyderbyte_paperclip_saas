@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 23,
+  "revision": 27,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -10,7 +10,7 @@
     "workspace": ".",
     "parent_build_id": null,
     "created_at": "2026-07-21T12:39:15Z",
-    "updated_at": "2026-07-23T22:33:23Z"
+    "updated_at": "2026-07-23T23:55:00Z"
   },
   "objective": {
     "summary": "Ship SpyderByte Foundry: a software platform where a solo founder buys a workflow package for a market segment (social media manager, coach, website builder and more), connects their own AI provider account, and runs guided staged workflows that generate their company's operating documents, brand assets and procedures, approving each station before anything is finalized, then exports files they keep forever. Pricing is a one-time package of $600-$2,000 plus $19-$49/month platform access after included months. Twelve clients from a successful market-fit launch are waiting to purchase as of 2026-07-21, and the build is roughly 7 weeks past its intended launch. The engine is being rebuilt blueprint-native because the previous platform, a rebranded Paperclip, was a single-user agent runtime by design and could not carry multiple tenants, and because its only working secret-injection path persisted subscriber provider secrets onto issue objects. Success is not 'the tickets closed' - it is a paying customer completing purchase to export unaided.",
@@ -2409,7 +2409,7 @@
     {
       "id": "TASK-069",
       "title": "Wire session auth -> tenant-membership role -> install RBAC -> audit into one route path",
-      "status": "pending",
+      "status": "completed",
       "owner": "unassigned",
       "dependencies": [
         "TASK-055"
@@ -2423,11 +2423,135 @@
         "src/api",
         "src/factory"
       ],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "src/api/factory-package-install-role-resolver.ts (new)",
+        "src/api/factory-package-install-audit.ts (new)",
+        "src/api/factory-package-install-api.ts (modified: added optional auditSink dep, installPackage now calls it only after a successful install; no other method touched, no signature removed)",
+        "tests/factory-install-route-rbac-audit.integration.test.ts (new -- real-Postgres integration test; outside the recorded write_scope [src/api, src/factory], expressly authorized by the TASK-069 brief's write-scope expansion, same pattern TASK-055 used)",
+        "src/api/factory-package-install-api.ts (modified: auditSink dependency changed from optional to required in FactoryPackageInstallApiDeps; installPackage's conditional `if (deps.auditSink)` guard removed, audit call is now unconditional after a successful install; no other method or export touched)",
+        "tests/factory-package-install-api.test.ts (modified: added one no-op `auditSink: vi.fn().mockResolvedValue(undefined)` mock to the shared createApiHarness deps object so it compiles against the now-required dependency; zero existing assertions changed)"
+      ],
+      "evidence": [
+        {
+          "type": "command",
+          "summary": "docker ps --filter name=wf-skeleton-local-postgres-1 -- observed 'wf-skeleton-local-postgres-1: Up 5 minutes (healthy)'. Container was already up per the brief; not created or torn down this session.",
+          "reference": "docker ps --filter \"name=wf-skeleton-local-postgres-1\" --format \"{{.Names}}: {{.Status}}\""
+        },
+        {
+          "type": "test-run",
+          "falsifiability": "Case 3 is the falsifiable AC1 proof: the member user's token is minted with session.role='operator' (the most privileged claim a session can carry). If the route trusted session.role, this would install. It is denied with 403 and zero rows in either table, because resolveTenantPackageInstallRole reads wfpc.tenant_memberships.role ('member' for this user) and ignores the token's role claim entirely. Case 1 vs case 2 is the base RBAC falsifiability: identical route, identical package, owner succeeds (201 + 1 audit row) and member fails (403 + 0 rows) -- the only variable is the DB membership role.",
+          "summary": "WF_LOCAL_PG_URL=postgresql://postgres:postgres@127.0.0.1:55432/wf_skeleton npx vitest run tests/factory-install-route-rbac-audit.integration.test.ts --reporter=verbose -- 1 file, 3/3 PASSED: 'AC1/AC3: owner token succeeds' (201, install row persisted, exactly 1 audit_events row with event_type factory.package.installed, actor_user_id = owner, metadata.packageKey correct), 'AC1/AC3: member token is DENIED' (403, 0 install rows, 0 audit rows), 'AC1: session.role is NEVER trusted' (member token minted with session.role=operator still 403, 0 install rows, 0 audit rows).",
+          "reference": "WF_LOCAL_PG_URL=postgresql://postgres:postgres@127.0.0.1:55432/wf_skeleton npx vitest run tests/factory-install-route-rbac-audit.integration.test.ts --reporter=verbose"
+        },
+        {
+          "type": "test-run",
+          "summary": "WF_LOCAL_PG_URL unset: npx vitest run tests/factory-install-route-rbac-audit.integration.test.ts --reporter=verbose -- 1 file skipped, all 3 tests shown as skipped (not silently passed), confirming the env-var gate works.",
+          "reference": "npx vitest run tests/factory-install-route-rbac-audit.integration.test.ts --reporter=verbose"
+        },
+        {
+          "type": "test-run",
+          "summary": "WF_LOCAL_PG_URL=postgresql://postgres:postgres@127.0.0.1:55432/wf_skeleton npx vitest run tests/factory-package-install-api.test.ts tests/factory-package-install-http.test.ts tests/factory-walking-skeleton.integration.test.ts --reporter=dot -- 3 files, 13/13 PASSED. Confirms the pre-existing install API/HTTP unit tests (which never supply the new optional auditSink dep) and the TASK-055 walking-skeleton test are unaffected by this ticket's change.",
+          "reference": "npx vitest run tests/factory-package-install-api.test.ts tests/factory-package-install-http.test.ts tests/factory-walking-skeleton.integration.test.ts --reporter=dot"
+        },
+        {
+          "type": "typecheck",
+          "summary": "npx tsc --noEmit -- exit 0, no output (clean), after fixing one test-only compile error (RuntimeSessionAuthEnv requires sessionCookieName, initially omitted from the test's SESSION_ENV literal).",
+          "reference": "npx tsc --noEmit"
+        },
+        {
+          "type": "lint",
+          "summary": "npx eslint src/api/factory-package-install-role-resolver.ts src/api/factory-package-install-audit.ts src/api/factory-package-install-api.ts tests/factory-install-route-rbac-audit.integration.test.ts -- exit 0, no output, on exactly the files this ticket touched or created. Full-repo `npx eslint .` was not re-run this session (TASK-055's envelope already recorded its ~351 pre-existing unrelated problems); isolated linting of this ticket's files is sufficient per the engineer brief's own instruction.",
+          "reference": "npx eslint src/api/factory-package-install-role-resolver.ts src/api/factory-package-install-audit.ts src/api/factory-package-install-api.ts tests/factory-install-route-rbac-audit.integration.test.ts"
+        },
+        {
+          "type": "diff-scope",
+          "summary": "git status --short / git diff --stat show exactly 4 files touched: 1 modified (src/api/factory-package-install-api.ts, +23/-12) and 3 new (src/api/factory-package-install-role-resolver.ts, src/api/factory-package-install-audit.ts, tests/factory-install-route-rbac-audit.integration.test.ts). No file outside src/api and the one authorized tests/ addition was touched; src/db, supabase/migrations, scripts/, and deploy/ are untouched.",
+          "reference": "git status --short; git diff --stat"
+        },
+        {
+          "type": "typecheck",
+          "summary": "npx tsc --noEmit -- exit 0, no output.",
+          "reference": "npx tsc --noEmit"
+        },
+        {
+          "type": "lint",
+          "summary": "npx eslint src/api/factory-package-install-api.ts tests/factory-package-install-api.test.ts -- exit 0, no output.",
+          "reference": "npx eslint src/api/factory-package-install-api.ts tests/factory-package-install-api.test.ts"
+        },
+        {
+          "type": "test-run",
+          "falsifiability": "If the required-dependency change had broken the unconditional audit call's ordering (e.g. firing before or regardless of install success), tests/factory-install-route-rbac-audit.integration.test.ts's case 2 (member token denied, asserts 0 audit rows) and tests/factory-walking-skeleton.integration.test.ts would fail against the real local Postgres; both still pass.",
+          "summary": "WF_LOCAL_PG_URL=postgresql://postgres:postgres@127.0.0.1:55432/wf_skeleton npx vitest run tests/factory-package-install-api.test.ts tests/factory-package-install-http.test.ts tests/factory-install-route-rbac-audit.integration.test.ts tests/factory-walking-skeleton.integration.test.ts --reporter=dot -- 4 files, 16/16 PASSED, 0 failed, 0 skipped.",
+          "reference": "WF_LOCAL_PG_URL=postgresql://postgres:postgres@127.0.0.1:55432/wf_skeleton npx vitest run tests/factory-package-install-api.test.ts tests/factory-package-install-http.test.ts tests/factory-install-route-rbac-audit.integration.test.ts tests/factory-walking-skeleton.integration.test.ts --reporter=dot"
+        },
+        {
+          "type": "diff-scope",
+          "summary": "git status --short shows exactly 2 files modified this cycle: src/api/factory-package-install-api.ts and tests/factory-package-install-api.test.ts. tests/factory-package-install-http.test.ts, the resolver, the audit-sink file, and the integration test were read to confirm no change was needed, and left untouched, per the fix brief.",
+          "reference": "git status --short"
+        },
+        {
+          "type": "other",
+          "summary": "GitNexus MCP tools (gitnexus_impact, gitnexus_detect_changes) required by this repo's CLAUDE.md were NOT run: no GitNexus MCP server was connected/available in this session. Reporting as 'not run' rather than fabricating a result; the diff-scope evidence above is the substitute blast-radius check actually performed.",
+          "reference": "ToolSearch not attempted for gitnexus_* this cycle -- prior cycle already confirmed no server is connected"
+        },
+        {
+          "type": "command",
+          "summary": "Recreated the disposable Postgres for this cycle: docker compose -p wf-skeleton -f deploy/docker-compose.local-postgres.yml up -d -> container wf-skeleton-local-postgres-1 reported healthy; WF_LOCAL_PG_URL=postgresql://postgres:postgres@127.0.0.1:55432/wf_skeleton node scripts/apply-migrations-local.mjs applied all migrations with exit 0. Never touched SUPABASE_DB_URL.",
+          "reference": "docker compose ... up -d; node scripts/apply-migrations-local.mjs"
+        },
+        {
+          "type": "test-run",
+          "summary": "Orchestrator re-derived: WF_LOCAL_PG_URL set, npx vitest run tests/factory-install-route-rbac-audit.integration.test.ts --reporter=verbose -> 3/3 PASSED (owner 201 + 1 audit_events row with event_type factory.package.installed / actor=owner / metadata.packageKey; member 403 + 0 install rows + 0 audit rows; member-token-with-session.role=operator 403 + 0 rows).",
+          "reference": "npx vitest run tests/factory-install-route-rbac-audit.integration.test.ts --reporter=verbose"
+        },
+        {
+          "type": "test-run",
+          "summary": "Orchestrator re-derived the env gate: same test with WF_LOCAL_PG_URL UNSET -> 1 file / 3 tests SKIPPED (not passed), so it cannot false-pass when the DB is absent.",
+          "reference": "npx vitest run tests/factory-install-route-rbac-audit.integration.test.ts --reporter=verbose"
+        },
+        {
+          "type": "test-run",
+          "falsifiability": "Orchestrator falsifiability experiment (TASK-055 style): edited the resolver to `return \"owner\";` unconditionally (simulating a route that hands a privileged role to the RBAC gate) -> both member-denial cases went RED (2 failed, owner case still passed), proving the tests genuinely depend on the DB role driving the gate. Restored the file byte-identical (sha256 717d020d7b5403a570b6f886c2a8cbc9ffd5d6733b62ef3357d57b220397871a before and after) -> 3/3 green again. The RBAC gate is genuinely enforced and genuinely falsifiable.",
+          "summary": "Fault-inject resolver -> 2 RED; restore byte-identical -> 3 GREEN.",
+          "reference": "resolver fault-injection + sha256 restore + npx vitest run"
+        },
+        {
+          "type": "test-run",
+          "summary": "Orchestrator re-derived post-fix regression: WF_LOCAL_PG_URL set, npx vitest run tests/factory-package-install-api.test.ts tests/factory-package-install-http.test.ts tests/factory-install-route-rbac-audit.integration.test.ts tests/factory-walking-skeleton.integration.test.ts --reporter=dot -> 4 files, 16/16 PASSED. Confirms the now-required auditSink change did not regress the install API/HTTP unit tests or the TASK-055 skeleton.",
+          "reference": "npx vitest run tests/factory-package-install-*.test.ts tests/factory-*.integration.test.ts --reporter=dot"
+        },
+        {
+          "type": "typecheck",
+          "summary": "Orchestrator re-derived: npx tsc --noEmit -> exit 0, clean, on the final post-fix tree.",
+          "reference": "npx tsc --noEmit"
+        },
+        {
+          "type": "lint",
+          "summary": "Orchestrator re-derived: npx eslint on the 5 touched/created files (resolver, audit sink, install-api, integration test, install-api unit test) -> exit 0, no problems. Repo-wide `npx eslint .` retains ~351 pre-existing unrelated problems (documented in TASK-055); none in this ticket's files.",
+          "reference": "npx eslint src/api/factory-package-install-role-resolver.ts src/api/factory-package-install-audit.ts src/api/factory-package-install-api.ts tests/factory-install-route-rbac-audit.integration.test.ts tests/factory-package-install-api.test.ts"
+        },
+        {
+          "type": "diff-scope",
+          "summary": "Orchestrator confirmed scope: exactly 5 files changed -- 2 new src (factory-package-install-role-resolver.ts, factory-package-install-audit.ts), 1 modified src (factory-package-install-api.ts), 1 new test (tests/factory-install-route-rbac-audit.integration.test.ts, authorized tests/ expansion), 1 modified test (tests/factory-package-install-api.test.ts, no-op sink for the now-required dep). All within write_scope src/api + the brief-authorized tests/ expansion. src/factory, src/db, supabase/migrations, scripts/, deploy/ untouched.",
+          "reference": "git status --short"
+        },
+        {
+          "type": "auditor-signoff",
+          "summary": "Auditor (main Opus session) PASSED TASK-069 on audit cycle 1, re-deriving every claim from a clean shell against the live local disposable Postgres (container wf-skeleton-local-postgres-1, postgres:16, 127.0.0.1:55432; never SUPABASE_DB_URL). Record validation on rev 26 exit 0 with TASK-069 still pending. Route integration suite tests/factory-install-route-rbac-audit.integration.test.ts 3/3 green: owner token succeeds (201 + exactly one persisted audit row); member token denied (403, no install row and no audit row); member token minted with the most-privileged session.role='operator' still denied -- proving session.role is never trusted. RBAC falsifiability reproduced by direct experiment: backed up src/api/factory-package-install-role-resolver.ts (sha256 captured), forced it to return \"owner\" unconditionally -> both member-denial tests (including the session.role-decoupling test) went RED / 2 failed; restored byte-identical (sha256 matched) -> 3 passed, so the gate genuinely depends on the resolved wfpc.tenant_memberships.role. AC2 audit persistence verified: exactly one wfpc.audit_events row with event_type factory.package.installed, correct actor_user_id, metadata.packageKey and externalEntityId; auditSink is now a required dep (QC cycle-2 fix) so the install path emits the row itself. Wiring confirmed in production code, not test glue: createFactoryPackageInstallApi resolves the membership role via deps.resolveTenantPackageInstallRole, passes it into the RBAC gate installBlueprintPackageForTenant, and emits the audit row via deps.auditSink -- the integration test injects those real production implementations into the real createFactoryPackageInstallHttpHandler. npx tsc --noEmit exit 0 and eslint exit 0 on the 5 touched files. Regression: install-api + application-service + repository + both integration suites 42/42 green across 5 files, no regression from making auditSink required. Two boundaries carried forward as follow-ups: F1 the wired route is not yet mounted in a live server composition root (-> TASK-073); F2 install and audit_events are two separate writes with no wrapping transaction (-> TASK-074).",
+          "reference": ".buildwork/crew/2026-07-21-wealth-factory-blueprint-native-reboot/findings/TASK-069-audit-1.md"
+        }
+      ],
       "handoffs": [],
       "blockers": [],
-      "progress": "DEFECT surfaced during TASK-055 (rev 21) by both the engineer and the fresh QC reviewer: ApiRole / RuntimeSessionClaims carry only member|operator, but assertCanManagePackageInstalls requires owner|admin from wfpc.tenant_role. No route bridges the two. The TASK-055 integration test built the install actor from a direct tenant_memberships lookup and wrote the audit row manually, so auth, RBAC and audit are proven as pieces but are not yet wired into one authenticated route path (AC4 met piece-wise). RISK: a future route that trusts session.role would either wrongly deny valid owners or invite loosening the RBAC gate."
+      "progress": "TASK-069 delivered and orchestrator-verified against a REAL local disposable Postgres (never SUPABASE_DB_URL). The three ACs are wired into ONE authenticated route path and independently re-derived by the orchestrator. AC1: new src/api/factory-package-install-role-resolver.ts (createPostgresTenantPackageInstallRoleResolver) reads wfpc.tenant_memberships.role AFTER session verification and maps owner/admin through, everything else (member, operator, or no membership) -> non-privileged 'member'; it never consults session.role. The install API already declared resolveTenantPackageInstallRole and drops session.role structurally (its authenticate dep returns only {userId,tenantId}); this ticket supplies the real Postgres resolver and drives it through a route. AC2: new src/api/factory-package-install-audit.ts composes the existing durable audit sink; src/api/factory-package-install-api.ts's installPackage now emits the wfpc.audit_events row itself, only after a successful install. Per QC cycle-2 the auditSink dependency was made REQUIRED (was optional), so an install can no longer succeed without its own audit row -- AC2 is structurally guaranteed, not caller-opt-in. AC3: new tests/factory-install-route-rbac-audit.integration.test.ts drives the real HTTP handler with Bearer tokens against the live local Postgres, composing real deps throughout (runtime session auth, real requireTenantMember, the new Postgres role resolver, the Postgres install repo, the durable audit sink). Owner token -> 201 + exactly one persisted audit_events row; member token -> 403 + zero install/audit rows; and the falsifiable session.role proof -- the member's token minted with session.role='operator' (the most privileged session value) is STILL denied because the DB membership role, not the token claim, drives the gate. Note the owner token is minted with session.role='member' yet still succeeds, so session.role is proven decoupled in BOTH directions. Known accepted limitation (carried as a task risk, per brief): install persistence and the audit_events insert are two separate writes, not one transaction -- a committed install followed by a failed audit insert would leave an install with no audit row (best-effort-after, not atomic). Not fixed for MVP by explicit instruction. Orchestrator disposition: PASS pending audit. Container wf-skeleton-local-postgres-1 (postgres:16, 127.0.0.1:55432, project wf-skeleton) left RUNNING for the Auditor.",
+      "findings": [],
+      "risks": [
+        "Atomicity seam (disclosed, not fixed, per the brief's explicit instruction not to over-engineer a distributed-transaction solution for MVP): saveLifecycleEvent (persisting the install + its lifecycle event) and the new audit_events insert are two separate writes on two separate connections/transactions -- there is no single transaction wrapping both. installPackage in src/api/factory-package-install-api.ts awaits the install first (which commits its own begin/commit inside createPostgresFactoryPackageInstallRepository.saveLifecycleEvent) and only then calls deps.auditSink. If the install commits and the subsequent audit insert then throws (e.g. a transient DB error), the API call surfaces that error to the caller, but the install row and its lifecycle event are already durably committed with no matching audit_events row -- a committed install with a missing audit trail. This is a best-effort-after write, not atomic-with-install. No caller in this ticket's scope needs to recover from that partial state; flagging it as the honest boundary rather than silently claiming atomicity.",
+        "Atomicity seam (unchanged from cycle 1, disclosed not fixed, per the brief's explicit instruction to leave it): installPackage still awaits the install first (its own commit inside createPostgresFactoryPackageInstallRepository.saveLifecycleEvent) and only then calls deps.auditSink as a separate write -- there is still no single transaction wrapping both. Making auditSink required removes the 'no sink configured' footgun this cycle fixed, but does not add atomicity: if the install commits and the subsequent audit insert then throws, the API call surfaces that error to the caller while the install row is already durably committed with no matching audit_events row. No caller in this ticket's scope needs to recover from that partial state; restating as the honest boundary rather than letting the cycle-2 change imply it was also solved."
+      ],
+      "proposed_decisions": [
+        "Role-mapping decision for createPostgresTenantPackageInstallRoleResolver (src/api/factory-package-install-role-resolver.ts), exactly as specified by the brief: wfpc.tenant_memberships.role values 'owner' and 'admin' map through unchanged; 'operator', any other/unrecognized value, and the no-membership-row case all resolve to the non-privileged 'member' TenantPackageInstallRole, so the RBAC gate denies install-management for all of them. The resolver never throws for a missing/unrecognized role (fail-closed-to-member, not fail-open, and not an exception path) and never reads session.role. Recording this as a proposed_decision per the brief's explicit request so the orchestrator can log it; no code needs to change if approved as-is."
+      ]
     },
     {
       "id": "TASK-070",
@@ -2491,6 +2615,50 @@
       "handoffs": [],
       "blockers": [],
       "progress": "CARRIED-FORWARD defect, NOT independently re-verified during TASK-055 (rev 21): the record's TASK-055 pre-dispatch note and the engineer's finding both flag that several createPostgresHarnessRepository methods (getRun/getCard/etc.) appear to lack a `where tenant_id = $1` predicate. TASK-055 established that app-layer tenant_id scoping is the ONLY isolation mechanism (no enforced RLS in the app path), which makes any missing predicate a cross-tenant read risk. Recorded here so the pointer is not lost."
+    },
+    {
+      "id": "TASK-073",
+      "title": "Mount the wired factory install route into the live server composition root",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-069"
+      ],
+      "acceptance_criteria": [
+        "A live server route constructs the install API with the real Postgres tenant-membership role resolver and the durable audit sink, and serves it via createFactoryPackageInstallHttpHandler",
+        "An end-to-end check exercises the mounted route, proving real HTTP traffic reaches the wired RBAC + audit path"
+      ],
+      "write_scope": [
+        "src/api",
+        "src/server"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "FOLLOW-UP from the TASK-069 audit (finding F1): the RBAC/audit path is proven by the integration test injecting real production components, but createFactoryPackageInstallApi has no production construction site outside the test and createFactoryPackageInstallHttpHandler is not mounted in any server-main/composition root, so real HTTP traffic does not yet reach it. Same pattern TASK-055 was passed on. Mount it and cover it end to end. Ref .buildwork/crew/2026-07-21-wealth-factory-blueprint-native-reboot/findings/TASK-069-audit-1.md (F1)."
+    },
+    {
+      "id": "TASK-074",
+      "title": "Make factory install + audit_events write atomic or reconciled",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-069"
+      ],
+      "acceptance_criteria": [
+        "Either one transaction covers both the install (saveLifecycleEvent) and the audit_events insert, or a reconciliation/outbox mechanism guarantees eventual audit consistency after an install commit",
+        "A falsifiable test proves that a transient failure after the install commit does not leave a committed install with no audit row"
+      ],
+      "write_scope": [
+        "src/api",
+        "src/factory"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "FOLLOW-UP from the TASK-069 audit (finding F2), disclosed in TASK-069's risk notes: today the install commits inside createPostgresFactoryPackageInstallRepository.saveLifecycleEvent, then deps.auditSink writes the audit_events row separately with no wrapping transaction, so a transient failure after the install commit yields a committed install with no matching audit row (best-effort-after, not atomic). Left unfixed for MVP by explicit brief instruction (do not over-engineer a distributed-transaction solution). Ref .buildwork/crew/2026-07-21-wealth-factory-blueprint-native-reboot/findings/TASK-069-audit-1.md (F2)."
     }
   ],
   "risks": [
@@ -2948,6 +3116,37 @@
       "actor": "orchestrator-opus",
       "action": "auditor-signoff-task-055",
       "details": "Auditor (main Opus session) PASSED TASK-055 on audit cycle 1, re-deriving every claim from a clean shell: integration 5/5 green on the live local disposable Postgres; AC3 falsifiability reproduced by direct experiment (guard predicate stripped -> RED / 4 failed, restored byte-identical sha256 -> GREEN / 5 passed); tsc exit 0; eslint exit 0 on touched files; the integration gate SKIPS (not passes) without WF_LOCAL_PG_URL; 61/61 consumer tests of the two modified modules green (no regression); and the full-suite 25 failures proven pre-existing by a stash-run on the pre-ticket tree (identical 25 failures without the ticket, none importing this ticket's modules). Added an auditor-signoff evidence entry to TASK-055 referencing .buildwork/crew/2026-07-21-wealth-factory-blueprint-native-reboot/findings/TASK-055-audit-1.md and marked TASK-055 status=completed. Follow-up hardening carried by TASK-068..072."
+    },
+    {
+      "revision": 24,
+      "timestamp": "2026-07-23T23:40:08Z",
+      "actor": "orchestrator-task-069",
+      "action": "merge-update",
+      "update_id": "UPD-TASK-069-engineer-solo-1784849247203",
+      "details": "Merged UPD-TASK-069-engineer-solo-1784849247203 into TASK-069"
+    },
+    {
+      "revision": 25,
+      "timestamp": "2026-07-23T23:41:11Z",
+      "actor": "orchestrator-task-069",
+      "action": "merge-update",
+      "update_id": "UPD-TASK-069-engineer-solo-cycle2-1784856958000",
+      "details": "Merged UPD-TASK-069-engineer-solo-cycle2-1784856958000 into TASK-069"
+    },
+    {
+      "revision": 26,
+      "timestamp": "2026-07-23T23:42:43Z",
+      "actor": "orchestrator-task-069",
+      "action": "merge-update",
+      "update_id": "UPD-TASK-069-orchestrator-consolidation",
+      "details": "Merged UPD-TASK-069-orchestrator-consolidation into TASK-069"
+    },
+    {
+      "revision": 27,
+      "timestamp": "2026-07-23T23:55:00Z",
+      "actor": "orchestrator-task-069",
+      "action": "auditor-signoff-task-069",
+      "details": "Auditor (main Opus session) PASSED TASK-069 on audit cycle 1, re-deriving every claim from a clean shell against the live local disposable Postgres: route integration suite 3/3 green (owner allowed with exactly one audit row; member denied with no install and no audit row; member with the most-privileged session.role='operator' still denied); RBAC falsifiability reproduced by the Auditor (forced the role-resolver to return \"owner\" -> both member-denial tests RED, restored byte-identical -> GREEN); AC2 audit persistence verified (exactly one wfpc.audit_events row, event_type factory.package.installed); wiring confirmed in production code (createFactoryPackageInstallApi resolves the membership role and emits the audit row, injected into the real HTTP handler); tsc + eslint clean; 42/42 install-suite regression green. Added an auditor-signoff evidence entry to TASK-069 referencing .buildwork/crew/2026-07-21-wealth-factory-blueprint-native-reboot/findings/TASK-069-audit-1.md and marked TASK-069 status=completed. Recorded two follow-ups from findings F1/F2: TASK-073 (mount the wired install route into the live server composition root) and TASK-074 (make install + audit_events atomic or reconciled)."
     }
   ]
 }

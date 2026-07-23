@@ -45,7 +45,8 @@ function createApiHarness(input?: {
     entitlements: {
       canInstall: vi.fn().mockResolvedValue(input?.entitled ?? true)
     },
-    repository
+    repository,
+    auditSink: vi.fn().mockResolvedValue(undefined)
   };
   return {
     api: createFactoryPackageInstallApi(deps),

@@ -15,6 +15,7 @@ import {
   type TenantPackageInstallRole
 } from "../factory/packages/package-install-application-service.js";
 import type { FactoryPackageInstallRepository } from "../factory/packages/package-install-repository.js";
+import type { FactoryPackageInstallAuditSink } from "./factory-package-install-audit.js";
 
 export type FactoryPackageInstallApiSession = {
   userId: string;
@@ -71,6 +72,7 @@ export type FactoryPackageInstallApiDeps = {
   }): Promise<BlueprintPackageDefinition>;
   entitlements: PackageInstallEntitlements;
   repository: FactoryPackageInstallRepository;
+  auditSink: FactoryPackageInstallAuditSink;
 };
 
 type AuthenticatedRequest = {
@@ -117,19 +119,26 @@ export function createFactoryPackageInstallApi(deps: FactoryPackageInstallApiDep
         packageKey: request.packageKey
       });
 
-      return withApiErrors(async () =>
-        toInstallDto(
-          await installBlueprintPackageForTenant({
-            actor,
-            blueprint,
-            packageKey: request.packageKey,
-            installId: request.installId,
-            installedAt: request.installedAt,
-            repository: deps.repository,
-            entitlements: deps.entitlements
-          })
-        )
+      const install = await withApiErrors(() =>
+        installBlueprintPackageForTenant({
+          actor,
+          blueprint,
+          packageKey: request.packageKey,
+          installId: request.installId,
+          installedAt: request.installedAt,
+          repository: deps.repository,
+          entitlements: deps.entitlements
+        })
       );
+
+      await deps.auditSink({
+        tenantId: actor.tenantId,
+        actorUserId: actor.userId,
+        installId: install.id,
+        packageKey: request.packageKey
+      });
+
+      return toInstallDto(install);
     },
 
     async disablePackage(
