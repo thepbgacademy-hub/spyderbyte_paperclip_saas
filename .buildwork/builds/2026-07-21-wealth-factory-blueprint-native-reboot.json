@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 18,
+  "revision": 19,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -10,7 +10,7 @@
     "workspace": ".",
     "parent_build_id": null,
     "created_at": "2026-07-21T12:39:15Z",
-    "updated_at": "2026-07-23T01:10:00Z"
+    "updated_at": "2026-07-23T01:30:00Z"
   },
   "objective": {
     "summary": "Ship SpyderByte Foundry: a software platform where a solo founder buys a workflow package for a market segment (social media manager, coach, website builder and more), connects their own AI provider account, and runs guided staged workflows that generate their company's operating documents, brand assets and procedures, approving each station before anything is finalized, then exports files they keep forever. Pricing is a one-time package of $600-$2,000 plus $19-$49/month platform access after included months. Twelve clients from a successful market-fit launch are waiting to purchase as of 2026-07-21, and the build is roughly 7 weeks past its intended launch. The engine is being rebuilt blueprint-native because the previous platform, a rebranded Paperclip, was a single-user agent runtime by design and could not carry multiple tenants, and because its only working secret-injection path persisted subscriber provider secrets onto issue objects. Success is not 'the tickets closed' - it is a paying customer completing purchase to export unaided.",
@@ -145,6 +145,10 @@
     {
       "id": "CON-011",
       "text": "Customer-facing vocabulary lives in one copy layer and is enforced by a failing check, not by discipline. Internal engineering names may keep the word factory only while that guard exists and is proven able to fail; if the guard is removed, the internal names must be renamed instead."
+    },
+    {
+      "id": "CON-012",
+      "text": "The walking skeleton and its tests run only against a local, disposable Postgres (deploy/docker-compose.yml). They must never point at the VPS2/Supabase database referenced by .env SUPABASE_DB_URL, which is a shared production host with unrelated live tenants."
     }
   ],
   "decisions": [
@@ -342,6 +346,11 @@
       "id": "DEC-039",
       "text": "A demo Blueprint package catalog exists and is load-verified: two packages (local-service-launch, solo-consultant-positioning) authored to the current bounded slice, each passing loadBlueprintPackageManifest with the derived intake->positioning spine and direction/market specialist bindings asserted in tests/demo-packages-load.test.ts. The reusable authoring spec is docs/demo-package-authoring-brief.md. The walking skeleton (TASK-055) may seed its 'one hardcoded package' from any of three load-tested manifests: the connect-first fixture (tests/factory-package-manifest-fixtures.ts) or either demo.",
       "rationale": "The build had no package to demo. Rather than design one against the aspirational blueprint (which the loader would reject), the packages were authored against the code as written and each was run through the real loader before acceptance. This gives the skeleton a real, installable package to exercise install->run->deliverable->isolation, and gives the sellable catalog its first two entries. Persona definitions and deliverable templates ship alongside each manifest but are inert until the tool executor is wired."
+    },
+    {
+      "id": "DEC-040",
+      "text": "The walking skeleton (TASK-055) runs its station through a deterministic stub provider, not a real provider call, and runs against a local disposable Postgres from deploy/docker-compose.yml, never the VPS2/Supabase database. The live provider call is split into TASK-066, done by the owner and orchestrator outside the headless crew. TASK-055's 'one real provider' criterion is amended accordingly.",
+      "rationale": "Two reasons. Security: the build-crew roles are headless subprocesses, and real BYOK provider credentials must not flow into them or into any coordination artifact - the same secret-handling rule the whole build follows. Focus: the skeleton's purpose is to prove the risky, novel plumbing - real auth, real tenant persistence, install, deliverable durability across logout, and RLS tenant isolation shown falsifiable against a real Postgres. The provider call is an HTTP request behind an interface and is the least novel, most expensive, most secret-laden part; stubbing it behind the real provider interface lets the skeleton reach a green without a key or spend, and makes the live call a clean, isolated follow-up. The DB must be local and disposable because the .env SUPABASE_DB_URL points at the shared VPS2 host that carries unrelated live tenants, and the owner barred destructive VPS actions."
     }
   ],
   "open_questions": [
@@ -1912,15 +1921,16 @@
       "id": "TASK-055",
       "title": "Walking skeleton: drive one thin customer path through the real foundation",
       "status": "pending",
-      "owner": "unassigned",
+      "owner": "crew",
       "dependencies": [
         "TASK-025"
       ],
       "acceptance_criteria": [
-        "A real user logs in, a real tenant row exists, and one hardcoded package is installed against the live database",
-        "One station executes through one real provider using a stored credential, and its deliverable persists and is viewable after logout",
-        "A second tenant provably cannot read the first tenant's rows, proven by a test that fails when RLS is broken",
+        "A real user logs in, a real tenant row exists, and one hardcoded package (connect-first fixture or a demo-packages manifest) is installed against a REAL Postgres brought up locally and disposably from deploy/docker-compose.yml. The skeleton must NOT run against the VPS2/Supabase database in .env",
+        "One station executes through a DETERMINISTIC STUB PROVIDER (no network, no API key, no spend) and its deliverable persists to Postgres and is viewable after logout. The stub is injected behind the same provider interface a real provider will later satisfy, so swapping in a live provider is a later, isolated change (TASK-066)",
+        "A second tenant provably cannot read the first tenant's rows, proven by a test that runs against the real Postgres and FAILS when the RLS policy or tenant guard is removed (falsifiability shown, not asserted)",
         "Auth, tenant context, RBAC and audit events are exercised by the path rather than inspected in the abstract",
+        "No real provider credential is handled by the headless crew or written into any artifact; credentials stay out of subprocesses by design (see DEC-040)",
         "Every defect the slice surfaces is recorded as a task before it is fixed"
       ],
       "write_scope": [
@@ -2230,6 +2240,33 @@
         "Five running containers reference api.spyderbyte.cloud in their environment: affiliate-api, wf-stage-web, wf-stage-api, wf-stage-worker and wealth-factory-api itself. affiliate-api belongs to an unrelated live product, so the hostname is in active use and wealth-factory-api stays.",
         "The four stopped containers remain stopped with no observed impact: the public site returned 200 and every mini app kept running."
       ]
+    },
+    {
+      "id": "TASK-066",
+      "title": "Live provider call: replace the skeleton's stub with one real BYOK provider call",
+      "status": "pending",
+      "owner": "orchestrator",
+      "dependencies": [
+        "TASK-055"
+      ],
+      "acceptance_criteria": [
+        "The station that ran on the stub provider in TASK-055 makes one real call to a real provider (cheapest suitable model) using a stored, envelope-encrypted BYOK credential, and the deliverable it produces persists as before",
+        "The credential is wired in a controlled step by the owner and orchestrator, NOT fed through headless crew subprocesses or written to any coordination artifact",
+        "Spend is bounded by the package budgets already in the manifest (max_step_cost_usd / approval_required_above_usd)",
+        "The stub remains available as the default for tests so the suite stays offline and free"
+      ],
+      "write_scope": [
+        "src/factory/providers",
+        "src/factory/runs"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [
+        "Depends on TASK-055 delivering the provider interface seam the stub sits behind."
+      ],
+      "blockers": [],
+      "progress": "Split out of TASK-055 by DEC-040 so the live-credential path is exercised by the owner+orchestrator, not the headless crew. Not on the skeleton's critical path to a green.",
+      "risks": []
     }
   ],
   "risks": [
@@ -2645,6 +2682,13 @@
       "actor": "orchestrator",
       "action": "record-demo-package-catalog",
       "details": "Recorded DEC-039: two demo Blueprint packages authored against the current slice and verified through the real loader, with a reusable authoring brief. Noted on TASK-055 that seed packages are available (connect-first fixture plus two demos), so the walking skeleton is not blocked on package authoring."
+    },
+    {
+      "revision": 19,
+      "timestamp": "2026-07-23T01:30:00Z",
+      "actor": "orchestrator",
+      "action": "amend-task-055-stub-provider-local-db",
+      "details": "Amended TASK-055 per the owner's decision to stub the provider: the skeleton runs its station through a deterministic stub behind the real provider interface, against a local disposable Postgres, never the VPS2 database. Added the RLS falsifiability requirement (test must fail when the policy is removed) and a criterion barring real credentials from the headless crew. Split the live provider call into TASK-066 (owner+orchestrator, outside the crew). Recorded DEC-040 and CON-012 (local-disposable-DB only)."
     }
   ]
 }
