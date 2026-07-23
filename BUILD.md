@@ -31,7 +31,18 @@ requirement.
 - `TODO.md` and `wf-harness/HANDOFF.md` are historical reference. Do not add or
   tick items there; the record governs task status.
 
-## Current position (revision 15, 2026-07-21)
+## Reference docs (subordinate to this record)
+
+- **Master blueprint** — `THE_WEALTH_FACTORY_MASTER_BLUEPRINT.md`, kept outside
+  this repo (the founder's `wealth_clip` working area). It is the founding design
+  document (v1.0, 2026-07-06) and the source of the architecture, the anti-"AI
+  company" stance, and the internal-vs-customer naming mechanism (its Section 5).
+  It is **historical**: where it and this record differ, the record wins. It still
+  uses the original name "The Wealth Factory" (= SpyderByte Foundry) by design,
+  not oversight. Do not renumber or restructure it — this record's phase map
+  (B11–B35 → Tickets 07–12) depends on its ticket numbers.
+
+## Current position (revision 16, 2026-07-23)
 
 - **Active branch:** `foundry/mvp-baseline` (synced to origin).
 - **Repo:** `thepbgacademy-hub/spyderbyte_paperclip_saas`.
