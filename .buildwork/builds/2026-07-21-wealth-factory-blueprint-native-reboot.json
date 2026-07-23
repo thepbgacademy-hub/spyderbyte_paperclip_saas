@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 15,
+  "revision": 16,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -10,7 +10,7 @@
     "workspace": ".",
     "parent_build_id": null,
     "created_at": "2026-07-21T12:39:15Z",
-    "updated_at": "2026-07-21T18:35:00Z"
+    "updated_at": "2026-07-23T00:00:00Z"
   },
   "objective": {
     "summary": "Ship SpyderByte Foundry: a software platform where a solo founder buys a workflow package for a market segment (social media manager, coach, website builder and more), connects their own AI provider account, and runs guided staged workflows that generate their company's operating documents, brand assets and procedures, approving each station before anything is finalized, then exports files they keep forever. Pricing is a one-time package of $600-$2,000 plus $19-$49/month platform access after included months. Twelve clients from a successful market-fit launch are waiting to purchase as of 2026-07-21, and the build is roughly 7 weeks past its intended launch. The engine is being rebuilt blueprint-native because the previous platform, a rebranded Paperclip, was a single-user agent runtime by design and could not carry multiple tenants, and because its only working secret-injection path persisted subscriber provider secrets onto issue objects. Success is not 'the tickets closed' - it is a paying customer completing purchase to export unaided.",
@@ -345,7 +345,7 @@
     },
     {
       "id": "OQ-010",
-      "text": "CLAUDE.md is gitignored in this repo, so the pointer telling a fresh session to read the build record never reaches GitHub. The record itself commits fine. Should CLAUDE.md be un-ignored, or should a committed docs/START-HERE.md carry the pointer instead? Only matters for a clone on another machine; a session in this working directory still sees the local file."
+      "text": "[RESOLVED 2026-07-23] The read-first pointer lived only in CLAUDE.md, which is gitignored (.gitignore:14), so a freshly cloned session never saw it and had no signal to read the work record. Resolved by adding a tracked BUILD.md at the repo root carrying the same product identity, authoritative-record path, landing-page scope rule, working rules, and current position. GitNexus tooling config stays in the gitignored CLAUDE.md by intent. Also corrected a stale branch reference: the pointer named codex/wealth-factory-blueprint; the real active branch is foundry/mvp-baseline."
     },
     {
       "id": "OQ-011",
@@ -2608,6 +2608,13 @@
       "actor": "orchestrator",
       "action": "block-port-closure-and-save-wealth-factory-api",
       "details": "Retracted the traffic evidence for api.spyderbyte.cloud: Caddy has no log directives configured, so the earlier 'no traffic' reading was an absence of logging rather than an absence of traffic. Environment inspection shows five containers reference that hostname including affiliate-api, an unrelated live product, so wealth-factory-api is now positively excluded from retirement. TASK-034 moved to blocked: the deploy user has passwordless sudo for docker only, so no firewall rule can be added, and the alternative of rebinding root-owned Supabase compose ports would interrupt every tenant on the host. Recorded the full closure plan for whoever holds root, including the Docker iptables bypass that makes plain ufw rules ineffective. Added RISK-026 on the missing access logging."
+    },
+    {
+      "revision": 16,
+      "timestamp": "2026-07-23T00:00:00Z",
+      "actor": "orchestrator",
+      "action": "close-oq-010-tracked-pointer",
+      "details": "Closed OQ-010 by adding a tracked BUILD.md at the repo root. The existing read-first pointer lived only in CLAUDE.md, which is gitignored, so a cloned session got no signal to read the work record. BUILD.md is committed and carries the product identity, the authoritative-record path, the landing-page scope rule, the working rules, and the current revision-15 position including the next task. Corrected the stale branch name codex/wealth-factory-blueprint to foundry/mvp-baseline in the new pointer."
     }
   ]
 }
