@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 17,
+  "revision": 18,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -10,7 +10,7 @@
     "workspace": ".",
     "parent_build_id": null,
     "created_at": "2026-07-21T12:39:15Z",
-    "updated_at": "2026-07-23T00:30:00Z"
+    "updated_at": "2026-07-23T01:10:00Z"
   },
   "objective": {
     "summary": "Ship SpyderByte Foundry: a software platform where a solo founder buys a workflow package for a market segment (social media manager, coach, website builder and more), connects their own AI provider account, and runs guided staged workflows that generate their company's operating documents, brand assets and procedures, approving each station before anything is finalized, then exports files they keep forever. Pricing is a one-time package of $600-$2,000 plus $19-$49/month platform access after included months. Twelve clients from a successful market-fit launch are waiting to purchase as of 2026-07-21, and the build is roughly 7 weeks past its intended launch. The engine is being rebuilt blueprint-native because the previous platform, a rebranded Paperclip, was a single-user agent runtime by design and could not carry multiple tenants, and because its only working secret-injection path persisted subscriber provider secrets onto issue objects. Success is not 'the tickets closed' - it is a paying customer completing purchase to export unaided.",
@@ -337,6 +337,11 @@
       "id": "DEC-038",
       "text": "The external master blueprint (THE_WEALTH_FACTORY_MASTER_BLUEPRINT.md, in the founder's wealth_clip area) is reconciled by a non-destructive status banner prepended to it, not by rewriting or renaming its body. The banner establishes that the work record is authoritative where the two differ, gives a naming key (Wealth Factory = SpyderByte Foundry; internals stay wealth-factory), states the scope has moved to landing-page promises, and marks the factory-metaphor vocabulary as to-be-revised in the copy layer (not started). A subordinate-reference pointer was also added to the tracked BUILD.md.",
       "rationale": "The blueprint is more aligned with the current direction than a stale-name skim suggests: its Section 4 is the origin of the anti-CEO/anti-org-chart decision, and its Section 5 line ~120 prescribes the exact internals-frozen / branding-in-copy-layer mechanism the reboot uses. So the confusion a future reader would hit is nominal (the old name) and authority (is this the plan or the record?), not content. A global rename would be actively harmful: it would break the doc-to-code mapping (code deliberately still says wealth-factory), corrupt the rejection table that quotes the old framing in context, and — because this record's phase map (B11-B35 -> Tickets 07-12) cites the blueprint's ticket numbers — a renumber would orphan the map. A banner plus a single Section-5 table as the vocabulary home reconciles it while leaving the historical body intact."
+    },
+    {
+      "id": "DEC-039",
+      "text": "A demo Blueprint package catalog exists and is load-verified: two packages (local-service-launch, solo-consultant-positioning) authored to the current bounded slice, each passing loadBlueprintPackageManifest with the derived intake->positioning spine and direction/market specialist bindings asserted in tests/demo-packages-load.test.ts. The reusable authoring spec is docs/demo-package-authoring-brief.md. The walking skeleton (TASK-055) may seed its 'one hardcoded package' from any of three load-tested manifests: the connect-first fixture (tests/factory-package-manifest-fixtures.ts) or either demo.",
+      "rationale": "The build had no package to demo. Rather than design one against the aspirational blueprint (which the loader would reject), the packages were authored against the code as written and each was run through the real loader before acceptance. This gives the skeleton a real, installable package to exercise install->run->deliverable->isolation, and gives the sellable catalog its first two entries. Persona definitions and deliverable templates ship alongside each manifest but are inert until the tool executor is wired."
     }
   ],
   "open_questions": [
@@ -1925,7 +1930,13 @@
         "apps/web"
       ],
       "artifacts": [],
-      "evidence": [],
+      "evidence": [
+        {
+          "type": "verification",
+          "summary": "Seed packages available and load-verified 2026-07-23: connect-first fixture plus demo-packages/local-service-launch and demo-packages/solo-consultant-positioning, all passing loadBlueprintPackageManifest (15/15 package-loader tests green). The skeleton is not blocked on package authoring.",
+          "reference": "npx vitest run tests/demo-packages-load.test.ts"
+        }
+      ],
       "handoffs": [],
       "blockers": [],
       "progress": "MVP CRITICAL PATH - first build action after the tree is committed. Replaces the abstract B36 audit per DEC-032. This is the smallest thing that turns 25 phases of in-memory domain code into something a person can use."
@@ -2627,6 +2638,13 @@
       "actor": "orchestrator",
       "action": "reconcile-master-blueprint-non-destructively",
       "details": "Reconciled the external master blueprint by prepending a status banner (authoritative-record pointer, Wealth-Factory=Foundry naming key, scope-moved-to-landing-page note, and factory-vocabulary marked to-be-revised and not started), and added a subordinate-reference pointer in the tracked BUILD.md. Recorded the approach and the reasoning against a global rename as DEC-038. The blueprint body is intentionally unchanged, including its ticket numbering, which this record's phase map depends on."
+    },
+    {
+      "revision": 18,
+      "timestamp": "2026-07-23T01:10:00Z",
+      "actor": "orchestrator",
+      "action": "record-demo-package-catalog",
+      "details": "Recorded DEC-039: two demo Blueprint packages authored against the current slice and verified through the real loader, with a reusable authoring brief. Noted on TASK-055 that seed packages are available (connect-first fixture plus two demos), so the walking skeleton is not blocked on package authoring."
     }
   ]
 }
