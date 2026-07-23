@@ -1,0 +1,44 @@
+{
+  "manifest_schema": 1,
+  "package_id": "pkg_solo_consultant_positioning",
+  "package_key": "solo-consultant-positioning",
+  "name": "Solo Consultant Positioning Kit",
+  "version": "1.0.0",
+  "type": "business_framework",
+  "description": "A structured expertise-mining interview and authority positioning brief for independent consultants and fractional experts. Turns a broad career into one defensible claim a buyer can repeat.",
+  "publisher": "spyderbyte-foundry",
+  "license_note": "proprietary-content",
+  "min_platform_version": "1.0.0",
+  "requires": [],
+  "permissions": {
+    "tools": ["structured_interview", "document_generation", "deliverable_write", "brand_profile_update"],
+    "external_actions": { "publish": "approval_required", "send_email": "denied" },
+    "data_access": { "tenant_scope_only": true, "package_scope_only": true, "readable_deliverables": "own_package" }
+  },
+  "provider_requirements": {
+    "llm": { "required": true, "capabilities": ["structured_output", "tool_use", "long_context"], "preferred_tier": "premium" }
+  },
+  "budgets": { "max_run_cost_usd": 25, "max_run_minutes": 90, "max_step_cost_usd": 5, "approval_required_above_usd": 10 },
+  "guardrails": {
+    "scope_statement": "This package interviews one independent consultant about their own career and produces exactly two deliverables: a founder profile and an authority positioning brief. All positioning is derived from the founder's stated experience — the package performs no external research and makes no claims about market demand, rates, or income. It does not write proposals, contracts, or outreach, and gives no legal, tax, or financial advice.",
+    "denied_actions": ["contact_prospects_or_clients", "publish_marketing_content_without_approval", "provide_legal_tax_or_financial_advice", "fabricate_credentials_or_client_results", "guarantee_rates_or_income", "access_other_tenant_data", "create_unrelated_business"]
+  },
+  "personas": [
+    { "id": "practice_intake_advisor", "name": "Practice Intake Advisor", "tagline": "Mines twenty years of work for the five lines that matter.",
+      "definition": "personas/practice_intake_advisor.yaml", "allowed_stations": ["intake"],
+      "allowed_tools": ["structured_interview", "brand_profile_update", "deliverable_write"] },
+    { "id": "authority_strategist", "name": "Authority Strategist", "tagline": "Finds the one claim of expertise a buyer will repeat in a meeting.",
+      "definition": "personas/authority_strategist.yaml", "allowed_stations": ["positioning"],
+      "allowed_tools": ["document_generation", "deliverable_write", "brand_profile_update"] }
+  ],
+  "workflow": {
+    "stations": [
+      { "id": "intake", "name": "Intake Station", "persona": "practice_intake_advisor", "inputs": [], "outputs": ["founder_profile"], "checkpoint": "none" },
+      { "id": "positioning", "name": "Positioning Station", "persona": "authority_strategist", "inputs": ["founder_profile"], "outputs": ["positioning_brief"], "checkpoint": "required" }
+    ]
+  },
+  "deliverables": [
+    { "key": "founder_profile", "name": "Practice Profile", "schema": "schemas/founder_profile.json", "template": "templates/founder_profile.md.hbs" },
+    { "key": "positioning_brief", "name": "Authority Positioning Brief", "schema": "schemas/positioning_brief.json", "template": "templates/positioning_brief.md.hbs" }
+  ]
+}

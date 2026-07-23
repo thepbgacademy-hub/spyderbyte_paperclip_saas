@@ -1,0 +1,44 @@
+{
+  "manifest_schema": 1,
+  "package_id": "pkg_local_service_launch",
+  "package_key": "local-service-launch",
+  "name": "Local Service Launch Kit",
+  "version": "1.0.0",
+  "type": "business_framework",
+  "description": "Guided intake and neighborhood-level positioning for solo local-service founders. Two stations: a plainspoken intake interview, then a positioning brief sharp enough to print on a door hanger.",
+  "publisher": "spyderbyte-foundry",
+  "license_note": "proprietary-content",
+  "min_platform_version": "1.0.0",
+  "requires": [],
+  "permissions": {
+    "tools": ["structured_interview", "document_generation", "deliverable_write", "brand_profile_update", "web_research_readonly"],
+    "external_actions": { "publish": "approval_required", "send_email": "denied" },
+    "data_access": { "tenant_scope_only": true, "package_scope_only": true, "readable_deliverables": "own_package" }
+  },
+  "provider_requirements": {
+    "llm": { "required": true, "capabilities": ["structured_output", "tool_use"], "preferred_tier": "economy" }
+  },
+  "budgets": { "max_run_cost_usd": 10, "max_run_minutes": 60, "max_step_cost_usd": 2, "approval_required_above_usd": 5 },
+  "guardrails": {
+    "scope_statement": "This package interviews one solo local-service founder and produces exactly two deliverables: a founder profile and a local positioning brief. It advises on positioning within the founder's stated trade and service area only. It does not write ad copy at scale, contact customers, quote prices, or give legal, licensing, or insurance advice.",
+    "denied_actions": ["contact_customers_or_leads", "publish_marketing_content_without_approval", "provide_licensing_or_insurance_advice", "fabricate_local_market_data", "access_other_tenant_data", "create_unrelated_business"]
+  },
+  "personas": [
+    { "id": "service_intake_guide", "name": "Service Intake Guide", "tagline": "Talks shop, not marketing — gets the real story of the business.",
+      "definition": "personas/service_intake_guide.yaml", "allowed_stations": ["intake"],
+      "allowed_tools": ["structured_interview", "brand_profile_update", "deliverable_write"] },
+    { "id": "local_market_strategist", "name": "Local Market Strategist", "tagline": "Turns a trade and a zip code into a position worth choosing.",
+      "definition": "personas/local_market_strategist.yaml", "allowed_stations": ["positioning"],
+      "allowed_tools": ["web_research_readonly", "document_generation", "deliverable_write", "brand_profile_update"] }
+  ],
+  "workflow": {
+    "stations": [
+      { "id": "intake", "name": "Intake Station", "persona": "service_intake_guide", "inputs": [], "outputs": ["founder_profile"], "checkpoint": "none" },
+      { "id": "positioning", "name": "Positioning Station", "persona": "local_market_strategist", "inputs": ["founder_profile"], "outputs": ["positioning_brief"], "checkpoint": "required" }
+    ]
+  },
+  "deliverables": [
+    { "key": "founder_profile", "name": "Founder Profile", "schema": "schemas/founder_profile.json", "template": "templates/founder_profile.md.hbs" },
+    { "key": "positioning_brief", "name": "Local Positioning Brief", "schema": "schemas/positioning_brief.json", "template": "templates/positioning_brief.md.hbs" }
+  ]
+}
