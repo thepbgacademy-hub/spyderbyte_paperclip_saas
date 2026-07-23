@@ -12,6 +12,7 @@ import {
   requestChangesForPendingApproval
 } from "../approvals/approval-service.js";
 import type { IntakeRun } from "./intake-run-service.js";
+import type { LLMProvider } from "../providers/provider-types.js";
 
 function resolvePositioningStation(blueprint: BlueprintPackageDefinition) {
   const positioningStation = blueprint.stations.find((station) => station.key === "positioning");
@@ -220,6 +221,63 @@ export function completePositioningAnalysis(input: {
     },
     deliverable,
     approval
+  };
+}
+
+/**
+ * Same bounded transition as completePositioningAnalysis, but sources the
+ * deliverable's positioning summary from an LLMProvider.complete() call
+ * instead of the template literal (DEC-040 / TASK-055 AC2). The stub
+ * provider satisfies this in the walking skeleton; a live provider is a
+ * later, isolated swap (TASK-066) behind the same LLMProvider interface.
+ */
+export async function completePositioningAnalysisWithProvider(input: {
+  run: IntakeRun;
+  workspace: Workspace;
+  packageInstall: PackageInstall;
+  blueprint: BlueprintPackageDefinition;
+  founderProfile: FounderProfileDeliverable;
+  requestedAt: string;
+  provider: LLMProvider;
+  providerModel: string;
+  providerSecret: string;
+}): Promise<{ run: IntakeRun; deliverable: PositioningBriefDeliverable; approval: Approval }> {
+  const templated = completePositioningAnalysis({
+    run: input.run,
+    workspace: input.workspace,
+    packageInstall: input.packageInstall,
+    blueprint: input.blueprint,
+    founderProfile: input.founderProfile,
+    requestedAt: input.requestedAt
+  });
+
+  const completion = await input.provider.complete(
+    {
+      model: input.providerModel,
+      system:
+        "You are the market positioning specialist. Write one concise positioning summary sentence for the founder's business.",
+      messages: [
+        {
+          role: "user",
+          content:
+            `Business: ${input.founderProfile.body.businessName}. ` +
+            `Audience: ${input.founderProfile.body.targetAudience}. ` +
+            `Goal: ${input.founderProfile.body.primaryGoal}.`
+        }
+      ]
+    },
+    input.providerSecret
+  );
+
+  return {
+    ...templated,
+    deliverable: {
+      ...templated.deliverable,
+      body: {
+        ...templated.deliverable.body,
+        positioningSummary: completion.text
+      }
+    }
   };
 }
 

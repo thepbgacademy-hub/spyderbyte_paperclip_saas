@@ -28,6 +28,8 @@ tmp_stage_six_companies.json
 phase-*.html
 src/**/*.js
 tests/**/*.js
+.buildwork/crew/
+.buildwork/updates/
 apps/web/src/**/*.js
 apps/web/tests/**/*.js
 apps/web/*.js

@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 20,
+  "revision": 23,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -10,7 +10,7 @@
     "workspace": ".",
     "parent_build_id": null,
     "created_at": "2026-07-21T12:39:15Z",
-    "updated_at": "2026-07-23T01:45:00Z"
+    "updated_at": "2026-07-23T22:33:23Z"
   },
   "objective": {
     "summary": "Ship SpyderByte Foundry: a software platform where a solo founder buys a workflow package for a market segment (social media manager, coach, website builder and more), connects their own AI provider account, and runs guided staged workflows that generate their company's operating documents, brand assets and procedures, approving each station before anything is finalized, then exports files they keep forever. Pricing is a one-time package of $600-$2,000 plus $19-$49/month platform access after included months. Twelve clients from a successful market-fit launch are waiting to purchase as of 2026-07-21, and the build is roughly 7 weeks past its intended launch. The engine is being rebuilt blueprint-native because the previous platform, a rebranded Paperclip, was a single-user agent runtime by design and could not carry multiple tenants, and because its only working secret-injection path persisted subscriber provider secrets onto issue objects. Success is not 'the tickets closed' - it is a paying customer completing purchase to export unaided.",
@@ -1920,7 +1920,7 @@
     {
       "id": "TASK-055",
       "title": "Walking skeleton: drive one thin customer path through the real foundation",
-      "status": "pending",
+      "status": "completed",
       "owner": "crew",
       "dependencies": [
         "TASK-025"
@@ -1939,17 +1939,107 @@
         "supabase/migrations",
         "apps/web"
       ],
-      "artifacts": [],
+      "artifacts": [
+        "src/factory/providers/stub-provider.ts (new)",
+        "src/factory/runs/deliverable-repository.ts (new)",
+        "src/factory/runs/positioning-station-service.ts (modified: added completePositioningAnalysisWithProvider, purely additive)",
+        "src/factory/packages/package-install-repository.ts (modified: added createPostgresFactoryPackageInstallRepository, purely additive)",
+        "supabase/migrations/0038_factory_run_deliverables.sql (new -- within the ticket's recorded write_scope, does not modify any existing migration file)",
+        "tests/factory-stub-provider.test.ts (new)",
+        "tests/factory-positioning-station-provider.test.ts (new)",
+        "tests/factory-walking-skeleton.integration.test.ts (new -- the real-Postgres integration test, includes the AC3 falsifiability tests)",
+        "scripts/apply-migrations-local.mjs (new, outside recorded write_scope, authorized by the engineer brief's write-scope expansion)",
+        "scripts/local-postgres-auth-shim.sql (new, outside recorded write_scope, authorized by the engineer brief's write-scope expansion)",
+        "deploy/docker-compose.local-postgres.yml (new, outside recorded write_scope, authorized by the engineer brief's write-scope expansion; does not modify deploy/docker-compose.yml)"
+      ],
       "evidence": [
         {
           "type": "verification",
           "summary": "Seed packages available and load-verified 2026-07-23: connect-first fixture plus demo-packages/local-service-launch and demo-packages/solo-consultant-positioning, all passing loadBlueprintPackageManifest (15/15 package-loader tests green). The skeleton is not blocked on package authoring.",
           "reference": "npx vitest run tests/demo-packages-load.test.ts"
+        },
+        {
+          "type": "command",
+          "summary": "docker pull postgres:16 -- observed: 'Status: Downloaded newer image for postgres:16', digest sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20",
+          "reference": "docker pull postgres:16"
+        },
+        {
+          "type": "command",
+          "summary": "docker compose -p wf-skeleton -f deploy/docker-compose.local-postgres.yml up -d -- observed container wf-skeleton-local-postgres-1 created and started, bound to 127.0.0.1:55432; docker inspect --format='{{.State.Health.Status}}' reported 'healthy' on the first health check.",
+          "reference": "docker compose -p wf-skeleton -f deploy/docker-compose.local-postgres.yml up -d"
+        },
+        {
+          "type": "command",
+          "summary": "WF_LOCAL_PG_URL=postgresql://postgres:postgres@127.0.0.1:55432/wf_skeleton node scripts/apply-migrations-local.mjs -- observed: auth-shim applied, then all 41 supabase/migrations/*.sql files applied in filename order with zero errors, final output {\"schema\":\"wfpc\",\"migrationCount\":41,\"tableCount\":32,...} listing all 32 wfpc tables including factory_blueprint_package_installs and factory_blueprint_package_install_events. Migration 0038 (added mid-session) applied separately afterward with the same client, observed 'applied 0038'.",
+          "reference": "node scripts/apply-migrations-local.mjs"
+        },
+        {
+          "type": "test-run",
+          "summary": "npx vitest run tests/factory-stub-provider.test.ts -- 6/6 passed: deterministic completion, no-network/no-credential validateCredential, providerRequestId shape stub-<hash>, zero cost.",
+          "reference": "npx vitest run tests/factory-stub-provider.test.ts --reporter=verbose"
+        },
+        {
+          "type": "test-run",
+          "summary": "npx vitest run tests/factory-positioning-station-service.test.ts tests/factory-positioning-station-provider.test.ts tests/factory-stub-provider.test.ts -- 3 files, 28 tests, all passed. Confirms the pre-existing 18 template-based positioning tests are untouched and green alongside the new 2 provider-backed tests.",
+          "reference": "npx vitest run tests/factory-positioning-station-service.test.ts tests/factory-positioning-station-provider.test.ts tests/factory-stub-provider.test.ts --reporter=dot"
+        },
+        {
+          "type": "test-run",
+          "summary": "WF_LOCAL_PG_URL unset: npx vitest run tests/factory-walking-skeleton.integration.test.ts -- 1 file skipped, 5 tests skipped (all 5 show as skipped, confirming the env-var gate works and the test never silently no-ops as passing).",
+          "reference": "npx vitest run tests/factory-walking-skeleton.integration.test.ts --reporter=verbose"
+        },
+        {
+          "type": "test-run",
+          "falsifiability": "AC3 red/green shown in the same test run: 'AC3: a second tenant provably cannot read the first tenant's install row, shown falsifiable' asserts installRepository.findInstallById({tenantId: tenantB, installId}) is null (GREEN, guard present) AND a raw query with no tenant_id predicate (select tenant_id from wfpc.factory_blueprint_package_installs where install_id = $1) returns tenant A's row (RED condition made concrete: removing/bypassing the WHERE tenant_id=$1 predicate is what would expose the cross-tenant row). The same pattern is repeated for the deliverable table in a second test.",
+          "summary": "WF_LOCAL_PG_URL=postgresql://postgres:postgres@127.0.0.1:55432/wf_skeleton npx vitest run tests/factory-walking-skeleton.integration.test.ts -- 1 file, 5 tests, ALL PASSED: session mint+verify; RBAC-gated install (member rejected, owner accepted) persisted to Postgres with 1 lifecycle event and 1 audit_events row; positioning station executed through the stub provider with deliverable.body.positioningSummary matching /^\\[stub:[0-9a-f]{16}\\] /; deliverable re-read successfully on a brand-new connection + brand-new session token; both AC3 isolation-falsifiability tests (install row, deliverable row) green.",
+          "reference": "npx vitest run tests/factory-walking-skeleton.integration.test.ts --reporter=verbose"
+        },
+        {
+          "type": "test-run",
+          "summary": "WF_LOCAL_PG_URL set: npx vitest run tests/factory-*.test.ts tests/bullmq-factory-*.test.ts tests/demo-packages-load.test.ts -- 30 files, 234 tests, ALL PASSED (0 skipped, since the integration test's env-var gate is satisfied). Without the env var: 29 files passed / 1 skipped, 229 passed / 5 skipped -- confirms the gate behaves correctly either way.",
+          "reference": "npx vitest run tests/factory-*.test.ts tests/bullmq-factory-*.test.ts tests/demo-packages-load.test.ts --reporter=dot"
+        },
+        {
+          "type": "test-run",
+          "summary": "npx vitest run tests (full repo suite) -- 1673 passed / 25 failed / 5 skipped across 201 files (193 files passed, 7 failed, 1 skipped). All 25 failures are in tests/harness-board-service.test.ts, tests/runtime-server.test.ts (x2), tests/handoff-docs.test.ts, and three tests/first-subscriber-*.test.ts files -- none touched by this ticket. `git diff --stat` shows exactly 2 tracked files modified this session, both purely additive (215 insertions, 0 deletions), confirming these are pre-existing failures, not regressions from this work.",
+          "reference": "npx vitest run tests --reporter=dot"
+        },
+        {
+          "type": "typecheck",
+          "summary": "npx tsc --noEmit -- exit 0, no output (clean).",
+          "reference": "npx tsc --noEmit"
+        },
+        {
+          "type": "lint",
+          "summary": "npx eslint . (project-wide) -- exit 1, 351 pre-existing problems, NONE in files this ticket touched or created. Verified by re-running eslint against exactly the files this ticket touched/created (src/factory/providers/stub-provider.ts, src/factory/runs/deliverable-repository.ts, src/factory/runs/positioning-station-service.ts, src/factory/packages/package-install-repository.ts, tests/factory-stub-provider.test.ts, tests/factory-positioning-station-provider.test.ts, tests/factory-walking-skeleton.integration.test.ts, scripts/apply-migrations-local.mjs): exit 0, 0 problems.",
+          "reference": "npx eslint . ; npx eslint <the 8 files this ticket touched or created>"
+        },
+        {
+          "type": "auditor-signoff",
+          "summary": "Auditor (main Opus session) independently re-derived all TASK-055 evidence from a clean shell and PASSED, audit cycle 1. Re-derived: the real-Postgres integration suite 5/5 green against the live local disposable Postgres (container wf-skeleton-local-postgres-1, postgres:16, 127.0.0.1:55432); AC3 falsifiability reproduced by direct experiment (removed the `tenant_id = $1` predicate from package-install-repository.ts findInstallById -> both AC3 isolation tests went RED / 4 failed, restored the file byte-identical with sha256 match -> 5 passed), so isolation is genuinely enforced and genuinely falsifiable; npx tsc --noEmit exit 0; npx eslint exit 0 on the touched/created source+test files; the integration gate SKIPS (5 skipped, not passed) when WF_LOCAL_PG_URL is unset, so it cannot false-pass; 61/61 consumer tests across the two modified modules' 6 dependent files green, no regression; and the full-suite 25 failures proven pre-existing by stashing ALL ticket changes (git stash push -u) and re-running the 7 failing files on the pre-ticket tree -> identical 25 failed, none of which import this ticket's modules. Verdict PASS; TASK-068..072 carry the recorded follow-up hardening.",
+          "reference": ".buildwork/crew/2026-07-21-wealth-factory-blueprint-native-reboot/findings/TASK-055-audit-1.md"
         }
       ],
-      "handoffs": [],
+      "handoffs": [
+        "Docker container wf-skeleton-local-postgres-1 (postgres:16, 127.0.0.1:55432, project 'wf-skeleton') is left RUNNING after this session for the orchestrator/auditor to inspect directly if desired. It is disposable and local-only (tmpfs data volume, throwaway password); tear it down with `docker compose -p wf-skeleton -f deploy/docker-compose.local-postgres.yml down` whenever convenient -- nothing depends on it surviving.",
+        "TASK-066 (live provider swap) can now target completePositioningAnalysisWithProvider directly: swap the stub for a real adapter behind the same LLMProvider interface, no other change needed to the station or its persistence path."
+      ],
       "blockers": [],
-      "progress": "MVP CRITICAL PATH - first build action after the tree is committed. Replaces the abstract B36 audit per DEC-032. This is the smallest thing that turns 25 phases of in-memory domain code into something a person can use. | PRE-DISPATCH FINDINGS 2026-07-23: (a) no RLS exists in any migration - tenant isolation is app-layer tenant_id scoping, so the isolation test targets the guard, not RLS; (b) no real-Postgres test harness exists - every migration test only string-matches the .sql; the skeleton establishes the first real-DB integration test; (c) deploy/docker-compose.yml defines no Postgres service (DB is external Supabase), so a disposable Postgres must be stood up separately and migrations applied via scripts/apply-wfpc-migration.mjs; (d) Docker Desktop is installed but the daemon is not running - a prerequisite the owner must start before the crew can run."
+      "progress": "Full green, end to end, against a real local disposable Postgres (never SUPABASE_DB_URL): (1) postgres:16 pulled and brought up via a new deploy/docker-compose.local-postgres.yml on 127.0.0.1:55432, password 'postgres' (throwaway, guards nothing real); (2) a new auth-schema shim (scripts/local-postgres-auth-shim.sql: schema auth, table auth.users, function auth.uid(), role authenticated) plus a new local applier (scripts/apply-migrations-local.mjs) applied ALL 41 supabase/migrations/*.sql files in filename order unmodified, producing all 32 wfpc.* tables including the 0037 factory_blueprint_package_install(_events) tables; (3) a deterministic, no-network, no-credential stub LLMProvider (src/factory/providers/stub-provider.ts) satisfying the real LLMProvider interface (provider-types.ts:76); (4) the positioning station wired to the stub via a new completePositioningAnalysisWithProvider wrapper (src/factory/runs/positioning-station-service.ts) that sources deliverable.body.positioningSummary from provider.complete() instead of the template literal, while leaving the original completePositioningAnalysis and its 18 existing exact-match unit tests untouched (design choice, see proposed_decisions); (5) createPostgresFactoryPackageInstallRepository (src/factory/packages/package-install-repository.ts) backing migration 0037 over the existing QueryClient/postgres-client.ts, with every read scoped by `tenant_id = $1` (the load-bearing AC3 guard); (6) a new minimal migration 0038_factory_run_deliverables.sql plus createPostgresFactoryRunDeliverableRepository (src/factory/runs/deliverable-repository.ts) for deliverable persistence, since no existing table fit (only install/install-event tables existed before this ticket); (7) a new real-Postgres integration test (tests/factory-walking-skeleton.integration.test.ts, the first of its kind in this repo -- every other *-migration.test.ts only regex-matches .sql text) driving: real tenant+membership rows -> a real HMAC session token (runtime-auth.ts) -> RBAC-gated install (member denied, owner allowed) persisted to Postgres -> an audit event persisted to wfpc.audit_events -> the positioning station executed through the stub provider -> the deliverable persisted and re-read successfully on a brand-new connection with a brand-new session token (simulating post-logout) -> AC3 isolation shown falsifiable twice (install row and deliverable row): tenant B's repository read returns null (green, guard present) while a raw query with no tenant_id predicate against the same table returns tenant A's row (red, proving the app-layer WHERE tenant_id=$1 predicate -- not Postgres RLS, of which there are zero enforced policies in the app path -- is the only thing preventing cross-tenant reads). All 5 integration tests pass live; the test is gated on WF_LOCAL_PG_URL and confirmed to skip cleanly when that env var is absent, and refuses to run if the target does not look local or matches .env's SUPABASE_DB_URL. NOT done: apps/web wiring (stretch per the brief's Priority 5, not attempted this session) and TASK-066's live provider swap (explicitly out of scope per DEC-040).",
+      "findings": [
+        "CONFIRMED (re-verified by reading the source, not just re-asserting the record's pre-dispatch note): scripts/apply-wfpc-migration.mjs (the production Supabase applier) never applies supabase/migrations/0036_factory_blueprint_catalog.sql or 0037_factory_blueprint_package_installs.sql -- its last conditional block covers only 0032. Any real Supabase database migrated only via that script is missing the entire factory blueprint catalog/install schema. Candidate task: add 0036/0037 (and now 0038) idempotency-check blocks to scripts/apply-wfpc-migration.mjs.",
+        "NEW: the runtime session's role vocabulary and the tenant DB role vocabulary are two different, unreconciled enums. ApiRole (src/api/dashboard-api.ts:5) is only \"member\" | \"operator\" and that is exactly what verifyRuntimeSessionToken (src/api/runtime-auth.ts) returns in RuntimeSessionClaims -- but assertCanManagePackageInstalls (src/factory/packages/package-install-application-service.ts:38) requires the actor's role to be \"owner\" | \"admin\", drawn from wfpc.tenant_role (owner/admin/member/operator in migration 0001). No existing route or service in this repo bridges the two: a session proves who the caller is and which tenant, but a real caller must separately query wfpc.tenant_memberships.role to authorize an install action -- session.role cannot be trusted for that decision as currently typed. The integration test in this ticket builds the TenantPackageInstallActor from a direct tenant_memberships lookup rather than from session claims to make this concrete; nothing wires that lookup into an actual HTTP route yet. Candidate task: either widen ApiRole to carry the full tenant_role set, or add an explicit tenant-membership-role resolver every install-touching route calls after session auth.",
+        "CARRIED FORWARD, NOT INDEPENDENTLY RE-VERIFIED THIS SESSION (time-boxed out): the build record's pre-dispatch findings for TASK-055 already flag that several createPostgresHarnessRepository methods (src/harness/repository.ts getRun/getCard/etc.) lack a tenant_id predicate. This session did not re-read src/harness/repository.ts to confirm; flagging it here only so the orchestrator does not lose the pointer, not as a new independent finding.",
+        "Pre-existing, NOT introduced by this ticket: `npx eslint .` exits 1 with 351 problems across the repo (mostly in tests/*.test.js compiled twins and unused-var/no-undef violations unrelated to factory/, e.g. tests/worker-runtime.test.js, tests/runtime-server.test.js, tests/harness-board-client.test.js). Verified this is pre-existing, not caused by this ticket's work, by linting exactly the files this ticket touched or created in isolation: 0 errors, 0 warnings. Did not attempt to fix the unrelated 351 -- that is well outside this ticket's write_scope and blast radius.",
+        "Pre-existing, NOT introduced by this ticket: `npx vitest run tests` (the full repo suite, not just the blueprint-native slice) has 7 failing files / 25 failing tests, all in tests/harness-board-service.test.ts, tests/runtime-server.test.ts, tests/handoff-docs.test.ts, and three tests/first-subscriber-*.test.ts files -- none of which this ticket touched. Confirmed via `git diff --stat` that this session modified exactly two tracked files (both purely additive, 0 deletions) and none of the failing files are among them. The record's TASK-001 evidence of '219 tests green' was scoped only to tests/factory-*.test.ts and tests/bullmq-factory-*.test.ts, not the full suite, so this is a pre-existing gap in that claim's coverage, not a regression from this work."
+      ],
+      "risks": [
+        "The session-role / tenant-DB-role vocabulary gap (see findings) means any future route that lets a session holder install/disable/uninstall a package must NOT trust session.role for that authorization decision as currently typed -- it must resolve the real tenant_memberships.role first. If a future ticket wires HTTP routes for install actions without noticing this, it could either wrongly deny valid owners/admins (session.role can never be \"owner\"/\"admin\") or, worse, be patched by loosening assertCanManagePackageInstalls in a way that weakens the RBAC gate."
+      ],
+      "proposed_decisions": [
+        "Recorded as a design choice, not a defect: rather than changing the signature of the existing completePositioningAnalysis (which 18 existing unit tests call synchronously with exact-match assertions on the template-derived text), this ticket added a new completePositioningAnalysisWithProvider that wraps it and overrides only the deliverable's positioningSummary with the stub/live provider's output. Both functions are exported and green. Recommend the orchestrator decide, as part of TASK-066 scoping, whether the provider-backed path should fully replace completePositioningAnalysis (deleting the template-only path and updating the 18 tests) or continue to coexist as a fallback.",
+        "scripts/apply-wfpc-migration.mjs omitting 0036/0037/0038 (see findings) should become its own tracked task rather than being silently patched here, since fixing the production applier is outside this ticket's write_scope and touches the live-migration path the owner has been careful about."
+      ]
     },
     {
       "id": "TASK-056",
@@ -2295,6 +2385,112 @@
       "risks": [
         "RISK-027"
       ]
+    },
+    {
+      "id": "TASK-068",
+      "title": "Production migration applier omits factory migrations 0036/0037/0038",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "scripts/apply-wfpc-migration.mjs applies migrations 0036, 0037 and 0038 idempotently (its last conditional block currently stops at 0032)",
+        "A fresh Postgres migrated only via scripts/apply-wfpc-migration.mjs contains wfpc.factory_blueprint_packages, factory_blueprint_package_versions, factory_blueprint_package_installs, factory_blueprint_package_install_events and factory_run_deliverables",
+        "Guarded so re-running the applier is a no-op"
+      ],
+      "write_scope": [
+        "scripts"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "DEFECT surfaced and CONFIRMED by the orchestrator during TASK-055 (rev 21) verification: the production Supabase applier scripts/apply-wfpc-migration.mjs never applies 0036/0037 (and now 0038). Any Supabase DB migrated only via that script is missing the entire factory blueprint catalog/install/deliverable schema. The TASK-055 walking skeleton sidestepped this with a separate local applier (scripts/apply-migrations-local.mjs); production still needs this fix. Owner-gated because it touches the live-migration path."
+    },
+    {
+      "id": "TASK-069",
+      "title": "Wire session auth -> tenant-membership role -> install RBAC -> audit into one route path",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-055"
+      ],
+      "acceptance_criteria": [
+        "An install-touching route resolves the caller's wfpc.tenant_memberships.role after session verification and passes it to the RBAC gate; session.role (member|operator) is never trusted for the owner/admin install decision",
+        "The install path emits its own persisted wfpc.audit_events row rather than relying on the caller to write one separately",
+        "An integration test drives token -> route -> RBAC decision -> persisted audit as a single wired path (not three disconnected actions)"
+      ],
+      "write_scope": [
+        "src/api",
+        "src/factory"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "DEFECT surfaced during TASK-055 (rev 21) by both the engineer and the fresh QC reviewer: ApiRole / RuntimeSessionClaims carry only member|operator, but assertCanManagePackageInstalls requires owner|admin from wfpc.tenant_role. No route bridges the two. The TASK-055 integration test built the install actor from a direct tenant_memberships lookup and wrote the audit row manually, so auth, RBAC and audit are proven as pieces but are not yet wired into one authenticated route path (AC4 met piece-wise). RISK: a future route that trusts session.role would either wrongly deny valid owners or invite loosening the RBAC gate."
+    },
+    {
+      "id": "TASK-070",
+      "title": "Deliverable persistence write path is not tenant-scoped (cross-tenant overwrite)",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-055"
+      ],
+      "acceptance_criteria": [
+        "createPostgresFactoryRunDeliverableRepository.save refuses to overwrite a factory_run_deliverables row owned by a different tenant, mirroring the tenant-ownership guard in createPostgresFactoryPackageInstallRepository.saveLifecycleEvent",
+        "A test proves tenant B cannot mutate tenant A's deliverable title/body via a colliding deliverable_id"
+      ],
+      "write_scope": [
+        "src/factory"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "DEFECT surfaced during TASK-055 (rev 21) by the QC reviewer and CONFIRMED by the orchestrator reading src/factory/runs/deliverable-repository.ts: save() does `on conflict (deliverable_id) do update set title=..., body=...` with NO tenant_id guard, unlike the install repo's saveLifecycleEvent which checks existingTenantId != row.tenantId. Reads ARE tenant-scoped (AC3 read-isolation proven falsifiable), and natural collisions are near-impossible because deliverable_id derives from a random-UUID run id, so this is a low-severity but real write-path defense-in-depth gap. Recommend fixing before the deliverable path is exposed via any route or TASK-066."
+    },
+    {
+      "id": "TASK-071",
+      "title": "Postgres install repo does inline begin/commit on a possibly-pooled QueryClient",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-055"
+      ],
+      "acceptance_criteria": [
+        "createPostgresFactoryPackageInstallRepository performs its multi-statement install+event write atomically via a pinned single connection or createPgTransactionRunner, not inline `begin`/`commit`/`rollback` on an abstract QueryClient that may be pool-backed",
+        "Behavior is proven safe when the repository is constructed from a pool-backed QueryClient (createPgPoolQueryClient)"
+      ],
+      "write_scope": [
+        "src/factory"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "LATENT DEFECT surfaced during TASK-055 (rev 21): the QC reviewer flagged, and the orchestrator confirmed by reading src/db/postgres-client.ts, that saveLifecycleEvent issues inline begin/commit/rollback on the abstract QueryClient. This is transactionally safe as used by the walking skeleton (connectPgQueryClient returns a single pinned pg.Client), but if a caller ever passes a pool-backed QueryClient the begin/commit could split across pooled connections and lose atomicity. The repo already provides createPgTransactionRunner for the correct pattern."
+    },
+    {
+      "id": "TASK-072",
+      "title": "Audit harness repository methods for missing tenant_id predicates",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-055"
+      ],
+      "acceptance_criteria": [
+        "src/harness/repository.ts methods (getRun/getCard/etc.) are audited for a tenant_id predicate and either scoped by tenant or explicitly documented as tenant-agnostic with justification",
+        "Any cross-tenant read gap found is proven closed by a falsifiable isolation test in the same style as the TASK-055 walking skeleton"
+      ],
+      "write_scope": [
+        "src/harness"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "CARRIED-FORWARD defect, NOT independently re-verified during TASK-055 (rev 21): the record's TASK-055 pre-dispatch note and the engineer's finding both flag that several createPostgresHarnessRepository methods (getRun/getCard/etc.) appear to lack a `where tenant_id = $1` predicate. TASK-055 established that app-layer tenant_id scoping is the ONLY isolation mechanism (no enforced RLS in the app path), which makes any missing predicate a cross-tenant read risk. Recorded here so the pointer is not lost."
     }
   ],
   "risks": [
@@ -2730,6 +2926,28 @@
       "actor": "orchestrator",
       "action": "correct-isolation-criterion-record-predispatch-findings",
       "details": "Pre-dispatch inspection for TASK-055 found no RLS anywhere in the migrations - tenant isolation is app-layer tenant_id scoping. Corrected TASK-055's isolation criterion to target the app-layer guard falsifiably rather than a nonexistent RLS policy, and recorded that no real-Postgres test harness exists (migration tests only string-match the SQL), that the compose file defines no Postgres service, and that Docker Desktop is not running. Added RISK-027 (no DB backstop for a missed tenant filter, high) and TASK-067 (add RLS as defense-in-depth)."
+    },
+    {
+      "revision": 21,
+      "timestamp": "2026-07-23T22:31:56Z",
+      "actor": "orchestrator-opus",
+      "action": "merge-update",
+      "update_id": "UPD-TASK-055-engineer-solo-1784845094247",
+      "details": "Merged UPD-TASK-055-engineer-solo-1784845094247 into TASK-055"
+    },
+    {
+      "revision": 22,
+      "timestamp": "2026-07-23T22:33:23Z",
+      "actor": "orchestrator-opus",
+      "action": "add-tasks",
+      "details": "Recorded TASK-068..072: defects surfaced by the TASK-055 walking-skeleton cycle (prod applier omits 0036/0037/0038; auth/RBAC/audit not wired end-to-end; deliverable write-path not tenant-scoped; install-repo inline-transaction footgun; carried-forward harness tenant-predicate gap)."
+    },
+    {
+      "revision": 23,
+      "timestamp": "2026-07-23T22:45:00Z",
+      "actor": "orchestrator-opus",
+      "action": "auditor-signoff-task-055",
+      "details": "Auditor (main Opus session) PASSED TASK-055 on audit cycle 1, re-deriving every claim from a clean shell: integration 5/5 green on the live local disposable Postgres; AC3 falsifiability reproduced by direct experiment (guard predicate stripped -> RED / 4 failed, restored byte-identical sha256 -> GREEN / 5 passed); tsc exit 0; eslint exit 0 on touched files; the integration gate SKIPS (not passes) without WF_LOCAL_PG_URL; 61/61 consumer tests of the two modified modules green (no regression); and the full-suite 25 failures proven pre-existing by a stash-run on the pre-ticket tree (identical 25 failures without the ticket, none importing this ticket's modules). Added an auditor-signoff evidence entry to TASK-055 referencing .buildwork/crew/2026-07-21-wealth-factory-blueprint-native-reboot/findings/TASK-055-audit-1.md and marked TASK-055 status=completed. Follow-up hardening carried by TASK-068..072."
     }
   ]
 }

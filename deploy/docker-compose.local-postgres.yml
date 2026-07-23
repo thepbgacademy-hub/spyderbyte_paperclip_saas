@@ -1,0 +1,22 @@
+# Disposable, local-only Postgres for the TASK-055 walking skeleton and its
+# real-DB integration tests. This is NOT part of the production stack
+# (deploy/docker-compose.yml) and must never be pointed at SUPABASE_DB_URL
+# (CON-012 / DEC-040). Bound to 127.0.0.1 only, on a non-default host port so
+# it does not collide with any other Postgres on this machine.
+services:
+  local-postgres:
+    image: postgres:16
+    restart: "no"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: wf_skeleton
+    ports:
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d wf_skeleton"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    tmpfs:
+      - /var/lib/postgresql/data
