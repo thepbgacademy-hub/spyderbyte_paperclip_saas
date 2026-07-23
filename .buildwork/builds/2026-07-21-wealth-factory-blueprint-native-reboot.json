@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 19,
+  "revision": 20,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -10,7 +10,7 @@
     "workspace": ".",
     "parent_build_id": null,
     "created_at": "2026-07-21T12:39:15Z",
-    "updated_at": "2026-07-23T01:30:00Z"
+    "updated_at": "2026-07-23T01:45:00Z"
   },
   "objective": {
     "summary": "Ship SpyderByte Foundry: a software platform where a solo founder buys a workflow package for a market segment (social media manager, coach, website builder and more), connects their own AI provider account, and runs guided staged workflows that generate their company's operating documents, brand assets and procedures, approving each station before anything is finalized, then exports files they keep forever. Pricing is a one-time package of $600-$2,000 plus $19-$49/month platform access after included months. Twelve clients from a successful market-fit launch are waiting to purchase as of 2026-07-21, and the build is roughly 7 weeks past its intended launch. The engine is being rebuilt blueprint-native because the previous platform, a rebranded Paperclip, was a single-user agent runtime by design and could not carry multiple tenants, and because its only working secret-injection path persisted subscriber provider secrets onto issue objects. Success is not 'the tickets closed' - it is a paying customer completing purchase to export unaided.",
@@ -1928,7 +1928,7 @@
       "acceptance_criteria": [
         "A real user logs in, a real tenant row exists, and one hardcoded package (connect-first fixture or a demo-packages manifest) is installed against a REAL Postgres brought up locally and disposably from deploy/docker-compose.yml. The skeleton must NOT run against the VPS2/Supabase database in .env",
         "One station executes through a DETERMINISTIC STUB PROVIDER (no network, no API key, no spend) and its deliverable persists to Postgres and is viewable after logout. The stub is injected behind the same provider interface a real provider will later satisfy, so swapping in a live provider is a later, isolated change (TASK-066)",
-        "A second tenant provably cannot read the first tenant's rows, proven by a test that runs against the real Postgres and FAILS when the RLS policy or tenant guard is removed (falsifiability shown, not asserted)",
+        "A second tenant provably cannot read the first tenant's rows, proven by a test that runs against the real local Postgres and FAILS when the application-layer tenant guard is bypassed (isolation in this codebase is enforced by tenant_id scoping in the repositories, NOT by Postgres RLS - there are zero RLS policies in the migrations). Falsifiability must be shown (remove/bypass the guard -> red; restore -> green), not merely asserted. If DB-level RLS is added as defense-in-depth, that is a bonus recorded as its own task, not a substitute for proving the guard.",
         "Auth, tenant context, RBAC and audit events are exercised by the path rather than inspected in the abstract",
         "No real provider credential is handled by the headless crew or written into any artifact; credentials stay out of subprocesses by design (see DEC-040)",
         "Every defect the slice surfaces is recorded as a task before it is fixed"
@@ -1949,7 +1949,7 @@
       ],
       "handoffs": [],
       "blockers": [],
-      "progress": "MVP CRITICAL PATH - first build action after the tree is committed. Replaces the abstract B36 audit per DEC-032. This is the smallest thing that turns 25 phases of in-memory domain code into something a person can use."
+      "progress": "MVP CRITICAL PATH - first build action after the tree is committed. Replaces the abstract B36 audit per DEC-032. This is the smallest thing that turns 25 phases of in-memory domain code into something a person can use. | PRE-DISPATCH FINDINGS 2026-07-23: (a) no RLS exists in any migration - tenant isolation is app-layer tenant_id scoping, so the isolation test targets the guard, not RLS; (b) no real-Postgres test harness exists - every migration test only string-matches the .sql; the skeleton establishes the first real-DB integration test; (c) deploy/docker-compose.yml defines no Postgres service (DB is external Supabase), so a disposable Postgres must be stood up separately and migrations applied via scripts/apply-wfpc-migration.mjs; (d) Docker Desktop is installed but the daemon is not running - a prerequisite the owner must start before the crew can run."
     },
     {
       "id": "TASK-056",
@@ -2267,6 +2267,34 @@
       "blockers": [],
       "progress": "Split out of TASK-055 by DEC-040 so the live-credential path is exercised by the owner+orchestrator, not the headless crew. Not on the skeleton's critical path to a green.",
       "risks": []
+    },
+    {
+      "id": "TASK-067",
+      "title": "Add Postgres RLS as defense-in-depth behind the app-layer tenant guard",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-055"
+      ],
+      "acceptance_criteria": [
+        "Tenant-scoped tables enforce row-level security in Postgres so a query missing an app-layer tenant_id filter still cannot read another tenant's rows",
+        "A test demonstrates RLS blocking a deliberately unscoped query (falsifiable: disable the policy -> leak -> red)",
+        "The app sets the tenant context (e.g. SET LOCAL) on each connection/transaction so policies resolve correctly"
+      ],
+      "write_scope": [
+        "supabase/migrations",
+        "src/db"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [
+        "Hardens the isolation TASK-055 proves at the app layer; addresses RISK-027."
+      ],
+      "blockers": [],
+      "progress": "Created from the pre-dispatch finding that no RLS exists. Defense-in-depth, not a blocker for the skeleton.",
+      "risks": [
+        "RISK-027"
+      ]
     }
   ],
   "risks": [
@@ -2425,6 +2453,12 @@
       "text": "Caddy runs with no access logging configured, so the platform has no record of who reaches which hostname. This session nearly retired a live service on the strength of an empty log, and any future traffic-based decision has the same blind spot.",
       "severity": "medium",
       "mitigation": "Enable access logging in the Caddyfile before making further keep-or-retire decisions based on traffic. Until then, environment references between containers are the only reliable usage evidence."
+    },
+    {
+      "id": "RISK-027",
+      "text": "Tenant isolation is enforced only at the application layer (tenant_id scoping in repositories); there are zero Postgres RLS policies in the 41 migrations. A single missed WHERE tenant_id clause in any query is a cross-tenant data leak with no database backstop. With 12 real clients about to share infrastructure, this is a standing confidentiality risk.",
+      "severity": "high",
+      "mitigation": "The walking skeleton (TASK-055) proves the guard works and is falsifiable for the one skeleton path. Separately, add DB-level RLS as defense-in-depth so a missed app-layer filter cannot leak across tenants - tracked as TASK-067."
     }
   ],
   "artifacts": [
@@ -2689,6 +2723,13 @@
       "actor": "orchestrator",
       "action": "amend-task-055-stub-provider-local-db",
       "details": "Amended TASK-055 per the owner's decision to stub the provider: the skeleton runs its station through a deterministic stub behind the real provider interface, against a local disposable Postgres, never the VPS2 database. Added the RLS falsifiability requirement (test must fail when the policy is removed) and a criterion barring real credentials from the headless crew. Split the live provider call into TASK-066 (owner+orchestrator, outside the crew). Recorded DEC-040 and CON-012 (local-disposable-DB only)."
+    },
+    {
+      "revision": 20,
+      "timestamp": "2026-07-23T01:45:00Z",
+      "actor": "orchestrator",
+      "action": "correct-isolation-criterion-record-predispatch-findings",
+      "details": "Pre-dispatch inspection for TASK-055 found no RLS anywhere in the migrations - tenant isolation is app-layer tenant_id scoping. Corrected TASK-055's isolation criterion to target the app-layer guard falsifiably rather than a nonexistent RLS policy, and recorded that no real-Postgres test harness exists (migration tests only string-match the SQL), that the compose file defines no Postgres service, and that Docker Desktop is not running. Added RISK-027 (no DB backstop for a missed tenant filter, high) and TASK-067 (add RLS as defense-in-depth)."
     }
   ]
 }
