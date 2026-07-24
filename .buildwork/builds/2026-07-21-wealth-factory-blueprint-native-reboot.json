@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 33,
+  "revision": 34,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -10,7 +10,7 @@
     "workspace": ".",
     "parent_build_id": null,
     "created_at": "2026-07-21T12:39:15Z",
-    "updated_at": "2026-07-24T03:40:00Z"
+    "updated_at": "2026-07-24T04:10:00Z"
   },
   "objective": {
     "summary": "Ship SpyderByte Foundry: a software platform where a solo founder buys a workflow package for a market segment (social media manager, coach, website builder and more), connects their own AI provider account, and runs guided staged workflows that generate their company's operating documents, brand assets and procedures, approving each station before anything is finalized, then exports files they keep forever. Pricing is a one-time package of $600-$2,000 plus $19-$49/month platform access after included months. Twelve clients from a successful market-fit launch are waiting to purchase as of 2026-07-21, and the build is roughly 7 weeks past its intended launch. The engine is being rebuilt blueprint-native because the previous platform, a rebranded Paperclip, was a single-user agent runtime by design and could not carry multiple tenants, and because its only working secret-injection path persisted subscriber provider secrets onto issue objects. Success is not 'the tickets closed' - it is a paying customer completing purchase to export unaided.",
@@ -356,6 +356,11 @@
       "id": "DEC-041",
       "text": "Build-crew execution for this build uses a DIRECT-DISPATCH model: the auditor (main session) dispatches the engineer and QC reviewer as direct single-role leaf calls via launch_role.py, and uses the orchestrator role ONLY for record-only sign-off steps (add evidence, mark completed, add follow-ups, validate, rebuild index). The full orchestrator-led pipeline is retired for this build.",
       "rationale": "The headless orchestrator (claude -p) stalled on all three feature tickets (TASK-055, TASK-069, TASK-073) in the identical way: it dispatched a child role in the background (or 'armed a monitor') and exited its one-shot invocation expecting a wake-up that never comes, orphaning the child before merge/QC/stage. Baking a foreground-only directive into the prompt did not reliably prevent it. Record-only orchestrator invocations (no child dispatch) succeeded every time. Engineer and reviewer are leaf roles that spawn no children, so dispatching them directly removes the failing layer while preserving all rigor: independent audit, hand-run falsifiability, blank-context QC, and validated record. Chosen by the owner 2026-07-24."
+    },
+    {
+      "id": "DEC-042",
+      "text": "Priority: a working END-TO-END CONVEYOR BELT comes before output polish. The build has proven each station and storage slice in isolation (install, RBAC/audit, mount, approval checkpoint, export) but there is NO run driver that sequences a run through its stations and NO mounted start/advance/status surface - each slice's tests seed their precondition rather than arriving by running the belt. Next focus: wire a driver + start-run surface so one run flows install -> start -> intake -> positioning -> checkpoint -> approve/revise -> ready -> export, driven, on the deterministic stub provider (live provider stays TASK-066). Output-polish features are backlog, deferred by the owner 2026-07-24: see TASK-081/082/083.",
+      "rationale": "Owner (a $600-$2,000 product) correctly flagged that a one-page render is nowhere near the deliverable a buyer expects, but that presentation work is premature until a workpiece can actually traverse the whole line as a system. Proving the belt E2E on the stub is crew-safe (no real credential) and is the true spine; formats, cloud delivery, and brand kits hang off a working belt."
     }
   ],
   "open_questions": [
@@ -2830,6 +2835,57 @@
       "blockers": [],
       "progress": "Test-infra flakiness disclosed during TASK-079: shared beforeAll seeding uses `on conflict (package_id) do nothing`, which does not cover the separate package_key unique constraint, so concurrent Vitest file execution can rarely fail with duplicate key. Product code is unaffected; low probability. Pre-existing pattern shared by the earlier mounted-route e2e tests.",
       "risks": []
+    },
+    {
+      "id": "TASK-081",
+      "title": "Rendered Launch Kit document (HTML/PDF) from the export data via the package templates",
+      "progress": "BACKLOG (post-conveyor polish, DEC-042). Today export emits raw JSON. Render the deliverables through the shipped .md.hbs templates into a human-facing document (HTML, then PDF). Preview built at docs/sample-launch-kit.html shows the target.",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "Defined when scheduled; currently a captured backlog item deferred behind the E2E conveyor belt (DEC-042)."
+      ],
+      "write_scope": [],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "risks": []
+    },
+    {
+      "id": "TASK-082",
+      "title": "Deliver generated files to the customer's connected Google Drive / Dropbox",
+      "progress": "BACKLOG (post-conveyor polish, DEC-042). Landing page promises cloud delivery. Storage-connector infra partially exists (storage-oauth route, storage connectors); wire the finished kit to push into the tenant's connected Drive/Dropbox.",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "Defined when scheduled; currently a captured backlog item deferred behind the E2E conveyor belt (DEC-042)."
+      ],
+      "write_scope": [],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "risks": []
+    },
+    {
+      "id": "TASK-083",
+      "title": "Brand kit deliverable: color palette + brand voice as part of the run output",
+      "progress": "BACKLOG (post-conveyor polish, DEC-042). Buyers at this price expect brand color/voice assets, not just text briefs. Add a brand-kit deliverable kind + station/output once the belt and rendering exist.",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "Defined when scheduled; currently a captured backlog item deferred behind the E2E conveyor belt (DEC-042)."
+      ],
+      "write_scope": [],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "risks": []
     }
   ],
   "risks": [
@@ -3360,6 +3416,13 @@
       "actor": "orchestrator",
       "action": "auditor-signoff-task-079",
       "details": "Auditor signed off TASK-079 (Launch Kit export) PASS after direct-dispatch build, one QC finding, and a fix cycle for deterministic deliverable ordering. Recorded directly by the auditor because the record-only sign-off orchestrator dispatch produced no output this cycle. The customer loop buy->connect->run->approve->export is now closed end to end against a real local Postgres, each slice with falsifiable tenant isolation. Added TASK-080 for the disclosed e2e seeding race."
+    },
+    {
+      "revision": 34,
+      "timestamp": "2026-07-24T04:10:00Z",
+      "actor": "orchestrator",
+      "action": "record-conveyor-priority-and-polish-backlog",
+      "details": "Recorded DEC-042: an end-to-end conveyor belt (run driver + start/advance surface joining the proven stations) is the priority before output polish, driven on the stub provider. Captured owner-deferred polish as backlog TASK-081 (rendered HTML/PDF kit), TASK-082 (Drive/Dropbox delivery), TASK-083 (brand color/voice kit)."
     }
   ]
 }
