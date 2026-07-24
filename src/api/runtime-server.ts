@@ -15,9 +15,13 @@ import { createFactoryPackageInstallHttpHandler } from "./factory-package-instal
 import { createPostgresTenantPackageInstallRoleResolver } from "./factory-package-install-role-resolver.js";
 import { createDurableFactoryPackageInstallAuditSink } from "./factory-package-install-audit.js";
 import { createDemoPackageBlueprintLoader } from "./factory-package-install-blueprint-loader.js";
+import { createFactoryRunApprovalApi } from "./factory-run-approval-api.js";
+import { createFactoryRunApprovalHttpHandler } from "./factory-run-approval-http.js";
+import { createDurableFactoryRunApprovalAuditSink } from "./factory-run-approval-audit.js";
 import {
   createPostgresFactoryPackageInstallRepository
 } from "../factory/packages/package-install-repository.js";
+import { createPostgresFactoryRunApprovalRepository } from "../factory/runs/run-approval-repository.js";
 import { allowAllPackageInstallEntitlements } from "../factory/packages/package-install-application-service.js";
 import { createDurableAuditSink } from "../audit/durable-audit.js";
 import { createAcidGuardRepository } from "../db/acid-guard-repository.js";
@@ -1075,6 +1079,17 @@ export function createDashboardRuntime(options: {
     packageInstallApi: factoryPackageInstallApi,
     rateLimiter: createPostgresFixedWindowRateLimiter({ runner: transactionRunner, limit: 60, windowMs: 60_000 })
   });
+  const factoryRunApprovalApi = createFactoryRunApprovalApi({
+    authenticate: options.auth.authenticate,
+    requireTenantMember: repositories.requireTenantMember,
+    repository: createPostgresFactoryRunApprovalRepository(queryClient),
+    auditSink: createDurableFactoryRunApprovalAuditSink(queryClient)
+  });
+  const factoryRunApprovalHandler = createFactoryRunApprovalHttpHandler({
+    allowedOrigins: options.env.allowedOrigins,
+    runApprovalApi: factoryRunApprovalApi,
+    rateLimiter: createPostgresFixedWindowRateLimiter({ runner: transactionRunner, limit: 60, windowMs: 60_000 })
+  });
   const runtimeHandler = async (request: DashboardHttpRequest): Promise<DashboardHttpResponse> => {
     if (request.path === "/health" || request.path === "/api/health") {
       return healthHandler(request);
@@ -1093,6 +1108,9 @@ export function createDashboardRuntime(options: {
     }
     if (request.path.startsWith("/api/factory/package-installs")) {
       return factoryPackageInstallHandler(request);
+    }
+    if (request.path.startsWith("/api/factory/runs/")) {
+      return factoryRunApprovalHandler(request);
     }
     if (appShellHandler && !request.path.startsWith("/api/")) {
       return appShellHandler(request);
