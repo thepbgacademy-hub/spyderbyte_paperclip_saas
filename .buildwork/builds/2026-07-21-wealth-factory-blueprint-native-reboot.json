@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 27,
+  "revision": 28,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -10,7 +10,7 @@
     "workspace": ".",
     "parent_build_id": null,
     "created_at": "2026-07-21T12:39:15Z",
-    "updated_at": "2026-07-23T23:55:00Z"
+    "updated_at": "2026-07-24T00:20:00Z"
   },
   "objective": {
     "summary": "Ship SpyderByte Foundry: a software platform where a solo founder buys a workflow package for a market segment (social media manager, coach, website builder and more), connects their own AI provider account, and runs guided staged workflows that generate their company's operating documents, brand assets and procedures, approving each station before anything is finalized, then exports files they keep forever. Pricing is a one-time package of $600-$2,000 plus $19-$49/month platform access after included months. Twelve clients from a successful market-fit launch are waiting to purchase as of 2026-07-21, and the build is roughly 7 weeks past its intended launch. The engine is being rebuilt blueprint-native because the previous platform, a rebranded Paperclip, was a single-user agent runtime by design and could not carry multiple tenants, and because its only working secret-injection path persisted subscriber provider secrets onto issue objects. Success is not 'the tickets closed' - it is a paying customer completing purchase to export unaided.",
@@ -2619,7 +2619,7 @@
     {
       "id": "TASK-073",
       "title": "Mount the wired factory install route into the live server composition root",
-      "status": "pending",
+      "status": "completed",
       "owner": "unassigned",
       "dependencies": [
         "TASK-069"
@@ -2633,7 +2633,13 @@
         "src/server"
       ],
       "artifacts": [],
-      "evidence": [],
+      "evidence": [
+        {
+          "type": "auditor-signoff",
+          "summary": "Auditor (main Opus session) PASSED TASK-073 on audit cycle 1. Process note: the prior orchestrator cycle stalled before merge/QC/stage -- it dispatched the engineer then exited, so NO crew envelope, staged marker or crew QC was produced -- but the engineer's code landed complete in the working tree. The Auditor therefore audited the working-tree diff directly and independently re-derived all evidence, a documented recovery rather than a bypass. Re-derived against the live local disposable Postgres (container wf-skeleton-local-postgres-1, postgres:16, 127.0.0.1:55432; never SUPABASE_DB_URL): real-socket e2e tests/factory-install-route-mounted.e2e.test.ts 3/3 green -- owner token -> 201 + install row + exactly one audit_events row; member token -> 403 with zero install rows and zero audit rows; member token minted with the most-privileged session.role='operator' -> still 403 (session.role decoupling proven through the mounted server). RBAC falsifiability reproduced by the Auditor: forced src/api/factory-package-install-role-resolver.ts to return \"owner\" unconditionally -> both member-denial e2e tests went RED; restored byte-identical (sha256 matched) -> 3 passed, so the mounted route genuinely depends on the resolved wfpc.tenant_memberships.role. npx tsc --noEmit exit 0. Scope clean: only src/api/runtime-server.ts (mount, +26 lines), new src/api/factory-package-install-blueprint-loader.ts, and new tests/factory-install-route-mounted.e2e.test.ts -- within write_scope (src/api) plus the test expansion. AC1 MET: createDashboardRuntime constructs the install API with the real Postgres role resolver + durable audit sink + Postgres install repository and serves it via createFactoryPackageInstallHttpHandler, so a production construction site now exists. AC2 MET: the e2e drives real HTTP over a real socket to the mounted route, proving the RBAC + audit path and persisting a real audit row, with falsifiability shown. The Auditor additionally ran the blank-context QC reviewer (codex gpt-5.5) as a leaf role -> VERDICT: pass (three UNVERIFIED notes all resolved: rate-limiter import resolves under tsc; the ALLOWED_DEMO_PACKAGE_KEYS allowlist rejects any key before filesystem access so path.join cannot traverse; the e2e env-var gate skips-not-false-passes without WF_LOCAL_PG_URL). Follow-up recorded from finding F1 (cwd-relative package assets) as TASK-075.",
+          "reference": ".buildwork/crew/2026-07-21-wealth-factory-blueprint-native-reboot/findings/TASK-073-audit-1.md"
+        }
+      ],
       "handoffs": [],
       "blockers": [],
       "progress": "FOLLOW-UP from the TASK-069 audit (finding F1): the RBAC/audit path is proven by the integration test injecting real production components, but createFactoryPackageInstallApi has no production construction site outside the test and createFactoryPackageInstallHttpHandler is not mounted in any server-main/composition root, so real HTTP traffic does not yet reach it. Same pattern TASK-055 was passed on. Mount it and cover it end to end. Ref .buildwork/crew/2026-07-21-wealth-factory-blueprint-native-reboot/findings/TASK-069-audit-1.md (F1)."
@@ -2659,6 +2665,26 @@
       "handoffs": [],
       "blockers": [],
       "progress": "FOLLOW-UP from the TASK-069 audit (finding F2), disclosed in TASK-069's risk notes: today the install commits inside createPostgresFactoryPackageInstallRepository.saveLifecycleEvent, then deps.auditSink writes the audit_events row separately with no wrapping transaction, so a transient failure after the install commit yields a committed install with no matching audit row (best-effort-after, not atomic). Left unfixed for MVP by explicit brief instruction (do not over-engineer a distributed-transaction solution). Ref .buildwork/crew/2026-07-21-wealth-factory-blueprint-native-reboot/findings/TASK-069-audit-1.md (F2)."
+    },
+    {
+      "id": "TASK-075",
+      "title": "Wire demoPackagesRoot / package-asset path for the deployed server (not process.cwd())",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-073"
+      ],
+      "acceptance_criteria": [
+        "The deployed server composition supplies the correct absolute demo-packages path (or bundles the manifests), verified by a check that does not depend on cwd"
+      ],
+      "write_scope": [
+        "src/api"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "FOLLOW-UP from the TASK-073 audit (finding F1): createDemoPackageBlueprintLoader defaults its root to path.resolve(process.cwd(), \"demo-packages\"). Correct for local/test runs, but a server started from a container or dist/ with a different cwd will not find the manifests unless demoPackagesRoot is passed explicitly. The injection seam exists; production wiring must supply the right absolute path (or bundle the manifests). Recommend resolving before deploy so this is not discovered at deploy time. Ref .buildwork/crew/2026-07-21-wealth-factory-blueprint-native-reboot/findings/TASK-073-audit-1.md (F1)."
     }
   ],
   "risks": [
@@ -3147,6 +3173,13 @@
       "actor": "orchestrator-task-069",
       "action": "auditor-signoff-task-069",
       "details": "Auditor (main Opus session) PASSED TASK-069 on audit cycle 1, re-deriving every claim from a clean shell against the live local disposable Postgres: route integration suite 3/3 green (owner allowed with exactly one audit row; member denied with no install and no audit row; member with the most-privileged session.role='operator' still denied); RBAC falsifiability reproduced by the Auditor (forced the role-resolver to return \"owner\" -> both member-denial tests RED, restored byte-identical -> GREEN); AC2 audit persistence verified (exactly one wfpc.audit_events row, event_type factory.package.installed); wiring confirmed in production code (createFactoryPackageInstallApi resolves the membership role and emits the audit row, injected into the real HTTP handler); tsc + eslint clean; 42/42 install-suite regression green. Added an auditor-signoff evidence entry to TASK-069 referencing .buildwork/crew/2026-07-21-wealth-factory-blueprint-native-reboot/findings/TASK-069-audit-1.md and marked TASK-069 status=completed. Recorded two follow-ups from findings F1/F2: TASK-073 (mount the wired install route into the live server composition root) and TASK-074 (make install + audit_events atomic or reconciled)."
+    },
+    {
+      "revision": 28,
+      "timestamp": "2026-07-24T00:20:00Z",
+      "actor": "orchestrator",
+      "action": "auditor-signoff-task-073",
+      "details": "Auditor (main Opus session) PASSED TASK-073 on audit cycle 1. Orchestration stall recovery: the crew orchestrator stalled before merge/QC/stage this cycle (it dispatched the engineer then exited), so no crew envelope, staged marker or crew QC was produced, but the engineer's code landed complete in the working tree. The Auditor audited the working-tree diff directly and independently re-derived all evidence against the live local disposable Postgres (never SUPABASE_DB_URL): real-socket e2e tests/factory-install-route-mounted.e2e.test.ts 3/3 green (owner 201 + install row + exactly one audit_events row; member 403 with zero install and zero audit rows; member with session.role='operator' still 403); RBAC falsifiability reproduced by the Auditor (forced the role-resolver to return \"owner\" -> both denial e2e tests RED, byte-identical restore -> GREEN); tsc clean; scope clean (src/api + tests). The Auditor also ran the blank-context QC reviewer (codex gpt-5.5) as a leaf role -> VERDICT: pass. Added an auditor-signoff evidence entry to TASK-073 referencing .buildwork/crew/2026-07-21-wealth-factory-blueprint-native-reboot/findings/TASK-073-audit-1.md and marked TASK-073 status=completed. Recorded one follow-up from finding F1: TASK-075 (wire demoPackagesRoot / package-asset path for the deployed server, not process.cwd())."
     }
   ]
 }

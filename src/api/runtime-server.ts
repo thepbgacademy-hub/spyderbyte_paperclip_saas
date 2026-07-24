@@ -10,6 +10,15 @@ import { createHarnessHttpHandler } from "./harness-http.js";
 import { createHealthHttpHandler } from "./health-http.js";
 import { createOperatorHttpHandler } from "./operator-http.js";
 import { createStorageOAuthHttpHandler } from "./storage-oauth-http.js";
+import { createFactoryPackageInstallApi } from "./factory-package-install-api.js";
+import { createFactoryPackageInstallHttpHandler } from "./factory-package-install-http.js";
+import { createPostgresTenantPackageInstallRoleResolver } from "./factory-package-install-role-resolver.js";
+import { createDurableFactoryPackageInstallAuditSink } from "./factory-package-install-audit.js";
+import { createDemoPackageBlueprintLoader } from "./factory-package-install-blueprint-loader.js";
+import {
+  createPostgresFactoryPackageInstallRepository
+} from "../factory/packages/package-install-repository.js";
+import { allowAllPackageInstallEntitlements } from "../factory/packages/package-install-application-service.js";
 import { createDurableAuditSink } from "../audit/durable-audit.js";
 import { createAcidGuardRepository } from "../db/acid-guard-repository.js";
 import { createPgPool, createPgPoolQueryClient, createPgTransactionRunner } from "../db/postgres-client.js";
@@ -1052,6 +1061,20 @@ export function createDashboardRuntime(options: {
         ...(options.env.webAppStylesheetUrl ? { webAppStylesheetUrl: options.env.webAppStylesheetUrl } : {})
       })
     : undefined;
+  const factoryPackageInstallApi = createFactoryPackageInstallApi({
+    authenticate: options.auth.authenticate,
+    requireTenantMember: repositories.requireTenantMember,
+    resolveTenantPackageInstallRole: createPostgresTenantPackageInstallRoleResolver(queryClient),
+    loadBlueprintPackage: createDemoPackageBlueprintLoader(),
+    entitlements: allowAllPackageInstallEntitlements,
+    repository: createPostgresFactoryPackageInstallRepository(queryClient),
+    auditSink: createDurableFactoryPackageInstallAuditSink(queryClient)
+  });
+  const factoryPackageInstallHandler = createFactoryPackageInstallHttpHandler({
+    allowedOrigins: options.env.allowedOrigins,
+    packageInstallApi: factoryPackageInstallApi,
+    rateLimiter: createPostgresFixedWindowRateLimiter({ runner: transactionRunner, limit: 60, windowMs: 60_000 })
+  });
   const runtimeHandler = async (request: DashboardHttpRequest): Promise<DashboardHttpResponse> => {
     if (request.path === "/health" || request.path === "/api/health") {
       return healthHandler(request);
@@ -1067,6 +1090,9 @@ export function createDashboardRuntime(options: {
     }
     if (request.path.startsWith("/api/operator/")) {
       return operatorHttpHandler(request);
+    }
+    if (request.path.startsWith("/api/factory/package-installs")) {
+      return factoryPackageInstallHandler(request);
     }
     if (appShellHandler && !request.path.startsWith("/api/")) {
       return appShellHandler(request);
