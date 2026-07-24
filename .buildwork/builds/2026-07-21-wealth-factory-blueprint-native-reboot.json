@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 31,
+  "revision": 32,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -10,7 +10,7 @@
     "workspace": ".",
     "parent_build_id": null,
     "created_at": "2026-07-21T12:39:15Z",
-    "updated_at": "2026-07-24T03:00:00Z"
+    "updated_at": "2026-07-24T03:10:00Z"
   },
   "objective": {
     "summary": "Ship SpyderByte Foundry: a software platform where a solo founder buys a workflow package for a market segment (social media manager, coach, website builder and more), connects their own AI provider account, and runs guided staged workflows that generate their company's operating documents, brand assets and procedures, approving each station before anything is finalized, then exports files they keep forever. Pricing is a one-time package of $600-$2,000 plus $19-$49/month platform access after included months. Twelve clients from a successful market-fit launch are waiting to purchase as of 2026-07-21, and the build is roughly 7 weeks past its intended launch. The engine is being rebuilt blueprint-native because the previous platform, a rebranded Paperclip, was a single-user agent runtime by design and could not carry multiple tenants, and because its only working secret-injection path persisted subscriber provider secrets onto issue objects. Success is not 'the tickets closed' - it is a paying customer completing purchase to export unaided.",
@@ -2773,6 +2773,35 @@
       "blockers": [],
       "progress": "Covers the revision half of TASK-076 QC finding F3. Today a changes_requested decision persists and reports awaiting_revision and honors the one-revision cap, but does not trigger revisePositioningAnalysisAfterChangesRequested to actually produce the revision_1 deliverable.",
       "risks": []
+    },
+    {
+      "id": "TASK-079",
+      "title": "Launch Kit export: gather an approved run's deliverables into a downloadable kit via a mounted tenant-scoped route",
+      "status": "active",
+      "owner": "crew",
+      "dependencies": [
+        "TASK-073",
+        "TASK-076"
+      ],
+      "acceptance_criteria": [
+        "A deliverable repository method lists a run's deliverables tenant-scoped (WHERE tenant_id = $1 AND run_id = $2, using the existing factory_run_deliverables (tenant_id, run_id) index), added to BOTH the in-memory and Postgres repositories in src/factory/runs/deliverable-repository.ts. Isolation is app-layer tenant_id scoping (no reliance on RLS)",
+        "An export application service assembles a Launch Kit for a tenant's run ONLY when that run's approval is 'approved' (the ready_for_export outcome from TASK-076); if there is no approved approval for the run, export is refused with a clear not-ready error. The kit bundles run + package metadata and the run's deliverables (kind, title, body) in a deterministic order (e.g. station sequence intake -> positioning)",
+        "A mounted HTTP route in createDashboardRuntime (mirroring the TASK-073/076 slices) serves the export for the authenticated tenant member of the run's tenant, tenant-scoped, as a DOWNLOADABLE response (Content-Disposition attachment, application/json)",
+        "A second tenant provably cannot export the first tenant's run, proven by a test against the real local Postgres that FAILS when the tenant guard is bypassed (falsifiability shown). Export-before-approval is refused; export-after-approval returns the kit with both deliverables and survives a fresh session",
+        "e2e drives token -> mounted route -> downloadable kit over real HTTP against the local disposable Postgres (CON-012, never the VPS DB). No secrets in any artifact; every surfaced defect recorded as a task before it is fixed"
+      ],
+      "write_scope": [
+        "src/factory",
+        "src/api"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [
+        "Closes the customer loop buy->connect->run->approve->EXPORT. Human-facing rendering (the .md.hbs templates -> markdown/zip/PDF) is a separate follow-up; this ticket's kit is a structured JSON bundle."
+      ],
+      "blockers": [],
+      "progress": "Final customer-loop slice. Deliverables already persist (wfpc.factory_run_deliverables, 0038, indexed by (tenant_id, run_id)); approval already yields ready_for_export (TASK-076). Export is READ-ONLY over existing tables (no new migration expected) plus a mounted route: list-run-deliverables -> gate on approved -> assemble kit -> mount -> prove, same pattern as install/approval. MVP kit is structured JSON; template rendering to human docs is deferred.",
+      "risks": []
     }
   ],
   "risks": [
@@ -3289,6 +3318,13 @@
       "actor": "orchestrator",
       "action": "auditor-signoff-task-076",
       "details": "Auditor (main Opus session) PASSED TASK-076 (factory approval checkpoint) on audit cycle 1. Built via direct-dispatch (DEC-041; no orchestrator pipeline) with one QC fix cycle. The Auditor independently re-derived all evidence against the live local disposable Postgres: 13/13 approval tests (migration + app-service + mounted e2e), full factory suite 234/234 with no regression, tsc + eslint clean. AC3 tenant-isolation falsifiability reproduced by the Auditor (stripped tenant_id from findPendingApprovalForRun -> AC3 cross-tenant e2e RED -> byte-identical restore -> GREEN). Blank-context QC (codex gpt-5.5) returned 3 should-fix findings; F1 (unique index scoped to run_id instead of (tenant_id, run_id)) was FIXED in migration 0039 in place and verified against the live index (UNIQUE btree (tenant_id, run_id) WHERE approval_status='pending'). Added an auditor-signoff evidence entry to TASK-076 referencing .buildwork/crew/2026-07-21-wealth-factory-blueprint-native-reboot/findings/TASK-076-audit-1.md and marked TASK-076 status=completed. Recorded two follow-ups: TASK-077 (wire run-flow creation THROUGH createApprovalRequest with tenant-consistency checks; covers QC findings F2+F3-creation) and TASK-078 (wire the positioning revision re-run to produce revision_1 after request-changes; covers QC finding F3-revision)."
+    },
+    {
+      "revision": 32,
+      "timestamp": "2026-07-24T03:10:00Z",
+      "actor": "orchestrator",
+      "action": "define-task-079-launch-kit-export",
+      "details": "Defined TASK-079: gather an approved run's persisted deliverables into a downloadable Launch Kit via a mounted tenant-scoped route, gated on the run being approved (TASK-076 ready_for_export), with falsifiable tenant isolation. Read-only over existing tables (no new migration). Closes the customer loop; human-facing template rendering deferred."
     }
   ]
 }
