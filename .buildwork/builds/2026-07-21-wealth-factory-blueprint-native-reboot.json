@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 28,
+  "revision": 29,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -10,7 +10,7 @@
     "workspace": ".",
     "parent_build_id": null,
     "created_at": "2026-07-21T12:39:15Z",
-    "updated_at": "2026-07-24T00:20:00Z"
+    "updated_at": "2026-07-24T02:00:00Z"
   },
   "objective": {
     "summary": "Ship SpyderByte Foundry: a software platform where a solo founder buys a workflow package for a market segment (social media manager, coach, website builder and more), connects their own AI provider account, and runs guided staged workflows that generate their company's operating documents, brand assets and procedures, approving each station before anything is finalized, then exports files they keep forever. Pricing is a one-time package of $600-$2,000 plus $19-$49/month platform access after included months. Twelve clients from a successful market-fit launch are waiting to purchase as of 2026-07-21, and the build is roughly 7 weeks past its intended launch. The engine is being rebuilt blueprint-native because the previous platform, a rebranded Paperclip, was a single-user agent runtime by design and could not carry multiple tenants, and because its only working secret-injection path persisted subscriber provider secrets onto issue objects. Success is not 'the tickets closed' - it is a paying customer completing purchase to export unaided.",
@@ -351,6 +351,11 @@
       "id": "DEC-040",
       "text": "The walking skeleton (TASK-055) runs its station through a deterministic stub provider, not a real provider call, and runs against a local disposable Postgres from deploy/docker-compose.yml, never the VPS2/Supabase database. The live provider call is split into TASK-066, done by the owner and orchestrator outside the headless crew. TASK-055's 'one real provider' criterion is amended accordingly.",
       "rationale": "Two reasons. Security: the build-crew roles are headless subprocesses, and real BYOK provider credentials must not flow into them or into any coordination artifact - the same secret-handling rule the whole build follows. Focus: the skeleton's purpose is to prove the risky, novel plumbing - real auth, real tenant persistence, install, deliverable durability across logout, and RLS tenant isolation shown falsifiable against a real Postgres. The provider call is an HTTP request behind an interface and is the least novel, most expensive, most secret-laden part; stubbing it behind the real provider interface lets the skeleton reach a green without a key or spend, and makes the live call a clean, isolated follow-up. The DB must be local and disposable because the .env SUPABASE_DB_URL points at the shared VPS2 host that carries unrelated live tenants, and the owner barred destructive VPS actions."
+    },
+    {
+      "id": "DEC-041",
+      "text": "Build-crew execution for this build uses a DIRECT-DISPATCH model: the auditor (main session) dispatches the engineer and QC reviewer as direct single-role leaf calls via launch_role.py, and uses the orchestrator role ONLY for record-only sign-off steps (add evidence, mark completed, add follow-ups, validate, rebuild index). The full orchestrator-led pipeline is retired for this build.",
+      "rationale": "The headless orchestrator (claude -p) stalled on all three feature tickets (TASK-055, TASK-069, TASK-073) in the identical way: it dispatched a child role in the background (or 'armed a monitor') and exited its one-shot invocation expecting a wake-up that never comes, orphaning the child before merge/QC/stage. Baking a foreground-only directive into the prompt did not reliably prevent it. Record-only orchestrator invocations (no child dispatch) succeeded every time. Engineer and reviewer are leaf roles that spawn no children, so dispatching them directly removes the failing layer while preserving all rigor: independent audit, hand-run falsifiability, blank-context QC, and validated record. Chosen by the owner 2026-07-24."
     }
   ],
   "open_questions": [
@@ -3180,6 +3185,13 @@
       "actor": "orchestrator",
       "action": "auditor-signoff-task-073",
       "details": "Auditor (main Opus session) PASSED TASK-073 on audit cycle 1. Orchestration stall recovery: the crew orchestrator stalled before merge/QC/stage this cycle (it dispatched the engineer then exited), so no crew envelope, staged marker or crew QC was produced, but the engineer's code landed complete in the working tree. The Auditor audited the working-tree diff directly and independently re-derived all evidence against the live local disposable Postgres (never SUPABASE_DB_URL): real-socket e2e tests/factory-install-route-mounted.e2e.test.ts 3/3 green (owner 201 + install row + exactly one audit_events row; member 403 with zero install and zero audit rows; member with session.role='operator' still 403); RBAC falsifiability reproduced by the Auditor (forced the role-resolver to return \"owner\" -> both denial e2e tests RED, byte-identical restore -> GREEN); tsc clean; scope clean (src/api + tests). The Auditor also ran the blank-context QC reviewer (codex gpt-5.5) as a leaf role -> VERDICT: pass. Added an auditor-signoff evidence entry to TASK-073 referencing .buildwork/crew/2026-07-21-wealth-factory-blueprint-native-reboot/findings/TASK-073-audit-1.md and marked TASK-073 status=completed. Recorded one follow-up from finding F1: TASK-075 (wire demoPackagesRoot / package-asset path for the deployed server, not process.cwd())."
+    },
+    {
+      "revision": 29,
+      "timestamp": "2026-07-24T02:00:00Z",
+      "actor": "orchestrator",
+      "action": "adopt-direct-dispatch-crew-model",
+      "details": "Recorded DEC-041: after three identical orchestrator stalls, the build adopts a direct-dispatch crew model - the auditor dispatches engineer and reviewer as leaf roles directly and uses the orchestrator only for record-only sign-off. Chosen by the owner."
     }
   ]
 }
