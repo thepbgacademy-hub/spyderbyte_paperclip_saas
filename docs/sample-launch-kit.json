@@ -1,0 +1,32 @@
+{
+  "runId": "run_demo_0001",
+  "packageId": "pkg_local_service_launch",
+  "packageVersionId": "pkg_local_service_launch@1.0.0",
+  "packageInstallId": "install_demo_0001",
+  "approvedAt": "2026-07-24T02:15:00.000Z",
+  "deliverables": [
+    {
+      "stationKey": "intake",
+      "kind": "founder_profile",
+      "title": "Founder Profile",
+      "body": {
+        "founderName": "Dana Ruiz",
+        "businessName": "BrightMove Cleaning",
+        "primaryGoal": "Book the first 10 recurring residential clients in 90 days",
+        "targetAudience": "Busy two-income households in the Route 9 / Maple Heights neighborhoods",
+        "summary": "Dana has cleaned houses for eight years, most recently managing a crew for a franchise, and is now going solo. BrightMove focuses on reliable weekly and biweekly residential cleaning in a tight service area. Dana refuses one-time move-out jobs and commercial contracts to protect the recurring-route model."
+      }
+    },
+    {
+      "stationKey": "positioning",
+      "kind": "positioning_brief",
+      "title": "Local Positioning Brief",
+      "body": {
+        "headline": "The weekly cleaner Maple Heights families never have to think about",
+        "audience": "Dual-income homeowners in Maple Heights and off Route 9 who want a dependable recurring cleaner",
+        "primaryGoal": "10 recurring residential clients in 90 days",
+        "positioningSummary": "BrightMove wins on route reliability, not price or 'family-owned' claims every competitor makes. Position around the same trusted cleaner every visit, a fixed weekly slot, and a two-street service radius Dana can actually keep. First place to say it: door hangers on the two target streets."
+      }
+    }
+  ]
+}
