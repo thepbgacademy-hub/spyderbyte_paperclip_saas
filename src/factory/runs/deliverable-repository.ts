@@ -14,6 +14,43 @@ export interface FactoryRunDeliverableRow {
 export interface FactoryRunDeliverableRepository {
   save(row: FactoryRunDeliverableRow): Promise<void>;
   findById(input: { tenantId: string; deliverableId: string }): Promise<FactoryRunDeliverableRow | null>;
+  listDeliverablesForRun(input: { tenantId: string; runId: string }): Promise<FactoryRunDeliverableRow[]>;
+}
+
+function cloneRow(row: FactoryRunDeliverableRow): FactoryRunDeliverableRow {
+  return { ...row, body: JSON.parse(JSON.stringify(row.body)) as Record<string, unknown> };
+}
+
+/**
+ * In-memory adapter for TASK-079's export slice (list-for-run only; the
+ * durable adapter below remains the persistence path exercised by the
+ * TASK-055 walking skeleton). Deterministic order matches the Postgres
+ * adapter: station_key ascending, which for the bounded intake->positioning
+ * slice sorts intake before positioning.
+ */
+export function createInMemoryFactoryRunDeliverableRepository(): FactoryRunDeliverableRepository {
+  const deliverables = new Map<string, FactoryRunDeliverableRow>();
+
+  return {
+    async save(row) {
+      deliverables.set(row.deliverableId, cloneRow(row));
+    },
+
+    async findById(input) {
+      const found = deliverables.get(input.deliverableId);
+      if (!found || found.tenantId !== input.tenantId) {
+        return null;
+      }
+      return cloneRow(found);
+    },
+
+    async listDeliverablesForRun(input) {
+      return [...deliverables.values()]
+        .filter((row) => row.tenantId === input.tenantId && row.runId === input.runId)
+        .sort((a, b) => a.stationKey.localeCompare(b.stationKey) || a.deliverableId.localeCompare(b.deliverableId))
+        .map(cloneRow);
+    }
+  };
 }
 
 /**
@@ -68,6 +105,29 @@ export function createPostgresFactoryRunDeliverableRepository(client: QueryClien
         title: String(row.title),
         body: row.body as Record<string, unknown>
       };
+    },
+
+    async listDeliverablesForRun(input) {
+      const result = await client.query(
+        `select deliverable_id, tenant_id, run_id, package_install_id, station_key, kind, title, body
+         from wfpc.factory_run_deliverables
+         where tenant_id = $1 and run_id = $2
+         order by station_key asc, deliverable_id asc`,
+        [input.tenantId, input.runId]
+      );
+      return result.rows.map((raw) => {
+        const row = raw as Record<string, unknown>;
+        return {
+          deliverableId: String(row.deliverable_id),
+          tenantId: String(row.tenant_id),
+          runId: String(row.run_id),
+          packageInstallId: String(row.package_install_id),
+          stationKey: String(row.station_key),
+          kind: String(row.kind),
+          title: String(row.title),
+          body: row.body as Record<string, unknown>
+        };
+      });
     }
   };
 }

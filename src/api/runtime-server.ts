@@ -18,10 +18,13 @@ import { createDemoPackageBlueprintLoader } from "./factory-package-install-blue
 import { createFactoryRunApprovalApi } from "./factory-run-approval-api.js";
 import { createFactoryRunApprovalHttpHandler } from "./factory-run-approval-http.js";
 import { createDurableFactoryRunApprovalAuditSink } from "./factory-run-approval-audit.js";
+import { createFactoryRunExportApi } from "./factory-run-export-api.js";
+import { createFactoryRunExportHttpHandler } from "./factory-run-export-http.js";
 import {
   createPostgresFactoryPackageInstallRepository
 } from "../factory/packages/package-install-repository.js";
 import { createPostgresFactoryRunApprovalRepository } from "../factory/runs/run-approval-repository.js";
+import { createPostgresFactoryRunDeliverableRepository } from "../factory/runs/deliverable-repository.js";
 import { allowAllPackageInstallEntitlements } from "../factory/packages/package-install-application-service.js";
 import { createDurableAuditSink } from "../audit/durable-audit.js";
 import { createAcidGuardRepository } from "../db/acid-guard-repository.js";
@@ -1090,6 +1093,17 @@ export function createDashboardRuntime(options: {
     runApprovalApi: factoryRunApprovalApi,
     rateLimiter: createPostgresFixedWindowRateLimiter({ runner: transactionRunner, limit: 60, windowMs: 60_000 })
   });
+  const factoryRunExportApi = createFactoryRunExportApi({
+    authenticate: options.auth.authenticate,
+    requireTenantMember: repositories.requireTenantMember,
+    deliverableRepository: createPostgresFactoryRunDeliverableRepository(queryClient),
+    approvalRepository: createPostgresFactoryRunApprovalRepository(queryClient)
+  });
+  const factoryRunExportHandler = createFactoryRunExportHttpHandler({
+    allowedOrigins: options.env.allowedOrigins,
+    runExportApi: factoryRunExportApi,
+    rateLimiter: createPostgresFixedWindowRateLimiter({ runner: transactionRunner, limit: 60, windowMs: 60_000 })
+  });
   const runtimeHandler = async (request: DashboardHttpRequest): Promise<DashboardHttpResponse> => {
     if (request.path === "/health" || request.path === "/api/health") {
       return healthHandler(request);
@@ -1108,6 +1122,9 @@ export function createDashboardRuntime(options: {
     }
     if (request.path.startsWith("/api/factory/package-installs")) {
       return factoryPackageInstallHandler(request);
+    }
+    if (request.path.startsWith("/api/factory/runs/") && request.path.endsWith("/export")) {
+      return factoryRunExportHandler(request);
     }
     if (request.path.startsWith("/api/factory/runs/")) {
       return factoryRunApprovalHandler(request);

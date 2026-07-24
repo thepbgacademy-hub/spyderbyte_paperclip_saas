@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 32,
+  "revision": 33,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -10,7 +10,7 @@
     "workspace": ".",
     "parent_build_id": null,
     "created_at": "2026-07-21T12:39:15Z",
-    "updated_at": "2026-07-24T03:10:00Z"
+    "updated_at": "2026-07-24T03:40:00Z"
   },
   "objective": {
     "summary": "Ship SpyderByte Foundry: a software platform where a solo founder buys a workflow package for a market segment (social media manager, coach, website builder and more), connects their own AI provider account, and runs guided staged workflows that generate their company's operating documents, brand assets and procedures, approving each station before anything is finalized, then exports files they keep forever. Pricing is a one-time package of $600-$2,000 plus $19-$49/month platform access after included months. Twelve clients from a successful market-fit launch are waiting to purchase as of 2026-07-21, and the build is roughly 7 weeks past its intended launch. The engine is being rebuilt blueprint-native because the previous platform, a rebranded Paperclip, was a single-user agent runtime by design and could not carry multiple tenants, and because its only working secret-injection path persisted subscriber provider secrets onto issue objects. Success is not 'the tickets closed' - it is a paying customer completing purchase to export unaided.",
@@ -2777,7 +2777,7 @@
     {
       "id": "TASK-079",
       "title": "Launch Kit export: gather an approved run's deliverables into a downloadable kit via a mounted tenant-scoped route",
-      "status": "active",
+      "status": "completed",
       "owner": "crew",
       "dependencies": [
         "TASK-073",
@@ -2795,12 +2795,40 @@
         "src/api"
       ],
       "artifacts": [],
-      "evidence": [],
+      "evidence": [
+        {
+          "type": "auditor-signoff",
+          "summary": "PASS. Built via direct-dispatch (DEC-041). The record-only sign-off orchestrator dispatch produced no output this cycle (a flaky launch, not a stall - it has succeeded four prior times), so the auditor recorded this sign-off directly; integrity rests on the auditor's independent re-derivation below, not on which process wrote the entry. Auditor re-derived vs the live local Postgres: 7/7 export tests (unit + mounted e2e), full factory suite 240/240 no regression, tsc + eslint clean. AC4 tenant-isolation falsifiability reproduced by the auditor: stripped tenant_id from findApprovedApprovalForRun -> the AC4 cross-tenant export e2e went RED -> byte-identical restore (sha256) -> GREEN. Export gate proven: 404 not_ready before approval; cross-tenant indistinguishable from missing (no existence leak). Download proven: the e2e asserts content-disposition: attachment + filename. Blank-context QC (codex gpt-5.5) returned one should-fix (deliverables ordered by station_key only, non-deterministic for same-station rows); FIXED in a fix cycle with a stable deliverable_id tie-breaker in both adapters plus a determinism test, re-verified by the auditor (7/7, tsc 0). No new migration (read-only over existing tables). Customer loop buy->connect->run->approve->export now closed end to end against a real database.",
+          "reference": ".buildwork/crew/2026-07-21-wealth-factory-blueprint-native-reboot/findings/TASK-079-audit-1.md"
+        }
+      ],
       "handoffs": [
         "Closes the customer loop buy->connect->run->approve->EXPORT. Human-facing rendering (the .md.hbs templates -> markdown/zip/PDF) is a separate follow-up; this ticket's kit is a structured JSON bundle."
       ],
       "blockers": [],
       "progress": "Final customer-loop slice. Deliverables already persist (wfpc.factory_run_deliverables, 0038, indexed by (tenant_id, run_id)); approval already yields ready_for_export (TASK-076). Export is READ-ONLY over existing tables (no new migration expected) plus a mounted route: list-run-deliverables -> gate on approved -> assemble kit -> mount -> prove, same pattern as install/approval. MVP kit is structured JSON; template rendering to human docs is deferred.",
+      "risks": []
+    },
+    {
+      "id": "TASK-080",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-079"
+      ],
+      "title": "Make the shared factory e2e demo-package seeding race-safe",
+      "acceptance_criteria": [
+        "The mounted-route e2e tests (TASK-073/076/079) seed the demo package without a duplicate-key race: the insert conflict target covers the package_key unique constraint (not only package_id), or seeding is serialized / uses a per-file unique package",
+        "Running the three mounted e2e files concurrently under Vitest repeatedly shows zero seeding failures on factory_blueprint_packages_package_key_key"
+      ],
+      "write_scope": [
+        "tests"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "progress": "Test-infra flakiness disclosed during TASK-079: shared beforeAll seeding uses `on conflict (package_id) do nothing`, which does not cover the separate package_key unique constraint, so concurrent Vitest file execution can rarely fail with duplicate key. Product code is unaffected; low probability. Pre-existing pattern shared by the earlier mounted-route e2e tests.",
       "risks": []
     }
   ],
@@ -3325,6 +3353,13 @@
       "actor": "orchestrator",
       "action": "define-task-079-launch-kit-export",
       "details": "Defined TASK-079: gather an approved run's persisted deliverables into a downloadable Launch Kit via a mounted tenant-scoped route, gated on the run being approved (TASK-076 ready_for_export), with falsifiable tenant isolation. Read-only over existing tables (no new migration). Closes the customer loop; human-facing template rendering deferred."
+    },
+    {
+      "revision": 33,
+      "timestamp": "2026-07-24T03:40:00Z",
+      "actor": "orchestrator",
+      "action": "auditor-signoff-task-079",
+      "details": "Auditor signed off TASK-079 (Launch Kit export) PASS after direct-dispatch build, one QC finding, and a fix cycle for deterministic deliverable ordering. Recorded directly by the auditor because the record-only sign-off orchestrator dispatch produced no output this cycle. The customer loop buy->connect->run->approve->export is now closed end to end against a real local Postgres, each slice with falsifiable tenant isolation. Added TASK-080 for the disclosed e2e seeding race."
     }
   ]
 }

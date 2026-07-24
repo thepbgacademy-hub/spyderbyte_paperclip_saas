@@ -130,6 +130,9 @@ describe("decideFactoryRunApproval", () => {
       async findPendingApprovalForRun() {
         return raced;
       },
+      async findApprovedApprovalForRun() {
+        throw new Error("not used in this test");
+      },
       async applyDecision() {
         // Simulates another request winning the race and resolving the row first.
         return null;

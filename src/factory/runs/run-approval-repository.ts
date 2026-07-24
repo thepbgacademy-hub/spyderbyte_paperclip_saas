@@ -27,6 +27,10 @@ export interface FactoryRunApprovalRepository {
     tenantId: string;
     runId: string;
   }): Promise<FactoryRunApprovalRow | null>;
+  findApprovedApprovalForRun(input: {
+    tenantId: string;
+    runId: string;
+  }): Promise<FactoryRunApprovalRow | null>;
   applyDecision(input: {
     tenantId: string;
     approvalId: string;
@@ -67,6 +71,16 @@ export function createInMemoryFactoryRunApprovalRepository(): FactoryRunApproval
         (candidate) =>
           candidate.tenantId === input.tenantId && candidate.runId === input.runId && candidate.status === "pending"
       );
+      return found ? cloneRow(found) : null;
+    },
+
+    async findApprovedApprovalForRun(input) {
+      const found = [...approvals.values()]
+        .filter(
+          (candidate) =>
+            candidate.tenantId === input.tenantId && candidate.runId === input.runId && candidate.status === "approved"
+        )
+        .sort((a, b) => (b.resolvedAt ?? "").localeCompare(a.resolvedAt ?? ""))[0];
       return found ? cloneRow(found) : null;
     },
 
@@ -150,6 +164,20 @@ export function createPostgresFactoryRunApprovalRepository(client: QueryClient):
                 station_key, deliverable_id, contract_key, approval_status, requested_at, resolved_at, resolution_summary
          from wfpc.factory_run_approvals
          where tenant_id = $1 and run_id = $2 and approval_status = 'pending'
+         limit 1`,
+        [input.tenantId, input.runId]
+      );
+      const row = result.rows[0] as Record<string, unknown> | undefined;
+      return row ? mapRow(row) : null;
+    },
+
+    async findApprovedApprovalForRun(input) {
+      const result = await client.query(
+        `select approval_id, tenant_id, run_id, package_id, package_version_id, package_install_id,
+                station_key, deliverable_id, contract_key, approval_status, requested_at, resolved_at, resolution_summary
+         from wfpc.factory_run_approvals
+         where tenant_id = $1 and run_id = $2 and approval_status = 'approved'
+         order by resolved_at desc
          limit 1`,
         [input.tenantId, input.runId]
       );
