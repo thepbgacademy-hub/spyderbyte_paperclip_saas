@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 29,
+  "revision": 30,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -10,7 +10,7 @@
     "workspace": ".",
     "parent_build_id": null,
     "created_at": "2026-07-21T12:39:15Z",
-    "updated_at": "2026-07-24T02:00:00Z"
+    "updated_at": "2026-07-24T02:20:00Z"
   },
   "objective": {
     "summary": "Ship SpyderByte Foundry: a software platform where a solo founder buys a workflow package for a market segment (social media manager, coach, website builder and more), connects their own AI provider account, and runs guided staged workflows that generate their company's operating documents, brand assets and procedures, approving each station before anything is finalized, then exports files they keep forever. Pricing is a one-time package of $600-$2,000 plus $19-$49/month platform access after included months. Twelve clients from a successful market-fit launch are waiting to purchase as of 2026-07-21, and the build is roughly 7 weeks past its intended launch. The engine is being rebuilt blueprint-native because the previous platform, a rebranded Paperclip, was a single-user agent runtime by design and could not carry multiple tenants, and because its only working secret-injection path persisted subscriber provider secrets onto issue objects. Success is not 'the tickets closed' - it is a paying customer completing purchase to export unaided.",
@@ -2690,6 +2690,35 @@
       "handoffs": [],
       "blockers": [],
       "progress": "FOLLOW-UP from the TASK-073 audit (finding F1): createDemoPackageBlueprintLoader defaults its root to path.resolve(process.cwd(), \"demo-packages\"). Correct for local/test runs, but a server started from a container or dist/ with a different cwd will not find the manifests unless demoPackagesRoot is passed explicitly. The injection seam exists; production wiring must supply the right absolute path (or bundle the manifests). Recommend resolving before deploy so this is not discovered at deploy time. Ref .buildwork/crew/2026-07-21-wealth-factory-blueprint-native-reboot/findings/TASK-073-audit-1.md (F1)."
+    },
+    {
+      "id": "TASK-076",
+      "title": "Factory approval checkpoint: persist + mount the approve / request-changes route for the positioning deliverable",
+      "status": "active",
+      "owner": "crew",
+      "dependencies": [
+        "TASK-073"
+      ],
+      "acceptance_criteria": [
+        "Factory run approvals persist to a REAL Postgres table (new additive migration, e.g. wfpc.factory_run_approvals), scoped by tenant_id. A pending approval exists for the positioning deliverable (its station checkpoint is 'required'); approving or requesting-changes transitions the persisted status (pending -> approved | changes_requested) using the existing domain functions in src/factory/approvals/approval-service.ts (createApprovalRequest / approvePendingApproval / requestChangesForPendingApproval) -- do not reimplement the transition logic",
+        "A mounted HTTP route (in createDashboardRuntime, mirroring the TASK-073 install route) lets the authenticated tenant user submit an approve or request-changes decision on their run's pending approval; the decision persists and the run advances (approved -> ready for export; changes_requested -> positioning revision generation increments, honoring the one-revision cap already in intake-run-service.ts). Isolation is app-layer tenant_id scoping (there is no RLS)",
+        "A second tenant provably cannot read or act on the first tenant's approval, proven by a test against the real local Postgres that FAILS when the tenant guard is bypassed (falsifiability shown, not asserted)",
+        "An end-to-end check drives token -> mounted route -> persisted approval transition over real HTTP against the local disposable Postgres; the run state reflects the decision and survives a fresh session",
+        "No real provider credential is handled by the headless crew or written to any artifact; runs against the local disposable Postgres only (CON-012), never the VPS DB. Every surfaced defect is recorded as a task before it is fixed"
+      ],
+      "write_scope": [
+        "src/factory",
+        "src/api",
+        "supabase/migrations"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [
+        "Unblocks the export slice (approved deliverables are what a customer exports)."
+      ],
+      "blockers": [],
+      "progress": "NEXT customer-loop slice after TASK-073. Approval DOMAIN logic already exists (approval-service.ts, statuses pending|approved|changes_requested; run state machine in intake-run-service.ts tracks activeApprovalId + a one-revision generation) but is in-memory only; the sole approval table (0034) is the legacy Paperclip harness flow, not the factory run. This ticket gives factory approvals real persistence + a mounted route + tenant isolation, same persist->wire->mount->prove pattern as install (TASK-055/069/073). Export is a separate follow-up.",
+      "risks": []
     }
   ],
   "risks": [
@@ -3192,6 +3221,13 @@
       "actor": "orchestrator",
       "action": "adopt-direct-dispatch-crew-model",
       "details": "Recorded DEC-041: after three identical orchestrator stalls, the build adopts a direct-dispatch crew model - the auditor dispatches engineer and reviewer as leaf roles directly and uses the orchestrator only for record-only sign-off. Chosen by the owner."
+    },
+    {
+      "revision": 30,
+      "timestamp": "2026-07-24T02:20:00Z",
+      "actor": "orchestrator",
+      "action": "define-task-076-approval-checkpoint",
+      "details": "Defined TASK-076: persist factory run approvals to Postgres, wire the approve/request-changes transitions (reusing approval-service.ts), mount a tenant-scoped route in createDashboardRuntime, and prove it e2e with falsifiable tenant isolation against the local disposable Postgres. Next customer-loop slice after the mounted install route; export follows separately."
     }
   ]
 }
