@@ -52,10 +52,10 @@ requirement.
   not oversight. Do not renumber or restructure it — this record's phase map
   (B11–B35 → Tickets 07–12) depends on its ticket numbers.
 
-## Current position (revision 36, 2026-07-25)
+## Current position (revision 38, 2026-07-25)
 
 - **Active branch:** `foundry/mvp-baseline` (synced to origin
-  `thepbgacademy-hub/spyderbyte_paperclip_saas`). 32/85 tasks completed.
+  `thepbgacademy-hub/spyderbyte_paperclip_saas`). 34/86 tasks completed.
 - **Built & independently audited** against a real local disposable Postgres, each
   slice with tenant isolation/RBAC proven falsifiable by hand:
   - `TASK-055` walking skeleton (login → tenant → install → station → persisted
@@ -67,24 +67,26 @@ requirement.
     cap; `wfpc.factory_run_approvals`, migration 0039)
   - `TASK-079` Launch Kit export (`GET /api/factory/runs/:runId/export`, downloadable,
     gated on approved, no cross-tenant leak)
-  - `TASK-084` **run-driver spine — the conveyor belt now MOVES** (`wfpc.factory_runs`
-    migration 0040; driver sequences intake → positioning on the stub provider;
-    mounted `POST /api/factory/runs` answers-at-start + `GET /api/factory/runs/:runId`
-    status). Subsumes `TASK-077` (approval created by the flow via
-    `createApprovalRequest`).
+  - `TASK-084` run-driver spine (`wfpc.factory_runs` migration 0040; driver sequences
+    intake → positioning on the stub; mounted `POST /api/factory/runs` answers-at-start +
+    `GET /api/factory/runs/:runId` status). Subsumes `TASK-077`.
+  - `TASK-078` **the approve/REVISE fork — belt now flows BOTH branches.**
+    `request_changes` drives `reviseFactoryRunPositioning` (composing the existing domain
+    fns on the stub) → persists `revision_1` deliverable + new pending approval + updated
+    run row, wired into the mounted decision route. One-revision cap + idempotency proven.
   - Two demo packages load-verify (`DEC-039`, `demo-packages/`)
-- **✔ Status (changed at rev 36):** the belt flows as ONE SYSTEM on the stub provider —
-  the e2e drives `POST start → driver runs both stations → GET status stopped at the
-  checkpoint → the existing approve route → the existing export route serves the kit
-  with both deliverables`. No longer seeded preconditions; the workpiece arrives by
-  running the line.
-- **Immediate next slice: `TASK-078`** — wire the positioning revision re-run
-  (`revisePositioningAnalysisAfterChangesRequested`) so a request-changes decision
-  produces `revision_1` and the belt advances after it. The revision domain already
-  exists as a proven pure function; this is driver + persistence wiring, like TASK-084.
-- **Deferred (DEC-043):** interactive/multi-turn intake (answers-at-start only today);
-  client-run-id contract confirmation; `TASK-085` make `startFactoryRun` idempotency
-  concurrency-safe (auditor finding, low priority — sequential retry is proven).
+- **✔ Status (rev 38):** the belt flows as ONE SYSTEM on the stub provider, BOTH forks —
+  `start → checkpoint → approve → export`, and
+  `start → checkpoint → request_changes → revision_1 → approve → export` (export serves
+  the REVISED brief). Workpieces arrive by running the line, not by seeded preconditions.
+- **Suggested next slices** (owner's call): `TASK-086` export should curate to the
+  latest-approved positioning (today the kit bundles the superseded original draft
+  alongside the revision); then owner-deferred output polish `TASK-081/082/083`; and/or
+  `TASK-066` the first live BYOK provider call (owner + main session, outside the crew).
+- **Deferred (DEC-043/044):** interactive intake (answers-at-start only); client-run-id
+  contract; `TASK-085` concurrency-safe start idempotency; the revision op's
+  content-channel + non-atomicity limitations (DEC-044). All low-priority; sequential
+  stub path is proven.
 - **Deferred polish backlog (DEC-042):** `TASK-081` rendered HTML/PDF kit,
   `TASK-082` Drive/Dropbox delivery, `TASK-083` brand color/voice kit. Previews:
   `docs/sample-launch-kit.json` (what ships today) and `docs/sample-launch-kit.html`
