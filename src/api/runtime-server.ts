@@ -20,16 +20,22 @@ import { createFactoryRunApprovalHttpHandler } from "./factory-run-approval-http
 import { createDurableFactoryRunApprovalAuditSink } from "./factory-run-approval-audit.js";
 import { createFactoryRunExportApi } from "./factory-run-export-api.js";
 import { createFactoryRunExportHttpHandler } from "./factory-run-export-http.js";
+import { createFactoryRunDriverApi } from "./factory-run-driver-api.js";
+import { createFactoryRunDriverHttpHandler } from "./factory-run-driver-http.js";
 import {
   createPostgresFactoryPackageInstallRepository
 } from "../factory/packages/package-install-repository.js";
 import { createPostgresFactoryRunApprovalRepository } from "../factory/runs/run-approval-repository.js";
 import { createPostgresFactoryRunDeliverableRepository } from "../factory/runs/deliverable-repository.js";
+import { createPostgresFactoryRunRepository } from "../factory/runs/run-repository.js";
+import { createStubLLMProvider } from "../factory/providers/stub-provider.js";
+import type { BlueprintPackageDefinition } from "../factory/domain/types.js";
 import { allowAllPackageInstallEntitlements } from "../factory/packages/package-install-application-service.js";
 import { createDurableAuditSink } from "../audit/durable-audit.js";
 import { createAcidGuardRepository } from "../db/acid-guard-repository.js";
 import { createPgPool, createPgPoolQueryClient, createPgTransactionRunner } from "../db/postgres-client.js";
 import { createSupabaseRepositories, createSupabaseSecretRepository } from "../db/supabase-repositories.js";
+import type { QueryClient } from "../db/supabase-repositories.js";
 import {
   createPaperclipSecretAdminHttpClient,
   createPaperclipSecretBindingRepository,
@@ -277,6 +283,29 @@ function createRedispatchQueueJobId(input: {
 }): string {
   const digest = createHash("sha256").update(input.actionToken).digest("hex").slice(0, 12);
   return `${input.tenantId}:${input.workflowId}:${input.runId}:redispatch:${input.dispatchKind}:${digest}`;
+}
+
+function createPostgresBlueprintPackageForInstallLoader(input: {
+  queryClient: QueryClient;
+  loadBlueprintPackage: (input: { packageKey: string; packageVersionId?: string }) => Promise<BlueprintPackageDefinition>;
+}) {
+  return async function loadBlueprintPackageForInstall(installIdentity: {
+    packageId: string;
+    packageVersionId: string;
+  }): Promise<BlueprintPackageDefinition> {
+    const result = await input.queryClient.query(
+      "select package_key from wfpc.factory_blueprint_packages where package_id = $1",
+      [installIdentity.packageId]
+    );
+    const row = result.rows[0] as { package_key?: string } | undefined;
+    if (!row?.package_key) {
+      throw new Error(`Blueprint package "${installIdentity.packageId}" was not found in the catalog`);
+    }
+    return input.loadBlueprintPackage({
+      packageKey: row.package_key,
+      packageVersionId: installIdentity.packageVersionId
+    });
+  };
 }
 
 async function resolveTenantInstalledOverlayPackages(input: {
@@ -1104,6 +1133,26 @@ export function createDashboardRuntime(options: {
     runExportApi: factoryRunExportApi,
     rateLimiter: createPostgresFixedWindowRateLimiter({ runner: transactionRunner, limit: 60, windowMs: 60_000 })
   });
+  const factoryRunDriverApi = createFactoryRunDriverApi({
+    authenticate: options.auth.authenticate,
+    requireTenantMember: repositories.requireTenantMember,
+    packageInstallRepository: createPostgresFactoryPackageInstallRepository(queryClient),
+    loadBlueprintPackageForInstall: createPostgresBlueprintPackageForInstallLoader({
+      queryClient,
+      loadBlueprintPackage: createDemoPackageBlueprintLoader()
+    }),
+    provider: createStubLLMProvider(),
+    providerModel: "stub-deterministic-v1",
+    runRepository: createPostgresFactoryRunRepository(queryClient),
+    deliverableRepository: createPostgresFactoryRunDeliverableRepository(queryClient),
+    approvalRepository: createPostgresFactoryRunApprovalRepository(queryClient),
+    createRunId: () => `run_${randomUUID()}`
+  });
+  const factoryRunDriverHandler = createFactoryRunDriverHttpHandler({
+    allowedOrigins: options.env.allowedOrigins,
+    runDriverApi: factoryRunDriverApi,
+    rateLimiter: createPostgresFixedWindowRateLimiter({ runner: transactionRunner, limit: 60, windowMs: 60_000 })
+  });
   const runtimeHandler = async (request: DashboardHttpRequest): Promise<DashboardHttpResponse> => {
     if (request.path === "/health" || request.path === "/api/health") {
       return healthHandler(request);
@@ -1125,6 +1174,9 @@ export function createDashboardRuntime(options: {
     }
     if (request.path.startsWith("/api/factory/runs/") && request.path.endsWith("/export")) {
       return factoryRunExportHandler(request);
+    }
+    if (request.path === "/api/factory/runs" || /^\/api\/factory\/runs\/[^/]+$/.test(request.path)) {
+      return factoryRunDriverHandler(request);
     }
     if (request.path.startsWith("/api/factory/runs/")) {
       return factoryRunApprovalHandler(request);

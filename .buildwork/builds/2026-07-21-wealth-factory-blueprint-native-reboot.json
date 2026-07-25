@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 35,
+  "revision": 36,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -361,6 +361,10 @@
       "id": "DEC-042",
       "text": "Priority: a working END-TO-END CONVEYOR BELT comes before output polish. The build has proven each station and storage slice in isolation (install, RBAC/audit, mount, approval checkpoint, export) but there is NO run driver that sequences a run through its stations and NO mounted start/advance/status surface - each slice's tests seed their precondition rather than arriving by running the belt. Next focus: wire a driver + start-run surface so one run flows install -> start -> intake -> positioning -> checkpoint -> approve/revise -> ready -> export, driven, on the deterministic stub provider (live provider stays TASK-066). Output-polish features are backlog, deferred by the owner 2026-07-24: see TASK-081/082/083.",
       "rationale": "Owner (a $600-$2,000 product) correctly flagged that a one-page render is nowhere near the deliverable a buyer expects, but that presentation work is premature until a workpiece can actually traverse the whole line as a system. Proving the belt E2E on the stub is crew-safe (no real credential) and is the true spine; formats, cloud delivery, and brand kits hang off a working belt."
+    },
+    {
+      "id": "DEC-043",
+      "text": "TASK-084 run-driver scope calls, confirmed at sign-off: (a) POST /api/factory/runs accepts ANSWERS-AT-START only (the full IntakeAnswers payload up front, option A) - interactive/multi-turn intake is a deferred later pass. (b) The route accepts an OPTIONAL client-supplied runId as an idempotency key, falling back to a server-generated run_<uuid>; it is safe under the tenant-scoped (tenant_id, run_id) PK and tenant-scoped guards (cannot hijack or probe another tenant's run), but the client contract is worth owner confirmation before a UI is built against it. (c) The driver route resolves packageId->packageKey via a small inline seam (createPostgresBlueprintPackageForInstallLoader) in runtime-server.ts because the existing demo loader only accepts packageKey - a composition seam, not a new domain concept. The approval is created BY the flow via createApprovalRequest (TASK-077 subsumed); the revision re-run stays TASK-078."
     }
   ],
   "open_questions": [
@@ -2734,8 +2738,8 @@
     {
       "id": "TASK-077",
       "title": "Wire production run-flow creation of the pending factory approval via createApprovalRequest, with tenant-consistency checks",
-      "status": "pending",
-      "owner": "unassigned",
+      "status": "completed",
+      "owner": "crew",
       "dependencies": [
         "TASK-076"
       ],
@@ -2749,7 +2753,13 @@
         "src/api"
       ],
       "artifacts": [],
-      "evidence": [],
+      "evidence": [
+        {
+          "type": "auditor-signoff",
+          "reference": ".buildwork/crew/2026-07-21-wealth-factory-blueprint-native-reboot/findings/TASK-084-audit-1.md",
+          "summary": "Subsumed by TASK-084. The run driver creates the pending approval THROUGH the domain's completePositioningAnalysisWithProvider -> createApprovalRequest path (not a direct pending-row insert), carrying the run's own tenant/package/install/deliverable identity; the e2e asserts the pending approval exists after the driver runs, tenant-scoped, linked to the persisted positioning deliverable. Verified by the auditor in the TASK-084 sign-off."
+        }
+      ],
       "handoffs": [],
       "blockers": [],
       "progress": "Covers TASK-076 QC findings F2 (create path not via createApprovalRequest; no tenant-consistency check on linked install/deliverable) and F3's creation half (the production run flow does not yet create the approval when the positioning deliverable is produced; the TASK-076 e2e seeds it). run-approval-repository.ts createPendingApproval currently inserts the pending row directly, not through createApprovalRequest.",
@@ -2891,7 +2901,7 @@
       "id": "TASK-084",
       "title": "Run driver + start-run/status surface: drive one run install->intake->positioning->checkpoint on the stub provider (the conveyor-belt spine)",
       "progress": "First and central conveyor-belt slice (DEC-042). Today each station is proven in isolation but no driver sequences a run and no start/status route exists; slice tests seed their preconditions. This ticket builds the run state model + the driver that advances a run through its stations on the deterministic stub provider (DEC-040), and mounts the start + status routes. Intake uses answers-at-start (option A, owner-confirmed): the start call carries the intake payload; interactive intake is a later pass. Subsumes TASK-077 (the pending approval must be created BY the flow, through createApprovalRequest, when positioning completes) so the belt connects to the already-proven approval (TASK-076) and export (TASK-079) slices. Does NOT include the revision re-run (TASK-078 stays the immediate follow-on).",
-      "status": "pending",
+      "status": "completed",
       "owner": "crew",
       "dependencies": [
         "TASK-073",
@@ -2910,6 +2920,47 @@
         "src/factory",
         "src/api",
         "supabase/migrations"
+      ],
+      "artifacts": [
+        "supabase/migrations/0040_factory_runs.sql",
+        "src/factory/runs/run-repository.ts",
+        "src/factory/runs/run-driver-application-service.ts",
+        "src/api/factory-run-driver-api.ts",
+        "src/api/factory-run-driver-http.ts",
+        "src/api/runtime-server.ts",
+        "tests/factory-run-driver-application-service.test.ts",
+        "tests/factory-run-driver.integration.test.ts",
+        "tests/factory-run-driver-route-mounted.e2e.test.ts"
+      ],
+      "evidence": [
+        {
+          "type": "auditor-signoff",
+          "reference": ".buildwork/crew/2026-07-21-wealth-factory-blueprint-native-reboot/findings/TASK-084-audit-1.md",
+          "summary": "PASS. Direct-dispatch (DEC-041), COLLAPSED solo engineer. Auditor re-derived vs the live local disposable Postgres: the 3 new driver test files 7/7 (unit 2, integration 2, mounted e2e 3) run serially; tsc --noEmit exit 0; eslint clean on touched files. THE BELT MOVES END TO END: the e2e drives POST /api/factory/runs (answers-at-start) -> driver runs intake+positioning on the stub provider (DEC-040) -> GET status stopped at the positioning checkpoint with the pending approval -> the EXISTING approve route (TASK-076) -> the EXISTING export route (TASK-079) serves the kit with both deliverables. AC5 tenant isolation reproduced falsifiable BY THE AUDITOR on a clean container: sha256 3a722684..b7d, GREEN 2/2 -> stripped tenant_id=$1 from findByRunId -> RED (AC5 failed 'expected {..14} to be null', tenant B read tenant A's row) -> restored byte-identical (sha256 3a722684..b7d) -> GREEN 2/2. Dispatch ordering verified correct (export suffix, then exact/single-segment /runs driver, then generic /runs approval) - no path shadowing; existing export route green alone confirms no regression. TASK-077 subsumed (approval created by the flow via createApprovalRequest, not a direct insert); revision (TASK-078) correctly left unwired. 0040 RLS matches the 0037/0038/0039 sibling pattern (app-layer tenant_id scoping remains load-bearing). No defects; no fix cycle. Cross-file e2e collisions observed are the pre-existing TASK-080 fixture-isolation class, not introduced here. Recorded directly by the auditor (TASK-079 precedent); integrity rests on the independent re-derivation."
+        }
+      ],
+      "handoffs": [
+        "The E2E conveyor belt (DEC-042) is now DRIVEN: install->start->intake->positioning->checkpoint flows as one system on the stub provider, joining the existing approve (TASK-076) and export (TASK-079) slices. Immediate next slice: TASK-078 (wire the positioning revision re-run after request-changes). Answers-at-start only (interactive intake deferred, DEC-043)."
+      ],
+      "blockers": [],
+      "risks": []
+    },
+    {
+      "id": "TASK-085",
+      "title": "Make startFactoryRun idempotency concurrency-safe (atomic run-row claim), not just read-then-act",
+      "progress": "Auditor finding at TASK-084 sign-off. startFactoryRun guards on findByRunId (tenant-scoped) then proceeds; two CONCURRENT starts with the same runId could both pass the existence check before either persists, risking duplicate work/rows. Sequential retry (the real client case) is fully covered and proven. Low priority. Fix: claim the run row atomically first (insert ... on conflict do nothing, act only if this process won the claim), or wrap start in a transaction with a unique-constraint guard.",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-084"
+      ],
+      "acceptance_criteria": [
+        "startFactoryRun is safe under concurrent same-runId invocation: exactly one invocation runs the stations/persists; the other returns the existing run without duplicating any deliverable or approval",
+        "A test demonstrates two concurrent starts with the same runId produce no duplicate rows"
+      ],
+      "write_scope": [
+        "src/factory",
+        "src/api"
       ],
       "artifacts": [],
       "evidence": [],
@@ -3460,6 +3511,13 @@
       "actor": "auditor",
       "action": "add-task-084-conveyor-spine",
       "details": "Added TASK-084: the run-driver spine for the E2E conveyor belt (DEC-042). Builds the run state model + driver that sequences install->intake->positioning->checkpoint on the stub provider (DEC-040), and mounts POST /api/factory/runs (answers-at-start, option A) + GET /api/factory/runs/:runId status. Subsumes TASK-077 (approval created by the flow via createApprovalRequest). Leaves TASK-078 (revision re-run) as the immediate follow-on. Depends on TASK-073/076/079. Slicing decided by the auditor; DEC-042 direction and option-A intake were owner-confirmed."
+    },
+    {
+      "revision": 36,
+      "timestamp": "2026-07-25T02:00:00Z",
+      "actor": "auditor",
+      "action": "auditor-signoff-task-084-conveyor-spine",
+      "details": "Auditor signed off TASK-084 (run-driver spine) PASS: the E2E conveyor belt (DEC-042) now moves as one system on the stub provider (install->start->intake->positioning->checkpoint, joining the existing approve/export slices). Re-derived 7/7 driver tests + tsc 0 vs the live local Postgres; reproduced AC5 tenant-isolation falsifiability by hand (break->RED->restore byte-identical sha256->GREEN). Marked TASK-077 completed (subsumed - approval now created by the flow via createApprovalRequest). Added DEC-043 (answers-at-start only, optional client runId, packageId->packageKey seam) and TASK-085 (make start idempotency concurrency-safe, auditor finding, low priority). Immediate next slice: TASK-078 (revision re-run)."
     }
   ]
 }
