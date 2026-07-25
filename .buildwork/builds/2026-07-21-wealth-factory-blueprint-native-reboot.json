@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 34,
+  "revision": 35,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -2886,6 +2886,36 @@
       "handoffs": [],
       "blockers": [],
       "risks": []
+    },
+    {
+      "id": "TASK-084",
+      "title": "Run driver + start-run/status surface: drive one run install->intake->positioning->checkpoint on the stub provider (the conveyor-belt spine)",
+      "progress": "First and central conveyor-belt slice (DEC-042). Today each station is proven in isolation but no driver sequences a run and no start/status route exists; slice tests seed their preconditions. This ticket builds the run state model + the driver that advances a run through its stations on the deterministic stub provider (DEC-040), and mounts the start + status routes. Intake uses answers-at-start (option A, owner-confirmed): the start call carries the intake payload; interactive intake is a later pass. Subsumes TASK-077 (the pending approval must be created BY the flow, through createApprovalRequest, when positioning completes) so the belt connects to the already-proven approval (TASK-076) and export (TASK-079) slices. Does NOT include the revision re-run (TASK-078 stays the immediate follow-on).",
+      "status": "pending",
+      "owner": "crew",
+      "dependencies": [
+        "TASK-073",
+        "TASK-076",
+        "TASK-079"
+      ],
+      "acceptance_criteria": [
+        "A run state model persists a run's lifecycle tenant-scoped: a wfpc.factory_runs row (or equivalent) keyed by (tenant_id, run_id) recording package_install_id, status, and current/last-completed station, with a new migration in supabase/migrations. All reads/writes are app-layer tenant_id scoped (no reliance on RLS), consistent with the existing factory_run_deliverables (tenant_id, run_id) index.",
+        "A run driver in src/factory/runs sequences a run through its stations (intake -> positioning) using the deterministic stub provider behind the LLMProvider interface (DEC-040, no live credential), persisting each station's deliverable via the existing deliverable-repository and advancing the run's state. The driver is idempotent/safe to re-invoke (advancing an already-advanced run does not duplicate deliverables).",
+        "When positioning completes, the driver creates the pending approval THROUGH createApprovalRequest (approval-service.ts) with tenant-consistency checks on the linked package_install_id and deliverable_id (subsumes TASK-077), so the run stops at the checkpoint exactly as the TASK-076 approval slice expects - no direct pending-row insert.",
+        "A mounted POST /api/factory/runs in createDashboardRuntime (mirroring the TASK-073/076/079 slices) starts a run for the authenticated tenant member against an install they own, accepting the intake answers-at-start payload; and a mounted GET /api/factory/runs/:runId returns that run's status (state + station progress) tenant-scoped. RBAC and auth reuse the existing resolver; session.role is never trusted.",
+        "A second tenant provably cannot start or read the first tenant's run, proven by a test against the real local disposable Postgres (CON-012, never the VPS DB) that FAILS when the tenant guard is bypassed (falsifiability shown) and passes when restored byte-identical.",
+        "An e2e drives token -> POST /api/factory/runs (answers-at-start) -> driver runs intake+positioning on the stub -> GET status shows the run stopped at the approval checkpoint with the pending approval present -> the existing approve route (TASK-076) then yields ready_for_export -> the existing export route (TASK-079) serves the kit. The belt moves as one system over real HTTP against the local Postgres. No secrets in any artifact; every surfaced defect recorded as a task before it is fixed."
+      ],
+      "write_scope": [
+        "src/factory",
+        "src/api",
+        "supabase/migrations"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "risks": []
     }
   ],
   "risks": [
@@ -3423,6 +3453,13 @@
       "actor": "orchestrator",
       "action": "record-conveyor-priority-and-polish-backlog",
       "details": "Recorded DEC-042: an end-to-end conveyor belt (run driver + start/advance surface joining the proven stations) is the priority before output polish, driven on the stub provider. Captured owner-deferred polish as backlog TASK-081 (rendered HTML/PDF kit), TASK-082 (Drive/Dropbox delivery), TASK-083 (brand color/voice kit)."
+    },
+    {
+      "revision": 35,
+      "timestamp": "2026-07-25T00:00:00Z",
+      "actor": "auditor",
+      "action": "add-task-084-conveyor-spine",
+      "details": "Added TASK-084: the run-driver spine for the E2E conveyor belt (DEC-042). Builds the run state model + driver that sequences install->intake->positioning->checkpoint on the stub provider (DEC-040), and mounts POST /api/factory/runs (answers-at-start, option A) + GET /api/factory/runs/:runId status. Subsumes TASK-077 (approval created by the flow via createApprovalRequest). Leaves TASK-078 (revision re-run) as the immediate follow-on. Depends on TASK-073/076/079. Slicing decided by the auditor; DEC-042 direction and option-A intake were owner-confirmed."
     }
   ]
 }
