@@ -502,9 +502,9 @@ describe.skipIf(!LOCAL_PG_URL)(
       expect(approveRevisionBody.runOutcome).toBe("ready_for_export");
       expect(approveRevisionBody.approvalId).toBe(`approval_${runId}_positioning_revision_1`);
 
-      // AC5: export serves the kit whose positioning brief is the REVISED
-      // one -- assert the exported positioning body is the revision, not
-      // the original.
+      // TASK-086 AC2/AC5: export serves the kit CURATED to the approved
+      // positioning brief only -- the superseded original is not present --
+      // and the surviving positioning deliverable is the REVISED one.
       const exportResponse = await getExport({ token, runId });
       expect(exportResponse.status).toBe(200);
       const kit = (await exportResponse.json()) as {
@@ -512,20 +512,12 @@ describe.skipIf(!LOCAL_PG_URL)(
         deliverables: Array<{ stationKey: string; kind: string; body: { positioningSummary: string } }>;
       };
       expect(kit.runId).toBe(runId);
-      expect(kit.deliverables).toHaveLength(3);
+      expect(kit.deliverables).toHaveLength(2);
       const positioningDeliverables = kit.deliverables.filter((deliverable) => deliverable.stationKey === "positioning");
-      expect(positioningDeliverables).toHaveLength(2);
-      const revisedDeliverable = positioningDeliverables.find((deliverable) =>
-        deliverable.body.positioningSummary.includes("Revision focus:")
-      );
-      expect(revisedDeliverable).toBeDefined();
-      expect(revisedDeliverable?.body.positioningSummary).toContain(
+      expect(positioningDeliverables).toHaveLength(1);
+      expect(positioningDeliverables[0]?.body.positioningSummary).toContain(
         "Revision focus: Tighten the audience claim and clarify the proof of value."
       );
-      const originalDeliverable = positioningDeliverables.find(
-        (deliverable) => deliverable !== revisedDeliverable
-      );
-      expect(originalDeliverable?.body.positioningSummary).not.toContain("Revision focus:");
     });
 
     it("TASK-078 AC5: a second tenant cannot drive or read another tenant's revision -- proven falsifiable", async () => {

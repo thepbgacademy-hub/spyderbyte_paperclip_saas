@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 39,
+  "revision": 40,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -2995,7 +2995,7 @@
       "id": "TASK-086",
       "title": "Launch Kit export should curate to the latest-approved positioning brief, not bundle the superseded original",
       "progress": "Surfaced by TASK-078. assembleFactoryRunLaunchKit (run-export-application-service.ts) gates on the approved approval (findApprovedApprovalForRun) then bundles ALL run deliverables via listDeliverablesForRun. Once a run has a revision, that is intake founder_profile + the SUPERSEDED original positioning_brief + the approved positioning_brief_revision_1 -- so the customer's Launch Kit shows the rejected draft next to the final. FIX: the approved approval row already carries deliverableId (the exact positioning deliverable that was approved) -- curate the kit to keep every non-positioning deliverable plus only the positioning deliverable the approval points to, dropping the other positioning_brief*. Source of truth is the approval pointer, not string-matching 'revision_1'. Read-only over existing tables (no migration).",
-      "status": "pending",
+      "status": "completed",
       "owner": "crew",
       "dependencies": [
         "TASK-079",
@@ -3013,9 +3013,20 @@
         "src/factory",
         "src/api"
       ],
-      "artifacts": [],
-      "evidence": [],
-      "handoffs": [],
+      "artifacts": [
+        "src/factory/runs/run-export-application-service.ts",
+        "tests/factory-run-driver-route-mounted.e2e.test.ts"
+      ],
+      "evidence": [
+        {
+          "type": "auditor-signoff",
+          "reference": ".buildwork/crew/2026-07-21-wealth-factory-blueprint-native-reboot/findings/TASK-086-audit-1.md",
+          "summary": "PASS. Direct-dispatch (DEC-041), COLLAPSED solo engineer. assembleFactoryRunLaunchKit now curates the kit to the positioning deliverable the approved approval points at (filter keyed on approval.stationKey/deliverableId, NO 'revision_1' string match, order-preserving, applied AFTER the existing tenant-scoped reads) -- the customer's Launch Kit no longer shows the superseded original draft next to the revised one. Auditor re-derived vs the live local Postgres: tsc 0; driver e2e 5/5 (AC2/AC5 revised run's kit = intake + the single REVISED positioning; original gone); export e2e 3/3 (AC3 non-revised run unchanged = intake + original, filter is a proven no-op there; AC4 cross-tenant denied). AC4 falsifiability reproduced BY THE AUDITOR: sha256 9b53846d..e3d0, GREEN 3/3 -> stripped tenant_id=$1 from findApprovedApprovalForRun -> RED (cross-tenant export test: expected 200 to be 404, tenant B exported tenant A's run) -> restored byte-identical (sha256 9b53846d..e3d0) -> GREEN 3/3. Test edit vetted: the TASK-078 revised-run assertion flip (length 3->2, positioning 2->1) preserves the revised-brief + all tenant-isolation assertions -- a correct update, not a weakening. No new query, no weakened guard, no migration. No defects; no fix cycle. Recorded directly by the auditor; integrity rests on the independent re-derivation."
+        }
+      ],
+      "handoffs": [
+        "The Launch Kit now presents only the approved positioning brief (revised when a revision exists, original otherwise), keyed off the approval's own deliverableId. Customer-facing export is correct. Belt + export are MVP-complete on the stub path; remaining: owner-deferred output polish TASK-081/082/083 and the first live provider call TASK-066."
+      ],
       "blockers": [],
       "risks": []
     }
@@ -3590,6 +3601,13 @@
       "actor": "auditor",
       "action": "scope-task-086-export-curation",
       "details": "Enriched TASK-086 for dispatch: curate assembleFactoryRunLaunchKit to present only the approval-pointed positioning deliverable (dropping the superseded original) using approval.deliverableId as source of truth, keep intake unchanged, prove revised + non-revised runs, preserve cross-tenant isolation, and update the TASK-078 e2e's 3-deliverable assertion to the curated shape. Owner=crew, deps TASK-079/078."
+    },
+    {
+      "revision": 40,
+      "timestamp": "2026-07-25T06:00:00Z",
+      "actor": "auditor",
+      "action": "auditor-signoff-task-086-export-curation",
+      "details": "Auditor signed off TASK-086 (curate Launch Kit export to the approved positioning) PASS: assembleFactoryRunLaunchKit filters to the approval-pointed positioning deliverable (approval.stationKey/deliverableId, no string match), dropping the superseded original; intake unchanged. Re-derived tsc 0 + driver 5/5 + export 3/3 vs the live local Postgres; reproduced export cross-tenant falsifiability by hand (strip findApprovedApprovalForRun tenant guard -> RED 200-not-404 -> restore byte-identical sha256 -> GREEN). Vetted the TASK-078 e2e assertion flip as a correct update, not a weakening. Read-only, no migration, no guard weakened. Customer-facing Launch Kit is now correct."
     }
   ]
 }

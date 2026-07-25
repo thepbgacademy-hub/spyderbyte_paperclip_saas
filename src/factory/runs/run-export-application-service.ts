@@ -55,13 +55,22 @@ export async function assembleFactoryRunLaunchKit(input: {
     runId: input.runId
   });
 
+  // TASK-086: a revised, approved run has both the superseded original and
+  // the approved revision persisted under the same stationKey (TASK-078).
+  // Curate to the one the approval actually points at -- deliverableId, not
+  // a "revision_1" string match -- so the export never leaks the rejected
+  // draft. Other stations (e.g. intake) pass through unchanged.
+  const curatedDeliverables = deliverables.filter(
+    (deliverable) => deliverable.stationKey !== approval.stationKey || deliverable.deliverableId === approval.deliverableId
+  );
+
   return {
     runId: input.runId,
     packageId: approval.packageId,
     packageVersionId: approval.packageVersionId,
     packageInstallId: approval.packageInstallId,
     approvedAt: approval.resolvedAt ?? approval.requestedAt,
-    deliverables: deliverables.map((deliverable) => ({
+    deliverables: curatedDeliverables.map((deliverable) => ({
       stationKey: deliverable.stationKey,
       kind: deliverable.kind,
       title: deliverable.title,
