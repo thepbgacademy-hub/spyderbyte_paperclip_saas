@@ -1115,7 +1115,14 @@ export function createDashboardRuntime(options: {
     authenticate: options.auth.authenticate,
     requireTenantMember: repositories.requireTenantMember,
     repository: createPostgresFactoryRunApprovalRepository(queryClient),
-    auditSink: createDurableFactoryRunApprovalAuditSink(queryClient)
+    auditSink: createDurableFactoryRunApprovalAuditSink(queryClient),
+    packageInstallRepository: createPostgresFactoryPackageInstallRepository(queryClient),
+    loadBlueprintPackageForInstall: createPostgresBlueprintPackageForInstallLoader({
+      queryClient,
+      loadBlueprintPackage: createDemoPackageBlueprintLoader()
+    }),
+    runRepository: createPostgresFactoryRunRepository(queryClient),
+    deliverableRepository: createPostgresFactoryRunDeliverableRepository(queryClient)
   });
   const factoryRunApprovalHandler = createFactoryRunApprovalHttpHandler({
     allowedOrigins: options.env.allowedOrigins,

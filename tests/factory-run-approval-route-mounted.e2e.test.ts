@@ -25,6 +25,7 @@ import { installBlueprintPackageForTenant } from "../src/factory/packages/packag
 import type { TenantPackageInstallActor } from "../src/factory/packages/package-install-application-service.js";
 import { createPostgresFactoryRunDeliverableRepository } from "../src/factory/runs/deliverable-repository.js";
 import { createPostgresFactoryRunApprovalRepository } from "../src/factory/runs/run-approval-repository.js";
+import { createPostgresFactoryRunRepository } from "../src/factory/runs/run-repository.js";
 
 const LOCAL_PG_URL = process.env.WF_LOCAL_PG_URL;
 const SESSION_ENV = {
@@ -149,6 +150,59 @@ const installIdByTenant = new Map<string, string>();
         }
       });
       return approvalId;
+    }
+
+    /**
+     * TASK-078: request_changes now also drives the positioning revision
+     * re-run (reviseFactoryRunPositioning), which needs a real run row and
+     * the intake founder_profile deliverable to exist -- the same
+     * prerequisites startFactoryRun always creates together in production.
+     * seedDeliverable/seedPendingApproval alone (TASK-076) only seed the
+     * positioning_brief + its approval, so the request-changes test seeds
+     * this run-level state too.
+     */
+    async function seedRunReadyForRevision(input: {
+      tenantId: string;
+      installId: string;
+      runId: string;
+      deliverableId: string;
+      approvalId: string;
+    }): Promise<void> {
+      const runRepository = createPostgresFactoryRunRepository(seedClient);
+      await runRepository.upsert({
+        runId: input.runId,
+        tenantId: input.tenantId,
+        packageInstallId: input.installId,
+        packageId: blueprint.packageId,
+        packageVersionId: blueprint.packageVersionId,
+        status: "waiting_for_approval",
+        currentStationKey: "positioning",
+        completedStationKey: null,
+        activeDeliverableId: input.deliverableId,
+        activeApprovalId: input.approvalId,
+        activeApprovalContractKey: "original",
+        positioningRevisionGeneration: 0,
+        startedAt: new Date().toISOString(),
+        completedAt: null
+      });
+
+      const deliverableRepository = createPostgresFactoryRunDeliverableRepository(seedClient);
+      await deliverableRepository.save({
+        deliverableId: `deliverable_${input.runId}_founder_profile`,
+        tenantId: input.tenantId,
+        runId: input.runId,
+        packageInstallId: input.installId,
+        stationKey: "intake",
+        kind: "founder_profile",
+        title: "Founder Profile",
+        body: {
+          founderName: "Test Founder",
+          businessName: "Test Business",
+          primaryGoal: "Test goal",
+          targetAudience: "Test audience",
+          summary: "Test summary"
+        }
+      });
     }
 
     beforeAll(async () => {
@@ -296,7 +350,8 @@ const installIdByTenant = new Map<string, string>();
       const tenantAInstallId = await ensureTenantInstall({ tenantId: tenantAId, ownerUserId: ownerAUserId });
       const { installId, deliverableId } = await seedDeliverable({ tenantId: tenantAId, installId: tenantAInstallId });
       const runId = deliverableId.replace("deliverable_", "").replace("_positioning_brief", "");
-      await seedPendingApproval({ tenantId: tenantAId, installId, deliverableId, runId });
+      const approvalId = await seedPendingApproval({ tenantId: tenantAId, installId, deliverableId, runId });
+      await seedRunReadyForRevision({ tenantId: tenantAId, installId, runId, deliverableId, approvalId });
 
       const response = await postDecision({
         token: mintToken({ tenantId: tenantAId, userId: ownerAUserId }),
@@ -310,6 +365,14 @@ const installIdByTenant = new Map<string, string>();
       expect(body.status).toBe("changes_requested");
       expect(body.runOutcome).toBe("awaiting_revision");
       expect(body.resolutionSummary).toBe("Please sharpen the positioning summary");
+
+      // TASK-078: the mounted route also drove the positioning revision
+      // re-run -- the run row moved onto the revision_1 contract.
+      const runRepository = createPostgresFactoryRunRepository(seedClient);
+      const revisedRunRow = await runRepository.findByRunId({ tenantId: tenantAId, runId });
+      expect(revisedRunRow?.status).toBe("waiting_for_approval");
+      expect(revisedRunRow?.activeApprovalContractKey).toBe("revision_1");
+      expect(revisedRunRow?.positioningRevisionGeneration).toBe(1);
     });
 
     it("AC3: a second tenant is DENIED acting on the first tenant's pending approval -- proven falsifiable", async () => {

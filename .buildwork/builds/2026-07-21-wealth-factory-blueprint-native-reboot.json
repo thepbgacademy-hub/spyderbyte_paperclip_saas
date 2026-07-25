@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 37,
+  "revision": 38,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -365,6 +365,10 @@
     {
       "id": "DEC-043",
       "text": "TASK-084 run-driver scope calls, confirmed at sign-off: (a) POST /api/factory/runs accepts ANSWERS-AT-START only (the full IntakeAnswers payload up front, option A) - interactive/multi-turn intake is a deferred later pass. (b) The route accepts an OPTIONAL client-supplied runId as an idempotency key, falling back to a server-generated run_<uuid>; it is safe under the tenant-scoped (tenant_id, run_id) PK and tenant-scoped guards (cannot hijack or probe another tenant's run), but the client contract is worth owner confirmation before a UI is built against it. (c) The driver route resolves packageId->packageKey via a small inline seam (createPostgresBlueprintPackageForInstallLoader) in runtime-server.ts because the existing demo loader only accepts packageKey - a composition seam, not a new domain concept. The approval is created BY the flow via createApprovalRequest (TASK-077 subsumed); the revision re-run stays TASK-078."
+    },
+    {
+      "id": "DEC-044",
+      "text": "TASK-078 revision known limitations, accepted at sign-off: (a) the revised positioning brief's 'Revision focus:' text reuses the single client-supplied resolutionSummary for both the change request and the deliverable's stated revision focus, because DEC-040's stub has no separate content channel; a live-provider revision (TASK-066) would decide whether the requester's feedback and the deliverable's revision focus diverge. (b) reviseFactoryRunPositioning is non-atomic across its two persist steps (run-transition upsert, then revision_1 deliverable/approval): a crash in that narrow window leaves the run at waiting_for_input / gen 0 with no pending approval to resume from. Same atomicity class as TASK-085; a durable fix wraps the op transactionally. Neither blocks the belt on the deterministic stub path."
     }
   ],
   "open_questions": [
@@ -2768,7 +2772,7 @@
     {
       "id": "TASK-078",
       "title": "Wire the positioning revision re-run to produce revision_1 after request-changes",
-      "status": "pending",
+      "status": "completed",
       "owner": "crew",
       "dependencies": [
         "TASK-076",
@@ -2786,9 +2790,24 @@
         "src/factory",
         "src/api"
       ],
-      "artifacts": [],
-      "evidence": [],
-      "handoffs": [],
+      "artifacts": [
+        "src/factory/runs/run-driver-application-service.ts",
+        "src/api/factory-run-approval-api.ts",
+        "src/api/factory-run-driver-api.ts",
+        "src/api/runtime-server.ts",
+        "tests/factory-run-driver-route-mounted.e2e.test.ts",
+        "tests/factory-run-approval-route-mounted.e2e.test.ts"
+      ],
+      "evidence": [
+        {
+          "type": "auditor-signoff",
+          "reference": ".buildwork/crew/2026-07-21-wealth-factory-blueprint-native-reboot/findings/TASK-078-audit-1.md",
+          "summary": "PASS. Direct-dispatch (DEC-041), COLLAPSED solo engineer. The DEC-042 approve/REVISE fork is now real: request_changes drives reviseFactoryRunPositioning (composing the existing domain fns requestChangesForPositioningAnalysis -> revisePositioningAnalysisAfterChangesRequested on the stub, DEC-040) to produce+persist revision_1 deliverable + new pending approval + updated run row, wired into the mounted decision route. Auditor re-derived vs the live local Postgres: tsc 0; the 3 route e2e files pass serially (driver 5/5, approval 4/4, export 3/3). Full belt proven: start->checkpoint->request_changes->revision_1-> approve->export serves the kit whose positioning brief is the REVISED one (positioningSummary contains 'Revision focus:', distinct from the original). One-revision cap honored (2nd request_changes -> 400, revision_1 stays pending). Idempotent (re-invoke -> no dup rows). Falsifiability reproduced BY THE AUDITOR: sha256 9b53846d..e3d0 of run-approval-repository.ts, GREEN -> stripped tenant_id=$1 from findPendingApprovalForRun -> RED (cross-tenant revision test: expected 409 to be 404, tenant denial gone) -> restored byte-identical (sha256 9b53846d..e3d0) -> GREEN 5/5. Test modification vetted: the TASK-076 AC2 test edit STRENGTHENS (original assertions preserved + run-row/founder_profile seeding the new side effect needs + new revision_1-contract assertions), not a weakening. No defects; no fix cycle. Follow-ups recorded: TASK-086 (export bundles the superseded original brief) + DEC-044 (revision content channel; non-atomic revision op). Recorded directly by the auditor; integrity rests on the independent re-derivation."
+        }
+      ],
+      "handoffs": [
+        "The conveyor belt's approve/revise fork is closed. Belt now flows both branches: approve->export, and request_changes->revision_1->approve->export (serving the revised brief). Follow-ups: TASK-086 (export should curate to the latest-approved positioning, not bundle the superseded draft), DEC-044 limitations, TASK-085 (atomicity class)."
+      ],
       "blockers": [],
       "progress": "The positioning revision DOMAIN already exists as proven pure functions in positioning-station-service.ts: requestChangesForPositioningAnalysis transitions the run to the revision-ready state (currentStationKey=positioning, status=waiting_for_input, revisionGen=0, active approval cleared), and revisePositioningAnalysisAfterChangesRequested produces revision_1 + a new pending approval (approval_<runId>_positioning_revision_1, contract revision_1) on the stub provider. GAP: the mounted decision route (TASK-076 decideFactoryRunApproval) only persists the approval row (changes_requested, runOutcome awaiting_revision); it predates factory_runs (0040/TASK-084), so it does NOT transition the run row and does NOT produce the revision deliverable. TASK-078 drives the revision as a persistence+driver op (like TASK-084) and wires the request_changes decision to it so the belt advances to a re-approvable revision_1 and then to export.",
       "risks": []
@@ -2961,6 +2980,30 @@
       "acceptance_criteria": [
         "startFactoryRun is safe under concurrent same-runId invocation: exactly one invocation runs the stations/persists; the other returns the existing run without duplicating any deliverable or approval",
         "A test demonstrates two concurrent starts with the same runId produce no duplicate rows"
+      ],
+      "write_scope": [
+        "src/factory",
+        "src/api"
+      ],
+      "artifacts": [],
+      "evidence": [],
+      "handoffs": [],
+      "blockers": [],
+      "risks": []
+    },
+    {
+      "id": "TASK-086",
+      "title": "Launch Kit export should curate to the latest-approved positioning brief, not bundle the superseded original",
+      "progress": "Surfaced by TASK-078: once a run has a revision, the export (TASK-079) bundles ALL run deliverables — intake + original positioning_brief + positioning_brief_revision_1 — so a customer's Launch Kit shows the REJECTED original draft next to the final revised brief. The export/render layer should present only the latest-approved positioning (the revision_1 when it exists), or the renderer (TASK-081) should curate it. Product/correctness of the customer-facing artifact, not a tenant-isolation issue.",
+      "status": "pending",
+      "owner": "unassigned",
+      "dependencies": [
+        "TASK-079",
+        "TASK-078"
+      ],
+      "acceptance_criteria": [
+        "When a run has an approved revision_1 positioning brief, the exported Launch Kit presents that revision as the positioning deliverable and does NOT present the superseded original as a co-equal deliverable (curate or clearly mark it)",
+        "A test proves a revised run's export surfaces the revision, not the rejected original, as the positioning result"
       ],
       "write_scope": [
         "src/factory",
@@ -3529,6 +3572,13 @@
       "actor": "auditor",
       "action": "scope-task-078-revision-rerun",
       "details": "Enriched TASK-078 acceptance criteria for dispatch: drive the positioning revision re-run as a persistence+driver op over the existing domain fns (requestChangesForPositioningAnalysis + revisePositioningAnalysisAfterChangesRequested) on the stub provider, wire the mounted request_changes decision to produce+persist revision_1 + its pending approval + updated run row, honor the one-revision cap, and prove the belt advances start->checkpoint->request_changes->revision_1->approve->export via e2e with falsifiable tenant isolation. Set owner=crew, deps TASK-076+TASK-084."
+    },
+    {
+      "revision": 38,
+      "timestamp": "2026-07-25T04:00:00Z",
+      "actor": "auditor",
+      "action": "auditor-signoff-task-078-revision-rerun",
+      "details": "Auditor signed off TASK-078 (positioning revision re-run) PASS: the DEC-042 approve/REVISE fork is real — request_changes drives reviseFactoryRunPositioning (existing domain fns on the stub) to produce+persist revision_1 + pending approval + run row, wired into the mounted decision route. Re-derived tsc 0 + driver 5/5 / approval 4/4 / export 3/3 serially vs the live local Postgres; reproduced tenant-isolation falsifiability by hand (strip findPendingApprovalForRun tenant guard -> RED 409-not-404 -> restore byte-identical sha256 -> GREEN). Vetted the TASK-076 test edit as a strengthening, not a weakening. Added DEC-044 (revision content channel + non-atomic op) and TASK-086 (export should curate to the latest-approved positioning). The conveyor belt now flows BOTH branches end to end."
     }
   ]
 }

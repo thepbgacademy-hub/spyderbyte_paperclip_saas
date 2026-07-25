@@ -71,7 +71,7 @@ function toStatusDto(run: IntakeRun): FactoryRunStatusDto {
   };
 }
 
-function toPackageInstallDomain(row: {
+export function toPackageInstallDomain(row: {
   installId: string;
   tenantId: string;
   packageId: string;

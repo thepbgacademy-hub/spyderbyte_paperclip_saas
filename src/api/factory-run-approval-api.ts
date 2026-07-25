@@ -1,4 +1,5 @@
 import { TenantMembershipRequiredError } from "../db/supabase-repositories.js";
+import type { BlueprintPackageDefinition, Workspace } from "../factory/domain/types.js";
 import {
   decideFactoryRunApproval,
   FactoryRunApprovalConflictError,
@@ -7,7 +8,12 @@ import {
   type FactoryRunApprovalDecision,
   type FactoryRunOutcome
 } from "../factory/runs/run-approval-application-service.js";
-import type { FactoryRunApprovalRepository } from "../factory/runs/run-approval-repository.js";
+import { reviseFactoryRunPositioning } from "../factory/runs/run-driver-application-service.js";
+import type { FactoryRunApprovalRepository, FactoryRunApprovalRow } from "../factory/runs/run-approval-repository.js";
+import type { FactoryRunDeliverableRepository } from "../factory/runs/deliverable-repository.js";
+import type { FactoryRunRepository } from "../factory/runs/run-repository.js";
+import type { FactoryPackageInstallRepository } from "../factory/packages/package-install-repository.js";
+import { toPackageInstallDomain } from "./factory-run-driver-api.js";
 import type { FactoryRunApprovalAuditSink } from "./factory-run-approval-audit.js";
 
 export type FactoryRunApprovalApiSession = {
@@ -36,6 +42,13 @@ export type FactoryRunApprovalApiDeps = {
   requireTenantMember(input: { tenantId: string; userId: string }): Promise<void>;
   repository: FactoryRunApprovalRepository;
   auditSink: FactoryRunApprovalAuditSink;
+  packageInstallRepository: FactoryPackageInstallRepository;
+  loadBlueprintPackageForInstall(input: {
+    packageId: string;
+    packageVersionId: string;
+  }): Promise<BlueprintPackageDefinition>;
+  runRepository: FactoryRunRepository;
+  deliverableRepository: FactoryRunDeliverableRepository;
 };
 
 type AuthenticatedRequest = {
@@ -44,6 +57,44 @@ type AuthenticatedRequest = {
 };
 
 export function createFactoryRunApprovalApi(deps: FactoryRunApprovalApiDeps) {
+  async function driveRevisionAfterChangesRequested(input: {
+    tenantId: string;
+    runId: string;
+    decidedApproval: FactoryRunApprovalRow;
+    decidedAt: string;
+  }): Promise<void> {
+    const installRow = await deps.packageInstallRepository.findInstallById({
+      tenantId: input.tenantId,
+      installId: input.decidedApproval.packageInstallId
+    });
+    if (!installRow) {
+      throw new Error(`Blueprint install "${input.decidedApproval.packageInstallId}" was not found`);
+    }
+    const blueprint = await deps.loadBlueprintPackageForInstall({
+      packageId: input.decidedApproval.packageId,
+      packageVersionId: input.decidedApproval.packageVersionId
+    });
+    const workspace: Workspace = {
+      id: input.tenantId,
+      name: input.tenantId,
+      slug: input.tenantId,
+      status: "active",
+      createdAt: input.decidedAt
+    };
+
+    await reviseFactoryRunPositioning({
+      workspace,
+      packageInstall: toPackageInstallDomain(installRow),
+      blueprint,
+      runId: input.runId,
+      decidedApproval: input.decidedApproval,
+      revisionRequestedAt: input.decidedAt,
+      runRepository: deps.runRepository,
+      deliverableRepository: deps.deliverableRepository,
+      approvalRepository: deps.repository
+    });
+  }
+
   async function createActor(request: AuthenticatedRequest) {
     const session = await deps.authenticate({
       authorization: request.authorization,
@@ -82,6 +133,17 @@ export function createFactoryRunApprovalApi(deps: FactoryRunApprovalApiDeps) {
           repository: deps.repository
         })
       );
+
+      if (result.runOutcome === "awaiting_revision") {
+        await withApiErrors(() =>
+          driveRevisionAfterChangesRequested({
+            tenantId: actor.tenantId,
+            runId: request.runId,
+            decidedApproval: result.approval,
+            decidedAt: request.decidedAt
+          })
+        );
+      }
 
       await deps.auditSink({
         tenantId: actor.tenantId,

@@ -27,6 +27,10 @@ import { createPostgresFactoryPackageInstallRepository } from "../src/factory/pa
 import { installBlueprintPackageForTenant } from "../src/factory/packages/package-install-application-service.js";
 import type { TenantPackageInstallActor } from "../src/factory/packages/package-install-application-service.js";
 import { createPostgresFactoryRunRepository } from "../src/factory/runs/run-repository.js";
+import { createPostgresFactoryRunDeliverableRepository } from "../src/factory/runs/deliverable-repository.js";
+import { createPostgresFactoryRunApprovalRepository } from "../src/factory/runs/run-approval-repository.js";
+import { reviseFactoryRunPositioning } from "../src/factory/runs/run-driver-application-service.js";
+import { toPackageInstallDomain } from "../src/api/factory-run-driver-api.js";
 
 const LOCAL_PG_URL = process.env.WF_LOCAL_PG_URL;
 const SESSION_ENV = {
@@ -223,6 +227,35 @@ describe.skipIf(!LOCAL_PG_URL)(
       });
     }
 
+    async function postDecision(input: {
+      token: string;
+      runId: string;
+      action: "approve" | "request-changes";
+      resolutionSummary?: string;
+    }) {
+      return fetch(`${baseUrl}/api/factory/runs/${input.runId}/approval/${input.action}`, {
+        method: "POST",
+        headers: {
+          origin: ALLOWED_ORIGIN,
+          authorization: `Bearer ${input.token}`,
+          "content-type": "application/json"
+        },
+        body: JSON.stringify(
+          input.resolutionSummary === undefined ? {} : { resolutionSummary: input.resolutionSummary }
+        )
+      });
+    }
+
+    async function getExport(input: { token: string; runId: string }) {
+      return fetch(`${baseUrl}/api/factory/runs/${input.runId}/export`, {
+        method: "GET",
+        headers: {
+          origin: ALLOWED_ORIGIN,
+          authorization: `Bearer ${input.token}`
+        }
+      });
+    }
+
     it("AC4/AC6: drives the whole belt end to end -- start, status, approve, export", async () => {
       const installId = await ensureTenantInstall({ tenantId: tenantAId, ownerUserId: ownerAUserId });
       const token = mintToken({ tenantId: tenantAId, userId: ownerAUserId });
@@ -349,6 +382,214 @@ describe.skipIf(!LOCAL_PG_URL)(
       expect(ownRead).not.toBeNull();
       const ownTenantStatus = await getStatus({ token: tenantAToken, runId: startedBody.runId });
       expect(ownTenantStatus.status).toBe(200);
+    });
+
+    it("TASK-078 AC1/AC2/AC4/AC5: request_changes drives the revision re-run -- request-changes -> revision_1 produced -> approve -> export serves the REVISED brief", async () => {
+      const installId = await ensureTenantInstall({ tenantId: tenantAId, ownerUserId: ownerAUserId });
+      const token = mintToken({ tenantId: tenantAId, userId: ownerAUserId });
+
+      const startResponse = await postStart({ token, packageInstallId: installId });
+      expect(startResponse.status).toBe(201);
+      const started = (await startResponse.json()) as { runId: string };
+      const runId = started.runId;
+
+      const requestChangesResponse = await postDecision({
+        token,
+        runId,
+        action: "request-changes",
+        resolutionSummary: "Tighten the audience claim and clarify the proof of value."
+      });
+      expect(requestChangesResponse.status).toBe(200);
+      const requestChangesBody = (await requestChangesResponse.json()) as {
+        status: string;
+        runOutcome: string;
+      };
+      expect(requestChangesBody.status).toBe("changes_requested");
+      expect(requestChangesBody.runOutcome).toBe("awaiting_revision");
+
+      // AC2: the run row itself was driven to the revision_1 contract --
+      // waiting_for_approval again, positioningRevisionGeneration 1.
+      const runRepository = createPostgresFactoryRunRepository(seedClient);
+      const revisedRunRow = await runRepository.findByRunId({ tenantId: tenantAId, runId });
+      expect(revisedRunRow?.status).toBe("waiting_for_approval");
+      expect(revisedRunRow?.currentStationKey).toBe("positioning");
+      expect(revisedRunRow?.positioningRevisionGeneration).toBe(1);
+      expect(revisedRunRow?.activeApprovalContractKey).toBe("revision_1");
+
+      const revisionDeliverableRows = await seedClient.query(
+        "select deliverable_id, body from wfpc.factory_run_deliverables where tenant_id = $1 and run_id = $2 and deliverable_id = $3",
+        [tenantAId, runId, `deliverable_${runId}_positioning_brief_revision_1`]
+      );
+      expect(revisionDeliverableRows.rows).toHaveLength(1);
+
+      const revisionApprovalRows = await seedClient.query(
+        "select approval_id, contract_key, approval_status from wfpc.factory_run_approvals where tenant_id = $1 and run_id = $2 and contract_key = 'revision_1'",
+        [tenantAId, runId]
+      );
+      expect(revisionApprovalRows.rows).toHaveLength(1);
+      expect((revisionApprovalRows.rows[0] as { approval_status: string }).approval_status).toBe("pending");
+
+      const originalApprovalRows = await seedClient.query(
+        "select approval_status from wfpc.factory_run_approvals where tenant_id = $1 and run_id = $2 and contract_key = 'original'",
+        [tenantAId, runId]
+      );
+      expect(originalApprovalRows.rows).toHaveLength(1);
+      expect((originalApprovalRows.rows[0] as { approval_status: string }).approval_status).toBe("changes_requested");
+
+      // AC4: re-invoking the revision driver op directly is idempotent -- no
+      // second revision_1 row, no duplicate deliverable.
+      const installRepositoryForRetry = createPostgresFactoryPackageInstallRepository(seedClient);
+      const installRow = await installRepositoryForRetry.findInstallById({ tenantId: tenantAId, installId });
+      if (!installRow) {
+        throw new Error(`Blueprint install "${installId}" was not found while retrying the revision op`);
+      }
+      const secondRevisionOutcome = await reviseFactoryRunPositioning({
+        workspace: { id: tenantAId, name: tenantAId, slug: tenantAId, status: "active", createdAt: new Date().toISOString() },
+        packageInstall: toPackageInstallDomain(installRow),
+        blueprint,
+        runId,
+        decidedApproval: {
+          approvalId: `approval_${runId}_positioning`,
+          tenantId: tenantAId,
+          runId,
+          packageId: blueprint.packageId,
+          packageVersionId: blueprint.packageVersionId,
+          packageInstallId: installId,
+          stationKey: "positioning",
+          deliverableId: `deliverable_${runId}_positioning_brief`,
+          contractKey: "original",
+          status: "changes_requested",
+          requestedAt: new Date().toISOString(),
+          resolvedAt: new Date().toISOString(),
+          resolutionSummary: "Tighten the audience claim and clarify the proof of value."
+        },
+        revisionRequestedAt: new Date().toISOString(),
+        runRepository: createPostgresFactoryRunRepository(seedClient),
+        deliverableRepository: createPostgresFactoryRunDeliverableRepository(seedClient),
+        approvalRepository: createPostgresFactoryRunApprovalRepository(seedClient)
+      });
+      expect(secondRevisionOutcome.run.positioningRevisionGeneration).toBe(1);
+      const revisionDeliverableRowsAfterRetry = await seedClient.query(
+        "select deliverable_id from wfpc.factory_run_deliverables where tenant_id = $1 and run_id = $2 and deliverable_id = $3",
+        [tenantAId, runId, `deliverable_${runId}_positioning_brief_revision_1`]
+      );
+      expect(revisionDeliverableRowsAfterRetry.rows).toHaveLength(1);
+      const revisionApprovalRowsAfterRetry = await seedClient.query(
+        "select approval_id from wfpc.factory_run_approvals where tenant_id = $1 and run_id = $2 and contract_key = 'revision_1'",
+        [tenantAId, runId]
+      );
+      expect(revisionApprovalRowsAfterRetry.rows).toHaveLength(1);
+
+      // AC3: the one-revision cap is honored -- request_changes on the
+      // revision_1 approval is rejected; only approval is possible now.
+      const secondRequestChangesResponse = await postDecision({
+        token,
+        runId,
+        action: "request-changes",
+        resolutionSummary: "One more pass please"
+      });
+      expect(secondRequestChangesResponse.status).toBe(400);
+      const revisionStillPending = await seedClient.query(
+        "select approval_status from wfpc.factory_run_approvals where tenant_id = $1 and run_id = $2 and contract_key = 'revision_1'",
+        [tenantAId, runId]
+      );
+      expect((revisionStillPending.rows[0] as { approval_status: string }).approval_status).toBe("pending");
+
+      // Approve the revision_1 checkpoint -> ready_for_export.
+      const approveRevisionResponse = await postDecision({ token, runId, action: "approve" });
+      expect(approveRevisionResponse.status).toBe(200);
+      const approveRevisionBody = (await approveRevisionResponse.json()) as { runOutcome: string; approvalId: string };
+      expect(approveRevisionBody.runOutcome).toBe("ready_for_export");
+      expect(approveRevisionBody.approvalId).toBe(`approval_${runId}_positioning_revision_1`);
+
+      // AC5: export serves the kit whose positioning brief is the REVISED
+      // one -- assert the exported positioning body is the revision, not
+      // the original.
+      const exportResponse = await getExport({ token, runId });
+      expect(exportResponse.status).toBe(200);
+      const kit = (await exportResponse.json()) as {
+        runId: string;
+        deliverables: Array<{ stationKey: string; kind: string; body: { positioningSummary: string } }>;
+      };
+      expect(kit.runId).toBe(runId);
+      expect(kit.deliverables).toHaveLength(3);
+      const positioningDeliverables = kit.deliverables.filter((deliverable) => deliverable.stationKey === "positioning");
+      expect(positioningDeliverables).toHaveLength(2);
+      const revisedDeliverable = positioningDeliverables.find((deliverable) =>
+        deliverable.body.positioningSummary.includes("Revision focus:")
+      );
+      expect(revisedDeliverable).toBeDefined();
+      expect(revisedDeliverable?.body.positioningSummary).toContain(
+        "Revision focus: Tighten the audience claim and clarify the proof of value."
+      );
+      const originalDeliverable = positioningDeliverables.find(
+        (deliverable) => deliverable !== revisedDeliverable
+      );
+      expect(originalDeliverable?.body.positioningSummary).not.toContain("Revision focus:");
+    });
+
+    it("TASK-078 AC5: a second tenant cannot drive or read another tenant's revision -- proven falsifiable", async () => {
+      const installId = await ensureTenantInstall({ tenantId: tenantAId, ownerUserId: ownerAUserId });
+      const tenantAToken = mintToken({ tenantId: tenantAId, userId: ownerAUserId });
+      const tenantBToken = mintToken({ tenantId: tenantBId, userId: ownerBUserId });
+
+      const started = await postStart({ token: tenantAToken, packageInstallId: installId });
+      expect(started.status).toBe(201);
+      const { runId } = (await started.json()) as { runId: string };
+
+      // GREEN: tenant B cannot drive tenant A's run into revision.
+      const crossTenantRequestChanges = await postDecision({
+        token: tenantBToken,
+        runId,
+        action: "request-changes",
+        resolutionSummary: "Cross-tenant attempt"
+      });
+      expect(crossTenantRequestChanges.status).toBe(404);
+
+      // FALSIFIABLE RED: bypassing the tenant_id guard (querying by run_id
+      // alone) proves the run row is reachable and still belongs to tenant A
+      // -- so the 404 above is the tenant_id guard denying cross-tenant
+      // access, not a missing run.
+      const unguardedRun = await seedClient.query("select tenant_id from wfpc.factory_runs where run_id = $1", [runId]);
+      expect(unguardedRun.rows).toHaveLength(1);
+      expect((unguardedRun.rows[0] as { tenant_id: string }).tenant_id).toBe(tenantAId);
+
+      // Tenant A drives its own run into revision.
+      const ownRequestChanges = await postDecision({
+        token: tenantAToken,
+        runId,
+        action: "request-changes",
+        resolutionSummary: "Tighten the audience claim and clarify the proof of value."
+      });
+      expect(ownRequestChanges.status).toBe(200);
+
+      // GREEN: tenant B cannot read tenant A's revision via export (not yet
+      // approved, and not tenant B's run either way).
+      const crossTenantExport = await getExport({ token: tenantBToken, runId });
+      expect(crossTenantExport.status).toBe(404);
+
+      // FALSIFIABLE RED: bypassing the tenant_id guard proves the revision_1
+      // deliverable and approval rows are reachable and belong to tenant A.
+      const unguardedRevisionDeliverable = await seedClient.query(
+        "select tenant_id from wfpc.factory_run_deliverables where deliverable_id = $1",
+        [`deliverable_${runId}_positioning_brief_revision_1`]
+      );
+      expect(unguardedRevisionDeliverable.rows).toHaveLength(1);
+      expect((unguardedRevisionDeliverable.rows[0] as { tenant_id: string }).tenant_id).toBe(tenantAId);
+
+      const unguardedRevisionApproval = await seedClient.query(
+        "select tenant_id from wfpc.factory_run_approvals where run_id = $1 and contract_key = 'revision_1'",
+        [runId]
+      );
+      expect(unguardedRevisionApproval.rows).toHaveLength(1);
+      expect((unguardedRevisionApproval.rows[0] as { tenant_id: string }).tenant_id).toBe(tenantAId);
+
+      // Sanity: tenant A itself can approve and export its own revision, so
+      // the denials above are about tenant scoping, not a broken route.
+      const ownApprove = await postDecision({ token: tenantAToken, runId, action: "approve" });
+      expect(ownApprove.status).toBe(200);
+      const ownExport = await getExport({ token: tenantAToken, runId });
+      expect(ownExport.status).toBe(200);
     });
   }
 );
