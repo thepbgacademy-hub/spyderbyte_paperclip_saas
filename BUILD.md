@@ -52,10 +52,10 @@ requirement.
   not oversight. Do not renumber or restructure it — this record's phase map
   (B11–B35 → Tickets 07–12) depends on its ticket numbers.
 
-## Current position (revision 34, 2026-07-24)
+## Current position (revision 36, 2026-07-25)
 
 - **Active branch:** `foundry/mvp-baseline` (synced to origin
-  `thepbgacademy-hub/spyderbyte_paperclip_saas`). 30/83 tasks completed.
+  `thepbgacademy-hub/spyderbyte_paperclip_saas`). 32/85 tasks completed.
 - **Built & independently audited** against a real local disposable Postgres, each
   slice with tenant isolation/RBAC proven falsifiable by hand:
   - `TASK-055` walking skeleton (login → tenant → install → station → persisted
@@ -67,17 +67,24 @@ requirement.
     cap; `wfpc.factory_run_approvals`, migration 0039)
   - `TASK-079` Launch Kit export (`GET /api/factory/runs/:runId/export`, downloadable,
     gated on approved, no cross-tenant leak)
+  - `TASK-084` **run-driver spine — the conveyor belt now MOVES** (`wfpc.factory_runs`
+    migration 0040; driver sequences intake → positioning on the stub provider;
+    mounted `POST /api/factory/runs` answers-at-start + `GET /api/factory/runs/:runId`
+    status). Subsumes `TASK-077` (approval created by the flow via
+    `createApprovalRequest`).
   - Two demo packages load-verify (`DEC-039`, `demo-packages/`)
-- **⚠ Honest status:** each STATION is proven in isolation, but there is **no run
-  driver** and **no mounted start/advance/status route** — the slices' tests seed
-  their precondition rather than arriving by running the belt. A workpiece cannot
-  yet flow the whole line as a system.
-- **Next focus (DEC-042): the E2E conveyor belt.** Build a run driver + start/status
-  surface so one run flows install → start → intake → positioning → checkpoint →
-  approve/revise → ready → export, driven, on the **stub provider** (crew-safe, no
-  credential). This subsumes `TASK-077` (approval created by the flow) and `TASK-078`
-  (revision re-run). Recommended intake approach: **answers-at-start (option A)** —
-  `start run` takes the intake payload; interactive intake is a later polish pass.
+- **✔ Status (changed at rev 36):** the belt flows as ONE SYSTEM on the stub provider —
+  the e2e drives `POST start → driver runs both stations → GET status stopped at the
+  checkpoint → the existing approve route → the existing export route serves the kit
+  with both deliverables`. No longer seeded preconditions; the workpiece arrives by
+  running the line.
+- **Immediate next slice: `TASK-078`** — wire the positioning revision re-run
+  (`revisePositioningAnalysisAfterChangesRequested`) so a request-changes decision
+  produces `revision_1` and the belt advances after it. The revision domain already
+  exists as a proven pure function; this is driver + persistence wiring, like TASK-084.
+- **Deferred (DEC-043):** interactive/multi-turn intake (answers-at-start only today);
+  client-run-id contract confirmation; `TASK-085` make `startFactoryRun` idempotency
+  concurrency-safe (auditor finding, low priority — sequential retry is proven).
 - **Deferred polish backlog (DEC-042):** `TASK-081` rendered HTML/PDF kit,
   `TASK-082` Drive/Dropbox delivery, `TASK-083` brand color/voice kit. Previews:
   `docs/sample-launch-kit.json` (what ships today) and `docs/sample-launch-kit.html`
