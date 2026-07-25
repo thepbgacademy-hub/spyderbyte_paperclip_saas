@@ -52,10 +52,10 @@ requirement.
   not oversight. Do not renumber or restructure it — this record's phase map
   (B11–B35 → Tickets 07–12) depends on its ticket numbers.
 
-## Current position (revision 38, 2026-07-25)
+## Current position (revision 40, 2026-07-25)
 
 - **Active branch:** `foundry/mvp-baseline` (synced to origin
-  `thepbgacademy-hub/spyderbyte_paperclip_saas`). 34/86 tasks completed.
+  `thepbgacademy-hub/spyderbyte_paperclip_saas`). 35/86 tasks completed.
 - **Built & independently audited** against a real local disposable Postgres, each
   slice with tenant isolation/RBAC proven falsifiable by hand:
   - `TASK-055` walking skeleton (login → tenant → install → station → persisted
@@ -75,14 +75,20 @@ requirement.
     fns on the stub) → persists `revision_1` deliverable + new pending approval + updated
     run row, wired into the mounted decision route. One-revision cap + idempotency proven.
   - Two demo packages load-verify (`DEC-039`, `demo-packages/`)
-- **✔ Status (rev 38):** the belt flows as ONE SYSTEM on the stub provider, BOTH forks —
+  - `TASK-086` **export curated to the approved positioning** — `assembleFactoryRunLaunchKit`
+    filters to the positioning deliverable the approved approval points at (keyed on
+    `approval.deliverableId`, not a string match); the customer's kit no longer shows the
+    superseded draft. Revised run → revised brief; non-revised run → original. Read-only,
+    no migration.
+- **✔ Status (rev 40):** the belt flows as ONE SYSTEM on the stub provider, BOTH forks —
   `start → checkpoint → approve → export`, and
-  `start → checkpoint → request_changes → revision_1 → approve → export` (export serves
-  the REVISED brief). Workpieces arrive by running the line, not by seeded preconditions.
-- **Suggested next slices** (owner's call): `TASK-086` export should curate to the
-  latest-approved positioning (today the kit bundles the superseded original draft
-  alongside the revision); then owner-deferred output polish `TASK-081/082/083`; and/or
-  `TASK-066` the first live BYOK provider call (owner + main session, outside the crew).
+  `start → checkpoint → request_changes → revision_1 → approve → export` — and the exported
+  Launch Kit now presents only the approved positioning. Workpieces arrive by running the
+  line, not by seeded preconditions. The customer loop is MVP-complete on the stub path.
+- **Suggested next slices** (owner's call): owner-deferred output polish `TASK-081` (rendered
+  HTML/PDF kit), `TASK-082` (Drive/Dropbox delivery), `TASK-083` (brand color/voice kit);
+  and/or `TASK-066` the first live BYOK provider call (owner + main session, outside the crew
+  — no real credential in headless subprocesses).
 - **Deferred (DEC-043/044):** interactive intake (answers-at-start only); client-run-id
   contract; `TASK-085` concurrency-safe start idempotency; the revision op's
   content-channel + non-atomicity limitations (DEC-044). All low-priority; sequential
