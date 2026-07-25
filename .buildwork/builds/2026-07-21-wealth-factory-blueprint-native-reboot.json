@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 38,
+  "revision": 39,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -2994,16 +2994,20 @@
     {
       "id": "TASK-086",
       "title": "Launch Kit export should curate to the latest-approved positioning brief, not bundle the superseded original",
-      "progress": "Surfaced by TASK-078: once a run has a revision, the export (TASK-079) bundles ALL run deliverables — intake + original positioning_brief + positioning_brief_revision_1 — so a customer's Launch Kit shows the REJECTED original draft next to the final revised brief. The export/render layer should present only the latest-approved positioning (the revision_1 when it exists), or the renderer (TASK-081) should curate it. Product/correctness of the customer-facing artifact, not a tenant-isolation issue.",
+      "progress": "Surfaced by TASK-078. assembleFactoryRunLaunchKit (run-export-application-service.ts) gates on the approved approval (findApprovedApprovalForRun) then bundles ALL run deliverables via listDeliverablesForRun. Once a run has a revision, that is intake founder_profile + the SUPERSEDED original positioning_brief + the approved positioning_brief_revision_1 -- so the customer's Launch Kit shows the rejected draft next to the final. FIX: the approved approval row already carries deliverableId (the exact positioning deliverable that was approved) -- curate the kit to keep every non-positioning deliverable plus only the positioning deliverable the approval points to, dropping the other positioning_brief*. Source of truth is the approval pointer, not string-matching 'revision_1'. Read-only over existing tables (no migration).",
       "status": "pending",
-      "owner": "unassigned",
+      "owner": "crew",
       "dependencies": [
         "TASK-079",
         "TASK-078"
       ],
       "acceptance_criteria": [
-        "When a run has an approved revision_1 positioning brief, the exported Launch Kit presents that revision as the positioning deliverable and does NOT present the superseded original as a co-equal deliverable (curate or clearly mark it)",
-        "A test proves a revised run's export surfaces the revision, not the rejected original, as the positioning result"
+        "assembleFactoryRunLaunchKit curates the exported deliverables: for the station the approved approval covers (positioning), include ONLY the deliverable named by approval.deliverableId; include every deliverable from other stations (the intake founder_profile) unchanged. Determinism/order preserved. Uses the approval's own deliverableId pointer as the source of truth, NOT a substring match on 'revision_1'.",
+        "A revised, approved run exports a kit with exactly the intake founder_profile + the REVISED positioning brief (the one the revision_1 approval points to); the superseded original positioning_brief is NOT present. Proven by a test.",
+        "A NON-revised, approved run is unchanged: it still exports the intake founder_profile + the original positioning_brief (no regression to the TASK-079 path). Proven by a test.",
+        "Cross-tenant export isolation is unchanged and still falsifiable (the curation is a pure post-filter over already-tenant-scoped reads; no new query, no weakened guard).",
+        "Update the TASK-078 driver e2e assertion that currently expects 3 deliverables / 2 positioning to the curated shape (intake + the revised positioning only), PRESERVING the assertion that the exported positioning brief is the REVISED one (contains 'Revision focus:'). Do not weaken any tenant-isolation assertion.",
+        "No secrets in any artifact; every surfaced defect recorded as a follow-up rather than silently fixed out of scope."
       ],
       "write_scope": [
         "src/factory",
@@ -3579,6 +3583,13 @@
       "actor": "auditor",
       "action": "auditor-signoff-task-078-revision-rerun",
       "details": "Auditor signed off TASK-078 (positioning revision re-run) PASS: the DEC-042 approve/REVISE fork is real — request_changes drives reviseFactoryRunPositioning (existing domain fns on the stub) to produce+persist revision_1 + pending approval + run row, wired into the mounted decision route. Re-derived tsc 0 + driver 5/5 / approval 4/4 / export 3/3 serially vs the live local Postgres; reproduced tenant-isolation falsifiability by hand (strip findPendingApprovalForRun tenant guard -> RED 409-not-404 -> restore byte-identical sha256 -> GREEN). Vetted the TASK-076 test edit as a strengthening, not a weakening. Added DEC-044 (revision content channel + non-atomic op) and TASK-086 (export should curate to the latest-approved positioning). The conveyor belt now flows BOTH branches end to end."
+    },
+    {
+      "revision": 39,
+      "timestamp": "2026-07-25T05:00:00Z",
+      "actor": "auditor",
+      "action": "scope-task-086-export-curation",
+      "details": "Enriched TASK-086 for dispatch: curate assembleFactoryRunLaunchKit to present only the approval-pointed positioning deliverable (dropping the superseded original) using approval.deliverableId as source of truth, keep intake unchanged, prove revised + non-revised runs, preserve cross-tenant isolation, and update the TASK-078 e2e's 3-deliverable assertion to the curated shape. Owner=crew, deps TASK-079/078."
     }
   ]
 }

@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "generated_at": "2026-07-25T21:18:36Z",
+  "generated_at": "2026-07-25T21:57:22Z",
   "builds": {
     "2026-07-21-wealth-factory-blueprint-native-reboot": {
       "path": ".buildwork/builds/2026-07-21-wealth-factory-blueprint-native-reboot.json",
