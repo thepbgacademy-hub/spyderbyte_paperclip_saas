@@ -1,7 +1,7 @@
 {
   "$schema": "beginning-builds/build-work.schema.json",
   "schema_version": "1.0.0",
-  "revision": 36,
+  "revision": 37,
   "build": {
     "id": "2026-07-21-wealth-factory-blueprint-native-reboot",
     "title": "SpyderByte Foundry (formerly Wealth Factory) blueprint-native reboot",
@@ -2769,14 +2769,18 @@
       "id": "TASK-078",
       "title": "Wire the positioning revision re-run to produce revision_1 after request-changes",
       "status": "pending",
-      "owner": "unassigned",
+      "owner": "crew",
       "dependencies": [
-        "TASK-076"
+        "TASK-076",
+        "TASK-084"
       ],
       "acceptance_criteria": [
-        "A request-changes decision triggers the positioning re-run (revisePositioningAnalysisAfterChangesRequested) producing a persisted revision_1 deliverable, honoring the one-revision cap",
-        "The run advances after the revision is produced",
-        "An e2e proves it"
+        "A revision driver operation (in src/factory/runs, sibling to startFactoryRun) handles a request_changes decision for a run whose current pending approval is the ORIGINAL positioning contract: it loads the run row, the intake founder_profile deliverable and the original positioning_brief deliverable (from the tenant-scoped deliverable repository) and the just-decided changes_requested approval, transitions the run via requestChangesForPositioningAnalysis, then calls revisePositioningAnalysisAfterChangesRequested on the STUB provider (DEC-040, no live credential) to produce the revision_1 positioning brief and its new pending approval. All existing domain functions are reused, not reimplemented.",
+        "The revision_1 positioning_brief deliverable is persisted via the deliverable repository, the new pending approval (contract revision_1) via the approval repository, and the run row is updated (positioningRevisionGeneration=1, activeApprovalContractKey=revision_1, status=waiting_for_approval) — all tenant-scoped (app-layer tenant_id, no reliance on RLS). The original changes_requested approval remains persisted; the new revision_1 approval is the pending one.",
+        "The one-revision cap is honored: after revision_1 is produced, a request_changes decision on the revision_1 approval is rejected (only approval is possible) — the existing contractKey!='original' guard in decideFactoryRunApproval, now provably reached because the revision actually gets produced.",
+        "The mounted approval decision route drives this: a single request_changes decision over HTTP persists the decision AND produces+persists revision_1, leaving the run waiting_for_approval on the revision_1 contract. The revision op is idempotent (positioningRevisionGeneration=1 guard: re-invoking does not produce a second revision or duplicate rows).",
+        "The belt advances end to end, proven by an e2e over real HTTP against the local disposable Postgres (CON-012): start -> checkpoint -> request_changes -> revision_1 produced -> approve the revision_1 -> ready_for_export -> export serves the kit whose positioning brief is the REVISED one. Tenant isolation on the revision path is proven falsifiable (a second tenant cannot drive or read another tenant's revision; break the guard -> RED, restore byte-identical -> GREEN).",
+        "No secrets in any artifact; every surfaced defect recorded as a proposed follow-up task rather than silently fixed out of scope."
       ],
       "write_scope": [
         "src/factory",
@@ -2786,7 +2790,7 @@
       "evidence": [],
       "handoffs": [],
       "blockers": [],
-      "progress": "Covers the revision half of TASK-076 QC finding F3. Today a changes_requested decision persists and reports awaiting_revision and honors the one-revision cap, but does not trigger revisePositioningAnalysisAfterChangesRequested to actually produce the revision_1 deliverable.",
+      "progress": "The positioning revision DOMAIN already exists as proven pure functions in positioning-station-service.ts: requestChangesForPositioningAnalysis transitions the run to the revision-ready state (currentStationKey=positioning, status=waiting_for_input, revisionGen=0, active approval cleared), and revisePositioningAnalysisAfterChangesRequested produces revision_1 + a new pending approval (approval_<runId>_positioning_revision_1, contract revision_1) on the stub provider. GAP: the mounted decision route (TASK-076 decideFactoryRunApproval) only persists the approval row (changes_requested, runOutcome awaiting_revision); it predates factory_runs (0040/TASK-084), so it does NOT transition the run row and does NOT produce the revision deliverable. TASK-078 drives the revision as a persistence+driver op (like TASK-084) and wires the request_changes decision to it so the belt advances to a re-approvable revision_1 and then to export.",
       "risks": []
     },
     {
@@ -3518,6 +3522,13 @@
       "actor": "auditor",
       "action": "auditor-signoff-task-084-conveyor-spine",
       "details": "Auditor signed off TASK-084 (run-driver spine) PASS: the E2E conveyor belt (DEC-042) now moves as one system on the stub provider (install->start->intake->positioning->checkpoint, joining the existing approve/export slices). Re-derived 7/7 driver tests + tsc 0 vs the live local Postgres; reproduced AC5 tenant-isolation falsifiability by hand (break->RED->restore byte-identical sha256->GREEN). Marked TASK-077 completed (subsumed - approval now created by the flow via createApprovalRequest). Added DEC-043 (answers-at-start only, optional client runId, packageId->packageKey seam) and TASK-085 (make start idempotency concurrency-safe, auditor finding, low priority). Immediate next slice: TASK-078 (revision re-run)."
+    },
+    {
+      "revision": 37,
+      "timestamp": "2026-07-25T03:00:00Z",
+      "actor": "auditor",
+      "action": "scope-task-078-revision-rerun",
+      "details": "Enriched TASK-078 acceptance criteria for dispatch: drive the positioning revision re-run as a persistence+driver op over the existing domain fns (requestChangesForPositioningAnalysis + revisePositioningAnalysisAfterChangesRequested) on the stub provider, wire the mounted request_changes decision to produce+persist revision_1 + its pending approval + updated run row, honor the one-revision cap, and prove the belt advances start->checkpoint->request_changes->revision_1->approve->export via e2e with falsifiable tenant isolation. Set owner=crew, deps TASK-076+TASK-084."
     }
   ]
 }
